@@ -2,6 +2,7 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeProduct, createProduct } from '@modules/products/tests/factory';
 import { productRepository } from '@modules/products';
+import { productModel } from '../../model';
 
 setupTestDb();
 
@@ -178,6 +179,30 @@ describe('productRepository', () => {
             expect(await productRepository.count()).toBe(1);
             const remaining = await productRepository.findOne({ title: 'Keep me' });
             expect(remaining).not.toBeNull();
+        });
+    });
+});
+
+/*
+ * The absent-row arms. Every aggregate above answers over a seeded catalogue; these pin what the
+ * same pipelines answer over NOTHING — the `.at(0)` arm the calling code guards, asserted rather
+ * than assumed, because an empty $group or $facet returns no row at all rather than a zeroed one.
+ */
+describe('an empty catalogue', () => {
+    beforeEach(() => productModel.deleteMany({}));
+
+    it('answers facets as empty lists, not a crash on the absent aggregate row', async () => {
+        await expect(productRepository.facets()).resolves.toEqual({ categories: [], tags: [] });
+    });
+
+    it('sums zero reserved units when there is nothing to reserve', async () => {
+        await expect(productRepository.sumReserved()).resolves.toBe(0);
+    });
+
+    it('serves an empty availability page with a zero total', async () => {
+        await expect(productRepository.availabilityPage({ skip: 0, limit: 10 })).resolves.toEqual({
+            items: [],
+            totalItems: 0
         });
     });
 });

@@ -183,6 +183,28 @@ module.exports = {
             functions: 70,
             lines: 70
         },
+        // The same tier when it outgrows one file: account and cart became `services/`
+        // directories, and the key above silently stopped matching them the day they moved.
+        // The negation is the exemption mechanism, same as `!(pdf|mailer)` below: a negated
+        // file carries its own measured entry at the bottom of this block.
+        'src/modules/*/services/!(verification|reorder).ts': {
+            statements: 70,
+            branches: 70,
+            functions: 70,
+            lines: 70
+        },
+        /*
+         * The domain layer's floor is the RATCHET's record, not an aspiration: pure functions
+         * over plain data are the cheapest code in the repo to execute, and every domain file
+         * measured 100/≥80/100/100 on 2026-08-19. A new domain file that cannot clear this bar
+         * is a domain file without its unit suite, which is the one thing `domain/` promises.
+         */
+        'src/modules/*/domain/**/*.ts': {
+            statements: 100,
+            branches: 80,
+            functions: 100,
+            lines: 100
+        },
         'src/kernel/**/*.ts': {
             statements: 70,
             branches: 70,
@@ -190,12 +212,30 @@ module.exports = {
             lines: 70
         },
         /*
-         * Core, minus the four files written down below.
-         *
-         * `bootstrap` and `tracer.ts` are absent here for the same reason they are excluded from
-         * `mutate`: their behaviour belongs to the runtime, not to this codebase.
+         * The single-star glob matches only files sitting DIRECTLY in `src/infrastructure/`
+         * (today: `i18n.ts`). The subdirectories each carry their own key below — a directory
+         * that falls out of this list does not fail the build, it just stops being measured,
+         * which is the drift that let `runtime/` and `persistence/` go unfloored after the
+         * files moved into them.
          */
         'src/infrastructure/*.ts': { statements: 70, branches: 70, functions: 70, lines: 70 },
+        'src/infrastructure/persistence/**/*.ts': {
+            statements: 70,
+            branches: 70,
+            functions: 70,
+            lines: 70
+        },
+        /*
+         * `otel-sdk.ts` is absent for the same reason the old top-level `bootstrap`/`tracer`
+         * were: its behaviour belongs to the OpenTelemetry runtime, not to this codebase.
+         * `database.ts` and `server-lifecycle.ts` carry their own measured entries below.
+         */
+        'src/infrastructure/runtime/!(otel-sdk|database|server-lifecycle).ts': {
+            statements: 70,
+            branches: 70,
+            functions: 70,
+            lines: 70
+        },
         'src/infrastructure/http/**/*.ts': {
             statements: 70,
             branches: 70,
@@ -266,6 +306,50 @@ module.exports = {
             branches: 90,
             functions: 60,
             lines: 80
+        },
+        /*
+         * Measured 2026-08-19, same policy as the four above: records of where the code IS.
+         *
+         *   database.ts         — the connect-retry loop and `stopDatabase` are driven by boot
+         *                         and shutdown, which no unit suite owns; the URI/backoff logic
+         *                         is what the units reach.
+         *   server-lifecycle.ts — signal-driven drain-and-exit; the honest zero on the record,
+         *                         exactly like `stream.ts` and `pdf.ts`.
+         */
+        'src/infrastructure/runtime/database.ts': {
+            statements: 70,
+            branches: 100,
+            functions: 25,
+            lines: 70
+        },
+        'src/infrastructure/runtime/server-lifecycle.ts': {
+            statements: 0,
+            branches: 0,
+            functions: 0,
+            lines: 0
+        },
+        /*
+         * Two more measured records, 2026-08-19, from the day the `services/` glob started
+         * matching what it was written for:
+         *
+         *   verification.ts — the locale-fallback arms of the verify email
+         *                     (`user.locale ?? requestLocale ?? default`) are driven by the
+         *                     e2e registration flow, not by any unit.
+         *   reorder.ts      — buy-again is exercised end-to-end (the storefront and journey
+         *                     suites); no unit suite owns it yet. Same standing as `pdf.ts`:
+         *                     the honest number on the record, for the ratchet to raise.
+         */
+        'src/modules/account/services/verification.ts': {
+            statements: 100,
+            branches: 60,
+            functions: 100,
+            lines: 100
+        },
+        'src/modules/cart/services/reorder.ts': {
+            statements: 45,
+            branches: 100,
+            functions: 0,
+            lines: 45
         }
     },
     globalSetup: '<rootDir>/tests/support/global-setup.ts',
