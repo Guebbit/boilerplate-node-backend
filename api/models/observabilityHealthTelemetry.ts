@@ -18,8 +18,16 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ObservabilityHealthDatabaseStatus } from './observabilityHealthDatabaseStatus';
+import type { ObservabilityHealthTelemetryAnalytics } from './observabilityHealthTelemetryAnalytics';
 
-export type ObservabilityHealthDatabase = {
-  status: ObservabilityHealthDatabaseStatus;
-};
+/**
+ * Which telemetry sinks this deployment is WIRED TO — read off the environment, never probed.
+ * Deliberately not part of `status`: these are destinations this service writes to, and losing one costs visibility rather than capability. An unreachable Loki does not make a checkout fail, so it must not colour the dot a dashboard shows for "can this instance serve traffic".
+ */
+export interface ObservabilityHealthTelemetry {
+  loki: boolean;
+  otel: boolean;
+  umami: boolean;
+  faro: boolean;
+  analytics: ObservabilityHealthTelemetryAnalytics;
+}

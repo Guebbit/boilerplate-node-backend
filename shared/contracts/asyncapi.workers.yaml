@@ -30,11 +30,22 @@ channels:
         publish:
             operationId: workerEmailPublish
             summary: Enqueue an email for async delivery.
+            description: >-
+                `enqueueEmail` publishes here instead of calling the SMTP transport inline, so a
+                slow or unreachable mail server cannot add its latency to the request that
+                triggered the mail. When the broker itself is unavailable the adapter falls back to
+                sending inline rather than dropping the message — the queue is an optimisation on
+                this path, never the system of record.
             message:
                 $ref: '#/components/messages/EmailJobMessage'
         subscribe:
             operationId: workerEmailConsume
             summary: Email worker picks up and sends the email.
+            description: >-
+                The consumer acknowledges only after the transport accepts the message, so a worker
+                that dies mid-send returns the job to the queue rather than losing it. A rendering
+                failure is not retried — the template is broken for every redelivery, and requeueing
+                it forever would starve the queue behind a job that cannot succeed.
             message:
                 $ref: '#/components/messages/EmailJobConsumeMessage'
     worker.pdf.generate:
@@ -44,11 +55,19 @@ channels:
         publish:
             operationId: workerPdfPublish
             summary: Enqueue a PDF generation request.
+            description: >-
+                Rendering is CPU-bound and unbounded in duration, which is exactly what must not
+                happen on a request thread: the producer hands over the template name and its data
+                and returns immediately.
             message:
                 $ref: '#/components/messages/PdfJobMessage'
         subscribe:
             operationId: workerPdfConsume
             summary: PDF worker renders template to PDF.
+            description: >-
+                Renders the named template and writes the result where the job says. Runs in the
+                worker process rather than the API cluster, so a render storm degrades PDF turnaround
+                and leaves request latency alone.
             message:
                 $ref: '#/components/messages/PdfJobConsumeMessage'
 components:

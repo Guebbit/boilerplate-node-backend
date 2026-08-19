@@ -19,11 +19,16 @@
  * OpenAPI spec version: 2.0.0
  */
 
-export type ObservabilityHealthIntegrationsAnalytics = typeof ObservabilityHealthIntegrationsAnalytics[keyof typeof ObservabilityHealthIntegrationsAnalytics];
+/**
+ * One backing service's state, in the four words this payload uses for all of them.
+ * `disabled` means "not configured in this deployment" and is a supported state, not a failure — it never degrades `status`. `connecting` is separate from `unavailable` because the production HEALTHCHECK allows a 40-second start period, during which "not yet" and "broken" look identical on the wire and mean opposite things.
+ */
+export type DependencyStatus = typeof DependencyStatus[keyof typeof DependencyStatus];
 
 
-export const ObservabilityHealthIntegrationsAnalytics = {
-  umami: 'umami',
-  posthog: 'posthog',
-  none: 'none',
+export const DependencyStatus = {
+  ready: 'ready',
+  connecting: 'connecting',
+  unavailable: 'unavailable',
+  disabled: 'disabled',
 } as const;

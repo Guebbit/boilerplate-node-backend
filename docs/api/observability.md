@@ -36,7 +36,11 @@ These endpoints return **the same underlying numbers you see in Grafana, but as 
 
 ## GET /observability/health
 
-Returns system health and integration status.
+The **readiness** answer: can this instance serve what it promises, and which backing service is
+missing when it cannot.
+
+This is not the liveness probe. `GET /` is, and it is what the container HEALTHCHECK calls — see
+[The Observability Layer](../tools/observability-layer.md) for why the two must stay separate.
 
 ```json
 {
@@ -45,17 +49,39 @@ Returns system health and integration status.
   "service": "boilerplate-node-backend",
   "nodeVersion": "v22.x.x",
   "uptimeSeconds": 3600,
-  "database": { "status": "connected" },
-  "integrations": {
-    "loki": true,
-    "posthog": false,
-    "otelEnabled": true
+  "dependencies": {
+    "database": { "status": "ready" },
+    "cache": { "status": "ready" },
+    "queue": { "status": "disabled" }
   },
-  "memory": { "heapUsedMb": 45, "heapTotalMb": 80, "rssMb": 120 },
+  "telemetry": {
+    "loki": true,
+    "otel": true,
+    "umami": true,
+    "faro": false,
+    "analytics": "umami"
+  },
+  "memory": { "rss": 125829120, "heapUsed": 47185920, "heapTotal": 83886080, "external": 2097152 },
   "system": { "platform": "linux", "cpuCount": 4, "loadAvg": [0.5, 0.3, 0.2] },
   "timestamp": "2026-05-29T09:00:00.000Z"
 }
 ```
+
+`status` is `ok` when every dependency is `ready` or `disabled`, and `degraded` otherwise.
+
+| Dependency status | Means                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------ |
+| `ready`           | connected and usable                                                                |
+| `connecting`      | handshake in flight — a deploy inside its start-up grace period, not an outage      |
+| `unavailable`     | configured but not reachable                                                        |
+| `disabled`        | not configured in this deployment. A supported state: it never degrades `status`    |
+
+`telemetry` reports which sinks this deployment is **wired to**, read off the environment and never
+probed. It is deliberately outside the `status` fold: losing a telemetry sink costs visibility, not
+capability — an unreachable Loki does not make a checkout fail.
+
+`memory` is in **bytes**, identical to what the SSE stream publishes, so a dashboard showing both
+compares numbers instead of converting units.
 
 ## GET /observability/metrics/overview
 

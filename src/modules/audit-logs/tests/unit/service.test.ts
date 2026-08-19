@@ -23,6 +23,16 @@ import { auditLogRepository } from '@modules/audit-logs/repository';
 import { logger } from '@infrastructure/adapters/logger';
 import { type AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from '@modules/audit-logs/model';
+import { auditSinkFailuresTotal } from '@modules/audit-logs/metrics';
+
+/**
+ * The counter's current value, read back through prom-client rather than from a local tally: the
+ * point of the metric is that it reaches the registry the `/observability/metrics` scrape reads.
+ */
+const readCounter = async (): Promise<number> => {
+    const { values } = await auditSinkFailuresTotal.get();
+    return values[0]?.value ?? 0;
+};
 
 jest.mock('@modules/audit-logs/repository', () => ({
     auditLogRepository: {
@@ -83,6 +93,31 @@ describe('auditLogService.record', () => {
                 error: 'mongo is down'
             })
         );
+    });
+
+    it('counts the lost row so an empty dashboard is distinguishable from a quiet one', async () => {
+        /* The gap the fail-open leaves behind: `GET /observability/audit` answering `{ items: [] }`
+         * looks exactly like "nothing happened". The counter is the only thing that can tell those
+         * two apart, and it must be incremented on the SAME path that swallows the error. */
+        const before = await readCounter();
+        mockedRepository.create.mockRejectedValue(new Error('mongo is down'));
+
+        auditLogService.record(makeEntry());
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(await readCounter()).toBe(before + 1);
+    });
+
+    it('leaves the counter alone when the write succeeds', async () => {
+        const before = await readCounter();
+        mockedRepository.create.mockResolvedValue({} as AuditLogDocument);
+
+        auditLogService.record(makeEntry());
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(await readCounter()).toBe(before);
     });
 
     it('produces no unhandled rejection when the write fails', async () => {

@@ -4,13 +4,13 @@ import { createLocaleContext, negotiateLocale, runWithLocaleContext } from '@inf
 /**
  * Negotiates the request's language and runs the rest of the chain inside it.
  *
- * `request.locale` / `request.t` mirror the `request.obs` idiom for controllers that prefer the
- * explicit form; everything else — services, repositories, Zod thunks — just imports `t` from
- * `@infrastructure/i18n` and gets the same binding ambiently (see that module for how, and for where it
- * stops working).
+ * `request.locale` / `request.t` are the explicit form, for a handler that prefers to name what it
+ * is resolving against; everything else — services, repositories, Zod thunks — just imports `t`
+ * from `@infrastructure/i18n` and gets the same binding ambiently (see that module for how, and for
+ * where it stops working).
  *
- * Mounted before the routes, next to `attachObservability`. It must run after nothing in
- * particular, but every handler that produces user-facing copy must run after IT.
+ * Mounted before the routes. It must run after nothing in particular, but every handler that
+ * produces user-facing copy must run after IT.
  *
  * Two response headers, both about caches:
  * - `Content-Language` states what the client actually got, which may not be what it asked for.

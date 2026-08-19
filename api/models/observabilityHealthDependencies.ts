@@ -18,12 +18,13 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ObservabilityHealthIntegrationsAnalytics } from './observabilityHealthIntegrationsAnalytics';
+import type { ObservabilityDependency } from './observabilityDependency';
 
-export interface ObservabilityHealthIntegrations {
-  loki?: boolean;
-  analytics?: ObservabilityHealthIntegrationsAnalytics;
-  otelEnabled?: boolean;
-  umami?: boolean;
-  faro?: boolean;
+/**
+ * Every backing service this process needs, read from the connection state each adapter already maintains. No I/O: a health endpoint that opens sockets is polled every few seconds by every replica forever, and becomes an amplifier pointed at the infrastructure it reports on.
+ */
+export interface ObservabilityHealthDependencies {
+  database: ObservabilityDependency;
+  cache: ObservabilityDependency;
+  queue: ObservabilityDependency;
 }

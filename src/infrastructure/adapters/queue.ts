@@ -16,6 +16,7 @@
 //    including the delivery tag that `ack`/`nack` reference.
 import amqplib, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
 import { logger } from '@infrastructure/adapters/logger';
+import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 import { WORKER_CHANNELS } from '@types';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -58,6 +59,21 @@ let channel: Channel | undefined;
 
 /** In-flight connect, shared by concurrent callers to avoid a connection storm. */
 let connectPromise: Promise<Channel | void> | undefined;
+
+/**
+ * What this adapter's connection is doing, for `GET /observability/health`.
+ *
+ * The channel handle IS the readiness signal: every publish and every consume is issued on it, and
+ * `getChannel()`'s `close` listener clears it, so a live handle means the next `publishToQueue`
+ * will reach the broker. No `checkQueue` round trip — see the header of
+ * `infrastructure/observability/dependency-health.ts` for why a health endpoint does no I/O.
+ */
+export const queueState = (): DependencyStatus => {
+    if (!isQueueEnabled()) return 'disabled';
+    if (channel) return 'ready';
+    if (connectPromise) return 'connecting';
+    return 'unavailable';
+};
 
 /** One-shot flag so an unreachable broker does not log once per publish. */
 let connectionWarningLogged = false;

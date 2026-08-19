@@ -555,8 +555,14 @@ export const GetObservabilityEventsResponse = zod.unknown()
 
 
 /**
- * Full JSON health snapshot for dashboard use.
- * Includes uptime, database status, memory, integrations, and system info.
+ * Readiness snapshot: whether this instance can serve what it promises, and which
+ * backing service is missing when it cannot. Also carries uptime, memory, system and
+ * telemetry-wiring detail for the dashboard card.
+ *
+ * This is NOT the liveness probe — `GET /` is, and it is what the container
+ * HEALTHCHECK calls. Nothing here performs I/O; every dependency is read from the
+ * connection state its adapter already maintains.
+ *
  * Requires admin role.
  * @summary Health snapshot
  */
@@ -577,21 +583,29 @@ export const GetObservabilityHealthResponse = zod.object({
   "status": zod.number(),
   "message": zod.string(),
   "data": zod.object({
-  "status": zod.enum(['ok', 'degraded']),
+  "status": zod.enum(['ok', 'degraded']).describe('READINESS: `ok` when every dependency is `ready` or `disabled`, `degraded` otherwise. Which part is missing is `dependencies`\' job to say.\nThis is not liveness. `GET \/` answers that, and is what the container HEALTHCHECK probes — an orchestrator restarts on liveness, and restarting this process would not bring a downed Redis back.'),
   "environment": zod.string(),
   "service": zod.string(),
   "nodeVersion": zod.string(),
   "uptimeSeconds": zod.number().min(getObservabilityHealthResponseDataUptimeSecondsMin),
+  "dependencies": zod.object({
   "database": zod.object({
-  "status": zod.enum(['connected', 'connecting', 'disconnected'])
+  "status": zod.enum(['ready', 'connecting', 'unavailable', 'disabled']).describe('One backing service\'s state, in the four words this payload uses for all of them.\n`disabled` means \"not configured in this deployment\" and is a supported state, not a failure — it never degrades `status`. `connecting` is separate from `unavailable` because the production HEALTHCHECK allows a 40-second start period, during which \"not yet\" and \"broken\" look identical on the wire and mean opposite things.')
 }),
-  "integrations": zod.object({
-  "loki": zod.boolean().optional(),
-  "analytics": zod.enum(['umami', 'posthog', 'none']).optional(),
-  "otelEnabled": zod.boolean().optional(),
-  "umami": zod.boolean().optional(),
-  "faro": zod.boolean().optional()
-}).optional(),
+  "cache": zod.object({
+  "status": zod.enum(['ready', 'connecting', 'unavailable', 'disabled']).describe('One backing service\'s state, in the four words this payload uses for all of them.\n`disabled` means \"not configured in this deployment\" and is a supported state, not a failure — it never degrades `status`. `connecting` is separate from `unavailable` because the production HEALTHCHECK allows a 40-second start period, during which \"not yet\" and \"broken\" look identical on the wire and mean opposite things.')
+}),
+  "queue": zod.object({
+  "status": zod.enum(['ready', 'connecting', 'unavailable', 'disabled']).describe('One backing service\'s state, in the four words this payload uses for all of them.\n`disabled` means \"not configured in this deployment\" and is a supported state, not a failure — it never degrades `status`. `connecting` is separate from `unavailable` because the production HEALTHCHECK allows a 40-second start period, during which \"not yet\" and \"broken\" look identical on the wire and mean opposite things.')
+})
+}).describe('Every backing service this process needs, read from the connection state each adapter already maintains. No I\/O: a health endpoint that opens sockets is polled every few seconds by every replica forever, and becomes an amplifier pointed at the infrastructure it reports on.'),
+  "telemetry": zod.object({
+  "loki": zod.boolean(),
+  "otel": zod.boolean(),
+  "umami": zod.boolean(),
+  "faro": zod.boolean(),
+  "analytics": zod.enum(['umami', 'posthog', 'none'])
+}).optional().describe('Which telemetry sinks this deployment is WIRED TO — read off the environment, never probed.\nDeliberately not part of `status`: these are destinations this service writes to, and losing one costs visibility rather than capability. An unreachable Loki does not make a checkout fail, so it must not colour the dot a dashboard shows for \"can this instance serve traffic\".'),
   "memory": zod.object({
   "rss": zod.number().min(getObservabilityHealthResponseDataMemoryRssMin),
   "heapUsed": zod.number().min(getObservabilityHealthResponseDataMemoryHeapUsedMin),

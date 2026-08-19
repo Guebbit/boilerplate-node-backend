@@ -505,8 +505,14 @@ paths:
         - Observability
       summary: Health snapshot
       description: |
-        Full JSON health snapshot for dashboard use.
-        Includes uptime, database status, memory, integrations, and system info.
+        Readiness snapshot: whether this instance can serve what it promises, and which
+        backing service is missing when it cannot. Also carries uptime, memory, system and
+        telemetry-wiring detail for the dashboard card.
+
+        This is NOT the liveness probe — `GET /` is, and it is what the container
+        HEALTHCHECK calls. Nothing here performs I/O; every dependency is read from the
+        connection state its adapter already maintains.
+
         Requires admin role.
       operationId: getObservabilityHealth
       security:
@@ -3742,11 +3748,59 @@ components:
       properties:
         value:
           type: string
-    ObservabilityHealthIntegrations:
+    DependencyStatus:
+      type: string
+      enum:
+        - ready
+        - connecting
+        - unavailable
+        - disabled
+      description: |-
+        One backing service's state, in the four words this payload uses for all of them.
+        `disabled` means "not configured in this deployment" and is a supported state, not a failure — it never degrades `status`. `connecting` is separate from `unavailable` because the production HEALTHCHECK allows a 40-second start period, during which "not yet" and "broken" look identical on the wire and mean opposite things.
+    ObservabilityDependency:
       type: object
       additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/DependencyStatus'
+    ObservabilityHealthDependencies:
+      type: object
+      additionalProperties: false
+      required:
+        - database
+        - cache
+        - queue
+      description: 'Every backing service this process needs, read from the connection state each adapter already maintains. No I/O: a health endpoint that opens sockets is polled every few seconds by every replica forever, and becomes an amplifier pointed at the infrastructure it reports on.'
+      properties:
+        database:
+          $ref: '#/components/schemas/ObservabilityDependency'
+        cache:
+          $ref: '#/components/schemas/ObservabilityDependency'
+        queue:
+          $ref: '#/components/schemas/ObservabilityDependency'
+    ObservabilityHealthTelemetry:
+      type: object
+      additionalProperties: false
+      required:
+        - loki
+        - otel
+        - umami
+        - faro
+        - analytics
+      description: |-
+        Which telemetry sinks this deployment is WIRED TO — read off the environment, never probed.
+        Deliberately not part of `status`: these are destinations this service writes to, and losing one costs visibility rather than capability. An unreachable Loki does not make a checkout fail, so it must not colour the dot a dashboard shows for "can this instance serve traffic".
       properties:
         loki:
+          type: boolean
+        otel:
+          type: boolean
+        umami:
+          type: boolean
+        faro:
           type: boolean
         analytics:
           type: string
@@ -3754,12 +3808,6 @@ components:
             - umami
             - posthog
             - none
-        otelEnabled:
-          type: boolean
-        umami:
-          type: boolean
-        faro:
-          type: boolean
     ProcessMemory:
       type: object
       additionalProperties: false
@@ -3809,7 +3857,7 @@ components:
         - service
         - nodeVersion
         - uptimeSeconds
-        - database
+        - dependencies
         - timestamp
       properties:
         status:
@@ -3817,6 +3865,9 @@ components:
           enum:
             - ok
             - degraded
+          description: |-
+            READINESS: `ok` when every dependency is `ready` or `disabled`, `degraded` otherwise. Which part is missing is `dependencies`' job to say.
+            This is not liveness. `GET /` answers that, and is what the container HEALTHCHECK probes — an orchestrator restarts on liveness, and restarting this process would not bring a downed Redis back.
         environment:
           type: string
         service:
@@ -3826,20 +3877,10 @@ components:
         uptimeSeconds:
           type: integer
           minimum: 0
-        database:
-          type: object
-          additionalProperties: false
-          required:
-            - status
-          properties:
-            status:
-              type: string
-              enum:
-                - connected
-                - connecting
-                - disconnected
-        integrations:
-          $ref: '#/components/schemas/ObservabilityHealthIntegrations'
+        dependencies:
+          $ref: '#/components/schemas/ObservabilityHealthDependencies'
+        telemetry:
+          $ref: '#/components/schemas/ObservabilityHealthTelemetry'
         memory:
           $ref: '#/components/schemas/ProcessMemory'
         system:

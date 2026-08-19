@@ -19,14 +19,11 @@
  * OpenAPI spec version: 2.0.0
  */
 
-/**
- * READINESS: `ok` when every dependency is `ready` or `disabled`, `degraded` otherwise. Which part is missing is `dependencies`' job to say.
- * This is not liveness. `GET /` answers that, and is what the container HEALTHCHECK probes — an orchestrator restarts on liveness, and restarting this process would not bring a downed Redis back.
- */
-export type ObservabilityHealthStatus = typeof ObservabilityHealthStatus[keyof typeof ObservabilityHealthStatus];
+export type ObservabilityHealthTelemetryAnalytics = typeof ObservabilityHealthTelemetryAnalytics[keyof typeof ObservabilityHealthTelemetryAnalytics];
 
 
-export const ObservabilityHealthStatus = {
-  ok: 'ok',
-  degraded: 'degraded',
+export const ObservabilityHealthTelemetryAnalytics = {
+  umami: 'umami',
+  posthog: 'posthog',
+  none: 'none',
 } as const;

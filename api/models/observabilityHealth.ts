@@ -18,21 +18,25 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ObservabilityHealthDatabase } from './observabilityHealthDatabase';
-import type { ObservabilityHealthIntegrations } from './observabilityHealthIntegrations';
+import type { ObservabilityHealthDependencies } from './observabilityHealthDependencies';
 import type { ObservabilityHealthStatus } from './observabilityHealthStatus';
 import type { ObservabilityHealthSystem } from './observabilityHealthSystem';
+import type { ObservabilityHealthTelemetry } from './observabilityHealthTelemetry';
 import type { ProcessMemory } from './processMemory';
 
 export interface ObservabilityHealth {
+  /**
+     * READINESS: `ok` when every dependency is `ready` or `disabled`, `degraded` otherwise. Which part is missing is `dependencies`' job to say.
+     * This is not liveness. `GET /` answers that, and is what the container HEALTHCHECK probes — an orchestrator restarts on liveness, and restarting this process would not bring a downed Redis back.
+     */
   status: ObservabilityHealthStatus;
   environment: string;
   service: string;
   nodeVersion: string;
   /** @minimum 0 */
   uptimeSeconds: number;
-  database: ObservabilityHealthDatabase;
-  integrations?: ObservabilityHealthIntegrations;
+  dependencies: ObservabilityHealthDependencies;
+  telemetry?: ObservabilityHealthTelemetry;
   memory?: ProcessMemory;
   system?: ObservabilityHealthSystem;
   timestamp: string;

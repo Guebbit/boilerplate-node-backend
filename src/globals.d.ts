@@ -1,13 +1,10 @@
 import type { TFunction } from 'i18next';
 import type { AuthContext } from './types/auth-context';
-import type { ObservabilityContext } from '@infrastructure/observability/context';
 
 declare module 'express-serve-static-core' {
     interface Request {
         /** Transport-safe auth context DTO (available after auth middleware). */
         authContext?: AuthContext;
-        /** Observability helpers attached by the observability middleware. */
-        obs?: ObservabilityContext;
         requestId?: string;
         /**
          * URLs of the images this request uploaded, once the image store has committed them

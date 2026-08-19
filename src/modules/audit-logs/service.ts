@@ -3,6 +3,7 @@ import type { AuditLogSearchFilters } from './repository';
 import type { AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from './model';
 import { logger } from '@infrastructure/adapters/logger';
+import { auditSinkFailuresTotal } from './metrics';
 
 /**
  * Audit log service — the persistence sink behind `@infrastructure/observability/audit`, and the read path
@@ -25,13 +26,15 @@ import { logger } from '@infrastructure/adapters/logger';
  * genuinely be able to take the process down.
  */
 export const record = (entry: AuditEntry): void => {
-    void auditLogRepository.create(entry as Partial<AuditLogDocument>).catch((error: Error) =>
+    void auditLogRepository.create(entry as Partial<AuditLogDocument>).catch((error: Error) => {
+        // Before the log line, so the count is right even if the logger is what is broken.
+        auditSinkFailuresTotal.inc();
         logger.warn({
             message: 'audit entry not persisted',
             action: entry.action,
             error: error.message
-        })
-    );
+        });
+    });
 };
 
 /**

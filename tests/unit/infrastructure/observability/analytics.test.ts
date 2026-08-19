@@ -423,6 +423,19 @@ describe('the none provider', () => {
         expect(mockedPostHog).not.toHaveBeenCalled();
         expect(mockLoggerWarn).not.toHaveBeenCalled();
     });
+
+    /**
+     * The half of `none` that only runs at shutdown, and the reason it is worth a test of its own:
+     * `stopServices` awaits `shutdownAnalytics()`, so a provider whose `shutdown()` rejected — or
+     * returned something unawaitable — would hang or crash a process on its way out, in the one
+     * code path no request ever exercises.
+     */
+    it('shuts down cleanly, so selecting it cannot break process exit', () => {
+        process.env.NODE_ANALYTICS_PROVIDER = 'none';
+        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
+
+        return expect(shutdownAnalytics()).resolves.toBeUndefined();
+    });
 });
 
 // ─── Shutdown ─────────────────────────────────────────────────────────────────

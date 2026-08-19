@@ -9,7 +9,6 @@
 import crypto from 'node:crypto';
 import type { Express } from 'express';
 import { requestLogger } from '@infrastructure/http/middlewares/request-logger';
-import { attachObservability } from '@infrastructure/http/middlewares/observability';
 import { attachLocale } from '@infrastructure/http/middlewares/locale';
 
 /**
@@ -32,11 +31,6 @@ export const installRequestContext = (app: Express): void => {
      * Winston access log + OpenTelemetry trace injection
      */
     app.use(requestLogger);
-
-    /*
-     * Attach observability context — controllers use request.obs instead of singletons
-     */
-    app.use(attachObservability);
 
     /*
      * Negotiate Accept-Language and run the request inside that locale — must precede the routes,

@@ -18,12 +18,8 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { DependencyStatus } from './dependencyStatus';
 
-export type ObservabilityHealthDatabaseStatus = typeof ObservabilityHealthDatabaseStatus[keyof typeof ObservabilityHealthDatabaseStatus];
-
-
-export const ObservabilityHealthDatabaseStatus = {
-  connected: 'connected',
-  connecting: 'connecting',
-  disconnected: 'disconnected',
-} as const;
+export interface ObservabilityDependency {
+  status: DependencyStatus;
+}

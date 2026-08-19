@@ -31,18 +31,24 @@ channels:
         description: Initial metrics snapshot sent on SSE connect.
         subscribe:
             operationId: sseMetricsSnapshot
+            description: >-
+                Sent once, immediately on connect, so a dashboard renders populated instead of waiting out the first 5-second tick with empty cards. Same payload shape as the periodic update — a client handles one message type, not two.
             message:
                 $ref: '#/components/messages/MetricsSnapshotEvent'
     observability.metrics.updated:
         description: Periodic SSE metrics update.
         subscribe:
             operationId: sseMetricsUpdated
+            description: >-
+                Pushed every 5 seconds for as long as the connection is open. Memory is in BYTES, identical to what `GET /observability/health` publishes, so a dashboard showing both compares numbers rather than converting units to find out whether they agree.
             message:
                 $ref: '#/components/messages/MetricsUpdatedEvent'
     observability.heartbeat:
         description: SSE heartbeat event.
         subscribe:
             operationId: sseHeartbeat
+            description: >-
+                A 15-second keep-alive carrying no metrics. Idle proxies close a connection that has been quiet, and an SSE stream between two ticks looks idle to them; this is also what lets a client tell "the stream is alive and nothing changed" from "the stream died".
             message:
                 $ref: '#/components/messages/HeartbeatEvent'
 components:

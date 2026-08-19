@@ -11,6 +11,7 @@
 // `RedisClientType` is the resulting client's type, needed for the module-level `let` below.
 import { createClient, type RedisClientType } from 'redis';
 import { logger } from '@infrastructure/adapters/logger';
+import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 
 /**
  * Redis = a very fast in-memory data store.
@@ -80,6 +81,23 @@ let connectionWarningLogged = false;
  * production without tearing down the Redis service itself.
  */
 const isCacheEnabled = () => Boolean(getRedisUrl()) && process.env.NODE_REDIS_CACHE_ENABLED !== '0';
+
+/**
+ * What this adapter's connection is doing, for `GET /observability/health`.
+ *
+ * Reads the client's own flags rather than pinging: `isReady` is the exact condition `getClient()`
+ * treats as usable, so what the health payload reports is what the next cache lookup will actually
+ * do — not a second opinion obtained by opening a socket the application would not have opened.
+ *
+ * `isOpen` without `isReady` is the handshake window, reported as `connecting` so a deploy in its
+ * start-up grace period does not look like an outage.
+ */
+export const cacheState = (): DependencyStatus => {
+    if (!isCacheEnabled()) return 'disabled';
+    if (client?.isReady) return 'ready';
+    if (client?.isOpen) return 'connecting';
+    return 'unavailable';
+};
 
 /**
  * Longest TTL allowed outside production, in seconds.

@@ -64,25 +64,51 @@ describe('GET /observability/health', () => {
     it('reports the database state the process is actually in', async () => {
         /* `setupTestDb()` has connected, so this is the one assertion that would fail if the
          * snapshot ever stopped reading a live connection and started reporting a constant —
-         * which is what a hard-coded 'connected' would look like to every shape check. */
+         * which is what a hard-coded 'ready' would look like to every shape check. */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
         expect(connection.readyState).toBe(1);
-        expect(response.body.data.database.status).toBe('connected');
-        expect(response.body.data.status).toBe('ok');
+        expect(response.body.data.dependencies.database.status).toBe('ready');
+    });
+
+    it('describes cache and queue in the same words as the database', async () => {
+        /* The point of one vocabulary: a reader does not need to know which of the three is a
+         * document store and which is a broker to read the payload.
+         *
+         * WHICH value each reports is deliberately not asserted — that depends on the `.env` of
+         * whoever is running the suite, and a test that demanded a reachable Redis would fail on a
+         * laptop for a reason that has nothing to do with the contract. What must hold everywhere
+         * is that all three speak the same four words, and that `status` is the honest fold of
+         * them. `dependency-health.test.ts` pins the mapping itself, with the state controlled. */
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().get('/observability/health').set('Authorization', bearer);
+
+        const { dependencies, status } = response.body.data;
+        const reported = [dependencies.database, dependencies.cache, dependencies.queue].map(
+            (dependency: { status: string }) => dependency.status
+        );
+
+        for (const value of reported)
+            expect(['ready', 'connecting', 'unavailable', 'disabled']).toContain(value);
+
+        const serving = reported.every(
+            (value: string) => value === 'ready' || value === 'disabled'
+        );
+        expect(status).toBe(serving ? 'ok' : 'degraded');
     });
 
     it('names the analytics provider rather than claiming a boolean', async () => {
-        /* The integrations block reports WHICH backend serves analytics, because `posthog: false`
+        /* The telemetry block reports WHICH backend serves analytics, because `posthog: false`
          * could not distinguish "unconfigured" from "this deployment uses Umami". A regression to
          * a boolean satisfies `additionalProperties: false` and breaks the dashboard silently. */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
-        expect(typeof response.body.data.integrations.analytics).toBe('string');
+        expect(typeof response.body.data.telemetry.analytics).toBe('string');
     });
 
     it('matches the error contract for a non-admin', async () => {
