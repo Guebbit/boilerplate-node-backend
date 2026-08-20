@@ -46,7 +46,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
               with:
                   # Need full history to walk the commit range.
                   fetch-depth: 0
@@ -73,7 +73,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -92,7 +92,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -111,7 +111,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -129,7 +129,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -147,7 +147,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -167,7 +167,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -218,12 +218,12 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Checkout paired frontend
               id: sibling
               continue-on-error: true
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
               with:
                   # Override with a repository variable when the pair lives elsewhere.
                   repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
@@ -259,7 +259,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -375,7 +375,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -393,7 +393,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -446,7 +446,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -473,7 +473,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -491,7 +491,7 @@ jobs:
             contents: read
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             - name: Setup
               uses: ./.github/actions/setup
