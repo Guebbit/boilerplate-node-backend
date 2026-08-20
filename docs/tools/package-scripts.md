@@ -42,22 +42,23 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 
 ## Validation scripts
 
-| Script                            | Job                                                                                                             | Read more                                                                                    |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `ts-check`                        | TypeScript no-emit type check                                                                                   | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `lint` / `lint:fix`               | ESLint check or autofix                                                                                         | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                       | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `build`                           | `ts-check` + `lint` composite gate                                                                              | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `check:asyncapi-types`            | fail if `src/types/asyncapi.generated.ts` is not what `asyncapi.yaml` generates; writes nothing                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                             |
-| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI     | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                        | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                              | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `complete:manual`                 | what the gate cannot run for you: `test:prism`, which binds a real port                                         | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:` | [Load Testing](./load-testing.md)                                                            |
-| `bench:orders`                    | measure                                                                                                         | the same, against `/orders` — the endpoint that embeds snapshots and derives totals          | [Quick Start](./testing-quickstart.md) |
-| `bench:inventory`                 | measure                                                                                                         | the same, against `/inventory/levels`                                                        | [Quick Start](./testing-quickstart.md) |
-| `bench:k6`                        | measure                                                                                                         | ramping load over several endpoints, with thresholds — passes or fails rather than reporting | [Quick Start](./testing-quickstart.md) |
-| `bench:k6:checkout`               | measure                                                                                                         | the write path under contention: login, cart, checkout. **Writes** — throwaway database only | [Quick Start](./testing-quickstart.md) |
+| Script                            | Job                                                                                                                                          | Read more                                                                                    |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `ts-check`                        | TypeScript no-emit type check                                                                                                                | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `lint` / `lint:fix`               | ESLint check or autofix                                                                                                                      | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                                                    | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `build`                           | `ts-check` + `lint` composite gate                                                                                                           | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `check:asyncapi-types`            | fail if `src/types/asyncapi.generated.ts` is not what `asyncapi.yaml` generates; writes nothing                                              | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                             |
+| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI                                  | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `check:module-docs`               | fail on a stale module page, an undocumented file shape, a module with no page, a page with no module, or a missing cross-repo pairing entry | [Modules](../modules/)                                                                       |
+| `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                                                     | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                                                           | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `complete:manual`                 | what the gate cannot run for you: `test:prism`, which binds a real port                                                                      | [Testing & Docs](./testing-and-docs.md)                                                      |
+| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:`                              | [Load Testing](./load-testing.md)                                                            |
+| `bench:orders`                    | measure                                                                                                                                      | the same, against `/orders` — the endpoint that embeds snapshots and derives totals          | [Quick Start](./testing-quickstart.md) |
+| `bench:inventory`                 | measure                                                                                                                                      | the same, against `/inventory/levels`                                                        | [Quick Start](./testing-quickstart.md) |
+| `bench:k6`                        | measure                                                                                                                                      | ramping load over several endpoints, with thresholds — passes or fails rather than reporting | [Quick Start](./testing-quickstart.md) |
+| `bench:k6:checkout`               | measure                                                                                                                                      | the write path under contention: login, cart, checkout. **Writes** — throwaway database only | [Quick Start](./testing-quickstart.md) |
 
 ## Test scripts
 
@@ -118,10 +119,11 @@ uncommitted file cannot be stale.
 
 ## Docs scripts
 
-| Script                                     | Job                                                 | Read more                                        |
-| ------------------------------------------ | --------------------------------------------------- | ------------------------------------------------ |
-| `docs:dev` / `docs:build` / `docs:preview` | local docs authoring, production build, and preview | [Testing & Docs](./testing-and-docs.md)          |
-| `docs:asyncapi`                            | open AsyncAPI Studio locally                        | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
+| Script                                     | Job                                                                                       | Read more                                        |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `docs:dev` / `docs:build` / `docs:preview` | local docs authoring, production build, and preview                                       | [Testing & Docs](./testing-and-docs.md)          |
+| `docs:asyncapi`                            | open AsyncAPI Studio locally                                                              | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
+| `docs:modules`                             | rewrite the generated blocks of every module page from the manifests, routers and schemas | [Modules](../modules/)                           |
 
 ## Database & seed scripts
 

@@ -8,6 +8,16 @@ A module is a typed value declared in its manifest, not a folder convention — 
 [Modules](../theory/modules.md) for what that buys and
 [Adding & Removing a Module](../theory/module-lifecycle.md) for the lifecycle.
 
+::: tip This page explains shapes. For a domain, read its page.
+Everything below describes a **file shape** — what a `repository.ts` is, wherever you find one.
+What each domain does with those shapes, which of them it carries, and what it owns is on its own
+page under [Modules](../modules/).
+
+The shapes below are also enforced. `scripts/module-docs/shapes.ts` holds the same catalogue in
+code, and `npm run check:module-docs` fails on a file in a module folder that matches none of them —
+so a new shape costs one line here and one there, and stops being invisible.
+:::
+
 ---
 
 ## The shape of one module
@@ -83,28 +93,11 @@ Every module also carries its own unit, contract and factory files. They are cat
 [Tests](./tests.md), with the rest of the suite.
 :::
 
-## The thirteen modules
+## Which module carries which
 
-**Extras** lists the optional shapes above that each module carries. Nothing asserts it, so it is
-the row most likely to go quietly wrong — a module that gains a metrics file and does not gain the
-word here simply reads as not having one. Re-derive it rather than trusting it:
+Per-module answers live on the [Modules](../modules/) pages, one per domain, and the whole set is
+[the matrix on its overview](../modules/index.md#every-module).
 
-```bash
-ls src/modules/<name>
-```
-
-| Module                                | What it owns                                                                                                                                                                                       | Extras                                                                                      |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `src/modules/account/module.ts`       | Authentication and the account lifecycle: signup, login, refresh, password reset, logout-everywhere, and the two-step deletion. A second service over the `users` record.                          | index · services · demo · factory · audit · metrics · analytics · emails · probes · session |
-| `src/modules/audit-logs/module.ts`    | The queryable audit trail, kept for the retention window a TTL index enforces. Declares no router — the headless half of the manifest — and the endpoint that reads it belongs to `observability`. | index · metrics                                                                             |
-| `src/modules/cart/module.ts`          | One cart document per user, priced against the live catalogue.                                                                                                                                     | index · services · domain · demo · factory · audit · metrics · analytics · probes           |
-| `src/modules/delivery/module.ts`      | Shipping rates, shipments and the fake courier. Rates live in the domain layer as pure functions.                                                                                                  | index · domain · audit · emails                                                             |
-| `src/modules/feedback/module.ts`      | Contact requests: anyone may file one, admins triage them. Records an email address rather than a user, because the form is open to people with no account.                                        | audit · emails                                                                              |
-| `src/modules/inventory/module.ts`     | The two stock counters, the reservation lifecycle, and the ledger that explains both. The counters sit on the product document, but only this module writes them.                                  | index · domain · audit · metrics · events · config                                          |
-| `src/modules/locales/module.ts`       | Which languages this deployment speaks, and the dictionaries a client downloads. Distinct from the API's own bundles, which never merge with these.                                                | demo · factory · audit                                                                      |
-| `src/modules/observability/module.ts` | The operator-facing view: health, the metrics overview, the live SSE stream, the Prometheus scrape endpoint and the audit read. Owns no collection, which is why it has no model or repository.    | asyncapi                                                                                    |
-| `src/modules/orders/module.ts`        | Placed orders — admin write and soft delete, each account reading back its own. Embeds the catalogue row as it stood at purchase time, so a later product edit cannot rewrite history.             | index · domain · demo · factory · audit · metrics · analytics · events · emails · probes    |
-| `src/modules/payments/module.ts`      | An order's money, behind a provider port. The intent freezes a total, the confirm moves the order to paid.                                                                                         | audit · metrics · analytics · providers                                                     |
-| `src/modules/products/module.ts`      | The catalogue: public read, admin write, soft delete with restore. Depends on nothing.                                                                                                             | index · demo · factory · audit · analytics · events · probes                                |
-| `src/modules/users/module.ts`         | The user record: admin-facing search, read, write and soft delete. Depends on nothing.                                                                                                             | index · demo · factory · audit · events                                                     |
-| `src/modules/wishlist/module.ts`      | One wishlist per user, holding product references and nothing else.                                                                                                                                | demo · factory · analytics                                                                  |
+Both are generated from the manifests rather than transcribed, which is the reason they are there
+and not here: a module that gains a metrics file gains the word on the next `npm run docs:modules`,
+and `npm run check:module-docs` fails while it has not.

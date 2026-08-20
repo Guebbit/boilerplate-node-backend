@@ -26,7 +26,8 @@ Over in the paired frontend the mirror command is `npm run regenerate` as well �
 pull, or the app ships a client for the previous contract.
 
 The steps are still individually runnable (`contracts:bundle`, `gen:api`, `gen:asyncapi`,
-`seed:export`, `sync:frontend`) and worth reaching for when you know exactly what changed. The
+`seed:export`, `docs:modules`, `sync:frontend`) and worth reaching for when you know exactly what
+changed. The
 umbrella exists because the order is not guessable — see below.
 
 ## Why two steps and not one
@@ -85,13 +86,15 @@ phase and not the others.
 
 | You edited                                            | Run                                                | Because                                           |
 | ----------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
-| `src/modules/*/openapi.yaml`                           | `contracts:bundle` → `gen:api`                       | `openapi.yaml`, then the types and Zod schemas from it |
+| `src/modules/*/openapi.yaml`                           | `contracts:bundle` → `gen:api` → `docs:modules`      | `openapi.yaml`, then the types and Zod schemas from it, then the summaries on the module's page |
 | `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
 | `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml` and `asyncapi.public.yaml`, then `src/types/asyncapi.generated.ts` |
 | `src/modules/*/analytics.ts`                          | `contracts:bundle`                                  | rebuilds `src/infrastructure/observability/analytics-events.frontend.ts` |
 | `src/modules/*/demo.ts`                             | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
-| A route, controller or service (no contract change)   | nothing                                             | no bundle reads source code                       |
+| `src/modules/*/module.ts`, `model.ts`, `routes.ts`    | `docs:modules`                                      | the manifest, the schema and the router are what a module page states; `check:module-docs` fails while the page disagrees |
+| `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `docs:modules` (and `contracts:bundle` for the first two) | the page's **Signals** block names what each of them declares |
+| A controller or service (no contract, no route change) | nothing                                             | no bundle reads source code, and no page states a service's internals |
 | `openapi.yaml` / `asyncapi*.yaml` **directly**        | stop — edit the fragment instead                    | the next bundle overwrites you, and `contracts:bundle --check` fails first |
 | `contract.{bruno,insomnia,mockoon,postman}.*`         | stop — these are generated                          | edit the contract or the probes; a hand edit is reverted by the next run |
 

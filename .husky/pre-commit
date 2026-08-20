@@ -31,8 +31,15 @@
 # would pass against content that is not what gets committed. Note this widens a partial
 # `git add -p` to include the whole regenerated output — which is what you want for a generated
 # file, and a surprise exactly once.
+#
+# `docs/modules/` and `docs/api/endpoints.md` are on the list for the same reason `api/` is:
+# `regenerate` ends with `docs:modules`, which rewrites the generated blocks of every module page
+# and the app-wide endpoint table from the manifests, routers and schemas. Leave them off and
+# `check:module-docs` verifies a working tree that is fresher than the commit — green gate, stale
+# pages.
 npm run regenerate -- --no-sync
 git add openapi.yaml asyncapi.yaml asyncapi.public.yaml api src/types/asyncapi.generated.ts \
-        db/demo/demo-data.json src/infrastructure/observability/analytics-events.frontend.ts
+        db/demo/demo-data.json src/infrastructure/observability/analytics-events.frontend.ts \
+        docs/modules docs/api/endpoints.md
 
 npm run complete

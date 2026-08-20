@@ -13,6 +13,7 @@ export default withMermaid(
                 { text: 'Home', link: '/' },
                 { text: 'Start', link: '/getting-started' },
                 { text: 'Theory', link: '/theory/' },
+                { text: 'Modules', link: '/modules/' },
                 { text: 'Tools', link: '/tools/' },
                 { text: 'API', link: '/api/' },
                 { text: 'Files', link: '/reference/' }
@@ -38,6 +39,69 @@ export default withMermaid(
                             { text: 'Request Flow', link: '/theory/request-flow' },
                             { text: 'Request Input', link: '/theory/request-input' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' }
+                        ]
+                    }
+                ],
+                '/modules/': [
+                    {
+                        text: 'Overview',
+                        items: [{ text: 'The whole map', link: '/modules/' }]
+                    },
+                    {
+                        text: 'core',
+                        collapsed: false,
+                        items: [
+                            {
+                                text: 'cart',
+                                link: '/modules/cart',
+                                items: [{ text: 'Checkout', link: '/modules/cart-checkout' }]
+                            },
+                            { text: 'orders', link: '/modules/orders' },
+                            { text: 'products', link: '/modules/products' }
+                        ]
+                    },
+                    {
+                        text: 'supporting',
+                        collapsed: false,
+                        items: [
+                            { text: 'delivery', link: '/modules/delivery' },
+                            {
+                                text: 'inventory',
+                                link: '/modules/inventory',
+                                items: [
+                                    {
+                                        text: 'Reservations',
+                                        link: '/modules/inventory-reservations'
+                                    }
+                                ]
+                            },
+                            {
+                                text: 'payments',
+                                link: '/modules/payments',
+                                items: [
+                                    {
+                                        text: 'The provider port',
+                                        link: '/modules/payments-provider-port'
+                                    }
+                                ]
+                            },
+                            { text: 'wishlist', link: '/modules/wishlist' }
+                        ]
+                    },
+                    {
+                        text: 'generic',
+                        collapsed: false,
+                        items: [
+                            {
+                                text: 'account',
+                                link: '/modules/account',
+                                items: [{ text: 'Sessions', link: '/modules/account-sessions' }]
+                            },
+                            { text: 'audit-logs', link: '/modules/audit-logs' },
+                            { text: 'feedback', link: '/modules/feedback' },
+                            { text: 'locales', link: '/modules/locales' },
+                            { text: 'observability', link: '/modules/observability' },
+                            { text: 'users', link: '/modules/users' }
                         ]
                     }
                 ],

@@ -43,11 +43,25 @@ This backend and its frontend share a set of files byte-for-byte. These four kee
 | `scripts/demo.ts`        | The demo profile — the real API against an in-memory MongoDB, self-contained and disposable. What `npm run demo` boots, and what the paired frontend's e2e suite runs against. | [Demo profile](../tools/demo-profile.md) |
 | `scripts/export-seed.ts` | Publishes the demo dataset as the API actually serves it — `npm run seed:export`, with a check mode as the gate.                                                               | [Data](./data.md)                        |
 
+## Module documentation
+
+| File                                  | What it is                                                                                                                                                                 | Read next                                                   |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `scripts/gen-module-documentation.ts` | The CLI — `npm run docs:modules`, or `--check` in the gate. Imports the enabled module list and hands it to the generator.                                                 | [Modules](../modules/)                                      |
+| `scripts/module-docs/facts.ts`        | Reads every manifest, express router, Mongoose schema and contract fragment into the facts a page states. Nothing here is transcribed by hand.                             | [Modules](../modules/)                                      |
+| `scripts/module-docs/blocks.ts`       | Renders the eight generated blocks of one module page. Mirrors the frontend's copy on the idea: a collection there is a store, an endpoint is a screen.                    | [Modules](../modules/)                                      |
+| `scripts/module-docs/overview.ts`     | Renders the whole-map blocks — the context map, the legend, the matrix, the pairing table — plus the route table on [Endpoints](../api/endpoints.md).                      | [Modules](../modules/)                                      |
+| `scripts/module-docs/shapes.ts`       | The catalogue of file shapes a module folder may contain. A file matching none of them fails `check:module-docs` by name, which is what stops a new shape being invisible. | [Modules](./src-modules.md)                                 |
+| `scripts/module-docs/pairing.ts`      | Which **frontend** module each domain here answers, or a sentence saying why none does. The only file in this repo that names a domain on the other side.                  | [Modules](../modules/index.md#the-two-repositories)         |
+| `scripts/module-docs/subpages.ts`     | The sub-pages a module has earned. Declared rather than discovered, so a declared page that was never written is a failure rather than a gap.                              | [Modules](../modules/)                                      |
+| `scripts/module-docs/index.ts`        | Assembles the pages, runs them through prettier so the generator is the file's only writer, and holds the result to five coverage rules.                                   | [Adding & Removing a Module](../theory/module-lifecycle.md) |
+
 ## Checks
 
-| File                     | What it is                                                                                                                                                           | Read next                                                   |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| `scripts/prism-smoke.ts` | Boots Prism against `openapi.yaml` and proves it answers — `npm run test:prism`. A smoke test of the contract, not of the app: Prism serves the spec's own examples. | [Contract Testing (Response)](../tools/contract-testing.md) |
+| File                                          | What it is                                                                                                                                                            | Read next                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `scripts/prism-smoke.ts`                      | Boots Prism against `openapi.yaml` and proves it answers — `npm run test:prism`. A smoke test of the contract, not of the app: Prism serves the spec's own examples.  | [Contract Testing (Response)](../tools/contract-testing.md) |
+| `scripts/gen-module-documentation.ts --check` | `npm run check:module-docs`. Fails on a stale page, an undocumented file shape, a module with no page, a page with no module, and a missing cross-repo pairing entry. | [Modules](../modules/)                                      |
 
 ## Mutation testing
 

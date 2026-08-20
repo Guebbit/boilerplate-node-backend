@@ -375,6 +375,13 @@ thing itself. `subscribe` was the one field that broke it; six modules fill it t
 
 ## The dependency graph
 
+::: tip The live version of this graph
+The diagram below explains the **rules**. The graph as it stands — every edge, labelled with its
+relationship and its reason, generated from the manifests — is
+[the map on the Modules overview](../modules/index.md#the-whole-map), and every node there links to
+the domain's own page.
+:::
+
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
 flowchart TD

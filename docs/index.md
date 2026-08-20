@@ -12,6 +12,9 @@ hero:
           text: Read Theory
           link: /theory/
         - theme: alt
+          text: Browse Modules
+          link: /modules/
+        - theme: alt
           text: Explore Tools
           link: /tools/
         - theme: alt
@@ -47,6 +50,7 @@ flowchart TD
     A --> F[mvc-mysql-sequelize\nMVC or monorepo + SQL stack]
 
     B --> T[Theory]
+    B --> M[Modules]
     B --> U[Tools]
     B --> V[API]
 
@@ -55,7 +59,7 @@ flowchart TD
     classDef docs fill:#dbeafe,stroke:#2563eb,color:#111827;
     class A,C,D,E,F family;
     class B current;
-    class T,U,V docs;
+    class T,M,U,V docs;
 ```
 
 ## Read this repo as
@@ -69,11 +73,17 @@ flowchart TD
 - **Contracts**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./api/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
 - **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
 
-## Four sections, four jobs
+## Five sections, five jobs
 
 ### [Theory](./theory/)
 
 Big picture: architecture, layers, and request flow.
+
+### [Modules](./modules/)
+
+One page per domain, top to bottom: what it owns, who depends on it, its collection fields, its
+routes, and everything it emits.
+Start at [the whole map](./modules/) — thirteen domains grouped by subdomain, every node clickable.
 
 ### [Tools](./tools/)
 
@@ -128,6 +138,7 @@ flowchart LR
 ## Good starting points
 
 - Never run this repo before? Start at [Getting Started](./getting-started.md) — four commands to a browsable API.
+- Want to know what one domain does, end to end? [Modules](./modules/) — one page each, same nine blocks every time.
 - Found a file and have no idea what it is? [File Glossary](./reference/) — one hop to an answer.
 - Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./api/regenerating.md).
 - Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).

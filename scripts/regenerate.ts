@@ -56,6 +56,11 @@ const STEPS: readonly Step[] = [
         script: 'seed:export',
         because:
             'db/demo/demo-data.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'
+    },
+    {
+        script: 'docs:modules',
+        because:
+            'docs/modules/ — the generated half of every module page, from the manifests, routers and schemas'
     }
 ];
 
