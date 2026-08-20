@@ -132,12 +132,38 @@ consumeFromQueue({
     queue: EMAIL_QUEUE,
     prefetch: 5,
     handler: async (message) => {
-        // Process the message; return true to ack, false to nack.
+        // Return true to ack. Return false ONLY for a job that will never be processable —
+        // it is dead-lettered permanently. Let anything transient reject: the broker requeues it.
         await sendEmail(message);
         return true;
     }
 });
 ```
+
+### Dead letters
+
+Every work queue is declared with a dead-letter exchange, and every declaration also creates and
+binds the queue the refusals land in:
+
+| Name           | What it is                                                     |
+| -------------- | -------------------------------------------------------------- |
+| `dead-letter`  | A `direct` exchange. Every refused message is routed to it.    |
+| `<queue>.dead` | The dead-letter queue for `<queue>`, bound under its own name. |
+
+That is what makes the handler's three outcomes mean what they say:
+
+| Handler does  | Broker call               | Where the message goes         |
+| ------------- | ------------------------- | ------------------------------ |
+| resolve true  | `ack`                     | deleted — the job is done      |
+| resolve false | `nack(msg, false, false)` | `<queue>.dead`, for a human    |
+| reject        | `nack(msg, false, true)`  | back on `<queue>`, tried again |
+
+**Upgrading an existing broker.** `assertQueue` throws `PRECONDITION_FAILED` when a queue already
+exists with different arguments, which is what adding the dead-letter policy does to a broker
+holding queues declared without it. The channel dies, is replaced, and fails the same way. Delete
+the old queues once (`rabbitmqctl delete_queue worker.email.send`, and the same for
+`worker.pdf.generate`) with the consumers stopped, then restart the app — the declarations are
+recreated on the first publish.
 
 ### Options
 

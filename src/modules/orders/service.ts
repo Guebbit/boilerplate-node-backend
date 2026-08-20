@@ -24,6 +24,7 @@ import type { OrderActor } from './domain';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/base-repository';
+import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /**
  * Order Service
@@ -37,9 +38,8 @@ import { toObjectId } from '@infrastructure/persistence/base-repository';
  * Filters: id, userId, productId, email
  * Pagination: page (1-based), pageSize
  *
- * Note on productId:
- * In this schema product data is embedded: items[].product.
- * We filter by items.product._id (or items.product.id if your productSchema uses that).
+ * Note on productId: product data is embedded rather than referenced, so the filter is on
+ * `items.product._id` — declared once, in the repository's `searchable.objectIds`.
  *
  * @param search
  * @param scope - Additional query filters merged into the $match stage
@@ -49,7 +49,7 @@ export const search = (
     scope?: Record<string, unknown>
 ): Promise<{
     items: OrderDocument[];
-    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    meta: PaginatedMeta;
 }> => orderRepository.search(search, scope);
 
 /**
@@ -147,10 +147,15 @@ export const create = (
  * Update an existing order document (admin).
  * Only updates the fields provided.
  *
+ * Writes the moves that are pure status — `processing`, `shipped`, `delivered`. A cancellation is
+ * not one of them and lives in `cancelById`.
+ *
  * @param order
  * @param data
  */
-export const update = (
+// `async` for the same reason the repositories are: `toObjectId(data.userId)` below throws on a
+// malformed id, and a function typed `Promise<T>` must reject rather than throw synchronously.
+export const update = async (
     order: OrderDocument,
     data: {
         status?: string;
@@ -168,40 +173,69 @@ export const update = (
      */
     const nextStatus = data.status as OrderStatus | undefined;
     if (nextStatus !== undefined && !canTransition(previousStatus, nextStatus, 'admin'))
-        return Promise.resolve(
-            generateReject(409, [
-                {
-                    code: 'ORDER_TRANSITION_NOT_ALLOWED',
-                    message: t('orders.transition.not-allowed'),
-                    details: {
-                        from: previousStatus,
-                        to: nextStatus,
-                        allowed: statusesReachableFrom(previousStatus, 'admin')
-                    }
+        return generateReject(409, [
+            {
+                code: 'ORDER_TRANSITION_NOT_ALLOWED',
+                message: t('orders.transition.not-allowed'),
+                details: {
+                    from: previousStatus,
+                    to: nextStatus,
+                    allowed: statusesReachableFrom(previousStatus, 'admin')
                 }
-            ])
-        );
+            }
+        ]);
+
+    /*
+     * The lifecycle allows an admin this edge; executing it here does not. A cancellation is a
+     * sequence — release the hold, announce `ORDER_CANCELLED` so `payments` refunds — and
+     * `POST /orders/{id}/cancel` is where it runs.
+     */
+    if (nextStatus === OrderStatus.cancelled)
+        return generateReject(409, [
+            {
+                code: 'ORDER_CANCEL_VIA_CANCEL_ENDPOINT',
+                message: t('orders.transition.cancel-elsewhere'),
+                details: { from: previousStatus, to: nextStatus }
+            }
+        ]);
 
     if (nextStatus !== undefined) order.status = nextStatus;
     if (data.email !== undefined) order.email = data.email;
     if (data.userId !== undefined) order.userId = toObjectId(data.userId);
 
+    /*
+     * Rewriting the lines is refused while the shelf is holding them: the reservation froze its own
+     * copy of the basket, and a later `commitForOrder` would decrement products the order no longer
+     * contains. `inventory` owns the question.
+     */
+    const requestedItems = data.items;
     const updateItemsPromise =
-        data.items && data.items.length > 0
-            ? Promise.all(
-                  data.items.map((item) =>
-                      productRepository
-                          .findByIdRaw(item.productId)
-                          .then((product) => ({ item, product }))
-                  )
-              ).then((resolvedItems) => {
-                  const missingProduct = resolvedItems.some(({ product }) => !product);
-                  if (missingProduct) return generateReject(404, [t('products.not-found')]);
+        requestedItems && requestedItems.length > 0
+            ? inventoryService.isStockBoundToOrder(String(order._id)).then((bound) => {
+                  if (bound)
+                      return generateReject(409, [
+                          {
+                              code: 'ORDER_ITEMS_HELD',
+                              message: t('orders.items-held')
+                          }
+                      ]);
 
-                  order.items = resolvedItems.map(({ item, product }) => ({
-                      product: product!,
-                      quantity: item.quantity
-                  }));
+                  return Promise.all(
+                      requestedItems.map((item) =>
+                          productRepository
+                              .findByIdRaw(item.productId)
+                              .then((product) => ({ item, product }))
+                      )
+                  ).then((resolvedItems) => {
+                      const missingProduct = resolvedItems.some(({ product }) => !product);
+                      if (missingProduct) return generateReject(404, [t('products.not-found')]);
+
+                      order.items = resolvedItems.map(({ item, product }) => ({
+                          product: product!,
+                          quantity: item.quantity
+                      }));
+                      return undefined;
+                  });
               })
             : Promise.resolve();
 
@@ -246,9 +280,11 @@ export const updateById = (
  * Remove an order document (soft or hard delete).
  * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
  *
- * Unlike a product, an order has no image to clean up and is in nobody's cart, so the hard path
- * is the bare delete. The soft path is what an order actually wants most of the time: it is a
- * financial record, and unsetting it from a customer's view is not the same as destroying it.
+ * The soft path is what an order actually wants most of the time: it is a financial record, and
+ * unsetting it from a customer's view is not the same as destroying it. The hard path gives the
+ * units back first — an order holds stock, so destroying the row without releasing it leaves the
+ * shelf holding units for an order nobody can look up, until the TTL sweep notices and records
+ * the deliberate deletion as an expiry.
  *
  * @param order
  * @param hardDelete
@@ -259,12 +295,19 @@ export const remove = (
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     // HARD delete
     if (hardDelete)
-        return orderRepository
-            .deleteOne(order)
-            .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')));
+        return (
+            inventoryService
+                // Released BEFORE the row goes, so the release can still name the order it
+                // belongs to. Whether it released is not checked, for the same reason
+                // `cancelById` does not check: a hold that already expired is an ordinary
+                // sequence with nothing left to do about it.
+                .releaseForOrder(String(order._id))
+                .then(() => orderRepository.deleteOne(order))
+                .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
+        );
 
-    // Toggle: delete stamps, delete again restores. An order is a financial record, so the row
-    // survives either way — only the stamp moves.
+    // The toggle — see `hardDeleteSchema` in `@infrastructure/http/schemas` for what it means.
+    // An order is a financial record, which is why this is the default path and not the other.
     order.deletedAt = order.deletedAt ? undefined : new Date();
 
     // SOFT delete (or restore)
@@ -360,14 +403,13 @@ export function withActions(
 }
 
 /**
- * The statuses a CUSTOMER's cancel may move from — read off the lifecycle table, not declared.
- * Resolves to `pending` and `paid`.
+ * The statuses a cancel may move from — read off the lifecycle table, not declared.
  *
- * Asked as `customer` whoever is calling: an admin reaching this route is running the customer's
- * cancellation on their behalf and should get identical behaviour. The operator's own moves are a
- * different row of the table.
+ * Per actor, because the table answers differently: a customer may cancel from `pending` and
+ * `paid`, an operator also from `processing`.
  */
-const CANCELLABLE_ORDER_STATUSES = statusesLeadingTo(OrderStatus.cancelled, 'customer');
+const cancellableStatuses = (actor: OrderActor): readonly OrderStatus[] =>
+    statusesLeadingTo(OrderStatus.cancelled, actor);
 
 /**
  * Cancel an order — the one write a customer may make to one.
@@ -396,7 +438,7 @@ export const cancelById = (
     return orderRepository
         .updateStatusIfIn(
             id,
-            CANCELLABLE_ORDER_STATUSES,
+            cancellableStatuses(actorOf(authContext)),
             OrderStatus.cancelled,
             callerScope(authContext)
         )

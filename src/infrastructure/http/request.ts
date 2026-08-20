@@ -257,15 +257,22 @@ export const readInput = <TId extends string = never>(
  * Validating before querying matters: passing a malformed id to Mongoose throws a CastError
  * that would surface as an opaque 500 instead of a clear 422.
  *
+ * `surface` is a parameter and not a constant because a route reads ONE surface: a delete
+ * controller that took its id under `write` and its `hardDelete` under `delete` twelve lines later
+ * would be reading one request two ways, which is the single property the closed `RequestSurface`
+ * set exists to guarantee.
+ *
  * @param entityLabel - used in the developer-facing message ('Product - missing id')
+ * @param surface - the route's precedence rule, the same one its `readInput` call declares
  */
 export const extractAndValidateId = (
     request: Request,
     response: Response,
-    _entityLabel: string
+    _entityLabel: string,
+    surface: RequestSurface = 'write'
 ): string | undefined => {
     // Route param first (`/products/:id`), then body — a param is the more explicit intent.
-    const { id } = readInput(request, { surface: 'write', ids: ['id'] });
+    const { id } = readInput(request, { surface, ids: ['id'] });
     // `Types.ObjectId.isValid` checks the format (24 hex chars / 12 bytes), not existence.
     if (!id || !Types.ObjectId.isValid(id)) {
         // 422 Unprocessable Entity: syntactically valid request, semantically unusable value.

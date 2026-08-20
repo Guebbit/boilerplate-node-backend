@@ -79,15 +79,16 @@ describe('evaluateCheckout', () => {
     });
 
     /*
-     * Deliberately inverted from what this rule used to do.
+     * A missing count means REFUSE, not allow — the counter-intuitive half of this rule.
      *
-     * It previously treated a missing count as UNCONSTRAINED, so a document with no column let
-     * any quantity through — which was the wrong direction to be wrong in for a rule whose only
-     * job is to refuse. A document carrying neither counter is one that predates the split, and
-     * the safe reading of "we do not know how many there are" is "do not sell it".
+     * Reading absence as "unconstrained" is the natural instinct and the wrong direction to be
+     * wrong in for a rule whose only job is to refuse: it lets any quantity through on exactly the
+     * documents nothing is known about. The safe reading of "we do not know how many there are" is
+     * "do not sell it".
      *
-     * Nothing is actually lost: the migration backfills every row, so this is a defence against a
-     * document that should not exist rather than a behaviour the shop relies on.
+     * Nothing is lost by it: `db/migrations/20260817120000-inventory-counters.js` backfills every
+     * row, so this defends against a document that should not exist rather than a state the shop
+     * relies on.
      */
     it('treats absent counters as nothing to sell', () => {
         expect(evaluateCheckout([line(1)])).toMatchObject({

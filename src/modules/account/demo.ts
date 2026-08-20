@@ -23,7 +23,11 @@
  */
 
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
-import { SEED_SAVE_OPTIONS, type SeedOutcome } from '@infrastructure/persistence/seed';
+import {
+    SEED_SAVE_OPTIONS,
+    type SeedOutcome,
+    exportCollection
+} from '@infrastructure/persistence/seed';
 import { makeAddressBook } from './factory';
 import { addressBookModel } from './model';
 import { addressBookRepository } from './repository';
@@ -116,9 +120,5 @@ export const seedAddressBooksCollection = (): Promise<SeedOutcome[]> =>
  * out of this file.
  */
 export const exportSeededAddressBooks = async (): Promise<Record<string, unknown[]>> => ({
-    addressBooks: await addressBookModel
-        .find()
-        .sort({ userId: 1 })
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON()))
+    addressBooks: await exportCollection(addressBookModel, { userId: 1 })
 });

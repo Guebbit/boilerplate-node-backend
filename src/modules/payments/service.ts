@@ -30,7 +30,7 @@ import type { PaymentStatus } from '@types';
 import {
     orderService,
     orderRepository,
-    sumLineItems,
+    orderTotal,
     canTransition,
     statusesLeadingTo,
     ORDER_STATUS_CHANGED
@@ -96,9 +96,11 @@ const isOwnedBy = (
 /**
  * Create (or refresh) the payment intent for an order.
  *
- * The amount is frozen here, from the order's own lines — the same `sumLineItems` the order
- * quotes, so the intent cannot ask for a different number than the order shows. Re-asking is the
- * double-click case and answers the same intent; an order whose money already moved answers 409.
+ * The amount is frozen here through `orderTotal` — the same function the order's serializer and
+ * the confirmation email call, so the intent cannot ask for a different number than the order
+ * shows. Lines alone is not that number: shipping is frozen on the order at checkout and the
+ * contract counts it in `totalPrice`. Re-asking is the double-click case and answers the same
+ * intent; an order whose money already moved answers 409.
  *
  * @param orderId - the order to pay
  * @param authContext - the caller; the order must be theirs (admins pass, as everywhere)
@@ -119,7 +121,7 @@ export const createIntent = (
         return resolvePayerId(String(order.userId))
             .then((payerId) =>
                 paymentRepository.upsertIntent(orderId, payerId, {
-                    amount: sumLineItems(order.items).price,
+                    amount: orderTotal(order),
                     currency: defaultCurrency(),
                     provider: resolvePaymentProvider().name
                 })

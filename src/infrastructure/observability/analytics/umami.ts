@@ -131,6 +131,8 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
                     ...(event.hostname ? { hostname: stripPort(event.hostname) } : {}),
                     url: `/server/${event.event}`,
                     name: event.event,
+                    // No `event.timestamp`: `/api/send` declares no such field, so Umami stamps
+                    // ingest time. See the field's docblock in `./index`.
                     data: buildEventData(event)
                 }
             })

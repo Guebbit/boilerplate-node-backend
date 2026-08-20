@@ -10,7 +10,8 @@
             "not-cancellable": "Questo ordine non può più essere annullato."
         },
         "transition": {
-            "not-allowed": "Questo ordine non può passare a quello stato dalla posizione in cui si trova."
+            "not-allowed": "Questo ordine non può passare a quello stato dalla posizione in cui si trova.",
+            "cancel-elsewhere": "L'annullamento di un ordine esegue la sequenza di annullamento — annullalo tramite l'endpoint di annullamento dell'ordine."
         },
         "invoice-missing": "Nessun file fattura è stato trovato",
         "invoice": {
@@ -26,6 +27,7 @@
             "line": "{{title}} — {{quantity}} × {{price}}",
             "total": "Totale: {{total}}"
         },
+        "items-held": "Gli articoli di questo ordine non possono essere modificati mentre le scorte sono impegnate o già vendute.",
         "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`."
     }
 }

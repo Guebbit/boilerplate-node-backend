@@ -85,6 +85,29 @@ describe('cancelById', () => {
         expect(result.success).toBe(true);
     });
 
+    /**
+     * The lifecycle gives `processing → cancelled` to `admin` and to nobody else, and this is the
+     * only code path that can run it — `update()` refuses to execute a cancellation at all. Read
+     * as `customer` regardless of caller, the operator's own edge would exist in the table and
+     * nowhere else, and `orderActionsFor(status, 'admin')` would keep offering a control the
+     * server refuses.
+     */
+    it('an operator cancels a processing order, which a customer cannot', async () => {
+        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const order = await seedOrder(owner);
+        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'processing');
+
+        const refused = await orderService.cancelById(String(order._id), asUser(owner));
+        expect(refused.success).toBe(false);
+        expect(refused.status).toBe(409);
+
+        const allowed = await orderService.cancelById(String(order._id), { admin: true });
+
+        expect(allowed.success).toBe(true);
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored?.status).toBe('cancelled');
+    });
+
     it('a soft-deleted order is a 404 for its owner — hidden means hidden', async () => {
         const user = await createUser();
         const order = await seedOrder(user);

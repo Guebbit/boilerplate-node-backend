@@ -9,8 +9,8 @@
 
 // `toCents` is deliberately absent: `sumLineItems` is its only caller, and `totals.ts` is where
 // its property test reaches it. A barrel line would make it look like a rule others may use.
-export { sumLineItems } from './totals';
-export type { LineItem, LineItemTotals } from './totals';
+export { sumLineItems, orderTotal } from './totals';
+export type { LineItem, LineItemTotals, OrderTotalInput } from './totals';
 
 export { checkOrderLines } from './rules';
 export type { OrderLineCandidate, OrderLinesVerdict } from './rules';

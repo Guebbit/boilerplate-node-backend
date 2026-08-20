@@ -1,5 +1,5 @@
 import { userModel, applyUserTransform, TokenType } from './model';
-import type { UserDocument } from './model';
+import type { UserDocument, Token } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
 import {
     createBaseRepository,
@@ -31,6 +31,7 @@ export const userRepository: BaseRepository<UserDocument> & {
     ) => Promise<UpdateWriteOpResult>;
     findByIdWithCredentials: (id: string) => Promise<UserDocument | null>;
     findOneWithCredentials: (where: QueryFilter<UserDocument>) => Promise<UserDocument | null>;
+    findByToken: (token: string, type: Token['type']) => Promise<UserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
@@ -66,6 +67,30 @@ export const userRepository: BaseRepository<UserDocument> & {
      */
     findOneWithCredentials: (where: QueryFilter<UserDocument>) =>
         userModel.findOne(where).select(CREDENTIAL_FIELDS).exec(),
+
+    /**
+     * Fetch the user holding a token of this exact type, WITH its credential fields.
+     *
+     * `$elemMatch` rather than two dotted paths, and that is the whole point of the method. Written
+     * as `{ 'tokens.token': token, 'tokens.type': type }`, Mongo applies each condition to the
+     * array independently: it matches a user holding the value in ONE entry and the type in
+     * ANOTHER. A user with both a reset token and a delete token — the ordinary state during an
+     * account deletion — is therefore returned by a lookup for either type, whichever token was
+     * supplied. `$elemMatch` requires both conditions to hold on the SAME entry, which is what
+     * "holds a password-reset token" means.
+     *
+     * Credentials included: `tokens` carries `select: false`, and every caller reads the matching
+     * entry's expiration straight off the returned document.
+     *
+     * @param token - the token value from the link the user followed
+     * @param type - which kind of token it must be
+     * @returns the holder, or `null`
+     */
+    findByToken: (token: string, type: Token['type']) =>
+        userModel
+            .findOne({ tokens: { $elemMatch: { token, type } } })
+            .select(CREDENTIAL_FIELDS)
+            .exec(),
 
     /**
      * Spend one token by value, atomically.

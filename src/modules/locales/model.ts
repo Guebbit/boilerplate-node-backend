@@ -1,5 +1,5 @@
 import { model, Schema } from 'mongoose';
-import type { Document, Model, QueryFilter } from 'mongoose';
+import type { Document, Model } from 'mongoose';
 import { LocaleDirection, LocaleScope } from '@types';
 import type { Language, LocaleEntry } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -41,9 +41,6 @@ export interface LocaleMessageDocument
 
 export type LocaleModel = Model<LocaleDocument>;
 export type LocaleMessageModel = Model<LocaleMessageDocument>;
-/** Shorthand types for Mongoose query filters on the two collections. */
-export type LocaleQueryFilter = QueryFilter<LocaleDocument>;
-export type LocaleMessageQueryFilter = QueryFilter<LocaleMessageDocument>;
 
 /** The languages. */
 export const localeSchema = new Schema<LocaleDocument, LocaleModel>(

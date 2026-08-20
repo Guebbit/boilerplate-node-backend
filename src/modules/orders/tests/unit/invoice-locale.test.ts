@@ -134,11 +134,13 @@ describe('the PDF worker renders the copy it was given', () => {
         expect(renderHtmlToPdfMock).not.toHaveBeenCalled();
     });
 
-    it('nacks rather than throwing when rendering fails', async () => {
+    it('lets a failed render reject, so the invoice is retried rather than dropped', async () => {
         renderHtmlToPdfMock.mockRejectedValueOnce(new Error('puppeteer died'));
         const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
 
-        await expect(handlePdfJob(invoiceJob('it'))).resolves.toBe(false);
+        // A dead browser says nothing about the job. `false` would dead-letter it; a rejection
+        // puts it back on the queue — see the worker's own docblock.
+        await expect(handlePdfJob(invoiceJob('it'))).rejects.toThrow('puppeteer died');
     });
 });
 

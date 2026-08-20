@@ -27,7 +27,15 @@ import type { OrderDocument } from '@modules/orders';
 import type { UserDocument } from '@modules/users';
 import type { ProductDocument } from '@modules/products';
 import { orderRepository } from '@modules/orders';
-import { makeOrder as buildOrder, type OrderFixture, type OrderLineInput } from '../factory';
+import {
+    makeOrder as buildOrder,
+    type OrderFixture,
+    type OrderLineInput,
+    type OrderOverrides
+} from '../factory';
+
+/** Everything about an order a test may set beyond who placed it and what is in it. */
+type OrderExtras = Omit<OrderOverrides, 'userId' | 'email' | 'items'>;
 
 /**
  * Convert a persisted product document into an order line ready to embed.
@@ -43,14 +51,28 @@ export const toOrderItem = (product: ProductDocument, quantity = 1): OrderLineIn
     return { product: { ...snapshot, id: String(_id) }, quantity };
 };
 
-/** Build a valid order payload from a user and a list of order lines. */
-export const makeOrder = (user: UserDocument, items: OrderLineInput[]): OrderFixture =>
+/**
+ * Build a valid order payload from a user and a list of order lines.
+ *
+ * `extras` is what an order carries beyond its lines — the shipping columns above all, which the
+ * builder passes through rather than defaulting so that a test can tell "no method chosen" from
+ * "chose a free one". A total that ignores shipping is only visible on an order that has some.
+ */
+export const makeOrder = (
+    user: UserDocument,
+    items: OrderLineInput[],
+    extras: OrderExtras = {}
+): OrderFixture =>
     buildOrder({
         userId: String(user._id),
         email: user.email,
-        items
+        items,
+        ...extras
     });
 
 /** Insert an order into the test database and return the Mongoose document. */
-export const createOrder = (user: UserDocument, items: OrderLineInput[]): Promise<OrderDocument> =>
-    orderRepository.create(makeOrder(user, items));
+export const createOrder = (
+    user: UserDocument,
+    items: OrderLineInput[],
+    extras: OrderExtras = {}
+): Promise<OrderDocument> => orderRepository.create(makeOrder(user, items, extras));

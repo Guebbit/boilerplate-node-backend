@@ -59,7 +59,11 @@ export interface AnalyticsEvent {
     distinctId: string;
     /** Event name, from the declaring module's own catalogue. */
     event: AnalyticsEventName;
-    /** ISO-8601 timestamp; defaults to now if omitted. */
+    /**
+     * When the event happened, if that is not now. PostHog-only: Umami's `/api/send` declares no
+     * timestamp field (checked against v2.14.0, the pinned image) and stamps ingest time, so an
+     * event replayed by a backfill lands under the wrong date there.
+     */
     timestamp?: Date;
     /** OTel trace ID for cross-signal correlation. */
     traceId?: string;

@@ -11,10 +11,17 @@ import {
     type PaginationInput
 } from './search';
 
+/**
+ * The ceiling `findAll` applies when a caller names no limit. A backstop against an unbounded
+ * collection scan, not a page size — paging goes through `search`.
+ */
+export const FIND_ALL_LIMIT = 1000;
+
 /** Pagination/sort options shared across all repository `findAll` calls. */
 export interface FindAllOptions {
     sort?: Record<string, 1 | -1>;
     skip?: number;
+    /** How many documents at most. Defaults to {@link FIND_ALL_LIMIT}. */
     limit?: number;
 }
 
@@ -248,7 +255,9 @@ export function createBaseRepository<TDocument extends Document>(
      */
     const findAll = (
         where: QueryFilter<TDocument> = {},
-        { sort = { createdAt: -1 as const }, skip = 0, limit = 10 }: FindAllOptions = {}
+        // `sort` defaults to `DEFAULT_SORT` because this applies `skip`, and a non-unique sort
+        // makes which documents a page contains undefined.
+        { sort = DEFAULT_SORT, skip = 0, limit = FIND_ALL_LIMIT }: FindAllOptions = {}
     ): Promise<TDocument[]> =>
         mongooseModel
             .find({ ...where })

@@ -118,6 +118,14 @@ export default tseslint.config(
             'no-console': 'warn',
             'no-debugger': 'warn',
             'no-restricted-syntax': ['error', ...bannedDoubleCasts],
+            /*
+             * `!` is allowed where a value has ALREADY been proven present by something the
+             * compiler cannot follow — the `isAdmin` middleware guaranteeing `request.authContext`,
+             * a `.some(x => !x)` guard proving the `.map` below it finds no `undefined`. The
+             * alternative is a cast, which `no-restricted-syntax` above bans for being the same
+             * claim in a form that also silences type errors. The claim itself is the same either
+             * way; `!` is the spelling that stays narrow.
+             */
             '@typescript-eslint/no-non-null-assertion': 'off',
             '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
             'no-nested-ternary': 'off',

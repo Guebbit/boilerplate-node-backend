@@ -27,7 +27,7 @@ import {
 import { SEED_PRODUCT_IDS, seedProductById } from '@modules/products/demo';
 import { makeOrder, type OrderSnapshotInput } from './factory';
 import { orderModel } from './model';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { orderRepository } from './repository';
 
 /** The catalogue row as it stands, reshaped into the snapshot an order item stores. */
@@ -146,9 +146,5 @@ export const seedOrdersCollection = (): Promise<SeedOutcome[]> =>
  * lets the paired frontend stop recomputing that arithmetic in `mockOrderMath` and hope it agrees.
  */
 export const exportSeededOrders = async (): Promise<Record<string, unknown[]>> => ({
-    orders: await orderModel
-        .find()
-        .sort({ _id: 1 })
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON()))
+    orders: await exportCollection(orderModel, { _id: 1 })
 });

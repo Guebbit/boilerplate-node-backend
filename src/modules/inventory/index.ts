@@ -27,16 +27,13 @@ export { inventoryService } from './service';
 export { availabilityOf } from './domain';
 
 /*
- * `StockMovementReason`, `InventoryLevel` and `StockLine` are deliberately NOT re-exported.
- *
- * Each was, briefly, and `tests/cross-cutting/published-language.test.ts` caught all three as
- * promises made to nobody. That test is right and the instinct behind the exports was wrong:
- * `releaseForOrder` defaults its reason, so a caller never names one; the two types describe
- * shapes that only cross the wire, where the generated contract types are what a client reads.
- * `InventoryLevel` has since become exactly that — `service.ts` imports it from `@types` rather
- * than restating it — so there is no longer a local declaration here to re-export at all.
- * A barrel line is a commitment that a shape will not move — worth making for a real caller,
- * never on speculation.
+ * `StockMovementReason` and `StockLine` are deliberately NOT re-exported, and
+ * `tests/cross-cutting/published-language.test.ts` is what keeps them out: a barrel line is a
+ * promise that a shape will not move, worth making for a real caller and never on speculation.
+ * `releaseForOrder` defaults its reason, so no caller names one; `StockLine` describes a shape
+ * that only crosses the wire, where the generated contract types are what a client reads.
+ * `InventoryLevel` is one of those generated types — `service.ts` imports it from `@types` — so
+ * there is no local declaration here to publish.
  */
 
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */

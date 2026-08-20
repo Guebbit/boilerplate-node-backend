@@ -1,5 +1,5 @@
 /**
- * Line-item totals — what a list of priced lines adds up to.
+ * Order totals — what a list of priced lines adds up to, and what the customer owes on top of it.
  *
  * Owned by `orders`; `cart` and `payments` read it through the barrel, so a cart summary, the
  * order it previews and the intent that freezes it can never disagree. Same number, three names,
@@ -64,3 +64,25 @@ export const sumLineItems = (items: readonly LineItem[]): LineItemTotals => {
     // `count` is lines as given; `quantity` is units. A dropped line still counts as a line.
     return { count: items.length, quantity, price: toDecimalAmount(price) };
 };
+
+/** An order, as far as its grand total is concerned. */
+export interface OrderTotalInput {
+    items: readonly LineItem[];
+    /**
+     * The shipping cost frozen at checkout. `unknown` because it arrives as raw aggregate output,
+     * optional because a checkout that chose no delivery method owes nothing for shipping.
+     */
+    shippingCost?: unknown;
+}
+
+/**
+ * What the customer owes: the lines plus the shipping frozen against them.
+ *
+ * `money.ts` owns rounding; this owns composition. Three callers must agree on this number — the
+ * order, the payment intent and the confirmation email — so none of them sums it themselves.
+ *
+ * @param order - the order's lines and its frozen shipping cost
+ * @returns the grand total as the decimal amount the contract publishes
+ */
+export const orderTotal = ({ items, shippingCost }: OrderTotalInput): number =>
+    toDecimalAmount(addMoney(toMinorUnits(sumLineItems(items).price), toMinorUnits(shippingCost)));

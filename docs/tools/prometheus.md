@@ -29,6 +29,11 @@ Grafana reads Prometheus for all metric charts and dashboards.
 | `auth_login_total`, `cart_checkout_total`, … | business counters                          |
 | `process_*` and `nodejs_*`                   | default `prom-client` runtime metrics      |
 
+The `route` label is the template Express matched — `/orders/:id` — read on `finish`, or
+`unmatched` for a request that reached no handler. Never a requested path: prom-client evicts
+nothing, and a public deployment is scanned against a near-infinite path dictionary, so a label
+derived from the URL grows the registry for the life of the process.
+
 ## Alert rules
 
 Baseline alert rules live in `.docker/observability/prometheus.alert-rules.yaml`:

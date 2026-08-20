@@ -170,10 +170,12 @@ describe('the email worker renders the copy it was given', () => {
         expect(sendMailMock).not.toHaveBeenCalled();
     });
 
-    it('nacks rather than throwing when the send fails', async () => {
+    it('lets a failed send reject, so the email is retried rather than dropped', async () => {
         sendMailMock.mockRejectedValueOnce(new Error('smtp refused'));
         const { handleEmailJob } = await import('@infrastructure/adapters/email.worker');
 
-        await expect(handleEmailJob(jobFor('it'))).resolves.toBe(false);
+        // A refused SMTP connection says nothing about this job. `false` would dead-letter it;
+        // a rejection puts it back on the queue — see the worker's own docblock.
+        await expect(handleEmailJob(jobFor('it'))).rejects.toThrow('smtp refused');
     });
 });

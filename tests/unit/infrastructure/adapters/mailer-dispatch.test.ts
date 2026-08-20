@@ -183,6 +183,29 @@ describe('enqueueEmail — path 3: broker configured, publish fails', () => {
     });
 });
 
+/**
+ * Path 3 exists only because `publishToQueue` promises a boolean. This is what the promise is
+ * worth: `enqueueEmail` reads `published` and has no rejection handler, so an adapter that
+ * rejected instead of answering `false` would skip the inline fallback entirely — and every
+ * producer writes `void enqueueEmail(...)`, so the loss would surface as an `unhandledRejection`
+ * with no request id rather than as a failed request.
+ *
+ * The guard against that lives in `queue.test.ts`, which pins the adapter to `false`. This case
+ * pins the reason it has to.
+ */
+describe('enqueueEmail — path 3 depends on the adapter never rejecting', () => {
+    beforeEach(() => {
+        isQueueEnabledMock.mockReturnValue(true);
+        publishToQueueMock.mockRejectedValue(new Error('Channel closed'));
+    });
+
+    it('has no fallback left when the publish rejects instead of answering false', async () => {
+        await expect(enqueueEmail(REQUEST, TEMPLATE, DATA)).rejects.toThrow('Channel closed');
+
+        expect(sendMailMock).not.toHaveBeenCalled();
+    });
+});
+
 describe('enqueueEmail — the paths are mutually exclusive', () => {
     // Stated as a table over all three configurations: exactly one delivery attempt happens,
     // whichever way the broker behaves. This is what fails when a branch condition is inverted.

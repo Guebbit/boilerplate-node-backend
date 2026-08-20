@@ -167,14 +167,16 @@ every ternary in the codebase into `domain/`.
 > inlined, and its comment goes with it.**
 
 The comment is the part worth keeping. `order.deletedAt = order.deletedAt ? undefined : new Date()`
-with _"delete stamps, delete again restores — an order is a financial record"_ above it says
-everything a `nextDeletionState(deletedAt, now)` said, minus an import, a barrel line and a hop.
+with a line pointing at `hardDeleteSchema`, where the toggle's semantics are written once for every
+collection, says everything a `nextDeletionState(deletedAt, now)` said — minus an import, a barrel
+line and a hop.
 
 Both halves are live:
 
 | Kept              | Why it clears the floor                                                                                |
 | ----------------- | ------------------------------------------------------------------------------------------------------ |
 | `sumLineItems`    | Two modules — `cart` totals itself through it, so a summary cannot disagree with the order it previews |
+| `orderTotal`      | Three callers owe the customer one number — the order, the payment intent and the confirmation email   |
 | `steppedQuantity` | One caller, but a real trap: the clamp catches a double click outrunning `:disabled`                   |
 | `checkOrderLines` | Ordered reasons that map to distinct status codes and analytics labels                                 |
 

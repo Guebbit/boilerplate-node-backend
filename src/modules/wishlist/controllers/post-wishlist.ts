@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { AddWishlistItemBody } from '@api/schemas.zod';
+import { t } from '@infrastructure/i18n';
+import { isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AddWishlistItemRequest } from '@types';
@@ -32,6 +34,13 @@ export const postWishlist = (
         );
 
     const { productId } = parseResult.data;
+
+    // OpenAPI models Id as a plain string; the Mongo-specific format still needs its own check,
+    // and answering 422 is what tells a caller the id was malformed rather than absent.
+    if (!isValidObjectId(productId)) {
+        rejectResponse(response, 422, [t('generic.error-missing-data')]);
+        return;
+    }
 
     return wishlistService
         .wishlistAdd(userId, productId)

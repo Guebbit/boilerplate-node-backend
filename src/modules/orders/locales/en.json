@@ -10,7 +10,8 @@
             "not-cancellable": "This order can no longer be cancelled."
         },
         "transition": {
-            "not-allowed": "This order cannot move to that status from where it is now."
+            "not-allowed": "This order cannot move to that status from where it is now.",
+            "cancel-elsewhere": "Cancelling an order runs the cancellation sequence — cancel it through the order's cancel endpoint instead."
         },
         "invoice-missing": "No invoice file was found",
         "invoice": {
@@ -26,6 +27,7 @@
             "line": "{{title}} — {{quantity}} × {{price}}",
             "total": "Total: {{total}}"
         },
+        "items-held": "This order's items cannot be changed while its stock is held or already sold.",
         "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`."
     }
 }

@@ -16,7 +16,7 @@ import { ordersAuditActions } from '../audit';
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
  */
 export const deleteOrders = (request: Request, response: Response) => {
-    const id = extractAndValidateId(request, response, 'deleteOrder');
+    const id = extractAndValidateId(request, response, 'deleteOrder', 'delete');
     if (!id) return Promise.resolve();
 
     // `hardDelete` is a boolean the route accepts three ways — see docs/theory/request-input.md.

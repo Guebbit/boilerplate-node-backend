@@ -43,5 +43,3 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
         .then(({ items, total }) => successResponse(response, { items, total }))
         .catch((error: Error) => rejectDatabaseError(response, 'getObservabilityAuditLogs', error));
 };
-
-export default getObservabilityAuditLogs;

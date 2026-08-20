@@ -5,7 +5,6 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { toObjectId } from '@infrastructure/persistence/base-repository';
 import { productRepository } from '@modules/products';
 import { cartService } from '@modules/cart';
 import type { WishlistItem } from '@types';
@@ -47,16 +46,14 @@ export const wishlistAdd = (
     userId: string,
     productId: string
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
-    productRepository
-        .findOne({ _id: toObjectId(productId), ...productRepository.publicScope() })
-        .then((product) => {
-            if (!product) return generateReject(404, [t('wishlist.product-not-found')]);
-            return wishlistRepository
-                .addLine(userId, productId)
-                .then((wishlist) =>
-                    generateSuccess(toWishlistView(wishlist), 200, t('wishlist.added'))
-                );
-        });
+    productRepository.findPublicById(productId).then((product) => {
+        if (!product) return generateReject(404, [t('wishlist.product-not-found')]);
+        return wishlistRepository
+            .addLine(userId, productId)
+            .then((wishlist) =>
+                generateSuccess(toWishlistView(wishlist), 200, t('wishlist.added'))
+            );
+    });
 
 /**
  * Remove a saved product.

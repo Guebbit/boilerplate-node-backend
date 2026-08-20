@@ -3,7 +3,9 @@ import {
     publishToQueue,
     consumeFromQueue,
     startQueue,
-    stopQueue
+    stopQueue,
+    DEAD_LETTER_EXCHANGE,
+    deadLetterQueueOf
 } from '@infrastructure/adapters/queue';
 
 // ─── Mock amqplib ─────────────────────────────────────────────────────────────
@@ -16,21 +18,30 @@ const mockAssertQueue = jest
     .mockResolvedValue({ queue: 'test', messageCount: 0, consumerCount: 0 });
 const mockPrefetch = jest.fn().mockImplementation(() => Promise.resolve());
 const mockConsume = jest.fn().mockResolvedValue({ consumerTag: 'tag-1' });
-const mockCreateChannel = jest.fn().mockResolvedValue({
+const mockAssertExchange = jest.fn().mockResolvedValue({ exchange: DEAD_LETTER_EXCHANGE });
+const mockBindQueue = jest.fn().mockResolvedValue({});
+const mockChannelOn = jest.fn();
+const channelMock = () => ({
     assertQueue: mockAssertQueue,
+    assertExchange: mockAssertExchange,
+    bindQueue: mockBindQueue,
     sendToQueue: mockSendToQueue,
     prefetch: mockPrefetch,
     consume: mockConsume,
     ack: mockAck,
-    nack: mockNack
+    nack: mockNack,
+    on: mockChannelOn
 });
+const mockCreateChannel = jest.fn().mockImplementation(() => Promise.resolve(channelMock()));
 const mockClose = jest.fn().mockImplementation(() => Promise.resolve());
 const mockOn = jest.fn();
-const mockConnect = jest.fn().mockResolvedValue({
-    createChannel: mockCreateChannel,
-    on: mockOn,
-    close: mockClose
-});
+const mockConnect = jest.fn().mockImplementation(() =>
+    Promise.resolve({
+        createChannel: mockCreateChannel,
+        on: mockOn,
+        close: mockClose
+    })
+);
 
 jest.mock('amqplib', () => ({
     connect: (...args: unknown[]) => mockConnect(...args)
@@ -92,10 +103,77 @@ describe('publishToQueue()', () => {
         enableRabbitMQ();
         const result = await publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
         expect(result).toBe(true);
-        expect(mockAssertQueue).toHaveBeenCalledWith('emails', { durable: true });
         expect(mockSendToQueue).toHaveBeenCalledWith('emails', expect.any(Buffer), {
             persistent: true
         });
+    });
+
+    /**
+     * A queue with no dead-letter policy turns the ack policy's "handled and declined" arm into
+     * deletion: `nack(msg, false, false)` on a queue that dead-letters nowhere destroys the
+     * message. The three declarations below are what make `false` a decision rather than a loss,
+     * and the binding has to exist before the work queue names the exchange.
+     */
+    it('declares the work queue pointing at a bound dead-letter queue', async () => {
+        enableRabbitMQ();
+        await publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
+
+        expect(mockAssertExchange).toHaveBeenCalledWith(DEAD_LETTER_EXCHANGE, 'direct', {
+            durable: true
+        });
+        expect(mockAssertQueue).toHaveBeenCalledWith(deadLetterQueueOf('emails'), {
+            durable: true
+        });
+        expect(mockBindQueue).toHaveBeenCalledWith(
+            deadLetterQueueOf('emails'),
+            DEAD_LETTER_EXCHANGE,
+            deadLetterQueueOf('emails')
+        );
+        expect(mockAssertQueue).toHaveBeenCalledWith('emails', {
+            durable: true,
+            deadLetterExchange: DEAD_LETTER_EXCHANGE,
+            deadLetterRoutingKey: deadLetterQueueOf('emails')
+        });
+    });
+
+    /**
+     * The declared contract is a boolean, and `false` is what `enqueueEmail` reads to send the
+     * mail inline instead. A rejection is not `false`: it skips that fallback entirely and lands
+     * on a caller that wrote `void enqueueEmail(...)`, so the email is neither queued nor sent
+     * and the only trace is an `unhandledRejection` with no request id attached.
+     */
+    it('answers false when the channel dies mid-publish, rather than rejecting', async () => {
+        enableRabbitMQ();
+        mockAssertExchange.mockRejectedValueOnce(new Error('Channel closed'));
+
+        await expect(publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } })).resolves.toBe(
+            false
+        );
+    });
+});
+
+describe('the channel is supervised, not only the connection', () => {
+    afterEach(disableRabbitMQ);
+
+    /**
+     * In amqplib a `Channel` is an EventEmitter in its own right. The broker closes one on
+     * ordinary faults — a `PRECONDITION_FAILED` from re-declaring a queue with new arguments is
+     * the common one — and leaves the connection open, so the connection's listeners never fire.
+     * With no `error` listener the emit is an uncaught exception; with no `close` listener the
+     * cached handle stays set and every later publish reaches a corpse while
+     * `GET /observability/health` still reports `queue: "ready"`.
+     */
+    it('registers error and close listeners on the channel', async () => {
+        enableRabbitMQ();
+        // Drop whatever handle an earlier case cached, so this opens a fresh channel.
+        await stopQueue();
+        mockChannelOn.mockClear();
+
+        await startQueue();
+
+        expect(mockChannelOn.mock.calls.map(([event]) => event)).toEqual(
+            expect.arrayContaining(['error', 'close'])
+        );
     });
 });
 
@@ -113,7 +191,11 @@ describe('consumeFromQueue()', () => {
         enableRabbitMQ();
         const handler = jest.fn().mockResolvedValue(true);
         await consumeFromQueue({ queue: 'pdfs', handler });
-        expect(mockAssertQueue).toHaveBeenCalledWith('pdfs', { durable: true });
+        expect(mockAssertQueue).toHaveBeenCalledWith('pdfs', {
+            durable: true,
+            deadLetterExchange: DEAD_LETTER_EXCHANGE,
+            deadLetterRoutingKey: deadLetterQueueOf('pdfs')
+        });
         expect(mockPrefetch).toHaveBeenCalledWith(1);
         expect(mockConsume).toHaveBeenCalled();
     });
@@ -160,19 +242,7 @@ const captureConsumerCallback = async (handler: jest.Mock) => {
     mockAssertQueue.mockResolvedValue({ queue: 'jobs', messageCount: 0, consumerCount: 0 });
     mockPrefetch.mockImplementation(() => Promise.resolve());
     mockConsume.mockResolvedValue({ consumerTag: 'tag-1' });
-    mockCreateChannel.mockResolvedValue({
-        assertQueue: mockAssertQueue,
-        sendToQueue: mockSendToQueue,
-        prefetch: mockPrefetch,
-        consume: mockConsume,
-        ack: mockAck,
-        nack: mockNack
-    });
-    mockConnect.mockResolvedValue({
-        createChannel: mockCreateChannel,
-        on: mockOn,
-        close: mockClose
-    });
+    mockCreateChannel.mockImplementation(() => Promise.resolve(channelMock()));
 
     await consumeFromQueue({ queue: 'jobs', handler });
 

@@ -104,8 +104,6 @@ const SECTIONS = [
  */
 export const ANALYTICS_SECTIONS = SECTIONS;
 
-export const ANALYTICS_SECTION_ORDER = SECTIONS.map(({ module }) => module);
-
 /** The sections one scope owns, in publication order. */
 const sectionsInScope = (scope: AnalyticsScope): readonly (typeof SECTIONS)[number][] =>
     SECTIONS.filter((section) => section.scope === scope);

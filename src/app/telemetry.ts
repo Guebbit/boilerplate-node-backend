@@ -1,8 +1,10 @@
 /**
  * Prometheus HTTP metrics.
  *
- * Mounted after the request context so `getRouteLabel` can read a request the rest of the stack has
- * already annotated, and before the routes so the timer wraps the handler rather than following it.
+ * Mounted before the routes so the timer wraps the handler rather than following it. The route
+ * label is read in the `finish` listener, not here: `request.route` is populated during routing,
+ * so a label taken in the middleware body would have to guess at the template from the path — and
+ * a guess is unbounded for every path the app does not serve.
  */
 
 import type { Express } from 'express';

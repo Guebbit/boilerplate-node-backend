@@ -1,10 +1,9 @@
 /**
  * The cart's slice of the demo dataset.
  *
- * These rows used to live inside the users fixture — a `cart` array hanging off each seeded person,
- * which this module read back out and reshaped. That put one module's records inside another's, for
- * no reason beyond both halves needing to sit in a single shared file. They are stated here now,
- * where the collection is owned.
+ * Stated here, where the collection is owned. A `cart` array hanging off each seeded person would
+ * be shorter to write and would put one module's records inside another's, which is what a module
+ * owning its own slice of the dataset exists to prevent.
  *
  * Only users with something in their cart get a document: absence and an empty cart are the same
  * state, and the first write upserts one into existence. So the ordinary customer has no row at all
@@ -16,7 +15,11 @@ import { SEED_ADMIN_ID } from '@kernel/seed-accounts';
 import { SEED_PRODUCT_IDS } from '@modules/products/demo';
 import { makeCart } from './factory';
 import { cartModel } from './model';
-import { SEED_SAVE_OPTIONS, type SeedOutcome } from '@infrastructure/persistence/seed';
+import {
+    SEED_SAVE_OPTIONS,
+    type SeedOutcome,
+    exportCollection
+} from '@infrastructure/persistence/seed';
 import { cartRepository } from './repository';
 
 export const cartFixtures = [
@@ -55,9 +58,5 @@ export const seedCartsCollection = (): Promise<SeedOutcome[]> =>
  * by pricing the lines, and the frontend's handler mirrors that same construction.
  */
 export const exportSeededCarts = async (): Promise<Record<string, unknown[]>> => ({
-    carts: await cartModel
-        .find()
-        .sort({ userId: 1 })
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON()))
+    carts: await exportCollection(cartModel, { userId: 1 })
 });

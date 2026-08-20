@@ -113,9 +113,9 @@ export const makeOrder = ({
      * factory-supplied default would erase the difference between "not chosen" and "free" — which
      * is the distinction `pickup` (a real method, priced 0) exists to keep visible.
      *
-     * They were previously accepted by `OrderOverrides` — it derives from the contract's `Order` —
-     * and then silently dropped here, which is how the demo dataset ended up with no shipped
-     * order at all.
+     * `compact` is what makes "pass through" mean absent-stays-absent. `OrderOverrides` derives
+     * from the contract's `Order`, so accepting a column and then not writing it type-checks
+     * perfectly and leaves the dataset quietly missing whatever it described.
      */
     ...compact({
         shippingMethod,

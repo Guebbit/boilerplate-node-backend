@@ -15,10 +15,10 @@ import { lowStockThreshold } from './config';
  * A gauge that counted events would drift from the shelf it describes, and the shelf is one
  * indexed count away.
  *
- * It counts AVAILABILITY, not units on hand, and that is the whole point of the metric now that
- * the two can differ. A product with forty units all reserved is out of stock to every customer
- * looking at it; the old gauge read `stock` and would have reported forty, cheerfully, while the
- * storefront showed a sold-out badge. `countLowAvailability` does the subtraction inside mongod.
+ * It counts AVAILABILITY, not units on hand, and the difference is the whole metric: a product
+ * with forty units all reserved is out of stock to every customer looking at it, so a gauge
+ * reading `onHand` would report forty while the storefront showed a sold-out badge.
+ * `countLowAvailability` does the subtraction inside mongod.
  */
 export const productsLowStockTotal = new Gauge({
     name: 'products_low_stock_total',

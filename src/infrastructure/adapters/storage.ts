@@ -29,17 +29,6 @@ import { logger } from '@infrastructure/adapters/logger';
 import { ExtendedError } from '@infrastructure/http/errors';
 
 /**
- * The substring after the last dot, without the dot. A name with no dot returns whole
- * (`lastIndexOf` gives -1), which is acceptable because the value is only appended to a random
- * name and `fileFilter` already restricts uploads to images.
- *
- * @param filename - original client-supplied name
- */
-export function getExtension(filename: string) {
-    return filename.slice(filename.lastIndexOf('.') + 1);
-}
-
-/**
  * Where an upload is written while the request is still being decided — NOT the public directory.
  *
  *   1. A file in `public/` is a file the world can fetch, and between "multer wrote it" and "the

@@ -17,7 +17,7 @@ import { usersAuditActions } from '../audit';
  * delete; otherwise the user is soft-deleted (sets deletedAt).
  */
 export const deleteUsers = (request: Request, response: Response) => {
-    const id = extractAndValidateId(request, response, 'deleteUser');
+    const id = extractAndValidateId(request, response, 'deleteUser', 'delete');
     if (!id) return Promise.resolve();
 
     // `hardDelete` is a boolean the route accepts three ways — see docs/theory/request-input.md.

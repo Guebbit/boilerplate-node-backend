@@ -5,6 +5,7 @@ import { createProduct } from '@modules/products/tests/factory';
 import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/factory';
 import type { ProductDocument } from '@modules/products';
 import { orderRepository } from '@modules/orders';
+import { DEFAULT_SORT } from '@infrastructure/persistence/search';
 
 setupTestDb();
 
@@ -135,7 +136,9 @@ describe('orderRepository', () => {
             }
 
             const page2 = await orderRepository.aggregate([
-                { $sort: { createdAt: -1 } },
+                // The tiebreaker rides along here too: a page is only well-defined when the sort
+                // preceding its `$skip` is total. See `DEFAULT_SORT`.
+                { $sort: DEFAULT_SORT },
                 { $skip: 3 },
                 { $limit: 10 }
             ]);

@@ -14,7 +14,7 @@
 
 import { makeProduct } from './factory';
 import { productModel } from './model';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { productRepository } from './repository';
 
 /**
@@ -161,9 +161,5 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
  * runs rather than dependent on Mongo's natural order.
  */
 export const exportSeededProducts = async (): Promise<Record<string, unknown[]>> => ({
-    products: await productModel
-        .find()
-        .sort({ _id: 1 })
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON()))
+    products: await exportCollection(productModel, { _id: 1 })
 });

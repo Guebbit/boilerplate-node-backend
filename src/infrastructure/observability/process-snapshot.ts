@@ -2,14 +2,13 @@
  * One reading of the process, in the units the process reports.
  *
  * Three payloads describe this process: the SSE frame built in `./stream.ts`, and the two REST
- * endpoints in `modules/observability/controllers/`. Each used to call `process.memoryUsage()` and
- * `process.uptime()` for itself, which cost more than the duplication suggests. Three readings
- * taken at three instants can disagree; two converted to megabytes and one did not; and the two
- * roundings differed — `Math.round` on the stream against `Math.floor` on both controllers — so
- * the health endpoint and the live stream reported uptimes a second apart, forever, with no bug
- * behind it.
+ * endpoints in `modules/observability/controllers/`. All three read from here, and the cost of
+ * each calling `process.memoryUsage()` and `process.uptime()` for itself is larger than the
+ * duplication suggests: three readings taken at three instants can disagree, and a rounding that
+ * differs between them — `Math.round` against `Math.floor` — has the health endpoint and the live
+ * stream reporting uptimes a second apart forever, with no bug behind it.
  *
- * They all read from here now, and the wire units are bytes everywhere. Megabytes is a
+ * The wire units are bytes everywhere. Megabytes is a
  * PRESENTATION decision and a lossy one: `heapUsedMb: 41` cannot tell a leak hunter whether the
  * heap moved by 400 KB between two polls, which is exactly what a dashboard differencing
  * consecutive frames is looking for. The API states the measurement; whoever renders it states the

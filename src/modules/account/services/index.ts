@@ -67,15 +67,15 @@ import { runTokenCleanup } from './token-cleanup';
 /**
  * The one namespace this module's service is reached through.
  *
- * Named for the module, not for a slice of it: the old `authService` was accurate when this folder
- * held only authentication, and it is what left `addressesService` with nowhere to belong. Every
- * module exports exactly one `<something>Service`, and
- * `tests/cross-cutting/service-namespaces.test.ts` fails the build if one does not.
+ * Named for the module, not for a slice of it. A name like `authService` describes one of the
+ * things this folder does, and every other thing it does then has nowhere to belong. Every module
+ * exports exactly one `<something>Service`, and `tests/cross-cutting/service-namespaces.test.ts`
+ * fails the build if one does not.
  *
  * It carries EVERY function this folder exports, including the two side-effecting jobs
- * (`sendVerificationEmail`, `runTokenCleanup`). They were left off at first on the grounds that a
- * job is not an operation on the account — which is a distinction the caller cannot see and the
- * guard cannot check. A namespace with a judgement call in it is a namespace that quietly loses
+ * (`sendVerificationEmail`, `runTokenCleanup`). "A job is not an operation on the account" is a
+ * distinction the caller cannot see and the guard cannot check, so it is not one this namespace
+ * makes. A namespace with a judgement call in it is a namespace that quietly loses
  * members.
  */
 export const accountService = {

@@ -16,7 +16,6 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { toObjectId } from '@infrastructure/persistence/base-repository';
 import { orderRepository } from '@modules/orders';
 import { productRepository } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
@@ -80,10 +79,7 @@ export const reorderIntoCart = (
                 requested.map(
                     (line): Promise<ReorderLine> =>
                         productRepository
-                            .findOne({
-                                _id: toObjectId(line.productId),
-                                ...productRepository.publicScope()
-                            })
+                            .findPublicById(line.productId)
                             .then((product) => ({ ...line, product }))
                 )
             ).then((lines) => {

@@ -10,7 +10,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import { sumLineItems } from './domain';
+import { orderTotal } from './domain';
 
 /**
  * The minimum either document needs from an order: a title and a price per line.
@@ -20,6 +20,8 @@ import { sumLineItems } from './domain';
  */
 export interface OrderLines {
     items: { quantity: number; product: { title: string; price: number } }[];
+    /** The shipping frozen at checkout. Absent on an order that chose no delivery method. */
+    shippingCost?: number;
 }
 
 /**
@@ -27,8 +29,8 @@ export interface OrderLines {
  *
  * The bought lines are resolved here, one translated string each, for the same reason the invoice
  * does it — per-line copy interpolates per-line values, so it cannot be a single string decided up
- * front. The total is `sumLineItems`' arithmetic, not a fresh sum: the email quotes the number the
- * order stands for.
+ * front. The total is `orderTotal`'s arithmetic, not a fresh sum: the email quotes the number the
+ * order stands for, shipping included.
  */
 export const orderConfirmEmail = (
     locale: string,
@@ -52,7 +54,7 @@ export const orderConfirmEmail = (
                     price: item.product.price
                 })
             ),
-            total: t('orders.email-confirm.total', { total: sumLineItems(order.items).price }),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             footer: t('email.footer')
         }
     };

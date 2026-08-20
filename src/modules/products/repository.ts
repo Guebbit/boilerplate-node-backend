@@ -23,8 +23,22 @@ export interface AvailabilityRow {
     available: number;
 }
 
+/**
+ * What a non-admin caller is allowed to see: published, not soft-deleted. A rule about which *rows*
+ * exist for an audience, so it belongs to the repository — spread it into any filter. Admin callers
+ * pass nothing and see everything.
+ *
+ * A `const` above the literal because three members below need it, and reading it back off
+ * `productRepository` would only work through lazy property resolution.
+ */
+const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
+    active: true,
+    deletedAt: { $exists: false }
+};
+
 export const productRepository: BaseRepository<ProductDocument> & {
     publicScope: () => Record<string, unknown>;
+    findPublicById: (productId: string) => Promise<ProductDocument | null>;
     facets: () => Promise<{ categories: FacetCount[]; tags: FacetCount[] }>;
     reserveUnits: (productId: string, quantity: number) => Promise<boolean>;
     commitUnits: (productId: string, quantity: number) => Promise<boolean>;
@@ -49,25 +63,31 @@ export const productRepository: BaseRepository<ProductDocument> & {
         }
     }),
 
+    /** The published spelling of {@link PUBLIC_SCOPE}, for callers outside this file. */
+    publicScope: (): Record<string, unknown> => ({ ...PUBLIC_SCOPE }),
+
     /**
-     * What a non-admin caller is allowed to see: published, not soft-deleted.
+     * The publicly visible product with this id, or `null`.
      *
-     * Lives here rather than in the service because it is a rule about which *rows* exist for a
-     * given audience — spread it into any filter (`{ ...publicScope(), price: … }`). Admin
-     * callers pass nothing, which is how they see inactive and soft-deleted rows.
+     * `publicScope` composed with an id lookup, owned here so "a hidden product cannot be
+     * wishlisted or reordered" is one query rather than a spread each caller must remember.
+     * `orders.findByIdScoped` is the same idea.
+     *
+     * `async` because `toObjectId` throws on a malformed id — see `base-repository.ts`.
+     *
+     * @param productId - the product's id
+     * @returns the product if it is published and not soft-deleted, otherwise `null`
      */
-    publicScope: (): Record<string, unknown> => ({
-        active: true,
-        deletedAt: { $exists: false }
-    }),
+    findPublicById: async (productId: string) =>
+        productRepository.findOne({ _id: toObjectId(productId), ...PUBLIC_SCOPE }),
 
     /**
      * Every category and tag the PUBLIC catalogue carries, counted.
      *
      * One `$facet` pipeline rather than two aggregations, so both lists are counted against the
      * same snapshot of the collection — two round trips could disagree with each other about a
-     * product written in between. The `$match` is `publicScope()` for the reason the contract
-     * states: a category held only by hidden products would render as a filter chip that finds
+     * product written in between. The `$match` is `PUBLIC_SCOPE` itself, not a copy of its
+     * conditions: a category held only by hidden products renders as a filter chip that finds
      * nothing.
      */
     facets: () =>
@@ -76,7 +96,7 @@ export const productRepository: BaseRepository<ProductDocument> & {
                 categories: { _id: string; count: number }[];
                 tags: { _id: string; count: number }[];
             }>([
-                { $match: { active: true, deletedAt: { $exists: false } } },
+                { $match: { ...PUBLIC_SCOPE } },
                 {
                     $facet: {
                         categories: [
@@ -238,7 +258,7 @@ export const productRepository: BaseRepository<ProductDocument> & {
     countLowAvailability: (threshold: number) =>
         productModel
             .countDocuments({
-                ...productRepository.publicScope(),
+                ...PUBLIC_SCOPE,
                 $expr: { $lte: [{ $subtract: ['$onHand', '$reserved'] }, threshold] }
             })
             .exec(),

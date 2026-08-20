@@ -13,6 +13,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
+import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /**
  * OCP-compliant status mapping: adding a new status only requires adding one entry here.
@@ -51,7 +52,7 @@ export const search = (
     } = {}
 ): Promise<{
     items: FeedbackRequestDocument[];
-    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    meta: PaginatedMeta;
 }> =>
     // `status` is mapped here rather than declared on the repository: turning a raw string into
     // a member of the closed `FeedbackRequestStatus` enum is a domain rule, so it is passed down

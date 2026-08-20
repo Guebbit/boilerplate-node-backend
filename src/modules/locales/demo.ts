@@ -51,7 +51,7 @@ import { LocaleScope } from '@types';
 import { makeLocale, makeLocaleEntry } from './factory';
 import { localeModel, localeMessageModel } from './model';
 import { localeRepository, localeMessageRepository } from './repository';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
 export const SEED_LOCALE_TAGS = {
@@ -281,14 +281,6 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
  * Sorted so the published file is byte-stable rather than dependent on Mongo's natural order.
  */
 export const exportSeededLocales = async (): Promise<Record<string, unknown[]>> => ({
-    locales: await localeModel
-        .find()
-        .sort({ tag: 1 })
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON())),
-    localeMessages: await localeMessageModel
-        .find()
-        .sort({ locale: 1, scope: 1, key: 1 })
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON()))
+    locales: await exportCollection(localeModel, { tag: 1 }),
+    localeMessages: await exportCollection(localeMessageModel, { locale: 1, scope: 1, key: 1 })
 });

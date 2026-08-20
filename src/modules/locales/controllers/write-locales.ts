@@ -23,18 +23,14 @@ import { localeAuditActions } from '../audit';
  * A display name that survives being trimmed.
  *
  * `openapi.yaml` says `minLength: 1`, which a single space satisfies — and both the schema here and
- * Mongoose then trim, so `" "` arrives as `""` at a column declared `required: true`. That is a
- * Mongoose `ValidationError`, which the shared interpreter does not recognise, so it fell through to
- * a 500 on a request whose only fault was a stray space. Found by `tests/fuzz/endpoints.fuzz.test.ts`.
+ * Mongoose then trim, so `" "` arrives as `""` at a column declared `required: true`.
  *
- * Trimming BEFORE the length check is what makes the 422 reachable, and `minLength` in the contract
- * cannot express it: JSON Schema has no trim. The constraint therefore lives here, the way
- * `feedback`'s `adminNotes` cap does.
- *
- * (The wider observation the fuzz run makes: any Mongoose `ValidationError` reaching the response
- * layer is a 500 today, and nearly all of them are really 422s. Fixing that belongs in
- * `@infrastructure/http/errors` and in a change that can be reviewed against every module, not in
- * this one.)
+ * Trimming BEFORE the length check is what makes the refusal the request's own, answered by the
+ * schema that declared the rule rather than by the database rejecting the write. `minLength` in
+ * the contract cannot express it — JSON Schema has no trim — so the constraint lives here, the way
+ * `feedback`'s `adminNotes` cap does. The error names the field; a `ValidationError` surfacing
+ * from Mongoose is a 422 too (`@infrastructure/http/errors`) but says only that something was
+ * invalid.
  */
 const displayName = z.string().trim().min(1);
 

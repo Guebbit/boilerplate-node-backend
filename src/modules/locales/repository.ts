@@ -32,15 +32,6 @@ import { LocaleScope } from '@types';
  * correcting it.
  */
 
-/** A language's stored fields, as an update supplies them. */
-export interface LocaleAttributes {
-    tag?: string;
-    name?: string;
-    nativeName?: string;
-    direction?: string;
-    active?: boolean;
-}
-
 /** One key and its translation, as a write supplies them. */
 export interface EntryInput {
     key: string;

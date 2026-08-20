@@ -50,6 +50,10 @@ const blankToUndefined = (value: unknown): unknown =>
  * contract and it is a boolean here: `readInput` decodes the string spellings a URL can carry, and
  * anything left unrecognised fails this schema and answers 422 rather than being guessed at.
  * Absent means soft delete, which is what the contract's `default: false` says.
+ *
+ * **What a soft delete does, for every collection that has one.** It is a TOGGLE: `deletedAt` is
+ * stamped if absent and cleared if present, so a second `DELETE` RESTORES the record. Every
+ * module's `remove` writes that one statement; this is where it is explained.
  */
 export const hardDeleteSchema = z.preprocess(
     blankToUndefined,

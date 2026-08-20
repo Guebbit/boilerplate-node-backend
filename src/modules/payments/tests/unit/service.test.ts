@@ -3,8 +3,8 @@
  *
  * The invariants worth pinning are the two orderings and the two guards:
  *
- *   - the intent freezes the ORDER's number (`sumLineItems`), so intent and order can never
- *     quote different totals;
+ *   - the intent freezes the ORDER's number (`orderTotal`), so intent and order can never
+ *     quote different totals — shipping included, which is the half that was charged to nobody;
  *   - a confirm moves the order `pending → paid` conditionally — the payment row only says
  *     `succeeded` when the order says `paid`;
  *   - a decline is retryable state, not an error path that strands the document;
@@ -80,6 +80,30 @@ describe('createIntent', () => {
         // The order's own arithmetic — 2 × 25 — not a number the intent computed for itself.
         expect(payment!.amount).toBe(50);
         expect(payment!.status).toBe('requires_confirmation');
+    });
+
+    /**
+     * The under-charge, pinned against the number the customer was shown rather than against a
+     * literal. `totalPrice` is what `openapi.yaml` publishes and what the order page renders, and
+     * for as long as the intent summed the lines on its own, every shop built on this boilerplate
+     * charged the basket and gave the shipping away — on every non-free order, silently, because
+     * the two numbers were computed in two files that no test compared.
+     */
+    it('charges the total the order publishes, shipping included', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 50 });
+        const order = await createOrder(user, [toOrderItem(product, 2)], {
+            shippingMethod: 'express',
+            shippingCost: 15
+        });
+
+        const result = await createIntent(String(order._id), auth(user));
+
+        expect(result.success).toBe(true);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        const { totalPrice } = order.toJSON() as { totalPrice: number };
+        expect(totalPrice).toBe(115);
+        expect(payment!.amount).toBe(totalPrice);
     });
 
     it('answers the same intent when asked twice — one payment per order is a database fact', async () => {

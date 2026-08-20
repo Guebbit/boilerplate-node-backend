@@ -59,11 +59,12 @@ export class ExtendedError extends Error {
         // Logging in the constructor guarantees a record even if some caller swallows the
         // throw. Operational errors are skipped deliberately — a wrong password is not an
         // incident, and logging every one would drown the real signal.
+        // Under `error`, not spread: `serializeError` is what keeps stacks out of production
+        // logs, and it only sees what arrives under that key. See `adapters/logger.ts`.
         if (!isOperational)
             logger.error({
                 message: this.message,
-                stack: this.stack,
-                name: this.name,
+                error: this,
                 errors: this.errors,
                 httpCode: this.httpCode
             });

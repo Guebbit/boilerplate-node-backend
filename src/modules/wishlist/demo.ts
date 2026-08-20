@@ -11,7 +11,11 @@ import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import { SEED_PRODUCT_IDS } from '@modules/products/demo';
 import { makeWishlist } from './factory';
 import { wishlistModel } from './model';
-import { SEED_SAVE_OPTIONS, type SeedOutcome } from '@infrastructure/persistence/seed';
+import {
+    SEED_SAVE_OPTIONS,
+    type SeedOutcome,
+    exportCollection
+} from '@infrastructure/persistence/seed';
 import { wishlistRepository } from './repository';
 
 export const wishlistFixtures = [
@@ -46,9 +50,5 @@ export const seedWishlistsCollection = (): Promise<SeedOutcome[]> =>
 
 /** Read the seeded wishlists back as stored, sorted by owner — see `../cart/demo`. */
 export const exportSeededWishlists = async (): Promise<Record<string, unknown[]>> => ({
-    wishlists: await wishlistModel
-        .find()
-        .sort({ userId: 1 })
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON()))
+    wishlists: await exportCollection(wishlistModel, { userId: 1 })
 });

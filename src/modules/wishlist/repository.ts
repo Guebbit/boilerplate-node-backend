@@ -19,6 +19,9 @@ import {
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
+ *
+ * Every method is `async` because each assembles its filter with `toObjectId`, which throws on a
+ * malformed id — see `base-repository.ts` for why that decides between a 4xx and a 500.
  */
 export const wishlistRepository: BaseRepository<WishlistDocument> & {
     findByUserId: (userId: string) => Promise<WishlistDocument | null>;
@@ -35,13 +38,14 @@ export const wishlistRepository: BaseRepository<WishlistDocument> & {
      * Fetch a user's wishlist. `null` means they never saved anything — the same state as an
      * empty list, which is why no write path creates a placeholder document.
      */
-    findByUserId: (userId: string) => wishlistModel.findOne({ userId: toObjectId(userId) }).exec(),
+    findByUserId: async (userId: string) =>
+        wishlistModel.findOne({ userId: toObjectId(userId) }).exec(),
 
     /**
      * Add one product, creating the wishlist if the user has none. Idempotent by `$addToSet`:
      * saving what is already saved is the state the caller asked for, not an error.
      */
-    addLine: (userId: string, productId: string) =>
+    addLine: async (userId: string, productId: string) =>
         wishlistModel
             .findOneAndUpdate(
                 { userId: toObjectId(userId) },
@@ -55,7 +59,7 @@ export const wishlistRepository: BaseRepository<WishlistDocument> & {
      * product — the filter asks for both — which lets the service answer 404 without a second
      * query, exactly like the cart's `removeLine`.
      */
-    removeLine: (userId: string, productId: string) =>
+    removeLine: async (userId: string, productId: string) =>
         wishlistModel
             .findOneAndUpdate(
                 { userId: toObjectId(userId), 'items.productId': toObjectId(productId) },
@@ -68,7 +72,7 @@ export const wishlistRepository: BaseRepository<WishlistDocument> & {
      * Delete a user's wishlist outright — what a hard account deletion owes it. An orphaned
      * wishlist would outlive the account with no way to reach it.
      */
-    deleteByUserId: (userId: string) =>
+    deleteByUserId: async (userId: string) =>
         wishlistModel
             .deleteOne({ userId: toObjectId(userId) })
             .exec()
@@ -79,7 +83,7 @@ export const wishlistRepository: BaseRepository<WishlistDocument> & {
     /**
      * Drop one product from every wishlist that holds it — what a product deletion owes them.
      */
-    removeProductFromAll: (productId: string) =>
+    removeProductFromAll: async (productId: string) =>
         wishlistModel
             .updateMany(
                 { 'items.productId': toObjectId(productId) },

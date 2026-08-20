@@ -24,7 +24,7 @@ import {
 } from '@kernel/seed-accounts';
 import { makeUser } from './factory';
 import { userModel } from './model';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { userRepository } from './repository';
 
 export const userFixtures = [
@@ -64,9 +64,5 @@ export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
  * from `@kernel/seed-accounts`.
  */
 export const exportSeededUsers = async (): Promise<Record<string, unknown[]>> => ({
-    users: await userModel
-        .find()
-        .sort({ _id: 1 })
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON()))
+    users: await exportCollection(userModel, { _id: 1 })
 });

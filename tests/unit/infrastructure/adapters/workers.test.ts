@@ -1,15 +1,20 @@
 /**
  * The two queue consumers — `email.worker.ts` and `pdf.worker.ts`.
  *
- * Both answer the same question for the broker, and it is a two-valued one: `true` acks the job,
- * `false` nacks it to the dead-letter queue. Getting that boolean backwards is the failure worth
- * guarding, because neither outcome throws and both look like "the worker ran" in a log:
- * a failed send acked is an email silently dropped, and a malformed job requeued is a poison
- * message the broker redelivers forever.
+ * Both answer the same question for the broker, and it has THREE outcomes, not two:
+ *
+ *   - resolve `true`  → ack — done
+ *   - resolve `false` → nack without requeue → the dead-letter queue, permanently
+ *   - reject          → nack WITH requeue → tried again when the world is healthier
+ *
+ * The line between the last two is the one worth guarding, because it is the line between "this
+ * email will be sent when SMTP comes back" and "this email is lost". A payload that names no
+ * recipient will never become valid, so it is refused; an SMTP timeout says nothing about the job,
+ * so it is left to reject and the broker redelivers it.
  *
  * The side effect each one exists for — SMTP, puppeteer — is mocked. What is under test is the
- * decision, not the delivery: which payloads are rejected before any work starts, and how a
- * rejected promise from the thing that does the work is turned into a verdict.
+ * decision, not the delivery: which payloads are refused before any work starts, and which
+ * failures are allowed to escape.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -104,7 +109,7 @@ describe('handleEmailJob', () => {
         // `job?.` guards the job itself, not only its fields: a broker can deliver a null body.
         ['a null job', null],
         ['an undefined job', undefined]
-    ])('discards a job with %s, without sending', async (_label, malformed) => {
+    ])('refuses a job with %s, without sending', async (_label, malformed) => {
         await expect(
             handleEmailJob(malformed as Parameters<typeof handleEmailJob>[0])
         ).resolves.toBe(false);
@@ -112,12 +117,15 @@ describe('handleEmailJob', () => {
         expect(logger.warn).toHaveBeenCalled();
     });
 
-    it('nacks — rather than throwing — when the send rejects', async () => {
+    it('lets a failed send reject, so the broker requeues it', async () => {
         mockedMailer.mockRejectedValue(new Error('SMTP refused'));
 
-        // The rejection must not escape: an unhandled rejection in a consumer takes the whole
-        // worker process down, and with it every other job on the queue.
-        await expect(handleEmailJob(job)).resolves.toBe(false);
+        // Not `false`. A refused connection, a timeout, greylisting — none of them are facts about
+        // this job, and `consumeFromQueue` requeues a rejection for exactly that reason. Answering
+        // `false` here dead-letters a password reset because SMTP blinked.
+        await expect(handleEmailJob(job)).rejects.toThrow('SMTP refused');
+        // Logged on the way out: the requeue is what saves the email, the log is what makes a job
+        // that keeps failing visible instead of a queue that quietly refills.
         expect(logger.error).toHaveBeenCalledWith(
             expect.objectContaining({ error: 'SMTP refused' })
         );
@@ -154,7 +162,7 @@ describe('handlePdfJob', () => {
         ['an empty job', {}],
         ['a null job', null],
         ['an undefined job', undefined]
-    ])('discards a job with %s, without rendering', async (_label, malformed) => {
+    ])('refuses a job with %s, without rendering', async (_label, malformed) => {
         await expect(handlePdfJob(malformed as Parameters<typeof handlePdfJob>[0])).resolves.toBe(
             false
         );
@@ -162,23 +170,24 @@ describe('handlePdfJob', () => {
         expect(logger.warn).toHaveBeenCalled();
     });
 
-    it('nacks when the template fails to render', async () => {
+    it('lets a failed template render reject, so the broker requeues it', async () => {
         mockedEjs.mockRejectedValue(new Error('template missing'));
 
-        await expect(handlePdfJob(job)).resolves.toBe(false);
+        await expect(handlePdfJob(job)).rejects.toThrow('template missing');
         expect(mockedPdf).not.toHaveBeenCalled();
         expect(logger.error).toHaveBeenCalledWith(
             expect.objectContaining({ error: 'template missing' })
         );
     });
 
-    it('nacks when the PDF render fails after a successful template render', async () => {
+    it('lets a failed PDF render reject after a successful template render', async () => {
         mockedEjs.mockResolvedValue('<html></html>');
         mockedPdf.mockRejectedValue(new Error('puppeteer crashed'));
 
         // The second half of the chain has its own failure mode: the markup was fine and the
-        // browser died, which must still nack rather than ack an unwritten file.
-        await expect(handlePdfJob(job)).resolves.toBe(false);
+        // browser died. A dead browser is the most transient failure this file has — it must not
+        // ack an unwritten file, and it must not throw the job away either.
+        await expect(handlePdfJob(job)).rejects.toThrow('puppeteer crashed');
         expect(logger.error).toHaveBeenCalledWith(
             expect.objectContaining({ error: 'puppeteer crashed' })
         );

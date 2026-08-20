@@ -96,29 +96,29 @@ export const installErrorHandling = (app: Express): void => {
     /*
      * Process-level error handlers — audit unhandled rejections/exceptions
      */
-    process
-        .on('unhandledRejection', (reason) => {
-            auditLogger.error('process.unhandledRejection', {
-                action: 'process.unhandledRejection',
-                reason:
-                    reason instanceof Error
-                        ? { name: reason.name, message: reason.message }
-                        : String(reason)
-            });
-        })
-        .on('uncaughtException', (error, origin) => {
-            /*
-             * In production, exit immediately to trigger orchestrator restart
-             */
-            if (process.env.NODE_ENV !== 'production') return;
-            auditLogger.error('process.uncaughtException', {
-                action: 'process.uncaughtException',
-                name: error.name,
-                message: error.message,
-                origin
-            });
-            // The process state after an uncaught exception is unknown, so the only safe move is to
-            // stop and let the orchestrator start a clean one. Throwing would re-enter this handler.
-            process.exit(1);
+    process.on('unhandledRejection', (reason) => {
+        auditLogger.error('process.unhandledRejection', {
+            action: 'process.unhandledRejection',
+            reason:
+                reason instanceof Error
+                    ? { name: reason.name, message: reason.message }
+                    : String(reason)
         });
+    });
+
+    // No handler under a test runner: registering one replaces Node's default (print the stack,
+    // exit 1), and Jest's own is what reports the throw against the test that caused it.
+    if (process.env.NODE_ENV === 'test') return;
+
+    process.on('uncaughtException', (error, origin) => {
+        auditLogger.error('process.uncaughtException', {
+            action: 'process.uncaughtException',
+            name: error.name,
+            message: error.message,
+            origin
+        });
+        // Logged first, then stopped, in every environment: the state after an uncaught exception
+        // is unknown, so the only safe move is to stop. Throwing would re-enter this handler.
+        process.exit(1);
+    });
 };

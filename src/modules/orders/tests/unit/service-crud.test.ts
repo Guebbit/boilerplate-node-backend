@@ -31,9 +31,11 @@ import {
     remove,
     removeById,
     search,
-    callerScope
+    callerScope,
+    orderService
 } from '@modules/orders/service';
 import { orderRepository } from '@modules/orders';
+import { inventoryService } from '@modules/inventory';
 import { productRepository } from '@modules/products';
 import type { OrderDocument } from '@modules/orders';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
@@ -58,6 +60,17 @@ const seedOrder = async () => {
 
     return { user, keyboard, mouse, order: asSuccess(result).data! };
 };
+
+/** Re-read an order after something else moved it, so `update` works on current state. */
+const reload = async (order: OrderDocument) => (await orderRepository.findById(String(order._id)))!;
+
+/**
+ * Give an order's held units back.
+ *
+ * `create` holds stock against the lines it wrote, and `update` refuses to rewrite lines the
+ * shelf is holding — so an items test has to say which of the two situations it is in.
+ */
+const releaseHold = (order: OrderDocument) => inventoryService.releaseForOrder(String(order._id));
 
 describe('create', () => {
     it('creates an order and answers 201', async () => {
@@ -229,12 +242,33 @@ describe('getById', () => {
 describe('update', () => {
     it('changes the status along a move the lifecycle allows', async () => {
         const { order } = await seedOrder();
+        // `pending → paid` belongs to `system`, so the operator's first pure-status move starts
+        // from `paid`. Written through the repository for that reason, not through `update`.
+        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
 
-        // A fresh order is `pending`; cancelling is the operator's move from there.
-        const result = await update(order, { status: 'cancelled' });
+        const result = await update(await reload(order), { status: 'processing' });
 
         expect(result.success).toBe(true);
-        expect(asSuccess(result).data!.status).toBe('cancelled');
+        expect(asSuccess(result).data!.status).toBe('processing');
+    });
+
+    /**
+     * The lifecycle grants an operator this edge and `update` still refuses to run it. A
+     * cancellation is a sequence, not a field: it releases the held units and announces
+     * `ORDER_CANCELLED`, which is what makes `payments` refund. Executed here as an assignment
+     * plus a save, a paid order ends `cancelled` with the customer's money kept and the stock
+     * held until the sweep.
+     */
+    it('refuses to cancel through the status field, whoever is asking', async () => {
+        const { order } = await seedOrder();
+
+        const result = await update(order, { status: 'cancelled' });
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('ORDER_CANCEL_VIA_CANCEL_ENDPOINT');
+        const reloaded = await reload(order);
+        expect(reloaded.status).toBe('pending');
     });
 
     it('refuses a move the lifecycle does not allow, naming what was open instead', async () => {
@@ -277,9 +311,9 @@ describe('update', () => {
         // The path that made this worth fixing: a reopened order is cancellable again, and the
         // refund listener sees a payment that is still `succeeded`.
         const { order } = await seedOrder();
-        await update(order, { status: 'cancelled' });
+        await orderService.cancelById(String(order._id), { admin: true });
 
-        const result = await update(order, { status: 'pending' });
+        const result = await update(await reload(order), { status: 'pending' });
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(409);
@@ -328,8 +362,29 @@ describe('update', () => {
         expect(reloaded!.items).toHaveLength(2);
     });
 
+    /**
+     * The reservation froze its own copy of the basket, and the counters answer to that copy.
+     * Rewriting `order.items` underneath it leaves a later `commitForOrder` decrementing products
+     * the order no longer contains, while the ones it now contains were never held.
+     */
+    it('refuses to rewrite the items while the shelf is still holding them', async () => {
+        const { order } = await seedOrder();
+        const replacement = await createProduct({ title: 'Monitor', price: 200 });
+
+        const result = await update(order, {
+            items: [{ productId: String(replacement._id), quantity: 3 }]
+        });
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('ORDER_ITEMS_HELD');
+        const reloaded = await reload(order);
+        expect(reloaded.items).toHaveLength(2);
+    });
+
     it('replaces the items with fresh snapshots when given', async () => {
         const { order } = await seedOrder();
+        await releaseHold(order);
         const replacement = await createProduct({ title: 'Monitor', price: 200 });
 
         await update(order, { items: [{ productId: String(replacement._id), quantity: 3 }] });
@@ -342,6 +397,7 @@ describe('update', () => {
 
     it('rejects with 404 when a replacement product does not exist', async () => {
         const { order } = await seedOrder();
+        await releaseHold(order);
 
         const result = await update(order, { items: [{ productId: MISSING_ID, quantity: 1 }] });
 
@@ -350,6 +406,7 @@ describe('update', () => {
 
     it('leaves the existing items intact when a replacement product is missing', async () => {
         const { order } = await seedOrder();
+        await releaseHold(order);
 
         await update(order, { items: [{ productId: MISSING_ID, quantity: 1 }] });
 
@@ -369,18 +426,36 @@ describe('update', () => {
     });
 });
 
+describe('remove — the hard path and the shelf', () => {
+    /**
+     * An order holds stock. Destroying the row without releasing it leaves the units held against
+     * an order that can no longer be looked up: the shop under-sells until `expiresAt`, and the
+     * sweep then records a deliberate deletion as an expiry and tries to cancel an order that is
+     * gone. Self-healing, which is exactly why nothing noticed.
+     */
+    it('gives the held units back before destroying the row', async () => {
+        const { order } = await seedOrder();
+        expect(await inventoryService.isStockBoundToOrder(String(order._id))).toBe(true);
+
+        await remove(order, true);
+
+        expect(await inventoryService.isStockBoundToOrder(String(order._id))).toBe(false);
+        await expect(orderRepository.count({})).resolves.toBe(0);
+    });
+});
+
 describe('updateById', () => {
     it('updates an existing order', async () => {
         const { order } = await seedOrder();
 
-        const result = await updateById(String(order._id), { status: 'cancelled' });
+        const result = await updateById(String(order._id), { email: 'moved@example.com' });
 
         expect(result.success).toBe(true);
-        expect(asSuccess(result).data!.status).toBe('cancelled');
+        expect(asSuccess(result).data!.email).toBe('moved@example.com');
     });
 
     it('rejects with 404 for an id that does not exist', async () => {
-        const result = await updateById(MISSING_ID, { status: 'cancelled' });
+        const result = await updateById(MISSING_ID, { email: 'moved@example.com' });
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(404);

@@ -83,26 +83,38 @@ export const successResponse = <T>(response: Response, data: T, status = 200, me
     >;
 
 /**
- * Build the canonical error envelope so clients can parse failures predictably.
+ * Every status the envelope names, with the code and the message it answers with.
+ *
+ * One list, so adding 402 or 423 cannot reach the message and miss the code. An absent `code` is
+ * deliberate: 422 and 429 get a reason phrase and the generic code, because a client branches on
+ * "the request was wrong", not on which flavour of wrong.
  */
+const STATUS_ENVELOPE: Readonly<Partial<Record<number, { code?: string; message: string }>>> = {
+    400: { code: 'BAD_REQUEST', message: 'Bad Request' },
+    401: { code: 'UNAUTHORIZED', message: 'Unauthorized' },
+    403: { code: 'FORBIDDEN', message: 'Forbidden' },
+    404: { code: 'NOT_FOUND', message: 'Not Found' },
+    409: { code: 'CONFLICT', message: 'Conflict' },
+    422: { message: 'Unprocessable Entity' },
+    429: { message: 'Too Many Requests' }
+};
+
+/** What every 5xx answers with. One code and one phrase: the flavour would leak internals. */
+const SERVER_FAULT = { code: 'INTERNAL_ERROR', message: 'Internal Server Error' } as const;
+
+/** What an unmapped 4xx answers with. */
+const UNMAPPED_REQUEST_FAULT = { code: 'REQUEST_ERROR', message: 'Request Error' } as const;
+
 /**
  * Maps HTTP status codes to stable machine-readable error codes.
- *
- * The fallback for any unmapped 4xx. 5xx collapses to one code deliberately: clients should
- * not branch on the flavour of a server-side failure, and the distinction would leak internals.
  *
  * @param status - HTTP status code
  * @returns an uppercase, stable code string
  */
-const resolveErrorCode = (status: number) => {
-    if (status === 400) return 'BAD_REQUEST';
-    if (status === 401) return 'UNAUTHORIZED';
-    if (status === 403) return 'FORBIDDEN';
-    if (status === 404) return 'NOT_FOUND';
-    if (status === 409) return 'CONFLICT';
-    if (status >= 500) return 'INTERNAL_ERROR';
-    // Catch-all for 4xx codes without a dedicated mapping (422, 429, ...).
-    return 'REQUEST_ERROR';
+const resolveErrorCode = (status: number): string => {
+    if (status >= 500) return SERVER_FAULT.code;
+    // An entry with no `code` of its own is the deliberate asymmetry above, not a gap.
+    return STATUS_ENVELOPE[status]?.code ?? UNMAPPED_REQUEST_FAULT.code;
 };
 
 /**
@@ -114,17 +126,9 @@ const resolveErrorCode = (status: number) => {
  * @param status - HTTP status code
  * @returns the canonical reason phrase for that status
  */
-export const resolveErrorMessage = (status: number) => {
-    // Exact matches first, then the 5xx sweep — every server fault reads the same to the client.
-    if (status === 400) return 'Bad Request';
-    if (status === 401) return 'Unauthorized';
-    if (status === 403) return 'Forbidden';
-    if (status === 404) return 'Not Found';
-    if (status === 409) return 'Conflict';
-    if (status === 422) return 'Unprocessable Entity';
-    if (status === 429) return 'Too Many Requests';
-    if (status >= 500) return 'Internal Server Error';
-    return 'Request Error';
+export const resolveErrorMessage = (status: number): string => {
+    if (status >= 500) return SERVER_FAULT.message;
+    return STATUS_ENVELOPE[status]?.message ?? UNMAPPED_REQUEST_FAULT.message;
 };
 
 /**

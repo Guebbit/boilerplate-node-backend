@@ -82,8 +82,8 @@ export const httpRequestsTotal = new Counter({
     name: 'http_requests_total',
     help: 'Total number of HTTP requests handled.',
     // Labels = the dimensions you can slice by. Every distinct label *combination* becomes its
-    // own time series, so cardinality must stay bounded — which is exactly why `route` is a
-    // normalized template (see `normalizeRoutePath`) and never a raw URL.
+    // own time series, so cardinality must stay bounded — which is exactly why `route` is the
+    // template Express matched (see `getRouteLabel`) and never a path from the request.
     labelNames: ['method', 'route', 'status_code'] as const,
     registers: [metricsRegistry]
 });
@@ -128,49 +128,35 @@ export const httpInflightRequests = new Gauge({
 });
 
 /**
- * Collapse high-cardinality path segments (IDs) into a stable :id placeholder.
- *
- * The cardinality problem this prevents: labelling by raw path turns `/products/<id>` into one
- * time series *per product*. A few thousand products and the scrape payload — plus Prometheus'
- * memory — grows without bound. Templating keeps it at one series per route.
+ * The label for a request that matched no route — one value for every path the app does not serve.
+ * prom-client never evicts a series, and a public deployment is scanned against a near-infinite
+ * path dictionary, so anything derived from the requested path grows the registry without bound.
  */
-const sanitizeRouteSegment = (segment: string): string => {
-    // Numeric ids.
-    if (/^\d+$/.test(segment)) return ':id';
-    // Mongo ObjectIds — 24 hex chars.
-    if (/^[\da-f]{24}$/i.test(segment)) return ':id';
-    // UUIDs — 8-4-4-4-12 hex.
-    if (/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(segment)) return ':id';
-    // Anything else is assumed to be a literal path segment and kept as-is. Note that slugs
-    // and emails would pass through — worth extending if such routes are ever added.
-    return segment;
-};
-
-/** Normalize a URL path to a stable metric label. */
-export const normalizeRoutePath = (path: string): string => {
-    // Drop the query string: it is unbounded, and per-parameter series are never wanted.
-    // `|| '/'` covers a path that is empty or begins with '?'.
-    const pathWithoutQuery = path.split('?')[0] || '/';
-    const segments = pathWithoutQuery
-        .split('/')
-        // `filter(Boolean)` removes the empty strings produced by leading, trailing and
-        // duplicate slashes, so '/a//b/' and '/a/b' normalize identically.
-        .filter(Boolean)
-        .map((segment) => sanitizeRouteSegment(segment));
-    // Rejoin with a leading slash; the root path has no segments at all.
-    return segments.length > 0 ? `/${segments.join('/')}` : '/';
-};
+export const UNMATCHED_ROUTE = 'unmatched';
 
 /**
- * Best-effort route label extraction for the metrics middleware.
+ * The route template a request matched, as its metric label.
  *
- * "Best-effort" because the *ideal* label is Express' matched route pattern
- * (`request.route.path`), but that is only populated after routing — and the metrics middleware
- * runs before it. Normalizing the actual path is the pragmatic substitute.
- * `request.path` excludes the query string; `originalUrl` is the pre-rewrite fallback.
+ * Express populates `request.route` during routing, so every caller reads this inside a `finish`
+ * listener. `route.path` is relative to the router's mount point; `baseUrl` supplies the rest. A
+ * request that reached no handler collapses to a single `unmatched` series.
+ *
+ * @param request - the request, read after routing
+ * @returns the mounted route template, or `unmatched`
  */
-export const getRouteLabel = (request: Request): string =>
-    normalizeRoutePath(request.path || request.originalUrl || '/');
+export const getRouteLabel = (request: Request): string => {
+    // Express types `route` as `any`, and it may hold a RegExp or an array for routes declared
+    // that way; only a plain string names one template, and anything else is not worth a series
+    // of its own. Read through `unknown` so the `any` stops here.
+    const matched: unknown = request.route;
+    const template = (matched as { path?: unknown } | undefined)?.path;
+    if (typeof template !== 'string') return UNMATCHED_ROUTE;
+
+    const mounted = `${request.baseUrl}${template}`;
+    // `router.get('/')` mounted at `/orders` spells itself `/orders/`; the trailing slash is the
+    // same route as `/orders` and must not be a second series.
+    return mounted.length > 1 ? mounted.replace(/\/$/, '') : '/';
+};
 
 /** Input for `recordRequestMetric` — an object rather than four positional args, so a caller cannot transpose method and route. */
 interface RequestMetricInput {

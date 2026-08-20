@@ -121,16 +121,28 @@ was `succeeded`, so the guard passed.
 
 Four call sites, all reading the same rows:
 
-| Call site                                | Question asked                             |
-| ---------------------------------------- | ------------------------------------------ |
-| `orders/service.ts` — `update`           | `canTransition(from, to, 'admin')`         |
-| `orders/service.ts` — `cancelById`       | `statusesLeadingTo(cancelled, 'customer')` |
-| `payments/service.ts` — `createIntent`   | `canTransition(from, paid, 'system')`      |
-| `payments/service.ts` — `confirmPayment` | `statusesLeadingTo(paid, 'system')`        |
+| Call site                                | Question asked                                  |
+| ---------------------------------------- | ----------------------------------------------- |
+| `orders/service.ts` — `update`           | `canTransition(from, to, 'admin')`              |
+| `orders/service.ts` — `cancelById`       | `statusesLeadingTo(cancelled, actorOf(caller))` |
+| `payments/service.ts` — `createIntent`   | `canTransition(from, paid, 'system')`           |
+| `payments/service.ts` — `confirmPayment` | `statusesLeadingTo(paid, 'system')`             |
 
-`cancelById` asks as `customer` whoever is calling: an admin reaching that route is running the
-customer's cancellation on their behalf, and it should behave identically. The moves that belong to
-the operator are the ones the admin write makes.
+`cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
+may cancel from `pending` and `paid`, an operator also from `processing`.
+
+### `update` decides, `cancelById` executes
+
+The two are not interchangeable, and `update` refuses `cancelled` outright with
+`ORDER_CANCEL_VIA_CANCEL_ENDPOINT`. The lifecycle grants an operator that edge — but a cancellation
+is a SEQUENCE, not a field: the hold is released and `ORDER_CANCELLED` is announced so `payments`
+refunds. Executed as an assignment plus a save, a paid order ends `cancelled` with the customer's
+money kept and the stock held until the sweep. `POST /orders/{id}/cancel` is the only path that runs
+it, for a customer and an operator alike.
+
+For the same reason `update` refuses to rewrite `items` while `inventory` still binds stock to the
+order (`ORDER_ITEMS_HELD`): the reservation froze its own copy of the basket, and a later commit
+would decrement products the order no longer contains.
 
 ### Deciding and enforcing stay separate
 
@@ -149,10 +161,10 @@ flowchart LR
     class T pure;
 ```
 
-A refusal answers **409** with `ORDER_TRANSITION_NOT_ALLOWED`, and carries
-`details: { from, to, allowed }` so a client can offer the moves that are still open rather than
-making the operator guess. The guard runs before any field is assigned, so a refused request is
-never a partial write.
+A refusal to a move the table does not have answers **409** with `ORDER_TRANSITION_NOT_ALLOWED`,
+carrying `details: { from, to, allowed }` so a client can offer the moves that are still open rather
+than making the operator guess. Every guard runs before any field is assigned, so a refused request
+is never a partial write.
 
 ### Compensation is policy, and it travels with the fact
 
@@ -271,8 +283,13 @@ flowchart LR
 
 Two functions in, one out. Every intermediate is an integer, so the sum is exact and
 order-independent — no accumulator can round differently depending on the sequence it saw the lines
-in. The rounding rule exists once, in this file, instead of once in `totals.ts` and again inline in
-`model.ts`.
+in. The rounding rule exists once, in this file.
+
+`money.ts` owns ROUNDING; `totals.ts` owns COMPOSITION. `orderTotal({ items, shippingCost })` is
+what the customer owes, and its three callers — the order serializer, `payments.createIntent` and
+`orderConfirmEmail` — all read it rather than adding the two numbers themselves. That split matters:
+while only the serializer composed the total, the payment intent charged the lines and gave the
+shipping away on every non-free order.
 
 ### Why a brand rather than a class
 
@@ -296,8 +313,9 @@ examples. It found the `-0` case.
 
 ### Why it lives in `orders`, and why a shared kernel was not an option
 
-`orders` is the only module that does money **arithmetic**. `cart` and `payments` read
-`sumLineItems` through the orders barrel; `delivery` returns flat rates from a table. The modules
+`orders` is the only module that does money **arithmetic**. `cart` reads `sumLineItems` and
+`payments` reads `orderTotal`, both through the orders barrel; `delivery` returns flat rates from a
+table. The modules
 that look like they share the concept share a _function_, and that function already has an owner.
 
 There is also a hard constraint. The domain layer may not import `@kernel/*`, `@infrastructure/*`,

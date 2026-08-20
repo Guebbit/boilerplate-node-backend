@@ -7,10 +7,10 @@
  * anything. Both cases are covered here: the surface is pinned by name, and the function is checked
  * to be the same object `./services/addresses` exports rather than merely to exist.
  *
- * The token surface used to be published too, on the theory that authorization would need it. It
- * does not — the kernel's auth port is what every request goes through, and this module fills it
- * from `module.ts` with relative imports. `tests/cross-cutting/published-language.test.ts` is what
- * now stops that kind of export being added back on a theory.
+ * The token surface is deliberately not part of that front door: the kernel's auth port is what
+ * every request goes through, and this module fills it from `module.ts` with relative imports, so
+ * no sibling needs a token. `tests/cross-cutting/published-language.test.ts` is what stops such an
+ * export being added on the theory that one might.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';

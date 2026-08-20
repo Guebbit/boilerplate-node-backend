@@ -11,6 +11,9 @@ export { PDF_QUEUE } from '@infrastructure/adapters/queue';
  * Process a single PDF generation job from the queue.
  * Renders an EJS template to HTML, then uses Puppeteer to produce a PDF file.
  *
+ * Same split as `handleEmailJob`: `false` only for a payload naming no template or destination. A
+ * failed render is left to reject, so the broker retries it.
+ *
  * Typed parameter, `Partial` because it came off a broker — see `handleEmailJob` for the reasoning.
  */
 export const handlePdfJob = (job: Partial<PdfJobPayload>): Promise<boolean> => {
@@ -37,6 +40,6 @@ export const handlePdfJob = (job: Partial<PdfJobPayload>): Promise<boolean> => {
         })
         .catch((error: Error) => {
             logger.error({ message: 'PDF worker failed.', error: error.message });
-            return false;
+            throw error;
         });
 };

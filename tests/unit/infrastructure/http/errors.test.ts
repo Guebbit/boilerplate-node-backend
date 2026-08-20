@@ -109,9 +109,13 @@ describe('ExtendedError', () => {
         new ExtendedError('UnexpectedFailure', 500, false, ['Something broke']);
 
         expect(mockedLogger.error).toHaveBeenCalledTimes(1);
+        // The Error itself rides under `error`, which is the only key `redactFormat` hands to
+        // `serializeError` — and `serializeError` is where "no stack traces in production" is
+        // decided. Spelling `stack` and `name` out as fields of their own would put absolute
+        // container paths in the aggregated log store on exactly the failures this logs.
         expect(mockedLogger.error).toHaveBeenCalledWith(
             expect.objectContaining({
-                name: 'UnexpectedFailure',
+                error: expect.objectContaining({ name: 'UnexpectedFailure' }),
                 httpCode: 500,
                 errors: ['Something broke'],
                 message: 'UnexpectedFailure: Something broke'

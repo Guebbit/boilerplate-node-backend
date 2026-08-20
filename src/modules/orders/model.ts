@@ -3,8 +3,7 @@ import type { Document, Model } from 'mongoose';
 import { productSchema, applyProductTransform } from '@modules/products';
 import type { ProductSnapshot } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { sumLineItems, type LineItem } from './domain/totals';
-import { addMoney, toDecimalAmount, toMinorUnits } from './domain/money';
+import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
 
@@ -208,18 +207,14 @@ const applyOrderItems = (serialized: Record<string, unknown>) => {
  * matching a search, here it is the number of line items in one order. Pre-existing; unrelated.
  */
 const applyOrderTotals = (serialized: Record<string, unknown>) => {
-    const { count, quantity, price } = sumLineItems(
-        Array.isArray(serialized.items) ? (serialized.items as LineItem[]) : []
-    );
+    const items = Array.isArray(serialized.items) ? (serialized.items as LineItem[]) : [];
+    const { count, quantity } = sumLineItems(items);
 
     serialized.totalItems = count;
     serialized.totalQuantity = quantity;
-    // What the customer owes: the lines plus the shipping frozen at checkout, added in minor units
-    // so this site holds no rounding rule of its own. `toMinorUnits` also absorbs an absent
-    // `shippingCost` — orders predating delivery, and checkouts that chose no method.
-    serialized.totalPrice = toDecimalAmount(
-        addMoney(toMinorUnits(price), toMinorUnits(serialized.shippingCost))
-    );
+    // What the customer owes, from the one function that decides it — the same call the payment
+    // intent and the confirmation email make, so the three cannot quote different numbers.
+    serialized.totalPrice = orderTotal({ items, shippingCost: serialized.shippingCost });
 };
 
 /**

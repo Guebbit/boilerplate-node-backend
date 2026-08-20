@@ -1,5 +1,5 @@
 import { model, Schema } from 'mongoose';
-import type { Document, Model, QueryFilter } from 'mongoose';
+import type { Document, Model } from 'mongoose';
 import { FeedbackRequestStatus } from '@types';
 import type { FeedbackRequest } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -13,10 +13,7 @@ export interface FeedbackRequestDocument
     updatedAt?: Date;
 }
 
-/** Mongoose model + query helper types. */
 export type FeedbackRequestModel = Model<FeedbackRequestDocument>;
-/** Shorthand type for Mongoose query filters on the feedback collection. */
-export type FeedbackRequestQueryFilter = QueryFilter<FeedbackRequestDocument>;
 
 /** Feedback collection schema. */
 export const feedbackRequestSchema = new Schema<FeedbackRequestDocument, FeedbackRequestModel>(

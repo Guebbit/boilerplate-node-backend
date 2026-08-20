@@ -12,8 +12,10 @@
  * an order the cart asks for. The service layer would give it a response envelope it would only
  * have to unwrap.
  *
- * `sumLineItems` is the one export that is a rule rather than a handle. Line-item money is orders'
- * arithmetic; a cart totalling itself independently would show one number and bill another.
+ * `sumLineItems` and `orderTotal` are the exports that are rules rather than handles. Order money
+ * is orders' arithmetic: a cart totalling its lines independently would show one number and bill
+ * another, and `payments` composing the grand total itself charged the lines and forgot the
+ * shipping for as long as both existed.
  *
  * `canTransition` and `statusesLeadingTo` are published for the same reason: `payments` moves an
  * order to `paid`, and deciding for itself which status means payable would be a second opinion on
@@ -33,4 +35,4 @@ export { orderConfirmEmail } from './emails';
  * the line from a product document instead, so nothing outside this module names the type any more.
  */
 export type { OrderDocument } from './model';
-export { sumLineItems, canTransition, statusesLeadingTo } from './domain';
+export { sumLineItems, orderTotal, canTransition, statusesLeadingTo } from './domain';

@@ -10,8 +10,9 @@ export interface CartLineCandidate {
     quantity?: number;
     /**
      * The joined product, narrowed to what a refusal needs. Both counters are optional and both
-     * default to zero: a document carrying neither predates the split, and "nothing to sell" is
-     * the safe direction to be wrong in for a rule whose job is to refuse.
+     * default to zero — not because a row is expected to lack them (the migration backfills every
+     * one) but because "nothing to sell" is the safe direction to be wrong in for a rule whose job
+     * is to refuse.
      */
     product?: { title?: string; onHand?: number; reserved?: number } | null;
 }

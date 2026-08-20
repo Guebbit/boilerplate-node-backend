@@ -1167,6 +1167,7 @@ export const SignupResponse = zod.object({
 
 /**
  * Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
+ * @summary Request password reset
  */
 export const RequestPasswordResetBody = zod.object({
   "email": zod.email()
@@ -1181,6 +1182,7 @@ export const RequestPasswordResetResponse = zod.object({
 
 /**
  * Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user's password to the supplied value.
+ * @summary Confirm password reset
  */
 export const confirmPasswordResetBodyPasswordMin = 8;
 

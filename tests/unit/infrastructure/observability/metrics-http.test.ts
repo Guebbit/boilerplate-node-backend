@@ -1,5 +1,8 @@
+import type { Request } from 'express';
+import { asStub } from '@tests/stub';
 import {
-    normalizeRoutePath,
+    getRouteLabel,
+    UNMATCHED_ROUTE,
     recordRequestMetric,
     incrementInflight,
     decrementInflight,
@@ -7,33 +10,43 @@ import {
     percentileFromHistogramBuckets
 } from '@infrastructure/observability/metrics-http';
 
-describe('normalizeRoutePath', () => {
-    it('returns / for empty or root paths', () => {
-        expect(normalizeRoutePath('/')).toBe('/');
-        expect(normalizeRoutePath('')).toBe('/');
+/** A request as Express leaves it once routing has run — which is when the label is read. */
+const routed = (baseUrl: string, path?: unknown) =>
+    asStub<Request>({ baseUrl, ...(path === undefined ? {} : { route: { path } }) });
+
+/**
+ * `route` is a metric LABEL, and cardinality is a correctness property of one: prom-client never
+ * evicts a series, so an unbounded label set grows the registry for the life of the process, slows
+ * every scrape, and takes Prometheus' memory with it. Any public deployment is scanned
+ * continuously against a dictionary of paths it does not serve, so "normalize the requested path"
+ * bounds nothing — the bound has to come from the routes the application declares.
+ */
+describe('getRouteLabel', () => {
+    it('names the template Express matched, mounted', () => {
+        // `/:id`, not `/orders/507f1f77bcf86cd799439011` and not a guess at which segment was an
+        // id: one series per route, whatever the ids look like.
+        expect(getRouteLabel(routed('/orders', '/:id'))).toBe('/orders/:id');
+        expect(getRouteLabel(routed('/orders', '/:id/invoice'))).toBe('/orders/:id/invoice');
     });
 
-    it('keeps static segments unchanged', () => {
-        expect(normalizeRoutePath('/products')).toBe('/products');
-        expect(normalizeRoutePath('/account/login')).toBe('/account/login');
+    it('spells a router root without its trailing slash', () => {
+        // `router.get('/')` mounted at `/orders` is the same route as `/orders`, and two spellings
+        // of one route are two time series.
+        expect(getRouteLabel(routed('/orders', '/'))).toBe('/orders');
+        expect(getRouteLabel(routed('', '/'))).toBe('/');
     });
 
-    it('collapses numeric IDs', () => {
-        expect(normalizeRoutePath('/orders/42')).toBe('/orders/:id');
+    it('collapses everything that matched no route into one series', () => {
+        // The cardinality bomb, defused: a scanner's whole dictionary shares a single label.
+        expect(getRouteLabel(routed('/wp-login.php'))).toBe(UNMATCHED_ROUTE);
+        expect(getRouteLabel(routed('/vendor/phpunit/eval-stdin.php'))).toBe(UNMATCHED_ROUTE);
+        expect(getRouteLabel(routed('/.env'))).toBe(UNMATCHED_ROUTE);
     });
 
-    it('collapses MongoDB ObjectIDs (24-char hex)', () => {
-        expect(normalizeRoutePath('/users/507f1f77bcf86cd799439011')).toBe('/users/:id');
-    });
-
-    it('collapses UUIDs', () => {
-        expect(normalizeRoutePath('/items/550e8400-e29b-41d4-a716-446655440000')).toBe(
-            '/items/:id'
-        );
-    });
-
-    it('strips query strings', () => {
-        expect(normalizeRoutePath('/products?page=1&limit=10')).toBe('/products');
+    it('refuses a route declared as an array or a pattern rather than one template', () => {
+        // Express allows both, and neither names a single template worth a series.
+        expect(getRouteLabel(routed('/products', ['/a', '/b']))).toBe(UNMATCHED_ROUTE);
+        expect(getRouteLabel(routed('/products', /^\/x/))).toBe(UNMATCHED_ROUTE);
     });
 });
 

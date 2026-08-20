@@ -10,6 +10,7 @@ import {
 import {
     normalizePagination,
     buildPaginatedMeta,
+    DEFAULT_SORT,
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 
@@ -59,7 +60,11 @@ const search = async (
     // Scope merged last: it is the authorization boundary, and no client filter may widen it.
     const match = { ...base.buildWhere(filters), ...scope };
 
-    const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: { createdAt: -1 } }];
+    // `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
+    // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
+    // another. Orders arrive in bursts (a seed, a bulk import, two concurrent checkouts), which
+    // makes ties the normal case rather than the edge one.
+    const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: DEFAULT_SORT }];
 
     return aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }]).then(
         (countResults) => {

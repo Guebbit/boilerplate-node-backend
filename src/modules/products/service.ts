@@ -13,6 +13,7 @@ import { PRODUCT_DELETED } from './events';
 import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
+import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /**
  * Product Service
@@ -55,7 +56,7 @@ export const search = (
     admin = false
 ): Promise<{
     items: ProductDocument[];
-    meta: { page: number; pageSize: number; totalItems: number; totalPages: number };
+    meta: PaginatedMeta;
 }> =>
     // The only product-domain decision left here: admins see everything, everyone else sees the
     // published catalogue. How `text`/`category`/`tag`/`minPrice`/`maxPrice` become a query is
@@ -74,7 +75,7 @@ export const getById = (id: string | undefined, admin = false) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
     if (admin) return productRepository.findById(id);
-    return productRepository.findOne({ _id: id, ...productRepository.publicScope() });
+    return productRepository.findPublicById(id);
 };
 
 /**
@@ -185,7 +186,7 @@ export const remove = (
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
 
-    // If deletedAt already present: it's soft-deleted → RESTORE
+    // The toggle — see `hardDeleteSchema` in `@infrastructure/http/schemas` for what it means.
     product.deletedAt = product.deletedAt ? undefined : new Date();
 
     // SOFT delete (or restore)

@@ -1,5 +1,5 @@
 import { model, Schema } from 'mongoose';
-import type { Document, Model, QueryFilter } from 'mongoose';
+import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
@@ -39,10 +39,7 @@ export interface AuditLogDocument extends Document {
     level: 'info' | 'warn';
 }
 
-/** Mongoose model + query helper types. */
 export type AuditLogModel = Model<AuditLogDocument>;
-/** Shorthand type for Mongoose query filters on the audit collection. */
-export type AuditLogQueryFilter = QueryFilter<AuditLogDocument>;
 
 /**
  * How long an entry survives, in days. Read at import time because a TTL index is created once,

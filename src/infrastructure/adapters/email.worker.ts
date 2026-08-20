@@ -10,7 +10,10 @@ export type { EmailJob } from '@infrastructure/adapters/mailer';
 
 /**
  * Process a single email job from the queue.
- * Returns true to ack on success, false to nack (dead-letter) on permanent failure.
+ *
+ * `false` is a PERMANENT refusal — the payload names no recipient or template, so it is
+ * dead-lettered. Everything else is left to reject: an SMTP fault says nothing about the job, and
+ * `consumeFromQueue` requeues a rejection.
  *
  * The parameter is the job type, not `unknown`: `consumeFromQueue` is generic, so the queue side
  * carries the shape here instead of handing over an opaque value for this function to assert about.
@@ -38,8 +41,9 @@ export const handleEmailJob = (job: Partial<EmailJob>): Promise<boolean> => {
     return nodemailer(job.request, job.templateName, job.data ?? {})
         .then(() => true)
         .catch((error: Error) => {
+            // Logged AND rethrown: the requeue is what saves the email, the log is what makes a
+            // job that keeps failing visible instead of a queue that quietly refills.
             logger.error({ message: 'Email worker failed to send.', error: error.message });
-            // Returning false = nack without requeue (goes to dead-letter if configured).
-            return false;
+            throw error;
         });
 };

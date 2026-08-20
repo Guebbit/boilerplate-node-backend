@@ -14,10 +14,10 @@ import { processSnapshot } from '@infrastructure/observability/process-snapshot'
  * restarts on liveness and restarting this process would not bring a downed Redis back.
  *
  * `status` folds every backing service, so a deployment with Mongo up and Redis down reports
- * `degraded` rather than the `ok` it used to. `telemetry` sits apart from `dependencies` and is
- * NOT part of that fold: those are sinks this service writes to, and losing one costs visibility
- * rather than capability — an unreachable Loki does not make a checkout fail. They are also
- * configuration flags rather than probes, which is what the name now says out loud.
+ * `degraded` rather than `ok`. `telemetry` sits apart from `dependencies` and is NOT part of that
+ * fold: those are sinks this service writes to, and losing one costs visibility rather than
+ * capability — an unreachable Loki does not make a checkout fail. They are also configuration
+ * flags rather than probes, which is what the separate name says out loud.
  */
 export const getObservabilityHealth = (_request: Request, response: Response) => {
     const snapshot = processSnapshot();
@@ -72,5 +72,3 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
         timestamp: new Date().toISOString()
     });
 };
-
-export default getObservabilityHealth;

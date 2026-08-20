@@ -82,10 +82,15 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A status change the order's lifecycle does not allow — `delivered` on a
-                # `pending` order, or `paid` on anything, which only a confirmed payment writes.
-                # `errors[].code` is `ORDER_TRANSITION_NOT_ALLOWED`, and `errors[].details` carries
-                # `{ from, to, allowed }` so a client can offer the moves that ARE open.
+                # Three refusals share this status, told apart by `errors[].code`:
+                #  - `ORDER_TRANSITION_NOT_ALLOWED` — a move the lifecycle does not have, such as
+                #    `delivered` on a `pending` order, or `paid` on anything (only a confirmed
+                #    payment writes that). `errors[].details` carries `{ from, to, allowed }` so a
+                #    client can offer the moves that ARE open.
+                #  - `ORDER_CANCEL_VIA_CANCEL_ENDPOINT` — `cancelled` is a legal move and not a
+                #    field: it releases the held stock and refunds. Use `POST /orders/{id}/cancel`.
+                #  - `ORDER_ITEMS_HELD` — `items` cannot be rewritten while the order's stock is
+                #    still held or already sold, because the reservation froze the old lines.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -186,10 +191,15 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A status change the order's lifecycle does not allow — `delivered` on a
-                # `pending` order, or `paid` on anything, which only a confirmed payment writes.
-                # `errors[].code` is `ORDER_TRANSITION_NOT_ALLOWED`, and `errors[].details` carries
-                # `{ from, to, allowed }` so a client can offer the moves that ARE open.
+                # Three refusals share this status, told apart by `errors[].code`:
+                #  - `ORDER_TRANSITION_NOT_ALLOWED` — a move the lifecycle does not have, such as
+                #    `delivered` on a `pending` order, or `paid` on anything (only a confirmed
+                #    payment writes that). `errors[].details` carries `{ from, to, allowed }` so a
+                #    client can offer the moves that ARE open.
+                #  - `ORDER_CANCEL_VIA_CANCEL_ENDPOINT` — `cancelled` is a legal move and not a
+                #    field: it releases the held stock and refunds. Use `POST /orders/{id}/cancel`.
+                #  - `ORDER_ITEMS_HELD` — `items` cannot be rewritten while the order's stock is
+                #    still held or already sold, because the reservation froze the old lines.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }

@@ -15,7 +15,7 @@
  *     comment. The property states the rule; the example remembers the bug.
  */
 import fc from 'fast-check';
-import { sumLineItems, type LineItem } from '../../domain/totals';
+import { sumLineItems, orderTotal, type LineItem } from '../../domain/totals';
 
 /** One seed for the file, and one place to change it. */
 const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
@@ -168,6 +168,59 @@ describe('sumLineItems — arithmetic invariants', () => {
 
                     expect(withFreeLine.price).toBe(without.price);
                     expect(withFreeLine.count).toBe(without.count + 1);
+                }
+            ),
+            RUN
+        );
+    });
+});
+
+/**
+ * `orderTotal` is the COMPOSITION rule — lines plus the shipping frozen against them — and it has
+ * three callers who each owe the customer the same number: the order serializer, the payment
+ * intent and the confirmation email. What it must never do is disagree with `sumLineItems` about
+ * the part they share, or turn an order with no shipping into a different order.
+ */
+describe('orderTotal', () => {
+    it('is the line total when nothing was charged for shipping', () => {
+        // Covers both spellings of absence. An order placed before delivery existed carries no
+        // `shippingCost` at all, and `pickup` is a real method priced at zero.
+        fc.assert(
+            fc.property(
+                fc.array(lineItem(), { maxLength: 20 }),
+                fc.constantFrom(undefined, null, 0),
+                (items, shippingCost) => {
+                    expect(orderTotal({ items, shippingCost })).toBe(sumLineItems(items).price);
+                }
+            ),
+            RUN
+        );
+    });
+
+    it('adds the shipping exactly, in cents', () => {
+        // Exact, not within a tolerance: 100 + 15 must be 115 and 0.1 + 0.2 must be 0.3. A float
+        // `+` here is the reason the composition rule has a home at all.
+        fc.assert(
+            fc.property(
+                fc.array(lineItem(), { maxLength: 20 }),
+                fc.integer({ min: 0, max: 100_000 }),
+                (items, shippingCost) => {
+                    expect(Math.round(orderTotal({ items, shippingCost }) * 100)).toBe(
+                        Math.round(sumLineItems(items).price * 100) + shippingCost * 100
+                    );
+                }
+            ),
+            RUN
+        );
+    });
+
+    it('never produces NaN, whatever the order carries', () => {
+        fc.assert(
+            fc.property(
+                fc.array(hostileLineItem()),
+                fc.oneof(fc.double(), fc.string(), nullish(), fc.boolean()),
+                (items, shippingCost) => {
+                    expect(Number.isNaN(orderTotal({ items, shippingCost }))).toBe(false);
                 }
             ),
             RUN

@@ -53,9 +53,9 @@ export const deleteFile = (filePath: string) =>
     toolkitDeleteFile(filePath, (error) =>
         // `error` level rather than `warn`: an undeletable file usually points at a permissions
         // or mount misconfiguration that a human should look at.
-        logger.error({
-            message: error.message,
-            stack: error.stack,
-            name: error.name
-        })
+        // The Error goes under `error`, never spread into fields of its own: `redactFormat`
+        // hands anything under that key to `serializeError`, which is the single place deciding
+        // that stacks stay out of production logs. A hand-spelled `stack` bypasses the rule and
+        // puts absolute container paths in the aggregated store.
+        logger.error({ message: 'Could not delete file.', error })
     );

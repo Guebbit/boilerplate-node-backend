@@ -280,6 +280,21 @@ export const releaseForOrder = async (
 };
 
 /**
+ * Are this order's units bound to the lines it currently holds?
+ *
+ * The hold froze its own copy of the basket, and `held`/`committed` mean the counters answer to
+ * that copy — so anything rewriting the order's lines has to ask this first. A released or expired
+ * hold, or no hold at all, binds nothing.
+ *
+ * @param orderId - the order being asked about
+ * @returns whether stock is currently committed to this order's lines
+ */
+export const isStockBoundToOrder = (orderId: string): Promise<boolean> =>
+    reservationRepository
+        .findByOrderId(orderId)
+        .then((hold) => hold?.status === 'held' || hold?.status === 'committed');
+
+/**
  * The expiry tick: every hold whose window has closed gives its units back.
  *
  * A job rather than an internal schedule — the application ships no scheduler, so this is driven
@@ -432,7 +447,9 @@ export const listMovements = (
     filters: MovementFilters = {}
 ): Promise<ResponseSuccess<{ items: StockMovementDocument[]; meta: PaginatedMeta }>> =>
     stockMovementRepository
-        .search(filters, {}, { createdAt: -1, _id: -1 })
+        // No sort argument: `search`'s default is `DEFAULT_SORT`, which is this exact order and
+        // the only one that makes a paged ledger stable.
+        .search(filters)
         .then(({ items, meta }) => generateSuccess({ items, meta }));
 
 /** The module's one service handle. */
@@ -440,6 +457,7 @@ export const inventoryService = {
     reserveForOrder,
     commitForOrder,
     releaseForOrder,
+    isStockBoundToOrder,
     runReservationSweep,
     receive,
     adjust,

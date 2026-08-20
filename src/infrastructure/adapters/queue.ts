@@ -14,6 +14,7 @@
 //    (assertQueue/sendToQueue/consume/ack) are issued on a channel, never on the connection.
 //  - `ConsumeMessage` — a delivered message: `.content` (Buffer) plus delivery metadata,
 //    including the delivery tag that `ack`/`nack` reference.
+import type { EventEmitter } from 'node:events';
 import amqplib, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
 import { logger } from '@infrastructure/adapters/logger';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
@@ -64,9 +65,10 @@ let connectPromise: Promise<Channel | undefined> | undefined;
  * What this adapter's connection is doing, for `GET /observability/health`.
  *
  * The channel handle IS the readiness signal: every publish and every consume is issued on it, and
- * `getChannel()`'s `close` listener clears it, so a live handle means the next `publishToQueue`
- * will reach the broker. No `checkQueue` round trip — see the header of
- * `infrastructure/observability/dependency-health.ts` for why a health endpoint does no I/O.
+ * `superviseHandle` clears it on the channel's OWN close as well as the connection's, so a live
+ * handle means the next `publishToQueue` will reach the broker. No `checkQueue` round trip — see
+ * the header of `infrastructure/observability/dependency-health.ts` for why a health endpoint does
+ * no I/O.
  */
 export const queueState = (): DependencyStatus => {
     if (!isQueueEnabled()) return 'disabled';
@@ -87,6 +89,22 @@ const logConnectionWarning = (error: unknown) => {
         error: error instanceof Error ? error.message : String(error)
     });
     connectionWarningLogged = true;
+};
+
+/**
+ * Attach the mandatory `error` and `close` listeners to an amqplib handle.
+ *
+ * Both the connection and the channel are EventEmitters that fail independently, and an unhandled
+ * `error` on either takes the process down. One helper so the pair cannot be attached to one and
+ * forgotten on the other. `onClose` drops the cached reference: that is the whole reconnect
+ * strategy, driven by demand.
+ *
+ * @param handle - the connection or channel to supervise
+ * @param onClose - what to forget when it closes
+ */
+const superviseHandle = (handle: EventEmitter, onClose: () => void): void => {
+    handle.on('error', logConnectionWarning);
+    handle.on('close', onClose);
 };
 
 // ─── Connection management ────────────────────────────────────────────────────
@@ -112,12 +130,8 @@ const getChannel = (): Promise<Channel | undefined> => {
         .connect(url)
         .then((conn) => {
             connection = conn;
-            // Mandatory: amqplib connections are EventEmitters, and an unhandled 'error'
-            // (broker restart, network drop) would take the process down.
-            connection.on('error', logConnectionWarning);
-            // On close, forget the cached handles so the *next* `getChannel()` reconnects.
-            // This is the whole reconnect strategy — driven by demand, no background loop.
-            connection.on('close', () => {
+            // A dead connection takes its channels with it, so both handles are forgotten here.
+            superviseHandle(conn, () => {
                 channel = undefined;
                 connection = undefined;
             });
@@ -127,6 +141,13 @@ const getChannel = (): Promise<Channel | undefined> => {
         })
         .then((ch) => {
             channel = ch;
+            // A channel dies on its own for ordinary reasons — most of them named by
+            // `assertJobQueue` below — and the connection stays open when it does. Without this,
+            // the cached handle survives as a corpse whose every method throws, and
+            // `queueState()` keeps reporting `ready`.
+            superviseHandle(ch, () => {
+                channel = undefined;
+            });
             // Connection is healthy again — re-arm the warning for a future outage.
             connectionWarningLogged = false;
             return ch;
@@ -191,6 +212,54 @@ export const stopQueue = (): Promise<void> => {
 export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
 export const PDF_QUEUE = WORKER_CHANNELS.PDF_GENERATE;
 
+// ─── Dead letters ─────────────────────────────────────────────────────────────
+
+/**
+ * The exchange every refused message is routed to, so `nack(msg, false, false)` means "moved for a
+ * human" rather than "destroyed". `direct`, so each queue dead-letters under its own routing key.
+ */
+export const DEAD_LETTER_EXCHANGE = 'dead-letter';
+
+/**
+ * The dead-letter queue for a work queue, and the routing key that reaches it. Derived, so a queue
+ * added to `WORKER_CHANNELS` gets its dead letters without a second registration.
+ *
+ * @param queue - the work queue
+ * @returns the name of the queue its refusals land in
+ */
+export const deadLetterQueueOf = (queue: string): string => `${queue}.dead`;
+
+/**
+ * Declare a work queue, its dead-letter queue, and the binding between them.
+ *
+ * Idempotent, and called on both the publish and consume paths so producer and consumer may start
+ * in any order. The dead-letter queue is bound BEFORE the work queue names the exchange: a queue
+ * whose `x-dead-letter-exchange` resolves to nothing drops the message anyway.
+ *
+ * `assertQueue` throws `PRECONDITION_FAILED` when a queue already exists with different arguments,
+ * which kills the channel — see `docs/tools/rabbitmq.md` for upgrading an existing broker.
+ *
+ * @param ch - the channel to declare on
+ * @param queue - the work queue
+ * @param durable - whether the definitions survive a broker restart
+ */
+const assertJobQueue = (ch: Channel, queue: string, durable: boolean): Promise<void> =>
+    ch
+        .assertExchange(DEAD_LETTER_EXCHANGE, 'direct', { durable: true })
+        .then(() => ch.assertQueue(deadLetterQueueOf(queue), { durable: true }))
+        .then(() =>
+            ch.bindQueue(deadLetterQueueOf(queue), DEAD_LETTER_EXCHANGE, deadLetterQueueOf(queue))
+        )
+        .then(() =>
+            ch.assertQueue(queue, {
+                // `durable` = the queue definition survives a broker restart.
+                durable,
+                deadLetterExchange: DEAD_LETTER_EXCHANGE,
+                deadLetterRoutingKey: deadLetterQueueOf(queue)
+            })
+        )
+        .then(() => undefined);
+
 // ─── Publish ──────────────────────────────────────────────────────────────────
 
 export interface PublishOptions<TPayload = unknown> {
@@ -212,12 +281,13 @@ export interface PublishOptions<TPayload = unknown> {
  *          unavailable — callers use this to decide whether to fall back to inline work.
  *
  * Publishes to the *default exchange* (empty name), where the routing key is taken as a
- * literal queue name. That is the simplest AMQP topology: no exchange/binding setup needed.
+ * literal queue name — the simplest AMQP topology there is. The only exchange this file declares
+ * is the dead-letter one, which the broker uses on the way OUT of a queue, never on the way in.
  *
  * `TPayload` is the job envelope. A producer that names it — `publishToQueue<EmailJob>(…)` in
  * `enqueueEmail` — gets the same type checked here that its consumer declares, so a field added
  * on one side and forgotten on the other is a compile error rather than a message the worker
- * discards at 3am. Left inferred, it behaves exactly as the old `unknown` did.
+ * discards at 3am. Left inferred it defaults to `unknown`, which costs a caller nothing.
  */
 export const publishToQueue = <TPayload = unknown>(
     options: PublishOptions<TPayload>
@@ -230,15 +300,7 @@ export const publishToQueue = <TPayload = unknown>(
         const { queue, payload, durable = true, persistent = true } = options;
 
         return (
-            ch
-                // `assertQueue` is idempotent: it creates the queue if missing, or verifies the
-                // existing one matches. Called on every publish so producer and consumer can
-                // start in any order — but note it *throws* (killing the channel) if the queue
-                // already exists with different settings.
-                .assertQueue(queue, {
-                    // `durable` = the queue definition survives a broker restart.
-                    durable
-                })
+            assertJobQueue(ch, queue, durable)
                 .then(() =>
                     // `sendToQueue(queue, content, options)` — content must be a Buffer, so the
                     // payload is JSON-serialized here and parsed back in `consumeFromQueue`.
@@ -249,9 +311,16 @@ export const publishToQueue = <TPayload = unknown>(
                         persistent
                     })
                 )
-            // `sendToQueue` returns a boolean: false means amqplib's internal write buffer is
-            // full (backpressure) and the caller should wait for the channel's 'drain' event.
-            // This is surfaced to the caller as-is rather than handled.
+                // `sendToQueue` returns a boolean: false means amqplib's internal write buffer is
+                // full (backpressure) and the caller should wait for the channel's 'drain' event.
+                // This is surfaced to the caller as-is rather than handled.
+                //
+                // The catch is the declared contract: a channel that died since the cached-handle
+                // check rejects here, and every caller reads a boolean.
+                .catch((error: unknown) => {
+                    logConnectionWarning(error);
+                    return false;
+                })
         );
     });
 
@@ -278,8 +347,11 @@ export interface ConsumeOptions<TPayload = unknown> {
  *  - handler *throws*         → `nack` with requeue — assumed transient, try again
  *  - unparseable message      → `nack` without requeue — will never parse, so requeuing loops
  *
- * Caveat worth knowing: requeue-on-throw can spin hot if the failure is actually permanent.
- * A dead-letter exchange is the usual fix once volume justifies it.
+ * Both `nack`-without-requeue arms route to `DEAD_LETTER_EXCHANGE`, so "discard" means "moved to
+ * `<queue>.dead`", not "deleted".
+ *
+ * Caveat: requeue-on-throw spins hot if the failure is actually permanent — bounded by `prefetch`,
+ * and loud rather than silent.
  *
  * `TPayload` is inferred from the handler, which is how a worker gets to declare its own job type
  * (`handleEmailJob(job: Partial<EmailJob>)`) instead of taking `unknown` and asserting its way
@@ -294,9 +366,8 @@ export const consumeFromQueue = <TPayload = unknown>(
         const { queue, handler, durable = true, prefetch = 1 } = options;
 
         return (
-            ch
-                // Same idempotent declaration as on the publish side — the consumer may boot first.
-                .assertQueue(queue, { durable })
+            // Same idempotent declaration as on the publish side — the consumer may boot first.
+            assertJobQueue(ch, queue, durable)
                 // `prefetch` (AMQP basic.qos) caps unacked messages per consumer. With 1, the
                 // broker hands over the next message only after the current one is acked, which
                 // gives fair round-robin across replicas instead of one worker hoarding a batch.
