@@ -25,8 +25,9 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
+import { createCallerScope } from '@kernel/authorization';
 import { OrderStatus } from '@types';
-import type { PaymentStatus } from '@types';
+import type { PaymentStatus, Caller } from '@types';
 import {
     orderService,
     orderRepository,
@@ -88,20 +89,14 @@ const resolvePayerId = (orderUserId: string): Promise<string> =>
         .catch(() => orderUserId);
 
 /**
- * Which payments a caller may read — the same shape `orderService.callerScope` returns.
+ * Which payments a caller may read — the same rule `orderService.callerScope` applies, over this
+ * module's collection.
  *
- * `undefined` for admins, meaning "no restriction", so callers spread it into the query rather
- * than treating it as a filter. The scope rides IN the read: checking ownership on the document
- * afterwards is what `orders/repository.ts` names as the way a scoped find turns into a leak.
- *
- * The `?? ''` is deliberate and matches `orders`: an empty string is not a valid ObjectId, so a
- * request with no auth context errors out instead of quietly widening to every user's payments.
+ * `ownerScope` rather than a `visibleScope`: payments are never soft-deleted, so "whose" is the
+ * only axis there is. The rest — the `undefined` for admins, the scope riding in the read, the
+ * throw on a caller with no id — is `createCallerScope`'s to explain.
  */
-const callerScope = (authContext?: {
-    id?: string;
-    admin?: boolean;
-}): Record<string, unknown> | undefined =>
-    authContext?.admin ? undefined : paymentRepository.ownerScope(authContext?.id ?? '');
+const callerScope = createCallerScope(paymentRepository.ownerScope);
 
 /**
  * Create (or refresh) the payment intent for an order.
@@ -117,7 +112,7 @@ const callerScope = (authContext?: {
  */
 export const createIntent = (
     orderId: string,
-    authContext?: { id?: string; admin?: boolean }
+    authContext?: Caller
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('payments.order-not-found')]);
@@ -163,7 +158,7 @@ export const createIntent = (
 export const confirmPayment = (
     paymentId: string,
     card: CardDetails,
-    authContext?: { id?: string; admin?: boolean }
+    authContext?: Caller
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then(async (payment) => {
         if (!payment) return generateReject(404, [t('payments.not-found')]);
@@ -240,7 +235,7 @@ export const confirmPayment = (
  */
 export const getForOrder = (
     orderId: string,
-    authContext?: { id?: string; admin?: boolean }
+    authContext?: Caller
 ): Promise<ResponseSuccess<Record<string, unknown>> | ResponseReject> =>
     paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
         if (!payment) return generateReject(404, [t('payments.not-found')]);
@@ -263,7 +258,7 @@ export const getForOrder = (
 const withActions = (
     payment: PaymentDocument,
     order: OrderDocument | undefined,
-    authContext?: { admin?: boolean }
+    authContext?: Caller
 ): Record<string, unknown> => ({
     ...(payment.toJSON() as Record<string, unknown>),
     actions: {
@@ -315,7 +310,7 @@ const performRefund = (orderId: string): Promise<PaymentDocument | null> =>
  */
 export const refundByOrder = (
     orderId: string,
-    authContext?: { id?: string; admin?: boolean }
+    authContext?: Caller
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     performRefund(orderId).then((refunded) => {
         if (refunded) return generateSuccess(refunded, 200, t('payments.refund-success'));

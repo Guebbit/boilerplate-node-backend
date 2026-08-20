@@ -1,6 +1,6 @@
 import { t } from '@infrastructure/i18n';
 import { OrderStatus } from '@types';
-import type { SearchOrdersRequest, CartItem } from '@types';
+import type { SearchOrdersRequest, CartItem, Caller } from '@types';
 import type { OrderDocument, OrderDocumentItem } from './model';
 import {
     generateReject,
@@ -11,6 +11,7 @@ import {
 import { productRepository } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
+import { createCallerScope } from '@kernel/authorization';
 import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 import { orderRepository } from './repository';
 import {
@@ -336,23 +337,16 @@ export const removeById = (
  * Which orders a caller is allowed to read.
  *
  * The authorization boundary for order reads: the difference between a user seeing their own
- * orders and seeing everyone's, and between seeing a soft-deleted order and not. Returns
- * `undefined` for admins, meaning "no restriction", so callers must spread it
- * (`{ ...callerScope(ctx), status: 'paid' }`) rather than treat it as a filter.
+ * orders and seeing everyone's, and between seeing a soft-deleted order and not. `visibleScope`
+ * is what makes it BOTH — `ownerScope` alone would answer "whose" and leave soft-deleted rows
+ * visible to their owner.
  *
- * Takes the auth context rather than the express `Request`: this is a rule about a caller, not
- * about a request, and the narrower argument is what keeps the decision next to the query it
- * produces.
- *
- * The `?? ''` is deliberate: an empty string is not a valid ObjectId, so `ownerScope` throws.
- * That is the safe direction — a request with no auth context errors out instead of quietly
- * widening the scope to every user's data.
+ * Returns `undefined` for admins, meaning "no restriction", so callers must spread it
+ * (`{ ...callerScope(ctx), status: 'paid' }`) rather than treat it as a filter. Why the scope
+ * rides in the read, and why a caller with no id throws rather than widening, are the shared
+ * rule's to explain — see `createCallerScope`.
  */
-export const callerScope = (authContext?: {
-    id?: string;
-    admin?: boolean;
-}): Record<string, unknown> | undefined =>
-    authContext?.admin ? undefined : orderRepository.visibleScope(authContext?.id ?? '');
+export const callerScope = createCallerScope(orderRepository.visibleScope);
 
 /**
  * Which column of the lifecycle table a caller reads.
@@ -363,8 +357,7 @@ export const callerScope = (authContext?: {
  * @param authContext - the caller
  * @returns the actor whose permissions apply
  */
-const actorOf = (authContext?: { admin?: boolean }): OrderActor =>
-    authContext?.admin ? 'admin' : 'customer';
+const actorOf = (authContext?: Caller): OrderActor => (authContext?.admin ? 'admin' : 'customer');
 
 /**
  * The single-order response body: the order as it serializes, plus what this caller may do to it.
@@ -377,17 +370,14 @@ const actorOf = (authContext?: { admin?: boolean }): OrderActor =>
  * @param authContext - the caller whose options are being described
  * @returns the serialized order carrying its `actions`
  */
-export function withActions(
-    order: OrderDocument,
-    authContext?: { id?: string; admin?: boolean }
-): Record<string, unknown>;
+export function withActions(order: OrderDocument, authContext?: Caller): Record<string, unknown>;
 export function withActions(
     order: OrderDocument | undefined,
-    authContext?: { id?: string; admin?: boolean }
+    authContext?: Caller
 ): Record<string, unknown> | undefined;
 export function withActions(
     order: OrderDocument | undefined,
-    authContext?: { id?: string; admin?: boolean }
+    authContext?: Caller
 ): Record<string, unknown> | undefined {
     // A success envelope types its payload as optional. No order, no actions — the caller's
     // `undefined` passes straight through rather than becoming an empty capability block.
@@ -425,7 +415,7 @@ const cancellableStatuses = (actor: OrderActor): readonly OrderStatus[] =>
  */
 export const cancelById = (
     id: string,
-    authContext?: { id?: string; admin?: boolean },
+    authContext?: Caller,
     options: { refund?: boolean } = {}
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     /*

@@ -10,6 +10,7 @@
 
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
+import type { Caller } from '@types';
 
 /*
  * Action constants — domain.resource.verb dot-notation.
@@ -190,7 +191,7 @@ export const extractRequestContext = (request: {
  * @returns actor role string
  */
 export const resolveActorRole = (request: {
-    authContext?: { admin?: boolean } | null;
+    authContext?: Caller | null;
 }): AuditEvent['actor_role'] => {
     // Order matters: most-privileged first, since an admin also satisfies the `user` check.
     if (request.authContext?.admin) return 'admin';
@@ -213,7 +214,7 @@ export const buildAuditEvent = (
         ip?: string;
         headers?: Record<string, string | string[] | undefined>;
         requestId?: string;
-        authContext?: { id?: string; admin?: boolean } | null;
+        authContext?: Caller | null;
     },
     // The type says: `action` and `outcome` are mandatory, everything else optional. That is the
     // whole ergonomic point — a call site cannot forget what happened or whether it succeeded,

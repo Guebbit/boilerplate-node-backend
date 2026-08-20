@@ -17,7 +17,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { ShippingMethod } from '@types';
+import type { ShippingMethod, Caller } from '@types';
 import { emitDomainEvent } from '@kernel/events';
 import { orderService, orderRepository, ORDER_STATUS_CHANGED } from '@modules/orders';
 import { userRepository } from '@modules/users';
@@ -48,7 +48,7 @@ export const listMethods = (): ResponseSuccess<{ methods: readonly ShippingMetho
  */
 export const getForOrder = (
     orderId: string,
-    authContext?: { id?: string; admin?: boolean }
+    authContext?: Caller
 ): Promise<ResponseSuccess<ShipmentDocument> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
