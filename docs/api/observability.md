@@ -59,7 +59,7 @@ This is not the liveness probe. `GET /` is, and it is what the container HEALTHC
     "otel": true,
     "umami": true,
     "faro": false,
-    "analytics": "umami"
+    "analytics": { "provider": "umami", "configured": true }
   },
   "memory": { "rss": 125829120, "heapUsed": 47185920, "heapTotal": 83886080, "external": 2097152 },
   "system": { "platform": "linux", "cpuCount": 4, "loadAvg": [0.5, 0.3, 0.2] },
@@ -79,6 +79,14 @@ This is not the liveness probe. `GET /` is, and it is what the container HEALTHC
 `telemetry` reports which sinks this deployment is **wired to**, read off the environment and never
 probed. It is deliberately outside the `status` fold: losing a telemetry sink costs visibility, not
 capability — an unreachable Loki does not make a checkout fail.
+
+`analytics` carries two facts because neither answers on its own. `provider` is a choice between
+three implementations, so a boolean could not tell "PostHog is unconfigured" from "this deployment
+uses Umami". `configured` is whether that provider has the credentials it needs: a provider selected
+without them warns once at boot and then discards every event for the life of the process, which is
+the most common analytics failure there is. `none` is always configured — collecting nothing is its
+configuration. Note that `umami` above is a different fact: the public origin a browser loads the
+tracking script from, which says nothing about the website id the API needs.
 
 `memory` is in **bytes**, identical to what the SSE stream publishes, so a dashboard showing both
 compares numbers instead of converting units.

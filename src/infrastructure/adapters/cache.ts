@@ -359,15 +359,23 @@ export const setCacheValue = (
  * No cross-instance broadcast is needed: the entries live in shared Redis, so one call invalidates
  * them for every worker and replica.
  *
+ * Reports through the same {@link ClearCacheResult} `clearCache` does, and for the same reason its
+ * docblock gives — except this one runs on every successful write rather than from an operator's
+ * hand. `reachable: false` means the pre-write response is still cached and will be served until
+ * its TTL expires: the customer edits a product, gets a 200, and the catalogue shows the old one
+ * for up to an hour. Never rejects; the caller decides what to do with the answer.
+ *
  * See: docs/tools/redis-cache.md#why-there-is-no-cross-instance-broadcast
  */
-export const invalidateCacheTags = (tags: string[]): Promise<void> => {
+export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> => {
     const cacheTags = [...new Set(tags.filter(Boolean))];
-    if (cacheTags.length === 0) return Promise.resolve();
+    if (cacheTags.length === 0) return Promise.resolve({ deleted: 0, reachable: true });
 
     return getClient()
         .then((redisClient) => {
-            if (!redisClient) return;
+            // Same split as `clearCache`: caching switched off is trivially clear, caching on with
+            // no client is a connect that failed — `getClient()` reports both as void.
+            if (!redisClient) return { deleted: 0, reachable: !isCacheEnabled() };
 
             // For each tag:
             // 1) read all cached keys in that group
@@ -383,14 +391,17 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
                             // `del` accepts an array (variadic DEL) — one round-trip for the whole
                             // group instead of one per key. Guarded because DEL with zero
                             // arguments is a protocol error.
-                            .then((keys) => (keys.length > 0 ? redisClient.del(keys) : undefined))
+                            .then((keys) => (keys.length > 0 ? redisClient.del(keys) : 0))
                             // Drop the now-meaningless index set as well, so it does not grow
-                            // unbounded across invalidation cycles.
-                            .then(() => redisClient.del(tagKey))
+                            // unbounded across invalidation cycles. Its own deletion is not a
+                            // cached response and is not counted.
+                            .then((deleted) => redisClient.del(tagKey).then(() => deleted))
                     );
                 })
-                // Collapse the per-tag delete counts to void.
-            ).then(() => undefined);
+            ).then((perTag) => ({
+                deleted: perTag.reduce((total, count) => total + count, 0),
+                reachable: true
+            }));
         })
         .catch((error) => {
             logger.warn({
@@ -398,6 +409,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<void> => {
                 tags: cacheTags,
                 error: error instanceof Error ? error.message : String(error)
             });
+            return { deleted: 0, reachable: false };
         });
 };
 

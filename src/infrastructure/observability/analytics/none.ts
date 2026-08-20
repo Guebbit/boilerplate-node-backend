@@ -16,6 +16,11 @@ export const noneAnalyticsProvider: AnalyticsProvider = {
         // Deliberately empty.
     },
 
+    // Collecting nothing is this provider's whole configuration, so it is never unconfigured.
+    configured(): boolean {
+        return true;
+    },
+
     shutdown(): Promise<void> {
         return Promise.resolve();
     }

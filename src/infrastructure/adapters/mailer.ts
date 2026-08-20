@@ -192,6 +192,18 @@ export const nodemailer = (
 };
 
 /**
+ * The envelope an email job carries — the AsyncAPI contract's shape, not Nodemailer's.
+ *
+ * Every field here survives `JSON.stringify`, which is what makes the queued path and the inline
+ * path the same call. Nodemailer's full `SendMailOptions` does not: `attachments: [{ content:
+ * Buffer }]` arrives as `{"type":"Buffer","data":[…]}` and a `Readable` becomes `{}`, so a wider
+ * type would let a caller write something that works in development — where the broker is off —
+ * and corrupts the day it is switched on. A project that needs attachments should send a storage
+ * key and let the worker fetch the bytes.
+ */
+export type EmailRequest = EmailJobPayload['request'];
+
+/**
  * What one email job carries on the queue.
  *
  * It lives here, with the producer, for the reason `EMAIL_QUEUE` lives with the queue adapter: the
@@ -199,14 +211,11 @@ export const nodemailer = (
  * is not an error anywhere — it is a job the worker quietly discards. The worker re-exports this
  * type rather than declaring its own, so there is one definition to change.
  *
- * The AsyncAPI contract types `request` as the four fields the channel documents (to/subject/
- * text/html); this widens it to Nodemailer's full envelope, because the worker hands the value
- * straight to `sendMail`. Anything non-plain in there (streams, Buffers, functions) still will not
- * survive `JSON.stringify` — see the note at the publish site.
+ * It IS the generated contract type. `asyncapi.workers.yaml` declares `request` with
+ * `additionalProperties: false`, so a local widening would be a field the type permits and the
+ * contract forbids.
  */
-export interface EmailJob extends Omit<EmailJobPayload, 'request'> {
-    request: SendMailOptions;
-}
+export type EmailJob = EmailJobPayload;
 
 /**
  * One email's finished content: which template, and every string it prints.
@@ -247,7 +256,7 @@ export interface EmailContent {
  * that knows the template, so what goes on the queue is exactly what the caller assembled.
  */
 export const enqueueEmail = (
-    request: SendMailOptions,
+    request: EmailRequest,
     templateName: string,
     data: Data
 ): Promise<void> => {

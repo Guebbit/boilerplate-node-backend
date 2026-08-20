@@ -137,6 +137,7 @@ export * from './observabilityHealthStatus';
 export * from './observabilityHealthSystem';
 export * from './observabilityHealthTelemetry';
 export * from './observabilityHealthTelemetryAnalytics';
+export * from './observabilityHealthTelemetryAnalyticsProvider';
 export * from './observabilityMetricsLatency';
 export * from './observabilityMetricsSummary';
 export * from './observabilityMetricsSummaryAuth';

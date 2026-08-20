@@ -459,6 +459,40 @@ describe('invalidateCacheTags', () => {
         // completed write into an error response, and the client would retry a write that landed.
         mockSMembers.mockImplementation(() => Promise.reject(new Error('connection reset')));
 
-        await expect(freshCache().invalidateCacheTags(['products'])).resolves.toBeUndefined();
+        await expect(freshCache().invalidateCacheTags(['products'])).resolves.toEqual({
+            deleted: 0,
+            reachable: false
+        });
+    });
+
+    /**
+     * `reachable: false` is the whole reason this returns a value at all.
+     *
+     * The write has landed and its cached predecessor has not been removed, so the endpoint serves
+     * a stale response for its full TTL — a customer edits a product, gets a 200, and the catalogue
+     * shows the old one. Resolving `void` made that indistinguishable from a clean invalidation,
+     * which is the ambiguity `ClearCacheResult` exists to remove; the middleware turns the `false`
+     * into a counter and an `error` line.
+     */
+    it('reports success with the number of cached responses removed', async () => {
+        const cache = freshCache();
+        mockSMembers.mockImplementation(() => Promise.resolve(['a', 'b']));
+        // Variadic DEL answers with how many keys it removed; the tag set's own deletion is not a
+        // cached response and must not be counted with them.
+        mockDel.mockImplementation((keys: string[] | string) =>
+            Promise.resolve(Array.isArray(keys) ? keys.length : 1)
+        );
+
+        await expect(cache.invalidateCacheTags(['products'])).resolves.toEqual({
+            deleted: 2,
+            reachable: true
+        });
+    });
+
+    it('is trivially reachable when there are no tags to invalidate', async () => {
+        await expect(freshCache().invalidateCacheTags([])).resolves.toEqual({
+            deleted: 0,
+            reachable: true
+        });
     });
 });

@@ -22,7 +22,6 @@ import {
     loadLocaleResources,
     refreshLocaleOverrides,
     registerLocaleDirectories,
-    registerLocaleOverrideProvider,
     startLocaleOverrideRefresh
 } from '@infrastructure/i18n';
 
@@ -74,13 +73,6 @@ export const startServer = () => {
                     enabledModules
                         .map((appModule) => appModule.locales)
                         .filter((directory) => directory !== undefined)
-                );
-
-                // Where runtime edits to the API's own copy come from. Registered before `init` for
-                // symmetry with the directories, though only the refresh below actually reads it.
-                registerLocaleOverrideProvider(
-                    enabledModules.find((appModule) => appModule.localeOverrides !== undefined)
-                        ?.localeOverrides
                 );
             })
             .then(() =>

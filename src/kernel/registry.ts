@@ -10,7 +10,6 @@
 
 import type { Router } from 'express';
 import type { SeedOutcome } from '@infrastructure/persistence/seed';
-import type { LocaleOverrideProvider } from '@infrastructure/i18n';
 
 /**
  * How this module treats the one it depends on — the label on the arrow, not just the arrow.
@@ -86,14 +85,6 @@ interface AppModuleCommon {
      * `app.ts` passes these to `registerLocaleDirectories` before `i18next.init()`.
      */
     locales?: string;
-
-    /**
-     * Supplies runtime overrides for the API's own dictionaries, keyed by locale, already nested.
-     * At most one module declares it — the one owning the collection the edits live in.
-     *
-     * Optional, and unregistered is a working state: every language then resolves from its file.
-     */
-    localeOverrides?: LocaleOverrideProvider;
 
     /**
      * Write this module's slice of the demo dataset. Called only by `db/demo/index.ts`, never at

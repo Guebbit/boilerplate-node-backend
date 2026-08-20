@@ -18,10 +18,12 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { ObservabilityHealthTelemetryAnalyticsProvider } from './observabilityHealthTelemetryAnalyticsProvider';
 
-export type ObservabilityHealthTelemetryAnalytics = {
-  provider: ObservabilityHealthTelemetryAnalyticsProvider;
-  /** Whether the selected provider has the credentials it needs. `none` is always true: collecting nothing is its configuration. */
-  configured: boolean;
-};
+export type ObservabilityHealthTelemetryAnalyticsProvider = typeof ObservabilityHealthTelemetryAnalyticsProvider[keyof typeof ObservabilityHealthTelemetryAnalyticsProvider];
+
+
+export const ObservabilityHealthTelemetryAnalyticsProvider = {
+  umami: 'umami',
+  posthog: 'posthog',
+  none: 'none',
+} as const;

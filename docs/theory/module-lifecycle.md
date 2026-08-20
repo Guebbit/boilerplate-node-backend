@@ -13,9 +13,9 @@ That claim is not aspirational — `wishlist` was added under it, and three doma
 it. What each one actually cost is recorded below, honestly, including the parts that are more than
 one line.
 
-## The registries, all four of them
+## The registries, all five of them
 
-A module is named in exactly four places, and three of them are conditional. Knowing which ones
+A module is named in exactly five places, and three of them are conditional. Knowing which ones
 apply to your domain is most of both procedures:
 
 | Registry              | File                                    | Applies when                       |
@@ -25,11 +25,19 @@ apply to your domain is most of both procedures:
 | `ANALYTICS_SECTIONS`  | `scripts/contracts/analytics-events.ts` | the domain has an `analytics.ts`   |
 | `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi.ts`         | the domain owns an `asyncapi.yaml` |
 | `SHARED_SECTIONS`     | `scripts/contracts/asyncapi.ts`         | …and an API client can reach it    |
+| `FRONTEND_PAIRING`    | `scripts/module-docs/pairing.ts`        | **always**                         |
 
-A fifth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
-imported by name in `scripts/contracts/generate-collections.ts`. It is not in the table because it
-needs no discipline — it is a real import, so deleting the module stops the build on its own rather
-than waiting for a bundle to come out quietly short.
+`FRONTEND_PAIRING` is the newest of the five and the only one that names the other repository: which
+frontend module answers this domain, or a sentence saying why none does.
+`npm run check:module-docs` fails on a missing entry, which is what stops the FE/BE gap from widening
+unnoticed.
+
+A sixth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
+imported by name in `scripts/contracts/generate-collections.ts`. Deleting the module stops the build
+on its own rather than waiting for a bundle to come out quietly short — but ADDING one needs the map
+edited, and forgetting that is silent, so `tests/cross-cutting/probes-are-wired.test.ts` fails when a
+`probes.ts` on disk is missing from it. The import stays static: the compile-time deletion failure is
+stronger than a test, and this keeps both halves.
 
 There used to be a `SEED_SECTION_ORDER` here too. It is gone: the demo dataset stopped being
 assembled from per-module text and is now **published** — `npm run seed:export` seeds a throwaway
@@ -63,9 +71,13 @@ flowchart LR
     A["1 · mkdir src/modules/&lt;name&gt;/<br/>write module.ts"] --> B["2 · one line in<br/>src/modules.ts"]
     B --> C["3 · fragments + section order<br/><i>if it serves HTTP</i>"]
     C --> D["4 · npm run contracts:bundle"]
-    D --> E["5 · copy shared files<br/>to the frontend"]
+    D --> E["5 · npm run docs:modules<br/>then write two sections"]
+    E --> F["6 · copy shared files<br/>to the frontend"]
+    F --> G["7 · npm run complete"]
     classDef s fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class A,B,C,D,E s;
+    classDef d fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class A,B,C,D,F,G s;
+    class E d;
 ```
 
 ### 1 · The folder
@@ -207,7 +219,27 @@ npm run contracts:bundle -- bruno insomnia mockoon postman
 `openapi.yaml` and the demo dataset. They are generated and never hand-edited — a request the
 contract cannot describe belongs in that module's `probes.ts`.
 
-### 5 · The paired repo
+### 5 · The page
+
+```bash
+npm run docs:modules
+```
+
+The generator creates `docs/modules/<name>.md` from the template and fills its seven generated
+blocks from the manifest, the router, the schema and the contract fragment. Two sections are left
+for you:
+
+- the **At a glance** box — what it owns, what it depends on, what breaks if you change it
+- **The story** — why the domain exists, the decisions that are not obvious from the code, the traps
+
+Then add the entry to `FRONTEND_PAIRING` in `scripts/module-docs/pairing.ts`, and the page to the
+`/modules/` sidebar in `docs/.vitepress/config.mts`. `npm run check:module-docs` fails until the
+pairing entry exists.
+
+If the domain carries a file shape no other module has, add one line to
+`scripts/module-docs/shapes.ts` describing it — the same check fails on a shape nothing documents.
+
+### 6 · The paired repo
 
 `openapi.yaml` and the other shared bundles are byte-identical across the two repos. Copy them over
 and run the identity gate on both sides:
@@ -219,7 +251,7 @@ npm run check:spec-identity
 A red `spec-identity` after adding a domain is **correct** — it is the gate saying the frontend has
 not received the regenerated files yet. See [the shared contract](#the-shared-contract-in-both-directions).
 
-### 6 · Check
+### 7 · Check
 
 ```bash
 npm run complete
@@ -233,6 +265,7 @@ npm run complete
 | ------------------------------------------------ | ---------------------------------------------------------- |
 | files added                                      | one folder                                                 |
 | lines changed elsewhere                          | 1 in `src/modules.ts` + its section-order entries          |
+| documentation written by hand                    | two sections of one page — the rest is generated           |
 | existing files needing an edit to accommodate it | **0**                                                      |
 | generated unasked                                | the bundles; the client collections when asked for by name |
 
@@ -264,7 +297,27 @@ rm -rf src/modules/<name>
 Deleting a module named in another module's `dependsOn` stops the boot with the offending pair
 named. That is the registry working — either delete the dependant too, or drop the edge.
 
-### 4 · Re-bundle and mirror
+### 4 · The page
+
+```bash
+rm docs/modules/<name>.md
+# and any sub-pages declared for it in scripts/module-docs/subpages.ts
+```
+
+Then drop its entry from `FRONTEND_PAIRING`, its sub-pages from `SUB_PAGES`, and its sidebar entries
+from `docs/.vitepress/config.mts`.
+
+`npm run check:module-docs` reports each of those four independently, by name, so there is no order
+to get right — run it and work the list:
+
+```
+✖ module docs — 2 problem(s):
+  · docs/modules/wishlist.md documents nothing enabled. Delete it, add the module back to
+    src/modules.ts, or declare it in scripts/module-docs/subpages.ts.
+  · scripts/module-docs/pairing.ts names "wishlist", which is not an enabled module.
+```
+
+### 5 · Re-bundle and mirror
 
 ```bash
 npm run contracts:bundle
@@ -278,7 +331,7 @@ which domain they belonged to.
 
 Then copy the shared bundles to the frontend.
 
-### 5 · Read the failures — they are not all equal
+### 6 · Read the failures — they are not all equal
 
 This is the part that makes the exercise worth running. Classify every failure by **which tier it
 is in**, because only one tier is a verdict on the architecture:
@@ -443,3 +496,4 @@ the spec and every spec operation mounted. Neither is a substitute for actually 
 - [Modules](./modules.md) — why the shape is what it is
 - [Layers](./layers.md) — the layer stack inside one module
 - [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) — how fragments become bundles
+- [Modules overview](../modules/) — the thirteen pages this procedure adds to and removes from

@@ -91,6 +91,16 @@ export interface AnalyticsProvider {
     capture(event: AnalyticsEvent): void;
 
     /**
+     * Whether this provider has what it needs to deliver an event.
+     *
+     * `capture` is fire-and-forget, so a provider selected without its credentials warns once and
+     * then discards silently for the life of the process — the most common analytics failure there
+     * is, and one nothing outside the provider could observe. `none` answers `true`: collecting
+     * nothing IS its configuration.
+     */
+    configured(): boolean;
+
+    /**
      * Flush anything buffered and release the client.
      *
      * Called last in the shutdown chain (`runtime/server-lifecycle`). A provider that batches

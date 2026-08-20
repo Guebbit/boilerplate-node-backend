@@ -223,10 +223,21 @@ components:
                 otel: { type: boolean }
                 umami: { type: boolean }
                 faro: { type: boolean }
-                # Which backend `emitAnalyticsEvent` is delivering to, not whether one is
-                # configured — the choice is between three implementations, so a boolean
-                # could not tell "unconfigured" from "deliberately collecting nothing".
-                analytics: { type: string, enum: [umami, posthog, none] }
+                # Which backend `emitAnalyticsEvent` delivers to, AND whether it can. The choice is
+                # between three implementations, so a bare boolean could not tell "unconfigured"
+                # from "deliberately collecting nothing" — and a bare name could not tell a working
+                # provider from one warned once and discarding ever since.
+                analytics:
+                    type: object
+                    additionalProperties: false
+                    required: [provider, configured]
+                    properties:
+                        provider: { type: string, enum: [umami, posthog, none] }
+                        configured:
+                            type: boolean
+                            description: >-
+                                Whether the selected provider has the credentials it needs. `none`
+                                is always true: collecting nothing is its configuration.
 
         DependencyStatus:
             type: string

@@ -94,6 +94,12 @@ const buildEventData = (event: AnalyticsEvent): UmamiEventData => ({
 export const umamiAnalyticsProvider: AnalyticsProvider = {
     name: 'umami',
 
+    // Both halves of `readConfig`, so health reports the same answer `capture` acts on — a host
+    // without a website id is the misconfiguration this exists to surface.
+    configured(): boolean {
+        return readConfig() !== undefined;
+    },
+
     capture(event: AnalyticsEvent): void {
         const config = readConfig();
 

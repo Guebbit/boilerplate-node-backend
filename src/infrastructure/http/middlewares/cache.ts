@@ -5,6 +5,8 @@ import {
     setCacheValue,
     resolveCacheTtl
 } from '@infrastructure/adapters/cache';
+import { logger } from '@infrastructure/adapters/logger';
+import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
 
 /**
  * Extra cache metadata for middleware users.
@@ -181,8 +183,22 @@ export const invalidateCache =
     (tags: string[]) => (_request: Request, response: Response, next: NextFunction) => {
         response.on('finish', () => {
             // Only clear cache after a successful write; failed writes should not wipe valid cache.
-            if (response.statusCode >= 200 && response.statusCode < 300)
-                void invalidateCacheTags(tags);
+            if (response.statusCode < 200 || response.statusCode >= 300) return;
+
+            void invalidateCacheTags(tags).then(({ reachable }) => {
+                if (reachable) return;
+                /*
+                 * The write landed and its cached predecessor did not go with it, so this endpoint
+                 * serves a stale response until the TTL expires. The response is already sent —
+                 * recording it is the only move left, and `error` plus a counter is what makes it
+                 * reachable from an alert rather than from someone grepping.
+                 */
+                for (const tag of tags) cacheInvalidationFailuresTotal.inc({ tag });
+                logger.error({
+                    message: 'Cache invalidation could not reach Redis; stale responses survive.',
+                    tags
+                });
+            });
         });
 
         next();

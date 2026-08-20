@@ -238,6 +238,19 @@ resource. A worker that _writes to Mongo_, though, is one of the
 [writes that bypass the API](#writes-that-bypass-the-api) described above: it never passes through
 the `invalidateCache` middleware, so it must call `invalidateCacheTags` itself.
 
+### When invalidation cannot reach Redis
+
+`invalidateCacheTags` never rejects — the write it follows has already succeeded in Mongo, and
+rejecting would turn a completed write into an error response the client would retry. It reports
+instead, with the same `{ deleted, reachable }` `clearCache` returns.
+
+`reachable: false` means the pre-write response is still cached and will be served until its TTL
+expires: a customer edits a product, gets a 200, and the catalogue shows the old one for up to an
+hour. The response has already been sent by then, so observability is the only move left — the
+`invalidateCache` middleware logs at `error` and increments
+`cache_invalidation_failures_total{tag}`. A non-zero rate on that counter means some endpoint is
+serving a stale answer to somebody.
+
 ## Works with
 
 - **[OpenTelemetry](./opentelemetry.md)** — every Redis command (`GET` for cache reads, `SET` for writes, `DEL` for tag invalidations) is automatically wrapped as a child span. In Grafana → Tempo a cache hit looks like a short Redis span with no following Mongoose span — the span tree makes the cache benefit immediately visible. A cache miss shows Redis then Mongoose back to back. → [What is instrumented out of the box](./opentelemetry.md#what-is-instrumented-out-of-the-box)

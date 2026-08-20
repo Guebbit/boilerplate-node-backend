@@ -215,6 +215,11 @@ const values: ValueSources = {
  * the failure `docs/theory/module-lifecycle.md` asks for. A directory scan would instead drop that
  * module's probes silently and leave a collection that still looks complete.
  *
+ * That covers deletion and not addition — a new module writing a perfectly good `probes.ts` and
+ * not editing this map produces four collections that look complete and carry none of its probes.
+ * `tests/cross-cutting/probes-are-wired.test.ts` closes that half, so the compile-time failure is
+ * kept rather than traded for a directory scan.
+ *
  * Eight modules and the `system` section declare none. That is deliberate rather than a backlog —
  * a probe exists where a rejection is interesting, and most read endpoints have none.
  */
@@ -224,6 +229,9 @@ const PROBES: Partial<Record<SectionName, Probe[]>> = {
     orders: ordersProbes,
     products: productsProbes
 };
+
+/** Which sections {@link PROBES} carries. Read by the completeness guard, nothing else. */
+export const PROBED_SECTIONS: readonly SectionName[] = Object.keys(PROBES) as SectionName[];
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * 4. The four documents

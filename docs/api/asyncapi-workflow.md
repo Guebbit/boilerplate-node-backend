@@ -157,6 +157,12 @@ queue NAMES are the channel names: `src/infrastructure/adapters/queue.ts` export
 string a producer publishes to and the string the contract declares are one string. The worker types
 and names are both derived from AsyncAPI — no hand-written duplicates.
 
+`EmailJob` in `adapters/mailer.ts` IS `EmailJobPayload`, deliberately rather than a local widening
+onto Nodemailer's full envelope. The contract declares `request` with `additionalProperties: false`,
+and every field it names survives `JSON.stringify` — which is what makes the queued path and the
+inline fallback the same call. A `Buffer` attachment does not survive it, so a wider type would
+compile, work in development where the broker is off, and corrupt the day it is switched on.
+
 These channels are the reason the contract is published twice: they exist only in `asyncapi.yaml`,
 never in `asyncapi.public.yaml`.
 

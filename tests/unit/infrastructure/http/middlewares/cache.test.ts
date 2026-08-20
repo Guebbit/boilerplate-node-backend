@@ -309,7 +309,7 @@ describe('setCache', () => {
 describe('invalidateCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockedCache.invalidateCacheTags.mockResolvedValue();
+        mockedCache.invalidateCacheTags.mockResolvedValue({ deleted: 1, reachable: true });
     });
 
     it('invalidates tags after successful responses finish', async () => {

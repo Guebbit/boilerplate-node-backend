@@ -58,7 +58,7 @@ NODE_POSTHOG_API_KEY=phc_...
 NODE_POSTHOG_HOST=https://app.posthog.com
 ```
 
-`GET /observability/health` reports the active one as `integrations.analytics`.
+`GET /observability/health` reports the active one as `telemetry.analytics` — `{ provider, configured }`, so a provider selected without its credentials is visible rather than indistinguishable from a working one.
 
 ::: warning `NODE_UMAMI_INGEST_HOST` is not `NODE_UMAMI_HOST`
 `NODE_UMAMI_HOST` is declarative — the **public** origin a browser loads the tracking script

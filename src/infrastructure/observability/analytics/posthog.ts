@@ -55,6 +55,10 @@ let warnedAboutConfiguration = false;
 export const posthogAnalyticsProvider: AnalyticsProvider = {
     name: 'posthog',
 
+    configured(): boolean {
+        return isPostHogConfigured();
+    },
+
     capture(event: AnalyticsEvent): void {
         if (!isPostHogConfigured()) {
             if (!warnedAboutConfiguration) {

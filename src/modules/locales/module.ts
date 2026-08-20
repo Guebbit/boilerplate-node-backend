@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
+import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
 import { router } from './routes';
 import { localeService } from './service';
 import { seedLocalesCollection, exportSeededLocales } from './demo';
@@ -55,6 +56,18 @@ import { seedLocalesCollection, exportSeededLocales } from './demo';
  * `infrastructure` had to reach for its own translations would invert the one layering rule this
  * codebase enforces in two places.
  */
+/*
+ * The `api` half of this module's collection, handed to `@infrastructure/i18n` so an override typed
+ * into the admin screens reaches `t()`.
+ *
+ * Registered HERE, at import time, rather than declared as a manifest field — the same way
+ * `audit-logs` installs its sink and `account` its auth resolver. A field only one module can ever
+ * fill is a field `app.ts` has to go looking for, and it went looking with a `.find()` that would
+ * have silently picked one of two. Registering a function touches no database: `readApiOverrides`
+ * runs on the refresh, which cannot happen before the app serves a request.
+ */
+registerLocaleOverrideProvider(() => localeService.readApiOverrides());
+
 export default {
     name: 'locales',
     /*
@@ -71,12 +84,6 @@ export default {
      * a 409 on a key collision was reaching admins in English regardless of what they asked for.
      */
     locales: path.join(__dirname, 'locales'),
-    /*
-     * The `api` half of this module's collection, handed to `@infrastructure/i18n` so an override
-     * typed into the admin screens reaches `t()`. Only this module declares it: it is the one that
-     * owns the rows.
-     */
-    localeOverrides: () => localeService.readApiOverrides(),
     seeds: seedLocalesCollection,
     seedExport: exportSeededLocales,
     /* Neither row is served raw. `GET /locales` answers a composed capabilities envelope and

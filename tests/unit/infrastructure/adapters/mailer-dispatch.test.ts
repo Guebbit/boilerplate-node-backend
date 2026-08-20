@@ -21,7 +21,7 @@
  * Path 3 is the one worth the most: it is the only one that only happens when something else is
  * already broken.
  */
-import type { SendMailOptions } from 'nodemailer';
+import type { EmailRequest } from '@infrastructure/adapters/mailer';
 import type { Data } from 'ejs';
 
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
@@ -62,7 +62,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
-const REQUEST: SendMailOptions = { to: 'ada@example.com', subject: 'Reset your password' };
+const REQUEST: EmailRequest = { to: 'ada@example.com', subject: 'Reset your password' };
 const TEMPLATE = 'account.reset-request.ejs';
 /**
  * Every variable the chosen template interpolates — which, since templates stopped translating,

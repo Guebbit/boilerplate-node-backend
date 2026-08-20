@@ -100,15 +100,21 @@ describe('GET /observability/health', () => {
         expect(status).toBe(serving ? 'ok' : 'degraded');
     });
 
-    it('names the analytics provider rather than claiming a boolean', async () => {
-        /* The telemetry block reports WHICH backend serves analytics, because `posthog: false`
-         * could not distinguish "unconfigured" from "this deployment uses Umami". A regression to
-         * a boolean satisfies `additionalProperties: false` and breaks the dashboard silently. */
+    it('names the analytics provider AND whether it can deliver', async () => {
+        /*
+         * Two facts, and neither works alone. A bare boolean could not distinguish "PostHog is
+         * unconfigured" from "this deployment uses Umami"; a bare name could not distinguish a
+         * working provider from one that warned once at boot and has discarded every event since —
+         * which is the most common analytics failure there is, on the endpoint whose stated job is
+         * "which part is missing".
+         */
         const { bearer } = await authenticateAs('admin');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
-        expect(typeof response.body.data.telemetry.analytics).toBe('string');
+        const { analytics } = response.body.data.telemetry;
+        expect(typeof analytics.provider).toBe('string');
+        expect(typeof analytics.configured).toBe('boolean');
     });
 
     it('matches the error contract for a non-admin', async () => {

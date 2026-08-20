@@ -46,11 +46,17 @@ jest.mock('@infrastructure/adapters/cache', () => {
             return Promise.resolve();
         },
         invalidateCacheTags: (tags: string[]) => {
+            let deleted = 0;
             for (const tag of tags) {
-                for (const key of tagged.get(tag) ?? []) responses.delete(key);
+                for (const key of tagged.get(tag) ?? []) {
+                    responses.delete(key);
+                    deleted += 1;
+                }
                 tagged.delete(tag);
             }
-            return Promise.resolve();
+            // The real adapter reports whether the cache was reached, so the middleware can count
+            // a write whose stale response survived it. This fake always reaches.
+            return Promise.resolve({ deleted, reachable: true });
         }
     };
 });

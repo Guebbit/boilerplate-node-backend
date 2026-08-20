@@ -87,11 +87,21 @@ const resolvePayerId = (orderUserId: string): Promise<string> =>
         })
         .catch(() => orderUserId);
 
-/** Ownership, payments-style: yours or you are staff — anything else reads as absence. */
-const isOwnedBy = (
-    payment: PaymentDocument,
-    authContext?: { id?: string; admin?: boolean }
-): boolean => Boolean(authContext?.admin) || String(payment.userId) === authContext?.id;
+/**
+ * Which payments a caller may read — the same shape `orderService.callerScope` returns.
+ *
+ * `undefined` for admins, meaning "no restriction", so callers spread it into the query rather
+ * than treating it as a filter. The scope rides IN the read: checking ownership on the document
+ * afterwards is what `orders/repository.ts` names as the way a scoped find turns into a leak.
+ *
+ * The `?? ''` is deliberate and matches `orders`: an empty string is not a valid ObjectId, so a
+ * request with no auth context errors out instead of quietly widening to every user's payments.
+ */
+const callerScope = (authContext?: {
+    id?: string;
+    admin?: boolean;
+}): Record<string, unknown> | undefined =>
+    authContext?.admin ? undefined : paymentRepository.ownerScope(authContext?.id ?? '');
 
 /**
  * Create (or refresh) the payment intent for an order.
@@ -155,9 +165,8 @@ export const confirmPayment = (
     card: CardDetails,
     authContext?: { id?: string; admin?: boolean }
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository.findById(paymentId).then(async (payment) => {
-        if (!payment || !isOwnedBy(payment, authContext))
-            return generateReject(404, [t('payments.not-found')]);
+    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then(async (payment) => {
+        if (!payment) return generateReject(404, [t('payments.not-found')]);
         if (payment.status !== 'requires_confirmation' && payment.status !== 'declined')
             return generateReject(409, [
                 { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
@@ -233,9 +242,8 @@ export const getForOrder = (
     orderId: string,
     authContext?: { id?: string; admin?: boolean }
 ): Promise<ResponseSuccess<Record<string, unknown>> | ResponseReject> =>
-    paymentRepository.findByOrderId(orderId).then((payment) => {
-        if (!payment || !isOwnedBy(payment, authContext))
-            return generateReject(404, [t('payments.not-found')]);
+    paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
+        if (!payment) return generateReject(404, [t('payments.not-found')]);
 
         // The order is read for `pay` alone: payability is half a payment's status and half the
         // order's, and answering it here is what stops a client deciding it from two fields.
@@ -314,8 +322,8 @@ export const refundByOrder = (
 
         // Nothing moved. Which refusal it was is a second read, exactly as the order cancel does:
         // the decision is already made, and this only chooses the sentence.
-        return paymentRepository.findByOrderId(orderId).then((payment) =>
-            payment && isOwnedBy(payment, authContext)
+        return paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) =>
+            payment
                 ? generateReject(409, [
                       {
                           code: 'PAYMENT_NOT_REFUNDABLE',

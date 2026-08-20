@@ -3882,11 +3882,21 @@ components:
         faro:
           type: boolean
         analytics:
-          type: string
-          enum:
-            - umami
-            - posthog
-            - none
+          type: object
+          additionalProperties: false
+          required:
+            - provider
+            - configured
+          properties:
+            provider:
+              type: string
+              enum:
+                - umami
+                - posthog
+                - none
+            configured:
+              type: boolean
+              description: 'Whether the selected provider has the credentials it needs. `none` is always true: collecting nothing is its configuration.'
     ProcessMemory:
       type: object
       additionalProperties: false

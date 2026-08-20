@@ -22,6 +22,7 @@ import { processSnapshot } from '@infrastructure/observability/process-snapshot'
 export const getObservabilityHealth = (_request: Request, response: Response) => {
     const snapshot = processSnapshot();
     const dependencies = dependencyHealth();
+    const analyticsProvider = resolveAnalyticsProvider();
 
     successResponse(response, {
         status: overallStatus(dependencies),
@@ -47,16 +48,26 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
         telemetry: {
             loki: Boolean(process.env.NODE_LOKI_HOST),
             otel: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT),
-            /* Frontend observability: self-hosted Umami analytics + Grafana Faro collector. */
+            /*
+             * Frontend observability: the origin a browser loads the Umami tracking script from,
+             * plus the Faro collector. Declarative, and NOT the backend's own analytics wiring —
+             * that is `analytics` below, which needs a website id this origin says nothing about.
+             */
             umami: Boolean(process.env.NODE_UMAMI_HOST),
             faro: Boolean(process.env.NODE_FARO_COLLECTOR_URL),
             /*
-             * The name of the provider serving `emitAnalyticsEvent`, not a boolean: which backend
-             * receives product events is a deployment choice between three, and `posthog: false`
-             * could not distinguish "PostHog is unconfigured" from "this deployment uses Umami" or
-             * "it collects nothing on purpose".
+             * Which backend receives product events, and whether it can actually deliver them.
+             *
+             * The name is a deployment choice between three, so `posthog: false` could not
+             * distinguish "PostHog is unconfigured" from "this deployment uses Umami". `configured`
+             * is the half that was missing: a provider selected without its credentials warns once
+             * and then discards every event for the life of the process, and this endpoint —
+             * whose job is "which part is missing" — reported a name and looked healthy.
              */
-            analytics: resolveAnalyticsProvider().name
+            analytics: {
+                provider: analyticsProvider.name,
+                configured: analyticsProvider.configured()
+            }
         },
         /*
          * Bytes, not megabytes, and the same four fields the SSE stream publishes — so a dashboard

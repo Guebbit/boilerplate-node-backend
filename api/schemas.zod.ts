@@ -604,7 +604,10 @@ export const GetObservabilityHealthResponse = zod.object({
   "otel": zod.boolean(),
   "umami": zod.boolean(),
   "faro": zod.boolean(),
-  "analytics": zod.enum(['umami', 'posthog', 'none'])
+  "analytics": zod.object({
+  "provider": zod.enum(['umami', 'posthog', 'none']),
+  "configured": zod.boolean().describe('Whether the selected provider has the credentials it needs. `none` is always true: collecting nothing is its configuration.')
+})
 }).optional().describe('Which telemetry sinks this deployment is WIRED TO — read off the environment, never probed.\nDeliberately not part of `status`: these are destinations this service writes to, and losing one costs visibility rather than capability. An unreachable Loki does not make a checkout fail, so it must not colour the dot a dashboard shows for \"can this instance serve traffic\".'),
   "memory": zod.object({
   "rss": zod.number().min(getObservabilityHealthResponseDataMemoryRssMin),

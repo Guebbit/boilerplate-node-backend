@@ -20,14 +20,15 @@ Grafana reads Prometheus for all metric charts and dashboards.
 
 ## What `/observability/metrics` exposes
 
-| Metric                                       | Why it is here                             |
-| -------------------------------------------- | ------------------------------------------ |
-| `http_requests_total`                        | request rate, split by method/route/status |
-| `http_request_duration_milliseconds`         | latency histogram for p50/p95/p99          |
-| `http_request_errors_total`                  | 4xx/5xx counts                             |
-| `http_requests_in_flight`                    | concurrency at a glance                    |
-| `auth_login_total`, `cart_checkout_total`, … | business counters                          |
-| `process_*` and `nodejs_*`                   | default `prom-client` runtime metrics      |
+| Metric                                       | Why it is here                              |
+| -------------------------------------------- | ------------------------------------------- |
+| `http_requests_total`                        | request rate, split by method/route/status  |
+| `http_request_duration_milliseconds`         | latency histogram for p50/p95/p99           |
+| `http_request_errors_total`                  | 4xx/5xx counts                              |
+| `http_requests_in_flight`                    | concurrency at a glance                     |
+| `cache_invalidation_failures_total`          | writes whose stale cached response survived |
+| `auth_login_total`, `cart_checkout_total`, … | business counters                           |
+| `process_*` and `nodejs_*`                   | default `prom-client` runtime metrics       |
 
 The `route` label is the template Express matched — `/orders/:id` — read on `finish`, or
 `unmatched` for a request that reached no handler. Never a requested path: prom-client evicts
