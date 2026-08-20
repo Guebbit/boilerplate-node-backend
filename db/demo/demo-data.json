@@ -318,6 +318,7 @@
                         "quantity": 10
                     }
                 ],
+                "shippingCost": 0,
                 "status": "pending",
                 "totalItems": 2,
                 "totalPrice": 110,
@@ -391,6 +392,7 @@
                         "quantity": 4
                     }
                 ],
+                "shippingCost": 0,
                 "status": "pending",
                 "totalItems": 1,
                 "totalPrice": 400,

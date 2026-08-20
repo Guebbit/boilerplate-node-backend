@@ -22,7 +22,7 @@ import { postAddress, putAddress } from './controllers/write-addresses';
 import { deleteAddress } from './controllers/delete-address';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
-import { invalidateCache, noStore, setCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, noStore } from '@infrastructure/http/middlewares/cache';
 
 /** Express router for account/auth endpoints (login, signup, password reset, token refresh). */
 export const router = Router();
@@ -30,12 +30,22 @@ export const router = Router();
 // All routes apply getAuth so request.authContext is populated when a token is present
 router.use(getAuth);
 
-// Credentials and auth-state changes: never cacheable. Mounted here rather than per
-// controller so a route added later cannot silently omit it — see `noStore`.
+/*
+ * Credentials and auth-state changes: never cacheable. Mounted here rather than per controller so
+ * a route added later cannot silently omit it — see `noStore`.
+ *
+ * It covers `GET /account` too, deliberately. That route used to add `setCache`, whose
+ * `response.set('Cache-Control', …)` REPLACES the header this sets — so the one router-wide
+ * guarantee was silently off for the one route serving the caller's own profile, and a browser
+ * stored it for an hour. A profile is the caller's identity: `no-store` is the answer, and the
+ * read is one indexed lookup.
+ *
+ * `tests/cross-cutting/no-cached-credentials.test.ts` asserts no route in this file caches.
+ */
 router.use(noStore);
 
 // GET /account — current user profile (requires auth)
-router.get('/', setCache(3600, { tags: ['account'], keyParameters: [] }), isAuth, getAccount);
+router.get('/', isAuth, getAccount);
 
 // PUT /account — update own profile (requires auth). The upload mirrors signup's.
 router.put(

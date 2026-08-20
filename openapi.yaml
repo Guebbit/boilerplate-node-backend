@@ -630,8 +630,8 @@ paths:
             type: integer
             minimum: 1
             maximum: 200
-            default: 50
-          description: Maximum number of events to return
+            default: 200
+          description: 'Maximum number of events to return. CLAMPED rather than refused, unlike the `pageSize` every paged endpoint takes: this read has no pages, so a number above the maximum is met with the maximum instead of a 422, and anything unusable — absent, blank, non-numeric — is also the maximum.'
       responses:
         '200':
           description: Audit events

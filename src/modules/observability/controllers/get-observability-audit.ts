@@ -3,27 +3,30 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { auditLogService } from '@modules/audit-logs';
 import { t } from '@infrastructure/i18n';
 import { catchAs } from '@infrastructure/http/controller';
-
-/** Hard ceiling on `limit`, matching `maximum: 200` on the parameter in `openapi.yaml`. */
-const MAX_LIMIT = 200;
-const DEFAULT_LIMIT = 50;
+import { readInput } from '@infrastructure/http/request';
+import { limitSchema } from '@infrastructure/http/schemas';
 
 /**
  * GET /observability/audit
  * Recent audit events, filtered by actor, action, outcome, since, and limit.
  */
 export const getObservabilityAuditLogs = (request: Request, response: Response) => {
-    const { actor, action, outcome, since, limit } = request.query as Record<
-        string,
-        string | undefined
-    >;
+    // Through `readInput` like every other route, rather than reaching into `request.query`: the
+    // sources a surface reads are a property of the route, not of this handler.
+    const { actor, action, outcome, since, limit } = readInput(request, {
+        surface: 'search',
+        // Declared as ids so a repeated `?since=` collapses to its first entry rather than
+        // arriving as an array — these are scalars, and `new Date([…])` is not a date.
+        ids: ['actor', 'action', 'outcome', 'since']
+    });
 
-    const parsedLimit = Number.parseInt(limit ?? String(DEFAULT_LIMIT), 10);
-    // `parseInt` answers NaN for a non-numeric `?limit=abc`, and NaN survives both Math.min and
-    // Math.max — so it is caught here rather than reaching Mongo as an undefined page size.
-    const limitNumber = Number.isNaN(parsedLimit)
-        ? DEFAULT_LIMIT
-        : Math.min(Math.max(parsedLimit, 1), MAX_LIMIT);
+    /*
+     * `limit` CLAMPS rather than refusing — see `limitSchema`, which owns the three numbers this
+     * endpoint answers by and which `openapi.yaml` declares. It is the one page-size rule in this
+     * API that does not answer 422, because this read has no pages: "as much as you can" is the
+     * honest reading of a number too large, and there is no second page to send anyone to.
+     */
+    const limitNumber = limitSchema.parse(limit);
     const sinceDate = since ? new Date(since) : undefined;
 
     if (sinceDate !== undefined && Number.isNaN(sinceDate.getTime()))
@@ -31,6 +34,8 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
 
     return auditLogService
         .search({
+            // `readInput` answers `unknown` because a query value can arrive repeated; these three
+            // are scalars the repository matches verbatim, so they are read as the strings they are.
             actor,
             action,
             // The repository matches `outcome` verbatim, so anything outside the enum is dropped

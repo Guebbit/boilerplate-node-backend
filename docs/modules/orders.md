@@ -111,7 +111,7 @@ From model `Order`. `_id` and `__v` are omitted — every document carries them.
 | `status`          | `String`        | —        | "pending"                         | `pending` \| `paid` \| `processing` \| `shipped` \| `delivered` \| `cancelled` |
 | `notes`           | `String`        | —        | —                                 | —                                                                              |
 | `shippingMethod`  | `String`        | —        | —                                 | —                                                                              |
-| `shippingCost`    | `Number`        | —        | —                                 | —                                                                              |
+| `shippingCost`    | `Number`        | —        | 0                                 | —                                                                              |
 | `shippingAddress` | `Subdocument[]` | —        | —                                 | —                                                                              |
 | ↳ `fullName`      | `String`        | required | —                                 | —                                                                              |
 | ↳ `street`        | `String`        | required | —                                 | —                                                                              |

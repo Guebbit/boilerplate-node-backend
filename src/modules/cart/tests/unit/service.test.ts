@@ -595,7 +595,7 @@ describe('orderConfirm', () => {
         expect(stored!.reserved).toBe(0);
     });
 
-    it('an omitted method leaves the order without shipping — buying does not require it', async () => {
+    it('an omitted method leaves the order with no method and nothing owed for shipping', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
@@ -603,8 +603,12 @@ describe('orderConfirm', () => {
         await orderConfirm(user.id);
 
         const order = await orderRepository.findOne({ userId: user._id });
+        // The two columns answer different questions and are absent for different reasons. No
+        // method WAS chosen, so `shippingMethod` stays absent — inventing one would be a claim.
+        // What the customer owes for shipping is always a number, and here it is zero: the schema
+        // defaults it, so `orderTotal` never has to read absence as a price.
         expect(order!.shippingMethod).toBeUndefined();
-        expect(order!.shippingCost).toBeUndefined();
+        expect(order!.shippingCost).toBe(0);
     });
 
     it('sends the customer a confirmation email listing the bought lines', async () => {

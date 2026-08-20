@@ -38,7 +38,7 @@ outcome?: GetObservabilityAuditLogsOutcome;
  */
 since?: string;
 /**
- * Maximum number of events to return
+ * Maximum number of events to return. CLAMPED rather than refused, unlike the `pageSize` every paged endpoint takes: this read has no pages, so a number above the maximum is met with the maximum instead of a 422, and anything unusable — absent, blank, non-numeric — is also the maximum.
  * @minimum 1
  * @maximum 200
  */

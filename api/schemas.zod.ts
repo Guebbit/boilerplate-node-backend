@@ -731,7 +731,7 @@ export const GetObservabilityMetricsOverviewResponse = zod.object({
  * Requires admin role.
  * @summary Recent audit events
  */
-export const getObservabilityAuditLogsQueryLimitDefault = 50;
+export const getObservabilityAuditLogsQueryLimitDefault = 200;
 export const getObservabilityAuditLogsQueryLimitMax = 200;
 
 
@@ -741,7 +741,7 @@ export const GetObservabilityAuditLogsQueryParams = zod.object({
   "action": zod.string().optional().describe('Filter by action name (e.g. auth.login.failed)'),
   "outcome": zod.enum(['success', 'failure']).optional().describe('Filter by outcome'),
   "since": zod.iso.datetime({"offset":true}).optional().describe('Return events after this ISO-8601 timestamp'),
-  "limit": zod.number().min(1).max(getObservabilityAuditLogsQueryLimitMax).default(getObservabilityAuditLogsQueryLimitDefault).describe('Maximum number of events to return')
+  "limit": zod.number().min(1).max(getObservabilityAuditLogsQueryLimitMax).default(getObservabilityAuditLogsQueryLimitDefault).describe('Maximum number of events to return. CLAMPED rather than refused, unlike the `pageSize` every paged endpoint takes: this read has no pages, so a number above the maximum is met with the maximum instead of a 422, and anything unusable — absent, blank, non-numeric — is also the maximum.')
 })
 
 export const getObservabilityAuditLogsResponseDataTotalMin = 0;

@@ -121,15 +121,24 @@ export const orderSchema = new Schema<OrderDocument>(
         /*
          * The shipping choice, frozen at checkout like everything else on an order: the method's
          * id and what it COST THEN — a later change to the delivery module's rates cannot
-         * re-price history. Absent on orders that predate delivery and on checkouts that chose
-         * no method (shipping is not required to buy, exactly like the address).
+         * re-price history.
+         *
+         * `shippingMethod` is absent when no method was chosen — shipping is not required to buy,
+         * exactly like the address. `shippingCost` is NOT: it defaults to 0, because what the
+         * customer owes for shipping is always a number, and an order that chose nothing owes
+         * nothing. That is what keeps `orderTotal`'s tolerance of an absent value a defence
+         * against a malformed document rather than a live contract with the schema.
+         *
+         * `db/migrations/20260820140000-order-shipping-cost.js` backfills the rows written before
+         * this default existed.
          */
         shippingMethod: {
             type: String
         },
         shippingCost: {
             type: Number,
-            min: 0
+            min: 0,
+            default: 0
         },
         /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
