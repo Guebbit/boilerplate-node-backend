@@ -1,11 +1,10 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { readInput } from '@infrastructure/http/request';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListStockMovementsQueryParams } from '@api/schemas.zod';
 import { inventoryService } from '../service';
+import { catchAs, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * The generated query schema with the two pagination fields relaxed to accept query-string text.
@@ -28,11 +27,7 @@ export const getStockMovements = (request: Request, response: Response) => {
 
     const parseResult = movementsQuerySchema.safeParse(input);
     if (!parseResult.success) {
-        rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+        rejectValidation(response, parseResult.error);
         return Promise.resolve();
     }
 
@@ -41,7 +36,5 @@ export const getStockMovements = (request: Request, response: Response) => {
         .then((result) => {
             successResponse(response, result.data);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'getStockMovements', error);
-        });
+        .catch(catchAs(response, 'getStockMovements'));
 };

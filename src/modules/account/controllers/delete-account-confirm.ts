@@ -11,6 +11,7 @@ import { accountAuditActions } from '../audit';
 import { deleteConfirmEmail } from '../emails';
 import { emitAnalyticsEvent } from '@infrastructure/observability/analytics';
 import { accountAnalyticsEvents } from '../analytics';
+import { parseBody } from '@infrastructure/http/controller';
 
 /**
  * DELETE /account/delete-confirm
@@ -20,15 +21,10 @@ export const deleteAccountConfirm = (
     request: Request<unknown, unknown, AccountDeleteConfirmRequest>,
     response: Response
 ) => {
-    const parseResult = ConfirmAccountDeleteBody.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    const body = parseBody(ConfirmAccountDeleteBody, request.body, response);
+    if (!body) return;
 
-    const { token } = parseResult.data;
+    const { token } = body;
 
     return userService
         .findByAccountDeleteToken(token)

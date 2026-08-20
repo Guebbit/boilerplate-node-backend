@@ -109,14 +109,14 @@ From model `Product`. `_id` and `__v` are omitted — every document carries the
 
 | Endpoint                     | Middlewares                                                                                                   | Controller           | What it does                   |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------------------ |
-| `DELETE /products`           | `getAuth` → `isAuth` → `isAdmin` → `(inline)`                                                                 | `deleteProducts`     | Delete product                 |
+| `DELETE /products`           | `getAuth` → `isAuth` → `isAdmin` → `(inline)`                                                                 | `deleteProduct`      | Delete product                 |
 | `GET /products`              | `getAuth` → `(inline)`                                                                                        | `getProducts`        | List products (paginated)      |
 | `POST /products`             | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages` | `writeProducts`      | Create product                 |
 | `PUT /products`              | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages` | `writeProducts`      | Edit product                   |
-| `DELETE /products/{id}`      | `getAuth` → `isAuth` → `isAdmin` → `(inline)`                                                                 | `deleteProducts`     | Delete product                 |
+| `DELETE /products/{id}`      | `getAuth` → `isAuth` → `isAdmin` → `(inline)`                                                                 | `deleteProduct`      | Delete product                 |
 | `GET /products/{id}`         | `getAuth` → `(inline)`                                                                                        | `getProductItem`     | Product details                |
 | `PUT /products/{id}`         | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages` | `writeProducts`      | Edit product                   |
-| `DELETE /products/{id}/hard` | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)`                                                    | `deleteProducts`     | Permanently delete product     |
+| `DELETE /products/{id}/hard` | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)`                                                    | `deleteProduct`      | Permanently delete product     |
 | `GET /products/categories`   | `getAuth` → `(inline)`                                                                                        | `getCatalogueFacets` | Catalogue facets               |
 | `POST /products/search`      | `getAuth`                                                                                                     | `getProducts`        | Search products (DTO-friendly) |
 

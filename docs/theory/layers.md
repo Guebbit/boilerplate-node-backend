@@ -108,11 +108,26 @@ caller asks for by name. Export its **types** from the barrel, not its helpers.
 `account` took the same step: `services/` holds `authentication.ts`, `profile.ts`, `addresses.ts`,
 `verification.ts` and `token-cleanup.ts` behind one `index.ts` exporting `accountService`.
 
-**One module is over the threshold and has not been split.** `orders/service.ts` is 363 lines. That
-is recorded rather than quietly fixed, because the number's job is to make the split feel sanctioned
-instead of furtive — and a threshold that is silently re-fitted to whatever the largest file happens
-to measure is not a threshold. Read 300 as the line past which a split needs no justification, not
-as a limit something enforces: nothing in the suite checks it, and nothing should.
+**Four modules are over the threshold and have not been split:**
+
+| File                   | Lines | Why it is over                                                     |
+| ---------------------- | ----- | ------------------------------------------------------------------ |
+| `locales/service.ts`   | 663   | ~180 lines of pure, database-free key rules above ~480 of CRUD     |
+| `orders/service.ts`    | 487   | the lifecycle writes, the cancel sequence and the read scopes      |
+| `inventory/service.ts` | 466   | reserve, commit, release, the sweep, and the operator's own writes |
+| `payments/service.ts`  | 352   | intent, confirm, refund, and the ownership scope around them       |
+
+That is recorded rather than quietly fixed, because the number's job is to make the split feel
+sanctioned instead of furtive — and a threshold silently re-fitted to whatever the largest file
+happens to measure is not a threshold. Read 300 as the line past which a split needs no
+justification, not as a limit something enforces: nothing in the suite checks it.
+
+`locales` is the clearest candidate, and the one constraint worth knowing before starting: it is
+`subdomain: 'generic'`, so `subdomain-discipline.test.ts` forbids moving its pure rules into
+`domain/`. `services/keys.ts` is the sanctioned home for them.
+
+These counts are hand-recorded and nothing in the suite checks them, so read them as a snapshot
+rather than a fact — a published number with no guard behind it drifts from the file it describes.
 
 ### And `domain/`, if the module has rules
 

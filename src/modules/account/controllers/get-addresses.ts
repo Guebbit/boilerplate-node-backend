@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { accountService } from '../services';
+import { catchAs } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /account/addresses — the caller's whole address book.
@@ -12,14 +13,12 @@ import { accountService } from '../services';
  */
 export const getAddresses = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id } = authContextOf(request);
 
     return accountService
         .addressesGet(id)
         .then((view) => {
             successResponse(response, view);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'getAddresses', error);
-        });
+        .catch(catchAs(response, 'getAddresses'));
 };

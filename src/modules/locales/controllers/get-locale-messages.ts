@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { localeService } from '../service';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * GET /locales/:locale/messages
@@ -29,4 +29,4 @@ export const getLocaleMessages = (request: Request<{ locale: string }>, response
                 ? successResponse(response, result.data)
                 : rejectResponse(response, result.status, result.errors)
         )
-        .catch((error: Error) => rejectDatabaseError(response, 'getLocaleMessages', error));
+        .catch(catchAs(response, 'getLocaleMessages'));

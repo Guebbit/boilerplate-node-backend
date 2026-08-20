@@ -3,7 +3,8 @@ import {
     generateSuccess,
     generateReject,
     type ResponseSuccess,
-    type ResponseReject
+    type ResponseReject,
+    type ResponseErrorItem
 } from '@infrastructure/http/response';
 import { zodUserSchema } from './model';
 import type { UserDocument, UserRecord } from './model';
@@ -12,6 +13,7 @@ import { userRepository } from './repository';
 import { emitDomainEvent } from '@kernel/events';
 import { USER_DELETED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { validationErrors } from '@infrastructure/http/controller';
 
 /**
  * User Admin Service
@@ -32,11 +34,11 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
  * Takes `unknown` on purpose: this is the boundary that ESTABLISHES the type, so a narrower
  * parameter would only force its callers — all holding raw request bodies — to cast on the way in.
  */
-export const validateData = (userData: unknown, requirePassword = true): string[] => {
+export const validateData = (userData: unknown, requirePassword = true): ResponseErrorItem[] => {
     const schema = requirePassword ? zodUserSchema : zodUserSchema.partial({ password: true });
 
     const parseResult = schema.safeParse(userData);
-    if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
+    if (!parseResult.success) return validationErrors(parseResult.error);
     return [];
 };
 

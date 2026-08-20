@@ -2,8 +2,8 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { orderService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { isValidObjectId } from '@infrastructure/http/request';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * GET /orders/:id
@@ -41,7 +41,5 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
             // controls from the server's answer rather than from a copy of the lifecycle.
             successResponse(response, orderService.withActions(order, request.authContext));
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'getOrderItem', error);
-        });
+        .catch(catchAs(response, 'getOrderItem'));
 };

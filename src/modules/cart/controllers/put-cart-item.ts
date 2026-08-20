@@ -3,11 +3,11 @@ import { t } from '@infrastructure/i18n';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { UpdateCartItemByIdRequest } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
-import { readInput, isValidObjectId } from '@infrastructure/http/request';
+import { authContextOf, isValidObjectId, readInput } from '@infrastructure/http/request';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
  * PUT /cart/:productId
@@ -17,21 +17,12 @@ export const putCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
     response: Response
 ) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    const userId = request.authContext.id;
+    const userId = authContextOf(request).id;
 
-    const parseResult = UpdateCartItemByIdBody.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    const body = parseBody(UpdateCartItemByIdBody, request.body, response);
+    if (!body) return;
 
-    const { quantity } = parseResult.data;
+    const { quantity } = body;
     // productId travels via path param or body; body shape is already validated above.
     const { productId } = readInput(request, { surface: 'write', ids: ['productId'] });
 
@@ -50,7 +41,5 @@ export const putCartItem = (
             });
             successResponse(response, cart);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'updateCartItemById', error);
-        });
+        .catch(catchAs(response, 'updateCartItemById'));
 };

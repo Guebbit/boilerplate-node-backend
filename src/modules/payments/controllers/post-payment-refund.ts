@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { paymentService } from '../service';
+import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /payments/order/:orderId/refund
@@ -15,12 +14,7 @@ export const postPaymentRefund = (request: Request<{ orderId?: string }>, respon
     paymentService
         .refundByOrder(String(request.params.orderId), request.authContext)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postPaymentRefund', error);
-        });
+        .catch(catchAs(response, 'postPaymentRefund'));

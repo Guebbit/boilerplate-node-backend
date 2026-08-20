@@ -4,7 +4,8 @@ import {
     generateReject,
     generateSuccess,
     type ResponseReject,
-    type ResponseSuccess
+    type ResponseSuccess,
+    type ResponseErrorItem
 } from '@infrastructure/http/response';
 import type { FacetCount } from '@types';
 import { imageStore } from '@infrastructure/adapters/image-store';
@@ -14,6 +15,7 @@ import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { validationErrors } from '@infrastructure/http/controller';
 
 /**
  * Product Service
@@ -31,9 +33,9 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
  *
  * @param productData
  */
-export const validateData = (productData: unknown): string[] => {
+export const validateData = (productData: unknown): ResponseErrorItem[] => {
     const parseResult = zodProductSchema.safeParse(productData);
-    if (!parseResult.success) return parseResult.error.issues.map(({ message }) => message);
+    if (!parseResult.success) return validationErrors(parseResult.error);
     return [];
 };
 

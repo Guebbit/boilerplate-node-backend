@@ -1,11 +1,10 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { userModel as Users } from '@modules/users';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { authTokenCleanupTotal } from '../metrics';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * DELETE /account/tokens/expired
@@ -28,7 +27,5 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
             );
             return successResponse(response, undefined, status);
         })
-        .catch((error: CastError | Error) =>
-            rejectDatabaseError(response, 'deleteExpiredTokens', error)
-        );
+        .catch(catchAs(response, 'deleteExpiredTokens'));
 };

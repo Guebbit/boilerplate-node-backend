@@ -12,6 +12,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { AuthContext } from '@types';
 // `ParamsDictionary` is Express' default type for `request.params` (a `Record<string, string>`).
 // Naming it explicitly in generics keeps `request.params.id` typed instead of `any`.
 // i18next translation function — messages are resolved against the request's locale, which the
@@ -245,6 +246,30 @@ export const readInput = <TId extends string = never>(
     // The declared shape is what the loops above just built; a record cannot express it.
     return result as RequestInput<TId>;
 };
+
+/**
+ * The caller on a route mounted behind `isAuth`.
+ *
+ * `Request.authContext` is optional on the global augmentation, correctly — it is absent until the
+ * auth middleware resolves it, and a public route never gets one. A controller BEHIND `isAuth`
+ * then has three bad options, and this repo used all three: re-check and answer a 401 the router
+ * already answered (13 branches that cannot execute), assert with `!` (10 sites), or branch on a
+ * ternary. Three spellings of one fact, and the re-check is the worst of them because it reads as
+ * though the route were optionally authenticated.
+ *
+ * So the claim is made ONCE, here, where it can carry its own justification. A narrower request
+ * type would be better still and is not available: Express' `RequestHandler` is contravariant in
+ * its request, so a handler asking for more than `Request` will not mount.
+ *
+ * What no type can say is that the ROUTE is behind `isAuth`. `tests/cross-cutting/
+ * authenticated-controllers.test.ts` asserts that half; the two together are what make this honest
+ * rather than a tidier-looking assumption.
+ *
+ * @param request - a request whose route mounts `isAuth`
+ * @returns the resolved caller
+ */
+export const authContextOf = (request: { authContext?: AuthContext }): AuthContext =>
+    request.authContext!;
 
 /**
  * Validate a MongoDB ObjectId from request params/body.

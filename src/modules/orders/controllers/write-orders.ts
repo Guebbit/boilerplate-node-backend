@@ -4,7 +4,6 @@ import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { CreateOrderBody, UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput } from '@infrastructure/http/request';
 import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -14,6 +13,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { ordersAuditActions } from '../audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { ordersAnalyticsEvents } from '../analytics';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * POST /orders — create a new order from an explicit payload (admin).
@@ -50,11 +50,7 @@ export const writeOrders = (
 
         const parseResult = CreateOrderBody.safeParse(request.body);
         if (!parseResult.success) {
-            rejectResponse(
-                response,
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            );
+            rejectValidation(response, parseResult.error);
             return Promise.resolve();
         }
 
@@ -63,10 +59,7 @@ export const writeOrders = (
         return orderService
             .create(userId, email, items)
             .then((result) => {
-                if (!result.success) {
-                    rejectResponse(response, result.status, result.errors);
-                    return;
-                }
+                if (refused(response, result)) return;
 
                 // The request's own language: an admin-created order has no recipient record to take
                 // one from. Admin-created orders only have an email, so it stands in for the name.
@@ -104,7 +97,7 @@ export const writeOrders = (
                     201
                 );
             })
-            .catch((error: Error) => rejectDatabaseError(response, 'createOrder', error));
+            .catch(catchAs(response, 'createOrder'));
     }
 
     /**
@@ -114,21 +107,14 @@ export const writeOrders = (
     const schema = request.params.id ? UpdateOrderByIdBody : UpdateOrderBody;
     const parseResult = schema.safeParse(request.body);
     if (!parseResult.success) {
-        rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+        rejectValidation(response, parseResult.error);
         return Promise.resolve();
     }
 
     return orderService
         .updateById(id, parseResult.data)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -141,7 +127,5 @@ export const writeOrders = (
 
             successResponse(response, orderService.withActions(result.data, request.authContext));
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'writeOrder', error);
-        });
+        .catch(catchAs(response, 'writeOrder'));
 };

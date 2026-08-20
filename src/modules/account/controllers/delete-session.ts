@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { userRepository } from '@modules/users';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
+import { catchAs } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/sessions/:sessionId
@@ -22,7 +22,7 @@ import { accountAuditActions } from '../audit';
  */
 export const deleteSession = (request: Request<{ sessionId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id } = authContextOf(request);
     const { sessionId } = request.params;
 
     return userRepository
@@ -42,7 +42,5 @@ export const deleteSession = (request: Request<{ sessionId: string }>, response:
 
             successResponse(response, undefined, 200, t('account.sessions.revoked'));
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'deleteSession', error);
-        });
+        .catch(catchAs(response, 'deleteSession'));
 };

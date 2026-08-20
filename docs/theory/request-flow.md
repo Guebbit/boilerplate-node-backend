@@ -137,7 +137,23 @@ Shape validation happens in the **controller**, against the [Zod](../tools/runti
 generated from `openapi.yaml` — so a service is only ever called with data the contract already
 accepted, and never has to ask whether a field is a string. Which sources a controller reads
 (params, query, body, and in what precedence) is a property of the surface rather than of the
-handler; [Request Input](./request-input.md) is the page for that. Business rules live in the
+handler; [Request Input](./request-input.md) is the page for that.
+
+The four steps every controller repeats — parse the body, answer 422, send a service refusal,
+catch — live in `@infrastructure/http/controller` as `parseBody`, `rejectValidation`, `refused`
+and `catchAs`. Helpers rather than a wrapper, deliberately: a wrapper that owned the chain would
+move the stack trace off the handler, degrade the inference `parseBody`'s return type carries, and
+hide the literal `.catch(` that `every-controller-catches.test.ts` looks for.
+
+**Three endpoints deliberately do not parse a generated schema, and say so in place.**
+`post-signup` and `put-account` are validated by their service against `zodUserSchema`, whose
+messages come from the dictionary — parsing first would answer in Zod's own English and break the
+`Content-Language` guarantee `tests/integration/locale.test.ts` asserts. `post-login` answers one
+way for every wrong credential: parsing first makes a too-short password a 422 while a wrong
+password of the right length is a 401, and it answers before `recordLoginFailure`, so the attempt
+most worth recording never reaches the audit trail.
+
+Business rules live in the
 service, and the ones worth proving without a database live in `domain/`.
 
 ### Optional acceleration

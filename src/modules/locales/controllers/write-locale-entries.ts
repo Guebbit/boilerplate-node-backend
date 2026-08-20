@@ -14,11 +14,12 @@ import type {
     UpdateLocaleEntryRequest
 } from '@types';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeService } from '../service';
 import { localeAuditActions } from '../audit';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * The four write routes on a language's entries: one key at a time, and two bulk imports.
@@ -51,16 +52,6 @@ import { localeAuditActions } from '../audit';
  */
 const refreshOverrides = () => void refreshLocaleOverrides();
 
-/** 422 from a Zod result, in the one shape every controller here uses. */
-const rejectInvalid = (response: Response, issues: { message: string }[]) =>
-    Promise.resolve(
-        rejectResponse(
-            response,
-            422,
-            issues.map(({ message }) => message)
-        )
-    );
-
 /**
  * POST /locales/:locale/entries (admin)
  * Add one key.
@@ -70,12 +61,12 @@ export const createLocaleEntry = (
     response: Response
 ) => {
     const parseResult = CreateLocaleEntryBody.safeParse(request.body);
-    if (!parseResult.success) return rejectInvalid(response, parseResult.error.issues);
+    if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return localeService
         .createEntry(request.params.locale, parseResult.data)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -95,7 +86,7 @@ export const createLocaleEntry = (
 
             return successResponse(response, result.data, 201);
         })
-        .catch((error: Error) => rejectDatabaseError(response, 'createLocaleEntry', error));
+        .catch(catchAs(response, 'createLocaleEntry'));
 };
 
 /**
@@ -110,12 +101,12 @@ export const updateLocaleEntry = (
     response: Response
 ) => {
     const parseResult = UpdateLocaleEntryBody.safeParse(request.body);
-    if (!parseResult.success) return rejectInvalid(response, parseResult.error.issues);
+    if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return localeService
         .updateEntry(request.params.locale, request.params.entryId, parseResult.data)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -134,7 +125,7 @@ export const updateLocaleEntry = (
 
             return successResponse(response, result.data);
         })
-        .catch((error: Error) => rejectDatabaseError(response, 'updateLocaleEntry', error));
+        .catch(catchAs(response, 'updateLocaleEntry'));
 };
 
 /** The two bulk routes differ by one word, so they are one handler and a mode. */
@@ -148,7 +139,7 @@ const importEntries = (
     localeService
         .importEntries(request.params.locale, scope, entries, mode)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -179,7 +170,7 @@ export const replaceLocaleEntries = (
     response: Response
 ) => {
     const parseResult = ReplaceLocaleEntriesBody.safeParse(request.body);
-    if (!parseResult.success) return rejectInvalid(response, parseResult.error.issues);
+    if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return importEntries(
         request,
@@ -199,7 +190,7 @@ export const mergeLocaleEntries = (
     response: Response
 ) => {
     const parseResult = MergeLocaleEntriesBody.safeParse(request.body);
-    if (!parseResult.success) return rejectInvalid(response, parseResult.error.issues);
+    if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return importEntries(
         request,

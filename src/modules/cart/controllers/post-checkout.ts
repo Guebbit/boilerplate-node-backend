@@ -6,17 +6,14 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { cartCheckoutTotal } from '../metrics';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /cart/checkout
  * Converts the cart into an order and clears the cart.
  */
 export const postCheckout = (request: Request, response: Response) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    const userId = request.authContext.id;
+    const userId = authContextOf(request).id;
     // `?? {}` because a checkout without a body is legal and Express 5 leaves `body` undefined.
     const { addressId, shippingMethodId } = (request.body ?? {}) as {
         addressId?: string;

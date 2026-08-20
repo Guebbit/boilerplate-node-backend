@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { userRepository } from '@modules/users';
 import { destroyLoggedCookie, destroyRefreshCookie } from '../session/cookies';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * POST /account/logout
@@ -36,7 +36,5 @@ export const postLogout = (request: Request, response: Response) => {
 
             successResponse(response, undefined, 200, t('account.logout.success'));
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'postLogout', error);
-        });
+        .catch(catchAs(response, 'postLogout'));
 };

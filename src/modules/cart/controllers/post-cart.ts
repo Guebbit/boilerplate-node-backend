@@ -4,11 +4,11 @@ import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { productService } from '@modules/products';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { UpsertCartItemRequest } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
-import { isValidObjectId } from '@infrastructure/http/request';
+import { authContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
  * POST /cart
@@ -19,21 +19,12 @@ export const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,
     response: Response
 ) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    const userId = request.authContext.id;
+    const userId = authContextOf(request).id;
 
-    const parseResult = UpsertCartItemBody.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    const body = parseBody(UpsertCartItemBody, request.body, response);
+    if (!body) return;
 
-    const { productId, quantity } = parseResult.data;
+    const { productId, quantity } = body;
 
     // OpenAPI models Id as a plain string; Mongo-specific ObjectId format still needs its own check.
     if (!isValidObjectId(productId)) {
@@ -58,7 +49,5 @@ export const postCart = (
                 successResponse(response, cart, 200, t('cart.product-added'));
             });
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'upsertCartItem', error);
-        });
+        .catch(catchAs(response, 'upsertCartItem'));
 };

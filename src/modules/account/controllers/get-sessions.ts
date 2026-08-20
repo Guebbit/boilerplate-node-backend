@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { userRepository, TokenType } from '@modules/users';
 import type { Token } from '@modules/users';
 import type { Session } from '@types';
+import { catchAs } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * Map one stored refresh token to the wire's `Session`.
@@ -25,7 +26,7 @@ const toSession = (token: Token, cookieToken?: string): Session => ({
  */
 export const getSessions = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id } = authContextOf(request);
     const cookieToken = (request.cookies as Record<string, string | undefined>).jwt;
 
     return (
@@ -49,8 +50,6 @@ export const getSessions = (request: Request, response: Response) => {
 
                 successResponse(response, { sessions });
             })
-            .catch((error: Error) => {
-                rejectDatabaseError(response, 'getSessions', error);
-            })
+            .catch(catchAs(response, 'getSessions'))
     );
 };

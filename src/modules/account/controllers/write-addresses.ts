@@ -12,12 +12,12 @@
  * parses a body and so neither shares the shape this file is named for.
  */
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { AddAddressBody, UpdateAddressBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import type { AddressInput, UpdateAddressRequest } from '@types';
 import { accountService } from '../services';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/addresses — add an entry.
@@ -30,28 +30,18 @@ export const postAddress = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id } = authContextOf(request);
 
     const parseResult = AddAddressBody.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return accountService
         .addressAdd(id, parseResult.data)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postAddress', error);
-        });
+        .catch(catchAs(response, 'postAddress'));
 };
 
 /**
@@ -65,27 +55,17 @@ export const putAddress = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id } = authContextOf(request);
     const { addressId } = request.params;
 
     const parseResult = UpdateAddressBody.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return accountService
         .addressUpdate(id, addressId, parseResult.data)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'putAddress', error);
-        });
+        .catch(catchAs(response, 'putAddress'));
 };

@@ -23,6 +23,7 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema, userRepository, type TokenType, type UserDocument } from '@modules/users';
+import { validationErrors } from '@infrastructure/http/controller';
 
 /**
  * Add a token to the user (e.g. password reset).
@@ -76,12 +77,7 @@ export const signup = (
         });
 
     if (!parseResult.success)
-        return Promise.resolve(
-            generateReject(
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
+        return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return userRepository
         .findOne({ email })
@@ -116,12 +112,7 @@ export const login = (
     });
 
     if (!parseResult.success)
-        return Promise.resolve(
-            generateReject(
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
+        return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return (
         userRepository

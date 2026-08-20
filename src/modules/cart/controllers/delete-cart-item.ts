@@ -2,13 +2,13 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { RemoveCartItemRequest } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { cartAuditActions } from '../audit';
-import { readInput, isValidObjectId } from '@infrastructure/http/request';
+import { authContextOf, isValidObjectId, readInput } from '@infrastructure/http/request';
+import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
  * DELETE /cart/:productId
@@ -19,11 +19,7 @@ export const deleteCartItem = (
     request: Request<{ productId?: string }, unknown, RemoveCartItemRequest>,
     response: Response
 ) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    const userId = request.authContext.id;
+    const userId = authContextOf(request).id;
     // Path param only. `DELETE /cart/{productId}` declares no request body, and it could not use
     // one anyway: the route cannot match without the segment, so the param always wins the
     // precedence chain and a body `productId` was unreachable rather than merely undocumented.
@@ -38,10 +34,7 @@ export const deleteCartItem = (
     return cartService
         .cartItemRemoveById(userId, productId)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             emitAuditEvent(
                 buildAuditEvent(request, {
                     action: cartAuditActions.USER_CART_ITEM_REMOVED,
@@ -59,7 +52,5 @@ export const deleteCartItem = (
             });
             successResponse(response, result.data);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'deleteCartItem', error);
-        });
+        .catch(catchAs(response, 'deleteCartItem'));
 };

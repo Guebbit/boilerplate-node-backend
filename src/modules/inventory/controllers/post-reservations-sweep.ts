@@ -1,11 +1,10 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
 import { inventoryAuditActions } from '../audit';
 import { inventoryService } from '../service';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * POST /inventory/reservations/sweep
@@ -33,6 +32,4 @@ export const postReservationsSweep = (request: Request, response: Response) =>
             );
             successResponse(response, { expired }, 200, t('inventory.sweep-success'));
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postReservationsSweep', error);
-        });
+        .catch(catchAs(response, 'postReservationsSweep'));

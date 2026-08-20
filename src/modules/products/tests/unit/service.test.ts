@@ -165,7 +165,12 @@ describe('productService.validateData', () => {
         const errors = productService.validateData({ title: 'ab', price: -5 });
 
         expect(errors.length).toBeGreaterThan(0);
-        for (const message of errors) expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
+        // `message` is the copy; `details.field` names the input it belongs to, which is what a
+        // form needs to highlight the right box rather than string-matching the sentence.
+        for (const { message, details } of errors) {
+            expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
+            expect(details).toEqual({ field: expect.any(String) });
+        }
     });
 });
 

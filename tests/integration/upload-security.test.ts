@@ -2,6 +2,7 @@ import { existsSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { maxUploadBytes } from '@infrastructure/adapters/storage';
 
 /**
  * What actually reaches the disk.
@@ -96,10 +97,9 @@ describe('upload content validation', () => {
      * service needing no exploit: every byte is written before any handler runs.
      */
     it('refuses a file over the configured size limit', async () => {
-        const oversized = Buffer.concat([
-            PNG_BYTES,
-            Buffer.alloc(Number(process.env.NODE_MAX_UPLOAD_BYTES ?? 5 * 1024 * 1024) + 1024)
-        ]);
+        // Asked of the adapter rather than restated: the cap is read lazily there, so a test
+        // repeating the default would be guessing at a value it cannot see.
+        const oversized = Buffer.concat([PNG_BYTES, Buffer.alloc(maxUploadBytes() + 1024)]);
 
         const response = await signupWith(oversized, 'huge.png', 'image/png');
 

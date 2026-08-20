@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { listSupportedLocales, readLocaleDictionary, t } from '@infrastructure/i18n';
 import { localeService } from '../service';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * GET /locales
@@ -27,7 +27,7 @@ export const getLocales = (request: Request, response: Response) =>
         // role readable here, exactly as the products list does it.
         .listCapabilities(request.authContext?.admin === true)
         .then((capabilities) => successResponse(response, capabilities))
-        .catch((error: Error) => rejectDatabaseError(response, 'getLocales', error));
+        .catch(catchAs(response, 'getLocales'));
 
 /**
  * GET /locales/:locale

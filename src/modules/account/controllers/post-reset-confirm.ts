@@ -10,6 +10,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { resetConfirmEmail } from '../emails';
+import { parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /account/reset-confirm
@@ -20,15 +21,10 @@ export const postResetConfirm = (
     request: Request<{ token?: string }, unknown, PasswordResetConfirmRequest>,
     response: Response
 ) => {
-    const parseResult = ConfirmPasswordResetBody.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    const body = parseBody(ConfirmPasswordResetBody, request.body, response);
+    if (!body) return;
 
-    const { token, password, passwordConfirm } = parseResult.data;
+    const { token, password, passwordConfirm } = body;
 
     /**
      * Search user by token
@@ -81,10 +77,7 @@ export const postResetConfirm = (
                 return accountService
                     .passwordChange(user, password, passwordConfirm)
                     .then((result) => {
-                        if (!result.success) {
-                            rejectResponse(response, result.status, result.errors);
-                            return;
-                        }
+                        if (refused(response, result)) return;
                         // send confirmation email (no need to wait)
                         /*
                          * The recipient's OWN language, not the language of the request that triggered

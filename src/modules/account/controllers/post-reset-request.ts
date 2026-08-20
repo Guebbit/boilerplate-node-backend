@@ -3,13 +3,14 @@ import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { RequestPasswordResetBody } from '@api/schemas.zod';
 import { userService } from '@modules/users';
 import { accountService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { PasswordResetRequest } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { resetRequestEmail } from '../emails';
 import { authPasswordResetTotal } from '../metrics';
+import { parseBody } from '@infrastructure/http/controller';
 
 /**
  * POST /account/reset-request
@@ -47,15 +48,10 @@ export const postResetRequest = (
     response: Response
 ) => {
     // Shape validation only — existence of the account is never revealed (see below).
-    const parseResult = RequestPasswordResetBody.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    const body = parseBody(RequestPasswordResetBody, request.body, response);
+    if (!body) return;
 
-    const { email } = parseResult.data;
+    const { email } = body;
 
     return (
         lookupResetData(email)

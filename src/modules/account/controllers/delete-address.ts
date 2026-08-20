@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';
+import { catchAs, refused } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/addresses/:addressId — remove one entry.
@@ -16,19 +16,14 @@ import { accountService } from '../services';
  */
 export const deleteAddress = (request: Request<{ addressId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id } = authContextOf(request);
     const { addressId } = request.params;
 
     return accountService
         .addressRemove(id, addressId)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'deleteAddress', error);
-        });
+        .catch(catchAs(response, 'deleteAddress'));
 };

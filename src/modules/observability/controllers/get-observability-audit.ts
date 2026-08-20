@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { auditLogService } from '@modules/audit-logs';
 import { t } from '@infrastructure/i18n';
+import { catchAs } from '@infrastructure/http/controller';
 
 /** Hard ceiling on `limit`, matching `maximum: 200` on the parameter in `openapi.yaml`. */
 const MAX_LIMIT = 200;
@@ -41,5 +41,5 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
             limit: limitNumber
         })
         .then(({ items, total }) => successResponse(response, { items, total }))
-        .catch((error: Error) => rejectDatabaseError(response, 'getObservabilityAuditLogs', error));
+        .catch(catchAs(response, 'getObservabilityAuditLogs'));
 };

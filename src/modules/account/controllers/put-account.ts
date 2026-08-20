@@ -10,6 +10,7 @@ import type { UpdateAccountRequest, UpdateAccountRequestMultipart } from '@types
 import { accountService } from '../services';
 import { accountAuditActions } from '../audit';
 import { sendVerificationEmail } from '../services';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * PUT /account
@@ -23,7 +24,7 @@ export const putAccount = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id, email: currentEmail } = request.authContext!;
+    const { id, email: currentEmail } = authContextOf(request);
 
     /**
      * Uploaded file takes priority over body imageUrl — the same merge signup does.
@@ -34,6 +35,11 @@ export const putAccount = (
     // value: a body-supplied url names an image this request did not create.
     const deleteUpload = () => imageStore.remove(imageUrlFile);
 
+    /*
+     * Read through the request type rather than parsed against `UpdateAccountBody`, for the reason
+     * `post-signup` gives: `accountService.updateProfile` validates these fields with translated
+     * messages, and the generated schema would answer first in English.
+     */
     const { email, username, locale } = request.body as UpdateAccountRequest;
 
     return accountService

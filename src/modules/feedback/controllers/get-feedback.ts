@@ -1,14 +1,13 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import type { CastError } from 'mongoose';
 import type { SearchFeedbackRequestsRequest } from '@types';
 import { readInput } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { feedbackRequestService } from '../service';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from '../audit';
+import { catchAs, rejectValidation } from '@infrastructure/http/controller';
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
 
@@ -41,14 +40,7 @@ export const getFeedback = (
     // The shared schema is what makes `?pageSize=500` answer 422 here as it does everywhere else,
     // rather than being silently clamped.
     const parseResult = paginationSchema.safeParse({ page, pageSize });
-    if (!parseResult.success)
-        return Promise.resolve(
-            rejectResponse(
-                response,
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
+    if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
     return feedbackRequestService
         .search({
@@ -67,5 +59,5 @@ export const getFeedback = (
             );
             return successResponse(response, result);
         })
-        .catch((error: CastError) => rejectDatabaseError(response, 'getFeedback', error));
+        .catch(catchAs(response, 'getFeedback'));
 };

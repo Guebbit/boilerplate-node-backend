@@ -9,7 +9,7 @@ import type { Request, RequestHandler } from 'express';
 // multer is the `multipart/form-data` body parser for Express. It populates `request.file` /
 // `request.files` and, with diskStorage, writes the bytes to disk before the handler runs.
 // `FileFilterCallback` is the signature of the accept/reject callback used below.
-import multer, { type Field, type FileFilterCallback } from 'multer';
+import multer, { type Field, type FileFilterCallback, type Multer } from 'multer';
 // `randomBytes` = cryptographically secure RNG. Deliberately not `Math.random()`: predictable
 // filenames would let someone guess the URL of another user's upload.
 import { randomBytes } from 'node:crypto';
@@ -175,29 +175,48 @@ export const fileFilter = (
  */
 const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
-const getMaxUploadBytes = () => {
+/**
+ * The ceiling a mount applies right now. Read at call time, so a deployment that sets
+ * `NODE_MAX_UPLOAD_BYTES` after this module is evaluated still gets its value — and so a test can
+ * ask for the number rather than restating the default and hoping they agree.
+ */
+export const maxUploadBytes = (): number => {
     const configured = Number.parseInt(process.env.NODE_MAX_UPLOAD_BYTES ?? '', 10);
     return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_UPLOAD_BYTES;
 };
 
-const rawUpload = multer({
-    // Where/how files are written (see `fileStorage` above).
-    storage: fileStorage,
-    // Which files are accepted at all (see `fileFilter` above).
-    fileFilter,
-    limits: {
-        fileSize: getMaxUploadBytes(),
-        // These endpoints accept one image. Without a cap, a request carrying ten thousand file
-        // parts is accepted and each one is written.
-        files: 1,
-        // Non-file parts are bounded too: multer's 1 MB per field is generous, and the number of
-        // fields is unlimited by default, so a body of a million empty fields is otherwise a
-        // free way to burn parser time.
-        fields: 32,
-        fieldSize: 100 * 1024,
-        parts: 64
-    }
-});
+/**
+ * The configured multer instance, built on first use.
+ *
+ * Memoised rather than created at module scope because `limits` are FROZEN at construction: a
+ * value read while this module is being evaluated is fixed before `.env` has necessarily been
+ * loaded, and a test that sets `NODE_MAX_UPLOAD_BYTES` then imports this file gets whichever
+ * import happened first. Every other adapter reads its environment lazily for the same reason.
+ *
+ * One instance for the whole process, not one per request: multer keeps no per-request state in
+ * it, and rebuilding it per call would rebuild the storage engine with it.
+ */
+let configuredUpload: Multer | undefined;
+
+const rawUpload = (): Multer =>
+    (configuredUpload ??= multer({
+        // Where/how files are written (see `fileStorage` above).
+        storage: fileStorage,
+        // Which files are accepted at all (see `fileFilter` above).
+        fileFilter,
+        limits: {
+            fileSize: maxUploadBytes(),
+            // These endpoints accept one image. Without a cap, a request carrying ten thousand file
+            // parts is accepted and each one is written.
+            files: 1,
+            // Non-file parts are bounded too: multer's 1 MB per field is generous, and the number of
+            // fields is unlimited by default, so a body of a million empty fields is otherwise a
+            // free way to burn parser time.
+            fields: 32,
+            fieldSize: 100 * 1024,
+            parts: 64
+        }
+    }));
 
 /**
  * Wraps a multer middleware so the request's locale survives it.
@@ -369,10 +388,10 @@ const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
 ];
 
 export const upload = {
-    single: (fieldName: string) => wrapUpload(rawUpload.single(fieldName)),
+    single: (fieldName: string) => wrapUpload(rawUpload().single(fieldName)),
     array: (fieldName: string, maxCount?: number) =>
-        wrapUpload(rawUpload.array(fieldName, maxCount)),
-    fields: (fields: Field[]) => wrapUpload(rawUpload.fields(fields)),
-    none: () => wrapUpload(rawUpload.none()),
-    any: () => wrapUpload(rawUpload.any())
+        wrapUpload(rawUpload().array(fieldName, maxCount)),
+    fields: (fields: Field[]) => wrapUpload(rawUpload().fields(fields)),
+    none: () => wrapUpload(rawUpload().none()),
+    any: () => wrapUpload(rawUpload().any())
 };

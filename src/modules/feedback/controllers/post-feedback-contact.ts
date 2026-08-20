@@ -1,14 +1,14 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateFeedbackRequestBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import type { CreateFeedbackRequest } from '@types';
 import { contactRequestEmail } from '../emails';
 import { feedbackRequestService } from '../service';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
  * Built on the orval-generated CreateFeedbackRequestBody (kept in sync with
@@ -30,16 +30,11 @@ export const postFeedbackContact = (
     request: Request<unknown, unknown, CreateFeedbackRequest>,
     response: Response
 ) => {
-    const parseResult = createFeedbackSchema.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    const body = parseBody(createFeedbackSchema, request.body, response);
+    if (!body) return;
 
     return feedbackRequestService
-        .create(parseResult.data)
+        .create(body)
         .then((createdFeedbackRequest) => {
             // Notification target precedence: dedicated contact mailbox, then generic SMTP sender; skip email if neither is configured.
             const notifyEmail =
@@ -76,5 +71,5 @@ export const postFeedbackContact = (
 
             successResponse(response, createdFeedbackRequest, 201);
         })
-        .catch((error: Error) => rejectDatabaseError(response, 'postFeedbackContact', error));
+        .catch(catchAs(response, 'postFeedbackContact'));
 };

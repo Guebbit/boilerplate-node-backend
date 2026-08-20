@@ -3,8 +3,8 @@ import { LocaleScope } from '@types';
 import { readInput } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { localeService } from '../service';
+import { catchAs, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * GET /locales/:locale/entries (admin)
@@ -41,14 +41,7 @@ export const getLocaleEntries = (
     // The shared schema is what makes `?pageSize=500` answer 422 here as it does everywhere else,
     // rather than being silently clamped.
     const parseResult = paginationSchema.safeParse({ page, pageSize });
-    if (!parseResult.success)
-        return Promise.resolve(
-            rejectResponse(
-                response,
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
+    if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
     return localeService
         .searchEntries(request.params.locale, { ...parseResult.data, text, scope: scopeFilter })
@@ -57,5 +50,5 @@ export const getLocaleEntries = (
                 ? successResponse(response, result.data)
                 : rejectResponse(response, result.status, result.errors)
         )
-        .catch((error: Error) => rejectDatabaseError(response, 'getLocaleEntries', error));
+        .catch(catchAs(response, 'getLocaleEntries'));
 };

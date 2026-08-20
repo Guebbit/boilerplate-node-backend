@@ -2,11 +2,11 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
 import type { CreateLocaleRequest, UpdateLocaleRequest } from '@types';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeService } from '../service';
 import { localeAuditActions } from '../audit';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * POST /locales and PUT /locales/:locale (admin)
@@ -46,19 +46,12 @@ export const createLocale = (
         name: displayName,
         nativeName: displayName
     }).safeParse(request.body);
-    if (!parseResult.success)
-        return Promise.resolve(
-            rejectResponse(
-                response,
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
+    if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
     return localeService
         .createLanguage(parseResult.data)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -72,7 +65,7 @@ export const createLocale = (
 
             return successResponse(response, result.data, 201);
         })
-        .catch((error: Error) => rejectDatabaseError(response, 'createLocale', error));
+        .catch(catchAs(response, 'createLocale'));
 };
 
 /**
@@ -90,19 +83,12 @@ export const updateLocale = (
         name: displayName.optional(),
         nativeName: displayName.optional()
     }).safeParse(request.body);
-    if (!parseResult.success)
-        return Promise.resolve(
-            rejectResponse(
-                response,
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
+    if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
     return localeService
         .updateLanguage(request.params.locale, parseResult.data)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -119,5 +105,5 @@ export const updateLocale = (
 
             return successResponse(response, result.data);
         })
-        .catch((error: Error) => rejectDatabaseError(response, 'updateLocale', error));
+        .catch(catchAs(response, 'updateLocale'));
 };

@@ -8,6 +8,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAuditActions } from '../audit';
 import { deleteRequestEmail } from '../emails';
 import { authAccountDeleteTotal } from '../metrics';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account
@@ -21,7 +22,7 @@ import { authAccountDeleteTotal } from '../metrics';
  */
 export const deleteAccountRequest = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id, email, username } = request.authContext!;
+    const { id, email, username } = authContextOf(request);
 
     return userService
         .findByEmail(email)

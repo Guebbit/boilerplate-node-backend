@@ -1,12 +1,11 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
-import { isValidObjectId } from '@infrastructure/http/request';
+import { authContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { wishlistService } from '../service';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { wishlistAnalyticsEvents } from '../analytics';
+import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
  * DELETE /wishlist/:productId
@@ -14,11 +13,7 @@ import { wishlistAnalyticsEvents } from '../analytics';
  * they need to know, the same contract the cart's remove keeps.
  */
 export const deleteWishlistItem = (request: Request<{ productId: string }>, response: Response) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    const userId = request.authContext.id;
+    const userId = authContextOf(request).id;
     const { productId } = request.params;
 
     // OpenAPI models Id as a plain string; the Mongo-specific format still needs its own check,
@@ -31,10 +26,7 @@ export const deleteWishlistItem = (request: Request<{ productId: string }>, resp
     return wishlistService
         .wishlistRemove(userId, productId)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
 
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
@@ -44,7 +36,5 @@ export const deleteWishlistItem = (request: Request<{ productId: string }>, resp
 
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'deleteWishlistItem', error);
-        });
+        .catch(catchAs(response, 'deleteWishlistItem'));
 };

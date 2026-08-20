@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { userRepository } from '@modules/users';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { sendVerificationEmail } from '../services';
+import { catchAs } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/verify-request
@@ -19,7 +19,7 @@ import { sendVerificationEmail } from '../services';
  */
 export const postVerifyRequest = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id } = authContextOf(request);
 
     return (
         userRepository
@@ -46,8 +46,6 @@ export const postVerifyRequest = (request: Request, response: Response) => {
                     successResponse(response, undefined, 200, t('account.verify.email-sent'));
                 });
             })
-            .catch((error: CastError | Error) => {
-                rejectDatabaseError(response, 'postVerifyRequest', error);
-            })
+            .catch(catchAs(response, 'postVerifyRequest'))
     );
 };

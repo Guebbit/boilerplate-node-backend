@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { UpdateFeedbackRequestStatusBody } from '@api/schemas.zod';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import type { UpdateFeedbackRequestStatusRequest } from '@types';
 import { feedbackRequestService } from '../service';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from '../audit';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * Built on the orval-generated UpdateFeedbackRequestStatusBody (kept in sync
@@ -25,30 +25,23 @@ export const putFeedbackStatus = (
     request: Request<{ id: string }, unknown, UpdateFeedbackRequestStatusRequest>,
     response: Response
 ) => {
-    const parseResult = updateFeedbackStatusSchema.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    const body = parseBody(updateFeedbackStatusSchema, request.body, response);
+    if (!body) return;
 
     return feedbackRequestService
-        .updateStatusById(request.params.id, parseResult.data)
+        .updateStatusById(request.params.id, body)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
             emitAuditEvent(
                 buildAuditEvent(request, {
                     action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
                     outcome: 'success',
                     target_type: 'feedback',
                     target_id: request.params.id,
-                    metadata: { status: parseResult.data.status }
+                    metadata: { status: body.status }
                 })
             );
             return successResponse(response, result.data);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'putFeedbackStatus', error);
-        });
+        .catch(catchAs(response, 'putFeedbackStatus'));
 };

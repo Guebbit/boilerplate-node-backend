@@ -1,13 +1,12 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { orderService } from '../service';
 import type { CancelOrderRequest } from '@types';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { ordersAuditActions } from '../audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { ordersAnalyticsEvents } from '../analytics';
+import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /orders/:id/cancel
@@ -32,10 +31,7 @@ export const postCancelOrder = (
             refund: request.body?.refund
         })
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -57,6 +53,4 @@ export const postCancelOrder = (
                 result.message
             );
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postCancelOrder', error);
-        });
+        .catch(catchAs(response, 'postCancelOrder'));

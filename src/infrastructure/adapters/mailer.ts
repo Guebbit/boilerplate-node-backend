@@ -43,11 +43,16 @@ import { isQueueEnabled, publishToQueue, EMAIL_QUEUE } from '@infrastructure/ada
  * resolved against the consumer's own directory stays portable where a path into `src/modules`
  * would not. The owner lives in the filename prefix instead.
  *
+ * A function, not a constant, for the reason {@link getTransporter} is lazy: a value read while
+ * this module is being evaluated is fixed before `.env` has necessarily been loaded, and a test
+ * that sets the variable then imports this file gets the value from whichever import came first.
+ *
  * See: docs/tools/email-and-rendering.md#templates-interpolate-they-do-not-translate
  */
-export const EMAIL_TEMPLATES_DIR = process.env.NODE_EMAIL_TEMPLATES_DIR
-    ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
-    : path.resolve(process.cwd(), 'shared/views/templates-emails');
+export const emailTemplatesDirectory = (): string =>
+    process.env.NODE_EMAIL_TEMPLATES_DIR
+        ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
+        : path.resolve(process.cwd(), 'shared/views/templates-emails');
 
 /** The memoised SMTP transport. See {@link getTransporter}. */
 let transport: Transporter | undefined;
@@ -122,7 +127,7 @@ const getTransporter = (): Transporter => {
  *
  * @param request - nodemailer envelope (to, subject, attachments, ...). `from` and `html`
  *                  are filled in here, but anything passed in overrides them.
- * @param templateName - file name inside {@link EMAIL_TEMPLATES_DIR}
+ * @param templateName - file name inside {@link emailTemplatesDirectory}
  * @param data - variables interpolated into the EJS template
  */
 export const nodemailer = (
@@ -164,7 +169,7 @@ export const nodemailer = (
                  * the worker that calls it, possibly in another process, hours later) does not
                  * need to know what a locale is.
                  */
-                .renderFile(path.resolve(EMAIL_TEMPLATES_DIR, templateName), { ...data })
+                .renderFile(path.resolve(emailTemplatesDirectory(), templateName), { ...data })
                 /**
                  * Send email (nodemailer returns a Promise when no callback is provided)
                  */
@@ -227,7 +232,7 @@ export type EmailJob = EmailJobPayload;
  */
 export interface EmailContent {
     /**
-     * Template file name inside {@link EMAIL_TEMPLATES_DIR}, prefixed with the module that owns
+     * Template file name inside {@link emailTemplatesDirectory}, prefixed with the module that owns
      * it — `orders.order-confirm.ejs`. The templates sit in one flat directory so this stays a
      * bare name the queue can carry, and the prefix is what makes an orphan visible after its
      * module is deleted.

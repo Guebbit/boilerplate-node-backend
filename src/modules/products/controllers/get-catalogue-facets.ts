@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { productService } from '../service';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * GET /products/categories
@@ -15,6 +15,4 @@ export const getCatalogueFacets = (request: Request, response: Response) =>
         .then((facets) => {
             successResponse(response, facets);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'getCatalogueFacets', error);
-        });
+        .catch(catchAs(response, 'getCatalogueFacets'));

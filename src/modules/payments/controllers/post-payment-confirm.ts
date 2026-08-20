@@ -1,7 +1,5 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { paymentsAnalyticsEvents } from '../analytics';
@@ -9,6 +7,7 @@ import { ConfirmPaymentBody } from '@api/schemas.zod';
 import { paymentsAuditActions } from '../audit';
 import { paymentConfirmTotal } from '../metrics';
 import { paymentService } from '../service';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * POST /payments/:id/confirm
@@ -21,11 +20,7 @@ import { paymentService } from '../service';
 export const postPaymentConfirm = (request: Request<{ id?: string }>, response: Response) => {
     const parseResult = ConfirmPaymentBody.safeParse(request.body ?? {});
     if (!parseResult.success) {
-        rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+        rejectValidation(response, parseResult.error);
         return Promise.resolve();
     }
 
@@ -56,13 +51,8 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
                 });
             }
 
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postPaymentConfirm', error);
-        });
+        .catch(catchAs(response, 'postPaymentConfirm'));
 };

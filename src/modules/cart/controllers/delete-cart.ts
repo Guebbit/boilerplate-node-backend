@@ -1,20 +1,17 @@
 import type { Request, Response } from 'express';
 import { cartService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
+import { catchAs } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /cart
  * Remove ALL items in the user cart.
  */
 export const deleteCart = (request: Request, response: Response) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    const userId = request.authContext.id;
+    const userId = authContextOf(request).id;
 
     return cartService
         .cartRemove(userId)
@@ -26,7 +23,5 @@ export const deleteCart = (request: Request, response: Response) => {
             });
             successResponse(response, cart);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'deleteCart', error);
-        });
+        .catch(catchAs(response, 'deleteCart'));
 };

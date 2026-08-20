@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { deliveryService } from '../service';
+import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
  * GET /delivery/order/:orderId
@@ -13,12 +12,7 @@ export const getShipmentByOrder = (request: Request<{ orderId?: string }>, respo
     deliveryService
         .getForOrder(String(request.params.orderId), request.authContext)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             successResponse(response, result.data);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'getShipmentByOrder', error);
-        });
+        .catch(catchAs(response, 'getShipmentByOrder'));

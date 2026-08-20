@@ -1,14 +1,13 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { AddWishlistItemBody } from '@api/schemas.zod';
 import { t } from '@infrastructure/i18n';
-import { isValidObjectId } from '@infrastructure/http/request';
+import { authContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AddWishlistItemRequest } from '@types';
 import { wishlistService } from '../service';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { wishlistAnalyticsEvents } from '../analytics';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /wishlist
@@ -19,21 +18,12 @@ export const postWishlist = (
     request: Request<unknown, unknown, AddWishlistItemRequest>,
     response: Response
 ) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    const userId = request.authContext.id;
+    const userId = authContextOf(request).id;
 
-    const parseResult = AddWishlistItemBody.safeParse(request.body);
-    if (!parseResult.success)
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+    const body = parseBody(AddWishlistItemBody, request.body, response);
+    if (!body) return;
 
-    const { productId } = parseResult.data;
+    const { productId } = body;
 
     // OpenAPI models Id as a plain string; the Mongo-specific format still needs its own check,
     // and answering 422 is what tells a caller the id was malformed rather than absent.
@@ -45,10 +35,7 @@ export const postWishlist = (
     return wishlistService
         .wishlistAdd(userId, productId)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
 
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
@@ -58,7 +45,5 @@ export const postWishlist = (
 
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postWishlist', error);
-        });
+        .catch(catchAs(response, 'postWishlist'));
 };

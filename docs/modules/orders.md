@@ -139,15 +139,15 @@ From model `Order`. `_id` and `__v` are omitted — every document carries them.
 
 | Endpoint                   | Middlewares                                                | Controller        | What it does                 |
 | -------------------------- | ---------------------------------------------------------- | ----------------- | ---------------------------- |
-| `DELETE /orders`           | `getAuth` → `isAuth` → `isAdmin` → `(inline)`              | `deleteOrders`    | Delete order                 |
+| `DELETE /orders`           | `getAuth` → `isAuth` → `isAdmin` → `(inline)`              | `deleteOrder`     | Delete order                 |
 | `GET /orders`              | `getAuth` → `isAuth` → `(inline)`                          | `getOrders`       | List orders (paginated)      |
 | `POST /orders`             | `getAuth` → `isAuth` → `isAdmin` → `(inline)`              | `writeOrders`     | Create order                 |
 | `PUT /orders`              | `getAuth` → `isAuth` → `isAdmin` → `(inline)`              | `writeOrders`     | Update order                 |
-| `DELETE /orders/{id}`      | `getAuth` → `isAuth` → `isAdmin` → `(inline)`              | `deleteOrders`    | Delete order                 |
+| `DELETE /orders/{id}`      | `getAuth` → `isAuth` → `isAdmin` → `(inline)`              | `deleteOrder`     | Delete order                 |
 | `GET /orders/{id}`         | `getAuth` → `isAuth` → `(inline)`                          | `getOrderItem`    | Order details                |
 | `PUT /orders/{id}`         | `getAuth` → `isAuth` → `isAdmin` → `(inline)`              | `writeOrders`     | Edit order                   |
 | `POST /orders/{id}/cancel` | `getAuth` → `isAuth` → `(inline)`                          | `postCancelOrder` | Cancel order                 |
-| `DELETE /orders/{id}/hard` | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)` | `deleteOrders`    | Permanently delete order     |
+| `DELETE /orders/{id}/hard` | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)` | `deleteOrder`     | Permanently delete order     |
 | `GET /orders/{id}/invoice` | `getAuth` → `isAuth` → `(inline)`                          | `getOrderInvoice` | Download order invoice (PDF) |
 | `POST /orders/search`      | `getAuth` → `isAuth`                                       | `getOrders`       | Search orders (DTO-friendly) |
 

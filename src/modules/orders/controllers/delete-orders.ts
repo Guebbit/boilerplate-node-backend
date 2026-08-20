@@ -1,12 +1,5 @@
-import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import type { CastError } from 'mongoose';
+import { createDeleteController } from '@infrastructure/http/delete-controller';
 import { orderService } from '../service';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { extractAndValidateId, readInput } from '@infrastructure/http/request';
-import { hardDeleteSchema } from '@infrastructure/http/schemas';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { ordersAuditActions } from '../audit';
 
 /**
@@ -14,52 +7,13 @@ import { ordersAuditActions } from '../audit';
  * DELETE /orders/:id — delete an order by path id (admin).
  * DELETE /orders/:id/hard — the same operation with the flag spelled in the path (admin).
  * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
+ *
+ * An order is a financial record, so the soft path is the one it wants: the row survives and only
+ * the stamp moves. The hard path releases the units the order still holds before destroying it.
  */
-export const deleteOrders = (request: Request, response: Response) => {
-    const id = extractAndValidateId(request, response, 'deleteOrder', 'delete');
-    if (!id) return Promise.resolve();
-
-    // `hardDelete` is a boolean the route accepts three ways — see docs/theory/request-input.md.
-    // The path form (`DELETE /orders/:id/hard`) reaches `params` through `routeFlag`.
-    const input = readInput(request, {
-        surface: 'delete',
-        booleans: ['hardDelete']
-    });
-    const parseResult = hardDeleteSchema.safeParse(input.hardDelete);
-    if (!parseResult.success)
-        return Promise.resolve(
-            rejectResponse(
-                response,
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
-    const hardDelete = parseResult.data;
-
-    return (
-        orderService
-            // true = hard-delete; false (default) = soft-delete (sets deletedAt)
-            .removeById(id, hardDelete)
-            .then((result) => {
-                if (!result.success) {
-                    rejectResponse(response, result.status, result.errors);
-                    return;
-                }
-                emitAuditEvent(
-                    buildAuditEvent(request, {
-                        action: ordersAuditActions.ADMIN_ORDER_DELETED,
-                        outcome: 'success',
-                        target_type: 'order',
-                        target_id: id,
-                        metadata: { hardDelete }
-                    })
-                );
-                successResponse(response, undefined, 200, result.message);
-            })
-            .catch((error: CastError) => {
-                if (error.kind === 'ObjectId')
-                    return rejectResponse(response, 404, [t('orders.not-found')]);
-                rejectDatabaseError(response, 'deleteOrder', error);
-            })
-    );
-};
+export const deleteOrders = createDeleteController({
+    entity: 'order',
+    remove: (id, hardDelete) => orderService.removeById(id, hardDelete),
+    auditAction: ordersAuditActions.ADMIN_ORDER_DELETED,
+    notFoundKey: 'orders.not-found'
+});

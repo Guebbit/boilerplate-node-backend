@@ -1,11 +1,12 @@
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { cartService } from '../services';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { cartAuditActions } from '../audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
+import { catchAs, refused } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /cart/reorder/:orderId
@@ -16,20 +17,13 @@ import { cartAnalyticsEvents } from '../analytics';
  * what landed — and an order with nothing left to add answers 409 rather than a hollow 200.
  */
 export const postReorder = (request: Request<{ orderId: string }>, response: Response) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    const userId = request.authContext.id;
+    const userId = authContextOf(request).id;
     const { orderId } = request.params;
 
     return cartService
         .reorderIntoCart(userId, orderId)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -46,7 +40,5 @@ export const postReorder = (request: Request<{ orderId: string }>, response: Res
 
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'postReorder', error);
-        });
+        .catch(catchAs(response, 'postReorder'));
 };

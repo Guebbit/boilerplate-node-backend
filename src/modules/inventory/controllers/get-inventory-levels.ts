@@ -1,11 +1,10 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { readInput } from '@infrastructure/http/request';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListInventoryLevelsQueryParams } from '@api/schemas.zod';
 import { inventoryService } from '../service';
+import { catchAs, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * The generated query schema, relaxed to accept what a query string can carry.
@@ -29,11 +28,7 @@ export const getInventoryLevels = (request: Request, response: Response) => {
 
     const parseResult = levelsQuerySchema.safeParse(input);
     if (!parseResult.success) {
-        rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+        rejectValidation(response, parseResult.error);
         return Promise.resolve();
     }
 
@@ -42,7 +37,5 @@ export const getInventoryLevels = (request: Request, response: Response) => {
         .then((result) => {
             successResponse(response, result.data);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'getInventoryLevels', error);
-        });
+        .catch(catchAs(response, 'getInventoryLevels'));
 };

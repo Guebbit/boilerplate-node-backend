@@ -1,9 +1,8 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { CreatePaymentIntentBody } from '@api/schemas.zod';
 import { paymentService } from '../service';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * POST /payments/intent
@@ -16,24 +15,15 @@ import { paymentService } from '../service';
 export const postPaymentIntent = (request: Request, response: Response) => {
     const parseResult = CreatePaymentIntentBody.safeParse(request.body ?? {});
     if (!parseResult.success) {
-        rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+        rejectValidation(response, parseResult.error);
         return Promise.resolve();
     }
 
     return paymentService
         .createIntent(parseResult.data.orderId, request.authContext)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             successResponse(response, result.data, 201);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postPaymentIntent', error);
-        });
+        .catch(catchAs(response, 'postPaymentIntent'));
 };

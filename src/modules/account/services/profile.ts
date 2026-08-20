@@ -19,10 +19,12 @@ import {
     generateSuccess,
     generateReject,
     type ResponseSuccess,
-    type ResponseReject
+    type ResponseReject,
+    type ResponseErrorItem
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema, userRepository, userService, type UserDocument } from '@modules/users';
+import { validationErrors } from '@infrastructure/http/controller';
 
 /**
  * Validate a new-password pair without touching the user.
@@ -35,7 +37,10 @@ import { zodUserSchema, userRepository, userService, type UserDocument } from '@
  *
  * @returns the UI-facing messages, empty when the pair is acceptable
  */
-export const validatePasswordChange = (password = '', passwordConfirm = ''): string[] => {
+export const validatePasswordChange = (
+    password = '',
+    passwordConfirm = ''
+): ResponseErrorItem[] => {
     const parseResult = zodUserSchema
         .pick({
             password: true
@@ -57,7 +62,7 @@ export const validatePasswordChange = (password = '', passwordConfirm = ''): str
         });
 
     if (parseResult.success) return [];
-    return parseResult.error.issues.map(({ message }) => message);
+    return validationErrors(parseResult.error);
 };
 
 /**
@@ -120,12 +125,7 @@ export const updateProfile = (
     const parseResult = zodProfileSchema.safeParse(data);
 
     if (!parseResult.success)
-        return Promise.resolve(
-            generateReject(
-                422,
-                parseResult.error.issues.map(({ message }) => message)
-            )
-        );
+        return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return (
         userRepository

@@ -9,6 +9,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAuditActions } from '../audit';
 import { authEmailVerifyTotal } from '../metrics';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '../services';
+import { rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * POST /account/verify-confirm
@@ -28,11 +29,7 @@ export const postVerifyConfirm = (
     const parseResult = ConfirmEmailVerificationBody.safeParse(request.body);
     if (!parseResult.success) {
         authEmailVerifyTotal.inc({ status: 'failure' });
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+        return rejectValidation(response, parseResult.error);
     }
 
     const { token } = parseResult.data;

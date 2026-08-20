@@ -5,10 +5,10 @@ import { orderService } from '../service';
 import type { OrderDocument } from '../model';
 import { invoiceDocument } from '../emails';
 import { rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import ejs from 'ejs';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { isValidObjectId } from '@infrastructure/http/request';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * GET /orders/:id/invoice
@@ -69,7 +69,5 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                         .send(pdf);
                 });
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'Invoice generation failed', error);
-        });
+        .catch(catchAs(response, 'Invoice generation failed'));
 };

@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';
+import { catchAs } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /wishlist
@@ -9,17 +10,10 @@ import { wishlistService } from '../service';
  * against its own product store.
  */
 export const getWishlist = (request: Request, response: Response) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-
     return wishlistService
-        .wishlistGet(request.authContext.id)
+        .wishlistGet(authContextOf(request).id)
         .then((view) => {
             successResponse(response, view);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'getWishlist', error);
-        });
+        .catch(catchAs(response, 'getWishlist'));
 };

@@ -1,12 +1,11 @@
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
 import { AdjustStockBody } from '@api/schemas.zod';
 import { inventoryAuditActions } from '../audit';
 import { inventoryService } from '../service';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * POST /inventory/adjustments
@@ -17,11 +16,7 @@ import { inventoryService } from '../service';
 export const postAdjustment = (request: Request, response: Response) => {
     const parseResult = AdjustStockBody.safeParse(request.body ?? {});
     if (!parseResult.success) {
-        rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+        rejectValidation(response, parseResult.error);
         return Promise.resolve();
     }
 
@@ -40,10 +35,7 @@ export const postAdjustment = (request: Request, response: Response) => {
     return inventoryService
         .adjust(productId, delta, note)
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             emitAuditEvent(
                 buildAuditEvent(request, {
                     action: inventoryAuditActions.ADMIN_STOCK_ADJUSTED,
@@ -55,7 +47,5 @@ export const postAdjustment = (request: Request, response: Response) => {
             );
             successResponse(response, result.data, 200, result.message);
         })
-        .catch((error: CastError | Error) => {
-            rejectDatabaseError(response, 'postAdjustment', error);
-        });
+        .catch(catchAs(response, 'postAdjustment'));
 };

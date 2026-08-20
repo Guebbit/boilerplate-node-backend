@@ -63,7 +63,17 @@ export const postLogin = (
     response: Response
 ) => {
     /*
-     * Get POST data.
+     * Read, not parsed against `LoginBody`, and this one is a security decision rather than an
+     * omission.
+     *
+     * A login answers ONE way for every wrong credential. Parsing first makes a password shorter
+     * than the contract's minimum answer 422 while a wrong password of the right length answers
+     * 401 — which tells a caller something about the secret they guessed. It also answers before
+     * `recordLoginFailure`, so the failed attempt never reaches the audit trail: the request that
+     * most needs recording becomes the one that is not.
+     *
+     * The credentials are checked against the stored hash, which is the only check that decides
+     * anything here.
      */
     const { email, password, remember } = request.body;
 

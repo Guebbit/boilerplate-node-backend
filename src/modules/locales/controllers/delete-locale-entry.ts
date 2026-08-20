@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeService } from '../service';
 import { localeAuditActions } from '../audit';
+import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
  * DELETE /locales/:locale/entries/:entryId (admin)
@@ -26,7 +26,7 @@ export const deleteLocaleEntry = (
     localeService
         .deleteEntry(request.params.locale, request.params.entryId)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
 
             emitAuditEvent(
                 buildAuditEvent(request, {
@@ -45,4 +45,4 @@ export const deleteLocaleEntry = (
 
             return successResponse(response, undefined);
         })
-        .catch((error: Error) => rejectDatabaseError(response, 'deleteLocaleEntry', error));
+        .catch(catchAs(response, 'deleteLocaleEntry'));

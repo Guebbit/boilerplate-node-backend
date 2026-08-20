@@ -1,9 +1,10 @@
 import type { Request, Response } from 'express';
 import { cartService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
+import { catchAs } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /cart
@@ -11,12 +12,8 @@ import { cartAnalyticsEvents } from '../analytics';
  * Authentication check is done before entering the route.
  */
 export const getCart = (request: Request, response: Response) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
     return cartService
-        .cartGetWithSummary(request.authContext.id)
+        .cartGetWithSummary(authContextOf(request).id)
         .then((cart) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),
@@ -24,7 +21,5 @@ export const getCart = (request: Request, response: Response) => {
             });
             successResponse(response, cart);
         })
-        .catch((error: Error) => {
-            rejectDatabaseError(response, 'getCart', error);
-        });
+        .catch(catchAs(response, 'getCart'));
 };

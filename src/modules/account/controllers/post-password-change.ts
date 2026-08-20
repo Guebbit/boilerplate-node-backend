@@ -9,6 +9,8 @@ import type { ChangePasswordRequest } from '@types';
 import { accountService } from '../services';
 import { accountAuditActions } from '../audit';
 import { authPasswordChangeTotal } from '../metrics';
+import { rejectValidation } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/password
@@ -23,17 +25,13 @@ export const postPasswordChange = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id } = authContextOf(request);
 
     // Shape first: absent fields are a malformed request, not a wrong password.
     const parseResult = ChangePasswordBody.safeParse(request.body);
     if (!parseResult.success) {
         authPasswordChangeTotal.inc({ status: 'failure' });
-        return rejectResponse(
-            response,
-            422,
-            parseResult.error.issues.map(({ message }) => message)
-        );
+        return rejectValidation(response, parseResult.error);
     }
 
     const { currentPassword, password, passwordConfirm } = parseResult.data;

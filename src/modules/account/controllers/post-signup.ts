@@ -21,8 +21,12 @@ export const postSignup = (
     request: Request<unknown, unknown, SignupRequest | SignupRequestMultipart>,
     response: Response
 ) => {
-    /**
-     * Get POST data
+    /*
+     * Read, not parsed against `SignupBody` — and that is deliberate rather than the gap it looks
+     * like. `accountService.signup` validates every one of these fields through `zodUserSchema`,
+     * whose messages come from the dictionary; the generated schema would answer first, in Zod's
+     * own untranslated English, and `tests/integration/locale.test.ts` asserts it does not.
+     * Whichever validator a project keeps, one endpoint must not run both.
      */
     const { email, username, password, passwordConfirm } = request.body;
 

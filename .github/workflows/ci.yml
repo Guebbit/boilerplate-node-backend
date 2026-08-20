@@ -9,9 +9,11 @@ name: CI
 #
 # The jobs fall into four groups:
 #   - style           commitlint, lint, prettier
-#   - contract        lint-openapi, lint-asyncapi, api-freshness, asyncapi-types-freshness,
-#                     spec-identity — the spec is valid, its generated output is committed and
-#                     current, and the paired frontend still agrees with it
+#   - contract        lint-openapi, lint-asyncapi, their per-module counterparts,
+#                     api-freshness, asyncapi-types-freshness, contracts-bundle-freshness,
+#                     seed-export-freshness, module-docs-freshness, spec-identity — the spec is
+#                     valid, its generated output is committed and current, and the paired
+#                     frontend still agrees with it
 #   - correctness     typecheck, build, test-unit, test-integration, test-contract
 #   - supply chain    audit
 #
@@ -49,15 +51,10 @@ jobs:
                   # Need full history to walk the commit range.
                   fetch-depth: 0
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Lint commit messages (PR)
               if: github.event_name == 'pull_request'
@@ -78,15 +75,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Lint
               run: npm run lint
@@ -102,15 +94,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Check formatting
               run: npm run prettier:check
@@ -126,15 +113,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Lint OpenAPI spec
               run: npm run lint:openapi
@@ -149,15 +131,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Lint AsyncAPI spec
               run: npm run lint:asyncapi
@@ -172,15 +149,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             # The generator itself compares, so the committed file is never overwritten here and
             # the job needs no git state to read a verdict out of.
@@ -197,15 +169,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Check generated API client is fresh
               run: |
@@ -273,20 +240,108 @@ jobs:
                   "private, or delete this job if this copy has no paired frontend."
                   exit 1
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Compare the shared contract files
               env:
                   FRONTEND_PATH: .spec-sibling
               run: npm run check:spec-identity
+
+    lint-openapi-modules:
+        # The per-module REST fragments, against the narrower ruleset they are bundled from.
+        # `lint-openapi` above only sees the bundle, so a fragment can be invalid and still bundle.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Lint per-module OpenAPI fragments
+              run: npm run lint:openapi:modules
+
+    lint-asyncapi-modules:
+        # The per-module async fragments, for the same reason as the REST ones above.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Lint per-module AsyncAPI fragments
+              run: npm run lint:asyncapi:modules
+
+    contracts-bundle-freshness:
+        # The published bundles are what their fragments say they are. Without this, a merged
+        # fragment edit leaves `openapi.yaml` describing the previous version of the API.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check contract bundles are current
+              run: npm run check:contracts-bundle
+
+    seed-export-freshness:
+        # `db/demo/demo-data.json` matches what the seeders produce. It is the specimen the
+        # contract suite compares responses against, so a stale copy weakens every test using it.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check the exported demo dataset is current
+              run: npm run check:seed-export
+
+    module-docs-freshness:
+        # Every module carries its generated documentation section, and it is current.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check module docs are current
+              run: npm run check:module-docs
 
     typecheck:
         # `tsc --noEmit` — types only. `build` below repeats it as part of its own script; this
@@ -299,15 +354,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Type check
               run: npm run ts-check
@@ -327,15 +377,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Build
               run: npm run build
@@ -350,15 +395,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Run unit tests
               run: npm run test:unit
@@ -408,15 +448,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Run integration tests
               run: npm run test:integration
@@ -440,15 +475,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Run contract tests
               run: npm run test:contract
@@ -463,15 +493,10 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
 
             - name: Audit dependencies
               run: npm audit --omit=dev --audit-level=high
@@ -489,6 +514,11 @@ jobs:
             - asyncapi-types-freshness
             - api-freshness
             - spec-identity
+            - lint-openapi-modules
+            - lint-asyncapi-modules
+            - contracts-bundle-freshness
+            - seed-export-freshness
+            - module-docs-freshness
             - typecheck
             - build
             - test-unit

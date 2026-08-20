@@ -9,7 +9,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import ejs from 'ejs';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
-import { EMAIL_TEMPLATES_DIR } from '@infrastructure/adapters/mailer';
+import { emailTemplatesDirectory } from '@infrastructure/adapters/mailer';
 import { listSupportedLocales } from '@infrastructure/i18n';
 import {
     registrationConfirmEmail,
@@ -25,11 +25,11 @@ import { shipmentShippedEmail } from '@modules/delivery/emails';
 
 describe('email templates', () => {
     it('resolves to a directory that exists', () => {
-        expect(existsSync(EMAIL_TEMPLATES_DIR)).toBe(true);
+        expect(existsSync(emailTemplatesDirectory())).toBe(true);
     });
 
     it('contains at least one .ejs template', () => {
-        const templates = readdirSync(EMAIL_TEMPLATES_DIR).filter((f) => f.endsWith('.ejs'));
+        const templates = readdirSync(emailTemplatesDirectory()).filter((f) => f.endsWith('.ejs'));
         expect(templates.length).toBeGreaterThan(0);
     });
 
@@ -40,7 +40,7 @@ describe('email templates', () => {
         'account.delete-request.ejs',
         'feedback.contact.ejs'
     ])('resolves %s to a real file', (template) => {
-        expect(existsSync(path.resolve(EMAIL_TEMPLATES_DIR, template))).toBe(true);
+        expect(existsSync(path.resolve(emailTemplatesDirectory(), template))).toBe(true);
     });
 });
 
@@ -91,11 +91,13 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
 });
 
 describe('email templates render in every supported locale', () => {
-    const templates = readdirSync(EMAIL_TEMPLATES_DIR).filter((file) => file.endsWith('.ejs'));
+    const templates = readdirSync(emailTemplatesDirectory()).filter((file) =>
+        file.endsWith('.ejs')
+    );
 
     const render = (template: string, locale: string) =>
         ejs.renderFile(
-            path.resolve(EMAIL_TEMPLATES_DIR, template),
+            path.resolve(emailTemplatesDirectory(), template),
             contentFor(locale)[template].data
         );
 
