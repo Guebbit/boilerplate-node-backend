@@ -898,6 +898,7 @@ export const GetSessionsResponse = zod.object({
   "sessions": zod.array(zod.object({
   "id": zod.string().describe('Resource identifier'),
   "expiration": zod.iso.datetime({"offset":true}).optional().describe('Absent on a token issued without an expiry tier.'),
+  "lastUsedAt": zod.iso.datetime({"offset":true}).optional().describe('When this session last made a request. Absent until it makes one, which is what makes an idle session visible as idle in the list.'),
   "current": zod.boolean().describe('Whether this session is the one making the request, matched through the refresh cookie. Always `false` for a caller authenticating by bearer token alone — an access token does not identify a session.')
 }))
 })
@@ -1110,7 +1111,8 @@ export const loginBodyPasswordMin = 8;
 
 export const LoginBody = zod.object({
   "email": zod.email(),
-  "password": zod.string().min(loginBodyPasswordMin)
+  "password": zod.string().min(loginBodyPasswordMin),
+  "remember": zod.enum(['short', 'medium', 'long']).optional().describe('How long the refresh cookie outlives the tab — the \"remember me\" tiers, sized by the deployment (`NODE_TOKEN_REFRESH_TIME_\*`). Omitted, the cookie lives only as long as an access token.')
 })
 
 export const LoginResponse = zod.object({

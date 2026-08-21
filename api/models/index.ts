@@ -126,6 +126,7 @@ export * from './localeMessagesMessages';
 export * from './localeScope';
 export * from './localeSource';
 export * from './loginRequest';
+export * from './loginRequestRemember';
 export * from './mergeLocaleEntriesRequest';
 export * from './messageResponse';
 export * from './notFoundResponse';

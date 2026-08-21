@@ -18,14 +18,15 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { Id } from './id';
 
-export interface Session {
-  id: Id;
-  /** Absent on a token issued without an expiry tier. */
-  expiration?: string;
-  /** When this session last made a request. Absent until it makes one, which is what makes an idle session visible as idle in the list. */
-  lastUsedAt?: string;
-  /** Whether this session is the one making the request, matched through the refresh cookie. Always `false` for a caller authenticating by bearer token alone — an access token does not identify a session. */
-  current: boolean;
-}
+/**
+ * How long the refresh cookie outlives the tab — the "remember me" tiers, sized by the deployment (`NODE_TOKEN_REFRESH_TIME_*`). Omitted, the cookie lives only as long as an access token.
+ */
+export type LoginRequestRemember = typeof LoginRequestRemember[keyof typeof LoginRequestRemember];
+
+
+export const LoginRequestRemember = {
+  short: 'short',
+  medium: 'medium',
+  long: 'long',
+} as const;

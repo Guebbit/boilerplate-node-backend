@@ -104,29 +104,29 @@ From model `AddressBook`. `_id` and `__v` are omitted — every document carries
 
 <!-- gen:surface:start -->
 
-| Endpoint                                | Middlewares                                                                                                     | Controller             | What it does               |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------- |
-| `DELETE /account`                       | `getAuth` → `noStore` → `isAuth`                                                                                | `deleteAccountRequest` | Request account deletion   |
-| `GET /account`                          | `getAuth` → `noStore` → `isAuth`                                                                                | `getAccount`           | Current user info          |
-| `PUT /account`                          | `getAuth` → `noStore` → `isAuth` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages`   | `putAccount`           | Update own profile         |
-| `GET /account/addresses`                | `getAuth` → `noStore` → `isAuth`                                                                                | `getAddresses`         | List saved addresses       |
-| `POST /account/addresses`               | `getAuth` → `noStore` → `isAuth`                                                                                | `postAddress`          | Add an address             |
-| `DELETE /account/addresses/{addressId}` | `getAuth` → `noStore` → `isAuth`                                                                                | `deleteAddress`        | Remove an address          |
-| `PUT /account/addresses/{addressId}`    | `getAuth` → `noStore` → `isAuth`                                                                                | `putAddress`           | Update an address          |
-| `DELETE /account/delete-confirm`        | `getAuth` → `noStore` → `(inline)`                                                                              | `deleteAccountConfirm` | Confirm account deletion   |
-| `POST /account/login`                   | `getAuth` → `noStore` → `(inline)`                                                                              | `postLogin`            | Login                      |
-| `POST /account/logout`                  | `getAuth` → `noStore`                                                                                           | `postLogout`           | Logout this session        |
-| `POST /account/logout-all`              | `getAuth` → `noStore` → `isAuth` → `(inline)`                                                                   | `postLogoutEverywhere` | Logout from all devices    |
-| `POST /account/password`                | `getAuth` → `noStore` → `(inline)` → `isAuth`                                                                   | `postPasswordChange`   | Change password            |
-| `GET /account/refresh`                  | `getAuth` → `noStore`                                                                                           | `getRefreshToken`      | Refresh access token       |
-| `POST /account/reset`                   | `getAuth` → `noStore` → `(inline)`                                                                              | `postResetRequest`     | Request password reset     |
-| `POST /account/reset-confirm`           | `getAuth` → `noStore` → `(inline)` → `(inline)`                                                                 | `postResetConfirm`     | Confirm password reset     |
-| `GET /account/sessions`                 | `getAuth` → `noStore` → `isAuth`                                                                                | `getSessions`          | List active sessions       |
-| `DELETE /account/sessions/{sessionId}`  | `getAuth` → `noStore` → `isAuth`                                                                                | `deleteSession`        | Revoke one session         |
-| `POST /account/signup`                  | `getAuth` → `noStore` → `(inline)` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages` | `postSignup`           | Signup                     |
-| `DELETE /account/tokens/expired`        | `getAuth` → `noStore` → `isAuth` → `isAdmin` → `(inline)`                                                       | `deleteExpiredTokens`  | Remove expired tokens      |
-| `POST /account/verify-confirm`          | `getAuth` → `noStore` → `(inline)` → `(inline)`                                                                 | `postVerifyConfirm`    | Confirm email verification |
-| `POST /account/verify-request`          | `getAuth` → `noStore` → `(inline)` → `isAuth`                                                                   | `postVerifyRequest`    | Request email verification |
+| Endpoint                                | Middlewares                                                                                                                  | Controller             | What it does               |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------------- |
+| `DELETE /account`                       | `getAuth` → `noStore` → `isAuth`                                                                                             | `deleteAccountRequest` | Request account deletion   |
+| `GET /account`                          | `getAuth` → `noStore` → `isAuth`                                                                                             | `getAccount`           | Current user info          |
+| `PUT /account`                          | `getAuth` → `noStore` → `isAuth` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages`                | `putAccount`           | Update own profile         |
+| `GET /account/addresses`                | `getAuth` → `noStore` → `isAuth`                                                                                             | `getAddresses`         | List saved addresses       |
+| `POST /account/addresses`               | `getAuth` → `noStore` → `isAuth`                                                                                             | `postAddress`          | Add an address             |
+| `DELETE /account/addresses/{addressId}` | `getAuth` → `noStore` → `isAuth`                                                                                             | `deleteAddress`        | Remove an address          |
+| `PUT /account/addresses/{addressId}`    | `getAuth` → `noStore` → `isAuth`                                                                                             | `putAddress`           | Update an address          |
+| `DELETE /account/delete-confirm`        | `getAuth` → `noStore` → `(inline)`                                                                                           | `deleteAccountConfirm` | Confirm account deletion   |
+| `POST /account/login`                   | `getAuth` → `noStore` → `(inline)` → `(inline)`                                                                              | `postLogin`            | Login                      |
+| `POST /account/logout`                  | `getAuth` → `noStore`                                                                                                        | `postLogout`           | Logout this session        |
+| `POST /account/logout-all`              | `getAuth` → `noStore` → `isAuth` → `(inline)`                                                                                | `postLogoutEverywhere` | Logout from all devices    |
+| `POST /account/password`                | `getAuth` → `noStore` → `(inline)` → `(inline)` → `isAuth`                                                                   | `postPasswordChange`   | Change password            |
+| `GET /account/refresh`                  | `getAuth` → `noStore`                                                                                                        | `getRefreshToken`      | Refresh access token       |
+| `POST /account/reset`                   | `getAuth` → `noStore` → `(inline)` → `(inline)`                                                                              | `postResetRequest`     | Request password reset     |
+| `POST /account/reset-confirm`           | `getAuth` → `noStore` → `(inline)` → `(inline)` → `(inline)`                                                                 | `postResetConfirm`     | Confirm password reset     |
+| `GET /account/sessions`                 | `getAuth` → `noStore` → `isAuth`                                                                                             | `getSessions`          | List active sessions       |
+| `DELETE /account/sessions/{sessionId}`  | `getAuth` → `noStore` → `isAuth`                                                                                             | `deleteSession`        | Revoke one session         |
+| `POST /account/signup`                  | `getAuth` → `noStore` → `(inline)` → `(inline)` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages` | `postSignup`           | Signup                     |
+| `DELETE /account/tokens/expired`        | `getAuth` → `noStore` → `isAuth` → `isAdmin` → `(inline)`                                                                    | `deleteExpiredTokens`  | Remove expired tokens      |
+| `POST /account/verify-confirm`          | `getAuth` → `noStore` → `(inline)` → `(inline)` → `(inline)`                                                                 | `postVerifyConfirm`    | Confirm email verification |
+| `POST /account/verify-request`          | `getAuth` → `noStore` → `(inline)` → `(inline)` → `isAuth`                                                                   | `postVerifyRequest`    | Request email verification |
 
 Middlewares run left to right; the controller is the last handler on the route. Summaries come from this module’s own `openapi.yaml`, which is where they are edited.
 

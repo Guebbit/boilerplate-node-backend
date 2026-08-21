@@ -33,6 +33,14 @@ export interface Token {
     token: string;
     type: string;
     expiration?: Date;
+    /**
+     * When this token was last exchanged for an access token.
+     *
+     * Absent until it is, which is what lets `GET /account/sessions` show an idle session as idle
+     * rather than as indistinguishable from an active one. Only refresh tokens are ever exchanged,
+     * so it stays absent on the one-time kinds — a pending reset, a verification link.
+     */
+    lastUsedAt?: Date;
 }
 
 /**
@@ -227,6 +235,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
                         required: true
                     },
                     expiration: {
+                        type: Date,
+                        required: false
+                    },
+                    lastUsedAt: {
                         type: Date,
                         required: false
                     }

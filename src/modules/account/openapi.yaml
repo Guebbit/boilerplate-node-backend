@@ -490,6 +490,13 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                remember:
+                    type: string
+                    enum: [short, medium, long]
+                    description: >-
+                        How long the refresh cookie outlives the tab — the "remember me" tiers,
+                        sized by the deployment (`NODE_TOKEN_REFRESH_TIME_*`). Omitted, the cookie
+                        lives only as long as an access token.
 
         SignupRequest:
             type: object
@@ -628,6 +635,12 @@ components:
                     type: string
                     format: date-time
                     description: Absent on a token issued without an expiry tier.
+                lastUsedAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When this session last made a request. Absent until it makes one, which is
+                        what makes an idle session visible as idle in the list.
                 current:
                     type: boolean
                     description: >-

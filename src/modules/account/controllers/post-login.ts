@@ -1,9 +1,12 @@
 import type { Request, Response } from 'express';
+import { z } from 'zod';
 import { accountService } from '../services';
-import { createRefreshToken, createAccessToken, RefreshTokenExpiryTime } from '../session/jwt';
+import { createRefreshToken, createAccessToken } from '../session/jwt';
+import { RefreshTokenExpiryTime } from '../session/config';
 import { createRefreshCookie, createLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { rejectValidation } from '@infrastructure/http/controller';
 import type { LoginRequest } from '@types';
 import { runTokenCleanup } from '../services';
 import { authLoginTotal } from '../metrics';
@@ -11,6 +14,9 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAuditActions } from '../audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { accountAnalyticsEvents } from '../analytics';
+
+/** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
+const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optional() });
 
 /**
  * Emit login failure observability (metrics + audit).
@@ -55,11 +61,7 @@ const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) 
  * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
 export const postLogin = (
-    request: Request<
-        Record<string, string>,
-        unknown,
-        LoginRequest & { remember?: RefreshTokenExpiryTime }
-    >,
+    request: Request<Record<string, string>, unknown, LoginRequest>,
     response: Response
 ) => {
     /*
@@ -75,7 +77,19 @@ export const postLogin = (
      * The credentials are checked against the stored hash, which is the only check that decides
      * anything here.
      */
-    const { email, password, remember } = request.body;
+    const { email, password } = request.body;
+
+    /*
+     * `remember` IS parsed, and first: it is not a secret, so a 422 here tells a caller nothing
+     * about the credentials — while an unknown tier must not slip through to become a cookie with
+     * no lifetime at all.
+     */
+    const tier = rememberSchema.safeParse({ remember: request.body.remember });
+    if (!tier.success) {
+        rejectValidation(response, tier.error);
+        return;
+    }
+    const { remember } = tier.data;
 
     /*
      * Run token cleanup as a background pre-flight step, then authenticate.

@@ -95,6 +95,7 @@ From model `User`. `_id` and `__v` are omitted — every document carries them.
 | ↳ `type`       | `String`        | required | —                                 | —                  |
 | ↳ `token`      | `String`        | required | —                                 | —                  |
 | ↳ `expiration` | `Date`          | —        | —                                 | —                  |
+| ↳ `lastUsedAt` | `Date`          | —        | —                                 | —                  |
 | `deletedAt`    | `Date`          | —        | —                                 | —                  |
 | `createdAt`    | `Date`          | —        | —                                 | —                  |
 | `updatedAt`    | `Date`          | —        | —                                 | —                  |

@@ -17,6 +17,9 @@ import { authContextOf } from '@infrastructure/http/request';
 const toSession = (token: Token, cookieToken?: string): Session => ({
     id: String(token._id),
     ...(token.expiration ? { expiration: token.expiration.toISOString() } : {}),
+    // Absent until this token has been exchanged at least once — an unused session reads as
+    // unused rather than as one that happens to share the moment it was issued.
+    ...(token.lastUsedAt ? { lastUsedAt: token.lastUsedAt.toISOString() } : {}),
     current: cookieToken !== undefined && token.token === cookieToken
 });
 

@@ -57,6 +57,51 @@ const readVerifyToken = async (userId: string) => {
     return stored?.tokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)?.token;
 };
 
+/** `Max-Age` of the named cookie on a response, in seconds. */
+const cookieMaxAge = (response: { headers: Record<string, unknown> }, name: string) => {
+    const setCookie = response.headers['set-cookie'] ?? [];
+    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+    const match = (cookies as string[])
+        .find((cookie) => cookie.startsWith(`${name}=`))
+        ?.match(/max-age=(\d+)/i);
+    return match ? Number(match[1]) : undefined;
+};
+
+describe('POST /account/login — remember me', () => {
+    it('sizes the refresh cookie by the requested tier', async () => {
+        const user = await createUser();
+        const response = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'medium' });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const expected = Number(process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM);
+        expect(cookieMaxAge(response, 'jwt')).toBe(expected);
+        // The UI hint expires in step with the credential it describes.
+        expect(cookieMaxAge(response, 'isAuth')).toBe(expected);
+    });
+
+    it('keeps the access-token window when no tier is asked for', async () => {
+        const user = await createUser();
+        const response = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD });
+
+        expect(response.status).toBe(200);
+        expect(cookieMaxAge(response, 'jwt')).toBe(Number(process.env.NODE_TOKEN_ACCESS_TIME));
+    });
+
+    it('answers 422 for a tier the contract does not declare, before checking credentials', async () => {
+        const response = await api()
+            .post('/account/login')
+            .send({ email: 'nobody@example.com', password: 'whatever-it-is', remember: 'forever' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('PUT /account', () => {
     it('matches the contract when a plain user updates their own profile', async () => {
         const { bearer } = await authenticateAs('user');
@@ -212,6 +257,39 @@ describe('GET /account/sessions', () => {
         expect(response.body.data.sessions).toHaveLength(1);
         expect(response.body.data.sessions[0].current).toBe(false);
         expect(response).toSatisfyApiSpec();
+    });
+
+    /**
+     * `lastUsedAt` is what separates an idle device from an active one in the list, and it is only
+     * meaningful if it is ABSENT until the session is actually used — a field that appeared at
+     * issue time would read as "used just now" for a session nobody has touched since login.
+     *
+     * Both halves are asserted in one case on purpose: absent-then-present is the property, and
+     * splitting it into two tests would leave either half passing on its own while the field never
+     * changed at all.
+     */
+    it('reports lastUsedAt only once the session has been used', async () => {
+        const { bearer, jwtCookie } = await loginWithCookie();
+
+        const before = await api()
+            .get('/account/sessions')
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie);
+
+        expect(before.body.data.sessions[0].lastUsedAt).toBeUndefined();
+
+        // Exchanging the refresh cookie for an access token IS the session making a request.
+        const refreshed = await api().get('/account/refresh').set('Cookie', jwtCookie);
+        expect(refreshed.status).toBe(200);
+
+        const after = await api()
+            .get('/account/sessions')
+            .set('Authorization', bearer)
+            .set('Cookie', jwtCookie);
+
+        expect(after.status).toBe(200);
+        expect(typeof after.body.data.sessions[0].lastUsedAt).toBe('string');
+        expect(after).toSatisfyApiSpec();
     });
 
     it('matches the error contract when unauthenticated', async () => {

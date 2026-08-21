@@ -102,6 +102,32 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
         });
 
 /*
+ * Stamp a refresh token as used, so `GET /account/sessions` can show which device is idle.
+ *
+ * Called from the REFRESH route only, never from `createAccessToken` — which login also uses, to
+ * mint the first access token of a session. Stamping there would mark every session as used the
+ * moment it was issued, and a field that always says "just now" distinguishes nothing. Issuing a
+ * session is not the session using one.
+ *
+ * A POSITIONAL update rather than a read-modify-write: `tokens.$` addresses the matched entry and
+ * mongod evaluates it at write time, so two devices refreshing at once cannot overwrite each
+ * other's array — the same rule the rest of this document's token handling follows.
+ *
+ * Resolves even when it fails. This is bookkeeping: a refresh that was valid must not answer 401
+ * because a stamp could not be written, which is the same reasoning `getRefreshToken` already
+ * applies to `runTokenCleanup`.
+ *
+ * @param refreshToken - the refresh JWT that was just exchanged
+ */
+export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
+    Users.updateOne(
+        { 'tokens.token': refreshToken },
+        { $set: { 'tokens.$.lastUsedAt': new Date() } }
+    )
+        .then(() => undefined)
+        .catch(() => undefined);
+
+/*
  * Exchange a valid refresh token for a short-lived access token.
  * @param refreshToken - previously issued refresh JWT
  * @returns signed access JWT string
