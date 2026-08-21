@@ -199,7 +199,10 @@ describe('getCacheValue', () => {
     });
 
     it('resolves undefined when caching is switched off, without connecting', async () => {
+        // Both routes to a URL — the explicit one and the host/port fallback — or `getRedisUrl`
+        // still resolves one from a loaded `.env`, as it did under the mutation runner.
         delete process.env.NODE_REDIS_URL;
+        delete process.env.NODE_REDIS_PORT;
 
         await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
         expect(mockConnect).not.toHaveBeenCalled();
