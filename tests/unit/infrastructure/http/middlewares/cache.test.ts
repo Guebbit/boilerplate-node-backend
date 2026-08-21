@@ -1,18 +1,47 @@
+/**
+ * The HTTP response cache: the key, the headers, the envelope, the TTL policy and the size gate.
+ *
+ * Everything the adapter underneath does NOT decide. It stores bytes under a key; which bytes,
+ * for how long, and up to what size are response questions, and they are answered here — so the
+ * TTL clamp and the byte limit are exercised against their real implementations rather than a
+ * mock, and only the Redis round-trip is stubbed.
+ *
+ * `NODE_ENV` is 'test' under jest, so the development TTL ceiling applies to every case below.
+ * The blocks that are not about clamping switch it off with `NODE_REDIS_CACHE_DEV_TTL_MAX=0`,
+ * which means "no cap" — otherwise every declared TTL would silently arrive as 30.
+ */
 import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
-import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, resolveCacheTtl, setCache } from '@infrastructure/http/middlewares/cache';
 import * as cache from '@infrastructure/adapters/cache';
 
 jest.mock('@infrastructure/adapters/cache', () => ({
     getCacheValue: jest.fn(),
     setCacheValue: jest.fn(),
-    invalidateCacheTags: jest.fn(),
-    // Identity by default so the tests below assert the TTL the route declared. The clamping
-    // behaviour itself is tested against the real implementation in core/adapters/cache.test.ts.
-    resolveCacheTtl: jest.fn((seconds: number) => seconds)
+    invalidateCacheTags: jest.fn()
+}));
+
+// The size gate logs the entry it refuses; silence it so a passing run is quiet.
+jest.mock('@infrastructure/adapters/logger', () => ({
+    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 
 const mockedCache = jest.mocked(cache);
+
+const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+const ORIGINAL_TTL_MAX = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
+const ORIGINAL_MAX_BYTES = process.env.NODE_REDIS_CACHE_MAX_BYTES;
+
+const restore = (key: string, value: string | undefined) => {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+};
+
+afterEach(() => {
+    restore('NODE_ENV', ORIGINAL_NODE_ENV);
+    restore('NODE_REDIS_CACHE_DEV_TTL_MAX', ORIGINAL_TTL_MAX);
+    restore('NODE_REDIS_CACHE_MAX_BYTES', ORIGINAL_MAX_BYTES);
+});
 
 const createResponse = () => {
     const headers: Record<string, string> = {};
@@ -53,7 +82,7 @@ const keyFor = async (
     keyParameters: readonly string[],
     originalUrl = '/products'
 ) => {
-    mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+    mockedCache.getCacheValue.mockResolvedValue(undefined);
     const middleware = setCache(60, { tags: ['products'], keyParameters });
     await middleware(
         asStub<Request>({ method: 'GET', originalUrl, query, locale: 'en' }),
@@ -64,17 +93,33 @@ const keyFor = async (
     return calls.at(-1)?.[0];
 };
 
+/** Drive one MISS through the middleware and let the controller answer with `body`. */
+const storeThrough = async (body: unknown, seconds = 60) => {
+    mockedCache.getCacheValue.mockResolvedValue(undefined);
+    const middleware = setCache(seconds, { tags: ['products'], keyParameters: [] });
+    const { response } = createResponse();
+
+    await middleware(
+        asStub<Request>({ method: 'GET', originalUrl: '/products', query: {}, locale: 'en' }),
+        response,
+        jest.fn() as NextFunction
+    );
+
+    response.statusCode = 200;
+    response.json(body);
+};
+
 describe('setCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockedCache.resolveCacheTtl.mockImplementation((seconds: number) => seconds);
+        // No cap: these cases are about the key and the headers, not about clamping.
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
     });
 
     it('returns a cached response when Redis has a match', async () => {
-        mockedCache.getCacheValue.mockResolvedValue({
-            status: 200,
-            body: { success: true }
-        });
+        mockedCache.getCacheValue.mockResolvedValue(
+            JSON.stringify({ status: 200, body: { success: true } })
+        );
 
         const middleware = setCache(60, { tags: ['products'], keyParameters: ['page'] });
         const { response, headers } = createResponse();
@@ -95,8 +140,31 @@ describe('setCache', () => {
         expect(next).not.toHaveBeenCalled();
     });
 
+    /*
+     * A half-written or hand-edited entry must degrade to "not cached". If the parse failure
+     * escaped, one bad key would turn a working endpoint into a 500 until someone noticed and
+     * deleted it by hand — and the adapter cannot catch it, since to the adapter the value is
+     * bytes it never reads.
+     */
+    it('treats a corrupt entry as a miss rather than throwing', async () => {
+        mockedCache.getCacheValue.mockResolvedValue('{not json');
+
+        const middleware = setCache(60, { tags: ['products'], keyParameters: [] });
+        const { response, headers } = createResponse();
+        const next = jest.fn() as NextFunction;
+
+        await middleware(
+            asStub<Request>({ method: 'GET', originalUrl: '/products', query: {}, locale: 'en' }),
+            response,
+            next
+        );
+
+        expect(headers['x-cache']).toBe('MISS');
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
     it('stores successful uncached responses after the handler runs', async () => {
-        mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
 
         const middleware = setCache(120, { tags: ['products'], keyParameters: [] });
         const { response, headers } = createResponse();
@@ -121,19 +189,16 @@ describe('setCache', () => {
 
         expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
             'GET:/products?:user:507f1f77bcf86cd799439011:en',
-            {
-                status: 201,
-                body: { success: true, data: [] }
-            },
+            JSON.stringify({ status: 201, body: { success: true, data: [] } }),
             120,
             ['products']
         );
     });
 
     it('stores and advertises the clamped TTL, not the declared one', async () => {
-        // Stand in for the dev cap: the route asks for an hour, the resolver allows 30s.
-        mockedCache.resolveCacheTtl.mockReturnValue(30);
-        mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+        // The dev cap: the route asks for an hour, the ceiling allows 30s.
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '30';
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
 
         const middleware = setCache(3600, { tags: ['products'], keyParameters: [] });
         const { response, headers } = createResponse();
@@ -145,7 +210,6 @@ describe('setCache', () => {
 
         await middleware(request, response, jest.fn() as NextFunction);
 
-        expect(mockedCache.resolveCacheTtl).toHaveBeenCalledWith(3600);
         // The browser must not be told to hold it longer than the server will
         expect(headers['cache-control']).toBe('public, max-age=30');
 
@@ -153,7 +217,7 @@ describe('setCache', () => {
 
         expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
             expect.any(String),
-            expect.any(Object),
+            expect.any(String),
             30,
             ['products']
         );
@@ -178,8 +242,7 @@ describe('setCache', () => {
     ])(
         'varies a %s response on Authorization and Accept-Language',
         async (_scope, extraRequest, cacheControl) => {
-            mockedCache.resolveCacheTtl.mockReturnValue(30);
-            mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+            mockedCache.getCacheValue.mockResolvedValue(undefined);
 
             const middleware = setCache(30, {
                 tags: ['products'],
@@ -205,8 +268,7 @@ describe('setCache', () => {
      * same (anonymous) caller, in different languages must not share a Redis entry.
      */
     it('keys the Redis entry by locale, so languages cannot share an entry', async () => {
-        mockedCache.resolveCacheTtl.mockReturnValue(30);
-        mockedCache.getCacheValue.mockResolvedValue(void 0 as never);
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
 
         const middleware = setCache(30, { tags: ['products'], keyParameters: [] });
 
@@ -288,9 +350,7 @@ describe('setCache', () => {
     });
 
     it('skips caching entirely when the TTL resolves to zero', async () => {
-        mockedCache.resolveCacheTtl.mockReturnValue(0);
-
-        const middleware = setCache(3600, { tags: ['products'], keyParameters: [] });
+        const middleware = setCache(0, { tags: ['products'], keyParameters: [] });
         const { response } = createResponse();
         const next = jest.fn() as NextFunction;
         const request = asStub<Request>({
@@ -303,6 +363,131 @@ describe('setCache', () => {
 
         expect(next).toHaveBeenCalledTimes(1);
         expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+    });
+});
+
+// ─── The TTL policy ──────────────────────────────────────────────────────────
+/**
+ * Cache invalidation only fires for writes that go through the API, so anything writing straight
+ * to Mongo (`db:seed`, migrations, `mongosh`) leaves stale answers behind until they expire.
+ * Outside production the declared TTL is clamped so that window is seconds, not an hour.
+ *
+ * `resolveCacheTtl` reads `process.env` on every call, so no re-import is needed between cases —
+ * but NODE_ENV has to be restored, since jest sets it to 'test' globally.
+ */
+describe('resolveCacheTtl', () => {
+    it('leaves the declared TTL alone in production', () => {
+        process.env.NODE_ENV = 'production';
+
+        expect(resolveCacheTtl(3600)).toBe(3600);
+    });
+
+    it('clamps long TTLs to the 30s default outside production', () => {
+        process.env.NODE_ENV = 'development';
+        delete process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
+
+        expect(resolveCacheTtl(3600)).toBe(30);
+    });
+
+    it('leaves TTLs already below the ceiling untouched', () => {
+        process.env.NODE_ENV = 'development';
+        delete process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
+
+        expect(resolveCacheTtl(10)).toBe(10);
+    });
+
+    it('honours a custom ceiling', () => {
+        process.env.NODE_ENV = 'development';
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '5';
+
+        expect(resolveCacheTtl(3600)).toBe(5);
+    });
+
+    it('treats 0 as "no cap" rather than "never cache"', () => {
+        process.env.NODE_ENV = 'development';
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
+
+        expect(resolveCacheTtl(3600)).toBe(3600);
+    });
+
+    it('falls back to the default when the ceiling is not a usable number', () => {
+        process.env.NODE_ENV = 'development';
+
+        for (const value of ['not-a-number', '-1', '']) {
+            process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = value;
+            expect(resolveCacheTtl(3600)).toBe(30);
+        }
+    });
+});
+
+// ─── The size gate ───────────────────────────────────────────────────────────
+/** A response body whose serialized form is comfortably above the given byte count. */
+const bodyOfAtLeast = (bytes: number) => ({ items: 'x'.repeat(bytes) });
+
+/*
+ * A cache turns a cheap request into long-lived server state, which is a different risk from
+ * simply answering it. `GET /products` is public, its entries live for an hour, and the key
+ * carries the full URL — so without a bound on entry size an unauthenticated caller can mint a
+ * distinct multi-megabyte entry per query string and keep every one of them resident. The page
+ * size limit bounds this in practice; this guard is what makes it true regardless of which
+ * endpoint is writing, and of whether that endpoint's own bounds are ever loosened.
+ */
+describe('the per-entry size limit', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
+    });
+
+    it('stores a response within the limit', async () => {
+        await storeThrough({ items: [] });
+
+        expect(mockedCache.setCacheValue).toHaveBeenCalledTimes(1);
+    });
+
+    it('skips a response above the limit instead of storing it', async () => {
+        await storeThrough(bodyOfAtLeast(300 * 1024));
+
+        expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
+    });
+
+    // Measured against the bytes that would actually be written: a body of multi-byte characters
+    // is larger than its length in code units suggests.
+    it('measures bytes, not string length', async () => {
+        process.env.NODE_REDIS_CACHE_MAX_BYTES = '100';
+
+        await storeThrough({ items: '€'.repeat(40) });
+
+        expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
+    });
+
+    it('honours a custom limit', async () => {
+        process.env.NODE_REDIS_CACHE_MAX_BYTES = String(1024 * 1024);
+
+        await storeThrough(bodyOfAtLeast(300 * 1024));
+
+        expect(mockedCache.setCacheValue).toHaveBeenCalledTimes(1);
+    });
+
+    // Skipping is a lost optimisation, not a failure: the caller has already been served, and the
+    // response still goes out.
+    it('still answers the request it refused to cache', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        const middleware = setCache(60, { tags: ['products'], keyParameters: [] });
+        const { response } = createResponse();
+        // Held before the middleware runs: `setCache` replaces `response.json` with the wrapper
+        // that writes to the cache, and the wrapper is what must still reach this one.
+        const sendJson = response.json;
+
+        await middleware(
+            asStub<Request>({ method: 'GET', originalUrl: '/products', query: {}, locale: 'en' }),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        const body = bodyOfAtLeast(300 * 1024);
+        response.json(body);
+
+        expect(sendJson).toHaveBeenCalledWith(body);
     });
 });
 

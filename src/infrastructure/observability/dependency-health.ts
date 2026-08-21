@@ -17,8 +17,9 @@
  *
  * ── WHY NO PING, NO TIMEOUT BUDGET ───────────────────────────────────────────────────────────────
  * Not one function below performs I/O. Every dependency already maintains its own live connection
- * state for its own reasons — Mongoose's `readyState`, node-redis' `isReady`/`isOpen`, the AMQP
- * channel handle — so readiness is a memory read, and this endpoint cannot be the thing that hangs.
+ * state for its own reasons — Mongoose's `readyState`, and the memoised handle each optional
+ * dependency keeps through `runtime/managed-connection.ts` — so readiness is a memory read, and
+ * this endpoint cannot be the thing that hangs.
  *
  * That is deliberate, not a shortcut taken to avoid the work. A health endpoint that opens sockets
  * is a denial-of-service amplifier pointed at your own infrastructure: it is polled every few

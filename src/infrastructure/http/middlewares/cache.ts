@@ -1,12 +1,120 @@
+/**
+ * HTTP response caching: the envelope, the TTL policy and the size gate.
+ *
+ * Everything here is about caching a RESPONSE. The adapter underneath stores opaque bytes under a
+ * key, which is why the JSON envelope, the development TTL clamp and the per-entry byte limit live
+ * with the only consumer of all four rather than in `adapters/cache.ts` — a project caching
+ * something that is not a response inherits none of them.
+ *
+ * See: docs/tools/redis-cache.md
+ */
+
 import type { NextFunction, Request, Response } from 'express';
-import {
-    getCacheValue,
-    invalidateCacheTags,
-    setCacheValue,
-    resolveCacheTtl
-} from '@infrastructure/adapters/cache';
+import { getCacheValue, invalidateCacheTags, setCacheValue } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
+
+/** Enough to replay an HTTP response verbatim: the status code and the serialized body. */
+interface CachedResponse {
+    status: number;
+    body: unknown;
+}
+
+/**
+ * Longest TTL allowed outside production, in seconds — the bound on how long a write that bypassed
+ * the API (a seed, a migration, a `mongosh` session) can keep serving a stale answer. Production is
+ * never clamped, because there the API is the only writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts
+ * out.
+ *
+ * See: docs/tools/redis-cache.md#writes-that-bypass-the-api
+ */
+const DEFAULT_DEV_TTL_MAX_SECONDS = 30;
+
+const getDevelopmentTtlMax = (): number => {
+    const raw = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
+    if (raw === undefined || raw.trim() === '') return DEFAULT_DEV_TTL_MAX_SECONDS;
+
+    const parsed = Number(raw);
+    // A non-numeric or negative value is a config typo; fall back rather than cache forever.
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_DEV_TTL_MAX_SECONDS;
+};
+
+/**
+ * Clamp a route's declared TTL to the development ceiling.
+ *
+ * Applied where the TTL enters the system (the `setCache` middleware below) rather than at write
+ * time, so the `Cache-Control: max-age` header advertises the same lifetime the server will
+ * actually honour.
+ *
+ * @param seconds - TTL declared by the route
+ * @returns the TTL to use, capped outside production
+ */
+export const resolveCacheTtl = (seconds: number): number => {
+    if (process.env.NODE_ENV === 'production') return seconds;
+
+    const max = getDevelopmentTtlMax();
+    if (max <= 0) return seconds;
+    return Math.min(seconds, max);
+};
+
+/**
+ * Largest response body this cache will store, in bytes.
+ *
+ * A cache turns a cheap request into long-lived server state: the key includes the full URL, so an
+ * unauthenticated caller can mint an entry per query string and keep every one resident. Bounding
+ * the ENTRY is what stops that being an amplifier.
+ *
+ * See: docs/tools/redis-cache.md#entry-size-is-bounded
+ */
+const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
+
+const getMaxCachedBytes = (): number =>
+    Number(process.env.NODE_REDIS_CACHE_MAX_BYTES) || DEFAULT_MAX_CACHED_BYTES;
+
+/**
+ * Serialize a response for storage, or refuse it for being too large.
+ *
+ * Serialized once, here, so the size check measures exactly what would be written rather than an
+ * estimate of it. Skipping is not a failure: the caller still gets its response, it just will not
+ * be replayed from cache, so the endpoint stays correct and only loses an optimisation.
+ *
+ * @param key - the cache key, for the log line
+ * @param value - status + body envelope to replay on a later hit
+ * @returns the bytes to store, or `undefined` when the response is over the limit
+ */
+const serializeCachedResponse = (key: string, value: CachedResponse): string | undefined => {
+    const payload = JSON.stringify(value);
+    const maxCachedBytes = getMaxCachedBytes();
+    if (Buffer.byteLength(payload) <= maxCachedBytes) return payload;
+
+    // Logged rather than silent: an endpoint that never caches is worth noticing, and the
+    // usual cause is a response that grew past what its page size was supposed to bound.
+    logger.warn({
+        message: 'Redis cache write skipped: response larger than the per-entry limit.',
+        key,
+        bytes: Buffer.byteLength(payload),
+        maxCachedBytes
+    });
+    return undefined;
+};
+
+/**
+ * Read one stored envelope back.
+ *
+ * A corrupt value — half-written, hand-edited — degrades to a cache miss. If the parse failure
+ * escaped, one bad key would turn a working endpoint into a 500 until someone deleted it by hand.
+ *
+ * @param raw - the bytes `getCacheValue` returned
+ * @returns the envelope, or `undefined` when it cannot be read
+ */
+const parseCachedResponse = (raw: string): CachedResponse | undefined => {
+    // eslint-disable-next-line no-restricted-syntax -- JSON.parse has no non-throwing form; a corrupt entry is a miss, not a 500
+    try {
+        return JSON.parse(raw) as CachedResponse;
+    } catch {
+        return undefined;
+    }
+};
 
 /**
  * Extra cache metadata for middleware users.
@@ -141,7 +249,9 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         }
 
         const cacheKey = getCacheKey(request, sortedKeyParameters);
-        return getCacheValue(cacheKey).then((cachedResponse) => {
+        return getCacheValue(cacheKey).then((raw) => {
+            const cachedResponse = raw === undefined ? undefined : parseCachedResponse(raw);
+
             // Fast path: Redis already has a response for this exact request.
             if (cachedResponse) {
                 response.set('x-cache', 'HIT');
@@ -154,13 +264,14 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
             const responseJson = response.json.bind(response);
             response.json = ((body: unknown) => {
                 // Save only successful responses, so errors do not become sticky in cache.
-                if (response.statusCode >= 200 && response.statusCode < 300)
-                    void setCacheValue(
-                        cacheKey,
-                        { status: response.statusCode, body },
-                        ttl,
-                        options.tags
-                    );
+                if (response.statusCode >= 200 && response.statusCode < 300) {
+                    const payload = serializeCachedResponse(cacheKey, {
+                        status: response.statusCode,
+                        body
+                    });
+                    if (payload !== undefined)
+                        void setCacheValue(cacheKey, payload, ttl, options.tags);
+                }
 
                 return responseJson(body);
             }) as Response['json'];

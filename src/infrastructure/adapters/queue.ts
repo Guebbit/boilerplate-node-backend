@@ -17,6 +17,7 @@
 import type { EventEmitter } from 'node:events';
 import amqplib, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
 import { logger } from '@infrastructure/adapters/logger';
+import { manageConnection } from '@infrastructure/runtime/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 import { WORKER_CHANNELS } from '@types';
 
@@ -52,44 +53,14 @@ export const isQueueEnabled = (): boolean =>
 
 // ─── Connection state ─────────────────────────────────────────────────────────
 
-/** The single TCP connection to the broker. Kept so shutdown can close it. */
-let connection: ChannelModel | undefined;
-
-/** Shared channel for all publish/consume traffic in this process. */
-let channel: Channel | undefined;
-
-/** In-flight connect, shared by concurrent callers to avoid a connection storm. */
-let connectPromise: Promise<Channel | undefined> | undefined;
-
 /**
- * What this adapter's connection is doing, for `GET /observability/health`.
+ * The TCP connection under the managed channel.
  *
- * The channel handle IS the readiness signal: every publish and every consume is issued on it, and
- * `superviseHandle` clears it on the channel's OWN close as well as the connection's, so a live
- * handle means the next `publishToQueue` will reach the broker. No `checkQueue` round trip — see
- * the header of `infrastructure/observability/dependency-health.ts` for why a health endpoint does
- * no I/O.
+ * The lifecycle's handle is the CHANNEL — that is what every publish and consume is issued on —
+ * but a channel offers no way back to the connection that carries it, and closing that connection
+ * is the only thing that releases the socket. So it is kept here and closed from `close` below.
  */
-export const queueState = (): DependencyStatus => {
-    if (!isQueueEnabled()) return 'disabled';
-    if (channel) return 'ready';
-    if (connectPromise) return 'connecting';
-    return 'unavailable';
-};
-
-/** One-shot flag so an unreachable broker does not log once per publish. */
-let connectionWarningLogged = false;
-
-/** Log the first failure only; reset on a successful connect so later outages are visible. */
-const logConnectionWarning = (error: unknown) => {
-    if (connectionWarningLogged) return;
-    // One line, not one per publish: an unreachable broker would otherwise flood the log.
-    logger.warn({
-        message: 'RabbitMQ unavailable, queue operations will be skipped.',
-        error: error instanceof Error ? error.message : String(error)
-    });
-    connectionWarningLogged = true;
-};
+let connection: ChannelModel | undefined;
 
 /**
  * Attach the mandatory `error` and `close` listeners to an amqplib handle.
@@ -103,69 +74,96 @@ const logConnectionWarning = (error: unknown) => {
  * @param onClose - what to forget when it closes
  */
 const superviseHandle = (handle: EventEmitter, onClose: () => void): void => {
-    handle.on('error', logConnectionWarning);
+    handle.on('error', queueConnection.reportUnavailable);
     handle.on('close', onClose);
 };
 
-// ─── Connection management ────────────────────────────────────────────────────
+/**
+ * The one channel this process publishes and consumes on.
+ *
+ * Memoising, sharing the in-flight connect, warning once and reporting a `DependencyStatus` are
+ * `manageConnection`'s job — the same rules `cache.ts` runs on, so two dependencies in one health
+ * payload cannot answer "what does `connecting` mean" differently. What is AMQP-specific is the
+ * two-step open (connection, then channel) and the fact that both halves need supervising.
+ */
+const queueConnection = manageConnection<Channel>({
+    unavailableMessage: 'RabbitMQ unavailable, queue operations will be skipped.',
+    isEnabled: isQueueEnabled,
+    /*
+     * The channel handle IS the readiness signal. amqplib publishes no "is this channel still
+     * alive" flag, and it does not need to: `superviseHandle` forgets the handle on the channel's
+     * OWN close as well as the connection's, so a handle still held is one the next publish will
+     * reach the broker through.
+     */
+    isReady: () => true,
+    connect: () => {
+        const url = getAmqpUrl();
+        // Enablement already implies a URL; this is the type narrowing, and resolving `undefined`
+        // is the "cannot be built" signal rather than a failure worth warning about.
+        if (!url) return Promise.resolve(undefined);
+
+        return (
+            amqplib
+                // Opens the TCP connection and performs the AMQP handshake (auth + vhost
+                // negotiation).
+                .connect(url)
+                .then((conn) => {
+                    connection = conn;
+                    // A dead connection takes its channels with it, so both are forgotten here.
+                    superviseHandle(conn, () => {
+                        queueConnection.forget();
+                        connection = undefined;
+                    });
+                    // Channels are cheap and multiplexed over the one connection; this is where
+                    // all actual AMQP commands are issued.
+                    return conn.createChannel();
+                })
+                .then((ch) => {
+                    // A channel dies on its own for ordinary reasons — most of them named by
+                    // `assertJobQueue` below — and the connection stays open when it does. Without
+                    // this, the cached handle survives as a corpse whose every method throws, and
+                    // `queueState()` keeps reporting `ready`.
+                    superviseHandle(ch, () => {
+                        queueConnection.forget();
+                    });
+                    return ch;
+                })
+        );
+    },
+    close: () => {
+        const conn = connection;
+        // Nothing was opened, or the connection already announced its own close.
+        if (!conn) return Promise.resolve();
+
+        return (
+            conn
+                // Flushes pending frames, then closes. Closing the connection implicitly closes
+                // its channels, so there is no separate `channel.close()`. Unacked messages are
+                // requeued by the broker for another consumer — the reason `prefetch` is kept low
+                // (see `consumeFromQueue`).
+                .close()
+                .finally(() => {
+                    connection = undefined;
+                })
+        );
+    }
+});
 
 /**
- * Lazily connect to RabbitMQ and return a shared channel.
+ * What this adapter's connection is doing, for `GET /observability/health`.
+ *
+ * No `checkQueue` round trip — see the header of
+ * `infrastructure/observability/dependency-health.ts` for why a health endpoint does no I/O.
+ */
+export const queueState = (): DependencyStatus => queueConnection.state();
+
+/**
+ * Lazily connect to RabbitMQ and return the shared channel.
  *
  * Resolving with `void` (instead of rejecting) is what makes every public function in this
  * file a safe no-op when the broker is absent.
  */
-const getChannel = (): Promise<Channel | undefined> => {
-    if (!isQueueEnabled()) return Promise.resolve(undefined);
-    // Reuse the live channel — creating one per publish leaks channels on the broker.
-    if (channel) return Promise.resolve(channel);
-    // Join an in-flight attempt rather than opening a second connection.
-    if (connectPromise) return connectPromise;
-
-    const url = getAmqpUrl();
-    if (!url) return Promise.resolve(undefined);
-
-    const attempt: Promise<Channel | undefined> = amqplib
-        // Opens the TCP connection and performs the AMQP handshake (auth + vhost negotiation).
-        .connect(url)
-        .then((conn) => {
-            connection = conn;
-            // A dead connection takes its channels with it, so both handles are forgotten here.
-            superviseHandle(conn, () => {
-                channel = undefined;
-                connection = undefined;
-            });
-            // Channels are cheap and multiplexed over the one connection; this is where all
-            // actual AMQP commands are issued.
-            return conn.createChannel();
-        })
-        .then((ch) => {
-            channel = ch;
-            // A channel dies on its own for ordinary reasons — most of them named by
-            // `assertJobQueue` below — and the connection stays open when it does. Without this,
-            // the cached handle survives as a corpse whose every method throws, and
-            // `queueState()` keeps reporting `ready`.
-            superviseHandle(ch, () => {
-                channel = undefined;
-            });
-            // Connection is healthy again — re-arm the warning for a future outage.
-            connectionWarningLogged = false;
-            return ch;
-        })
-        .catch((error: unknown) => {
-            // Swallow: publish/consume callers treat undefined as "queue unavailable".
-            logConnectionWarning(error);
-            return undefined;
-        })
-        .finally(() => {
-            // Always clear, so a failed attempt does not poison subsequent calls.
-            connectPromise = undefined;
-        });
-
-    connectPromise = attempt;
-
-    return attempt;
-};
+const getChannel = (): Promise<Channel | undefined> => queueConnection.get();
 
 /**
  * Warm up RabbitMQ connection during app startup.
@@ -175,28 +173,8 @@ export const startQueue = (): Promise<void> => getChannel().then(() => undefined
 
 /**
  * Gracefully close the RabbitMQ connection.
- *
- * Closing the connection implicitly closes its channels, so there is no separate
- * `channel.close()` here.
  */
-export const stopQueue = (): Promise<void> => {
-    const conn = connection;
-    if (!conn) return Promise.resolve();
-
-    return (
-        conn
-            // Flushes pending frames, then closes. Unacked messages are requeued by the broker
-            // for another consumer — the reason `prefetch` is kept low (see `consumeFromQueue`).
-            .close()
-            // Already-dead socket: nothing to salvage, and we are exiting anyway.
-            .catch(() => undefined)
-            .finally(() => {
-                channel = undefined;
-                connection = undefined;
-                connectPromise = undefined;
-            })
-    );
-};
+export const stopQueue = (): Promise<void> => queueConnection.stop();
 
 // ─── Queue names ──────────────────────────────────────────────────────────────
 
@@ -318,7 +296,7 @@ export const publishToQueue = <TPayload = unknown>(
                 // The catch is the declared contract: a channel that died since the cached-handle
                 // check rejects here, and every caller reads a boolean.
                 .catch((error: unknown) => {
-                    logConnectionWarning(error);
+                    queueConnection.reportUnavailable(error);
                     return false;
                 })
         );

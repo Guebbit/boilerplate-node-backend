@@ -71,11 +71,12 @@ Where a dependency shouldn't run for real in a unit test (the filesystem, an SMT
 jest.mock('@infrastructure/adapters/cache', () => ({
     getCacheValue: jest.fn(),
     setCacheValue: jest.fn(),
-    // Identity by default — the TTL-clamping behaviour itself is tested against the
-    // real implementation in tests/unit/infrastructure/adapters/cache.test.ts, not re-verified here.
-    resolveCacheTtl: jest.fn((seconds: number) => seconds)
+    invalidateCacheTags: jest.fn()
 }));
 ```
+
+Note what is NOT mocked there: the caching middleware's own TTL clamp and size limit run for real,
+because they are the thing under test. Only the Redis round-trip is replaced.
 
 Middleware tests build minimal hand-rolled Express `Request`/`Response` doubles (`jest.fn()` chains for `.set()`/`.status()`/`.json()`) rather than going through `supertest` — that's a deliberate boundary: real HTTP starts at [Contract Testing](./contract-testing.md).
 

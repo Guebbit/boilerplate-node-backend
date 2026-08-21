@@ -1,83 +1,38 @@
 /**
- * Cache adapter — two things the seeding/cache tooling depends on.
+ * Cache adapter — the byte store the caching middleware is built on.
  *
- * 1. TTL clamping. Cache invalidation only fires for writes that go through the API, so anything
- *    writing straight to Mongo (`db:seed`, migrations, `mongosh`) leaves stale answers behind
- *    until they expire. Outside production the declared TTL is clamped so that window is
- *    seconds, not an hour.
- * 2. `clearCache`'s reachability reporting. It fails open, but distinguishes "nothing to clear"
- *    from "could not clear" so `db:cache:clear` can exit non-zero instead of announcing a
- *    success it did not achieve.
+ * Two properties run through everything below and are worth naming once:
  *
- * `resolveCacheTtl` reads `process.env` on every call, so the module does not need re-importing
- * between cases — but NODE_ENV has to be restored, since jest sets it to 'test' globally.
- * The `clearCache` block below *does* re-import, because the adapter memoises its Redis client
- * in module scope.
+ *   1. **Fail open.** A cache is an optimisation, never a dependency. Every path here must
+ *      resolve — never reject — when Redis is unreachable, slow, or returns nonsense, because a
+ *      rejection becomes a 500 on a request that could have been served from Mongo.
+ *   2. **Prefixing.** Every key is namespaced. Two deployments sharing a Redis (staging and
+ *      production, the classic accident) must not read each other's entries, and the prefix is the
+ *      only thing preventing it.
+ *
+ * `clearCache` gets its own block because it is the one function that does NOT collapse the two
+ * fail-open cases: `db:cache:clear` has to tell "nothing to clear" from "could not clear" so it
+ * can exit non-zero instead of announcing a success it did not achieve.
+ *
+ * What this file no longer tests, because the adapter no longer decides it: the TTL clamp, the
+ * per-entry byte limit and the response envelope live with their only consumer, in
+ * `tests/unit/infrastructure/http/middlewares/cache.test.ts`.
+ *
+ * The blocks below re-import the adapter, because it memoises its Redis client in module scope.
  */
-import { resolveCacheTtl } from '@infrastructure/adapters/cache';
 
-const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
-const ORIGINAL_TTL_MAX = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
-const ORIGINAL_REDIS_URL = process.env.NODE_REDIS_URL;
-const ORIGINAL_CACHE_ENABLED = process.env.NODE_REDIS_CACHE_ENABLED;
-const ORIGINAL_MAX_BYTES = process.env.NODE_REDIS_CACHE_MAX_BYTES;
-
-const restore = (key: string, value: string | undefined) => {
-    if (value === undefined) delete process.env[key];
-    else process.env[key] = value;
+const ORIGINAL_ENVIRONMENT = {
+    NODE_REDIS_URL: process.env.NODE_REDIS_URL,
+    NODE_REDIS_HOST: process.env.NODE_REDIS_HOST,
+    NODE_REDIS_PORT: process.env.NODE_REDIS_PORT,
+    NODE_REDIS_CACHE_ENABLED: process.env.NODE_REDIS_CACHE_ENABLED
 };
 
 afterEach(() => {
-    restore('NODE_ENV', ORIGINAL_NODE_ENV);
-    restore('NODE_REDIS_CACHE_DEV_TTL_MAX', ORIGINAL_TTL_MAX);
-    restore('NODE_REDIS_URL', ORIGINAL_REDIS_URL);
-    restore('NODE_REDIS_CACHE_ENABLED', ORIGINAL_CACHE_ENABLED);
-    restore('NODE_REDIS_CACHE_MAX_BYTES', ORIGINAL_MAX_BYTES);
-});
-
-describe('resolveCacheTtl', () => {
-    it('leaves the declared TTL alone in production', () => {
-        process.env.NODE_ENV = 'production';
-
-        expect(resolveCacheTtl(3600)).toBe(3600);
-    });
-
-    it('clamps long TTLs to the 30s default outside production', () => {
-        process.env.NODE_ENV = 'development';
-        delete process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
-
-        expect(resolveCacheTtl(3600)).toBe(30);
-    });
-
-    it('leaves TTLs already below the ceiling untouched', () => {
-        process.env.NODE_ENV = 'development';
-        delete process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
-
-        expect(resolveCacheTtl(10)).toBe(10);
-    });
-
-    it('honours a custom ceiling', () => {
-        process.env.NODE_ENV = 'development';
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '5';
-
-        expect(resolveCacheTtl(3600)).toBe(5);
-    });
-
-    it('treats 0 as "no cap" rather than "never cache"', () => {
-        process.env.NODE_ENV = 'development';
-        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
-
-        expect(resolveCacheTtl(3600)).toBe(3600);
-    });
-
-    it('falls back to the default when the ceiling is not a usable number', () => {
-        process.env.NODE_ENV = 'development';
-
-        for (const value of ['not-a-number', '-1', '']) {
-            process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = value;
-            expect(resolveCacheTtl(3600)).toBe(30);
-        }
-    });
+    for (const [key, value] of Object.entries(ORIGINAL_ENVIRONMENT)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+    }
 });
 
 // ─── clearCache: "nothing to clear" vs "could not clear" ──────────────────────
@@ -91,6 +46,9 @@ const mockSAdd = jest.fn();
 const mockGet = jest.fn();
 const mockSMembers = jest.fn();
 
+const mockQuit = jest.fn();
+const mockDestroy = jest.fn();
+
 const mockClient = {
     on: mockOn,
     connect: mockConnect,
@@ -100,15 +58,17 @@ const mockClient = {
     sAdd: mockSAdd,
     get: mockGet,
     sMembers: mockSMembers,
-    quit: jest.fn(),
-    disconnect: jest.fn(),
-    // `getClient` short-circuits on `isReady`; keeping it false forces the connect path, which
+    quit: mockQuit,
+    destroy: mockDestroy,
+    // The lifecycle short-circuits on `isReady`; keeping it false forces the connect path, which
     // is where the reachable/unreachable distinction is actually decided.
     isReady: false,
     isOpen: false
 };
 
-jest.mock('redis', () => ({ createClient: () => mockClient }));
+const mockCreateClient = jest.fn((_options: unknown) => mockClient);
+
+jest.mock('redis', () => ({ createClient: (options: unknown) => mockCreateClient(options) }));
 
 // The adapter logs a warning on every unreachable path; silence it so a passing run is quiet.
 jest.mock('@infrastructure/adapters/logger', () => ({
@@ -194,108 +154,11 @@ describe('clearCache', () => {
     });
 });
 
-/** A response body whose serialized form is comfortably above the given byte count. */
-const bodyOfAtLeast = (bytes: number) => ({ items: 'x'.repeat(bytes) });
-
-/*
- * A cache turns a cheap request into long-lived server state, which is a different risk from
- * simply answering it. `GET /products` is public, its entries live for an hour, and the key
- * carries the full URL — so without a bound on entry size an unauthenticated caller can mint a
- * distinct multi-megabyte entry per query string and keep every one of them resident. The page
- * size limit bounds this in practice; this guard is what makes it true regardless of which
- * endpoint is writing, and of whether that endpoint's own bounds are ever loosened.
- */
-describe('setCacheValue size guard', () => {
-    beforeEach(() => {
-        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
-        mockConnect.mockImplementation(() => Promise.resolve());
-        mockSet.mockImplementation(() => Promise.resolve('OK'));
-        mockSAdd.mockImplementation(() => Promise.resolve(1));
-    });
-
-    it('stores a response within the limit', async () => {
-        await freshCache().setCacheValue('GET:/products', { status: 200, body: { items: [] } }, 60);
-
-        expect(mockSet).toHaveBeenCalledTimes(1);
-    });
-
-    it('skips a response above the limit instead of storing it', async () => {
-        const value = { status: 200, body: bodyOfAtLeast(300 * 1024) };
-
-        await freshCache().setCacheValue('GET:/products', value, 60);
-
-        expect(mockSet).not.toHaveBeenCalled();
-    });
-
-    // Skipping is a lost optimisation, not a failure — the caller has already been served.
-    it('resolves rather than rejecting when it skips', async () => {
-        const value = { status: 200, body: bodyOfAtLeast(300 * 1024) };
-
-        await expect(
-            freshCache().setCacheValue('GET:/products', value, 60)
-        ).resolves.toBeUndefined();
-    });
-
-    // Measured against the bytes that would actually be written: a body of multi-byte characters
-    // is larger than its length in code units suggests.
-    it('measures bytes, not string length', async () => {
-        process.env.NODE_REDIS_CACHE_MAX_BYTES = '100';
-
-        await freshCache().setCacheValue(
-            'GET:/products',
-            { status: 200, body: { items: '€'.repeat(40) } },
-            60
-        );
-
-        expect(mockSet).not.toHaveBeenCalled();
-    });
-
-    it('honours a custom limit', async () => {
-        process.env.NODE_REDIS_CACHE_MAX_BYTES = String(1024 * 1024);
-        const value = { status: 200, body: bodyOfAtLeast(300 * 1024) };
-
-        await freshCache().setCacheValue('GET:/products', value, 60);
-
-        expect(mockSet).toHaveBeenCalledTimes(1);
-    });
-
-    // The TTL guard runs first and is the cheaper of the two: nothing is serialized for an entry
-    // that was never going to be written.
-    it.each([0, -1])(
-        'refuses a TTL of %s before it measures anything, and indexes nothing',
-        async (ttlSeconds) => {
-            // Redis rejects `EX` values of zero or less, and a non-positive TTL means "do not
-            // cache" anyway — so it is caught here rather than sent and refused. Asserting on
-            // `mockConnect` is what pins the ORDER: the guard runs before a client is even asked
-            // for, so an entry that was never going to be written costs no round-trip.
-            await freshCache().setCacheValue(
-                'GET:/products',
-                { status: 200, body: {} },
-                ttlSeconds,
-                ['products']
-            );
-
-            expect(mockSet).not.toHaveBeenCalled();
-            expect(mockSAdd).not.toHaveBeenCalled();
-            expect(mockConnect).not.toHaveBeenCalled();
-        }
-    );
-});
-
 // ─── The read/write/invalidate path ──────────────────────────────────────────
 /**
  * The three functions the caching middleware actually calls, and the reason they had no tests:
  * they need a Redis, and the unit suite has none. Every one of their branches was reported as
  * "no coverage" — not weak assertions, no execution at all — which is why the file sat at 48%.
- *
- * Two properties run through all of them and are worth naming once:
- *
- *   1. **Fail open.** A cache is an optimisation, never a dependency. Every path below must
- *      resolve — never reject — when Redis is unreachable, slow, or returns nonsense, because a
- *      rejection here becomes a 500 on a request that could have been served from Mongo.
- *   2. **Prefixing.** Every key is namespaced. Two deployments sharing a Redis (staging and
- *      production, the classic accident) must not read each other's cached responses, and the
- *      prefix is the only thing preventing it.
  */
 describe('getCacheValue', () => {
     beforeEach(() => {
@@ -303,12 +166,14 @@ describe('getCacheValue', () => {
         mockConnect.mockImplementation(() => Promise.resolve());
     });
 
-    it('returns the stored envelope on a hit', async () => {
+    it('returns the stored bytes on a hit, exactly as they were written', async () => {
+        // Opaque to the adapter: whatever the caller serialized comes back verbatim, and only the
+        // caller knows how to read it.
         mockGet.mockImplementation(() => Promise.resolve('{"status":201,"body":{"id":"7"}}'));
 
         const value = await freshCache().getCacheValue('GET:/products');
 
-        expect(value).toEqual({ status: 201, body: { id: '7' } });
+        expect(value).toBe('{"status":201,"body":{"id":"7"}}');
     });
 
     it('reads a namespaced key, so two deployments cannot share entries', async () => {
@@ -323,15 +188,6 @@ describe('getCacheValue', () => {
     it('resolves undefined on a miss', async () => {
         // node-redis answers `null` for an absent or expired key.
         mockGet.mockImplementation(() => Promise.resolve(null));
-
-        await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
-    });
-
-    it('treats a corrupt entry as a miss rather than throwing', async () => {
-        // A half-written or hand-edited value must degrade to "not cached". If the JSON.parse
-        // throw escaped, one bad key would turn a working endpoint into a 500 until someone
-        // noticed and deleted it by hand.
-        mockGet.mockImplementation(() => Promise.resolve('{not json'));
 
         await expect(freshCache().getCacheValue('GET:/products')).resolves.toBeUndefined();
     });
@@ -358,12 +214,12 @@ describe('setCacheValue tag index', () => {
         mockSAdd.mockImplementation(() => Promise.resolve(1));
     });
 
-    it('stores the body with the TTL as an expiry Redis enforces itself', async () => {
-        await freshCache().setCacheValue('GET:/products', { status: 200, body: { a: 1 } }, 90);
+    it('stores the bytes with the TTL as an expiry Redis enforces itself', async () => {
+        await freshCache().setCacheValue('GET:/products', '{"a":1}', 90);
 
         expect(mockSet).toHaveBeenCalledWith(
             expect.stringContaining(':key:GET:/products'),
-            JSON.stringify({ status: 200, body: { a: 1 } }),
+            '{"a":1}',
             { EX: 90 }
         );
     });
@@ -373,10 +229,7 @@ describe('setCacheValue tag index', () => {
         // efficiently delete "every key matching a pattern", so writes have to record their own
         // membership. A write that skips it produces an entry nothing can ever invalidate — it
         // just serves stale data until its TTL runs out.
-        await freshCache().setCacheValue('GET:/products', { status: 200, body: {} }, 60, [
-            'products',
-            'catalog'
-        ]);
+        await freshCache().setCacheValue('GET:/products', '{}', 60, ['products', 'catalog']);
 
         expect(mockSAdd).toHaveBeenCalledTimes(2);
         expect(mockSAdd).toHaveBeenCalledWith(
@@ -392,7 +245,7 @@ describe('setCacheValue tag index', () => {
     it('de-duplicates tags and drops empty ones', async () => {
         // Both halves matter: a repeated tag is a wasted round-trip, and an empty one creates a
         // junk `tag:` key that every future invalidation then reads and deletes for nothing.
-        await freshCache().setCacheValue('GET:/products', { status: 200, body: {} }, 60, [
+        await freshCache().setCacheValue('GET:/products', '{}', 60, [
             'products',
             'products',
             '',
@@ -406,8 +259,116 @@ describe('setCacheValue tag index', () => {
         mockSet.mockImplementation(() => Promise.reject(new Error('OOM')));
 
         await expect(
-            freshCache().setCacheValue('GET:/products', { status: 200, body: {} }, 60, ['products'])
+            freshCache().setCacheValue('GET:/products', '{}', 60, ['products'])
         ).resolves.toBeUndefined();
+    });
+
+    // The TTL guard runs first and is the cheapest check there is: nothing is sent, and no client
+    // is even asked for, on behalf of an entry that was never going to be written.
+    it.each([0, -1])('refuses a TTL of %s, and indexes nothing', async (ttlSeconds) => {
+        // Redis rejects `EX` values of zero or less, and a non-positive TTL means "do not cache"
+        // anyway — so it is caught here rather than sent and refused. Asserting on `mockConnect`
+        // is what pins the ORDER.
+        await freshCache().setCacheValue('GET:/products', '{}', ttlSeconds, ['products']);
+
+        expect(mockSet).not.toHaveBeenCalled();
+        expect(mockSAdd).not.toHaveBeenCalled();
+        expect(mockConnect).not.toHaveBeenCalled();
+    });
+});
+
+// ─── The connection ──────────────────────────────────────────────────────────
+/**
+ * The lifecycle rules themselves live in `runtime/managed-connection.ts` and are tested there
+ * against a fake handle. What is left here is what is Redis-specific: how a client is built, and
+ * how it is closed.
+ */
+describe('the Redis client', () => {
+    beforeEach(() => {
+        mockConnect.mockImplementation(() => Promise.resolve());
+        mockQuit.mockImplementation(() => Promise.resolve());
+    });
+
+    // Both spellings are supported so deployment config can stay flexible; the fragments are the
+    // half a compose file usually has.
+    it('assembles a URL from host and port when no full URL is given', async () => {
+        delete process.env.NODE_REDIS_URL;
+        process.env.NODE_REDIS_HOST = 'redis.internal';
+        process.env.NODE_REDIS_PORT = '6380';
+
+        await freshCache().startCache();
+
+        expect(mockCreateClient).toHaveBeenCalledWith(
+            expect.objectContaining({ url: 'redis://redis.internal:6380' })
+        );
+    });
+
+    it('defaults the host to localhost when only a port is given', async () => {
+        delete process.env.NODE_REDIS_URL;
+        delete process.env.NODE_REDIS_HOST;
+        process.env.NODE_REDIS_PORT = '6379';
+
+        await freshCache().startCache();
+
+        expect(mockCreateClient).toHaveBeenCalledWith(
+            expect.objectContaining({ url: 'redis://127.0.0.1:6379' })
+        );
+    });
+
+    it('closes politely on shutdown', async () => {
+        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        const cache = freshCache();
+        await cache.startCache();
+
+        await cache.stopCache();
+
+        expect(mockQuit).toHaveBeenCalledTimes(1);
+        expect(mockDestroy).not.toHaveBeenCalled();
+    });
+
+    /*
+     * QUIT waits for queued replies, which an already-dead socket will never send. `destroy()`
+     * drops it immediately — otherwise a shutdown against a Redis that went away first hangs on
+     * the way out, which reads as a stuck deploy rather than as a dead cache.
+     */
+    it('destroys the socket when QUIT itself fails', async () => {
+        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        mockQuit.mockImplementation(() => Promise.reject(new Error('socket closed')));
+        const cache = freshCache();
+        await cache.startCache();
+
+        await expect(cache.stopCache()).resolves.toBeUndefined();
+
+        expect(mockDestroy).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes nothing when caching was never switched on', async () => {
+        delete process.env.NODE_REDIS_URL;
+        delete process.env.NODE_REDIS_PORT;
+
+        await expect(freshCache().stopCache()).resolves.toBeUndefined();
+
+        expect(mockQuit).not.toHaveBeenCalled();
+        expect(mockConnect).not.toHaveBeenCalled();
+    });
+
+    // The state a health payload reports, and the reason it is a memory read: `GET
+    // /observability/health` is polled by every replica forever, so it may not open a socket.
+    it('reports disabled without connecting, and ready once connected', async () => {
+        delete process.env.NODE_REDIS_URL;
+        delete process.env.NODE_REDIS_PORT;
+        const cache = freshCache();
+
+        expect(cache.cacheState()).toBe('disabled');
+
+        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        mockClient.isReady = true;
+        try {
+            await cache.startCache();
+            expect(cache.cacheState()).toBe('ready');
+        } finally {
+            mockClient.isReady = false;
+        }
     });
 });
 

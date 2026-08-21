@@ -19,21 +19,22 @@
  * semantics the Redis adapter does (a key per response, a set per tag) in a Map, which is exactly
  * the part being asserted: that the key the write clears is the key the read wrote.
  *
- * `resolveCacheTtl` is deliberately NOT doubled. It is what decides whether anything is cached at
- * all outside production, and stubbing it would let this suite pass against a configuration where
- * the middleware caches nothing.
+ * Only the adapter is doubled, and deliberately only the adapter: the TTL clamp and the stored
+ * envelope live in `http/middlewares/cache.ts` and run for real here. The clamp is what decides
+ * whether anything is cached at all outside production, and stubbing it would let this suite pass
+ * against a configuration where the middleware caches nothing.
  */
 
 jest.mock('@infrastructure/adapters/cache', () => {
     const actual = jest.requireActual('@infrastructure/adapters/cache');
 
-    const responses = new Map<string, unknown>();
+    const responses = new Map<string, string>();
     const tagged = new Map<string, Set<string>>();
 
     return {
         ...actual,
         getCacheValue: (key: string) => Promise.resolve(responses.get(key)),
-        setCacheValue: (key: string, value: unknown, ttlSeconds: number, tags: string[] = []) => {
+        setCacheValue: (key: string, value: string, ttlSeconds: number, tags: string[] = []) => {
             // The real adapter's guard: a non-positive TTL means "do not cache this at all".
             if (ttlSeconds <= 0) return Promise.resolve();
 

@@ -212,13 +212,19 @@ module.exports = {
             lines: 70
         },
         /*
-         * The single-star glob matches only files sitting DIRECTLY in `src/infrastructure/`
-         * (today: `i18n.ts`). The subdirectories each carry their own key below — a directory
-         * that falls out of this list does not fail the build, it just stops being measured,
-         * which is the drift that let `runtime/` and `persistence/` go unfloored after the
-         * files moved into them.
+         * Every subdirectory of `src/infrastructure/` carries its own key — a directory that falls
+         * out of this list does not fail the build, it just stops being measured, which is the
+         * drift that let `runtime/` and `persistence/` go unfloored after the files moved into
+         * them. `tests/cross-cutting/coverage-thresholds.test.ts` is what turns the next such
+         * rename red instead of unmeasured; the single-star key that used to sit here, matching
+         * `i18n.ts` alone, is how that test came to exist.
          */
-        'src/infrastructure/*.ts': { statements: 70, branches: 70, functions: 70, lines: 70 },
+        'src/infrastructure/i18n/**/*.ts': {
+            statements: 70,
+            branches: 70,
+            functions: 70,
+            lines: 70
+        },
         'src/infrastructure/persistence/**/*.ts': {
             statements: 70,
             branches: 70,

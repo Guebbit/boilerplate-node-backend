@@ -1,23 +1,24 @@
 /**
- * Redis cache adapter.
+ * Redis cache adapter — a byte store with tags, and nothing above that.
  *
  * Every function here *fails open*: if Redis is unreachable the app keeps serving requests
  * without a cache rather than returning errors. A cache is an optimisation, never a dependency.
+ *
+ * What it stores is an opaque `string`. The one thing cached today is an HTTP response, and the
+ * envelope that makes a response replayable — status, body, the size a response may reach, the
+ * TTL a route may declare — belongs to the middleware that caches responses, not here. So a
+ * project that wants to cache a computed aggregate or a rendered fragment writes its own bytes
+ * through the same four functions instead of abusing a response shape.
  *
  * See: docs/tools/redis-cache.md
  */
 
 // `createClient` builds a (not yet connected) Redis client from a connection URL;
-// `RedisClientType` is the resulting client's type, needed for the module-level `let` below.
+// `RedisClientType` is the resulting client's type, needed for the generic below.
 import { createClient, type RedisClientType } from 'redis';
 import { logger } from '@infrastructure/adapters/logger';
+import { manageConnection } from '@infrastructure/runtime/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
-
-/** Enough to replay an HTTP response verbatim: the status code and the serialized body. */
-interface CacheValue {
-    status: number;
-    body: unknown;
-}
 
 /**
  * Prefix for every key this app owns. Redis has no namespaces beyond numbered databases, so
@@ -39,18 +40,6 @@ const getRedisUrl = (): string | undefined => {
     return `redis://${host}:${process.env.NODE_REDIS_PORT}`;
 };
 
-/** The shared client: one connection per process — a client per request exhausts Redis' limit. */
-let client: RedisClientType | undefined;
-
-/** The in-flight connect, so a burst during startup does not thunder-herd its own `connect()`. */
-let connectPromise: Promise<RedisClientType | undefined> | undefined;
-
-/**
- * Latches the "Redis is down" warning: the client emits `error` per failed operation, which would
- * be one log line per request. Reset on a successful connect so a later outage is still reported.
- */
-let connectionWarningLogged = false;
-
 /**
  * Turn cache usage on only when Redis is configured and not explicitly disabled.
  *
@@ -61,97 +50,25 @@ let connectionWarningLogged = false;
 const isCacheEnabled = () => Boolean(getRedisUrl()) && process.env.NODE_REDIS_CACHE_ENABLED !== '0';
 
 /**
- * What this adapter's connection is doing, for `GET /observability/health`.
+ * The one connection this process opens to Redis — a client per request exhausts Redis' limit.
  *
- * Reads the client's own flags rather than pinging, so health reports what the next lookup will
- * actually do. `isOpen` without `isReady` is the handshake window, reported as `connecting`.
+ * The lifecycle rules (memoise, share the in-flight connect, warn once, resolve `undefined`
+ * instead of rejecting) are `manageConnection`'s; what is Redis-specific is below.
  */
-export const cacheState = (): DependencyStatus => {
-    if (!isCacheEnabled()) return 'disabled';
-    if (client?.isReady) return 'ready';
-    if (client?.isOpen) return 'connecting';
-    return 'unavailable';
-};
-
-/**
- * Longest TTL allowed outside production, in seconds — the bound on how long a write that bypassed
- * the API (a seed, a migration, a `mongosh` session) can keep serving a stale answer. Production is
- * never clamped, because there the API is the only writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts
- * out.
- *
- * See: docs/tools/redis-cache.md#writes-that-bypass-the-api
- */
-const DEFAULT_DEV_TTL_MAX_SECONDS = 30;
-
-const getDevelopmentTtlMax = (): number => {
-    const raw = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
-    if (raw === undefined || raw.trim() === '') return DEFAULT_DEV_TTL_MAX_SECONDS;
-
-    const parsed = Number(raw);
-    // A non-numeric or negative value is a config typo; fall back rather than cache forever.
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_DEV_TTL_MAX_SECONDS;
-};
-
-/**
- * Clamp a route's declared TTL to the development ceiling.
- *
- * Applied where the TTL enters the system (the `setCache` middleware) rather than at write
- * time, so the `Cache-Control: max-age` header advertises the same lifetime the server will
- * actually honour.
- *
- * @param seconds - TTL declared by the route
- * @returns the TTL to use, capped outside production
- */
-export const resolveCacheTtl = (seconds: number): number => {
-    if (process.env.NODE_ENV === 'production') return seconds;
-
-    const max = getDevelopmentTtlMax();
-    if (max <= 0) return seconds;
-    return Math.min(seconds, max);
-};
-
-/**
- * Build one namespaced Redis key.
- *
- * Callers pass a sub-namespace, giving the two key families used here:
- *   `<prefix>:key:<hash>` → a cached response      (a Redis string)
- *   `<prefix>:tag:<name>` → the keys under a tag   (a Redis set)
- */
-const prefix = (value: string) => `${CACHE_PREFIX}:${value}`;
-
-/**
- * Log one warning when Redis is unavailable, then stay quiet until a reconnect succeeds.
- */
-const logConnectionWarning = (error: unknown) => {
-    if (connectionWarningLogged) return;
-
-    // One line, not one per request: an unreachable Redis would otherwise flood the log.
-    logger.warn({
-        message: 'Redis cache unavailable, continuing without server-side cache.',
-        error: error instanceof Error ? error.message : String(error)
-    });
-    connectionWarningLogged = true;
-};
-
-/**
- * Reuse one Redis client for the whole app.
- * If Redis is off/unreachable, we fail open and just skip server-side caching.
- */
-const getClient = (): Promise<RedisClientType | undefined> => {
-    // Disabled → resolve with nothing. Every caller treats a void result as "skip the cache".
-    if (!isCacheEnabled()) return Promise.resolve(undefined);
-    // `isReady` (as opposed to `isOpen`) means the socket is up *and* the handshake finished,
-    // so commands can be issued immediately.
-    if (client?.isReady) return Promise.resolve(client);
-    // A connect is already in flight — join it instead of starting a second one.
-    if (connectPromise) return connectPromise;
-
-    // Create the client only once, then reuse it for the rest of the app lifetime.
-    if (!client) {
+const cacheConnection = manageConnection<RedisClientType>({
+    unavailableMessage: 'Redis cache unavailable, continuing without server-side cache.',
+    isEnabled: isCacheEnabled,
+    // `isReady` (as opposed to `isOpen`) means the socket is up *and* the handshake finished, so
+    // commands can be issued immediately. A client that dropped since the last call answers
+    // `false` here and is replaced rather than handed back dead.
+    isReady: (client) => client.isReady,
+    connect: () => {
         const redisUrl = getRedisUrl();
+        // Enablement already implies a URL; this is the type narrowing, and resolving `undefined`
+        // is the "cannot be built" signal rather than a failure worth warning about.
         if (!redisUrl) return Promise.resolve(undefined);
 
-        client = createClient({
+        const client: RedisClientType = createClient({
             // `redis://[:password@]host:port[/db]` — parsed by node-redis itself.
             url: redisUrl,
             socket: {
@@ -160,41 +77,55 @@ const getClient = (): Promise<RedisClientType | undefined> => {
                 connectTimeout: 1000,
                 // `false` disables node-redis' automatic reconnect loop. Deliberate: the loop
                 // would retry in the background forever and log on every attempt. Instead each
-                // `getClient()` call gets one clean attempt, so recovery is driven by traffic.
+                // attempt is one clean try, so recovery is driven by traffic.
                 reconnectStrategy: false
             }
         });
 
         // node-redis is an EventEmitter and an unhandled 'error' event would crash the process,
         // so this listener is mandatory, not just for logging.
-        client.on('error', logConnectionWarning);
+        client.on('error', cacheConnection.reportUnavailable);
+
+        // A client is built per ATTEMPT rather than kept across failed ones: the handle belongs to
+        // the lifecycle, and one that never finished connecting has nothing worth reusing.
+        return client.connect().then(() => client);
+    },
+    close: (client) => {
+        // Nothing was ever opened: caching is off, or the last connect failed. Either way there
+        // is no socket to release.
+        if (!client) return Promise.resolve();
+
+        return (
+            client
+                // `quit()` sends the QUIT command and waits for queued replies — the polite close.
+                .quit()
+                .then(
+                    () => undefined,
+                    // If QUIT itself fails (already-dead socket), `destroy()` drops the socket
+                    // immediately, discarding anything still queued.
+                    () => client.destroy()
+                )
+        );
     }
+});
 
-    // Local alias so the closures below capture a non-undefined reference: `client` is a
-    // module-level `let` that `stopCache()` can clear while this promise is still pending.
-    const redisClient = client;
+/**
+ * What this adapter's connection is doing, for `GET /observability/health`.
+ *
+ * Reads memoised state rather than pinging, so health reports what the next lookup will actually
+ * do — see the header of `infrastructure/observability/dependency-health.ts` for why a health
+ * endpoint does no I/O.
+ */
+export const cacheState = (): DependencyStatus => cacheConnection.state();
 
-    const promise: Promise<RedisClientType | undefined> = redisClient
-        .connect()
-        .then(() => {
-            // If connect worked, allow future warnings again for later failures.
-            connectionWarningLogged = false;
-            return redisClient;
-        })
-        .catch((error: unknown) => {
-            // Resolve (not reject) with undefined: connection failure is a cache miss, not a request failure.
-            logConnectionWarning(error);
-            return undefined;
-        })
-        .finally(() => {
-            // Clear the in-flight marker either way, so the *next* call can retry a dead Redis.
-            connectPromise = undefined;
-        });
-
-    connectPromise = promise;
-
-    return connectPromise;
-};
+/**
+ * Build one namespaced Redis key.
+ *
+ * Callers pass a sub-namespace, giving the two key families used here:
+ *   `<prefix>:key:<hash>` → a cached value    (a Redis string)
+ *   `<prefix>:tag:<name>` → the keys under a tag   (a Redis set)
+ */
+const prefix = (value: string) => `${CACHE_PREFIX}:${value}`;
 
 /**
  * Warm up Redis during app startup so the first request does not pay the connect cost.
@@ -202,53 +133,29 @@ const getClient = (): Promise<RedisClientType | undefined> => {
  * Intentionally not awaited by the boot sequence in a blocking way — a missing Redis
  * must not stop the server from listening.
  */
-export const startCache = () => getClient();
+export const startCache = (): Promise<void> => cacheConnection.get().then(() => undefined);
 
 /**
- * Close Redis gracefully and forget the cached client so a later restart begins from a clean state.
+ * Close Redis gracefully and forget the client so a later restart begins from a clean state.
  */
-export const stopCache = (): Promise<void> => {
-    const redisClient = client;
-    // `isOpen` covers connecting/connected; nothing to close otherwise.
-    if (!redisClient || !redisClient.isOpen) return Promise.resolve();
-
-    return (
-        redisClient
-            // `quit()` sends the QUIT command and waits for queued replies — the polite close.
-            .quit()
-            .then(
-                () => undefined,
-                // If QUIT itself fails (already-dead socket), `destroy()` drops the socket
-                // immediately, discarding anything still queued.
-                () => redisClient.destroy()
-            )
-            .finally(() => {
-                // Reset module state so a subsequent `getClient()` (e.g. in a test that restarts
-                // the app in-process) builds a fresh client instead of reusing a closed one.
-                connectPromise = undefined;
-                client = undefined;
-            })
-    );
-};
+export const stopCache = (): Promise<void> => cacheConnection.stop();
 
 /**
- * Read one cached HTTP response from Redis.
+ * Read one cached value from Redis.
  *
- * Resolves with `undefined` on a miss, on a Redis failure, and when caching is disabled —
- * the caller cannot distinguish them, and does not need to.
+ * Resolves with `undefined` on a miss, on a Redis failure, and when caching is disabled — the
+ * caller cannot distinguish them, and does not need to. What the bytes MEAN is the caller's
+ * business; this returns them exactly as they were written.
  */
-export const getCacheValue = (key: string): Promise<CacheValue | undefined> =>
-    getClient()
+export const getCacheValue = (key: string): Promise<string | undefined> =>
+    cacheConnection
+        .get()
         .then((redisClient) => {
             if (!redisClient) return undefined;
 
-            // Redis GET on a string key. Returns `null` when the key is absent or has expired.
-            return redisClient.get(prefix(`key:${key}`)).then((raw) => {
-                if (!raw) return undefined;
-                // Redis stores bytes, so the envelope was JSON-serialized on write.
-                // A throw here (corrupt value) is caught by the `.catch` below → treated as a miss.
-                return JSON.parse(raw) as CacheValue;
-            });
+            // Redis GET on a string key. Returns `null` when the key is absent or has expired,
+            // which is the same answer to the caller as "not cached".
+            return redisClient.get(prefix(`key:${key}`)).then((raw) => raw ?? undefined);
         })
         .catch((error) => {
             logger.warn({
@@ -260,70 +167,37 @@ export const getCacheValue = (key: string): Promise<CacheValue | undefined> =>
         });
 
 /**
- * Largest response body this cache will store, in bytes.
+ * Save one value in Redis and attach it to one or more "tags".
+ * Tags let us delete groups of cached entries later (example: all "products" cache).
  *
- * A cache turns a cheap request into long-lived server state: the key includes the full URL, so an
- * unauthenticated caller can mint an entry per query string and keep every one resident. Bounding
- * the ENTRY is what stops that being an amplifier.
- *
- * See: docs/tools/redis-cache.md#entry-size-is-bounded
- */
-const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
-
-const getMaxCachedBytes = (): number =>
-    Number(process.env.NODE_REDIS_CACHE_MAX_BYTES) || DEFAULT_MAX_CACHED_BYTES;
-
-/**
- * Save one HTTP response in Redis and attach it to one or more "tags".
- * Tags let us delete groups of cached responses later (example: all "products" cache).
- *
- * Oversized bodies are skipped rather than stored — see `DEFAULT_MAX_CACHED_BYTES`. Skipping is
- * not a failure: the caller still gets its response, it just will not be replayed from cache, so
- * the endpoint stays correct and only loses an optimisation.
- *
- * @param key - the cache key (typically derived from method + URL + auth scope)
- * @param value - status + body envelope to replay on a later hit
+ * @param key - the cache key, namespaced by the caller's own scheme
+ * @param value - the bytes to store, already serialized by whoever knows their shape
  * @param ttlSeconds - lifetime; `<= 0` means "do not cache this at all"
  * @param tags - invalidation groups this entry belongs to
  */
 export const setCacheValue = (
     key: string,
-    value: CacheValue,
+    value: string,
     ttlSeconds: number,
     tags: string[] = []
 ): Promise<void> => {
     // Guard: Redis rejects `EX` values of 0 or less, and a zero TTL means "don't cache" anyway.
     if (ttlSeconds <= 0) return Promise.resolve();
 
-    // Serialized once, here, so the size check measures exactly what would be written rather
-    // than an estimate of it.
-    const payload = JSON.stringify(value);
-    const maxCachedBytes = getMaxCachedBytes();
-    if (Buffer.byteLength(payload) > maxCachedBytes) {
-        // Logged rather than silent: an endpoint that never caches is worth noticing, and the
-        // usual cause is a response that grew past what its page size was supposed to bound.
-        logger.warn({
-            message: 'Redis cache write skipped: response larger than the per-entry limit.',
-            key,
-            bytes: Buffer.byteLength(payload),
-            maxCachedBytes
-        });
-        return Promise.resolve();
-    }
-
     const cacheKey = prefix(`key:${key}`);
     // `filter(Boolean)` drops empty strings, `new Set` de-duplicates — both would otherwise
     // create junk tag keys and redundant SADD round-trips.
     const cacheTags = [...new Set(tags.filter(Boolean))];
 
-    return getClient()
+    return cacheConnection
+        .get()
         .then((redisClient) => {
             if (!redisClient) return;
 
-            // Save the response body with a TTL so Redis evicts it automatically later.
+            // Save the value with a TTL so Redis evicts it automatically later.
             return (
                 redisClient
-                    .set(cacheKey, payload, {
+                    .set(cacheKey, value, {
                         // `EX` = expire after N seconds. Redis deletes the key itself, so the cache
                         // is self-trimming and needs no cleanup job.
                         EX: ttlSeconds
@@ -354,7 +228,7 @@ export const setCacheValue = (
 };
 
 /**
- * Remove every cached response linked to the given tags — called after a successful write.
+ * Remove every cached entry linked to the given tags — called after a successful write.
  *
  * No cross-instance broadcast is needed: the entries live in shared Redis, so one call invalidates
  * them for every worker and replica.
@@ -371,15 +245,16 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
     const cacheTags = [...new Set(tags.filter(Boolean))];
     if (cacheTags.length === 0) return Promise.resolve({ deleted: 0, reachable: true });
 
-    return getClient()
+    return cacheConnection
+        .get()
         .then((redisClient) => {
             // Same split as `clearCache`: caching switched off is trivially clear, caching on with
-            // no client is a connect that failed — `getClient()` reports both as void.
+            // no client is a connect that failed — the lifecycle reports both as void.
             if (!redisClient) return { deleted: 0, reachable: !isCacheEnabled() };
 
             // For each tag:
             // 1) read all cached keys in that group
-            // 2) delete those cached responses
+            // 2) delete those cached entries
             // 3) delete the tag set itself
             return Promise.all(
                 cacheTags.map((tag) => {
@@ -394,7 +269,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
                             .then((keys) => (keys.length > 0 ? redisClient.del(keys) : 0))
                             // Drop the now-meaningless index set as well, so it does not grow
                             // unbounded across invalidation cycles. Its own deletion is not a
-                            // cached response and is not counted.
+                            // cached entry and is not counted.
                             .then((deleted) => redisClient.del(tagKey).then(() => deleted))
                     );
                 })
@@ -435,7 +310,7 @@ export interface ClearCacheResult {
 }
 
 /**
- * Delete every cached response and tag set belonging to this app — the escape hatch for writes
+ * Delete every cached entry and tag set belonging to this app — the escape hatch for writes
  * that never ran `invalidateCache`.
  *
  * Deliberately **not** `FLUSHALL`: scoped to `<CACHE_PREFIX>:*`, so a shared Redis is untouched.
@@ -447,15 +322,16 @@ export interface ClearCacheResult {
  * See: docs/tools/redis-cache.md#writes-that-bypass-the-api
  */
 export const clearCache = (): Promise<ClearCacheResult> =>
-    getClient()
+    cacheConnection
+        .get()
         .then((redisClient) => {
             if (!redisClient) {
                 /*
-                 * Two different situations land here, and `getClient()` cannot distinguish them
-                 * for us: caching is switched off, or it is on and the connect failed —
-                 * `getClient()` reports that by resolving void rather than rejecting, which is
-                 * why the `.catch` below never sees a connection error. `isCacheEnabled()` is
-                 * what separates "nothing to clear" from "could not clear".
+                 * Two different situations land here, and the lifecycle cannot distinguish them
+                 * for us: caching is switched off, or it is on and the connect failed — `get()`
+                 * reports that by resolving void rather than rejecting, which is why the `.catch`
+                 * below never sees a connection error. `isCacheEnabled()` is what separates
+                 * "nothing to clear" from "could not clear".
                  */
                 return { deleted: 0, reachable: !isCacheEnabled() };
             }

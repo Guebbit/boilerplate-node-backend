@@ -5,7 +5,12 @@
 [Redis](https://redis.io/docs/latest/) is used as an **optional server-side cache** for repeated GET responses.
 It makes repeated reads cheaper without becoming required for the API to work.
 
-The repo uses the official [`redis`](https://github.com/redis/node-redis) Node client; cache helpers live in `src/infrastructure/adapters/cache.ts`.
+The repo uses the official [`redis`](https://github.com/redis/node-redis) Node client. The work is
+split in two: `src/infrastructure/adapters/cache.ts` is a **byte store with tags** — get, set,
+invalidate by tag, clear — and `src/infrastructure/http/middlewares/cache.ts` is what makes those
+bytes an HTTP response, owning the key, the stored envelope, the TTL policy and the size limit. A
+project that wants to cache something that is not a response uses the adapter directly and inherits
+none of the response rules.
 
 ## Cache flow
 
@@ -74,8 +79,11 @@ simply answering it: `GET /products` is public and `setCache(3600, …)` keeps i
 hour. The declared-parameter key above bounds how many entries a caller can mint; this bounds how
 large any one of them may be, at whatever size the endpoint happens to return.
 
-`setCacheValue` therefore refuses to store a body above `NODE_REDIS_CACHE_MAX_BYTES` (default
-`262144`, 256 KB) and logs a warning naming the key and the size. The response is still returned
+The `setCache` middleware therefore refuses to store a body above `NODE_REDIS_CACHE_MAX_BYTES`
+(default `262144`, 256 KB) and logs a warning naming the key and the size. It lives with the
+middleware rather than in the adapter because the limit is measured on a serialized RESPONSE — the
+adapter below it stores opaque bytes and has no opinion about how many of them a response is
+allowed to be. The response is still returned
 normally — skipping is a lost optimisation, not a failure — so the endpoint stays correct and only
 loses its cache.
 
@@ -162,8 +170,8 @@ flowchart TD
     R -.-> Note["No per-worker copy of the data:<br/>every read is a round-trip"]
 ```
 
-Each worker opens **its own connection** (`getClient()` in `src/infrastructure/adapters/cache.ts`, one lazy
-client per process), but every connection addresses the **same keyspace** — same
+Each worker opens **its own connection** (`src/infrastructure/adapters/cache.ts` over
+`runtime/managed-connection.ts`, one lazy client per process), but every connection addresses the **same keyspace** — same
 `NODE_REDIS_URL`, same `NODE_REDIS_CACHE_PREFIX`. A worker never keeps a local copy of a cached
 response, so there is no such thing as "worker 2's cache" to fall out of date. There is one cache,
 and four processes reading it.
