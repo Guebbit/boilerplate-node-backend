@@ -34,13 +34,14 @@ router.use(getAuth);
  * Credentials and auth-state changes: never cacheable. Mounted here rather than per controller so
  * a route added later cannot silently omit it — see `noStore`.
  *
- * It covers `GET /account` too, deliberately. That route used to add `setCache`, whose
+ * It covers `GET /account` too, deliberately. That route once also mounted `setCache`, whose
  * `response.set('Cache-Control', …)` REPLACES the header this sets — so the one router-wide
  * guarantee was silently off for the one route serving the caller's own profile, and a browser
  * stored it for an hour. A profile is the caller's identity: `no-store` is the answer, and the
  * read is one indexed lookup.
  *
- * `tests/cross-cutting/no-cached-credentials.test.ts` asserts no route in this file caches.
+ * That combination can no longer recur silently: `noStore` marks the response, and `setCache`
+ * refuses to run on one it finds marked — see both in `infrastructure/http/middlewares/cache.ts`.
  */
 router.use(noStore);
 

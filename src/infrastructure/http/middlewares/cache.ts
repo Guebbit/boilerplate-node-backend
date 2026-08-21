@@ -206,6 +206,19 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
     const sortedKeyParameters = options.keyParameters.toSorted();
 
     return (request: Request, response: Response, next: NextFunction) => {
+        // `noStore`, below, marks a response it has already forbidden caching on. Left unchecked,
+        // this line would call `response.set('Cache-Control', …)` right after it and REPLACE that
+        // header rather than merge with it — which is exactly how `GET /account` once cached a
+        // caller's own profile for an hour behind a router-wide `no-store` mount that looked
+        // total. Failing here means the two middlewares can never again disagree on the wire; a
+        // route that wants both mounted has a design error to fix, not a header race to lose.
+        if (response.locals.noStore)
+            throw new Error(
+                'setCache mounted on a route noStore already marked no-store. A route is either ' +
+                    'cacheable or it is not — remove one of the two. See the comment on noStore ' +
+                    'in this file.'
+            );
+
         // Outside production the declared TTL is clamped (see resolveCacheTtl), so that writes
         // which bypass the API — db:seed, migrations, mongosh — cannot leave stale answers
         // around for an hour. Resolved here, before the header, so browsers are told the
@@ -331,11 +344,15 @@ export const invalidateCache =
  * is the 304 path itself (RFC 9111 §5.2.2.5). `Pragma`/`Expires` are omitted — HTTP/1.0 only, and
  * §5.4 deprecates `Pragma`.
  *
- * Runs before the route handlers, so a route wanting caching overrides it with `setCache` — as
- * `GET /account` does.
+ * Marks `response.locals.noStore` for `setCache`, above, to check. `GET /account` used to mount
+ * both — `setCache` calls `response.set('Cache-Control', …)`, which REPLACES rather than merges,
+ * so the router-wide guarantee here was silently off for the one route serving the caller's own
+ * profile, and a browser stored it for an hour. `setCache` now refuses to run on a response this
+ * marked, so that combination fails loudly instead of losing silently.
  */
 export const noStore = (request: Request, response: Response, next: NextFunction) => {
     response.set('Cache-Control', 'no-store');
+    response.locals.noStore = true;
 
     // `no-store` stops a COMPLIANT client from keeping a copy, so it never revalidates — which
     // covers browsers. It does not stop a request that sends `If-None-Match` regardless (an

@@ -55,6 +55,10 @@ describe('GET /account', () => {
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
+
+        // A profile is the caller's identity: a browser must never be told to keep a copy. See
+        // `noStore` in `infrastructure/http/middlewares/cache.ts`.
+        expect(response.headers['cache-control']).toBe('no-store');
     });
 
     it('matches the error contract when unauthenticated', async () => {

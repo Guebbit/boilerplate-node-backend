@@ -12,7 +12,12 @@
  */
 import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
-import { invalidateCache, resolveCacheTtl, setCache } from '@infrastructure/http/middlewares/cache';
+import {
+    invalidateCache,
+    noStore,
+    resolveCacheTtl,
+    setCache
+} from '@infrastructure/http/middlewares/cache';
 import * as cache from '@infrastructure/adapters/cache';
 
 jest.mock('@infrastructure/adapters/cache', () => ({
@@ -50,6 +55,7 @@ const createResponse = () => {
     // Annotated: the stub's own callbacks return `response`, so inference would be circular.
     const response: Response = asStub<Response>({
         statusCode: 200,
+        locals: {},
         set: jest.fn((name: string, value: string) => {
             headers[name.toLowerCase()] = value;
             return response;
@@ -363,6 +369,61 @@ describe('setCache', () => {
 
         expect(next).toHaveBeenCalledTimes(1);
         expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+    });
+
+    it('refuses to run on a response noStore already marked no-store', () => {
+        const { response, headers } = createResponse();
+        noStore(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
+
+        const middleware = setCache(3600, { tags: ['account'], keyParameters: [] });
+        const request = asStub<Request>({ method: 'GET', originalUrl: '/account', query: {} });
+
+        expect(() => middleware(request, response, jest.fn() as NextFunction)).toThrow(/noStore/);
+
+        // The header noStore set must survive unreplaced — this is the bug the guard exists to
+        // stop: unchecked, setCache would call response.set('Cache-Control', …) right here.
+        expect(headers['cache-control']).toBe('no-store');
+        expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+    });
+});
+
+describe('noStore', () => {
+    it('forbids every cache from storing the response', () => {
+        const { response, headers } = createResponse();
+
+        noStore(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
+
+        expect(headers['cache-control']).toBe('no-store');
+    });
+
+    it('marks the response so setCache can refuse to run on top of it', () => {
+        const { response } = createResponse();
+
+        noStore(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
+
+        expect(response.locals.noStore).toBe(true);
+    });
+
+    it('drops conditional request headers, so a stale ETag cannot short-circuit to a bodyless 304', () => {
+        const { response } = createResponse();
+        const headers: Record<string, string> = {
+            'if-none-match': '"abc"',
+            'if-modified-since': 'Wed, 21 Oct 2015 07:28:00 GMT'
+        };
+
+        noStore(asStub<Request>({ headers }), response, jest.fn() as NextFunction);
+
+        expect(headers['if-none-match']).toBeUndefined();
+        expect(headers['if-modified-since']).toBeUndefined();
+    });
+
+    it('calls next', () => {
+        const { response } = createResponse();
+        const next = jest.fn() as NextFunction;
+
+        noStore(asStub<Request>({ headers: {} }), response, next);
+
+        expect(next).toHaveBeenCalledTimes(1);
     });
 });
 
