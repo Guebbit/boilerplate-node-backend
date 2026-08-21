@@ -143,7 +143,7 @@ The four steps every controller repeats — parse the body, answer 422, send a s
 catch — live in `@infrastructure/http/controller` as `parseBody`, `rejectValidation`, `refused`
 and `catchAs`. Helpers rather than a wrapper, deliberately: a wrapper that owned the chain would
 move the stack trace off the handler, degrade the inference `parseBody`'s return type carries, and
-hide the literal `.catch(` that `every-controller-catches.test.ts` looks for.
+hide the literal `.catch(` that `eslint/rules/controller-chain-must-catch.ts` looks for.
 
 **Three endpoints deliberately do not parse a generated schema, and say so in place.**
 `post-signup` and `put-account` are validated by their service against `zodUserSchema`, whose

@@ -9,9 +9,9 @@
  * Helpers rather than a `defineController()` wrapper, deliberately. A wrapper owns the chain: the
  * stack trace gains a frame that points here instead of at the handler, the service result has to
  * be threaded through a generic or inference degrades to `unknown`, and
- * `tests/cross-cutting/every-controller-catches.test.ts` — which greps for a literal `.catch(` —
- * stops seeing the catch it exists to find. Each of these is a call the controller still makes for
- * itself, so the chain, the types and the guard all survive.
+ * `eslint/rules/controller-chain-must-catch.ts` — which walks the AST for a chain ending in a real
+ * `.catch()` call — stops seeing the catch it exists to find. Each of these is a call the
+ * controller still makes for itself, so the chain, the types and the guard all survive.
  *
  * `locales/controllers/write-locale-entries.ts` invented the 422 half locally first; this is that
  * idea, finished and shared.
@@ -124,7 +124,7 @@ export const refused = <TData>(response: Response, result: ServiceResult<TData>)
  *
  * `catchAs(response, 'getProducts')` reads as the name of the operation whose failure is being
  * logged, which is the argument `rejectDatabaseError` wanted anyway. The literal `.catch(` stays
- * at the call site, so `every-controller-catches.test.ts` still sees it.
+ * at the call site, so `controller-chain-must-catch` still sees it.
  *
  * @param response - the express response
  * @param context - developer-facing operation name, recorded in the log line

@@ -37,8 +37,8 @@ describe('every declared probes.ts reaches the collections', () => {
     });
 
     it('actually scans the module tree', () => {
-        // A canary, as in `every-controller-catches.test.ts`: an empty result must mean "all
-        // wired", never "nothing was read".
+        // A canary, as in the audit sweep: an empty result must mean "all wired", never "nothing
+        // was read".
         expect(modulesDeclaringProbes().length).toBeGreaterThan(0);
     });
 

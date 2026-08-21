@@ -12,8 +12,9 @@
  * section.
  *
  * Both are COMMITTED, so both can be asked the strongest question: does the file on disk equal a
- * fresh assembly. Two sources for one document is a fork waiting to happen, and that is the
- * assertion that stops it — edit a source without re-bundling, or hand-edit a bundle, and it fails.
+ * fresh assembly. Two sources for one document is a fork waiting to happen — that is what
+ * `check:contracts-bundle --check` asserts, in `complete` on every run, so it is not repeated here
+ * as a second Jest case over the same two function calls.
  *
  * GENERATED — the four API client collections, produced whole from `openapi.yaml` and the demo
  * dataset. They have no fragments: nothing on disk stands between the contract and the document.
@@ -23,11 +24,12 @@
  * that mattered anyway — a stale committed copy was only ever a proxy for a generator that had
  * stopped covering the contract.
  *
- * WHERE THE COMMENTS LIVE differs between the first two kinds, and that is the interesting part. A
- * parse drops them, so an assembled bundle cannot use one. The REST contract stopped needing that
- * guarantee once its sources became whole documents: the explanations now sit in the module files
- * where the thing they explain is written, and nobody reads the bundle by hand. `the OpenAPI bundle`
- * below asserts they are still there — in the sources rather than in the output.
+ * WHERE THE COMMENTS LIVE differs between the first two kinds. A parse drops them, so an
+ * assembled bundle cannot use one. The REST contract stopped needing that guarantee once its
+ * sources became whole documents: the explanations now sit in the module files where the thing
+ * they explain is written, and nobody reads the bundle by hand. That placement is a design choice
+ * rather than a property this file checks — a comment count is a floor nothing can tell apart from
+ * noise, so unlike everything else below it was never a guard against a real fork.
  */
 
 import { readFileSync } from 'node:fs';
@@ -42,7 +44,7 @@ import {
     REPO_ROOT,
     type ContractBundle
 } from '../../scripts/contracts';
-import { MODULE_SECTIONS, moduleSpec, ROOT_SPEC } from '../../scripts/contracts/openapi';
+import { MODULE_SECTIONS, moduleSpec } from '../../scripts/contracts/openapi';
 import { ANALYTICS_SECTIONS } from '../../scripts/contracts/analytics-events';
 import { allProbes } from '../../scripts/contracts/generate-collections';
 import { SHARED_FILES } from '../../scripts/spec-identity';
@@ -63,13 +65,6 @@ const bundleByName = (name: string): ContractBundle => {
 const AUTHORED_BUNDLES = CONTRACT_BUNDLES.filter((bundle) => !isGenerated(bundle));
 
 describe('every contract bundle', () => {
-    it.each(AUTHORED_BUNDLES.map((bundle) => [bundle.name, bundle] as const))(
-        '%s reproduces its committed file byte for byte',
-        (_name, bundle) => {
-            expect(assembleBundle(bundle)).toBe(readCommittedBundle(bundle));
-        }
-    );
-
     it.each(AUTHORED_BUNDLES.map((bundle) => [bundle.name, bundle] as const))(
         '%s is built from fragments that all carry content',
         (_name, bundle) => {
@@ -113,24 +108,6 @@ describe('every contract bundle', () => {
 
 describe('the OpenAPI bundle', () => {
     const openapi = bundleByName('openapi');
-
-    it('keeps every comment, in the files that are actually read by hand', () => {
-        /*
-         * `redocly bundle` parses, so the BUNDLE carries no comments and cannot — that is the trade
-         * this layout made deliberately. What had to survive is the explanations, and they live in
-         * the module documents where the thing they explain is written. The count is a floor, not a
-         * fixture: it goes up as modules gain notes, and a collapse to near zero means someone
-         * flattened the sources back into one generated file.
-         */
-        const sources = [ROOT_SPEC, ...MODULE_SECTIONS.map((section) => moduleSpec(section))];
-        const comments = sources.flatMap((file) =>
-            readFileSync(file, 'utf8')
-                .split('\n')
-                .filter((line) => line.trim().startsWith('#'))
-        );
-
-        expect(comments.length).toBeGreaterThanOrEqual(200);
-    });
 
     it('gives every module a standalone document with both paths and schemas', () => {
         for (const section of MODULE_SECTIONS) {

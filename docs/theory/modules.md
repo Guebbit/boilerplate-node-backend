@@ -567,21 +567,21 @@ Some of these rules are relational — what a file may import depends on which m
 `no-restricted-imports` only matches file globs. Those live as tests instead, in
 `tests/cross-cutting/`.
 
-| Rule                                                                                  | Guard                              |
-| ------------------------------------------------------------------------------------- | ---------------------------------- |
-| No module imports a sibling's internals                                               | ESLint `no-restricted-imports`     |
-| `infrastructure` and `kernel` never import a module                                   | ESLint, per-tier blocks            |
-| A spec may reach its own module, a sibling's barrel, manifest or tests — nothing else | `module-test-boundaries.test.ts`   |
-| Two modules never claim the same audit action, and every action is dotted             | `audit-actions.test.ts`            |
-| No module shadows a shared locale key, or writes outside its own namespace            | `locale-namespaces.test.ts`        |
-| Every language declares the same keys across every module                             | `locale-parity.test.ts`            |
-| `infrastructure`'s shared scalars still match every operation in `openapi.yaml`       | `contract-scalars.test.ts`         |
-| Every controller handles its own rejections                                           | `every-controller-catches.test.ts` |
-| **A function added to a service but forgotten in its namespace**                      | `service-namespaces.test.ts`       |
-| Every declared `dependsOn` edge is imported, and every import is declared             | `context-map.test.ts`              |
-| A `generic` module carrying a `domain/` folder                                        | `subdomain-discipline.test.ts`     |
-| Every committed bundle still equals a fresh run of the bundler                        | `contract-bundles.test.ts`         |
-| Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`          |
+| Rule                                                                                  | Guard                                |
+| ------------------------------------------------------------------------------------- | ------------------------------------ |
+| No module imports a sibling's internals                                               | ESLint `no-restricted-imports`       |
+| `infrastructure` and `kernel` never import a module                                   | ESLint, per-tier blocks              |
+| A spec may reach its own module, a sibling's barrel, manifest or tests — nothing else | `module-test-boundaries.test.ts`     |
+| Two modules never claim the same audit action, and every action is dotted             | `audit-actions.test.ts`              |
+| No module shadows a shared locale key, or writes outside its own namespace            | `locale-namespaces.test.ts`          |
+| Every language declares the same keys across every module                             | `locale-parity.test.ts`              |
+| `infrastructure`'s shared scalars still match every operation in `openapi.yaml`       | `contract-scalars.test.ts`           |
+| Every controller handles its own rejections                                           | ESLint `controller-chain-must-catch` |
+| **A function added to a service but forgotten in its namespace**                      | `service-namespaces.test.ts`         |
+| Every declared `dependsOn` edge is imported, and every import is declared             | `context-map.test.ts`                |
+| A `generic` module carrying a `domain/` folder                                        | `subdomain-discipline.test.ts`       |
+| Every committed bundle still equals a fresh run of the bundler                        | `contract-bundles.test.ts`           |
+| Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`            |
 
 Each of these was verified by deliberately breaking it and watching it fail. A guard nobody has seen
 fire is a comment. All but the last live in `tests/cross-cutting/`; `request-sources.test.ts` sits

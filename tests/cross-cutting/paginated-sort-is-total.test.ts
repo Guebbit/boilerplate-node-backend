@@ -79,9 +79,9 @@ describe('every paged $sort is total', () => {
     });
 
     it('actually finds the pipelines it claims to scan', () => {
-        // A canary, as in `every-controller-catches.test.ts`: an empty result must mean "all
-        // total", never "the regex stopped matching". Two repositories page through aggregation
-        // pipelines today — `orders` and `products` — and between them declare more than one sort.
+        // A canary, as in the audit sweep: an empty result must mean "all total", never "the
+        // regex stopped matching". Two repositories page through aggregation pipelines today —
+        // `orders` and `products` — and between them declare more than one sort.
         expect(pagedSortStages().length).toBeGreaterThanOrEqual(2);
     });
 });
