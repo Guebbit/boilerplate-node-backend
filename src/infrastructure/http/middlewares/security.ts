@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
  * Default window and per-IP budget, used when the `NODE_RATE_LIMIT_*` variables are unset:
@@ -21,8 +22,8 @@ export const DEFAULT_RATE_LIMIT_MAX = 100;
  * Adds standard RateLimit headers (draft-7) and rejects excess requests with HTTP 429.
  */
 export const rateLimiter = rateLimit({
-    windowMs: Number(process.env.NODE_RATE_LIMIT_WINDOW_MS) || DEFAULT_RATE_LIMIT_WINDOW_MS,
-    limit: Number(process.env.NODE_RATE_LIMIT_MAX) || DEFAULT_RATE_LIMIT_MAX,
+    windowMs: environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1),
+    limit: environmentNumber('NODE_RATE_LIMIT_MAX', DEFAULT_RATE_LIMIT_MAX, 1),
     standardHeaders: 'draft-7',
     legacyHeaders: false
 });
@@ -43,8 +44,8 @@ export const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
  * See: docs/tools/security.md#the-two-rate-limit-budgets
  */
 export const authRateLimiter = rateLimit({
-    windowMs: Number(process.env.NODE_RATE_LIMIT_WINDOW_MS) || DEFAULT_RATE_LIMIT_WINDOW_MS,
-    limit: Number(process.env.NODE_AUTH_RATE_LIMIT_MAX) || DEFAULT_AUTH_RATE_LIMIT_MAX,
+    windowMs: environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1),
+    limit: environmentNumber('NODE_AUTH_RATE_LIMIT_MAX', DEFAULT_AUTH_RATE_LIMIT_MAX, 1),
     skipSuccessfulRequests: true,
     standardHeaders: 'draft-7',
     legacyHeaders: false

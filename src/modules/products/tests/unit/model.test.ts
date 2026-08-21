@@ -22,7 +22,10 @@ describe('product serialization', () => {
 
     it('normalizes a single lookup via productService.getById (no .lean())', async () => {
         const product = await createProduct({ title: 'Lookup Product', active: true });
-        const found = await productService.getById(product._id.toString(), true);
+        const found = await productService.getById(
+            product._id.toString(),
+            productService.callerScope({ admin: true })
+        );
 
         expect(found!.toJSON()).toMatchObject({
             id: product._id.toString(),
@@ -32,7 +35,10 @@ describe('product serialization', () => {
 
     it('normalizes a lean list via productService.search', async () => {
         await createProduct({ title: 'Listed Product', active: true });
-        const { items } = await productService.search({}, true);
+        const { items } = await productService.search(
+            {},
+            productService.callerScope({ admin: true })
+        );
 
         expect(items).toHaveLength(1);
         const item = asStub<Record<string, unknown>>(items[0]);

@@ -23,9 +23,9 @@ import { catchAs } from '@infrastructure/http/controller';
  */
 export const getLocales = (request: Request, response: Response) =>
     localeService
-        // Admin sees every row, inactive included — `getAuth` on the route is what makes the
-        // role readable here, exactly as the products list does it.
-        .listCapabilities(request.authContext?.admin === true)
+        // Which rows this caller may read — `getAuth` on the route is what makes the role
+        // readable here, exactly as the products list does it.
+        .listCapabilities(localeService.callerScope(request.authContext))
         .then((capabilities) => successResponse(response, capabilities))
         .catch(catchAs(response, 'getLocales'));
 

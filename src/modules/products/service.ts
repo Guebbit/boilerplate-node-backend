@@ -16,6 +16,7 @@ import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { validationErrors } from '@infrastructure/http/controller';
+import { createVisibilityScope } from '@kernel/authorization';
 
 /**
  * Product Service
@@ -45,39 +46,45 @@ const sanitizeStringArray = (values?: string[] | null): string[] => {
 };
 
 /**
+ * Which products a caller is allowed to read.
+ *
+ * `undefined` for admins, meaning "no restriction"; the published catalogue for everyone else.
+ * Why the scope rides in the read rather than being checked after it is the shared rule's to
+ * explain — see `createVisibilityScope`.
+ */
+export const callerScope = createVisibilityScope(productRepository.publicScope);
+
+/**
  * Search products (DTO-friendly) — matches POST /products/search in OpenAPI.
  *
  * Filters: id (product), text, minPrice, maxPrice
  * Pagination: page (1-based), pageSize
  *
  * @param filters
- * @param admin - Admin scope: shows inactive and soft-deleted products
+ * @param scope - which rows this caller may read ({@link callerScope})
  */
 export const search = (
     filters: SearchProductsRequest = {},
-    admin = false
+    scope?: Record<string, unknown>
 ): Promise<{
     items: ProductDocument[];
     meta: PaginatedMeta;
 }> =>
-    // The only product-domain decision left here: admins see everything, everyone else sees the
-    // published catalogue. How `text`/`category`/`tag`/`minPrice`/`maxPrice` become a query is
-    // declared on the repository.
-    productRepository.search(filters, admin ? {} : productRepository.publicScope());
+    // How `text`/`category`/`tag`/`minPrice`/`maxPrice` become a query is declared on the
+    // repository; the scope it is merged with is the caller's, and no filter may widen it.
+    productRepository.search(filters, scope);
 
 /**
  * Get a single product by ID.
- * Admin can see inactive or soft-deleted products; non-admin cannot.
  * Returns undefined if the id is falsy; null if no matching document is found.
  *
  * @param id
- * @param admin
+ * @param scope - which rows this caller may read ({@link callerScope})
  */
-export const getById = (id: string | undefined, admin = false) => {
+export const getById = (id: string | undefined, scope?: Record<string, unknown>) => {
     // Return early without triggering a DB call when no id is provided
     if (!id) return Promise.resolve();
-    if (admin) return productRepository.findById(id);
-    return productRepository.findPublicById(id);
+    return productRepository.findByIdScoped(id, scope);
 };
 
 /**
@@ -228,6 +235,7 @@ export const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[]
 
 export const productService = {
     validateData,
+    callerScope,
     search,
     facets,
     getById,

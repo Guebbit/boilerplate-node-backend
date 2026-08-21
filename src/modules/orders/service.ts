@@ -11,7 +11,7 @@ import {
 import { productRepository } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
-import { createCallerScope } from '@kernel/authorization';
+import { createOwnerScope } from '@kernel/authorization';
 import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 import { orderRepository } from './repository';
 import {
@@ -344,9 +344,9 @@ export const removeById = (
  * Returns `undefined` for admins, meaning "no restriction", so callers must spread it
  * (`{ ...callerScope(ctx), status: 'paid' }`) rather than treat it as a filter. Why the scope
  * rides in the read, and why a caller with no id throws rather than widening, are the shared
- * rule's to explain — see `createCallerScope`.
+ * rule's to explain — see `createOwnerScope`.
  */
-export const callerScope = createCallerScope(orderRepository.visibleScope);
+export const callerScope = createOwnerScope(orderRepository.visibleScope);
 
 /**
  * Which column of the lifecycle table a caller reads.

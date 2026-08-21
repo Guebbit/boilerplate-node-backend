@@ -8,6 +8,27 @@
         "error-forbidden": "Non hai i permessi per farlo.",
         "error-not-found": "Questo elemento non esiste più."
     },
+    "validation": {
+        "required": "Questo campo è obbligatorio.",
+        "invalid": "Questo valore non è valido.",
+        "invalid-type": "Era atteso un valore di tipo {{expected}}.",
+        "invalid-format": "Questo valore non è nel formato previsto.",
+        "format-email": "Inserisci un indirizzo email valido.",
+        "format-url": "Inserisci un URL valido.",
+        "format-uuid": "Inserisci un identificativo valido.",
+        "format-datetime": "Inserisci una data e un'ora valide.",
+        "format-date": "Inserisci una data valida.",
+        "format-time": "Inserisci un orario valido.",
+        "too-small-string": "Deve contenere almeno {{minimum}} caratteri.",
+        "too-big-string": "Non può superare {{maximum}} caratteri.",
+        "too-small-number": "Deve essere almeno {{minimum}}.",
+        "too-big-number": "Non può superare {{maximum}}.",
+        "too-small-items": "Deve contenere almeno {{minimum}} elementi.",
+        "too-big-items": "Non può contenere più di {{maximum}} elementi.",
+        "not-multiple-of": "Deve essere un multiplo di {{divisor}}.",
+        "unrecognized-keys": "Campo non riconosciuto: {{keys}}.",
+        "invalid-value": "Deve essere uno tra: {{values}}."
+    },
     "email": {
         "footer": "Inviata dal team di Ecommerce Demo."
     }

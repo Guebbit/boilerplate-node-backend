@@ -71,24 +71,28 @@ const entryBase = createBaseRepository<LocaleMessageDocument>(localeMessageModel
 const findByTag = (tag: string): Promise<LocaleDocument | null> =>
     localeBase.findOne({ tag: tag.toLowerCase() });
 
+/** Which languages a visitor may select. Narrows the manifest read; admins pass no scope. */
+const publicScope = (): Record<string, unknown> => ({ active: true });
+
 /**
- * Every ACTIVE language, unpaginated and sorted by tag.
+ * The languages this deployment offers, unpaginated and sorted by tag.
  *
  * Unpaginated on purpose, and safe to be: this is the set a deployment offers, which is a handful
  * of rows by construction — a deployment with a thousand languages has a different problem.
  * `findAll` is not used because its default limit is ten, and a manifest silently truncated at ten
  * languages is the kind of bug that only appears on the deployment that grew.
+ *
+ * The scope is the caller's, spread into the same query rather than picked between two methods —
+ * the pair mirrors the products repository, where `publicScope` narrows and admins pass nothing.
+ *
+ * @param scope - the caller's filter fragment, or `undefined` to read every row
  */
-const listActive = (): Promise<LocaleDocument[]> =>
-    localeModel.find({ active: true }).sort({ tag: 1 }).lean<LocaleDocument[]>().exec();
-
-/**
- * Every language, inactive included — the ADMIN's read. Same unpaginated reasoning as
- * {@link listActive}; the pair mirrors the products repository, where `publicScope` narrows and
- * admin callers pass nothing.
- */
-const listAll = (): Promise<LocaleDocument[]> =>
-    localeModel.find({}).sort({ tag: 1 }).lean<LocaleDocument[]>().exec();
+const list = (scope?: Record<string, unknown>): Promise<LocaleDocument[]> =>
+    localeModel
+        .find({ ...scope })
+        .sort({ tag: 1 })
+        .lean<LocaleDocument[]>()
+        .exec();
 
 /**
  * How many DOWNLOADABLE entries each language has, in one query rather than one per language.
@@ -280,15 +284,15 @@ const deleteLocaleCascade = async (locale: LocaleDocument): Promise<number> => {
 /** The languages. */
 export const localeRepository: BaseRepository<LocaleDocument> & {
     findByTag: (tag: string) => Promise<LocaleDocument | null>;
-    listActive: () => Promise<LocaleDocument[]>;
-    listAll: () => Promise<LocaleDocument[]>;
+    publicScope: () => Record<string, unknown>;
+    list: (scope?: Record<string, unknown>) => Promise<LocaleDocument[]>;
     bumpRevision: (tag: string) => Promise<number>;
     deleteLocaleCascade: (locale: LocaleDocument) => Promise<number>;
 } = {
     ...localeBase,
     findByTag,
-    listActive,
-    listAll,
+    publicScope,
+    list,
     bumpRevision,
     deleteLocaleCascade
 };

@@ -20,6 +20,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { manageConnection } from '@infrastructure/runtime/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 import { WORKER_CHANNELS } from '@types';
+import { environmentFlag } from '@infrastructure/runtime/environment';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ const getAmqpUrl = (): string | undefined => {
  * payload — see `enqueueEmail`, which sends inline rather than constructing a job envelope.
  */
 export const isQueueEnabled = (): boolean =>
-    Boolean(getAmqpUrl()) && process.env.NODE_RABBITMQ_ENABLED !== '0';
+    Boolean(getAmqpUrl()) && environmentFlag('NODE_RABBITMQ_ENABLED', true);
 
 // ─── Connection state ─────────────────────────────────────────────────────────
 

@@ -16,6 +16,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/security';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
  * Origins allowed to call this API with credentials, from `NODE_CORS_ORIGIN`.
@@ -46,7 +47,7 @@ export const installSecurity = (app: Express): void => {
      *
      * See: docs/tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
      */
-    app.set('trust proxy', Number.parseInt(process.env.NODE_TRUST_PROXY_HOPS ?? '0', 10) || 0);
+    app.set('trust proxy', environmentNumber('NODE_TRUST_PROXY_HOPS', 0, 0));
 
     /**
      * Secure headers

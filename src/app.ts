@@ -13,7 +13,11 @@ import { startCache } from '@infrastructure/adapters/cache';
 import { startQueue } from '@infrastructure/adapters/queue';
 import { registerWorkers } from '@app/workers';
 import { logger } from '@infrastructure/adapters/logger';
-import { validateRequiredEnvironment } from '@infrastructure/runtime/environment';
+import {
+    environmentNumber,
+    validateRequiredEnvironment
+} from '@infrastructure/runtime/environment';
+import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 import { shutdownInfra, registerSignalHandlers } from '@infrastructure/runtime/server-lifecycle';
 import {
     getDefaultLocale,
@@ -47,10 +51,7 @@ let shutdownPromise: Promise<void> | undefined;
 /*
  * Parse port from env with fallback to default
  */
-const getPort = () => {
-    const parsedPort = Number.parseInt(process.env.NODE_PORT ?? String(DEFAULT_PORT), 10);
-    return Number.isNaN(parsedPort) ? DEFAULT_PORT : parsedPort;
-};
+const getPort = () => environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
 
 /*
  * Boot sequence: validate env → connect infra → mount i18n → listen
@@ -95,6 +96,11 @@ export const startServer = () => {
              */
             .then(() => refreshLocaleOverrides())
             .then(() => startLocaleOverrideRefresh())
+            /*
+             * After i18n, because the map resolves its copy through `t`. Registering it earlier
+             * would install a translator with no dictionary behind it.
+             */
+            .then(() => registerValidationMessages())
             .then(
                 () =>
                     new Promise<Server>((resolve) => {

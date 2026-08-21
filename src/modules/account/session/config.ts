@@ -7,6 +7,8 @@
  * is parsed.
  */
 
+import { environmentNumber } from '@infrastructure/runtime/environment';
+
 export enum RefreshTokenExpiryTime {
     SHORT = 'short',
     MEDIUM = 'medium',
@@ -51,7 +53,4 @@ export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
  * Get access token TTL in seconds.
  * @returns seconds as integer, 0 if env var is unset
  */
-export const getAccessTokenTTL = () =>
-    process.env.NODE_TOKEN_ACCESS_TIME
-        ? Number.parseInt(process.env.NODE_TOKEN_ACCESS_TIME, 10)
-        : 0;
+export const getAccessTokenTTL = () => environmentNumber('NODE_TOKEN_ACCESS_TIME', 0);

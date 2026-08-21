@@ -7,6 +7,7 @@ import { productRepository } from '@modules/products';
 import { cartRepository } from '@modules/cart';
 import type { ResponseReject } from '@infrastructure/http/response';
 import type { ProductDocument } from '@modules/products';
+import type { Caller } from '@types';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import productsModule from '@modules/products/module';
@@ -39,6 +40,14 @@ setupTestDb();
 afterEach(() => {
     resetDomainEvents();
 });
+
+/* The three callers every visibility rule answers for. `guest` and `logged` differ by identity
+ * alone, so a rule that starts distinguishing them fails a case rather than passing silently. */
+const GUEST: Caller | undefined = undefined;
+const LOGGED: Caller = { id: '507f1f77bcf86cd799439011', admin: false };
+const ADMIN: Caller = { id: '507f1f77bcf86cd799439012', admin: true };
+
+const titlesOf = (items: ProductDocument[]): string[] => items.map(({ title }) => title);
 
 describe('productService.validateData', () => {
     it('returns an empty array for valid product data', () => {
@@ -175,23 +184,36 @@ describe('productService.validateData', () => {
 });
 
 describe('productService.search', () => {
-    it('returns only active products for non-admin callers', async () => {
+    /*
+     * One case per role, asserting on titles rather than counts: a mixed assertion cannot say
+     * WHICH rule moved, and `guest` vs `logged` are only distinguishable because the scope takes
+     * a caller rather than a boolean.
+     */
+    it('shows a guest only the published catalogue', async () => {
         await createProduct({ title: 'Active Product', active: true });
         await createProduct({ title: 'Inactive Product', active: false });
 
-        const result = await productService.search({}, false);
+        const result = await productService.search({}, productService.callerScope(GUEST));
 
-        expect(result.items).toHaveLength(1);
-        expect(result.items[0].title).toBe('Active Product');
+        expect(titlesOf(result.items)).toEqual(['Active Product']);
     });
 
-    it('returns all products (including inactive) for admin callers', async () => {
+    it('shows a signed-in non-admin the same published catalogue', async () => {
+        await createProduct({ title: 'Active Product', active: true });
+        await createProduct({ title: 'Inactive Product', active: false });
+
+        const result = await productService.search({}, productService.callerScope(LOGGED));
+
+        expect(titlesOf(result.items)).toEqual(['Active Product']);
+    });
+
+    it('shows an admin the inactive rows too', async () => {
         await createProduct({ title: 'Active', active: true });
         await createProduct({ title: 'Inactive', active: false });
 
-        const result = await productService.search({}, true);
+        const result = await productService.search({}, productService.callerScope(ADMIN));
 
-        expect(result.items).toHaveLength(2);
+        expect(titlesOf(result.items).toSorted()).toEqual(['Active', 'Inactive']);
     });
 
     it('filters by text (searches title and description)', async () => {
@@ -206,7 +228,10 @@ describe('productService.search', () => {
             active: true
         });
 
-        const result = await productService.search({ text: 'Fancy' }, false);
+        const result = await productService.search(
+            { text: 'Fancy' },
+            productService.callerScope(GUEST)
+        );
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].title).toBe('Fancy Widget');
@@ -216,7 +241,10 @@ describe('productService.search', () => {
         await createProduct({ title: 'Cheap', price: 5, active: true });
         await createProduct({ title: 'Expensive', price: 100, active: true });
 
-        const result = await productService.search({ minPrice: 50 }, false);
+        const result = await productService.search(
+            { minPrice: 50 },
+            productService.callerScope(GUEST)
+        );
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].title).toBe('Expensive');
@@ -226,7 +254,10 @@ describe('productService.search', () => {
         await createProduct({ title: 'Cheap', price: 5, active: true });
         await createProduct({ title: 'Expensive', price: 100, active: true });
 
-        const result = await productService.search({ maxPrice: 10 }, false);
+        const result = await productService.search(
+            { maxPrice: 10 },
+            productService.callerScope(GUEST)
+        );
 
         expect(result.items).toHaveLength(1);
         expect(result.items[0].title).toBe('Cheap');
@@ -261,19 +292,18 @@ describe('productService.search', () => {
             deletedAt: new Date()
         });
 
-        const result = await productService.search({}, false);
+        const result = await productService.search({}, productService.callerScope(GUEST));
 
-        expect(result.items).toHaveLength(1);
-        expect(result.items[0].title).toBe('Visible');
+        expect(titlesOf(result.items)).toEqual(['Visible']);
     });
 });
 
 describe('productService.getById', () => {
-    it('returns a lean product object for an active product (non-admin)', async () => {
+    it('returns a published product to a guest', async () => {
         const product = await createProduct({ active: true });
         const id = product._id.toString();
 
-        const found = await productService.getById(id, false);
+        const found = await productService.getById(id, productService.callerScope(GUEST));
 
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
@@ -281,20 +311,35 @@ describe('productService.getById', () => {
         expect(typeof asStub<{ save: unknown }>(found).save).toBe('function');
     });
 
-    it('returns null for an inactive product when called as non-admin', async () => {
+    it('hides an unpublished product from a guest', async () => {
         const product = await createProduct({ active: false });
-        const id = product._id.toString();
 
-        const found = await productService.getById(id, false);
+        const found = await productService.getById(
+            product._id.toString(),
+            productService.callerScope(GUEST)
+        );
 
         expect(found).toBeNull();
     });
 
-    it('returns an inactive product when called as admin', async () => {
+    it('hides an unpublished product from a signed-in non-admin', async () => {
         const product = await createProduct({ active: false });
-        const id = product._id.toString();
 
-        const found = await productService.getById(id, true);
+        const found = await productService.getById(
+            product._id.toString(),
+            productService.callerScope(LOGGED)
+        );
+
+        expect(found).toBeNull();
+    });
+
+    it('shows an unpublished product to an admin', async () => {
+        const product = await createProduct({ active: false });
+
+        const found = await productService.getById(
+            product._id.toString(),
+            productService.callerScope(ADMIN)
+        );
 
         expect(found).not.toBeNull();
     });

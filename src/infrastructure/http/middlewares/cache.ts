@@ -13,6 +13,7 @@ import type { NextFunction, Request, Response } from 'express';
 import { getCacheValue, invalidateCacheTags, setCacheValue } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /** Enough to replay an HTTP response verbatim: the status code and the serialized body. */
 interface CachedResponse {
@@ -69,7 +70,7 @@ export const resolveCacheTtl = (seconds: number): number => {
 const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
 
 const getMaxCachedBytes = (): number =>
-    Number(process.env.NODE_REDIS_CACHE_MAX_BYTES) || DEFAULT_MAX_CACHED_BYTES;
+    environmentNumber('NODE_REDIS_CACHE_MAX_BYTES', DEFAULT_MAX_CACHED_BYTES, 1);
 
 /**
  * Serialize a response for storage, or refuse it for being too large.

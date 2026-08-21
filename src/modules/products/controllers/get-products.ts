@@ -79,7 +79,7 @@ export const getProducts = (
     const { text } = parsed;
 
     return productService
-        .search(parsed, request.authContext?.admin === true)
+        .search(parsed, productService.callerScope(request.authContext))
         .then((result) => {
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(request),

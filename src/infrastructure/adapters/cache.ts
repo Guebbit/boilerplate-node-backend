@@ -19,6 +19,7 @@ import { createClient, type RedisClientType } from 'redis';
 import { logger } from '@infrastructure/adapters/logger';
 import { manageConnection } from '@infrastructure/runtime/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
+import { environmentFlag } from '@infrastructure/runtime/environment';
 
 /**
  * Prefix for every key this app owns. Redis has no namespaces beyond numbered databases, so
@@ -47,7 +48,8 @@ const getRedisUrl = (): string | undefined => {
  * is an explicit kill switch — useful for debugging a suspected stale-cache problem in
  * production without tearing down the Redis service itself.
  */
-const isCacheEnabled = () => Boolean(getRedisUrl()) && process.env.NODE_REDIS_CACHE_ENABLED !== '0';
+const isCacheEnabled = () =>
+    Boolean(getRedisUrl()) && environmentFlag('NODE_REDIS_CACHE_ENABLED', true);
 
 /**
  * The one connection this process opens to Redis — a client per request exhausts Redis' limit.

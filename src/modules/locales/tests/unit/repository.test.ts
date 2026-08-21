@@ -12,6 +12,7 @@ import { LocaleScope } from '@types';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/factory';
 import { localeMessageRepository, localeRepository } from '@modules/locales/repository';
+import type { LocaleDocument } from '@modules/locales/model';
 import { localeService } from '@modules/locales/service';
 
 setupTestDb();
@@ -531,23 +532,32 @@ describe('countEntriesByLocale', () => {
     });
 });
 
-describe('listActive', () => {
+describe('list', () => {
     it('is not truncated by the shared list default, which would silently cap a manifest', async () => {
         // `findAll` defaults to ten rows. A deployment that grew past ten languages would have lost
         // the rest from its manifest with nothing to indicate it.
         for (let index = 0; index < 12; index++)
             await givenLanguage(`l${index}`.padEnd(2, 'x').slice(0, 2) + String(index));
 
-        expect(await localeRepository.listActive()).toHaveLength(12);
+        expect(await localeRepository.list(localeRepository.publicScope())).toHaveLength(12);
     });
 
-    it('omits the inactive ones, which is what keeps a draft out of the manifest', async () => {
+    it('omits the inactive ones under the public scope, which keeps a draft out of the manifest', async () => {
         await givenLanguage('es');
         await givenLanguage('fr', {}, { active: false });
 
-        const active = await localeRepository.listActive();
+        const active = await localeRepository.list(localeRepository.publicScope());
 
-        expect(active.map(({ tag }) => tag)).toEqual(['es']);
+        expect(active.map(({ tag }: LocaleDocument) => tag)).toEqual(['es']);
+    });
+
+    it('returns the inactive ones too when no scope narrows it — the admin read', async () => {
+        await givenLanguage('es');
+        await givenLanguage('fr', {}, { active: false });
+
+        const all = await localeRepository.list();
+
+        expect(all.map(({ tag }: LocaleDocument) => tag)).toEqual(['es', 'fr']);
     });
 });
 

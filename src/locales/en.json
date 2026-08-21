@@ -8,6 +8,27 @@
         "error-forbidden": "You do not have permission to do that.",
         "error-not-found": "That item no longer exists."
     },
+    "validation": {
+        "required": "This field is required.",
+        "invalid": "This value is not valid.",
+        "invalid-type": "Expected {{expected}}.",
+        "invalid-format": "This value is not in the expected format.",
+        "format-email": "Enter a valid email address.",
+        "format-url": "Enter a valid URL.",
+        "format-uuid": "Enter a valid identifier.",
+        "format-datetime": "Enter a valid date and time.",
+        "format-date": "Enter a valid date.",
+        "format-time": "Enter a valid time.",
+        "too-small-string": "Must be at least {{minimum}} characters.",
+        "too-big-string": "Must be at most {{maximum}} characters.",
+        "too-small-number": "Must be at least {{minimum}}.",
+        "too-big-number": "Must be at most {{maximum}}.",
+        "too-small-items": "Must have at least {{minimum}} items.",
+        "too-big-items": "Must have at most {{maximum}} items.",
+        "not-multiple-of": "Must be a multiple of {{divisor}}.",
+        "unrecognized-keys": "Unknown field: {{keys}}.",
+        "invalid-value": "Must be one of: {{values}}."
+    },
     "email": {
         "footer": "Sent by the Ecommerce Demo team."
     }

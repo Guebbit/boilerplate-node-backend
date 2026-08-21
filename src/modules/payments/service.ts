@@ -25,7 +25,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
-import { createCallerScope } from '@kernel/authorization';
+import { createOwnerScope } from '@kernel/authorization';
 import { OrderStatus } from '@types';
 import type { PaymentStatus, Caller } from '@types';
 import {
@@ -94,9 +94,9 @@ const resolvePayerId = (orderUserId: string): Promise<string> =>
  *
  * `ownerScope` rather than a `visibleScope`: payments are never soft-deleted, so "whose" is the
  * only axis there is. The rest — the `undefined` for admins, the scope riding in the read, the
- * throw on a caller with no id — is `createCallerScope`'s to explain.
+ * throw on a caller with no id — is `createOwnerScope`'s to explain.
  */
-const callerScope = createCallerScope(paymentRepository.ownerScope);
+const callerScope = createOwnerScope(paymentRepository.ownerScope);
 
 /**
  * Create (or refresh) the payment intent for an order.

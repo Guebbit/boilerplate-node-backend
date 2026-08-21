@@ -29,6 +29,7 @@ import {
 } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 import { isDemoMode, recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
@@ -66,6 +67,9 @@ export const resetTransporter = (): void => {
     transport = undefined;
 };
 
+/** The port the SMTP client dials, and the one fact `secure` is derived from. */
+const smtpPort = (): number => environmentNumber('NODE_SMTP_PORT', 587, 1);
+
 /**
  * The SMTP transport, built on first use and reused: nodemailer pools connections, so a per-email
  * transport would pay the TCP + TLS + AUTH handshake every time.
@@ -95,13 +99,12 @@ const getTransporter = (): Transporter => {
                   host: process.env.NODE_SMTP_HOST ?? '',
                   // 587 = submission with STARTTLS (the modern default); 465 = implicit TLS;
                   // 25 = relay.
-                  port: process.env.NODE_SMTP_PORT
-                      ? Number.parseInt(process.env.NODE_SMTP_PORT)
-                      : 587,
+                  port: smtpPort(),
                   // `secure: true` means TLS from the first byte, which is only correct on 465.
                   // On 587 it must be false — the connection starts plaintext and is upgraded via
-                  // STARTTLS.
-                  secure: process.env.NODE_SMTP_PORT === '465', // True for 465, false otherwise
+                  // STARTTLS. Compared as a NUMBER, so a zero-padded `0465` cannot read as "not
+                  // 465" and open a plaintext connection to a port expecting TLS immediately.
+                  secure: smtpPort() === 465,
                   // SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
                   // attempts an unauthenticated send and the server rejects it — the failure
                   // surfaces at send time, not at boot, because email is not a hard startup

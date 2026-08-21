@@ -12,6 +12,7 @@
  */
 import type { SendMailOptions } from 'nodemailer';
 import type { Data } from 'ejs';
+import { environmentFlag } from '@infrastructure/runtime/environment';
 
 /** One recorded send, shaped for the e2e suite's outbox reader. */
 export interface DemoOutboxEmail {
@@ -25,7 +26,7 @@ export interface DemoOutboxEmail {
 }
 
 /** `npm run demo` sets this; nothing else does. */
-export const isDemoMode = (): boolean => process.env.NODE_DEMO === 'true';
+export const isDemoMode = (): boolean => environmentFlag('NODE_DEMO', false);
 
 const outbox: DemoOutboxEmail[] = [];
 

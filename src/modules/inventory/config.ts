@@ -10,6 +10,8 @@
  * file existed.
  */
 
+import { environmentNumber } from '@infrastructure/runtime/environment';
+
 /**
  * How long a hold survives without payment.
  *
@@ -19,7 +21,7 @@
  * @returns the reservation window in minutes
  */
 export const reservationTtlMinutes = (): number =>
-    Number(process.env.NODE_RESERVATION_TTL_MINUTES ?? 30);
+    environmentNumber('NODE_RESERVATION_TTL_MINUTES', 30, 0);
 
 /**
  * The availability at or under which a product wants restocking.
@@ -32,4 +34,4 @@ export const reservationTtlMinutes = (): number =>
  *
  * @returns the low-availability mark
  */
-export const lowStockThreshold = (): number => Number(process.env.NODE_LOW_STOCK_THRESHOLD ?? 5);
+export const lowStockThreshold = (): number => environmentNumber('NODE_LOW_STOCK_THRESHOLD', 5, 0);

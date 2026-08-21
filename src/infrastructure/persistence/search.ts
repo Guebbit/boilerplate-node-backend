@@ -4,6 +4,8 @@
  * require changes in one place instead of every service.
  */
 
+import { environmentNumber } from '@infrastructure/runtime/environment';
+
 export interface PaginationInput {
     // `unknown` rather than `number | string | null`: these values come straight off a request,
     // where a repeated query key arrives as an array and a JSON body can hold anything. The
@@ -63,7 +65,7 @@ export const normalizePagination = (input: PaginationInput = {}): PaginationResu
     const requestedPageSize = Number(input.pageSize) || 0;
     const configuredPageSize = Math.min(
         MAX_CONFIGURED_PAGE_SIZE,
-        Math.max(1, Number(process.env.NODE_SETTINGS_PAGINATION_PAGE_SIZE) || FALLBACK_PAGE_SIZE)
+        environmentNumber('NODE_SETTINGS_PAGINATION_PAGE_SIZE', FALLBACK_PAGE_SIZE, 1)
     );
     const pageSize = requestedPageSize > 0 ? requestedPageSize : configuredPageSize;
     return { page, pageSize, skip: (page - 1) * pageSize };

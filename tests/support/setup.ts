@@ -20,6 +20,7 @@ import {
     loadLocaleResources,
     registerLocaleDirectories
 } from '@infrastructure/i18n';
+import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 
 /**
  * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/security.ts, currently 100).
@@ -80,8 +81,8 @@ if (existsSync(systemBinary)) {
  *
  * That ordering is exactly what hid PROBLEM 01: under Jest, i18next is up by the time a
  * module-scope `t()` runs, so eagerly-resolved Zod messages worked here and only here. Tests that
- * assert on translated messages must therefore not rely on this — see
- * `tests/unit/i18n/validation-messages.test.ts`, which initialises its own instance.
+ * assert on translated messages must therefore not rely on this — see each module's own
+ * `validation-messages` spec, which initialises its own instance through `@tests/i18n-boot`.
  */
 /*
  * The same wiring `app.ts` does at boot: a module carries its own strings, and
@@ -107,3 +108,9 @@ void i18next.init({
     supportedLngs: listSupportedLocales(),
     resources: loadLocaleResources()
 });
+
+/*
+ * The other half of `app.ts`'s boot: without it, Zod answers its own English here and the suite
+ * would be asserting behaviour the running service does not have.
+ */
+registerValidationMessages();

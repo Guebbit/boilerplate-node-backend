@@ -38,6 +38,10 @@ const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
 
 export const productRepository: BaseRepository<ProductDocument> & {
     publicScope: () => Record<string, unknown>;
+    findByIdScoped: (
+        productId: string,
+        scope?: Record<string, unknown>
+    ) => Promise<ProductDocument | null>;
     findPublicById: (productId: string) => Promise<ProductDocument | null>;
     facets: () => Promise<{ categories: FacetCount[]; tags: FacetCount[] }>;
     reserveUnits: (productId: string, quantity: number) => Promise<boolean>;
@@ -67,19 +71,35 @@ export const productRepository: BaseRepository<ProductDocument> & {
     publicScope: (): Record<string, unknown> => ({ ...PUBLIC_SCOPE }),
 
     /**
-     * The publicly visible product with this id, or `null`.
+     * Fetch one product, optionally narrowed to a caller's authorization scope.
      *
-     * `publicScope` composed with an id lookup, owned here so "a hidden product cannot be
-     * wishlisted or reordered" is one query rather than a spread each caller must remember.
-     * `orders.findByIdScoped` is the same idea.
+     * The id lookup and the scope are applied by the same query — checking visibility after the
+     * read is how a scoped find turns into an information leak. No scope means no restriction,
+     * which is the admin branch (see `createVisibilityScope`).
      *
      * `async` because `toObjectId` throws on a malformed id — see `base-repository.ts`.
+     * `orders.findByIdScoped` is the same idea.
+     *
+     * @param productId - the product's id
+     * @param scope - the caller's filter fragment, or `undefined` to read unrestricted
+     * @returns the product if it matches the scope, otherwise `null`
+     */
+    findByIdScoped: async (productId: string, scope?: Record<string, unknown>) =>
+        productRepository.findOne({ _id: toObjectId(productId), ...scope }),
+
+    /**
+     * The publicly visible product with this id, or `null`.
+     *
+     * {@link findByIdScoped} bound to the public scope, named so "a hidden product cannot be
+     * wishlisted or reordered" is one call rather than a spread each caller must remember. The
+     * two domain readers that want exactly this — `cart/services/reorder.ts`, `wishlist/service.ts`
+     * — never vary by role, so they say what they mean instead of building a scope.
      *
      * @param productId - the product's id
      * @returns the product if it is published and not soft-deleted, otherwise `null`
      */
-    findPublicById: async (productId: string) =>
-        productRepository.findOne({ _id: toObjectId(productId), ...PUBLIC_SCOPE }),
+    findPublicById: (productId: string) =>
+        productRepository.findByIdScoped(productId, PUBLIC_SCOPE),
 
     /**
      * Every category and tag the PUBLIC catalogue carries, counted.

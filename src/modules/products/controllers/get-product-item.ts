@@ -13,9 +13,9 @@ import { productsAnalyticsEvents } from '../analytics';
  * Only admin can see non-active (inactive/deleted) products.
  */
 export const getProductItem = (request: Request, response: Response) =>
-    // Admin can search inactive or deleted products; non-admin sees only active ones
+    // Which rows this caller may read — `getAuth` on the route is what makes the role readable here.
     productService
-        .getById(String(request.params.id), request.authContext?.admin === true)
+        .getById(String(request.params.id), productService.callerScope(request.authContext))
         .then((product) => {
             if (!product) {
                 rejectResponse(response, 404, [t('products.not-found')]);

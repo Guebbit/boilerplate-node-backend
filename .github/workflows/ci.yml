@@ -343,6 +343,25 @@ jobs:
             - name: Check module docs are current
               run: npm run check:module-docs
 
+    env-keys-documented:
+        # Every variable the app reads is listed in `.env-example`, which is the only enumeration
+        # a deployment has. An undocumented one is a feature that silently never turns on.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check every environment variable is documented
+              run: npm run check:environment-keys
+
     typecheck:
         # `tsc --noEmit` — types only. `build` below repeats it as part of its own script; this
         # job exists so a type error is reported as one, not as a build failure.

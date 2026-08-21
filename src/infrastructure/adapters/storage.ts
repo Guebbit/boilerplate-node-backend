@@ -27,6 +27,7 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { getFormFiles } from '@infrastructure/http/uploads';
 import { logger } from '@infrastructure/adapters/logger';
 import { ExtendedError } from '@infrastructure/http/errors';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
  * Where an upload is written while the request is still being decided — NOT the public directory.
@@ -180,10 +181,8 @@ const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
  * `NODE_MAX_UPLOAD_BYTES` after this module is evaluated still gets its value — and so a test can
  * ask for the number rather than restating the default and hoping they agree.
  */
-export const maxUploadBytes = (): number => {
-    const configured = Number.parseInt(process.env.NODE_MAX_UPLOAD_BYTES ?? '', 10);
-    return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_MAX_UPLOAD_BYTES;
-};
+export const maxUploadBytes = (): number =>
+    environmentNumber('NODE_MAX_UPLOAD_BYTES', DEFAULT_MAX_UPLOAD_BYTES, 1);
 
 /**
  * The configured multer instance, built on first use.

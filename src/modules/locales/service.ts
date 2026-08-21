@@ -24,6 +24,7 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleMessageDocument } from './model';
 import { localeMessageRepository, localeRepository, type EntryInput } from './repository';
+import { createVisibilityScope } from '@kernel/authorization';
 
 /**
  * What the override tier can be asked, and the rules that make it safe to ask.
@@ -179,7 +180,7 @@ export const mergeCapabilities = (
  * exactly like a deployment that has none.
  */
 export const readDynamicTier = async (
-    admin = false
+    scope?: Record<string, unknown>
 ): Promise<{
     languages: LocaleDocument[];
     entryCounts: Map<string, number>;
@@ -189,7 +190,7 @@ export const readDynamicTier = async (
         const [languages, entryCounts] = await Promise.all([
             // `active` gates what a VISITOR may select and nothing else — the admin, who is the
             // one toggling the flag, reads every row. Same rule as products and users.
-            admin ? localeRepository.listAll() : localeRepository.listActive(),
+            localeRepository.list(scope),
             localeMessageRepository.countEntriesByLocale()
         ]);
         return { languages, entryCounts };
@@ -202,12 +203,23 @@ export const readDynamicTier = async (
 };
 
 /**
+ * Which languages a caller is allowed to read.
+ *
+ * `undefined` for admins, meaning "no restriction"; the active languages for everyone else. Why
+ * the scope rides in the read is the shared rule's to explain — see `createVisibilityScope`.
+ */
+export const callerScope = createVisibilityScope(localeRepository.publicScope);
+
+/**
  * Every language this deployment offers, and what each of them can do.
  *
- * @param admin - Include inactive languages, which only the admin surface may see.
+ * @param scope - which rows this caller may read ({@link callerScope}); inactive languages are
+ *   only in reach of the admin surface
  */
-export const listCapabilities = async (admin = false): Promise<LocaleCapabilities> => {
-    const { languages, entryCounts } = await readDynamicTier(admin);
+export const listCapabilities = async (
+    scope?: Record<string, unknown>
+): Promise<LocaleCapabilities> => {
+    const { languages, entryCounts } = await readDynamicTier(scope);
 
     return {
         locales: mergeCapabilities(listSupportedLocales(), languages, entryCounts),
@@ -644,6 +656,7 @@ export const localeService = {
     dynamicCapability,
     mergeCapabilities,
     readDynamicTier,
+    callerScope,
     listCapabilities,
     buildMessageTree,
     findUnsafeKeySegment,

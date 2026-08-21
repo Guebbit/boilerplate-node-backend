@@ -1,6 +1,7 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
  * Persisted audit trail — the durable half of `@infrastructure/observability/audit`.
@@ -45,7 +46,7 @@ export type AuditLogModel = Model<AuditLogDocument>;
  * How long an entry survives, in days. Read at import time because a TTL index is created once,
  * at startup, from whatever value is configured then — see the note on the index below.
  */
-const retentionDays = Number.parseInt(process.env.NODE_AUDIT_RETENTION_DAYS ?? '90', 10);
+const retentionDays = environmentNumber('NODE_AUDIT_RETENTION_DAYS', 90, 1);
 
 /** Audit collection schema. */
 export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(

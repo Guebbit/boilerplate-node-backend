@@ -12,6 +12,8 @@
 import { api } from '@tests/http';
 import enUsers from '@modules/users/locales/en.json';
 import itUsers from '@modules/users/locales/it.json';
+import enShared from '../../src/locales/en.json';
+import itShared from '../../src/locales/it.json';
 
 const INVALID_SIGNUP = {
     email: 'not-an-email',
@@ -112,5 +114,76 @@ describe('Accept-Language negotiation', () => {
             expect(response.headers['content-language']).toBe(language);
             expect(messagesOf(response.body)).toContain(dictionaryUsers['field-email-invalid']);
         }
+    });
+});
+
+/**
+ * The OTHER validation path, in the same language.
+ *
+ * `POST /account/signup` validates in the service against `zodUserSchema`, whose messages are
+ * `t(...)` per field. `POST /feedback/contact` validates in the controller against the
+ * orval-generated schema, which declares no messages at all — so it answered in Zod's own English
+ * whatever the client asked for, while signup answered in Italian. Same 422, same client, two
+ * languages, and which one you got depended on the endpoint.
+ *
+ * `@infrastructure/http/validation-messages` closes it by translating Zod's built-in refusals
+ * globally, without touching the codegen. Public and rejected before any repository call, so like
+ * the signup cases above these need no database.
+ */
+const INVALID_CONTACT = { email: 'not-an-email', subject: '', message: '' };
+
+const contactWith = (acceptLanguage?: string) => {
+    const pending = api().post('/feedback/contact');
+    return acceptLanguage ? pending.set('Accept-Language', acceptLanguage) : pending;
+};
+
+describe('generated-schema validation answers in the negotiated language', () => {
+    it('answers in Italian when the client asks for it', async () => {
+        const response = await contactWith('it').send(INVALID_CONTACT);
+
+        expect(response.status).toBe(422);
+        expect(response.headers['content-language']).toBe('it');
+        expect(messagesOf(response.body)).toContain(itShared.validation['format-email']);
+    });
+
+    it('answers in English when the client asks for nothing', async () => {
+        const response = await contactWith().send(INVALID_CONTACT);
+
+        expect(response.status).toBe(422);
+        expect(messagesOf(response.body)).toContain(enShared.validation['format-email']);
+    });
+
+    it('never leaves a Zod default on the wire', async () => {
+        const [italian, english] = await Promise.all([
+            contactWith('it').send(INVALID_CONTACT),
+            contactWith('en').send(INVALID_CONTACT)
+        ]);
+
+        const italianMessages = messagesOf(italian.body);
+        const englishMessages = messagesOf(english.body);
+
+        expect(italianMessages).toHaveLength(3);
+        expect(englishMessages).toHaveLength(3);
+
+        /*
+         * Every message differs between the two languages — asserted without naming any copy, so
+         * it holds for whatever the dictionary says today. An untranslated Zod default is
+         * identical in both responses, which is exactly what this catches: before the shared map
+         * all three of these were the same English string on both sides.
+         */
+        for (const [index, message] of italianMessages.entries())
+            expect(message).not.toBe(englishMessages[index]);
+
+        // And nothing resolved to a raw dictionary key, the other way copy goes missing.
+        for (const message of italianMessages) expect(message).not.toMatch(/^\w+(?:\.[\w-]+)+$/);
+    });
+
+    it('still lets a field with its own copy win over the shared map', async () => {
+        // Precedence, asserted rather than assumed: `zodUserSchema` declares `t(...)` per field,
+        // and the global map must not overwrite the specific sentence with a generic one.
+        const response = await signupWith('it').send(INVALID_SIGNUP);
+
+        expect(messagesOf(response.body)).toContain(itUsers.users['field-email-invalid']);
+        expect(messagesOf(response.body)).not.toContain(itShared.validation['format-email']);
     });
 });
