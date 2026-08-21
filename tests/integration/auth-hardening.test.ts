@@ -11,23 +11,35 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 setupTestDb();
 
 /**
- * A freshly-constructed `authRateLimiter` with a small budget.
+ * Freshly-constructed `credentialLimiters` with a small budget on each half.
+ *
+ * The two are separately settable because a case about one bucket has to leave the other with room
+ * — give both the same budget and whichever fills first is the one every assertion sees.
  *
  * `rateLimit()` reads its options once, at construction, so the module has to be re-evaluated
  * for a different budget to take effect — the suite otherwise runs with the raised limit from
  * `tests/support/setup.ts`.
  */
-const limiterWithBudget = async (limit: number) => {
-    const original = process.env.NODE_AUTH_RATE_LIMIT_MAX;
-    process.env.NODE_AUTH_RATE_LIMIT_MAX = String(limit);
+const limitersWithBudget = async (identityLimit: number, addressLimit = identityLimit) => {
+    const originals = {
+        identity: process.env.NODE_AUTH_RATE_LIMIT_MAX,
+        address: process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX
+    };
+    process.env.NODE_AUTH_RATE_LIMIT_MAX = String(identityLimit);
+    process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX = String(addressLimit);
     jest.resetModules();
 
-    const { authRateLimiter } = await import('@infrastructure/http/middlewares/security');
+    const { credentialLimiters } = await import('@infrastructure/http/middlewares/security');
 
-    if (original === undefined) delete process.env.NODE_AUTH_RATE_LIMIT_MAX;
-    else process.env.NODE_AUTH_RATE_LIMIT_MAX = original;
+    for (const [name, value] of [
+        ['NODE_AUTH_RATE_LIMIT_MAX', originals.identity],
+        ['NODE_AUTH_RATE_LIMIT_ADDRESS_MAX', originals.address]
+    ] as const) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+    }
 
-    return authRateLimiter;
+    return credentialLimiters;
 };
 
 describe('credential endpoints are rate limited separately', () => {
@@ -45,10 +57,10 @@ describe('credential endpoints are rate limited separately', () => {
     afterEach(() => jest.resetModules());
 
     it('rejects further attempts with 429 once the budget is spent', async () => {
-        const authRateLimiter = await limiterWithBudget(3);
+        const credentialLimiters = await limitersWithBudget(3);
 
         const limited = express();
-        limited.post('/login', authRateLimiter, (_request, response) => {
+        limited.post('/login', ...credentialLimiters, (_request, response) => {
             // Stands in for a failed credential check: a 4xx, which the limiter must count.
             response.status(401).json({ success: false });
         });
@@ -68,10 +80,10 @@ describe('credential endpoints are rate limited separately', () => {
      * locking out its own users for signing in correctly. Only failures are worth limiting.
      */
     it('does not spend the budget on successful attempts', async () => {
-        const authRateLimiter = await limiterWithBudget(3);
+        const credentialLimiters = await limitersWithBudget(3);
 
         const limited = express();
-        limited.post('/login', authRateLimiter, (_request, response) => {
+        limited.post('/login', ...credentialLimiters, (_request, response) => {
             response.status(200).json({ success: true });
         });
 
@@ -82,6 +94,34 @@ describe('credential endpoints are rate limited separately', () => {
         }
 
         expect(statuses.every((status) => status === 200)).toBe(true);
+    });
+
+    /**
+     * The point of two buckets rather than one `email|ip` pair: guessing at ONE account is bounded
+     * however many hosts it comes from, and a host is bounded however many accounts it names. A
+     * pair key gives an attacker a fresh bucket for varying either half, which is why it is the
+     * weakest of the three and not the strongest.
+     */
+    it('budgets one account separately from another at the same address', async () => {
+        // Room on the address bucket, so it is the IDENTITY budget this case observes.
+        const credentialLimiters = await limitersWithBudget(3, 50);
+
+        const limited = express();
+        limited.use(express.json());
+        limited.post('/login', ...credentialLimiters, (_request, response) => {
+            response.status(401).json({ success: false });
+        });
+
+        const attempt = (email: string) => supertest(limited).post('/login').send({ email });
+
+        // Spend the first account's identity budget.
+        for (let index = 0; index < 3; index++) await attempt('one@example.com');
+        const spent = await attempt('one@example.com');
+        expect(spent.status).toBe(429);
+
+        // A different account still has its own, until the shared ADDRESS budget catches up.
+        const other = await attempt('two@example.com');
+        expect(other.status).toBe(401);
     });
 
     it('is mounted on the real login route', async () => {

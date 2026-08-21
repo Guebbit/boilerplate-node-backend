@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authRateLimiter } from '@infrastructure/http/middlewares/security';
+import { credentialLimiters } from '@infrastructure/http/middlewares/security';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/adapters/storage';
 import { getAccount } from './controllers/get-account';
@@ -64,30 +64,30 @@ router.delete('/', isAuth, deleteAccountRequest);
 router.delete('/delete-confirm', invalidateCache(['users', 'account']), deleteAccountConfirm);
 
 // POST /account/login — authenticate and get tokens
-router.post('/login', authRateLimiter, postLogin);
+router.post('/login', credentialLimiters, postLogin);
 
 // POST /account/signup — register new user
 router.post(
     '/signup',
-    authRateLimiter,
+    credentialLimiters,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
     postSignup
 );
 
 // POST /account/reset — request password reset email
-router.post('/reset', authRateLimiter, postResetRequest);
+router.post('/reset', credentialLimiters, postResetRequest);
 
 // POST /account/reset-confirm — complete password reset with token
 router.post(
     '/reset-confirm',
-    authRateLimiter,
+    credentialLimiters,
     invalidateCache(['users', 'account']),
     postResetConfirm
 );
 
 // POST /account/password — change password by proving the current one (requires auth)
-router.post('/password', authRateLimiter, isAuth, postPasswordChange);
+router.post('/password', credentialLimiters, isAuth, postPasswordChange);
 
 // GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);
@@ -117,12 +117,12 @@ router.put('/addresses/:addressId', isAuth, putAddress);
 router.delete('/addresses/:addressId', isAuth, deleteAddress);
 
 // POST /account/verify-request — re-send the verification email (requires auth)
-router.post('/verify-request', authRateLimiter, isAuth, postVerifyRequest);
+router.post('/verify-request', credentialLimiters, isAuth, postVerifyRequest);
 
 // POST /account/verify-confirm — spend the emailed token; public, the token is the credential
 router.post(
     '/verify-confirm',
-    authRateLimiter,
+    credentialLimiters,
     invalidateCache(['users', 'account']),
     postVerifyConfirm
 );

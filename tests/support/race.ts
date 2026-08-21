@@ -18,7 +18,7 @@
  *    Removing the flag would not make these tests "more concurrent"; it would make them flaky for
  *    an unrelated reason.
  *
- *  - **The rate limiters are raised, not disabled** (`tests/support/setup.ts`). `authRateLimiter`
+ *  - **The rate limiters are raised, not disabled** (`tests/support/setup.ts`). `credentialLimiters`
  *    is mounted on exactly the endpoints these tests hammer, at 10 per IP per window by default,
  *    with `skipSuccessfulRequests`. At that budget an N=10 signup race sits exactly on the limit
  *    and N=12 starts returning 429s — and the test would still PASS, because "not two users" is

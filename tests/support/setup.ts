@@ -45,15 +45,32 @@ import { registerValidationMessages } from '@infrastructure/http/validation-mess
 process.env.NODE_RATE_LIMIT_MAX ??= '2000';
 
 /**
- * Same reasoning for the credential-endpoint budget (`authRateLimiter`), which is deliberately
- * much smaller — ten failed attempts per IP per minute. Suites drive login, signup and reset far
- * harder than a person does, from one address, and the concurrency test alone fires twenty
- * deliberately-invalid signups at once.
+ * Same reasoning for the two credential budgets (`credentialLimiters`), which are deliberately much
+ * smaller — failed attempts per account and per address per minute. Suites drive login, signup and
+ * reset far harder than a person does, from one address, and the concurrency test alone fires
+ * twenty deliberately-invalid signups at once.
+ *
+ * BOTH are raised, or raising one just moves which of them the suite trips over.
  *
  * Raised rather than disabled, so a test that accidentally loops on a credential endpoint still
- * terminates — and so the limiter's own tests can still reach it by setting a lower value.
+ * terminates — and so the limiters' own tests can still reach them by setting a lower value.
  */
 process.env.NODE_AUTH_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX ??= '1000';
+
+/**
+ * The limiters count IN MEMORY here, never in Redis.
+ *
+ * Not a preference — a requirement. `src/app.ts` imports `dotenv/config`, so `.env` reaches the
+ * suite, and its `NODE_REDIS_URL` names a compose hostname that does not resolve from a test
+ * runner. The limiters would then fail open on every request (`passOnStoreError`, deliberately),
+ * and every case asserting a 429 would fail for a reason that has nothing to do with the code
+ * under test.
+ *
+ * It is also the right answer on its own terms: a suite that shares counters with whatever else is
+ * talking to that Redis is a suite whose result depends on who else is running.
+ */
+process.env.NODE_RATE_LIMIT_REDIS_ENABLED ??= '0';
 
 /**
  * The Prometheus scrape credential. `/observability/metrics` denies by default when this is

@@ -1,12 +1,19 @@
-import { timingSafeEqual } from 'node:crypto';
-import type { NextFunction, Request, Response } from 'express';
-import { rateLimit } from 'express-rate-limit';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { rateLimit, type Store } from 'express-rate-limit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
+import { t } from '@infrastructure/i18n';
+import {
+    emitAuditEvent,
+    buildAuditEvent,
+    coreAuditActions
+} from '@infrastructure/observability/audit';
+import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
- * Default window and per-IP budget, used when the `NODE_RATE_LIMIT_*` variables are unset:
+ * Default window and per-address budget, used when the `NODE_RATE_LIMIT_*` variables are unset:
  * 100 requests per MINUTE, sized for browsing rather than for guessing.
  *
  * The test suites raise it tenfold — see `tests/support/setup.ts`.
@@ -16,40 +23,134 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 export const DEFAULT_RATE_LIMIT_MAX = 100;
 
+/**
+ * Failed credential attempts allowed per window, per ACCOUNT named and per ADDRESS calling.
+ *
+ * Two numbers because they are two budgets — see `credentialLimiters`. The per-account one is the
+ * smaller: guessing at one account is the attack, and someone signing in on several devices is not.
+ */
+export const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
+export const DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX = 30;
+
+const windowMs = () =>
+    environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1);
+
+/**
+ * What a caller sees when a budget is spent: the shared error envelope, never express-rate-limit's
+ * own plain-text body, and `Retry-After` so a well-behaved client can wait rather than hammer.
+ *
+ * `audit` is opt-in per limiter. The credential budgets record every refusal, because a burst of
+ * them IS what credential stuffing looks like from the inside and it is the one signal that arrives
+ * before an account is taken rather than after. The global brake does not: a port scan would fill
+ * the trail with noise and bury exactly the entries worth reading.
+ */
+const refuse =
+    (audit: boolean) =>
+    (request: Request, response: Response): Response => {
+        if (audit)
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
+                    outcome: 'failure',
+                    metadata: { route: request.path, method: request.method }
+                })
+            );
+
+        return rejectResponse(response, 429, [
+            { code: 'RATE_LIMITED', message: t('generic.error-rate-limited') }
+        ]);
+    };
+
+const limiterOptions = (store: Store, audit: boolean) => ({
+    store,
+    windowMs: windowMs(),
+    standardHeaders: 'draft-7' as const,
+    legacyHeaders: false,
+    /*
+     * A store that cannot answer lets the request through, rather than answering 500.
+     *
+     * This is the fail-open choice made explicit — see `rate-limit-store.ts`. Failing closed would
+     * turn a Redis blip into an authentication outage: nobody could sign in, which is a worse
+     * failure than a window during which the budgets are not enforced. The outage is logged at
+     * `error` level once, so it is never a silent one.
+     */
+    passOnStoreError: true,
+    handler: refuse(audit)
+});
+
 /*
- * Global IP-based rate limiter.
- * Configurable via NODE_RATE_LIMIT_WINDOW_MS and NODE_RATE_LIMIT_MAX env vars.
- * Adds standard RateLimit headers (draft-7) and rejects excess requests with HTTP 429.
+ * The burst brake: requests per address per window, across the whole surface.
+ *
+ * Mounted globally in `app/security.ts` rather than per route, so a request that matches no route
+ * counts too — a scanner sweeping for paths that do not exist is the traffic most worth braking.
  */
 export const rateLimiter = rateLimit({
-    windowMs: environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1),
-    limit: environmentNumber('NODE_RATE_LIMIT_MAX', DEFAULT_RATE_LIMIT_MAX, 1),
-    standardHeaders: 'draft-7',
-    legacyHeaders: false
+    ...limiterOptions(rateLimitStore('global'), false),
+    limit: environmentNumber('NODE_RATE_LIMIT_MAX', DEFAULT_RATE_LIMIT_MAX, 1)
 });
 
 /**
- * Attempts per IP per window against the credential endpoints. Deliberately a small fraction of
- * the global budget.
+ * Who a credential attempt names, normalised the way the login lookup normalises it — otherwise
+ * `Ada@Example.com` and `ada@example.com` are two budgets for one account.
+ *
+ * Hashed because the key reaches Redis, and a `KEYS *` or an RDB dump should not hand over the
+ * user list. An attempt naming nobody is bucketed as `anonymous`: it still costs something,
+ * because a flood of shapeless requests at a credential route is itself the attack.
  */
-export const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
+const identityOf = (request: Request): string => {
+    const body: unknown = request.body;
+    const named =
+        typeof body === 'object' && body !== null
+            ? ((body as Record<string, unknown>).email ??
+              (body as Record<string, unknown>).username)
+            : undefined;
+    const identity = typeof named === 'string' ? named.trim().toLowerCase() : '';
+
+    return createHash('sha256')
+        .update(identity || 'anonymous')
+        .digest('hex');
+};
 
 /**
- * Rate limiter for endpoints that accept credentials or mint tokens — a separate, much smaller
- * budget, mounted per route so browsing never consumes it.
+ * The credential budgets, for the routes that accept a password or mint a token.
  *
- * `skipSuccessfulRequests` is on, so only failures count: a shared address does not lock its own
- * users out for succeeding.
+ * TWO independent limiters, applied together, and that is the whole design:
+ *
+ * - the first bounds failed attempts against ONE account, however many hosts they come from. It is
+ *   what a botnet spreading its guesses defeats when the key is the address alone.
+ * - the second bounds failed attempts from ONE host, however many accounts they name. It is what a
+ *   single machine spraying a user list defeats when the key is the account alone.
+ *
+ * Keying on the PAIR — `email|ip` — reads like it does both and does neither: an attacker who
+ * varies either half gets a fresh bucket, so the pair is the weakest of the three keys rather than
+ * the strongest. Two buckets cost one extra store round-trip and close both holes.
+ *
+ * `skipSuccessfulRequests` on both, so only FAILURES spend the budget: proving the password is the
+ * strongest possible evidence that this caller is not guessing, and a shared address — an office,
+ * a CI runner, the paired frontend's e2e suite — must not be locked out by people getting it right.
+ *
+ * Exported as an array because Express flattens one, so a route reads
+ * `router.post('/login', credentialLimiters, postLogin)` and cannot apply half of the pair.
  *
  * See: docs/tools/security.md#the-two-rate-limit-budgets
  */
-export const authRateLimiter = rateLimit({
-    windowMs: environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1),
-    limit: environmentNumber('NODE_AUTH_RATE_LIMIT_MAX', DEFAULT_AUTH_RATE_LIMIT_MAX, 1),
-    skipSuccessfulRequests: true,
-    standardHeaders: 'draft-7',
-    legacyHeaders: false
-});
+export const credentialLimiters: RequestHandler[] = [
+    rateLimit({
+        ...limiterOptions(rateLimitStore('credentials-identity'), true),
+        limit: environmentNumber('NODE_AUTH_RATE_LIMIT_MAX', DEFAULT_AUTH_RATE_LIMIT_MAX, 1),
+        skipSuccessfulRequests: true,
+        keyGenerator: identityOf
+    }),
+    rateLimit({
+        ...limiterOptions(rateLimitStore('credentials-address'), true),
+        limit: environmentNumber(
+            'NODE_AUTH_RATE_LIMIT_ADDRESS_MAX',
+            DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX,
+            1
+        ),
+        skipSuccessfulRequests: true
+    })
+];
 
 /**
  * Guards the Prometheus scrape endpoint with a static bearer credential — Prometheus cannot hold a

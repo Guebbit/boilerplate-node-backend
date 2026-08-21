@@ -6,7 +6,8 @@
         "error-internal": "Qualcosa è andato storto dalla nostra parte.",
         "error-unauthorized": "Non hai effettuato l’accesso, oppure la sessione è scaduta.",
         "error-forbidden": "Non hai i permessi per farlo.",
-        "error-not-found": "Questo elemento non esiste più."
+        "error-not-found": "Questo elemento non esiste più.",
+        "error-rate-limited": "Troppe richieste. Riprova tra poco."
     },
     "validation": {
         "required": "Questo campo è obbligatorio.",

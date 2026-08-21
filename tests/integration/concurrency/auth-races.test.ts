@@ -212,7 +212,7 @@ describe('the limiter is raised for these suites, not disabled', () => {
 
         const expressModule = await import('express');
         const supertestModule = await import('supertest');
-        const { authRateLimiter } = await import('@infrastructure/http/middlewares/security');
+        const { credentialLimiters } = await import('@infrastructure/http/middlewares/security');
         const express = expressModule.default;
         const supertest = supertestModule.default;
 
@@ -220,7 +220,7 @@ describe('the limiter is raised for these suites, not disabled', () => {
         else process.env.NODE_AUTH_RATE_LIMIT_MAX = original;
 
         const app = express();
-        app.post('/probe', authRateLimiter, (_request, response) => {
+        app.post('/probe', ...credentialLimiters, (_request, response) => {
             response.status(401).json({ ok: false });
         });
 

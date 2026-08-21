@@ -46,7 +46,7 @@ The whole point of a race is that some participants lose, and **losing is the co
 
 ## Two things that quietly make these tests worthless
 
-**Rate limiting.** `authRateLimiter` is mounted on exactly the endpoints these tests hammer — signup, login, reset — at ten per IP per window. At that budget a ten-participant signup race sits exactly on the limit and twelve starts returning 429s.
+**Rate limiting.** `credentialLimiters` is mounted on exactly the endpoints these tests hammer — signup, login, reset. It is a PAIR of budgets, one per account named and one per address calling, and only failed attempts spend either. At the shipped budgets a ten-participant signup race sits close to the per-address limit and twelve starts returning 429s, so `tests/support/setup.ts` raises both — raising one alone just moves which of them the suite trips over.
 
 The trap is that the test still **passes**: "not two users" is trivially true when two of the requests never reached the handler. So the limits are raised in `tests/support/setup.ts`, and the shared assertion rejects a 429 explicitly rather than lumping it into "not a success". One case keeps a small, freshly-constructed limiter to prove the budget is still enforced rather than switched off.
 

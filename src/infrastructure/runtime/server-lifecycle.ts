@@ -4,6 +4,7 @@ import { shutdownAnalytics } from '@infrastructure/observability/analytics';
 import { shutdownTracing } from '@infrastructure/runtime/otel-sdk';
 import { stopDatabase } from '@infrastructure/runtime/database';
 import { stopCache } from '@infrastructure/adapters/cache';
+import { stopRateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
 
@@ -77,6 +78,7 @@ export const shutdownInfra = (server?: Server) =>
         })
         .then(() => stopLocaleOverrideRefresh())
         .then(() => stopCache())
+        .then(() => stopRateLimitStore())
         .then(() => stopQueue())
         .then(() => stopDatabase())
         .then(() => shutdownAnalytics())

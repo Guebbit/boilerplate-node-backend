@@ -6,7 +6,8 @@
         "error-internal": "Something went wrong on our side.",
         "error-unauthorized": "You are not signed in, or your session has expired.",
         "error-forbidden": "You do not have permission to do that.",
-        "error-not-found": "That item no longer exists."
+        "error-not-found": "That item no longer exists.",
+        "error-rate-limited": "Too many requests. Try again shortly."
     },
     "validation": {
         "required": "This field is required.",
