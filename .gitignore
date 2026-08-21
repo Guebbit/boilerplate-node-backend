@@ -41,3 +41,6 @@ contract.bruno.yml
 contract.insomnia.json
 contract.mockoon.json
 contract.postman.json
+
+# graphify (code-graph tool) cache — generated, never committed
+graphify-out/

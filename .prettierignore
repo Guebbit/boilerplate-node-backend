@@ -33,3 +33,6 @@ db/demo/demo-data.json
 shared/contracts/*
 !shared/contracts/asyncapi.root.yaml
 !shared/contracts/asyncapi.workers.yaml
+
+# graphify cache — generated JSON, not ours to format
+graphify-out/
