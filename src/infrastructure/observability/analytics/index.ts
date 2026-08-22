@@ -143,7 +143,7 @@ export const resolveAnalyticsProvider = (): AnalyticsProvider => {
     return provider;
 };
 
-/** Test seam, like `resetPaymentProvider`. */
+/** Test seam, like the mailer's `resetTransporter`. */
 export const resetAnalyticsProvider = (): void => {
     provider = undefined;
 };

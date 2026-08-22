@@ -4,7 +4,6 @@
         "hard-deleted": "Order was permanently deleted.",
         "soft-deleted": "Order was soft deleted (hidden from the customer).",
         "creation-success": "Order created with success.",
-        "creation-failure": "Order creation failed.",
         "cancel": {
             "success": "Order cancelled.",
             "not-cancellable": "This order can no longer be cancelled."
@@ -13,7 +12,6 @@
             "not-allowed": "This order cannot move to that status from where it is now.",
             "cancel-elsewhere": "Cancelling an order runs the cancellation sequence — cancel it through the order's cancel endpoint instead."
         },
-        "invoice-missing": "No invoice file was found",
         "invoice": {
             "meta-title": "Invoice — order {{order}}",
             "title": "The order has been confirmed",

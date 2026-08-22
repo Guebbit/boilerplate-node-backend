@@ -7,11 +7,9 @@
         },
         "signup": {
             "email-already-used": "L'email è già stata utilizzata.",
-            "password-dont-match": "La password di conferma deve essere uguale alla password.",
-            "registration-successful": "Registrazione completata, conferma via email per accedere."
+            "password-dont-match": "La password di conferma deve essere uguale alla password."
         },
         "reset": {
-            "email-not-found": "Nessun utente associato all'email inserita è stato trovato.",
             "token-not-found": "Token non valido o scaduto, riprova.",
             "email-sent": "È stata inviata un'email con un link, clicca per reimpostare la password.",
             "success": "Password modificata, accedi con la nuova password."

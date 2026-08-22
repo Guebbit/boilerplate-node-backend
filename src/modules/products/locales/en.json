@@ -6,7 +6,6 @@
         "field-price-invalid": "Price is missing or invalid",
         "field-price-min": "Price cannot be negative",
         "hard-deleted": "Product was permanently deleted.",
-        "soft-deleted": "Product was soft deleted (users only).",
-        "was-deleted-from-all-carts": "Product ID {{product}} was removed from {{count}} carts."
+        "soft-deleted": "Product was soft deleted (users only)."
     }
 }

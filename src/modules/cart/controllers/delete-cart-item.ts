@@ -50,7 +50,7 @@ export const deleteCartItem = (
                 event: cartAnalyticsEvents.CART_ITEM_REMOVED,
                 properties: { product_id: productId }
             });
-            successResponse(response, result.data);
+            successResponse(response, result.data, 200, t('cart.product-removed'));
         })
         .catch(catchAs(response, 'deleteCartItem'));
 };

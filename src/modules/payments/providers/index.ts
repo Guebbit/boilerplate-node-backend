@@ -9,7 +9,8 @@
  *
  * Same shape as `ImageStore` in `@infrastructure/adapters/image-store`, with the selection made
  * env-driven the way the mailer picks its transport: read lazily inside the function (tests vary
- * the environment per case), memoised, with a `reset` seam.
+ * the environment per case) and memoised. No `reset` seam, unlike the mailer's: one build ships one
+ * provider, so nothing has ever needed to swap it mid-run.
  */
 
 import { fakePaymentProvider } from './fake';
@@ -65,9 +66,4 @@ export const resolvePaymentProvider = (): PaymentProvider => {
         );
     provider = resolved;
     return provider;
-};
-
-/** Test seam, like the mailer's `resetTransporter`. */
-export const resetPaymentProvider = (): void => {
-    provider = undefined;
 };

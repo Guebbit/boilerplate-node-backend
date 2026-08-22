@@ -4,7 +4,6 @@
         "hard-deleted": "L'ordine è stato eliminato definitivamente.",
         "soft-deleted": "L'ordine è stato eliminato logicamente (nascosto al cliente).",
         "creation-success": "Ordine creato con successo.",
-        "creation-failure": "Creazione dell'ordine fallita.",
         "cancel": {
             "success": "Ordine annullato.",
             "not-cancellable": "Questo ordine non può più essere annullato."
@@ -13,7 +12,6 @@
             "not-allowed": "Questo ordine non può passare a quello stato dalla posizione in cui si trova.",
             "cancel-elsewhere": "L'annullamento di un ordine esegue la sequenza di annullamento — annullalo tramite l'endpoint di annullamento dell'ordine."
         },
-        "invoice-missing": "Nessun file fattura è stato trovato",
         "invoice": {
             "meta-title": "Fattura — ordine {{order}}",
             "title": "L'ordine è stato confermato",
