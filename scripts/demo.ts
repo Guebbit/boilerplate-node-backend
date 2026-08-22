@@ -57,6 +57,18 @@ const waitForDatabase = (readyState: () => number): Promise<void> =>
 
 MongoMemoryServer.create()
     .then((mongod) => {
+        // The consumers of this profile end it with a signal — the paired frontend's shard runner
+        // and `start-server-and-test` both send SIGTERM. Without this, the process dies and the
+        // instance's data directory stays behind under the temp dir (~200 MB per boot); `stop()`
+        // is the only thing that removes it.
+        for (const signal of ['SIGTERM', 'SIGINT'] as const)
+            process.once(signal, () => {
+                void mongod
+                    .stop()
+                    .catch(() => undefined)
+                    .then(() => process.exit(0));
+            });
+
         for (const [key, value] of Object.entries(REQUIRED_DEFAULTS))
             process.env[key] = process.env[key]?.trim() ? process.env[key] : value;
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- assigning undefined would coerce to the string 'undefined'; delete is how an env var is unset
