@@ -20,16 +20,16 @@
  */
 import type { Id } from './id';
 import type { Locale } from './locale';
-import type { LocaleScope } from './localeScope';
+import type { LocaleTenant } from './localeTenant';
 
 /**
- * One translated string: one row per (language, scope, key). That shape makes every operation this feature needs a single indexed query — add is an insert, edit is an update, a whole dictionary is one find — and adding a language touches nothing that already exists.
- * `scope` is part of the identity, not a label on it: the two dictionaries both declare a top-level `generic`, so `generic.error-internal` names one string in the API's copy and a different one in the client's. Without it in the key, one would overwrite the other.
+ * One translated string: one row per (language, tenant, key). That shape makes every operation this feature needs a single indexed query — add is an insert, edit is an update, a whole dictionary is one find — and adding a language touches nothing that already exists.
+ * `tenant` is part of the identity, not a label on it: two tenants may both declare a top-level `generic`, so `generic.error-internal` names one string in the API's copy and a different one in a client's. Without it in the key, one would overwrite the other.
  */
 export interface LocaleEntry {
   id: Id;
   locale: Locale;
-  scope: LocaleScope;
+  tenant: LocaleTenant;
   /** Flat and dotted. Stored AS A STRING and never as a Mongo path — a document per language with `$set: { "messages.products.list.title": v }` would have Mongo read three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting. */
   key: string;
   value: string;

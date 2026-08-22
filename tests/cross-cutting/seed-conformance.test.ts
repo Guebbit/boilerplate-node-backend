@@ -268,7 +268,7 @@ describe('the exported dataset conforms to the generated contract', () => {
         });
 
         it('include a language the API also has a deployed file for', () => {
-            /* The row that makes the manifest's merge real — one entry carrying both scopes and
+            /* The row that makes the manifest's merge real — one entry carrying both tenants and
              * `source: 'both'`. A dataset of languages the API cannot answer in would exercise
              * only half of it, which is exactly what happened while `es` played this part: it has
              * since become the database-only fixture and carries no deployed file at all. Read
@@ -282,7 +282,7 @@ describe('the exported dataset conforms to the generated contract', () => {
         it('include a language with no deployed file, which is the tier this module exists for', () => {
             /* The converse, and the one the split is FOR: a language a client can download a
              * dictionary for and the API cannot answer a single request in. Without it the whole
-             * dataset would be languages the filesystem already provides, and `scopes` would never
+             * dataset would be languages the filesystem already provides, and `tenants` would never
              * be observed carrying anything but both of them. */
             const deployed = new Set(listSupportedLocales());
 

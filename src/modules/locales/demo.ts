@@ -11,20 +11,20 @@
  *                             it the honest fixture for a language a client downloads rather than
  *                             bundles: nothing about it can be answered from the filesystem, so a
  *                             regression that quietly started serving files would show up here.
- *   es, two api rows          STORED AND INERT, on purpose. They name the API's own keyspace for a
+ *   es, two backend rows      STORED AND INERT, on purpose. They name the API's own keyspace for a
  *                             language the API has no dictionary file for, so
  *                             `applyLocaleOverrides` skips them and logs — the exact warning branch
  *                             that fires when someone translates the backend half of a language
  *                             nobody has deployed yet. It is also the sharpest available proof
- *                             that the two scopes are separate keyspaces rather than one
- *                             collection with a label: `generic.*` exists on both sides, and only
- *                             the `app` half reaches a frontend.
- *   it, active, two api rows  The MERGE, and the overlay that actually applies. Italian is a
+ *                             that two tenants are separate keyspaces rather than one collection
+ *                             with a label: `generic.*` exists in both, and only the frontend
+ *                             tenant's half reaches a frontend.
+ *   it, active, two be rows   The MERGE, and the overlay that actually applies. Italian is a
  *                             deployed file, so this row merges with the static tier into one
- *                             manifest entry carrying both scopes and `source: 'both'`, and its
- *                             two `api` rows override keys `src/locales/it.json` really defines —
+ *                             manifest entry carrying both tenants and `source: 'both'`, and its
+ *                             two backend rows override keys `src/locales/it.json` really defines —
  *                             so `t('generic.error-unauthorized')` under `Accept-Language: it`
- *                             answers the row, not the file. No `app` rows, and that is a fact
+ *                             answers the row, not the file. No frontend rows, and that is a fact
  *                             rather than an omission: a client that already bundles Italian has
  *                             nothing to download, which is why `entryCount` is 0 for a language
  *                             the manifest nonetheless reports as fully supported.
@@ -47,7 +47,7 @@
  * import's worth of writes produced these dictionaries, and `1` is what that would have left
  * behind.
  */
-import { LocaleScope } from '@types';
+import { backendTenant, frontendTenant } from './tenants';
 import { makeLocale, makeLocaleEntry } from './factory';
 import { localeModel, localeMessageModel } from './model';
 import { localeRepository, localeMessageRepository } from './repository';
@@ -120,60 +120,70 @@ export const localeEntryFixtures = [
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1001',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'products.list.title',
         value: 'Catálogo'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1002',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'products.list.empty',
         value: 'Sin resultados'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1003',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'products.list.filters.title',
         value: 'Filtros'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1004',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'products.list.filters.reset',
         value: 'Quitar filtros'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1005',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'products.detail.add-to-cart',
         value: 'Añadir al carrito'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1006',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'cart.title',
         value: 'Tu carrito'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1007',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'cart.empty',
         value: 'Tu carrito está vacío'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1008',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'checkout.title',
         value: 'Finalizar compra'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f1009',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'checkout.actions.confirm',
         value: 'Confirmar pedido'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f100a',
         locale: SEED_LOCALE_TAGS.downloadable,
+        tenant: frontendTenant(),
         key: 'account.menu.orders',
         value: 'Mis pedidos'
     }),
@@ -190,22 +200,22 @@ export const localeEntryFixtures = [
      * Deploy `src/locales/es.json` and the same two rows start answering, with nothing else
      * changed.
      *
-     * They also stay the sharpest available proof that the two scopes are separate keyspaces:
-     * `generic.*` is declared by the frontend as well, and if scope were a label rather than part
+     * They also stay the sharpest available proof that two tenants are separate keyspaces:
+     * `generic.*` is declared by the frontend as well, and if tenant were a label rather than part
      * of the row's identity these would collide with the `app` rows above. Neither appears in
      * `GET /locales/es/messages`, which serves `app` rows only.
      */
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f3001',
         locale: SEED_LOCALE_TAGS.downloadable,
-        scope: LocaleScope.api,
+        tenant: backendTenant(),
         key: 'generic.error-unauthorized',
         value: 'Sesión caducada. Vuelve a entrar.'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f3002',
         locale: SEED_LOCALE_TAGS.downloadable,
-        scope: LocaleScope.api,
+        tenant: backendTenant(),
         key: 'generic.error-internal',
         value: 'Algo ha fallado por nuestra parte. Inténtalo de nuevo.'
     }),
@@ -223,14 +233,14 @@ export const localeEntryFixtures = [
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f3101',
         locale: SEED_LOCALE_TAGS.answerable,
-        scope: LocaleScope.api,
+        tenant: backendTenant(),
         key: 'generic.error-unauthorized',
         value: 'Sessione scaduta. Accedi di nuovo.'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f3102',
         locale: SEED_LOCALE_TAGS.answerable,
-        scope: LocaleScope.api,
+        tenant: backendTenant(),
         key: 'generic.error-internal',
         value: 'Qualcosa è andato storto dalla nostra parte. Riprova.'
     }),
@@ -239,12 +249,14 @@ export const localeEntryFixtures = [
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f2001',
         locale: SEED_LOCALE_TAGS.draft,
+        tenant: frontendTenant(),
         key: 'products.list.title',
         value: 'Catalogue'
     }),
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f2002',
         locale: SEED_LOCALE_TAGS.draft,
+        tenant: frontendTenant(),
         key: 'cart.title',
         value: 'Votre panier'
     })
@@ -282,5 +294,5 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
  */
 export const exportSeededLocales = async (): Promise<Record<string, unknown[]>> => ({
     locales: await exportCollection(localeModel, { tag: 1 }),
-    localeMessages: await exportCollection(localeMessageModel, { locale: 1, scope: 1, key: 1 })
+    localeMessages: await exportCollection(localeMessageModel, { locale: 1, tenant: 1, key: 1 })
 });

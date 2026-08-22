@@ -1,6 +1,6 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { LocaleDirection, LocaleScope } from '@types';
+import { LocaleDirection } from '@types';
 import type { Language, LocaleEntry } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
@@ -8,7 +8,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  * The two collections behind the OVERRIDE tier — both dictionaries' runtime edits.
  *
  * Nothing here is AWAITED on the request path, which is the property to preserve when changing any
- * of it. `negotiateLocale` never reads a row, and `t()` never waits for one: the `api`-scoped rows
+ * of it. `negotiateLocale` never reads a row, and `t()` never waits for one: the backend tenant's rows
  * reach it through an overlay that `@infrastructure/i18n` rebuilds at boot, on a timer and after a
  * write, and that overlay is layered onto dictionaries already loaded from deployed files. Mongo
  * down, a language half-translated, a malformed key — the worst outcome is the two endpoints that
@@ -143,7 +143,7 @@ localeSchema.pre('validate', function derivesBaseLanguage() {
  */
 localeSchema.index({ tag: 1 }, { name: 'locales_tag', unique: true });
 
-/** The words. One row per (language, scope, key). */
+/** The words. One row per (language, tenant, key). */
 export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessageModel>(
     {
         /*
@@ -162,22 +162,24 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
             trim: true
         },
         /*
-         * Which dictionary this row overrides: `app` the client's, `api` the API's own.
+         * Whose dictionary this row overrides — a tenant id, see `./tenants`.
          *
-         * Part of the row's IDENTITY, not a label on it — see the unique index below. The two
-         * dictionaries are independently authored and both happen to declare a top-level
-         * `generic`, so `generic.error-internal` is one string in the API's copy and a different
-         * one in the client's. A key alone cannot tell them apart.
+         * Part of the row's IDENTITY, not a label on it — see the unique index below. Two tenants
+         * are independently authored and may both declare a top-level `generic`, so
+         * `generic.error-internal` is one string in the API's copy and a different one in a
+         * client's. A key alone cannot tell them apart.
          *
-         * Defaulted to `app` because that is the tier this collection was built for and every row
-         * that existed before the column did belongs to it; `db/migrations/20260818120000-locale-
-         * entry-scope.js` backfills the same value for exactly that reason.
+         * A plain string rather than an enum: which tenants exist is configuration (`./tenants`),
+         * and the service refuses an unknown one with a 422 before a row is written. The schema
+         * stays ignorant on purpose — an enum here would have to be rebuilt from the environment
+         * at model load, which is exactly the kind of boot-order trap `./tenants` avoids.
+         * `db/migrations/20260822120000-locale-entry-tenant.js` renames the old `scope` column.
          */
-        scope: {
+        tenant: {
             type: String,
-            enum: Object.values(LocaleScope),
-            default: LocaleScope.app,
-            required: true
+            required: true,
+            lowercase: true,
+            trim: true
         },
         /*
          * Flat and dotted (`products.list.title`), and stored AS A STRING.
@@ -213,18 +215,18 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
  * hope: every write path here is a check-then-insert, and two concurrent imports of the same key
  * would otherwise both read "absent".
  *
- * `scope` sits in the middle rather than at the end, and that ordering is the read this collection
+ * `tenant` sits in the middle rather than at the end, and that ordering is the read this collection
  * exists for. A compound index serves queries on any PREFIX of its keys, so this one answers both
- * `find({ locale, scope })` — the whole-dictionary read, once per download — and `find({ locale })`
- * for the admin listing that shows both sides at once. Ending on `scope` would answer neither
+ * `find({ locale, tenant })` — the whole-dictionary read, once per download — and `find({ locale })`
+ * for the admin listing that shows every tenant at once. Ending on `tenant` would answer neither
  * without a scan.
  *
  * There is deliberately no second index on `locale` alone for that reason, which is exactly what
  * `db/migrations/20260808180000-prune-unused-indexes.js` exists to have removed.
  */
 localeMessageSchema.index(
-    { locale: 1, scope: 1, key: 1 },
-    { name: 'localeMessages_locale_scope_key', unique: true }
+    { locale: 1, tenant: 1, key: 1 },
+    { name: 'localeMessages_locale_tenant_key', unique: true }
 );
 
 /** Normalizes a serialized language: `_id` → `id`, drops `__v`. */

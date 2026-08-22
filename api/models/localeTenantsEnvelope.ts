@@ -18,14 +18,14 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { LocaleEntryInput } from './localeEntryInput';
-import type { LocaleTenant } from './localeTenant';
+import type { EnvelopeMessage } from './envelopeMessage';
+import type { EnvelopeStatus } from './envelopeStatus';
+import type { EnvelopeSuccess } from './envelopeSuccess';
+import type { LocaleTenants } from './localeTenants';
 
-/**
- * The COMPLETE set of entries for this language IN ONE TENANT. Anything already stored under that tenant and not named here is deleted; the other tenants are untouched.
- * The tenant is named once for the batch rather than per row, so a replace cannot half-apply across dictionaries — the operation that deletes what it was not sent has to know exactly what it is allowed to delete.
- */
-export interface ReplaceLocaleEntriesRequest {
-  tenant: LocaleTenant;
-  entries: LocaleEntryInput[];
+export interface LocaleTenantsEnvelope {
+  success: EnvelopeSuccess;
+  status: EnvelopeStatus;
+  message: EnvelopeMessage;
+  data: LocaleTenants;
 }

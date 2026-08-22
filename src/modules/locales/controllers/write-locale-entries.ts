@@ -8,7 +8,7 @@ import {
 import type {
     CreateLocaleEntryRequest,
     LocaleEntryInput,
-    LocaleScope,
+    LocaleTenant,
     MergeLocaleEntriesRequest,
     ReplaceLocaleEntriesRequest,
     UpdateLocaleEntryRequest
@@ -46,9 +46,9 @@ import { catchAs, refused, rejectValidation } from '@infrastructure/http/control
  * visible immediately on the worker that served the write; the others pick it up on their next
  * scheduled refresh.
  *
- * Called after `app`-scoped writes too. Those cannot affect the overlay, and checking would mean
- * threading the scope through the two delete controllers to save a query that runs once per admin
- * keystroke at most.
+ * Called after frontend-tenant writes too. Those cannot affect the overlay, and checking would
+ * mean threading the tenant through the two delete controllers to save a query that runs once per
+ * admin keystroke at most.
  */
 const refreshOverrides = () => void refreshLocaleOverrides();
 
@@ -76,7 +76,7 @@ export const createLocaleEntry = (
                     target_id: String(result.data?._id),
                     metadata: {
                         locale: request.params.locale,
-                        scope: parseResult.data.scope,
+                        tenant: parseResult.data.tenant,
                         key: parseResult.data.key
                     }
                 })
@@ -133,11 +133,11 @@ const importEntries = (
     request: Request<{ locale: string }, unknown, { entries?: LocaleEntryInput[] }>,
     response: Response,
     mode: 'replace' | 'merge',
-    scope: LocaleScope,
+    tenant: LocaleTenant,
     entries: LocaleEntryInput[]
 ) =>
     localeService
-        .importEntries(request.params.locale, scope, entries, mode)
+        .importEntries(request.params.locale, tenant, entries, mode)
         .then((result) => {
             if (refused(response, result)) return;
 
@@ -149,9 +149,9 @@ const importEntries = (
                     target_id: request.params.locale,
                     // `mode` is the field that makes this record worth keeping: a replace that
                     // removed three hundred keys and a merge that added two are the same action
-                    // name and very different events. `scope` says which of the two dictionaries
-                    // it happened to, which the counts alone cannot.
-                    metadata: { mode, scope, ...result.data }
+                    // name and very different events. `tenant` says whose dictionary it happened
+                    // to, which the counts alone cannot.
+                    metadata: { mode, tenant, ...result.data }
                 })
             );
 
@@ -176,7 +176,7 @@ export const replaceLocaleEntries = (
         request,
         response,
         'replace',
-        parseResult.data.scope,
+        parseResult.data.tenant,
         parseResult.data.entries
     );
 };
@@ -196,7 +196,7 @@ export const mergeLocaleEntries = (
         request,
         response,
         'merge',
-        parseResult.data.scope,
+        parseResult.data.tenant,
         parseResult.data.entries
     );
 };

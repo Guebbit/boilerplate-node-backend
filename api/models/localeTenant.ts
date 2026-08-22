@@ -18,14 +18,21 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { LocaleEntryInput } from './localeEntryInput';
-import type { LocaleTenant } from './localeTenant';
 
 /**
- * The COMPLETE set of entries for this language IN ONE TENANT. Anything already stored under that tenant and not named here is deleted; the other tenants are untouched.
- * The tenant is named once for the batch rather than per row, so a replace cannot half-apply across dictionaries — the operation that deletes what it was not sent has to know exactly what it is allowed to delete.
+ * The id of one tenant — one keyspace, authored by one team. Which ids exist is
+ * configuration, listed by `GET /locales/tenants`; a row naming an unknown tenant is
+ * refused with a 422.
+ *
+ * On a LANGUAGE it reports capability: the backend tenant means the API can answer
+ * requests in it, because a dictionary file is deployed; a frontend tenant means a
+ * client dictionary is downloadable for it.
+ *
+ * On an ENTRY it says whose dictionary that row OVERRIDES. A frontend tenant's rows
+ * are what `GET /locales/{locale}/messages` serves; the backend tenant's rows are
+ * layered over the API's own deployed files at resolution time.
+ * @minLength 1
+ * @maxLength 64
+ * @pattern ^[a-z0-9][a-z0-9-]*$
  */
-export interface ReplaceLocaleEntriesRequest {
-  tenant: LocaleTenant;
-  entries: LocaleEntryInput[];
-}
+export type LocaleTenant = string;

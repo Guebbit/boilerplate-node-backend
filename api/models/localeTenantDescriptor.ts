@@ -18,6 +18,15 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { LocaleScope } from './localeScope';
+import type { LocaleTenant } from './localeTenant';
+import type { LocaleTenantKind } from './localeTenantKind';
 
-export type EntryScopeQueryParamParameter = LocaleScope;
+/**
+ * One tenant as the registry describes it.
+ */
+export interface LocaleTenantDescriptor {
+  id: LocaleTenant;
+  /** A human name, for an admin screen. */
+  label: string;
+  kind: LocaleTenantKind;
+}

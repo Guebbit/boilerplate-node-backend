@@ -18,14 +18,14 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { LocaleEntryInput } from './localeEntryInput';
-import type { LocaleTenant } from './localeTenant';
 
 /**
- * The COMPLETE set of entries for this language IN ONE TENANT. Anything already stored under that tenant and not named here is deleted; the other tenants are untouched.
- * The tenant is named once for the batch rather than per row, so a replace cannot half-apply across dictionaries — the operation that deletes what it was not sent has to know exactly what it is allowed to delete.
+ * What a tenant is. `backend` is this API's own copy, applied internally and never served; `frontend` is a client's copy, downloadable per language.
  */
-export interface ReplaceLocaleEntriesRequest {
-  tenant: LocaleTenant;
-  entries: LocaleEntryInput[];
-}
+export type LocaleTenantKind = typeof LocaleTenantKind[keyof typeof LocaleTenantKind];
+
+
+export const LocaleTenantKind = {
+  frontend: 'frontend',
+  backend: 'backend',
+} as const;

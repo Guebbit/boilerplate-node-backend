@@ -80,7 +80,7 @@ From model `LocaleMessage`. `_id` and `__v` are omitted — every document carri
 | Field       | Type     | Flags    | Default | Reference / values |
 | ----------- | -------- | -------- | ------- | ------------------ |
 | `locale`    | `String` | required | —       | —                  |
-| `scope`     | `String` | required | "app"   | `api` \| `app`     |
+| `tenant`    | `String` | required | —       | —                  |
 | `key`       | `String` | required | —       | —                  |
 | `value`     | `String` | —        | ""      | —                  |
 | `createdAt` | `Date`   | —        | —       | —                  |
@@ -88,9 +88,9 @@ From model `LocaleMessage`. `_id` and `__v` are omitted — every document carri
 
 **Declared indexes**
 
-| Keys                          | Options                                       |
-| ----------------------------- | --------------------------------------------- |
-| `locale: 1, scope: 1, key: 1` | name: localeMessages_locale_scope_key, unique |
+| Keys                           | Options                                        |
+| ------------------------------ | ---------------------------------------------- |
+| `locale: 1, tenant: 1, key: 1` | name: localeMessages_locale_tenant_key, unique |
 
 #### `locales`
 
@@ -134,6 +134,7 @@ From model `Locale`. `_id` and `__v` are omitted — every document carries them
 | `DELETE /locales/{locale}/entries/{entryId}` | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `deleteLocaleEntry`    | Remove one translation entry |
 | `PUT /locales/{locale}/entries/{entryId}`    | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `updateLocaleEntry`    | Edit one translation entry   |
 | `GET /locales/{locale}/messages`             | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `getLocaleMessages`    | Client message dictionary    |
+| `GET /locales/tenants`                       | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `getLocaleTenants`     | Translation tenants          |
 
 Middlewares run left to right; the controller is the last handler on the route. Summaries come from this module’s own `openapi.yaml`, which is where they are edited.
 
@@ -168,6 +169,7 @@ Middlewares run left to right; the controller is the last handler on the route. 
 | `controllers/delete-locale.ts`        | One operation: reads inputs, calls the service, answers through the response envelope, and catches.                                                          | [read](../theory/request-flow.md)        |
 | `controllers/get-locale-entries.ts`   | One operation: reads inputs, calls the service, answers through the response envelope, and catches.                                                          | [read](../theory/request-flow.md)        |
 | `controllers/get-locale-messages.ts`  | One operation: reads inputs, calls the service, answers through the response envelope, and catches.                                                          | [read](../theory/request-flow.md)        |
+| `controllers/get-locale-tenants.ts`   | One operation: reads inputs, calls the service, answers through the response envelope, and catches.                                                          | [read](../theory/request-flow.md)        |
 | `controllers/get-locales.ts`          | One operation: reads inputs, calls the service, answers through the response envelope, and catches.                                                          | [read](../theory/request-flow.md)        |
 | `controllers/write-locale-entries.ts` | One operation: reads inputs, calls the service, answers through the response envelope, and catches.                                                          | [read](../theory/request-flow.md)        |
 | `controllers/write-locales.ts`        | One operation: reads inputs, calls the service, answers through the response envelope, and catches.                                                          | [read](../theory/request-flow.md)        |
@@ -181,11 +183,14 @@ Middlewares run left to right; the controller is the last handler on the route. 
 | `repository.ts`                       | Every query this module makes, on the shared base repository. The only tier that talks to Mongoose.                                                          | [read](../tools/mongodb-mongoose.md)     |
 | `routes.ts`                           | The URL surface — one line per endpoint, naming its middlewares, the role it requires and the controller it lands on.                                        | [read](../api/endpoints.md)              |
 | `service.ts`                          | The domain decision, and the layer that owns status-code meaning.                                                                                            | [read](../theory/layers.md)              |
+| `tenants.ts`                          | The tenant registry — which keyspaces this deployment holds words for, read from the environment and published by the module’s own route.                    | —                                        |
 | `tests/contract/api.contract.test.ts` | Contract suite — the responses, against the fragment.                                                                                                        | [read](../tools/contract-testing.md)     |
 | `tests/unit/audit.test.ts`            | Unit suite — the rules, in isolation.                                                                                                                        | [read](../tools/unit-testing.md)         |
 | `tests/unit/model.test.ts`            | Unit suite — the rules, in isolation.                                                                                                                        | [read](../tools/unit-testing.md)         |
 | `tests/unit/repository.test.ts`       | Unit suite — the rules, in isolation.                                                                                                                        | [read](../tools/unit-testing.md)         |
 | `tests/unit/service.test.ts`          | Unit suite — the rules, in isolation.                                                                                                                        | [read](../tools/unit-testing.md)         |
+| `tests/unit/tenants.fixture.ts`       | Unit suite — the rules, in isolation.                                                                                                                        | [read](../tools/unit-testing.md)         |
+| `tests/unit/tenants.test.ts`          | Unit suite — the rules, in isolation.                                                                                                                        | [read](../tools/unit-testing.md)         |
 
 <!-- gen:files:end -->
 
@@ -195,7 +200,7 @@ Middlewares run left to right; the controller is the last handler on the route. 
 
 | Suite    | Files | Where                                 |
 | -------- | ----- | ------------------------------------- |
-| Unit     | 4     | `src/modules/locales/tests/unit/`     |
+| Unit     | 6     | `src/modules/locales/tests/unit/`     |
 | Contract | 1     | `src/modules/locales/tests/contract/` |
 
 ```bash

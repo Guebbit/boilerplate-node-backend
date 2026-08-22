@@ -67,6 +67,7 @@ controller each lands on, and why the domain is shaped that way — live on its
 | [`locales`](../modules/locales.md)             | `DELETE` | `/locales/{locale}/entries/{entryId}` | admin | Remove one translation entry                                |
 | [`locales`](../modules/locales.md)             | `PUT`    | `/locales/{locale}/entries/{entryId}` | admin | Edit one translation entry                                  |
 | [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}/messages`          | admin | Client message dictionary                                   |
+| [`locales`](../modules/locales.md)             | `GET`    | `/locales/tenants`                    | admin | Translation tenants                                         |
 | [`observability`](../modules/observability.md) | `GET`    | `/observability/audit`                | admin | Recent audit events                                         |
 | [`observability`](../modules/observability.md) | `GET`    | `/observability/events`               | none  | Observability SSE stream                                    |
 | [`observability`](../modules/observability.md) | `GET`    | `/observability/health`               | admin | Health snapshot                                             |
@@ -111,7 +112,7 @@ controller each lands on, and why the domain is shaped that way — live on its
 | [`wishlist`](../modules/wishlist.md)           | `DELETE` | `/wishlist/{productId}`               | user  | Remove a saved product                                      |
 | [`wishlist`](../modules/wishlist.md)           | `POST`   | `/wishlist/{productId}/move-to-cart`  | user  | Move a saved product into the cart                          |
 
-95 routes across 12 modules. The **Auth** column reads the mounted middleware chain rather than the contract, so it is what the server actually enforces. Each module page carries the same routes with their full middleware chain and controller.
+96 routes across 12 modules. The **Auth** column reads the mounted middleware chain rather than the contract, so it is what the server actually enforces. Each module page carries the same routes with their full middleware chain and controller.
 
 <!-- gen:all-endpoints:end -->
 

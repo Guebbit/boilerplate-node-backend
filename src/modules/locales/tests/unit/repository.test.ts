@@ -8,7 +8,7 @@
  * given.
  */
 
-import { LocaleScope } from '@types';
+import { BACKEND, FRONTEND } from './tenants.fixture';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/factory';
 import { localeMessageRepository, localeRepository } from '@modules/locales/repository';
@@ -28,14 +28,16 @@ const givenLanguage = async (
     );
 
     for (const [key, value] of Object.entries(entries))
-        await localeMessageRepository.create(makeLocaleEntry({ locale: tag, key, value }));
+        await localeMessageRepository.create(
+            makeLocaleEntry({ locale: tag, tenant: FRONTEND, key, value })
+        );
 
     return language;
 };
 
-/** One row on one side, written past the service so the scope is exactly what a test says. */
-const givenEntry = (locale: string, scope: LocaleScope, key: string, value: string) =>
-    localeMessageRepository.create(makeLocaleEntry({ locale, scope, key, value }));
+/** One row in one tenant, written past the service so the tenant is exactly what a test says. */
+const givenEntry = (locale: string, tenant: string, key: string, value: string) =>
+    localeMessageRepository.create(makeLocaleEntry({ locale, tenant, key, value }));
 
 /** The language's revision as stored right now. */
 const revisionOf = async (tag: string): Promise<number> => {
@@ -53,7 +55,7 @@ describe('the revision counter', () => {
     it('moves when a key is added', async () => {
         await givenLanguage('es');
 
-        await localeMessageRepository.createEntry('es', LocaleScope.app, {
+        await localeMessageRepository.createEntry('es', FRONTEND, {
             key: 'cart.title',
             value: 'Carrito'
         });
@@ -84,7 +86,7 @@ describe('the revision counter', () => {
 
         await localeMessageRepository.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [
                 { key: 'a', value: '1' },
                 { key: 'b', value: '2' },
@@ -109,7 +111,7 @@ describe('the revision counter', () => {
         await givenLanguage('es');
         await givenLanguage('it');
 
-        await localeMessageRepository.createEntry('es', LocaleScope.app, {
+        await localeMessageRepository.createEntry('es', FRONTEND, {
             key: 'cart.title',
             value: 'Carrito'
         });
@@ -124,7 +126,7 @@ describe('importEntries', () => {
 
         const { counts } = await localeMessageRepository.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [
                 { key: 'cart.title', value: 'Tu carrito' },
                 { key: 'cart.empty', value: 'Vacío' }
@@ -144,15 +146,13 @@ describe('importEntries', () => {
 
         const { counts } = await localeMessageRepository.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [{ key: 'cart.title', value: 'Tu carrito' }],
             { replace: true }
         );
 
         expect(counts.removed).toBe(1);
-        expect(await localeMessageRepository.listKeys('es', LocaleScope.app)).toEqual([
-            'cart.title'
-        ]);
+        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('leaves what the body did not name, when merging', async () => {
@@ -160,12 +160,12 @@ describe('importEntries', () => {
 
         const { counts } = await localeMessageRepository.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [{ key: 'cart.title', value: 'Tu carrito' }],
             { replace: false }
         );
 
-        const remaining = await localeMessageRepository.listKeys('es', LocaleScope.app);
+        const remaining = await localeMessageRepository.listKeys('es', FRONTEND);
 
         expect(counts.removed).toBe(0);
         expect(remaining.toSorted()).toEqual(['cart.empty', 'cart.title']);
@@ -176,23 +176,21 @@ describe('importEntries', () => {
         // route sits behind an admin token and an audit record rather than behind a confirmation.
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
-        const { counts } = await localeMessageRepository.importEntries('es', LocaleScope.app, [], {
+        const { counts } = await localeMessageRepository.importEntries('es', FRONTEND, [], {
             replace: true
         });
 
         expect(counts.removed).toBe(1);
-        expect(await localeMessageRepository.listKeys('es', LocaleScope.app)).toEqual([]);
+        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual([]);
     });
 
     it('touches only the language it was given', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
         await givenLanguage('it', { 'cart.title': 'Carrello' });
 
-        await localeMessageRepository.importEntries('es', LocaleScope.app, [], { replace: true });
+        await localeMessageRepository.importEntries('es', FRONTEND, [], { replace: true });
 
-        expect(await localeMessageRepository.listKeys('it', LocaleScope.app)).toEqual([
-            'cart.title'
-        ]);
+        expect(await localeMessageRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
     });
 });
 
@@ -205,9 +203,7 @@ describe('deleting a language', () => {
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
         // Nothing was destroyed on the way to the refusal.
-        expect(await localeMessageRepository.listKeys('es', LocaleScope.app)).toEqual([
-            'cart.title'
-        ]);
+        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('cascades its entries once it is inactive', async () => {
@@ -224,7 +220,7 @@ describe('deleting a language', () => {
         expect(result.success).toBe(true);
         expect(result.data).toEqual({ removedEntries: 2 });
         expect(await localeRepository.findByTag('es')).toBeNull();
-        expect(await localeMessageRepository.listKeys('es', LocaleScope.app)).toEqual([]);
+        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual([]);
     });
 
     it('leaves another language’s strings standing', async () => {
@@ -233,9 +229,7 @@ describe('deleting a language', () => {
 
         await localeService.deleteLanguage('es');
 
-        expect(await localeMessageRepository.listKeys('it', LocaleScope.app)).toEqual([
-            'cart.title'
-        ]);
+        expect(await localeMessageRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('404s for a language that was never registered', async () => {
@@ -282,7 +276,7 @@ describe('createEntry', () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
         const result = await localeService.createEntry('es', {
-            scope: LocaleScope.app,
+            tenant: FRONTEND,
             key: 'cart.title',
             value: 'Otro'
         });
@@ -294,7 +288,7 @@ describe('createEntry', () => {
         await givenLanguage('es', { 'products.list.title': 'Catálogo' });
 
         const result = await localeService.createEntry('es', {
-            scope: LocaleScope.app,
+            tenant: FRONTEND,
             key: 'products.list',
             value: 'Lista'
         });
@@ -309,7 +303,7 @@ describe('createEntry', () => {
         await givenLanguage('es');
 
         const result = await localeService.createEntry('es', {
-            scope: LocaleScope.app,
+            tenant: FRONTEND,
             key: '__proto__.title',
             value: 'x'
         });
@@ -321,7 +315,7 @@ describe('createEntry', () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
         const result = await localeService.createEntry('es', {
-            scope: LocaleScope.app,
+            tenant: FRONTEND,
             key: 'cart.titlebar',
             value: 'Barra'
         });
@@ -336,7 +330,7 @@ describe('importEntries, through the service', () => {
 
         const result = await localeService.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [
                 { key: 'products.list', value: 'Lista' },
                 { key: 'products.list.title', value: 'Catálogo' }
@@ -345,7 +339,7 @@ describe('importEntries, through the service', () => {
         );
 
         expect(result.status).toBe(409);
-        expect(await localeMessageRepository.listKeys('es', LocaleScope.app)).toEqual([]);
+        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual([]);
     });
 
     it('refuses a merge that would collide with a key it is leaving standing', async () => {
@@ -353,7 +347,7 @@ describe('importEntries, through the service', () => {
 
         const result = await localeService.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [{ key: 'products.list', value: 'Lista' }],
             'merge'
         );
@@ -372,15 +366,13 @@ describe('importEntries, through the service', () => {
 
         const result = await localeService.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [{ key: 'products.list', value: 'Lista' }],
             'replace'
         );
 
         expect(result.success).toBe(true);
-        expect(await localeMessageRepository.listKeys('es', LocaleScope.app)).toEqual([
-            'products.list'
-        ]);
+        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual(['products.list']);
     });
 
     it('refuses a batch naming one key twice', async () => {
@@ -388,7 +380,7 @@ describe('importEntries, through the service', () => {
 
         const result = await localeService.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [
                 { key: 'cart.title', value: 'Carrito' },
                 { key: 'cart.title', value: 'Tu carrito' }
@@ -404,7 +396,7 @@ describe('importEntries, through the service', () => {
 
         const result = await localeService.importEntries(
             'es',
-            LocaleScope.app,
+            FRONTEND,
             [{ key: 'cart.title', value: 'Carrito' }],
             'merge'
         );
@@ -465,9 +457,7 @@ describe('updateEntry and deleteEntry', () => {
 
         expect(updated.status).toBe(404);
         expect(deleted.status).toBe(404);
-        expect(await localeMessageRepository.listKeys('es', LocaleScope.app)).toEqual([
-            'cart.title'
-        ]);
+        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('edits the value and leaves the key alone', async () => {
@@ -565,14 +555,14 @@ describe('list', () => {
  * The provider `@infrastructure/i18n` rebuilds its overlay from.
  *
  * Driven against the database because the property that matters is the SPLIT: the same key exists
- * on both sides of this collection, and a query that forgot to scope would hand the API's overlay
+ * on both sides of this collection, and a query that forgot the tenant would hand the API's overlay
  * the frontend's words. An in-memory fake would be built from the same assumption the code is.
  */
 describe('readApiOverrides', () => {
     it('returns only the API’s half, nested', async () => {
         await givenLanguage('es');
-        await givenEntry('es', LocaleScope.api, 'generic.error-internal', 'Fallo interno');
-        await givenEntry('es', LocaleScope.app, 'cart.title', 'Tu carrito');
+        await givenEntry('es', BACKEND, 'generic.error-internal', 'Fallo interno');
+        await givenEntry('es', FRONTEND, 'cart.title', 'Tu carrito');
 
         expect(await localeService.readApiOverrides()).toEqual({
             es: { generic: { ['error-internal']: 'Fallo interno' } }
@@ -580,13 +570,13 @@ describe('readApiOverrides', () => {
     });
 
     /**
-     * The sharpest case the scope column exists for: one key, two dictionaries, two different
+     * The sharpest case the tenant column exists for: one key, two dictionaries, two different
      * strings. Without the split one would answer for both.
      */
     it('keeps the two sides apart when they share a key', async () => {
         await givenLanguage('es');
-        await givenEntry('es', LocaleScope.api, 'generic.title', 'del backend');
-        await givenEntry('es', LocaleScope.app, 'generic.title', 'del frontend');
+        await givenEntry('es', BACKEND, 'generic.title', 'del backend');
+        await givenEntry('es', FRONTEND, 'generic.title', 'del frontend');
 
         expect(await localeService.readApiOverrides()).toEqual({
             es: { generic: { title: 'del backend' } }
@@ -596,8 +586,8 @@ describe('readApiOverrides', () => {
     it('groups by language', async () => {
         await givenLanguage('es');
         await givenLanguage('it');
-        await givenEntry('es', LocaleScope.api, 'generic.error-internal', 'Fallo interno');
-        await givenEntry('it', LocaleScope.api, 'generic.error-internal', 'Errore interno');
+        await givenEntry('es', BACKEND, 'generic.error-internal', 'Fallo interno');
+        await givenEntry('it', BACKEND, 'generic.error-internal', 'Errore interno');
 
         expect(await localeService.readApiOverrides()).toEqual({
             es: { generic: { ['error-internal']: 'Fallo interno' } },
@@ -612,7 +602,7 @@ describe('readApiOverrides', () => {
      */
     it('includes an inactive language', async () => {
         await givenLanguage('fr', {}, { active: false });
-        await givenEntry('fr', LocaleScope.api, 'generic.error-internal', 'Erreur interne');
+        await givenEntry('fr', BACKEND, 'generic.error-internal', 'Erreur interne');
 
         expect(await localeService.readApiOverrides()).toEqual({
             fr: { generic: { ['error-internal']: 'Erreur interne' } }
@@ -633,9 +623,9 @@ describe('readApiOverrides', () => {
     it('skips a language whose keys cannot form a tree, and keeps the others', async () => {
         await givenLanguage('es');
         await givenLanguage('it');
-        await givenEntry('es', LocaleScope.api, 'generic', 'a string');
-        await givenEntry('es', LocaleScope.api, 'generic.error-internal', 'and a group');
-        await givenEntry('it', LocaleScope.api, 'generic.error-internal', 'Errore interno');
+        await givenEntry('es', BACKEND, 'generic', 'a string');
+        await givenEntry('es', BACKEND, 'generic.error-internal', 'and a group');
+        await givenEntry('it', BACKEND, 'generic.error-internal', 'Errore interno');
 
         expect(await localeService.readApiOverrides()).toEqual({
             it: { generic: { ['error-internal']: 'Errore interno' } }

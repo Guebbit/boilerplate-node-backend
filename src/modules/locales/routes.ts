@@ -3,6 +3,7 @@ import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { getLocales, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
+import { getLocaleTenants } from './controllers/get-locale-tenants';
 import { createLocale, updateLocale } from './controllers/write-locales';
 import { deleteLocale } from './controllers/delete-locale';
 import { getLocaleEntries } from './controllers/get-locale-entries';
@@ -32,8 +33,10 @@ import { deleteLocaleEntry } from './controllers/delete-locale-entry';
  * here.
  *
  * ── Route order ──────────────────────────────────────────────────────────────────────────────
- * `/:locale/messages` is declared before `/:locale` for readability only: a single-segment pattern
- * cannot match a two-segment path, so neither shadows the other whichever way round they go.
+ * `/tenants` MUST be declared before `/:locale`: both are one segment, and Express takes the first
+ * match, so the other way round `GET /locales/tenants` would be a dictionary lookup for a language
+ * called "tenants". `/:locale/messages` before `/:locale` is readability only — a single-segment
+ * pattern cannot match a two-segment path.
  */
 export const router = Router();
 
@@ -60,6 +63,9 @@ const publicLocaleCache = setCache(3600, {
 // `getAuth` (and only that: no token still answers) so an admin's manifest can include the
 // inactive rows a visitor is not offered. Before the cache, which scopes its key by caller.
 router.get('/', getAuth, publicLocaleCache, getLocales);
+
+// GET /locales/tenants — the keyspaces an entry can belong to. Before `/:locale`, see above.
+router.get('/tenants', publicLocaleCache, getLocaleTenants);
 
 // GET /locales/:locale/messages — the client's dictionary, out of the database
 router.get('/:locale/messages', publicLocaleCache, getLocaleMessages);

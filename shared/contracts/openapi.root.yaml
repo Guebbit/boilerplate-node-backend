@@ -676,6 +676,8 @@ paths:
     # ---------- locales ----------
     /locales:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales'
+    /locales/tenants:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1tenants'
     /locales/{locale}:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}'
     /locales/{locale}/messages:

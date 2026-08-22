@@ -7,7 +7,8 @@
  * Mongo in `repository.test.ts` and over HTTP in the contract suite.
  */
 
-import { LocaleDirection, LocaleScope, LocaleSource } from '@types';
+import { LocaleDirection, LocaleSource } from '@types';
+import { BACKEND, FRONTEND } from './tenants.fixture';
 import { localeService } from '../../service';
 import type { LocaleDocument } from '../../model';
 
@@ -155,12 +156,12 @@ describe('findUnsafeKeySegment', () => {
 });
 
 describe('mergeCapabilities', () => {
-    it('reports a deployed-file language as api-only, with no dictionary to download', () => {
+    it('reports a deployed-file language as backend-only, with no dictionary to download', () => {
         const [row] = localeService.mergeCapabilities(['en'], [], new Map());
 
         expect(row).toMatchObject({
             tag: 'en',
-            scopes: [LocaleScope.api],
+            tenants: [BACKEND],
             source: LocaleSource.static,
             entryCount: 0,
             revision: 0
@@ -173,7 +174,7 @@ describe('mergeCapabilities', () => {
         expect(row?.name).toBe('Spanish');
     });
 
-    it('reports a database-only language as app-only — the API cannot answer in it', () => {
+    it('reports a database-only language as frontend-only — the API cannot answer in it', () => {
         const rows = localeService.mergeCapabilities(
             [],
             [language({ tag: 'pt', name: 'Portuguese', nativeName: 'Português', revision: 3 })],
@@ -187,7 +188,7 @@ describe('mergeCapabilities', () => {
                 nativeName: 'Português',
                 direction: LocaleDirection.ltr,
                 active: true,
-                scopes: [LocaleScope.app],
+                tenants: [FRONTEND],
                 source: LocaleSource.dynamic,
                 entryCount: 12,
                 revision: 3
@@ -215,7 +216,7 @@ describe('mergeCapabilities', () => {
      * it is one language with both capabilities — not two entries, and not one entry claiming the
      * union of two things a client cannot tell apart.
      */
-    it('merges a language present in both tiers into one row carrying both scopes', () => {
+    it('merges a language present in both tiers into one row carrying both tenants', () => {
         const rows = localeService.mergeCapabilities(
             ['en', 'es'],
             [language({ tag: 'es', name: 'Spanish', nativeName: 'Español', revision: 7 })],
@@ -225,7 +226,7 @@ describe('mergeCapabilities', () => {
         expect(rows).toHaveLength(2);
         expect(rows[1]).toMatchObject({
             tag: 'es',
-            scopes: [LocaleScope.api, LocaleScope.app],
+            tenants: [BACKEND, FRONTEND],
             source: LocaleSource.both,
             entryCount: 214,
             revision: 7

@@ -18,25 +18,25 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { LocaleTenant } from './localeTenant';
+import type { MessagesTenantQueryParamParameter } from './messagesTenantQueryParamParameter';
 
+export type GetLocaleMessagesParams = {
 /**
- * Which of the two dictionaries something belongs to. `api` is the API's own — the
- * backend's words. `app` is the client's — the frontend's words. They are separate
- * keyspaces, authored by different people, and a key present in both means two
- * unrelated strings.
+ * The id of one tenant — one keyspace, authored by one team. Which ids exist is
+ * configuration, listed by `GET /locales/tenants`; a row naming an unknown tenant is
+ * refused with a 422.
  *
- * On a LANGUAGE it reports capability, and the two are independent: `api` — the API
- * can answer requests in it, because a dictionary file is deployed; `app` — a client
- * dictionary is downloadable for it.
+ * On a LANGUAGE it reports capability: the backend tenant means the API can answer
+ * requests in it, because a dictionary file is deployed; a frontend tenant means a
+ * client dictionary is downloadable for it.
  *
- * On an ENTRY it says which dictionary that row OVERRIDES. `app` rows are what
- * `GET /locales/{locale}/messages` serves to a frontend; `api` rows are layered over
- * the API's own deployed files at resolution time.
+ * On an ENTRY it says whose dictionary that row OVERRIDES. A frontend tenant's rows
+ * are what `GET /locales/{locale}/messages` serves; the backend tenant's rows are
+ * layered over the API's own deployed files at resolution time.
+ * @minLength 1
+ * @maxLength 64
+ * @pattern ^[a-z0-9][a-z0-9-]*$
  */
-export type LocaleScope = typeof LocaleScope[keyof typeof LocaleScope];
-
-
-export const LocaleScope = {
-  api: 'api',
-  app: 'app',
-} as const;
+tenant?: MessagesTenantQueryParamParameter;
+};

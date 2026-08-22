@@ -45,12 +45,12 @@ const createEntry = async (
     tag: string,
     key: string,
     value: string,
-    scope: 'api' | 'app' = 'app'
+    tenant = 'demo-fe'
 ) => {
     const response = await api()
         .post(`/locales/${tag}/entries`)
         .set('Authorization', bearer)
-        .send({ scope, key, value });
+        .send({ tenant, key, value });
 
     if (response.status !== 201)
         throw new Error(
@@ -75,7 +75,7 @@ describe('GET /locales', () => {
         expect(response.body.data.locales.map(({ tag }: { tag: string }) => tag)).toEqual(
             listSupportedLocales()
         );
-        for (const row of response.body.data.locales) expect(row.scopes).toContain('api');
+        for (const row of response.body.data.locales) expect(row.tenants).toContain('demo-be');
 
         expect(response.body.data.default).toBe(getDefaultLocale());
         expect(response.body.data.fallback).toBe(getFallbackLocale());
@@ -95,12 +95,12 @@ describe('GET /locales', () => {
             ({ tag }: { tag: string }) => tag === 'pt'
         );
 
-        expect(portuguese.scopes).toEqual(['app']);
+        expect(portuguese.tenants).toEqual(['demo-fe']);
         expect(portuguese.source).toBe('dynamic');
         expect(response).toSatisfyApiSpec();
     });
 
-    it('merges a language present in both tiers into one row with both scopes', async () => {
+    it('merges a language present in both tiers into one row with both tenants', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer, { tag: 'it', name: 'Italian', nativeName: 'Italiano' });
 
@@ -110,7 +110,7 @@ describe('GET /locales', () => {
         );
 
         expect(italian).toHaveLength(1);
-        expect(italian[0].scopes).toEqual(['api', 'app']);
+        expect(italian[0].tenants).toEqual(['demo-be', 'demo-fe']);
         expect(italian[0].source).toBe('both');
     });
 
@@ -526,7 +526,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', key: 'cart.title', value: 'Carrinho' });
+            .send({ tenant: 'demo-fe', key: 'cart.title', value: 'Carrinho' });
 
         expect(response.status).toBe(201);
         expect(response).toSatisfyApiSpec();
@@ -540,7 +540,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', key: 'cart.title', value: 'Outro' });
+            .send({ tenant: 'demo-fe', key: 'cart.title', value: 'Outro' });
 
         expect(response.status).toBe(409);
         expect(response).toSatisfyApiSpec();
@@ -558,7 +558,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', key: 'products.list', value: 'Lista' });
+            .send({ tenant: 'demo-fe', key: 'products.list', value: 'Lista' });
 
         expect(response.status).toBe(409);
         expect(response).toSatisfyApiSpec();
@@ -572,7 +572,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', key: 'products.list.title', value: 'Catálogo' });
+            .send({ tenant: 'demo-fe', key: 'products.list.title', value: 'Catálogo' });
 
         expect(response.status).toBe(409);
     });
@@ -584,7 +584,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', key: '', value: 'x' });
+            .send({ tenant: 'demo-fe', key: '', value: 'x' });
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
@@ -596,7 +596,7 @@ describe('POST /locales/:locale/entries', () => {
         const response = await api()
             .post('/locales/zz/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', key: 'cart.title', value: 'x' });
+            .send({ tenant: 'demo-fe', key: 'cart.title', value: 'x' });
 
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
@@ -706,7 +706,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
         const response = await api()
             .put('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
+            .send({ tenant: 'demo-fe', entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 1 });
@@ -723,7 +723,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
         const response = await api()
             .patch('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
+            .send({ tenant: 'demo-fe', entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toMatchObject({ created: 0, updated: 1, removed: 0 });
@@ -742,7 +742,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
         const response = await api()
             .patch('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', entries: [{ key: 'cart.title', value: 'Carrinho' }] });
+            .send({ tenant: 'demo-fe', entries: [{ key: 'cart.title', value: 'Carrinho' }] });
 
         expect(response.body.data.revision).toBe(1);
     });
@@ -755,7 +755,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
             .patch('/locales/pt/entries')
             .set('Authorization', bearer)
             .send({
-                scope: 'app',
+                tenant: 'demo-fe',
                 entries: [
                     { key: 'products.list', value: 'Lista' },
                     { key: 'products.list.title', value: 'Catálogo' }
@@ -773,14 +773,16 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
         const response = await api()
             .put('/locales/pt/entries')
             .set('Authorization', bearer)
-            .send({ scope: 'app', entries: [{ key: 'cart.title' }] });
+            .send({ tenant: 'demo-fe', entries: [{ key: 'cart.title' }] });
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 
     it('401s unauthenticated', async () => {
-        const response = await api().put('/locales/pt/entries').send({ scope: 'app', entries: [] });
+        const response = await api()
+            .put('/locales/pt/entries')
+            .send({ tenant: 'demo-fe', entries: [] });
 
         expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
@@ -829,5 +831,90 @@ describe('a locale only the API has', () => {
         const response = await api().get('/locales').set('Accept-Language', 'pt');
 
         expect(response.headers['content-language']).toBe(getFallbackLocale());
+    });
+});
+
+describe('GET /locales/tenants', () => {
+    it('matches the contract and lists the demo pair, the backend first', async () => {
+        const response = await api().get('/locales/tenants');
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        expect(response.body.data.tenants).toEqual([
+            { id: 'demo-be', label: 'API', kind: 'backend' },
+            { id: 'demo-fe', label: 'Frontend', kind: 'frontend' }
+        ]);
+    });
+
+    it('is not a language called "tenants" — the static route wins over the parameter', async () => {
+        // The one ordering mistake the router comment warns about.
+        const response = await api().get('/locales/tenants');
+
+        expect(response.body.data.messages).toBeUndefined();
+    });
+});
+
+describe('tenants on the write routes', () => {
+    it('refuses an entry for a tenant nobody configured, with a 422', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .post('/locales/pt/entries')
+            .set('Authorization', bearer)
+            .send({ tenant: 'nobody', key: 'cart.title', value: 'Carrinho' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses a bulk import for a tenant nobody configured, before writing anything', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .patch('/locales/pt/entries')
+            .set('Authorization', bearer)
+            .send({ tenant: 'nobody', entries: [{ key: 'cart.title', value: 'Carrinho' }] });
+
+        expect(response.status).toBe(422);
+
+        const listed = await api().get('/locales/pt/entries').set('Authorization', bearer);
+        expect(listed.body.data.items).toEqual([]);
+    });
+
+    it('keeps the same key apart across two tenants', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await createEntry(bearer, 'pt', 'generic.title', 'do frontend', 'demo-fe');
+        await createEntry(bearer, 'pt', 'generic.title', 'do backend', 'demo-be');
+
+        const listed = await api()
+            .get('/locales/pt/entries?tenant=demo-be')
+            .set('Authorization', bearer);
+
+        expect(listed.body.data.items.map(({ value }: { value: string }) => value)).toEqual([
+            'do backend'
+        ]);
+    });
+});
+
+describe('GET /locales/:locale/messages?tenant=', () => {
+    it('serves the named frontend tenant and never the backend one', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await createEntry(bearer, 'pt', 'cart.title', 'Carrinho', 'demo-fe');
+        await createEntry(bearer, 'pt', 'generic.error-internal', 'Falha', 'demo-be');
+
+        const named = await api().get('/locales/pt/messages?tenant=demo-fe');
+        expect(named.status).toBe(200);
+        expect(named.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
+
+        // The backend's rows are layered internally; asking for them is asking for nothing.
+        const backend = await api().get('/locales/pt/messages?tenant=demo-be');
+        expect(backend.status).toBe(404);
+
+        const stranger = await api().get('/locales/pt/messages?tenant=nobody');
+        expect(stranger.status).toBe(404);
     });
 });

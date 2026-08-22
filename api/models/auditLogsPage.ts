@@ -19,9 +19,9 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { AuditEventItem } from './auditEventItem';
+import type { PaginationMeta } from './paginationMeta';
 
 export interface AuditLogsPage {
   items: AuditEventItem[];
-  /** @minimum 0 */
-  total: number;
+  meta: PaginationMeta;
 }

@@ -140,6 +140,10 @@ export const FILE_SHAPES: readonly FileShape[] = [
         what: 'The settings several of this module’s transitions read, in one place.'
     },
     {
+        match: /^tenants\.ts$/,
+        what: 'The tenant registry — which keyspaces this deployment holds words for, read from the environment and published by the module’s own route.'
+    },
+    {
         match: /^session\/.+\.ts$/,
         what: 'Session mechanics kept out of the services: JWT signing and verification, cookie shape and flags, and the lifetimes both read.',
         reads: '../tools/security.md'

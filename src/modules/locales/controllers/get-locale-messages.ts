@@ -21,9 +21,13 @@ import { catchAs } from '@infrastructure/http/controller';
  * write invalidates the `locales` tag, so an edit is visible on the next request rather than in an
  * hour.
  */
-export const getLocaleMessages = (request: Request<{ locale: string }>, response: Response) =>
+export const getLocaleMessages = (
+    request: Request<{ locale: string }, unknown, unknown, { tenant?: string }>,
+    response: Response
+) =>
     localeService
-        .readMessages(request.params.locale)
+        // `?tenant=` names which frontend's copy; omitted, the deployment's default one.
+        .readMessages(request.params.locale, request.query.tenant?.trim() || undefined)
         .then((result) =>
             result.success
                 ? successResponse(response, result.data)

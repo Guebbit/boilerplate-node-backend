@@ -19,6 +19,10 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { GetObservabilityAuditLogsOutcome } from './getObservabilityAuditLogsOutcome';
+import type { Page } from './page';
+import type { PageParamParameter } from './pageParamParameter';
+import type { PageSize } from './pageSize';
+import type { PageSizeParamParameter } from './pageSizeParamParameter';
 
 export type GetObservabilityAuditLogsParams = {
 /**
@@ -34,13 +38,18 @@ action?: string;
  */
 outcome?: GetObservabilityAuditLogsOutcome;
 /**
- * Return events after this ISO-8601 timestamp
+ * Return events strictly after this ISO-8601 timestamp — an exclusive bound
  */
 since?: string;
 /**
- * Maximum number of events to return. CLAMPED rather than refused, unlike the `pageSize` every paged endpoint takes: this read has no pages, so a number above the maximum is met with the maximum instead of a 422, and anything unusable — absent, blank, non-numeric — is also the maximum.
+ * 1-based page index
  * @minimum 1
- * @maximum 200
  */
-limit?: number;
+page?: PageParamParameter;
+/**
+ * Optional override; server may clamp to a max
+ * @minimum 1
+ * @maximum 100
+ */
+pageSize?: PageSizeParamParameter;
 };

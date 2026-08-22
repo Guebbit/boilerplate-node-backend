@@ -1,7 +1,7 @@
 import {
     LocaleDirection,
-    LocaleScope,
     LocaleSource,
+    type LocaleTenant,
     type CreateLocaleEntryRequest,
     type CreateLocaleRequest,
     type LocaleCapabilities,
@@ -25,6 +25,7 @@ import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleMessageDocument } from './model';
 import { localeMessageRepository, localeRepository, type EntryInput } from './repository';
 import { createVisibilityScope } from '@kernel/authorization';
+import { backendTenant, frontendTenant, isFrontendTenant, isKnownTenant } from './tenants';
 
 /**
  * What the override tier can be asked, and the rules that make it safe to ask.
@@ -105,8 +106,9 @@ export const staticCapability = (tag: string): LocaleCapability => ({
     direction: isRightToLeft(tag) ? LocaleDirection.rtl : LocaleDirection.ltr,
     // A deployed file has no off switch: a static language is always selectable.
     active: true,
-    // `api` and only `api`: the API can answer in it, and there is no dictionary to download.
-    scopes: [LocaleScope.api],
+    // The backend tenant and only that: the API can answer in it, and there is no dictionary to
+    // download.
+    tenants: [backendTenant()],
     source: LocaleSource.static,
     entryCount: 0,
     revision: 0
@@ -125,7 +127,7 @@ export const dynamicCapability = (
     nativeName: language.nativeName,
     direction: language.direction,
     active: language.active,
-    scopes: [LocaleScope.app],
+    tenants: [frontendTenant()],
     source: LocaleSource.dynamic,
     entryCount,
     revision: language.revision
@@ -134,7 +136,7 @@ export const dynamicCapability = (
 /**
  * The two tiers as one list, without ever implying they are the same capability.
  *
- * A tag in both merges into ONE row carrying BOTH scopes. The dynamic side supplies the display
+ * A tag in both merges into ONE row carrying BOTH tenants. The dynamic side supplies the display
  * fields because it is the only side that has any — a static language's name is derived from its
  * tag — so there is nothing for the two to disagree about.
  *
@@ -157,7 +159,7 @@ export const mergeCapabilities = (
             rows.has(language.tag)
                 ? {
                       ...dynamic,
-                      scopes: [LocaleScope.api, LocaleScope.app],
+                      tenants: [backendTenant(), frontendTenant()],
                       source: LocaleSource.both
                   }
                 : dynamic
@@ -323,25 +325,38 @@ export const findDuplicateKey = (keys: readonly string[]): string | undefined =>
 const languageNotFound = (): ResponseReject =>
     generateReject(404, [t('locales.error-language-not-found')]);
 
+/** A tenant this deployment does not know — refused before anything is written under it. */
+const rejectUnknownTenant = (tenant: string): ResponseReject | undefined =>
+    isKnownTenant(tenant)
+        ? undefined
+        : generateReject(422, [t('locales.error-tenant-unknown', { tenant })]);
+
 /**
- * The OVERRIDES a client downloads for one language — `app` rows, never `api` ones.
+ * The OVERRIDES a client downloads for one language — one frontend tenant's rows, never the
+ * backend's.
  *
  * Not a dictionary: a client merges this over what it bundles, key by key, so a key nobody has
  * edited keeps its bundled text and a language nobody has finished falls back per key. Handing a
- * frontend the API's half instead would give it the backend's keyspace, which it did not author
- * and cannot render.
+ * frontend the API's own rows instead would give it the backend's keyspace, which it did not
+ * author and cannot render — so the backend tenant, and any id nobody configured, answer 404 here
+ * exactly as an unknown language does.
  *
  * An INACTIVE language answers exactly as an unknown one does. Inactive means invisible to the
  * public, and a 403 or an empty 200 would both leak that the language exists — which is the one
  * thing a draft translation is being kept from doing.
+ *
+ * @param tenant - whose dictionary; omitted, the deployment's default frontend tenant
  */
 export const readMessages = async (
-    tag: string
+    tag: string,
+    tenant: LocaleTenant = frontendTenant()
 ): Promise<ResponseSuccess<LocaleMessages> | ResponseReject> => {
+    if (!isFrontendTenant(tenant)) return languageNotFound();
+
     const language = await localeRepository.findByTag(tag);
     if (!language?.active) return languageNotFound();
 
-    const entries = await localeMessageRepository.listEntries(language.tag, LocaleScope.app);
+    const entries = await localeMessageRepository.listEntries(language.tag, tenant);
 
     return generateSuccess({
         locale: language.tag,
@@ -421,7 +436,7 @@ export const searchEntries = async (
         page?: string | number;
         pageSize?: string | number;
         text?: string;
-        scope?: LocaleScope;
+        tenant?: LocaleTenant;
     } = {}
 ): Promise<
     ResponseSuccess<{ items: LocaleMessageDocument[]; meta: PaginatedMeta }> | ResponseReject
@@ -454,8 +469,8 @@ export const searchEntries = async (
  *   entirely in the database, which is the point of letting someone maintain a site without
  *   touching a JSON file.
  *
- *   By NECESSITY for `app` rows, because their keyspace belongs to the frontend and lives in
- *   another repository. This API has never seen `navigation.label-home` and has no way to learn
+ *   By NECESSITY for a frontend tenant's rows, because their keyspace belongs to that client and
+ *   lives in another repository. This API has never seen `navigation.label-home` and has no way to learn
  *   it. Only a client holding its own dictionaries can say whether a key is one it uses, so if
  *   that warning is ever wanted it belongs in the admin screen, not here.
  *
@@ -485,14 +500,17 @@ export const createEntry = async (
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
 
+    const unknownTenant = rejectUnknownTenant(payload.tenant);
+    if (unknownTenant) return unknownTenant;
+
     const key = payload.key.trim();
     /*
-     * Both checks below are scoped to the dictionary being written. The same key legitimately
-     * exists on both sides — `generic.error-internal` is one string in each — so checking against
+     * Both checks below are narrowed to the tenant being written. The same key legitimately
+     * exists in two tenants — `generic.error-internal` is one string in each — so checking against
      * every row would refuse the second half of a perfectly correct pair, and a collision between
      * `products.list` and `products.list.title` only matters inside the tree they share.
      */
-    const existingKeys = await localeMessageRepository.listKeys(language.tag, payload.scope);
+    const existingKeys = await localeMessageRepository.listKeys(language.tag, payload.tenant);
 
     if (existingKeys.includes(key))
         return generateReject(409, [t('locales.error-key-exists', { key })]);
@@ -500,7 +518,7 @@ export const createEntry = async (
     const unusable = rejectUnusableKey(key, existingKeys);
     if (unusable) return unusable;
 
-    const { entry } = await localeMessageRepository.createEntry(language.tag, payload.scope, {
+    const { entry } = await localeMessageRepository.createEntry(language.tag, payload.tenant, {
         key,
         value: payload.value
     });
@@ -558,12 +576,15 @@ export const deleteEntry = async (
  */
 export const importEntries = async (
     tag: string,
-    scope: LocaleScope,
+    tenant: LocaleTenant,
     entries: readonly LocaleEntryInput[],
     mode: 'replace' | 'merge'
 ): Promise<ResponseSuccess<LocaleImportResult> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
+
+    const unknownTenant = rejectUnknownTenant(tenant);
+    if (unknownTenant) return unknownTenant;
 
     const inputs = entries.map(({ key, value }) => ({ key: key.trim(), value }));
     const keys = inputs.map(({ key }) => key);
@@ -592,7 +613,7 @@ export const importEntries = async (
      * would refuse imports that are perfectly consistent with themselves.
      */
     const incoming = new Set(keys);
-    const stored = await localeMessageRepository.listKeys(language.tag, scope);
+    const stored = await localeMessageRepository.listKeys(language.tag, tenant);
     const survivors = mode === 'replace' ? [] : stored.filter((key) => !incoming.has(key));
 
     for (const key of keys) {
@@ -602,7 +623,7 @@ export const importEntries = async (
 
     const { counts, revision } = await localeMessageRepository.importEntries(
         language.tag,
-        scope,
+        tenant,
         inputs,
         { replace: mode === 'replace' }
     );
@@ -611,7 +632,7 @@ export const importEntries = async (
 };
 
 /**
- * Every `api` override, grouped by language and expanded into trees.
+ * Every override of the BACKEND tenant, grouped by language and expanded into trees.
  *
  * The provider `@infrastructure/i18n` calls to rebuild its overlay — see the "Database overrides"
  * block there for what the overlay guarantees. Nested here rather than there because expanding a
@@ -628,7 +649,7 @@ export const importEntries = async (
  * other language's applied.
  */
 export const readApiOverrides = async (): Promise<Record<string, Record<string, unknown>>> => {
-    const rows = await localeMessageRepository.listEntriesByScope(LocaleScope.api);
+    const rows = await localeMessageRepository.listEntriesByTenant(backendTenant());
 
     const byLocale = new Map<string, { key: string; value: string }[]>();
     for (const { locale, key, value } of rows)

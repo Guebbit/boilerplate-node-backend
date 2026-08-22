@@ -77,9 +77,9 @@ const givenPublishedLanguage = async (bearer: string) => {
     await api()
         .post('/locales/pt/entries')
         .set('Authorization', bearer)
-        // `app`: the client's dictionary, which is the half `GET /locales/:locale/messages`
+        // `demo-fe`: the frontend tenant, which is the half `GET /locales/:locale/messages`
         // serves and therefore the half whose cached copy this test is about.
-        .send({ scope: 'app', key: 'cart.title', value: 'Carrinho' });
+        .send({ tenant: 'demo-fe', key: 'cart.title', value: 'Carrinho' });
 };
 
 describe('an admin write invalidates the cached public dictionary', () => {

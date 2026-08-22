@@ -18,10 +18,10 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { LocaleScope } from './localeScope';
+import type { LocaleTenant } from './localeTenant';
 
 export interface CreateLocaleEntryRequest {
-  scope: LocaleScope;
+  tenant: LocaleTenant;
   /** @minLength 1 */
   key: string;
   value: string;

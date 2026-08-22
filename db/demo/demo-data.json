@@ -85,7 +85,7 @@
                 "id": "65e0200a9a7d4b2e1c0f3002",
                 "key": "generic.error-internal",
                 "locale": "es",
-                "scope": "api",
+                "tenant": "demo-be",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Algo ha fallado por nuestra parte. Inténtalo de nuevo."
             },
@@ -94,7 +94,7 @@
                 "id": "65e0200a9a7d4b2e1c0f3001",
                 "key": "generic.error-unauthorized",
                 "locale": "es",
-                "scope": "api",
+                "tenant": "demo-be",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Sesión caducada. Vuelve a entrar."
             },
@@ -103,7 +103,7 @@
                 "id": "65e0200a9a7d4b2e1c0f100a",
                 "key": "account.menu.orders",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Mis pedidos"
             },
@@ -112,7 +112,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1007",
                 "key": "cart.empty",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Tu carrito está vacío"
             },
@@ -121,7 +121,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1006",
                 "key": "cart.title",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Tu carrito"
             },
@@ -130,7 +130,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1009",
                 "key": "checkout.actions.confirm",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Confirmar pedido"
             },
@@ -139,7 +139,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1008",
                 "key": "checkout.title",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Finalizar compra"
             },
@@ -148,7 +148,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1005",
                 "key": "products.detail.add-to-cart",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Añadir al carrito"
             },
@@ -157,7 +157,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1002",
                 "key": "products.list.empty",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Sin resultados"
             },
@@ -166,7 +166,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1004",
                 "key": "products.list.filters.reset",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Quitar filtros"
             },
@@ -175,7 +175,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1003",
                 "key": "products.list.filters.title",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Filtros"
             },
@@ -184,7 +184,7 @@
                 "id": "65e0200a9a7d4b2e1c0f1001",
                 "key": "products.list.title",
                 "locale": "es",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Catálogo"
             },
@@ -193,7 +193,7 @@
                 "id": "65e0200a9a7d4b2e1c0f2002",
                 "key": "cart.title",
                 "locale": "fr",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Votre panier"
             },
@@ -202,7 +202,7 @@
                 "id": "65e0200a9a7d4b2e1c0f2001",
                 "key": "products.list.title",
                 "locale": "fr",
-                "scope": "app",
+                "tenant": "demo-fe",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Catalogue"
             },
@@ -211,7 +211,7 @@
                 "id": "65e0200a9a7d4b2e1c0f3102",
                 "key": "generic.error-internal",
                 "locale": "it",
-                "scope": "api",
+                "tenant": "demo-be",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Qualcosa è andato storto dalla nostra parte. Riprova."
             },
@@ -220,7 +220,7 @@
                 "id": "65e0200a9a7d4b2e1c0f3101",
                 "key": "generic.error-unauthorized",
                 "locale": "it",
-                "scope": "api",
+                "tenant": "demo-be",
                 "updatedAt": "2024-02-29T06:11:22.000Z",
                 "value": "Sessione scaduta. Accedi di nuovo."
             }

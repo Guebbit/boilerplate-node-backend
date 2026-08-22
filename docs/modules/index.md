@@ -120,7 +120,7 @@ so a module that gains a route or a collection gains it here on the next `npm ru
 
 | Modules | core | supporting | generic | Collections | Routes | Context edges |
 | ------- | ---- | ---------- | ------- | ----------- | ------ | ------------- |
-| 13      | 3    | 4          | 6       | 14          | 95     | 19            |
+| 13      | 3    | 4          | 6       | 14          | 96     | 19            |
 
 <!-- gen:tally:end -->
 
@@ -134,7 +134,7 @@ so a module that gains a route or a collection gains it here on the next `npm ru
 | [`delivery`](./delivery.md)           | `supporting` | `/delivery`      | `shipments`                       | 3      | 2          | 1              |
 | [`feedback`](./feedback.md)           | `generic`    | `/feedback`      | `feedbackrequests`                | 3      | 0          | 0              |
 | [`inventory`](./inventory.md)         | `supporting` | `/inventory`     | `reservations` · `stockmovements` | 5      | 1          | 3              |
-| [`locales`](./locales.md)             | `generic`    | `/locales`       | `localemessages` · `locales`      | 12     | 0          | 0              |
+| [`locales`](./locales.md)             | `generic`    | `/locales`       | `localemessages` · `locales`      | 13     | 0          | 0              |
 | [`observability`](./observability.md) | `generic`    | `/observability` | —                                 | 5      | 1          | 0              |
 | [`orders`](./orders.md)               | `core`       | `/orders`        | `orders`                          | 11     | 2          | 3              |
 | [`payments`](./payments.md)           | `supporting` | `/payments`      | `payments`                        | 4      | 3          | 0              |

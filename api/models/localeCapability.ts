@@ -20,11 +20,11 @@
  */
 import type { Locale } from './locale';
 import type { LocaleDirection } from './localeDirection';
-import type { LocaleScope } from './localeScope';
 import type { LocaleSource } from './localeSource';
+import type { LocaleTenant } from './localeTenant';
 
 /**
- * One language as the manifest describes it: a merge of whatever the two tiers each know about it. A tag present in both appears once, with both scopes.
+ * One language as the manifest describes it: a merge of whatever the two tiers each know about it. A tag present in both appears once, carrying both tenants.
  */
 export interface LocaleCapability {
   tag: Locale;
@@ -33,10 +33,10 @@ export interface LocaleCapability {
   direction: LocaleDirection;
   active: boolean;
   /**
-     * What this language can do. Without it a client seeing `es` in the list cannot tell whether it may send `Accept-Language: es` and get Spanish error messages, or whether it may download a Spanish UI dictionary. Those are different questions.
+     * Which tenants have words in this language. Without it a client seeing `es` in the list cannot tell whether it may send `Accept-Language: es` and get Spanish error messages (the backend tenant), or whether it may download a Spanish UI dictionary (a frontend tenant). Those are different questions.
      * @minItems 1
      */
-  scopes: LocaleScope[];
+  tenants: LocaleTenant[];
   source: LocaleSource;
   /** @minimum 0 */
   entryCount: number;

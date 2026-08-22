@@ -6,6 +6,7 @@
         "error-entry-not-found": "That translation no longer exists.",
         "error-key-exists": "The key {{key}} is already translated in this language.",
         "error-key-collision": "The key {{key}} cannot be used alongside {{existing}}: one of them would have to be both a text and a group of texts.",
-        "error-key-invalid": "The key {{key}} is not a usable translation key."
+        "error-key-invalid": "The key {{key}} is not a usable translation key.",
+        "error-tenant-unknown": "The tenant {{tenant}} is not one this deployment serves — see GET /locales/tenants."
     }
 }

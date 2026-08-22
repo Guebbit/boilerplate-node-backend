@@ -20,16 +20,17 @@ import { seedLocalesCollection, exportSeededLocales } from './demo';
  * that lies is worse than a language being unavailable.
  *
  * TIER 2 is the OVERRIDES — the two collections this module owns, edited at runtime by people who
- * do not open a code editor. One row per (language, scope, key), and `scope` says which of the two
- * dictionaries the row patches:
+ * do not open a code editor. One row per (language, tenant, key), and `tenant` says whose
+ * dictionary the row patches — see `./tenants` for what a tenant is and where the ids come from:
  *
- *   `app` rows are served by `GET /locales/:locale/messages`. A frontend merges them over what it
- *   bundles, key by key, so an unedited key keeps its bundled text and a language the client does
- *   not ship at all falls back per key for whatever nobody has translated yet.
+ *   A FRONTEND tenant's rows (`demo-fe` in the demo) are served by
+ *   `GET /locales/:locale/messages`. A frontend merges them over what it bundles, key by key, so
+ *   an unedited key keeps its bundled text and a language the client does not ship at all falls
+ *   back per key for whatever nobody has translated yet.
  *
- *   `api` rows are layered over tier 1 by `@infrastructure/i18n`, which rebuilds its overlay at
- *   boot, on a timer and after every admin write. They never leave this API — a frontend that
- *   merged them would be adopting the backend's keyspace as its own.
+ *   The BACKEND tenant's rows (`demo-be`) are layered over tier 1 by `@infrastructure/i18n`, which
+ *   rebuilds its overlay at boot, on a timer and after every admin write. They never leave this
+ *   API — a frontend that merged them would be adopting the backend's keyspace as its own.
  *
  * NOTHING here is awaited on the request path, which is what buys the guarantee this module is
  * arranged around: Mongo down, a language half-translated, a malformed key — the worst outcome is
@@ -41,7 +42,7 @@ import { seedLocalesCollection, exportSeededLocales } from './demo';
  * says.
  *
  * The trap the split avoids, stated plainly: a language existing in the database does NOT mean the
- * API can answer in it. `GET /locales` therefore reports `scopes` per language rather than a list
+ * API can answer in it. `GET /locales` therefore reports `tenants` per language rather than a list
  * of tags, so "may I send `Accept-Language: es`" and "may I download a Spanish dictionary" stay
  * two questions.
  *
@@ -57,8 +58,8 @@ import { seedLocalesCollection, exportSeededLocales } from './demo';
  * codebase enforces in two places.
  */
 /*
- * The `api` half of this module's collection, handed to `@infrastructure/i18n` so an override typed
- * into the admin screens reaches `t()`.
+ * The backend tenant's share of this module's collection, handed to `@infrastructure/i18n` so an
+ * override typed into the admin screens reaches `t()`.
  *
  * Registered HERE, at import time, rather than declared as a manifest field — the same way
  * `audit-logs` installs its sink and `account` its auth resolver. A field only one module can ever
