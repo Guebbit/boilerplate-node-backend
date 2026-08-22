@@ -19,28 +19,11 @@
  * read costs the overrides and nothing else.
  */
 
-export {
-    buildMessageTree,
-    findUnsafeKeySegment,
-    findKeyCollision,
-    findBatchCollision,
-    findDuplicateKey
-} from './keys';
-
-export {
-    isRightToLeft,
-    describeLanguage,
-    staticCapability,
-    dynamicCapability,
-    mergeCapabilities,
-    readDynamicTier,
-    callerScope,
-    listCapabilities
-} from './capabilities';
-
-export { createLanguage, updateLanguage, deleteLanguage } from './languages';
-export { searchEntries, createEntry, updateEntry, deleteEntry, importEntries } from './entries';
-export { readMessages, readApiOverrides } from './messages';
+/*
+ * No loose re-exports beside the namespace: `localeService` is the only name anything imports from
+ * here — seven controllers, `module.ts` and three suites — and a second list naming all twenty-three
+ * functions said that twice, which is one list too many to keep in step with the folder.
+ */
 
 import {
     buildMessageTree,

@@ -370,12 +370,12 @@ const actorOf = (authContext?: Caller): OrderActor => (authContext?.admin ? 'adm
  * @param authContext - the caller whose options are being described
  * @returns the serialized order carrying its `actions`
  */
-export function withActions(order: OrderDocument, authContext?: Caller): Record<string, unknown>;
-export function withActions(
+function withActions(order: OrderDocument, authContext?: Caller): Record<string, unknown>;
+function withActions(
     order: OrderDocument | undefined,
     authContext?: Caller
 ): Record<string, unknown> | undefined;
-export function withActions(
+function withActions(
     order: OrderDocument | undefined,
     authContext?: Caller
 ): Record<string, unknown> | undefined {

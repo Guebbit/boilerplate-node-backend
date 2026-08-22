@@ -230,7 +230,7 @@ export const removeById = (
  * including inactive rows) or a cached variant, this is where that goes, and no controller has to
  * be rewritten to make room for it.
  */
-export const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
+const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
     productRepository.facets();
 
 export const productService = {

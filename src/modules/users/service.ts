@@ -179,7 +179,7 @@ export const findByAccountDeleteToken = (token: string): Promise<UserDocument | 
  *
  * @param token
  */
-export const findByEmailVerifyToken = (token: string): Promise<UserDocument | undefined | null> =>
+const findByEmailVerifyToken = (token: string): Promise<UserDocument | undefined | null> =>
     userRepository.findByToken(token, 'verify');
 
 /**

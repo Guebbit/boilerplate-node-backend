@@ -289,7 +289,7 @@ export const releaseForOrder = async (
  * @param orderId - the order being asked about
  * @returns whether stock is currently committed to this order's lines
  */
-export const isStockBoundToOrder = (orderId: string): Promise<boolean> =>
+const isStockBoundToOrder = (orderId: string): Promise<boolean> =>
     reservationRepository
         .findByOrderId(orderId)
         .then((hold) => hold?.status === 'held' || hold?.status === 'committed');

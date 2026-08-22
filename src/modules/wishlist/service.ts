@@ -32,7 +32,7 @@ const toWishlistView = (wishlist: WishlistDocument | null): WishlistView => ({
 /**
  * Get the user's wishlist. Absence and emptiness are the same state — an empty view, never 404.
  */
-export const wishlistGet = (userId: string): Promise<WishlistView> =>
+const wishlistGet = (userId: string): Promise<WishlistView> =>
     wishlistRepository.findByUserId(userId).then((wishlist) => toWishlistView(wishlist));
 
 /**
@@ -42,7 +42,7 @@ export const wishlistGet = (userId: string): Promise<WishlistView> =>
  * a stale tab would otherwise plant a line the storefront can never render. Adding what is
  * already saved is idempotent (`$addToSet`), so a double-click answers the same 200.
  */
-export const wishlistAdd = (
+const wishlistAdd = (
     userId: string,
     productId: string
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
@@ -61,7 +61,7 @@ export const wishlistAdd = (
  * 404 rather than silent success when the line is absent: a client deleting a line it cannot
  * see needs to know its view is stale — the same contract the cart's remove keeps.
  */
-export const wishlistRemove = (
+const wishlistRemove = (
     userId: string,
     productId: string
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
@@ -78,7 +78,7 @@ export const wishlistRemove = (
  * fail to add it — the one outcome a shopper cannot repair. The cart's own service re-validates
  * the product, so a stale line answers its 404 rather than planting a broken cart line.
  */
-export const wishlistMoveToCart = (
+const wishlistMoveToCart = (
     userId: string,
     productId: string
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>

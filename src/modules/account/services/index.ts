@@ -19,33 +19,6 @@
  * config they both read. Nothing outside this module imports either — see `../index`.
  */
 
-export { tokenAdd, signup, login, tokenRemoveAll } from './authentication';
-
-export {
-    validatePasswordChange,
-    passwordChange,
-    passwordChangeWithCurrent,
-    updateProfile
-} from './profile';
-
-export {
-    addressesGet,
-    addressAdd,
-    addressUpdate,
-    addressRemove,
-    addressForCheckout,
-    addressesDeleteByUserId
-} from './addresses';
-export type { AddressesView } from './addresses';
-
-export {
-    sendVerificationEmail,
-    EMAIL_VERIFY_TOKEN_TYPE,
-    EMAIL_VERIFY_TOKEN_TTL_MS
-} from './verification';
-
-export { runTokenCleanup } from './token-cleanup';
-
 import { tokenAdd, signup, login, tokenRemoveAll } from './authentication';
 import {
     validatePasswordChange,
@@ -63,6 +36,23 @@ import {
 } from './addresses';
 import { sendVerificationEmail } from './verification';
 import { runTokenCleanup } from './token-cleanup';
+
+/*
+ * Published by name as well as through the namespace, because something reaches for the function
+ * rather than for the service: controllers send the verification mail and trigger the cleanup job,
+ * `post-verify-confirm` compares against the token type, `auth-surface.test.ts` pins
+ * `addressForCheckout` to the binding `../index` republishes, and the unit suites drive the auth
+ * and password flows straight off this module.
+ *
+ * What is NOT here is the address-book CRUD and `tokenRemoveAll`: nothing imports them by name, so
+ * a second list carrying them said the same thing as `accountService` twice — and a name living in
+ * two lists can fall out of one of them without a single caller noticing.
+ */
+export { tokenAdd, signup, login } from './authentication';
+export { passwordChange, passwordChangeWithCurrent, updateProfile } from './profile';
+export { addressForCheckout } from './addresses';
+export { sendVerificationEmail, EMAIL_VERIFY_TOKEN_TYPE } from './verification';
+export { runTokenCleanup } from './token-cleanup';
 
 /**
  * The one namespace this module's service is reached through.

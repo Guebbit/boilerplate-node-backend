@@ -12,21 +12,6 @@
  * | `cleanup.ts`  | tearing down carts when a user or product is deleted      |
  */
 
-export type { CartLine, CartView } from './view';
-
-export {
-    cartGet,
-    cartGetWithSummary,
-    cartItemSetById,
-    cartItemAddById,
-    cartItemRemoveById,
-    cartRemove
-} from './items';
-
-export { orderConfirm } from './checkout';
-export { reorderIntoCart } from './reorder';
-export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
-
 import {
     cartGet,
     cartGetWithSummary,
@@ -38,6 +23,23 @@ import {
 import { orderConfirm } from './checkout';
 import { reorderIntoCart } from './reorder';
 import { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
+
+/*
+ * Published by name as well as through the namespace: `module.ts` wires the two cleanup calls into
+ * the events that trigger them, and the unit suite drives the item operations directly. The line
+ * types stay in `./view`, where the two files that name them already import from — a barrel line
+ * for a type nobody asks the barrel for is a name to keep in step for no reader.
+ */
+export {
+    cartGet,
+    cartGetWithSummary,
+    cartItemSetById,
+    cartItemAddById,
+    cartItemRemoveById,
+    cartRemove
+} from './items';
+export { orderConfirm } from './checkout';
+export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
 
 export const cartService = {
     cartGet,

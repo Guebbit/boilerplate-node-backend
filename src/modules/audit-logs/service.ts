@@ -26,7 +26,7 @@ import { auditSinkFailuresTotal } from './metrics';
  * rejected write from surfacing as an unhandled rejection — which, unlike the failed write, would
  * genuinely be able to take the process down.
  */
-export const record = (entry: AuditEntry): void => {
+const record = (entry: AuditEntry): void => {
     void auditLogRepository.create(entry as Partial<AuditLogDocument>).catch((error: Error) => {
         // Before the log line, so the count is right even if the logger is what is broken.
         auditSinkFailuresTotal.inc();

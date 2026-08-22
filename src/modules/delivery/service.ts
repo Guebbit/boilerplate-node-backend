@@ -34,7 +34,7 @@ import type { ShipmentDocument } from './model';
 const trackingCodeFor = (orderId: string): string => `TRK-${orderId.slice(-8).toUpperCase()}`;
 
 /** The methods list, for the checkout page's selector. Static, so always a success. */
-export const listMethods = (): ResponseSuccess<{ methods: readonly ShippingMethod[] }> =>
+const listMethods = (): ResponseSuccess<{ methods: readonly ShippingMethod[] }> =>
     generateSuccess({ methods: SHIPPING_METHODS });
 
 /**
