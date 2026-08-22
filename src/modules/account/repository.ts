@@ -102,9 +102,8 @@ export const addressBookRepository: BaseRepository<AddressBookDocument> & {
         const entry = book?.items.find((item) => String(item._id) === addressId);
         if (!book || !entry) return null;
 
-        const wasDefault = entry.default;
         book.items = book.items.filter((item) => String(item._id) !== addressId);
-        if (wasDefault && book.items.length > 0) book.items[0].default = true;
+        if (entry.default && book.items.length > 0) book.items[0].default = true;
 
         return book.save();
     },

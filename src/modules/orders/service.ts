@@ -393,15 +393,6 @@ export function withActions(
 }
 
 /**
- * The statuses a cancel may move from — read off the lifecycle table, not declared.
- *
- * Per actor, because the table answers differently: a customer may cancel from `pending` and
- * `paid`, an operator also from `processing`.
- */
-const cancellableStatuses = (actor: OrderActor): readonly OrderStatus[] =>
-    statusesLeadingTo(OrderStatus.cancelled, actor);
-
-/**
  * Cancel an order — the one write a customer may make to one.
  *
  * A conditional status move, not a read-check-write: the repository's filter carries the
@@ -425,10 +416,15 @@ export const cancelById = (
      */
     const refund = authContext?.admin ? (options.refund ?? true) : true;
 
+    /*
+     * The statuses a cancel may move from are read off the lifecycle table, not declared, and the
+     * table answers per actor: a customer may cancel from `pending` and `paid`, an operator also
+     * from `processing`.
+     */
     return orderRepository
         .updateStatusIfIn(
             id,
-            cancellableStatuses(actorOf(authContext)),
+            statusesLeadingTo(OrderStatus.cancelled, actorOf(authContext)),
             OrderStatus.cancelled,
             callerScope(authContext)
         )

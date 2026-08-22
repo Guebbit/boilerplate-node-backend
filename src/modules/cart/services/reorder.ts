@@ -82,7 +82,7 @@ export const reorderIntoCart = (
                             .findPublicById(line.productId)
                             .then((product) => ({ ...line, product }))
                 )
-            ).then((lines) => {
+            ).then(async (lines) => {
                 const addable = lines.filter((line) => line.product !== null);
 
                 if (addable.length === 0)
@@ -93,18 +93,15 @@ export const reorderIntoCart = (
                         }
                     ]);
 
-                const addAllInOrder = async (): Promise<void> => {
-                    for (const line of addable)
-                        await cartRepository.upsertLine(
-                            userId,
-                            line.productId,
-                            line.quantity,
-                            'add'
-                        );
-                };
+                /*
+                 * One at a time, in the original order: each `upsertLine` reads and rewrites the
+                 * same cart document, so a parallel add would lose lines to a last-write-wins race.
+                 */
+                for (const line of addable)
+                    await cartRepository.upsertLine(userId, line.productId, line.quantity, 'add');
 
-                return addAllInOrder()
-                    .then(() => cartRepository.findByUserId(userId))
+                return cartRepository
+                    .findByUserId(userId)
                     .then((cart) => toCartView(cart))
                     .then((view) => generateSuccess(view, 200, t('cart.reorder.success')));
             });

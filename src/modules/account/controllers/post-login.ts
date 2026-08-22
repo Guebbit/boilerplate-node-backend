@@ -115,8 +115,6 @@ export const postLogin = (
                 return;
             }
             const userId = data._id.toString();
-            const isAdmin = !!data.admin;
-
             return createRefreshToken(userId, remember)
                 .then((refreshToken) => {
                     createRefreshCookie(response, refreshToken, remember);
@@ -128,7 +126,7 @@ export const postLogin = (
                     return createAccessToken(refreshToken);
                 })
                 .then((accessToken) => {
-                    recordLoginSuccess(request, userId, isAdmin);
+                    recordLoginSuccess(request, userId, !!data.admin);
                     successResponse(
                         response,
                         { token: accessToken },

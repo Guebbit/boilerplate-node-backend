@@ -386,9 +386,8 @@ userSchema.static('tokenRemoveExpired', function (): Promise<{
     success: boolean;
 }> {
     const now = new Date();
-    const tokenExpirationPath = 'tokens.expiration';
     return this.updateMany(
-        { [tokenExpirationPath]: { $lt: now } },
+        { 'tokens.expiration': { $lt: now } },
         { $pull: { tokens: { expiration: { $lt: now } } } }
     )
         .then(() => ({ status: 200, success: true }))
