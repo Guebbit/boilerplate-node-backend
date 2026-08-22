@@ -1,0 +1,18 @@
+{
+    "cart": {
+        "changed": "Il carrello è cambiato durante la conferma dell’ordine. Controllalo e riprova.",
+        "emptied": "Tutti i prodotti sono stati rimossi dal carrello.",
+        "empty": "Il tuo carrello è vuoto.",
+        "product-removed": "Prodotto rimosso dal carrello.",
+        "product-unavailable": "Uno o più prodotti nel carrello non sono più disponibili.",
+        "product-added": "Prodotto aggiunto al carrello.",
+        "reorder": {
+            "success": "Ordine aggiunto al carrello.",
+            "unavailable": "Nessuno dei prodotti di questo ordine è ancora disponibile.",
+            "order-not-found": "L'ordine richiesto non è stato trovato"
+        },
+        "insufficient-stock": "Alcuni articoli non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
+        "address-not-found": "L'indirizzo di spedizione selezionato non è stato trovato.",
+        "shipping-method-not-found": "Il metodo di spedizione scelto non esiste."
+    }
+}

@@ -1,0 +1,74 @@
+# Prometheus alert rules for the local API stack.
+# Why this file exists: dashboards are visual, but alerts define actionable SRE thresholds.
+# Local goal: starter coverage for availability, errors, latency, load, and memory.
+
+groups:
+    - name: api.rules
+      rules:
+          # Availability: API metrics endpoint unreachable.
+          - alert: ApiDown
+            expr: up{job="api"} == 0
+            for: 1m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'API instance is down'
+                description: 'Prometheus cannot reach the /metrics endpoint of the API for > 1 min.'
+
+          # Error rate: failures are above normal baseline.
+          - alert: HighErrorRate
+            expr: |
+                (
+                    rate(http_request_errors_total[5m])
+                    /
+                    rate(http_requests_total[5m])
+                ) > 0.05
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'High HTTP error rate (> 5 %)'
+                description: 'More than 5 % of requests are returning 4xx/5xx over the last 5 minutes.'
+
+          # Latency: user-perceived slowness at p95 percentile.
+          - alert: HighP95Latency
+            expr: |
+                histogram_quantile(
+                    0.95,
+                    rate(http_request_duration_milliseconds_bucket[5m])
+                ) > 2000
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'p95 latency > 2 s'
+                description: 'The 95th-percentile request duration has exceeded 2 000 ms for 5 minutes.'
+
+          # Saturation: too many concurrent requests in-flight.
+          - alert: HighInFlightRequests
+            expr: http_requests_in_flight > 100
+            for: 2m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Too many in-flight requests (> 100)'
+                description: 'More than 100 requests are being processed simultaneously for 2 minutes.'
+
+          # Memory pressure: Node.js heap close to exhaustion.
+          #
+          # The denominator is `nodejs_heap_size_limit_bytes` — V8's fixed ceiling — and not
+          # `nodejs_heap_size_total_bytes`, which is only the heap V8 has committed so far and
+          # which it grows on demand. Against `total` this ratio sits around 0.97 on an idle,
+          # healthy process, so the alert fired permanently and taught everyone to ignore it.
+          # The limit metric is registered by `infrastructure/observability/metrics-http`.
+          - alert: HighHeapUsage
+            expr: |
+                nodejs_heap_size_used_bytes
+                /
+                nodejs_heap_size_limit_bytes > 0.90
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Node.js heap usage above 90 % of the V8 limit'
+                description: 'The heap is within 10 % of --max-old-space-size; OOM risk if left unaddressed.'

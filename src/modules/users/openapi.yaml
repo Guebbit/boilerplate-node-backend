@@ -1,0 +1,440 @@
+openapi: 3.0.3
+info:
+    title: users — module contract
+    version: '2.0.0'
+
+paths:
+    # --------- Users ---------
+    /users:
+        get:
+            tags: [Users]
+            summary: List users (paginated)
+            description: Returns a paginated list of user accounts.
+            operationId: listUsers
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdParam'
+                - name: email
+                  in: query
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - name: username
+                  in: query
+                  schema:
+                      type: string
+                - name: active
+                  in: query
+                  schema:
+                      type: boolean
+            responses:
+                '200':
+                    description: Users list page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UsersResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Users]
+            summary: Create user
+            description: Creates a new user account with the supplied email, username, and password. Optional image can be uploaded.
+            operationId: createUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateUserRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/CreateUserRequestMultipart'
+            responses:
+                '201':
+                    description: Created user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        put:
+            tags: [Users]
+            summary: Edit user
+            description: Updates an existing user's email or password. Optional image can be uploaded.
+            operationId: updateUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserRequestMultipart'
+            responses:
+                '200':
+                    description: Updated user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Users]
+            summary: Delete user
+            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record.
+            operationId: deleteUser
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeleteUserRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /users/{id}:
+        # Same as GET /users?id={id}
+        get:
+            tags: [Users]
+            summary: User details
+            description: Returns the full profile of the user identified by `{id}`. Functionally equivalent to `GET /users?id={id}`.
+            operationId: getUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: User
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        put:
+            tags: [Users]
+            summary: Edit user
+            description: Updates the email or password of the user identified by `{id}` in the path. Optional image can be uploaded.
+            operationId: updateUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserByIdRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserByIdRequestMultipart'
+            responses:
+                '200':
+                    description: Updated user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        # Same as DELETE /users
+        delete:
+            tags: [Users]
+            summary: Delete user
+            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /users`.
+            operationId: deleteUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - name: hardDelete
+                  in: query
+                  schema:
+                      type: boolean
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/HardDeleteRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Same as DELETE /users/{id}?hardDelete=true — the flag spelled in the path instead of
+    # in the query. Both reach the same handler; neither is the canonical one.
+    /users/{id}/hard:
+        delete:
+            tags: [Users]
+            summary: Permanently delete user
+            description: Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
+            operationId: hardDeleteUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Same as GET /users, but with JSON body, more suitable for DTOs and multi-language codegen
+    /users/search:
+        post:
+            tags: [Users]
+            summary: Search users (DTO-friendly)
+            description: Searches and filters users via a JSON request body. Functionally equivalent to `GET /users` with query parameters
+            operationId: searchUsers
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchUsersRequest'
+            responses:
+                '200':
+                    description: Users search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UsersResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- users — the schemas only this module's paths reference. ----------
+        UsersResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/UsersResponse'
+
+        SearchUsersRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
+                pageSize:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                text:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                # Filters the stored `active` column. It does NOT filter soft-deletion: the two
+                # are independent facts, and `deletedAt` is not exposed on `User` at all, so
+                # there is no filter for it here. `active: false` means "deactivated", never
+                # "deleted".
+                active:
+                    type: boolean
+
+        CreateUserRequest:
+            type: object
+            additionalProperties: false
+            required: [email, username, password]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                admin:
+                    type: boolean
+                # Same reasoning as `CreateProductRequest.active`: independent of soft-deletion,
+                # and defaulted here so both implementations derive it rather than each choosing.
+                # Create bodies only — an omitted `active` on an update means "leave it alone".
+                active:
+                    type: boolean
+                    default: true
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+
+        CreateUserRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [email, username, password]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                admin:
+                    type: boolean
+                # Same default, same reasoning as `CreateUserRequest.active` above.
+                active:
+                    type: boolean
+                    default: true
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+
+        UpdateUserRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+
+        UpdateUserRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+
+        UpdateUserByIdRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                username:
+                    type: string
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+
+        UpdateUserByIdRequestMultipart:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                username:
+                    type: string
+                admin:
+                    type: boolean
+                active:
+                    type: boolean
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
+        DeleteUserRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                hardDelete:
+                    type: boolean
+                    default: false
+
+        UsersResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'

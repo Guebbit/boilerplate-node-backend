@@ -9,12 +9,13 @@ Both are optional: they only activate when the relevant env vars / browser binar
 
 ## Where the code lives
 
-| Concern        | File                                                              |
-| -------------- | ----------------------------------------------------------------- |
-| SMTP transport | `src/utils/nodemailer.ts`                                         |
-| Email triggers | `src/controllers/account/post-reset-request.ts` (password reset)  |
-| HTML templates | `views/*.ejs`                                                     |
-| PDF rendering  | `src/controllers/orders/get-order-invoice.ts`                     |
+| Concern        | File                                                                     |
+| -------------- | ------------------------------------------------------------------------ |
+| SMTP transport | `src/infrastructure/adapters/mailer.ts`                                  |
+| Email triggers | `src/modules/account/controllers/post-reset-request.ts` (password reset) |
+| Email copy     | `src/modules/<name>/emails.ts`                                           |
+| HTML templates | `shared/views/**/*.ejs`                                                  |
+| PDF rendering  | `src/modules/orders/controllers/get-order-invoice.ts`                    |
 
 ## Email pipeline
 
@@ -28,15 +29,39 @@ flowchart LR
 
 ### SMTP configuration
 
-| Env var          | Meaning                                                    |
-| ---------------- | ---------------------------------------------------------- |
-| `NODE_SMTP_HOST` | SMTP server hostname.                                      |
-| `NODE_SMTP_PORT` | Defaults to `587` (STARTTLS). `465` enables implicit TLS.  |
-| `NODE_SMTP_USER` | SMTP username.                                             |
-| `NODE_SMTP_PASS` | SMTP password / app password.                              |
-| `NODE_SMTP_NAME` | EHLO/HELO name (optional).                                 |
+| Env var          | Meaning                                                   |
+| ---------------- | --------------------------------------------------------- |
+| `NODE_SMTP_HOST` | SMTP server hostname.                                     |
+| `NODE_SMTP_PORT` | Defaults to `587` (STARTTLS). `465` enables implicit TLS. |
+| `NODE_SMTP_USER` | SMTP username.                                            |
+| `NODE_SMTP_PASS` | SMTP password / app password.                             |
+| `NODE_SMTP_NAME` | EHLO/HELO name (optional).                                |
 
 Every send is wrapped in an OTel span (`withSpan`) so failures show up in [Tempo](./tempo.md) alongside the request that triggered them.
+
+### Templates interpolate, they do not translate
+
+An email is usually rendered by a queue worker, in another process, after the request that asked for it is gone — so there is no locale to resolve a translation key against at that point. The copy is therefore resolved **before** the job is published: a module's `emails.ts` takes the language as an argument, binds its own `t` to it, and returns an `IEmailContent` — the template name, the subject, and every string the template prints, down to the `locale` that fills `<html lang>` and the footer line the shared partial shows. `enqueueEmail` adds nothing and resolves nothing; it publishes exactly what the builder produced.
+
+The consequences are worth knowing:
+
+- Templates contain no `t(...)` calls. `<%= greeting %>`, never `<%= t('…') %>`.
+- The workers import no i18n at all, and cannot silently send an email in the boot language.
+- A template that grows a line grows a field in the one `emails.ts` that builds it — and a variable that is never supplied is an EJS `ReferenceError`, not a blank line.
+- `tests/unit/infrastructure/adapters/mailer-templates.test.ts` renders every template, in every supported locale, through those builders — which is where a missing key surfaces.
+
+### Using a hosted provider
+
+There is no provider-specific code here, and none is needed: SendGrid, Mailgun, SES, Postmark, Resend and Brevo all expose an SMTP relay, so switching to one is an `.env` change. SendGrid, for example:
+
+```bash
+NODE_SMTP_HOST=smtp.sendgrid.net
+NODE_SMTP_PORT=587
+NODE_SMTP_USER=apikey          # the literal string "apikey"
+NODE_SMTP_PASS=SG.xxxxxxxx     # your API key
+```
+
+Reach for a provider's HTTP SDK instead of its SMTP relay only when you actually need something SMTP cannot give you — most commonly a host that blocks outbound SMTP ports, or provider-side features like batch personalizations and hosted templates (the latter being redundant here, since bodies are rendered from EJS before they reach the transport). Nodemailer accepts any transport object, so that swap is confined to `createTransport(...)` in `mailer.ts`.
 
 ## PDF pipeline
 
@@ -50,15 +75,14 @@ flowchart LR
 
 `puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable the invoice endpoint will error out at request time, not at boot — by design, so the rest of the API keeps running.
 
-## Useful links
+## Works with
 
-- [Nodemailer docs](https://nodemailer.com/about/)
-- [Nodemailer SMTP options](https://nodemailer.com/smtp/)
-- [Nodemailer message structure](https://nodemailer.com/message/)
-- [EJS syntax reference](https://ejs.co/#docs)
-- [Puppeteer API](https://pptr.dev/api)
-- [puppeteer-core vs puppeteer](https://pptr.dev/guides/configuration#puppeteer-vs-puppeteer-core)
-- [Chromium download channels](https://www.chromium.org/getting-involved/download-chromium/)
+- **[RabbitMQ](./rabbitmq.md)** — email jobs are normally not sent synchronously. The controller calls `enqueueEmail()`, which publishes to the RabbitMQ `emails` queue and returns immediately. The `email.worker.ts` consumer picks up the job and calls Nodemailer in the background — so the HTTP response doesn't wait for SMTP. Falls back to direct Nodemailer if RabbitMQ is not configured. → [How it's used — emails](./rabbitmq.md#how-it-s-used)
+
+## External references
+
+- [Nodemailer SMTP options](https://nodemailer.com/smtp/) — transport config reference (TLS, auth, pool settings)
+- [Puppeteer API](https://pptr.dev/api) — needed when extending the PDF generation beyond the invoice example
 
 ## Related pages
 

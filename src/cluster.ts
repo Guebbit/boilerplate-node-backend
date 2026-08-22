@@ -3,56 +3,53 @@
  * If you don't need clusters, you can just change the MAIN attribute in the "package.json" and use "app.ts"
  */
 // OTel must initialize before any other module is loaded.
-import { startTracing } from '@utils/tracing';
+import { startTracing } from '@infrastructure/runtime/otel-sdk';
 startTracing();
 
 import os from 'node:os';
 import cluster from 'node:cluster';
-import { logger } from '@utils/winston';
+import { logger } from '@infrastructure/adapters/logger';
+import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
  * Cluster management
  * https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
  */
-const CLUSTER_ENABLED = process.env.NODE_ENABLE_CLUSTERING === '1';
+const CLUSTER_ENABLED = environmentFlag('NODE_ENABLE_CLUSTERING', false);
 const DEFAULT_CRASH_WINDOW_MS = 60_000;
 const DEFAULT_CRASH_BACKOFF_BASE_MS = 500;
 const DEFAULT_CRASH_BACKOFF_MAX_MS = 30_000;
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 
 /**
- * Cluster settings come from env vars, so normalize them before using them in process control.
- */
-const parseNumber = (rawValue: string | undefined, fallback: number) => {
-    const parsedValue = Number.parseInt(rawValue ?? String(fallback), 10);
-    return Number.isNaN(parsedValue) ? fallback : parsedValue;
-};
-
-/**
  * A cluster cannot scale below one worker, even if config is missing or invalid.
  */
 const getWorkerTarget = () => {
-    const requestedWorkers = parseNumber(process.env.NODE_CLUSTER_WORKERS, os.cpus().length);
+    const requestedWorkers = environmentNumber('NODE_CLUSTER_WORKERS', os.cpus().length);
     return requestedWorkers <= 0 ? 1 : requestedWorkers;
 };
 
 if (cluster.isPrimary && CLUSTER_ENABLED) {
     const workerTarget = getWorkerTarget();
-    const crashWindowMs = parseNumber(
-        process.env.NODE_CLUSTER_CRASH_WINDOW_MS,
-        DEFAULT_CRASH_WINDOW_MS
+    const crashWindowMs = environmentNumber(
+        'NODE_CLUSTER_CRASH_WINDOW_MS',
+        DEFAULT_CRASH_WINDOW_MS,
+        1
     );
-    const crashBackoffBaseMs = parseNumber(
-        process.env.NODE_CLUSTER_CRASH_BACKOFF_BASE_MS,
-        DEFAULT_CRASH_BACKOFF_BASE_MS
+    const crashBackoffBaseMs = environmentNumber(
+        'NODE_CLUSTER_CRASH_BACKOFF_BASE_MS',
+        DEFAULT_CRASH_BACKOFF_BASE_MS,
+        1
     );
-    const crashBackoffMaxMs = parseNumber(
-        process.env.NODE_CLUSTER_CRASH_BACKOFF_MAX_MS,
-        DEFAULT_CRASH_BACKOFF_MAX_MS
+    const crashBackoffMaxMs = environmentNumber(
+        'NODE_CLUSTER_CRASH_BACKOFF_MAX_MS',
+        DEFAULT_CRASH_BACKOFF_MAX_MS,
+        1
     );
-    const shutdownTimeoutMs = parseNumber(
-        process.env.NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS,
-        DEFAULT_SHUTDOWN_TIMEOUT_MS
+    const shutdownTimeoutMs = environmentNumber(
+        'NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS',
+        DEFAULT_SHUTDOWN_TIMEOUT_MS,
+        1
     );
 
     let isShuttingDown = false;
@@ -165,5 +162,5 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
      * Workers execute the app module
      */
 
-    import('./app');
+    void import('./app');
 }

@@ -1,0 +1,221 @@
+/**
+ * One optional connection's lifecycle, stated once.
+ *
+ * Redis and RabbitMQ are both *optional* dependencies: unconfigured is a supported deployment,
+ * unreachable is a degraded one, and neither may turn a request into an error. Expressing that
+ * takes the same six pieces every time — a memoised handle, an in-flight connect shared by
+ * concurrent callers, a warn-once flag re-armed on success, a getter resolving `undefined` rather
+ * than rejecting, a `DependencyStatus` reader and a close — and stating them twice is how the two
+ * adapters came to answer the same question by different rules: one reported `connecting` from the
+ * client's socket flag, the other from whether a connect was in flight, in the same health payload.
+ *
+ * So the rules live here and the adapters supply only what is genuinely theirs: how to open the
+ * thing, how to tell it is still usable, and how to close it.
+ *
+ * What this deliberately does NOT do is retry on a timer. Recovery is driven by demand — the next
+ * `get()` after a failure makes one clean attempt — which is why an unreachable dependency costs
+ * one log line rather than one per second.
+ *
+ * See: docs/tools/redis-cache.md, docs/tools/rabbitmq.md
+ */
+
+import { logger } from '@infrastructure/adapters/logger';
+import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
+
+/** What an adapter has to supply: how to open, how to check, how to close. */
+export interface ManagedConnectionOptions<THandle> {
+    /**
+     * The single line logged when the dependency is unreachable.
+     *
+     * Written by the adapter because only it can say what is lost — "continuing without
+     * server-side cache" and "queue operations will be skipped" are different promises.
+     */
+    unavailableMessage: string;
+
+    /**
+     * Whether this dependency is configured and not explicitly switched off.
+     *
+     * Checked before every attempt and read by {@link ManagedConnection.state}, so a deployment
+     * that runs without it never opens a socket and reports `disabled` rather than broken.
+     */
+    isEnabled: () => boolean;
+
+    /**
+     * Open the handle. Called at most once at a time; rejecting is how failure is reported.
+     *
+     * Resolving `undefined` says "cannot be built at all" — configuration that {@link isEnabled}
+     * could not rule out — and is treated as unavailable WITHOUT a warning, because nothing failed.
+     */
+    connect: () => Promise<THandle | undefined>;
+
+    /**
+     * Whether a handle already opened can still be used.
+     *
+     * Called before every reuse, so a dependency that died since the last call is reconnected
+     * rather than handed back dead. A handle whose own close event is supervised by the adapter
+     * (see `queue.ts`, which calls {@link ManagedConnection.forget}) answers `true`: there, a
+     * handle still held IS a live one.
+     */
+    isReady: (handle: THandle) => boolean;
+
+    /**
+     * Close it, from {@link ManagedConnection.stop}.
+     *
+     * Called with whatever handle is live, or with `undefined` when none is — an adapter that
+     * opened MORE than the handle still has to close it. `queue.ts` is the case: its handle is a
+     * channel, the channel can die on its own while the TCP connection beneath it stays open, and
+     * closing that connection is the only thing that releases it.
+     */
+    close: (handle: THandle | undefined) => Promise<void>;
+}
+
+/** The lifecycle an adapter drives its public functions from. */
+export interface ManagedConnection<THandle> {
+    /**
+     * The live handle, or `undefined` when the dependency is off, unconfigured or unreachable.
+     *
+     * NEVER rejects, and that is the property every fail-open adapter is built on: a caller
+     * treats `undefined` as "skip it", and cannot tell the three cases apart — nor does it need
+     * to. The one caller that does need to (`clearCache`, which must report whether the cache is
+     * now known to be clear) separates them with `isEnabled` instead.
+     */
+    get: () => Promise<THandle | undefined>;
+
+    /** What this connection is doing, for `GET /observability/health`. Performs no I/O. */
+    state: () => DependencyStatus;
+
+    /**
+     * Drop the memoised handle without closing anything.
+     *
+     * For an adapter whose handle announces its own death: the close listener forgets it here, and
+     * the next `get()` opens a fresh one. That is the whole reconnect strategy.
+     */
+    forget: () => void;
+
+    /**
+     * Log one warning about this dependency being unreachable, then stay quiet until a connect
+     * succeeds.
+     *
+     * Exported because failures arrive outside `connect` too — an `error` event on a live handle,
+     * a command rejected mid-publish — and they are the same outage, so they share the latch
+     * rather than each flooding the log on their own.
+     */
+    reportUnavailable: (error: unknown) => void;
+
+    /**
+     * Close and forget, so a later `get()` starts from a clean state.
+     *
+     * Waits for an in-flight connect before closing: a socket that finishes opening after shutdown
+     * has nobody left to close it and holds the process open.
+     */
+    stop: () => Promise<void>;
+}
+
+/**
+ * Build one managed connection.
+ *
+ * @param options - the three adapter-specific operations plus its enablement rule
+ * @returns the lifecycle, closed over module-level state private to this call
+ */
+export const manageConnection = <THandle>({
+    unavailableMessage,
+    isEnabled,
+    connect,
+    isReady,
+    close
+}: ManagedConnectionOptions<THandle>): ManagedConnection<THandle> => {
+    /** The shared handle: one per process — a handle per request exhausts the server's limit. */
+    let handle: THandle | undefined;
+
+    /** The in-flight connect, so a burst during startup does not thunder-herd its own attempt. */
+    let connectPromise: Promise<THandle | undefined> | undefined;
+
+    /**
+     * Latches the "it is down" warning: a dead dependency emits per failed operation, which would
+     * be one log line per request. Cleared on a successful connect so a later outage is reported.
+     */
+    let warningLogged = false;
+
+    const reportUnavailable = (error: unknown) => {
+        if (warningLogged) return;
+
+        logger.warn({
+            message: unavailableMessage,
+            error: error instanceof Error ? error.message : String(error)
+        });
+        warningLogged = true;
+    };
+
+    const get = (): Promise<THandle | undefined> => {
+        // Disabled → resolve with nothing. Every caller treats that as "skip this dependency".
+        if (!isEnabled()) return Promise.resolve(undefined);
+        // Reuse a handle that is still good; a dead one falls through to a fresh attempt.
+        if (handle && isReady(handle)) return Promise.resolve(handle);
+        // An attempt is already running — join it instead of opening a second connection.
+        if (connectPromise) return connectPromise;
+
+        const attempt: Promise<THandle | undefined> = connect()
+            .then((opened) => {
+                handle = opened;
+                // Connected → allow a warning again, so a later outage is still reported.
+                if (opened) warningLogged = false;
+                return opened;
+            })
+            .catch((error: unknown) => {
+                // Resolve, never reject: a failed connect is a skipped optimisation for the
+                // cache and an inline fallback for the queue, not a failed request.
+                reportUnavailable(error);
+                handle = undefined;
+                return undefined;
+            })
+            .finally(() => {
+                // Cleared either way, so the next call can retry a dependency that was down.
+                connectPromise = undefined;
+            });
+
+        connectPromise = attempt;
+
+        return attempt;
+    };
+
+    return {
+        get,
+
+        state: () => {
+            if (!isEnabled()) return 'disabled';
+            if (handle && isReady(handle)) return 'ready';
+            // One rule for every managed dependency: the handshake window is exactly the time an
+            // attempt is in flight. Reading it from each client's own socket flags instead is what
+            // let two dependencies in one payload disagree about what `connecting` means.
+            if (connectPromise) return 'connecting';
+            return 'unavailable';
+        },
+
+        forget: () => {
+            handle = undefined;
+        },
+
+        reportUnavailable,
+
+        stop: () => {
+            // An attempt still running owns the handle this is about to close, so it is settled
+            // first. `connectPromise` never rejects — `get` already turned failure into
+            // `undefined` — so there is nothing to catch here.
+            const settled = connectPromise ?? Promise.resolve(handle);
+
+            return (
+                settled
+                    .then(close)
+                    // Shutdown is the one path that must not raise. An already-dead socket rejecting
+                    // its own close is the ordinary case here and there is nothing to salvage: the
+                    // process is on its way out and the next boot starts from a fresh handle.
+                    .catch(() => undefined)
+                    .finally(() => {
+                        handle = undefined;
+                        connectPromise = undefined;
+                        warningLogged = false;
+                    })
+            );
+        }
+    };
+};

@@ -1,0 +1,44 @@
+import type { Request, Response } from 'express';
+import { successResponse } from '@infrastructure/http/response';
+import { cartService } from '../services';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { cartAuditActions } from '../audit';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
+import { catchAs, refused } from '@infrastructure/http/controller';
+import { authContextOf } from '@infrastructure/http/request';
+
+/**
+ * POST /cart/reorder/:orderId
+ * Copy one of the caller's own orders back into their cart.
+ *
+ * Filed under cart because of what it writes: the order is only read. Lines whose product has
+ * since left the public catalogue are skipped — the response's cart view is the honest record of
+ * what landed — and an order with nothing left to add answers 409 rather than a hollow 200.
+ */
+export const postReorder = (request: Request<{ orderId: string }>, response: Response) => {
+    const userId = authContextOf(request).id;
+    const { orderId } = request.params;
+
+    return cartService
+        .reorderIntoCart(userId, orderId)
+        .then((result) => {
+            if (refused(response, result)) return;
+
+            emitAuditEvent(
+                buildAuditEvent(request, {
+                    action: cartAuditActions.USER_CART_REORDERED,
+                    outcome: 'success',
+                    metadata: { order_id: orderId }
+                })
+            );
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(request),
+                event: cartAnalyticsEvents.CART_REORDERED,
+                properties: { order_id: orderId }
+            });
+
+            successResponse(response, result.data, 200, result.message);
+        })
+        .catch(catchAs(response, 'postReorder'));
+};

@@ -1,0 +1,346 @@
+import { Types } from 'mongoose';
+import type { Model, Document, QueryFilter, SaveOptions } from 'mongoose';
+import {
+    normalizePagination,
+    buildPaginatedMeta,
+    addTextFilter,
+    addRegexFilter,
+    toSearchPattern,
+    DEFAULT_SORT,
+    type PaginatedMeta,
+    type PaginationInput
+} from './search';
+
+/**
+ * The ceiling `findAll` applies when a caller names no limit. A backstop against an unbounded
+ * collection scan, not a page size — paging goes through `search`.
+ */
+export const FIND_ALL_LIMIT = 1000;
+
+/** Pagination/sort options shared across all repository `findAll` calls. */
+export interface FindAllOptions {
+    sort?: Record<string, 1 | -1>;
+    skip?: number;
+    /** How many documents at most. Defaults to {@link FIND_ALL_LIMIT}. */
+    limit?: number;
+}
+
+/**
+ * What a collection can be filtered by, expressed as data: filter key (what the caller sends)
+ * → Mongo path it targets.
+ *
+ * Declaring this per repository is what keeps `$regex`, `$elemMatch`, `$gte` and `ObjectId` out
+ * of services: a service says *what* to filter, the repository owns *how* it becomes a query.
+ *
+ * Empty/blank/nullish values are skipped throughout — `?text=` is an absent filter, not a
+ * request to match the empty string.
+ */
+export interface SearchSpec {
+    /** Holds a document id. Coerced to `ObjectId` — a string never matches one. */
+    objectIds?: Record<string, string>;
+    /** Matched verbatim (trimmed). */
+    exact?: Record<string, string>;
+    /**
+     * Matched as a boolean, and the value must already BE one.
+     *
+     * Controllers decode first (`get-users.ts` coerces `active`, `readInput`'s `booleans` does
+     * the same for bodies) because `?active=false` arrives as the truthy string `'false'`.
+     * Coercing again here would only hide a controller that forgot to.
+     */
+    booleans?: Record<string, string>;
+    /** Matched case-insensitively against one field. */
+    regex?: Record<string, string>;
+    /** Matched case-insensitively against any element of an array field. */
+    arrayRegex?: Record<string, string>;
+    /** Mongo paths the single `text` filter searches together. */
+    text?: string[];
+    /** Mongo path → the two filter keys bounding it, e.g. `price: { min: 'minPrice', … }`. */
+    ranges?: Record<string, { min: string; max: string }>;
+}
+
+/**
+ * Raw, unvalidated filter bag from the request layer.
+ *
+ * `object` and not `Record<string, unknown>`: the generated request DTOs are interfaces, which
+ * TypeScript denies an implicit index signature, so the stricter type would force every caller
+ * to cast. The one cast that makes keys readable lives in `buildWhere` instead.
+ */
+export type SearchFilters = object;
+
+/**
+ * A model's wire-shape serializer — `applySerialization`'s return value, exported by each model
+ * as `applyProductTransform` and friends. Mostly `_id` → `id`, though `audit-logs` drops the id
+ * outright; `@infrastructure/persistence/serialize` is the authority on what each collection owes.
+ *
+ * Needed because `.lean()` and `.aggregate()` both bypass the schema's `toJSON`, so their plain
+ * objects still carry `_id`/`__v`. Passing it to the factory is what lets repositories return
+ * serialized results instead of every service remembering to map.
+ */
+export type Transform = (serialized: Record<string, unknown>) => Record<string, unknown>;
+
+/** Treat empty/blank/nullish as "the caller did not filter on this". */
+const isPresent = (value: unknown): boolean =>
+    value !== undefined && value !== null && (typeof value !== 'string' || value.trim() !== '');
+
+/**
+ * Coerce an id to a BSON ObjectId.
+ *
+ * Throws on a malformed id, which is the safe direction: an aggregation `$match` does not cast
+ * the way `find()` does, so a raw string there matches nothing and reads as "no results"
+ * rather than as the bad input it is.
+ */
+export const toObjectId = (value: unknown): Types.ObjectId => new Types.ObjectId(String(value));
+
+/**
+ * Compile a filter bag into a Mongo query, per the collection's declared spec.
+ *
+ * Reached through the bound `buildWhere` on the factory result — the order repository uses it
+ * to build an aggregation `$match` from the same rules.
+ */
+const buildWhere = (filters: SearchFilters, spec: SearchSpec): Record<string, unknown> => {
+    // The one cast, confined here — see `SearchFilters`.
+    const bag = filters as Record<string, unknown>;
+    const where: Record<string, unknown> = {};
+
+    for (const [key, path] of Object.entries(spec.objectIds ?? {}))
+        if (isPresent(bag[key])) where[path] = toObjectId(String(bag[key]).trim());
+
+    for (const [key, path] of Object.entries(spec.exact ?? {}))
+        if (isPresent(bag[key])) where[path] = String(bag[key]).trim();
+
+    // Type check, not `isPresent`: `false` is a filter, and the value is pre-decoded by now.
+    for (const [key, path] of Object.entries(spec.booleans ?? {}))
+        if (typeof bag[key] === 'boolean') where[path] = bag[key];
+
+    // Both regex helpers escape the input — an unescaped `$regex` is a public ReDoS.
+    for (const [key, path] of Object.entries(spec.regex ?? {}))
+        addRegexFilter(where, path, bag[key] as string | undefined);
+
+    // `toSearchPattern` rather than `escapeRegex`: this is caller text on its way into a pattern,
+    // so it needs the control-character strip too — a NUL here is a 500 from `POST /products/search`.
+    // `undefined` means nothing searchable survived, and an absent filter is the honest answer.
+    for (const [key, path] of Object.entries(spec.arrayRegex ?? {})) {
+        const pattern = toSearchPattern(bag[key]);
+        if (pattern !== undefined) where[path] = { $elemMatch: { $regex: pattern, $options: 'i' } };
+    }
+
+    if (spec.text && spec.text.length > 0)
+        addTextFilter(where, bag.text as string | undefined, spec.text);
+
+    // Each bound is optional and independent: one-sided ranges are normal.
+    for (const [path, bounds] of Object.entries(spec.ranges ?? {})) {
+        const range: Record<string, number> = {};
+        const min = Number(bag[bounds.min]);
+        const max = Number(bag[bounds.max]);
+        // `NaN` checked separately: a non-numeric bound is dropped, not sent to Mongo.
+        if (isPresent(bag[bounds.min]) && !Number.isNaN(min)) range.$gte = min;
+        if (isPresent(bag[bounds.max]) && !Number.isNaN(max)) range.$lte = max;
+        if (Object.keys(range).length > 0) where[path] = range;
+    }
+
+    return where;
+};
+
+/** A page of already-normalized results plus its pagination meta. */
+export interface PaginatedResult<TDocument> {
+    items: TDocument[];
+    meta: PaginatedMeta;
+}
+
+export interface BaseRepositoryOptions {
+    /** The model's wire-shape serializer, applied by `normalize` — and so by `search`. */
+    transform: Transform;
+    /** What `search()` accepts. Omit for collections that are never searched. */
+    searchable?: SearchSpec;
+}
+
+/**
+ * The factory's return type, written out rather than inferred.
+ *
+ * Mongoose's `Query` generics are large enough that TypeScript refuses to serialize the
+ * inferred shape at an export boundary (TS7056) once it is spread into a repository object.
+ * Naming the contract fixes that, and doubles as the one place to read what a repository can do.
+ */
+export interface BaseRepository<TDocument extends Document> {
+    /**
+     * Fetch one document by `_id`, as a hydrated document.
+     *
+     * Resolves a Promise rather than handing back Mongoose's Query builder: a Query escaping
+     * the repository lets any caller chain `.select()`/`.lean()` onto it, which is the layering
+     * leak this factory exists to close. Need a plain object? See `findByIdRaw`.
+     */
+    findById: (id: string) => Promise<TDocument | null>;
+    /** Fetch the first document matching a filter, as a hydrated document. */
+    findOne: (where: QueryFilter<TDocument>) => Promise<TDocument | null>;
+    /**
+     * Fetch one document as a plain, **untransformed** object.
+     *
+     * For embedding a snapshot in another document: the stored copy must keep its `_id`, so
+     * this deliberately skips `normalize`. So does `findAll`; `search` is the only read that
+     * returns serialized output.
+     */
+    findByIdRaw: (id: string) => Promise<TDocument | null>;
+    /** Fetch a filtered, sorted, paginated list as lean objects — **not** normalized. */
+    findAll: (where?: QueryFilter<TDocument>, options?: FindAllOptions) => Promise<TDocument[]>;
+    /** Count the documents matching a filter. */
+    count: (where?: QueryFilter<TDocument>) => Promise<number>;
+    /**
+     * Insert a new document.
+     *
+     * `options` reaches the underlying `save()`, and exists for one caller: seeding passes
+     * `{ timestamps: false }` so a fixture's pinned `createdAt` survives instead of being
+     * overwritten with the moment the seeder ran. See `./factory`.
+     */
+    create: (data: Partial<TDocument>, options?: SaveOptions) => Promise<TDocument>;
+    /** Persist in-memory changes to an already-fetched document. */
+    save: (document: TDocument) => Promise<TDocument>;
+    /** Remove a single document. */
+    deleteOne: (document: TDocument) => Promise<void>;
+    /** Filter → count → page → normalize, per the declared search spec. */
+    search: (
+        filters?: SearchFilters,
+        scope?: Record<string, unknown>,
+        sort?: Record<string, 1 | -1>
+    ) => Promise<PaginatedResult<TDocument>>;
+    /** Apply the model's transform to lean/aggregate output. */
+    normalize: (items: unknown[]) => TDocument[];
+    /** Build a Mongo filter from a filter bag, per the declared search spec. */
+    buildWhere: (filters: SearchFilters) => Record<string, unknown>;
+}
+
+/**
+ * Creates the standard CRUD operations for a Mongoose model.
+ *
+ * Beyond plain CRUD this owns the three pieces of Mongo knowledge a service must not carry: id
+ * coercion, the lean→normalized mapping, and turning a filter bag into a query.
+ *
+ * A factory returning a closure-backed object, consumed by SPREAD — not a base class. There is no
+ * `extends` and no protected hook, so a module that cannot honour part of the contract narrows its
+ * own type (`orders` omits `search`, `audit-logs` exposes three members) instead of inheriting a
+ * method it has to break. Do not unify this into a base class.
+ */
+export function createBaseRepository<TDocument extends Document>(
+    mongooseModel: Model<TDocument>,
+    options: BaseRepositoryOptions
+): BaseRepository<TDocument> {
+    const { transform, searchable = {} } = options;
+
+    /**
+     * Normalize a batch of lean/aggregate results.
+     *
+     * `.lean()` returns plain objects, the transform rewrites their keys, and the app types the
+     * outcome as the document. The conversion is spelled as two honest single steps — into the
+     * record the transform reads, out of the `unknown[]` it leaves — confined to this one
+     * function, so there is one place to get it wrong.
+     */
+    const normalize = (items: unknown[]): TDocument[] => {
+        const transformed: unknown[] = items.map((item) =>
+            transform(item as Record<string, unknown>)
+        );
+        return transformed as TDocument[];
+    };
+
+    /** Hydrated — callers may mutate and `save()` the result. */
+    const findById = (id: string): Promise<TDocument | null> => mongooseModel.findById(id).exec();
+
+    /** Hydrated — callers may mutate and `save()` the result. */
+    const findOne = (where: QueryFilter<TDocument>): Promise<TDocument | null> =>
+        mongooseModel.findOne(where).exec();
+
+    /** Lean and untransformed, so the `_id` survives — for embedded snapshots. */
+    const findByIdRaw = (id: string): Promise<TDocument | null> =>
+        mongooseModel.findById(id).lean<TDocument | null>().exec();
+
+    /**
+     * Filtered, sorted, paginated list.
+     *
+     * `.lean<TDocument[]>()` is the `.lean()` lie made explicit: these are plain objects typed
+     * as hydrated documents, and they are NOT normalized — `search()` is the path that also
+     * normalizes.
+     */
+    const findAll = (
+        where: QueryFilter<TDocument> = {},
+        // `sort` defaults to `DEFAULT_SORT` because this applies `skip`, and a non-unique sort
+        // makes which documents a page contains undefined.
+        { sort = DEFAULT_SORT, skip = 0, limit = FIND_ALL_LIMIT }: FindAllOptions = {}
+    ): Promise<TDocument[]> =>
+        mongooseModel
+            .find({ ...where })
+            .lean<TDocument[]>()
+            // eslint-disable-next-line unicorn/no-array-sort -- Mongoose's Query#sort, not Array#sort
+            .sort(sort)
+            .skip(skip)
+            .limit(limit)
+            .exec();
+
+    /** Count the documents matching a filter. */
+    const count = (where: QueryFilter<TDocument> = {}): Promise<number> =>
+        mongooseModel.countDocuments(where);
+
+    /**
+     * Insert a new document.
+     *
+     * The two branches are not stylistic. `Model.create(doc, options)` is ambiguous — mongoose reads
+     * a trailing plain object as a SECOND DOCUMENT to insert — so the options path goes through
+     * `new Model(...).save(options)`, which is what `create` does internally anyway. Callers that
+     * pass no options keep the single-document call they have always made.
+     */
+    const create = (data: Partial<TDocument>, options?: SaveOptions): Promise<TDocument> =>
+        options === undefined ? mongooseModel.create(data) : new mongooseModel(data).save(options);
+
+    /** Persist in-memory changes to an already-fetched document. */
+    const save = (document: TDocument): Promise<TDocument> => document.save();
+
+    /** Remove a single document. */
+    const deleteOne = (document: TDocument): Promise<void> =>
+        // mongoose types `Document#deleteOne` as `any`; the cast restores the promise it returns
+        (document.deleteOne() as Promise<unknown>).then(() => undefined);
+
+    /**
+     * Filter → count → page → normalize, in one call.
+     *
+     * `async` is load-bearing, not style. The two lines below run synchronously before any
+     * promise exists, and `buildWhere` can throw: `toObjectId` hands a client string to
+     * `new Types.ObjectId(...)`, which rejects anything but 24 hex chars. Without `async` that
+     * throw escapes the function, the caller's `.then().catch()` is never even built, and
+     * Express answers 500 — `POST /products/search` with `{"id": ""}` was an unauthenticated
+     * 500 (found by `tests/fuzz/endpoints.fuzz.test.ts`). A signature saying `Promise<T>` must
+     * reject, never throw synchronously.
+     */
+    const search = async (
+        filters: SearchFilters = {},
+        scope: Record<string, unknown> = {},
+        // Total sort by default: `count` and `findAll` are separate queries, so a tie can put
+        // one document on two pages — see `DEFAULT_SORT`.
+        sort: Record<string, 1 | -1> = DEFAULT_SORT
+    ): Promise<PaginatedResult<TDocument>> => {
+        const pagination = normalizePagination(filters as PaginationInput);
+        // `scope` merged last and wins: it is the caller's authorization boundary (own rows,
+        // publicly visible rows), which no client-supplied filter may widen.
+        const where = { ...buildWhere(filters, searchable), ...scope } as QueryFilter<TDocument>;
+
+        return count(where).then((totalItems) =>
+            findAll(where, { sort, skip: pagination.skip, limit: pagination.pageSize }).then(
+                (items) => ({
+                    items: normalize(items),
+                    meta: buildPaginatedMeta(pagination, totalItems)
+                })
+            )
+        );
+    };
+
+    return {
+        findById,
+        findOne,
+        findByIdRaw,
+        findAll,
+        count,
+        create,
+        save,
+        deleteOne,
+        search,
+        normalize,
+        // Bound to this collection's spec, so callers pass filters only.
+        buildWhere: (filters: SearchFilters) => buildWhere(filters, searchable)
+    };
+}

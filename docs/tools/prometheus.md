@@ -1,45 +1,90 @@
-# Prometheus (opt-in)
+# Prometheus
 
-## Status in this repo
+## What it is
 
-Prometheus is **not** wired up by default — the boilerplate does not ship a Prometheus container.
-The app, however, exposes a `/metrics` endpoint in the standard Prometheus exposition format, so adding a scrape later is a one-line config change.
+Prometheus is the **metrics backend** of this boilerplate.
+It scrapes the app's `/observability/metrics` endpoint every 15 s, stores numeric time-series, evaluates alert rules, and sends firing alerts to Alertmanager.
 
-If you only care about traces, ignore this page and use [Tempo + Grafana](./tempo.md).
+Grafana reads Prometheus for all metric charts and dashboards.
 
-## What `/metrics` exposes
+## Where to find it
 
-| Metric | Why it is here |
-| --- | --- |
-| `http_requests_total` | request rate, split by method/route/status |
-| `http_request_duration_milliseconds` | latency histogram for p50/p95/p99 |
-| `http_request_errors_total` | 4xx/5xx counts |
-| `http_requests_in_flight` | concurrency at a glance |
-| `auth_login_total` / `auth_signup_total` / `cart_checkout_total` / `order_created_total` / … | business counters that you cannot derive from traces |
-| `process_*` and `nodejs_*` | default `prom-client` runtime metrics (CPU, memory, event-loop, GC) |
+- Prometheus UI: `http://localhost:9090`
+- Alertmanager UI: `http://localhost:9093`
 
-Database query metrics are intentionally **not** Prometheus counters — Mongoose spans from OTel give richer per-query data in Tempo.
+## System ping
 
-## Add a Prometheus scrape later
+| Route   | Purpose                                       | Success  |
+| ------- | --------------------------------------------- | -------- |
+| `GET /` | **Ping** — always 200 while the process is up | `200 ok` |
 
-```yaml
-scrape_configs:
-    - job_name: api
-      metrics_path: /metrics
-      static_configs:
-          - targets: ['app:3000']
-```
+## What `/observability/metrics` exposes
 
-## Useful links
+| Metric                                       | Why it is here                              |
+| -------------------------------------------- | ------------------------------------------- |
+| `http_requests_total`                        | request rate, split by method/route/status  |
+| `http_request_duration_milliseconds`         | latency histogram for p50/p95/p99           |
+| `http_request_errors_total`                  | 4xx/5xx counts                              |
+| `http_requests_in_flight`                    | concurrency at a glance                     |
+| `cache_invalidation_failures_total`          | writes whose stale cached response survived |
+| `auth_login_total`, `cart_checkout_total`, … | business counters                           |
+| `process_*` and `nodejs_*`                   | default `prom-client` runtime metrics       |
 
-- [Prometheus docs](https://prometheus.io/docs/introduction/overview/)
-- [Prometheus exposition format](https://prometheus.io/docs/instrumenting/exposition_formats/)
-- [prom-client (Node.js client)](https://github.com/siimon/prom-client#readme)
-- [Metric & label naming](https://prometheus.io/docs/practices/naming/)
-- [Histogram vs Summary](https://prometheus.io/docs/practices/histograms/)
+The `route` label is the template Express matched — `/orders/:id` — read on `finish`, or
+`unmatched` for a request that reached no handler. Never a requested path: prom-client evicts
+nothing, and a public deployment is scanned against a near-infinite path dictionary, so a label
+derived from the URL grows the registry for the life of the process.
+
+## Alert rules
+
+Baseline alert rules live in `.docker/observability/prometheus.alert-rules.yaml`:
+
+| Alert                  | Condition                           | Severity |
+| ---------------------- | ----------------------------------- | -------- |
+| `ApiDown`              | scrape target unreachable > 1 min   | critical |
+| `HighErrorRate`        | error rate > 5 % over 5 min         | warning  |
+| `HighP95Latency`       | p95 latency > 2 s over 5 min        | warning  |
+| `HighInFlightRequests` | > 100 concurrent requests for 2 min | warning  |
+| `HighHeapUsage`        | heap > 90 % for 5 min               | warning  |
+
+## Alertmanager
+
+Alertmanager config lives at `.docker/observability/alertmanager.config.yaml`.
+In local dev it uses a `null` receiver (logs only). Replace it with Slack, PagerDuty, or email for production.
+
+## Observability endpoints
+
+See [Observability Endpoints](../api/observability.md) for the full list. Key routes:
+
+| Route                                 | Auth  | Returns                                                                                   |
+| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
+| `GET /observability/metrics`          | none  | Raw Prometheus exposition (text/plain) — scrape target                                    |
+| `GET /observability/health`           | admin | Full health snapshot: DB status, memory, CPU, integration flags, uptime                   |
+| `GET /observability/metrics/overview` | admin | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
+| `GET /observability/audit`            | admin | Recent audit events from the persisted audit trail, newest first                          |
+
+These endpoints return **curated, domain-shaped summaries** — they are the data layer for a custom frontend, not raw Prometheus query results.
+
+## SSE metrics stream
+
+- `GET /observability/events` (`text/event-stream`, public, no auth)
+
+Emits `metrics.snapshot` immediately on connect, then `metrics.updated` every 5 s and a `heartbeat` every 15 s.
+
+Use this for live widgets in a custom UI. For historical charts, query your backend (which can read Prometheus), not process-local memory.
+
+## Works with
+
+- **[Grafana](./grafana.md)** — Grafana is the primary consumer of Prometheus data. Every metric chart and KPI panel in the dashboard reads from Prometheus. You rarely need to query Prometheus directly; Grafana's Explore view is the normal entry point. → [Works with Prometheus](./grafana.md#works-with)
+- **Alertmanager** — Prometheus evaluates the rules in `.docker/observability/prometheus.alert-rules.yaml` and pushes firing alerts to Alertmanager, which groups and routes them to notification receivers. In local dev the receiver is `null` (no actual notifications). Swap it for Slack, PagerDuty, or email in production. Both share the same [Observability Reference](./observability-reference.md) config tables.
+
+## External references
+
+- [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/) — needed to write queries in [Grafana](./grafana.md)'s Prometheus Explore view
 
 ## Related pages
 
+- [Observability Reference](./observability-reference.md)
 - [Grafana](./grafana.md)
 - [Tempo](./tempo.md)
 - [OpenTelemetry](./opentelemetry.md)

@@ -1,0 +1,350 @@
+openapi: 3.0.3
+info:
+    title: inventory — module contract
+    version: '2.0.0'
+
+paths:
+    /inventory/levels:
+        get:
+            tags: [Inventory]
+            summary: Stock levels
+            description: The stock board — every product with its two counters and the availability derived from them. Admin; a customer sees `available` on the product itself. Answers the question a catalogue listing cannot, which is WHY something is unbuyable — nothing on the shelf, or everything on it already spoken for.
+            operationId: listInventoryLevels
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: lowOnly
+                  in: query
+                  required: false
+                  schema:
+                      type: boolean
+                      default: false
+                  description: Only products at or under the low-availability threshold (`NODE_LOW_STOCK_THRESHOLD`).
+            responses:
+                '200':
+                    description: A page of levels, most scarce first
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/InventoryLevelsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /inventory/movements:
+        get:
+            tags: [Inventory]
+            summary: List stock movements
+            description: A page of the ledger, newest first — one row per counter change, with both deltas and the reason attached. Every row was written by the same call that moved the counter, so the ledger cannot have gaps. Paged rather than capped, and `meta.totalItems` counts everything matching the filters — this is the record an audit works through, and a read that returned only the newest rows would misreport history as complete.
+            operationId: listStockMovements
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: productId
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Narrow to one product's movements
+                - name: reason
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/StockMovementReason'
+                  description: Narrow to one kind of transition
+            responses:
+                '200':
+                    description: The latest movements
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/StockMovementsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /inventory/receipts:
+        post:
+            tags: [Inventory]
+            summary: Receive stock
+            description: Units arrive from a supplier — `onHand` rises, `reserved` does not, so the delivery becomes available immediately. The only transition that can create units, and the reason a shop that has sold out can sell again.
+            operationId: receiveStock
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReceiptRequest'
+            responses:
+                '200':
+                    description: The counters after the delivery landed
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/InventoryLevelEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /inventory/adjustments:
+        post:
+            tags: [Inventory]
+            summary: Adjust stock
+            description: A stocktake correction — signed, because shrinkage is the common case and it is negative. Refuses to take `onHand` below what is already reserved, because those units are promised to orders that exist — the fix for finding fewer units than were sold is to cancel orders, not to make availability negative.
+            operationId: adjustStock
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AdjustmentRequest'
+            responses:
+                '200':
+                    description: The counters after the correction
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/InventoryLevelEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409':
+                    description: The correction would leave fewer units than are already reserved
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ErrorResponse'
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /inventory/reservations/sweep:
+        post:
+            tags: [Inventory]
+            summary: Expire stale reservations
+            description: |
+                Releases every hold whose window has closed and announces each one, so the orders behind them get cancelled.
+
+                A job behind an admin endpoint rather than an internal schedule. The application ships no scheduler, so the tick is driven from outside — a cron entry, the platform's scheduled job, or an operator — the same arrangement as `POST /delivery/advance`. Idempotent; running it twice releases nothing the first run already released.
+            operationId: sweepReservations
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: How many holds were expired
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ReservationSweepEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ── Inventory module ────────────────────────────────────────────────────
+        # Owned by src/modules/inventory. This module is the ONLY writer of the two counters
+        # `Product.onHand` and `Product.reserved`; `products` declares them because it owns the
+        # collection, and reads them like everyone else.
+
+        # Why the units moved. Each reason implies a fixed pair of deltas — see
+        # `domain/transitions.ts`, which is the one place that mapping is written.
+        StockMovementReason:
+            type: string
+            enum: [reserve, commit, release, expire, receive, adjust]
+            description: |
+                * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
+                * `commit` — the order was paid for and the units left. Both down.
+                * `release` — the hold was given up (the order was cancelled). `reserved` down.
+                * `expire` — the hold timed out unpaid. Same counters as `release`, different story.
+                * `receive` — a supplier delivery. `onHand` up.
+                * `adjust` — a stocktake correction, signed. `onHand` moves either way.
+
+        # One row of the ledger. Append-only: there is no update path, and a wrong row is
+        # corrected by the next movement, the way accountants do it.
+        StockMovement:
+            type: object
+            additionalProperties: false
+            required: [id, productId, reason, onHandDelta, reservedDelta]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                reason:
+                    $ref: '#/components/schemas/StockMovementReason'
+                # Both deltas on every row, both signed, either possibly zero. Recording the
+                # PAIR rather than one number is what makes the ledger replayable: summing
+                # each column over a product's rows reproduces the counter it describes, which
+                # is asserted as a property in the module's tests.
+                onHandDelta:
+                    type: integer
+                reservedDelta:
+                    type: integer
+                reference:
+                    type: string
+                    description: The order the movement belongs to, when one does.
+                note:
+                    type: string
+                    description: Why an adjustment was made — the operator's own words.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        StockMovementsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/StockMovement'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        StockMovementsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/StockMovementsResponse'
+
+        # One product's stock, as the admin board shows it. `available` is repeated from the
+        # product rather than left to be computed by the client, for the same reason it is
+        # derived server-side there: two subtractions in two codebases is one too many.
+        InventoryLevel:
+            type: object
+            additionalProperties: false
+            required: [productId, title, onHand, reserved, available]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                    description: Carried so the board reads as a list of products rather than of ids.
+                onHand:
+                    type: integer
+                    minimum: 0
+                reserved:
+                    type: integer
+                    minimum: 0
+                available:
+                    type: integer
+                    minimum: 0
+
+        InventoryLevelEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/InventoryLevel'
+
+        InventoryLevelsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/InventoryLevel'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        InventoryLevelsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/InventoryLevelsResponse'
+
+        ReceiptRequest:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+                    description: How many units arrived. Strictly positive — a delivery that removes units is an adjustment.
+                note:
+                    type: string
+                    description: Optional — the supplier, the delivery note number, whatever the operator wants on the row.
+
+        AdjustmentRequest:
+            type: object
+            additionalProperties: false
+            required: [productId, delta]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                # Signed and non-zero. There is no `quantity` + `direction` pair here on
+                # purpose: two fields that must agree are two fields that can disagree, and the
+                # ledger stores a signed delta anyway.
+                delta:
+                    type: integer
+                    description: Signed. Negative is shrinkage or damage; positive is a miscount found in your favour.
+                note:
+                    type: string
+                    description: Why. An unexplained correction is the thing an audit is looking for.
+
+        ReservationSweepResponse:
+            type: object
+            additionalProperties: false
+            required: [expired]
+            properties:
+                expired:
+                    type: integer
+                    minimum: 0
+                    description: How many holds this run released.
+
+        ReservationSweepEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ReservationSweepResponse'

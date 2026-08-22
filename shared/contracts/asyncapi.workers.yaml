@@ -1,0 +1,158 @@
+# The queues that belong to no domain — the async half of what `openapi.root.yaml` files under
+# `system`.
+#
+# Sending an email and rendering a PDF are verbs, not domains: the producer is whichever module
+# needs one, and the consumer is `infrastructure/adapters/{email,pdf}.worker.ts`. Neither half
+# stops making sense in an app with no modules, so the contract for them sits beside the root
+# rather than inside a domain that happens to enqueue the most jobs.
+#
+# Unlike the root, this IS a standalone AsyncAPI document — `info` exists only to make it one, so
+# `npm run lint:asyncapi:modules` can validate it exactly like a module’s.
+#
+# It declares `rabbitmqLocal` because it is the only section whose channels bind to it. That is
+# what keeps the broker out of `asyncapi.public.yaml`: the bundle an API client shares merges the
+# shared sections only, so a server no shared channel can reach never appears in it.
+asyncapi: 2.6.0
+info:
+    title: Worker job queues
+    version: 1.0.0
+    description: The `worker.*` queues, owned by the application rather than by any domain.
+servers:
+    rabbitmqLocal:
+        url: localhost:5672
+        protocol: amqp
+        description: Local RabbitMQ broker for async job queues.
+channels:
+    worker.email.send:
+        description: Email job queue — producers enqueue email requests, the email worker consumes them.
+        servers:
+            - rabbitmqLocal
+        publish:
+            operationId: workerEmailPublish
+            summary: Enqueue an email for async delivery.
+            description: >-
+                `enqueueEmail` publishes here instead of calling the SMTP transport inline, so a
+                slow or unreachable mail server cannot add its latency to the request that
+                triggered the mail. When the broker itself is unavailable the adapter falls back to
+                sending inline rather than dropping the message — the queue is an optimisation on
+                this path, never the system of record.
+            message:
+                $ref: '#/components/messages/EmailJobMessage'
+        subscribe:
+            operationId: workerEmailConsume
+            summary: Email worker picks up and sends the email.
+            description: >-
+                The consumer acknowledges only after the transport accepts the message, so a worker
+                that dies mid-send returns the job to the queue rather than losing it. A rendering
+                failure is not retried — the template is broken for every redelivery, and requeueing
+                it forever would starve the queue behind a job that cannot succeed.
+            message:
+                $ref: '#/components/messages/EmailJobConsumeMessage'
+    worker.pdf.generate:
+        description: PDF generation job queue — producers enqueue render requests, the PDF worker consumes them.
+        servers:
+            - rabbitmqLocal
+        publish:
+            operationId: workerPdfPublish
+            summary: Enqueue a PDF generation request.
+            description: >-
+                Rendering is CPU-bound and unbounded in duration, which is exactly what must not
+                happen on a request thread: the producer hands over the template name and its data
+                and returns immediately.
+            message:
+                $ref: '#/components/messages/PdfJobMessage'
+        subscribe:
+            operationId: workerPdfConsume
+            summary: PDF worker renders template to PDF.
+            description: >-
+                Renders the named template and writes the result where the job says. Runs in the
+                worker process rather than the API cluster, so a render storm degrades PDF turnaround
+                and leaves request latency alone.
+            message:
+                $ref: '#/components/messages/PdfJobConsumeMessage'
+components:
+    messages:
+        EmailJobMessage:
+            name: EmailJobMessage
+            messageId: worker.email.send
+            title: Email delivery job
+            payload:
+                $ref: '#/components/schemas/EmailJobPayload'
+        PdfJobMessage:
+            name: PdfJobMessage
+            messageId: worker.pdf.generate
+            title: PDF generation job
+            payload:
+                $ref: '#/components/schemas/PdfJobPayload'
+        EmailJobConsumeMessage:
+            name: EmailJobConsumeMessage
+            messageId: worker.email.job.consume
+            title: Email delivery job (worker consume)
+            payload:
+                $ref: '#/components/schemas/EmailJobPayload'
+        PdfJobConsumeMessage:
+            name: PdfJobConsumeMessage
+            messageId: worker.pdf.job.consume
+            title: PDF generation job (worker consume)
+            payload:
+                $ref: '#/components/schemas/PdfJobPayload'
+    schemas:
+        EmailJobPayload:
+            type: object
+            required:
+                - request
+                - templateName
+                - data
+            properties:
+                request:
+                    type: object
+                    description: Nodemailer SendMailOptions subset.
+                    required:
+                        - to
+                    properties:
+                        to:
+                            type: string
+                        subject:
+                            type: string
+                        text:
+                            type: string
+                        html:
+                            type: string
+                    additionalProperties: false
+                from:
+                    type: string
+                    description: Optional sender override.
+                templateName:
+                    type: string
+                    description: >-
+                        Outbox name of the mail to render, without a file extension — the consumer
+                        resolves it to a template file. Shared with the twin backend, which renders
+                        a different engine, so the name names the mail and not the file.
+                data:
+                    type: object
+                    description: >-
+                        Everything the template prints, already translated by the producer —
+                        including the `<html lang>` value and the footer line. The consumer
+                        interpolates it and resolves nothing, which is why no locale travels
+                        with the job.
+            additionalProperties: false
+        PdfJobPayload:
+            type: object
+            required:
+                - templatePath
+                - templateData
+                - outputPath
+            properties:
+                templatePath:
+                    type: string
+                    description: Path to the EJS template file.
+                templateData:
+                    type: object
+                    description: >-
+                        Everything the template prints, already translated by the producer —
+                        same contract as EmailJobPayload.data, and the same reason no locale
+                        travels with the job.
+                outputPath:
+                    type: string
+                    description: Filesystem path where the generated PDF will be written.
+            additionalProperties: false

@@ -1,0 +1,101 @@
+name: Mutation
+
+# Deliberately breaks the source in small ways and checks the unit suite notices. Measures how
+# good the TESTS are, not how good the code is. Nightly, not a merge gate.
+#
+# Mutation testing lives in its own workflow, deliberately.
+#
+# It is NOT part of `ci.yml`, and that is structural rather than a convention: a run re-executes
+# the unit suite once per mutant, so putting it anywhere near the `ci` aggregate job would
+# eventually make someone wait minutes for a PR — and the first time it did, it would be turned
+# off. Kept separate, it cannot become a PR gate by accident.
+#
+# What it answers: "do the tests actually work?" A mutant that survives is a bug the suite cannot
+# see. Unlike line coverage, that cannot be satisfied by executing code without asserting on it.
+#
+# Runs nightly, and on demand from the Actions tab before a refactor.
+# Scope and thresholds live in stryker.config.json. Only the unit suite takes part — see the
+# note in that file for why integration and contract are excluded.
+
+on:
+    schedule:
+        # 03:00 UTC — half an hour before the frontend's, so the two do not compete for runners.
+        - cron: '0 3 * * *'
+    workflow_dispatch:
+
+concurrency:
+    group: mutation-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    NODE_VERSION: 22
+
+jobs:
+    mutation:
+        runs-on: ubuntu-latest
+        # Generous: the run scales with the number of mutants, and the point of a nightly is
+        # that it is allowed to be slow. It should never be trimmed by narrowing `mutate`.
+        timeout-minutes: 90
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Run mutation tests
+              # `continue-on-error` so the per-file check below always gets to run and report.
+              # The global `break` threshold is a backstop for a total collapse; the ratchet is
+              # the gate that says WHICH file got worse, and a run that trips the first would
+              # otherwise never reach it. Both results are folded back in at the end.
+              id: mutation
+              continue-on-error: true
+              # `--concurrency` is passed HERE rather than taken from stryker.config.json, and the
+              # difference matters. Each Stryker worker is a separate process running a full test
+              # runner (and, in the backend, its own in-memory mongod), so the safe number is a
+              # property of the MACHINE, not of the project. The committed config is tuned for a
+              # developer workstation; a standard GitHub-hosted runner is 4 vCPU / 16 GB, where
+              # that number would thrash or run out of memory.
+              # `--force` discards the committed `reports/stryker-incremental.json` and re-tests every
+              # mutant. That is the nightly's entire job: the incremental file is a cache, and a
+              # refactor that moves code between files or a badly resolved merge can leave it
+              # describing a codebase that no longer exists. Fast incremental runs are for humans
+              # on demand; this one is the measurement everything else is allowed to trust.
+              run: npm run test:mutation -- --concurrency 3 --force
+
+            - name: Check the per-file baseline
+              # The real gate. Stryker's thresholds are global — a strong file carries a weak one
+              # — so this compares every file against `mutation-baseline.json` and fails naming
+              # the ones that dropped. See scripts/mutation-baseline.ts for why it is a ratchet.
+              id: baseline
+              continue-on-error: true
+              run: npm run test:mutation:check
+
+            - name: Upload mutation report
+              # Uploaded even on failure: a run that trips the break threshold is exactly the
+              # run whose report someone needs to read.
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: mutation-report
+                  path: reports/mutation/
+                  retention-days: 30
+                  if-no-files-found: warn
+
+            - name: Fail if either gate tripped
+              # Folded back in here rather than left on the steps above, so the report artifact is
+              # always uploaded first — a failing run is exactly the one whose report is wanted.
+              if: steps.mutation.outcome == 'failure' || steps.baseline.outcome == 'failure'
+              run: |
+                  echo "mutation run: ${{ steps.mutation.outcome }}"
+                  echo "per-file baseline: ${{ steps.baseline.outcome }}"
+                  exit 1

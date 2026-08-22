@@ -1,0 +1,215 @@
+openapi: 3.0.3
+info:
+    title: feedback — module contract
+    version: '2.0.0'
+
+paths:
+    /feedback/contact:
+        post:
+            tags: [Feedback]
+            summary: Submit contact request
+            description: Creates a user feedback/contact request and notifies admins via email.
+            operationId: createFeedbackRequest
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateFeedbackRequest'
+            responses:
+                '201':
+                    description: Created feedback request
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequestEnvelope'
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /feedback:
+        get:
+            tags: [Feedback]
+            summary: List feedback requests
+            description: Returns feedback/contact requests for admin review.
+            operationId: listFeedbackRequests
+            security:
+                - bearerAuth: []
+            # The controller merges query and body, so every filter below is reachable either way.
+            # The body stays declared because it is read; unlike the other three resources this
+            # one has no `POST /feedback/search` sibling to carry the DTO form.
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+                - name: email
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchFeedbackRequestsRequest'
+            responses:
+                '200':
+                    description: Feedback request list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequestsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /feedback/{id}:
+        put:
+            tags: [Feedback]
+            summary: Update feedback request status
+            description: Updates status/notes of a feedback request.
+            operationId: updateFeedbackRequestStatus
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateFeedbackRequestStatusRequest'
+            responses:
+                '200':
+                    description: Updated feedback request
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequestEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # ----- Products -----
+
+components:
+    schemas:
+        # ---------- feedback — the schemas only this module's paths reference. ----------
+        FeedbackRequestEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/FeedbackRequest'
+
+        FeedbackRequestsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/FeedbackRequestsResponse'
+
+        FeedbackRequest:
+            type: object
+            additionalProperties: false
+            required: [id, email, subject, message, status, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                adminNotes:
+                    type: string
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        CreateFeedbackRequest:
+            type: object
+            additionalProperties: false
+            required: [email, subject, message]
+            properties:
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+
+        SearchFeedbackRequestsRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
+                pageSize:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                text:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+
+        UpdateFeedbackRequestStatusRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                status:
+                    type: string
+                    enum: [new, in_progress, resolved, spam]
+                adminNotes:
+                    type: string
+
+        FeedbackRequestsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FeedbackRequest'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'

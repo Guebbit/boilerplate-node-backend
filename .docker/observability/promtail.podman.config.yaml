@@ -1,0 +1,58 @@
+# Promtail config for rootless Podman running the k8s-file log driver.
+#
+# Podman's DEFAULT is journald, which writes no file for Promtail to tail — the stack sets
+# CONTAINER_LOG_DRIVER=k8s-file to get these files at all. See .env-example.
+# Why this file exists: Podman stores container logs in a different path and
+# uses CRI format instead of Docker JSON format, so a separate config is needed.
+#
+# Selected by PROMTAIL_CONFIG=promtail.podman.config.yaml in .env, alongside CONTAINER_LOGS_PATH
+# pointing at your podman storage. Docker equivalent: promtail.config.yaml (the default).
+#
+# Both are mounted at /var/log/host-containers regardless of engine, so the only difference left
+# below is the glob under it and the parser stage.
+
+server:
+    # Promtail debug/metrics HTTP endpoint.
+    http_listen_port: 9080
+    # Disable gRPC server in this local setup.
+    grpc_listen_port: 0
+
+positions:
+    # Tracks read offsets so restarts continue from the last processed line.
+    filename: /tmp/positions.yaml
+
+clients:
+    # Loki push endpoint.
+    - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+    # Read all Podman container log files from the host bind mount.
+    # Podman's k8s-file driver writes one <container-id>.log per container under
+    # overlay-containers/<id>/userdata/. The host path is mounted at
+    # /var/lib/containers/overlay-containers inside this container.
+    - job_name: podman-containers
+      static_configs:
+          - targets: ['localhost']
+            labels:
+                job: podman
+                __path__: /var/log/host-containers/*/userdata/*.log
+
+      pipeline_stages:
+          # Stage 1: parse the CRI envelope written by Podman's k8s-file driver.
+          # Format: <RFC3339Nano> <stream> <flag> <message>
+          # Example: 2024-01-01T00:00:00.000Z stdout F {"level":"info",...}
+          # This stage extracts: timestamp, stream (stdout/stderr), and the log body.
+          - cri: {}
+
+          # Stage 2: parse app JSON log payload (Winston fields) from the log body.
+          - json:
+                expressions:
+                    level: level
+                    service: service
+                    trace_id: trace_id
+
+          # Stage 3: promote fields to Loki labels for filtering in LogQL.
+          - labels:
+                stream:
+                level:
+                service:

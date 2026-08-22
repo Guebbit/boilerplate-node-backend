@@ -1,156 +1,81 @@
-const { ObjectId } = require('mongodb');
-const { hash } = require('bcrypt');
-
+/*
+ * Initial indexes.
+ *
+ * This is the original bootstrap and it has already run against every database, so it is kept as
+ * written rather than edited. Which indexes a collection should have is decided on its schema
+ * now; the ones still wanted are declared there under these same names, and a later migration
+ * drops the one that is not. The names must stay identical to the schemas': Mongo rejects a
+ * request for a key it already holds under a different name, and the app issues its own request
+ * at startup. A new index belongs on a schema alone.
+ *
+ * Demo DATA belongs to `npm run db:seed`.
+ *
+ * `createIndex` is idempotent, so re-running this against an already-migrated database is a
+ * no-op rather than an error — but only while the OPTIONS match too. Mongo compares name, key
+ * spec and options together: same name and key with different options is
+ * `IndexOptionsConflict`, not a no-op. That is why `users_email` below carries `unique: true`
+ * even though this file is otherwise kept as written. The schema declares it unique (see the
+ * index block in `src/models/users.ts`), the app builds its indexes at startup, and a migration
+ * asking for the non-unique version afterwards fails on every booted database.
+ *
+ * Editing it here is inert for databases that have already run this migration — they get the
+ * change from `20260808200000-users-email-unique.js`, which also refuses to run against
+ * duplicate data. This line is what a database created FROM SCRATCH gets, and it has to agree
+ * with the schema on day one. `tests/unit/db/migration-model-indexes.test.ts` is the test that
+ * catches the disagreement.
+ */
 module.exports = {
     async up(db) {
-        // Drop database
-        // await db.dropDatabase();
-        await db.collection('users').deleteMany({});
-        await db.collection('products').deleteMany({});
-        await db.collection('orders').deleteMany({});
+        await Promise.all([
+            /*
+             * Login and signup both look users up by email.
+             *
+             * UNIQUE: signup is a check-then-insert, so only the database can refuse the second
+             * of two concurrent registrations for one address. See the schema for the full note.
+             */
+            db.collection('users').createIndex({ email: 1 }, { name: 'users_email', unique: true }),
+            /* Refresh-token verification and the reset/delete flows query by token value. */
+            db
+                .collection('users')
+                .createIndex({ 'tokens.token': 1 }, { name: 'users_tokens_token' }),
+            /* Soft-delete filter used by the admin user search. */
+            db.collection('users').createIndex({ deletedAt: 1 }, { name: 'users_deletedAt' }),
 
-        // ---- USERS ----
-        await db.collection('users').insertMany([
-            {
-                _id: new ObjectId('65dd2bdb923652b7800fe180'),
-                username: 'root',
-                email: 'root@root.it',
-                password: await hash('rootroot', 12),
-                imageUrl: '\\images\\9726c4217f5998511f372afab4800ac8.jpg',
-                admin: true,
-                cart: {
-                    items: [
-                        {
-                            product: new ObjectId('65dc8a99604c307b702b5ccc'),
-                            quantity: 2
-                        },
-                        {
-                            product: new ObjectId('65dcdec2b18ad5e4bd597f0f'),
-                            quantity: 3
-                        }
-                    ],
-                    updatedAt: new Date()
-                },
-                tokens: []
-            },
-            {
-                _id: new ObjectId('65de646a44f861fd83c13f13'),
-                username: 'ginopinoshow',
-                email: 'gino@pino.it',
-                password: await hash('password', 12),
-                imageUrl: '\\images\\96346b77daf138a279677cb75c400ee9.jpg',
-                admin: false,
-                cart: { items: [], updatedAt: new Date() },
-                tokens: []
-            }
-        ]);
+            /* Default listing sort. */
+            db
+                .collection('products')
+                .createIndex({ createdAt: -1 }, { name: 'products_createdAt' }),
+            /* Storefront filters: active + not soft-deleted. */
+            db
+                .collection('products')
+                .createIndex({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' }),
 
-        // ---- PRODUCTS ----
-        await db.collection('products').insertMany([
-            {
-                _id: new ObjectId('65dc8a99604c307b702b5ccc'),
-                title: 'Sallyno Panino',
-                price: 100,
-                imageUrl: '\\images\\ad2e01890eebf72d06481c4fac3522ac.jpg',
-                active: true,
-                description: 'Piccolo Sallyno panino. Da mangiare di coccole'
-            },
-            {
-                _id: new ObjectId('65dc8ad8604c307b702b5cd4'),
-                title: 'Sallyno Carino',
-                price: 50,
-                imageUrl: '\\images\\96346b77daf138a279677cb75c400ee9.jpg',
-                active: true,
-                description:
-                    'Sallyno incredibilmente carino. Illegale in 400 paesi. Soft deleted product.',
-                deletedAt: new Date('2024-02-26T23:34:44.832Z')
-            },
-            {
-                _id: new ObjectId('65dc9be92f2794d1c16741e1'),
-                title: 'Miciona inutile',
-                price: 1,
-                imageUrl: '\\images\\60de15db7aed7174ef2d53d21e1f57a5.jpg',
-                active: true,
-                description:
-                    'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire'
-            },
-            {
-                _id: new ObjectId('65dcdec2b18ad5e4bd597f0f'),
-                title: 'Micino pufettino',
-                price: 77,
-                imageUrl: '\\images\\f12ba2e44fe347010397f1dcba399808.jpg',
-                active: true,
-                description: 'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.'
-            },
-            {
-                _id: new ObjectId('6622c88a5123b1e286f440f8'),
-                title: 'Bundle micini',
-                price: 40,
-                imageUrl: '\\images\\043cf5b2517fc99ce9a2c2f84288416d.jpg',
-                active: false,
-                description: 'Produttori di rumori molesti a tutte le ore. Inactive product.'
-            }
-        ]);
-
-        // ---- ORDERS ----
-        await db.collection('orders').insertMany([
-            {
-                _id: new ObjectId('65de73a69ca05739be2b5e85'),
-                userId: new ObjectId('65dd2bdb923652b7800fe180'),
-                email: 'oldpsw@root.it',
-                products: [
-                    {
-                        product: {
-                            _id: new ObjectId('65dc8a99604c307b702b5ccc'),
-                            title: 'Sallyno Panino',
-                            price: 100,
-                            imageUrl: '\\images\\ad2e01890eebf72d06481c4fac3522ac.jpg',
-                            active: true,
-                            description: 'Piccolo Sallyno panino. Da mangiare di coccole'
-                        },
-                        quantity: 1
-                    },
-                    {
-                        product: {
-                            _id: new ObjectId('65dc9be92f2794d1c16741e1'),
-                            title: 'Miciona inutile',
-                            price: 1,
-                            imageUrl: '\\images\\60de15db7aed7174ef2d53d21e1f57a5.jpg',
-                            active: true,
-                            description:
-                                'Miciona inutile, piccolo catorcio che come lavoro produce pelo a non finire'
-                        },
-                        quantity: 10
-                    }
-                ]
-            },
-            {
-                _id: new ObjectId('661c795a9e22bcbef63a5832'),
-                userId: new ObjectId('65dd2bdb923652b7800fe180'),
-                email: 'root@root.it',
-                products: [
-                    {
-                        product: {
-                            _id: new ObjectId('65dcdec2b18ad5e4bd597f0f'),
-                            title: 'Micino pufettino',
-                            price: 77,
-                            imageUrl: '\\images\\f12ba2e44fe347010397f1dcba399808.jpg',
-                            active: true,
-                            description:
-                                'Micino pufettino, incredibilmente pufino. Illegale in 400 paesi.'
-                        },
-                        quantity: 20
-                    }
-                ]
-            }
+            /* "My orders" lookups, newest first. */
+            db
+                .collection('orders')
+                .createIndex({ userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt' }),
+            db.collection('orders').createIndex({ email: 1 }, { name: 'orders_email' })
         ]);
     },
 
     async down(db) {
-        // simple rollback strategy
-        // await db.dropDatabase();
-        await db.collection('users').deleteMany({});
-        await db.collection('products').deleteMany({});
-        await db.collection('orders').deleteMany({});
+        /* Index drops are best-effort — a missing index must not fail the rollback. */
+        const drops = [
+            ['users', 'users_email'],
+            ['users', 'users_tokens_token'],
+            ['users', 'users_deletedAt'],
+            ['products', 'products_createdAt'],
+            ['products', 'products_active_deletedAt'],
+            ['orders', 'orders_userId_createdAt'],
+            ['orders', 'orders_email']
+        ];
+
+        for (const [collection, indexName] of drops) {
+            try {
+                await db.collection(collection).dropIndex(indexName);
+            } catch {
+                /* index already absent */
+            }
+        }
     }
 };

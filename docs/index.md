@@ -6,8 +6,14 @@ hero:
     tagline: Single-package REST API boilerplate in the Node backend family.
     actions:
         - theme: brand
+          text: Get Started
+          link: /getting-started
+        - theme: alt
           text: Read Theory
           link: /theory/
+        - theme: alt
+          text: Browse Modules
+          link: /modules/
         - theme: alt
           text: Explore Tools
           link: /tools/
@@ -22,7 +28,7 @@ features:
     - title: Tooling is part of the boilerplate
       details: Security, Redis cache hooks, Prometheus, OpenTelemetry, Grafana dashboards, logging, and PostHog are all examples already wired in.
     - title: Contract-first workflow
-      details: openapi.yaml stays the source of truth for API shape, generated types, mocks, and implementation alignment.
+      details: openapi.yaml covers REST contracts and asyncapi.yaml covers realtime/event contracts.
 ---
 
 ## What this docs site is for
@@ -35,6 +41,7 @@ Use it to understand **what this boilerplate is**, **how the app layers fit toge
 ## Family map
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 70}}}%%
 flowchart TD
     A[Node backend boilerplate family] --> B[api-mongodb-mongoose\nthis repo]
     A --> C[mvc-mongodb-mongoose\nsame data stack, monorepo shape]
@@ -43,8 +50,16 @@ flowchart TD
     A --> F[mvc-mysql-sequelize\nMVC or monorepo + SQL stack]
 
     B --> T[Theory]
+    B --> M[Modules]
     B --> U[Tools]
     B --> V[API]
+
+    classDef family fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef current fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef docs fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class A,C,D,E,F family;
+    class B current;
+    class T,M,U,V docs;
 ```
 
 ## Read this repo as
@@ -52,46 +67,82 @@ flowchart TD
 - **API**: REST API.
 - **Framework**: [Express](./tools/runtime.md).
 - **Database**: [MongoDB + Mongoose](./tools/mongodb-mongoose.md).
-- **Observability**: [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
-- **Real-time / outbound**: [WebSockets](./tools/websockets.md) and [email + PDF rendering](./tools/email-and-rendering.md).
+- **Observability**: [Observability Reference](./tools/observability-reference.md), [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
+- **Real-time / outbound**: [SSE metrics stream](./api/observability.md) and [email + PDF rendering](./tools/email-and-rendering.md).
 - **Process model**: [Clustering & graceful shutdown](./theory/clustering.md).
-- **Contract**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth).
+- **Contracts**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./api/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
 - **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
 
-## Three sections, three jobs
+## Five sections, five jobs
 
 ### [Theory](./theory/)
 
 Big picture: architecture, layers, and request flow.
 
+### [Modules](./modules/)
+
+One page per domain, top to bottom: what it owns, who depends on it, its collection fields, its
+routes, and everything it emits.
+Start at [the whole map](./modules/) — thirteen domains grouped by subdomain, every node clickable.
+
 ### [Tools](./tools/)
 
-Dependency-focused pages: runtime, security, database, cache, logs, metrics, traces, Grafana, analytics, testing, and docs.
+Dependency-focused pages: runtime, security, database, cache, logs, metrics, traces, package groups, scripts, containers, analytics, testing, and docs.
+New to the stack? Start at [Tools Explained](./tools/tools-explained.md) for a plain-English "what is X and why is it here" summary of every tool.
 
 ### [API](./api/)
 
-Contract-first workflow: OpenAPI, REST style, codegen, mocks, and implementation alignment.
+Contract-first workflow: OpenAPI + AsyncAPI, codegen, mocks, and implementation alignment.
+
+### [Files](./reference/)
+
+The lookup surface: every file in the repository, what it is, and which page above explains it.
+Start here when you have landed on a filename rather than on a question.
 
 ## Quick visual of the current repo
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 70}}}%%
 flowchart LR
-    Spec[openapi.yaml] --> Routes[Routes + middlewares]
+    OpenSpec[openapi.yaml] --> Routes[Routes + middlewares]
+    AsyncSpec[asyncapi.yaml] --> Realtime[SSE + event + queue contracts]
+    AsyncSpec --> Public[asyncapi.public.yaml — the half the frontend receives]
     Routes --> Controllers[Controllers]
     Controllers --> Services[Services]
     Services --> Repositories[Repositories]
     Repositories --> Models[Models]
     Models --> Mongo[(MongoDB)]
+    Services --> Queue[(RabbitMQ\nasync jobs)]
 
-    Routes --> Obs[Logs + metrics + traces]
-    Controllers --> Cache[Redis cache hooks]
+    Routes --> Obs[Traces · metrics · logs]
+    Controllers --> Cache[(Redis\ncache hooks)]
     Obs --> Grafana[Grafana dashboards]
-    Spec --> Types[Generated API types]
+    OpenSpec --> Types[Generated API types]
+
+    classDef contract fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef data fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef cache fill:#ffedd5,stroke:#ea580c,color:#111827;
+    classDef queue fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef ops fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef ui fill:#fce7f3,stroke:#db2777,color:#111827;
+    class OpenSpec,AsyncSpec,Types contract;
+    class Routes,Realtime,Controllers,Services app;
+    class Repositories,Models,Mongo data;
+    class Cache cache;
+    class Queue queue;
+    class Obs ops;
+    class Grafana ui;
 ```
 
 ## Good starting points
 
+- Never run this repo before? Start at [Getting Started](./getting-started.md) — four commands to a browsable API.
+- Want to know what one domain does, end to end? [Modules](./modules/) — one page each, same nine blocks every time.
+- Found a file and have no idea what it is? [File Glossary](./reference/) — one hop to an answer.
+- Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./api/regenerating.md).
 - Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).
 - Want a specific dependency? Start at [Tools](./tools/) and jump to the tool page you need.
-- Want observability? Read [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
+- Want the `package.json` map? Read [Package Dependencies](./tools/package-dependencies.md) and [Package Scripts](./tools/package-scripts.md).
+- Want observability? Start with [Observability Reference](./tools/observability-reference.md), then jump to [Prometheus](./tools/prometheus.md), [OpenTelemetry](./tools/opentelemetry.md), and [Grafana](./tools/grafana.md).
 - Want to change payloads or routes? Start in [API Overview](./api/) and keep [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) first.

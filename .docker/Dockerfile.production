@@ -1,0 +1,166 @@
+# Production image for the API.
+#
+# `.docker/Dockerfile` is the DEVELOPMENT image: it installs everything, copies nothing, and lets
+# `docker-compose.yml` bind-mount the working tree over /app so a save on the host is a reload in
+# the container. That is the right shape for development and the wrong shape for a deployment —
+# there is no source in the image at all, so it cannot run anywhere the host folder is absent.
+#
+# This file is the other half. The source is baked in, dev dependencies are gone, the process runs
+# as a non-root user, and the image only exists if the code type-checks and lints first.
+#
+# Build:  docker build -f .docker/Dockerfile.production -t boilerplate-api:latest .
+# Run:    docker compose -f docker-compose.production.yml up -d
+#
+# ── WHY THIS SHIPS TYPESCRIPT AND NOT COMPILED JAVASCRIPT ────────────────────────────────────────
+# The runtime stage below runs `tsx src/cluster.ts`, the same command as `npm start`. tsx transpiles
+# with esbuild once at boot and caches; it does not type-check, which is why the build stage does
+# that separately and refuses to produce an image otherwise.
+#
+# A `tsc` emit step would be better — faster cold start, no transpiler in the runtime image — and it
+# is deliberately NOT done here, because with this tsconfig it is a refactor rather than a build
+# flag, and a half-done one produces an image that starts and then fails on the first import:
+#
+#   - `verbatimModuleSyntax: true` conflicts with a CommonJS emit, so that direction is closed.
+#   - An ESM emit needs every relative import to carry an explicit `.js` extension. This codebase
+#     resolves with `moduleResolution: "bundler"` and writes them extensionless, across ~300 files.
+#   - `paths` aliases (`@infrastructure/*`, `@kernel/*`, `@modules/*`, `@api/*`) are a compile-time
+#     mapping that `tsc` does NOT rewrite in its output, so the emitted files import package names
+#     that do not exist. That needs `tsc-alias`, a bundler, or Node subpath imports.
+#
+# Do all three together or none of them. Until then this is the honest deployment: it runs the code
+# that was tested, and the cost is a second or two of boot and tsx in the dependency tree.
+
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+# Stage 1 — build: install everything, then use it as a gate.
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+FROM docker.io/library/node:25-alpine AS build
+
+WORKDIR /app
+
+# Dependencies first, and only the two manifests, so this layer is reused on every build where the
+# lockfile did not move. Copying the source first would invalidate the install on every edit.
+COPY package.json package-lock.json ./
+
+# `npm ci` rather than `npm install`: it installs exactly the lockfile, deletes any existing
+# node_modules first, and never rewrites package-lock.json. Dev dependencies are needed HERE —
+# TypeScript and ESLint are what the gate below is made of.
+RUN npm ci
+
+# Now the source. `.dockerignore` keeps node_modules, .git, .env, coverage and reports out.
+COPY . .
+
+# The gate. `npm run build` is `tsc --noEmit && eslint`, so a type error or a lint failure stops the
+# build and no image is produced. This is the whole reason for a separate stage that installs
+# devDependencies: the runtime stage cannot run this check, and an image that was never checked is
+# an image that fails in front of a user instead of in front of CI.
+#
+# It deliberately does NOT run the test suites. Those need MongoDB, Redis and RabbitMQ; a build that
+# reaches for a database is a build that fails on a laptop with no network. Tests belong to CI.
+RUN npm run build
+
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+# Stage 2 — runtime: production dependencies, application source, and nothing else.
+# ────────────────────────────────────────────────────────────────────────────────────────────────
+FROM docker.io/library/node:25-alpine AS runtime
+
+# Chromium is OFF by default and it is a ~200 MB difference.
+#
+# Only `infrastructure/adapters/pdf.ts` needs it — the order-invoice endpoint renders HTML to PDF
+# through puppeteer-core. Every other endpoint runs fine without it, and a deployment that never
+# asks for an invoice should not carry a browser. Turn it on when it is needed:
+#
+#   docker build -f .docker/Dockerfile.production --build-arg INSTALL_CHROMIUM=true .
+#
+# The endpoint answers 500 rather than crashing the process when Chromium is absent, so the wrong
+# choice here is recoverable and visible rather than silent.
+ARG INSTALL_CHROMIUM=false
+
+WORKDIR /app
+
+# `dumb-init` is PID 1 so that SIGTERM reaches Node instead of being swallowed.
+#
+# This matters more than usual here: `src/cluster.ts` implements graceful shutdown — it stops
+# accepting connections, waits for in-flight requests, then exits — and that whole mechanism is
+# only reachable if the signal arrives. A bare `node` as PID 1 in a container does not get the
+# default signal dispositions it expects, and `docker stop` degrades into a SIGKILL after its
+# timeout, cutting live requests.
+RUN apk add --no-cache dumb-init \
+    && if [ "$INSTALL_CHROMIUM" = "true" ]; then \
+    apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont; \
+    fi
+
+# Where puppeteer-core looks for the browser. `pdf.ts` already defaults to this path; declaring it
+# here keeps the image self-describing and lets a different base image override it in one place.
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+# Tells the application, its dependencies and Node itself that this is a deployment: express skips
+# its development-only work, error responses stop carrying stack traces, and the cache-TTL ceiling
+# in `.env-example` that only applies outside production stops applying.
+ENV NODE_ENV=production
+
+COPY package.json package-lock.json ./
+
+# `--omit=dev` is the difference between ~1.4 GB and ~200 MB of node_modules. `--ignore-scripts`
+# skips postinstall hooks, which are the usual way a transitive dependency runs arbitrary code at
+# image-build time; bcrypt ships prebuilt binaries for Alpine and does not need one.
+#
+# `npm cache clean --force` in the SAME layer, because a separate RUN would leave the cache in the
+# layer beneath it and delete nothing from the final image.
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+# Application source and the runtime assets it reads from disk, copied from the build stage so that
+# what ships is exactly what was type-checked.
+#
+# Each of these is here because something reads it at runtime, not for completeness:
+#   src/      the application, entered at src/cluster.ts
+#   api/      orval-generated request/response types and zod schemas, imported as @api/*
+#   shared/   EJS email templates (`shared/views/templates-emails`, resolved against the working
+#             directory by `adapters/mailer.ts`) and the contract fragments
+#   db/       migrations and seeds, for `npm run db:migrate:up` as a deploy step
+#   public/   express.static root — CSS, favicon, and the committed seed images
+#   openapi.yaml / asyncapi.yaml   served by the docs endpoints and read by response validation
+COPY --from=build --chown=node:node /app/src ./src
+COPY --from=build --chown=node:node /app/api ./api
+COPY --from=build --chown=node:node /app/shared ./shared
+COPY --from=build --chown=node:node /app/db ./db
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/openapi.yaml /app/asyncapi.yaml ./
+COPY --from=build --chown=node:node /app/tsconfig.json ./
+
+# Uploads land under public/images at runtime. The directory has to exist and be writable by the
+# user below BEFORE the volume is mounted over it, or the first upload fails on a read-only path.
+#
+# Mount a volume here in production — see `docker-compose.production.yml`: what this directory
+# holds does not survive the container without one.
+RUN mkdir -p public/images && chown -R node:node public/images
+
+# Drop root. The `node` user (uid 1000) ships with the base image, so there is no useradd here and
+# no surprise about which uid owns a bind-mounted volume on the host.
+#
+# Everything above this line runs as root deliberately — apk and npm need it. Everything below,
+# including the application, does not.
+USER node
+
+# Documentation for a reader and for `docker run -P`; it publishes nothing on its own. The port the
+# app actually binds comes from NODE_PORT, which is why compose passes the same value to both.
+EXPOSE 3000
+
+# `GET /` is the health endpoint — `app/system-routes.ts` answers `{ data: { status: 'ok' } }`, and
+# `tests/integration/app-health.test.ts` is what keeps that true.
+#
+# `start-period` is generous because the first request has to wait for the Mongo connection and the
+# OTel SDK; without it an orchestrator restarts a container that was merely still starting, forever.
+# Node's own fetch is used rather than curl or wget, so this adds nothing to the image.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.NODE_PORT||3000)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+ENTRYPOINT ["dumb-init", "--"]
+
+# `npm start` is `tsx src/cluster.ts`. Going through npm rather than calling tsx directly keeps ONE
+# definition of how this application starts, in package.json, shared with `npm run host` and with
+# anyone running it outside a container.
+#
+# Clustering is off unless NODE_ENABLE_CLUSTERING=1. Leave it off when the orchestrator already
+# runs several replicas — one process per container is what makes a replica count mean anything,
+# and two layers of process management is how a rolling deploy loses track of what is live.
+CMD ["npm", "start"]

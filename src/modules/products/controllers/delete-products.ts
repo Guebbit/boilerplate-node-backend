@@ -1,0 +1,18 @@
+import { createDeleteController } from '@infrastructure/http/delete-controller';
+import { productService } from '../service';
+import { productsAuditActions } from '../audit';
+
+/**
+ * DELETE /products/:id
+ * Delete a product by path id (admin).
+ * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
+ *
+ * The hard path also announces `PRODUCT_DELETED` and removes the image, so a deleted product does
+ * not outlive itself in a wishlist or on disk.
+ */
+export const deleteProducts = createDeleteController({
+    entity: 'product',
+    remove: (id, hardDelete) => productService.removeById(id, hardDelete),
+    auditAction: productsAuditActions.ADMIN_PRODUCT_DELETED,
+    notFoundKey: 'products.not-found'
+});

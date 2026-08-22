@@ -1,0 +1,1033 @@
+openapi: 3.0.3
+info:
+    title: locales — module contract
+    version: '3.0.0'
+
+# ── Two tiers, and they never merge ──────────────────────────────────────────────────────────
+#
+# TIER 1 — the API's OWN copy. Files under `src/locales/` and `src/modules/*/locales/`, loaded
+# into i18next at boot. It is what `t()` resolves, what decides `Content-Language`, and what
+# `GET /locales/{locale}` serves. Editable only by a deploy, permanently: it exists to let a
+# client render copy when NO RESPONSE ARRIVES, and putting it behind a database would make it
+# unavailable in exactly the situation it was created for.
+#
+# TIER 2 — the CLIENT's copy. Rows in MongoDB, edited at runtime through the admin routes below
+# and served by `GET /locales/{locale}/messages`. Nothing in the request path reads it, so a
+# database that is down, a half-translated language or a malformed key can cost at most this one
+# endpoint — never the API's ability to answer in its own language.
+#
+# The trap that separation avoids: a language existing in the database does NOT mean the API can
+# answer in it. `GET /locales` therefore reports `tenants` per language rather than a bare list, so
+# "may I send `Accept-Language: es`" and "may I download a Spanish UI dictionary" stay two
+# questions with two answers.
+#
+# ── Tenants ──────────────────────────────────────────────────────────────────────────────────
+#
+# A TENANT is one consumer of this translation service — one keyspace, authored by one team. This
+# API is a tenant of itself (`demo-be`), and the frontend it is paired with is another
+# (`demo-fe`). The two can declare the same key in the same language and mean two unrelated
+# strings, so every stored row is identified by (language, tenant, key). `GET /locales/tenants`
+# lists which tenants a deployment knows; the ids are configuration, never an enum of this file.
+#
+# ── `messages` vs `entries`, the naming that keeps this legible ──────────────────────────────
+#
+# `messages` is the BUILT DICTIONARY — public, read-only, nested, one object.
+# `entries` are the ROWS — admin, CRUD, flat, paginated.
+# One endpoint trying to be both is how this feature usually goes wrong.
+#
+# ── On `{locale}` in a path and `tag` in a body ──────────────────────────────────────────────
+#
+# The path parameter stays `{locale}`, matching the scalar every other module already `$ref`s and
+# the one path this module has always served. The stored language's own field is `tag`, because a
+# row about a language calls its identifier a tag. They are the same value.
+
+paths:
+    # --------- Locales ---------
+    /locales:
+        get:
+            tags: [System]
+            summary: Supported languages
+            description: |
+                Every language this deployment offers, from both tiers, each stating what it can
+                actually do.
+
+                `tenants` is the field doing the real work: which tenants have words in that
+                language. The backend tenant means the API can answer requests in it — its
+                dictionary is deployed and i18next holds it. A frontend tenant means a client
+                dictionary is downloadable from `GET /locales/{locale}/messages`. A language can
+                have either, or both, and the two are not the same capability: a language added
+                through the admin routes below carries only the frontend tenant until a file is
+                deployed for it.
+
+                Public, unauthenticated and cacheable. A client that has just failed to reach the
+                API is exactly who needs it.
+
+                An ADMIN gets the same manifest plus the rows a visitor is not offered: inactive
+                languages, each carrying `active: false`. The flag gates selection by visitors and
+                nothing else — the same rule products and users follow.
+            operationId: getLocales
+            responses:
+                '200':
+                    description: Locale capabilities
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleCapabilitiesEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [System]
+            summary: Add a language
+            description: |
+                Registers a language in the dynamic tier so entries can be translated into it.
+
+                This does NOT teach the API to answer in the new language — that needs a dictionary
+                file and a deploy. A language created here carries only the frontend tenant until
+                one exists.
+            operationId: createLocale
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateLocaleRequest'
+            responses:
+                '201':
+                    description: The created language
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LanguageEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /locales/tenants:
+        get:
+            tags: [System]
+            summary: Translation tenants
+            description: |
+                Every tenant this deployment holds words for — the keyspaces an entry can belong
+                to. Configuration, not data: the ids come from the API's environment, so a client
+                cannot invent one and an admin screen need not hardcode them.
+
+                `kind` is what a client uses the list for. The `backend` tenant is this API's own
+                copy — rows under it are layered over the deployed files at resolution time and
+                never leave the API. A `frontend` tenant is a client's copy, downloadable from
+                `GET /locales/{locale}/messages?tenant=`.
+
+                Public and cacheable, like every other locale read.
+            operationId: getLocaleTenants
+            responses:
+                '200':
+                    description: The configured tenants
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleTenantsEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /locales/{locale}:
+        get:
+            tags: [System]
+            summary: API message dictionary
+            description: |
+                This API's own dictionary for one language — tier 1, the deployed files.
+
+                Normally unnecessary: the API resolves its keys itself and puts finished text on
+                the wire. It earns its place when no response arrives at all (a network failure, a
+                bare 502) and the client must produce the copy itself, in the active language.
+
+                Not to be confused with `GET /locales/{locale}/messages`, which serves the client's
+                own copy out of the database.
+            operationId: getLocaleDictionary
+            parameters:
+                - name: locale
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                  description: A language tag from `GET /locales`.
+            responses:
+                '200':
+                    description: Dictionary for the requested locale
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleDictionaryEnvelope'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        put:
+            tags: [System]
+            summary: Edit a language
+            description: |
+                Updates a language's display names, writing direction or visibility. The tag itself
+                is immutable — it is what every entry references, so changing it would be a rename
+                of the whole dictionary rather than an edit of this record.
+            operationId: updateLocale
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateLocaleRequest'
+            responses:
+                '200':
+                    description: The updated language
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LanguageEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [System]
+            summary: Remove a language
+            description: |
+                Removes the language AND every entry translated into it.
+
+                Refuses with 409 while the language is still active. That two-step is deliberate:
+                this destroys a day's translation work, and a mis-click should cost a toggle rather
+                than the work. Deactivate first, then delete.
+            operationId: deleteLocale
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /locales/{locale}/messages:
+        get:
+            tags: [System]
+            summary: Client message dictionary
+            description: |
+                The dynamic dictionary for one language, built from its stored entries into the
+                same nested shape `GET /locales/{locale}` serves — so a client has ONE merge path
+                for both tiers rather than two.
+
+                ONE frontend tenant's rows — the client's own keyspace, the one named by `tenant`
+                or the deployment's default frontend tenant when omitted. The backend tenant is
+                refused here with a 404: its rows are layered over the deployed files internally
+                and never leave the API, because a frontend that merged them would be adopting the
+                backend's keys as its own.
+
+                OVERRIDES, not a dictionary: a client merges these over what it bundles, key by
+                key, so a key nobody has edited keeps its bundled value. A language the client does
+                not bundle at all gets whatever has been translated and falls back per key for the
+                rest — which is why a half-translated language is a usable state and not a broken
+                one.
+
+                404 for a language that does not exist in the dynamic tier, and equally for one
+                that exists but is inactive — an inactive language is invisible to every public
+                route, which is the whole point of the flag.
+
+                Public and cacheable, like every other locale read.
+            operationId: getLocaleMessages
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/MessagesTenantQueryParam'
+            responses:
+                '200':
+                    description: The built dictionary for the requested language
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleMessagesEnvelope'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /locales/{locale}/entries:
+        get:
+            tags: [System]
+            summary: List translation entries
+            description: |
+                The rows behind one language's dictionary, paginated and searchable — what a
+                translation screen lists. Flat, because a row is what gets edited; the nested tree
+                is `GET /locales/{locale}/messages`.
+
+                `text` searches keys and values together.
+            operationId: listLocaleEntries
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+                - $ref: '#/components/parameters/EntryTenantQueryParam'
+            responses:
+                '200':
+                    description: A page of entries
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleEntriesResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [System]
+            summary: Add one translation entry
+            description: |
+                409 if the key already exists in this language, and equally if it COLLIDES with one
+                — see `LocaleEntryInput.key` for what a collision is and why it is refused here
+                rather than discovered when the tree is built.
+            operationId: createLocaleEntry
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateLocaleEntryRequest'
+            responses:
+                '201':
+                    description: The created entry
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleEntryEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        put:
+            tags: [System]
+            summary: Replace every entry
+            description: |
+                Bulk import, REPLACING semantics: what is not sent is DELETED. The whole set of
+                entries for this language becomes exactly what the body carries.
+
+                Paired with `PATCH` on this same collection, which merges instead. "Does an import
+                delete missing keys" is the question every translation tool gets wrong, so the two
+                behaviours are spelled in the METHOD rather than in a flag — a client cannot pick
+                one and get the other.
+
+                Nobody adds five hundred keys through a form; without this the admin surface is a
+                demo.
+            operationId: replaceLocaleEntries
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceLocaleEntriesRequest'
+            responses:
+                '200':
+                    description: What the import did
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleImportResultEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [System]
+            summary: Merge entries
+            description: |
+                Bulk import, MERGING semantics: what is sent is upserted, everything else is left
+                alone. Nothing is ever deleted by this operation.
+
+                See `PUT` on this collection for the replacing counterpart, and for why the choice
+                lives in the method.
+            operationId: mergeLocaleEntries
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MergeLocaleEntriesRequest'
+            responses:
+                '200':
+                    description: What the import did
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleImportResultEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # An entry is addressed by its id and not by its key, and that is not a preference. Keys
+    # contain dots by design (`products.list.title`) and may contain anything else awkward in a URL
+    # path. The key stays a body field with uniqueness enforced by a database index; the row is
+    # addressed the way every other row in this API is. Same shape as `/account/addresses/{addressId}`.
+    /locales/{locale}/entries/{entryId}:
+        put:
+            tags: [System]
+            summary: Edit one translation entry
+            description: |
+                Updates the value of one entry. The key is not editable — a key is the identity a
+                client looks the string up by, so changing it is a delete plus an add, and the two
+                collision checks that go with them.
+            operationId: updateLocaleEntry
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/EntryIdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateLocaleEntryRequest'
+            responses:
+                '200':
+                    description: The updated entry
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LocaleEntryEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [System]
+            summary: Remove one translation entry
+            description: Removes a single key from one language. The other languages keep theirs.
+            operationId: deleteLocaleEntry
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/LocalePathParam'
+                - $ref: '#/components/parameters/EntryIdPathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `{entryId}` is not a usable ObjectId: the lookup raises a CastError, which the
+                # response layer reads as a statement about the request.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    parameters:
+        # ---------- locales — the parameters only this module's paths reference. ----------
+        LocalePathParam:
+            name: locale
+            in: path
+            required: true
+            schema:
+                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+            description: A language tag from `GET /locales`.
+
+        EntryTenantQueryParam:
+            name: tenant
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/LocaleTenant'
+            description: >-
+                Restrict the listing to one tenant's dictionary. Omitted lists every tenant, which
+                is what an admin screen wants before the operator has picked one.
+
+        MessagesTenantQueryParam:
+            name: tenant
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/LocaleTenant'
+            description: >-
+                Which frontend tenant's dictionary to build. Omitted, the deployment's default
+                frontend tenant — a client paired one-to-one with this API never needs to say.
+
+        EntryIdPathParam:
+            name: entryId
+            in: path
+            required: true
+            schema:
+                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+            description: Identifier of one translation entry.
+
+    schemas:
+        # ---------- locales — the schemas only this module's paths reference. ----------
+        LocaleDirection:
+            type: string
+            enum: [ltr, rtl]
+            description: >-
+                Writing direction, which a client needs before it can lay the language out. Trivial
+                today because every deployed language is left-to-right; a column rather than a
+                derivation because the day it is not, the alternative is a migration.
+            example: ltr
+
+        LocaleTenant:
+            type: string
+            pattern: '^[a-z0-9][a-z0-9-]*$'
+            minLength: 1
+            maxLength: 64
+            description: |
+                The id of one tenant — one keyspace, authored by one team. Which ids exist is
+                configuration, listed by `GET /locales/tenants`; a row naming an unknown tenant is
+                refused with a 422.
+
+                On a LANGUAGE it reports capability: the backend tenant means the API can answer
+                requests in it, because a dictionary file is deployed; a frontend tenant means a
+                client dictionary is downloadable for it.
+
+                On an ENTRY it says whose dictionary that row OVERRIDES. A frontend tenant's rows
+                are what `GET /locales/{locale}/messages` serves; the backend tenant's rows are
+                layered over the API's own deployed files at resolution time.
+            example: demo-fe
+
+        LocaleTenantKind:
+            type: string
+            enum: [frontend, backend]
+            description: >-
+                What a tenant is. `backend` is this API's own copy, applied internally and never
+                served; `frontend` is a client's copy, downloadable per language.
+            example: frontend
+
+        LocaleTenantDescriptor:
+            type: object
+            additionalProperties: false
+            required: [id, label, kind]
+            description: One tenant as the registry describes it.
+            properties:
+                id:
+                    $ref: '#/components/schemas/LocaleTenant'
+                label:
+                    type: string
+                    description: A human name, for an admin screen.
+                    example: Demo frontend
+                kind:
+                    $ref: '#/components/schemas/LocaleTenantKind'
+
+        LocaleTenants:
+            type: object
+            additionalProperties: false
+            required: [tenants]
+            properties:
+                tenants:
+                    type: array
+                    minItems: 1
+                    items:
+                        $ref: '#/components/schemas/LocaleTenantDescriptor'
+
+        LocaleTenantsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleTenants'
+
+        LocaleSource:
+            type: string
+            enum: [static, dynamic, both]
+            description: >-
+                Which tier a language came from — deployed files, the database, or both.
+            example: both
+
+        Language:
+            type: object
+            additionalProperties: false
+            required: [id, tag, baseLanguage, name, nativeName, direction, active, revision]
+            description: >-
+                A language registered in the DYNAMIC tier. Its existence means entries can be
+                translated into it and a client can download the result — never that the API can
+                answer a request in it, which is decided by a deployed file and nothing else.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                tag:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                baseLanguage:
+                    type: string
+                    pattern: ^[a-z]{2}$
+                    description: >-
+                        The ISO 639-1 code at the front of `tag` — the BCP 47 PRIMARY SUBTAG, with
+                        any region or script dropped. `pt-BR` and `pt-PT` are two languages here
+                        and both answer `pt`.
+
+                        Derived from `tag` and never sent by a client: two fields that can disagree
+                        about the same fact are a bug waiting for the first person who edits one of
+                        them. Stored rather than computed on read because it is what groups the
+                        variants of a language, and a stored column can be queried and indexed
+                        while a split cannot.
+                    example: pt
+                name:
+                    type: string
+                    description: English name, for an admin list.
+                    example: Spanish
+                nativeName:
+                    type: string
+                    description: The language's own name, for a client's language picker.
+                    example: Español
+                direction:
+                    $ref: '#/components/schemas/LocaleDirection'
+                # Inactive means invisible to every PUBLIC route: absent from the manifest, 404 on
+                # the dictionary. It is the state a half-finished translation lives in, and the
+                # state a language must be put into before it can be deleted.
+                active:
+                    type: boolean
+                # Bumped on ANY write to this language's entries, in the same operation as the
+                # write. A client stores the revision it downloaded and re-fetches only when the
+                # manifest reports a higher one. A counter rather than a content hash because a
+                # hash would mean reading and hashing every row of every language on each manifest
+                # request — an O(rows) cost on the most-cached endpoint in the API, to answer a
+                # question a counter answers exactly as well.
+                revision:
+                    type: integer
+                    minimum: 0
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        LanguageEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Language'
+
+        LocaleCapability:
+            type: object
+            additionalProperties: false
+            required: [tag, name, nativeName, direction, active, tenants, source, entryCount, revision]
+            description: >-
+                One language as the manifest describes it: a merge of whatever the two tiers each
+                know about it. A tag present in both appears once, carrying both tenants.
+            properties:
+                tag:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                name:
+                    type: string
+                    example: Spanish
+                nativeName:
+                    type: string
+                    example: Español
+                direction:
+                    $ref: '#/components/schemas/LocaleDirection'
+                # Whether a VISITOR may select the language — the flag's only job, the same rule
+                # products and users follow. Non-admin manifests simply omit inactive rows, so for
+                # them this is always true; an admin's manifest includes every row and reads the
+                # flag to tell them apart. Static-only languages are always true: a deployed file
+                # has no off switch.
+                active:
+                    type: boolean
+                tenants:
+                    type: array
+                    minItems: 1
+                    items:
+                        $ref: '#/components/schemas/LocaleTenant'
+                    description: >-
+                        Which tenants have words in this language. Without it a client seeing `es`
+                        in the list cannot tell whether it may send `Accept-Language: es` and get
+                        Spanish error messages (the backend tenant), or whether it may download a
+                        Spanish UI dictionary (a frontend tenant). Those are different questions.
+                source:
+                    $ref: '#/components/schemas/LocaleSource'
+                # Rows in the dynamic tier. Spots a half-translated language at a glance, and is
+                # the honest answer to "is this language finished" — no server-side per-key
+                # fallback fills the gaps, precisely so this number cannot become a lie.
+                entryCount:
+                    type: integer
+                    minimum: 0
+                revision:
+                    type: integer
+                    minimum: 0
+
+        LocaleCapabilities:
+            type: object
+            additionalProperties: false
+            required: [locales, default, fallback]
+            description: >-
+                Which languages a deployment offers, and what each of them can do. Runtime state,
+                not contract state: it is derived from the dictionaries actually deployed and the
+                rows actually stored, so it cannot be an enum here.
+            properties:
+                locales:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/LocaleCapability'
+                    description: Every language, ordered by tag so the response is stable.
+                default:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                fallback:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+
+        LocaleCapabilitiesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleCapabilities'
+
+        LocaleDictionary:
+            type: object
+            additionalProperties: false
+            required: [locale, messages]
+            description: >-
+                The API's OWN message dictionary for one language — its API-response copy and
+                nothing else. It is never a client's UI dictionary: the two are authored and
+                deployed in separate repositories, and mixing them would put view copy in the
+                API's keyspace. A client that wants these merges them under a namespace it
+                reserves for the API, never at the root.
+            properties:
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                messages:
+                    type: object
+                    additionalProperties: true
+                    description: Nested key/value dictionary, the same shape the API loads.
+
+        LocaleDictionaryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleDictionary'
+
+        LocaleMessages:
+            type: object
+            additionalProperties: false
+            required: [locale, revision, messages]
+            description: >-
+                The CLIENT's dictionary for one language, built from the stored entries. Same
+                nested shape as `LocaleDictionary` on purpose — a client merges both with one code
+                path rather than two — and a completely separate keyspace, because the two are
+                authored by different people for different surfaces.
+            properties:
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                # Repeated from the manifest so a client that fetched a dictionary knows what it
+                # holds without a second request, and so the two can be compared without trusting
+                # the order they arrived in.
+                revision:
+                    type: integer
+                    minimum: 0
+                messages:
+                    type: object
+                    additionalProperties: true
+                    description: >-
+                        Flat dotted keys expanded into a tree: `products.list.title` becomes
+                        `products.list.title`, nested. Empty for a language with no entries yet,
+                        which is a legitimate state and not a 404.
+
+        LocaleMessagesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleMessages'
+
+        LocaleEntry:
+            type: object
+            additionalProperties: false
+            required: [id, locale, tenant, key, value]
+            description: >-
+                One translated string: one row per (language, tenant, key). That shape makes every
+                operation this feature needs a single indexed query — add is an insert, edit is an
+                update, a whole dictionary is one find — and adding a language touches nothing that
+                already exists.
+
+                `tenant` is part of the identity, not a label on it: two tenants may both declare
+                a top-level `generic`, so `generic.error-internal` names one string in the API's
+                copy and a different one in a client's. Without it in the key, one would overwrite
+                the other.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                tenant:
+                    $ref: '#/components/schemas/LocaleTenant'
+                key:
+                    type: string
+                    description: >-
+                        Flat and dotted. Stored AS A STRING and never as a Mongo path — a document
+                        per language with `$set: { "messages.products.list.title": v }` would have
+                        Mongo read three levels of nesting where one key was meant, which is a trap
+                        that bites once and then keeps biting.
+                    example: products.list.title
+                value:
+                    type: string
+                    example: Catálogo
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        LocaleEntryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleEntry'
+
+        LocaleEntriesResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/LocaleEntry'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        LocaleEntriesResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleEntriesResponse'
+
+        LocaleEntryInput:
+            type: object
+            additionalProperties: false
+            required: [key, value]
+            description: >-
+                One key and its translation, as an import or a create sends it.
+
+                A key is refused when it is a strict prefix of an existing key in the same language,
+                or has one as a prefix — `products.list` alongside `products.list.title`. No tree
+                can hold both: one is a string, the other needs to be an object at the same path. A
+                naive builder silently drops one of them, and which one depends on insertion order,
+                so this is caught at WRITE time with a 409 naming both keys rather than discovered
+                at read time by whoever is missing a string.
+
+                A key that no dictionary defines is ACCEPTED. Entries add keys as well as override
+                them, and for `app` rows this API could not check anyway — that keyspace belongs to
+                the client and lives in another repository. So a typo saves cleanly and then renders
+                nowhere: harmless, invisible, and yours to notice.
+            properties:
+                key:
+                    type: string
+                    minLength: 1
+                    example: products.list.title
+                value:
+                    type: string
+                    example: Catálogo
+
+        CreateLocaleRequest:
+            type: object
+            additionalProperties: false
+            required: [tag, name, nativeName]
+            properties:
+                tag:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                name:
+                    type: string
+                    minLength: 1
+                nativeName:
+                    type: string
+                    minLength: 1
+                direction:
+                    $ref: '#/components/schemas/LocaleDirection'
+                # Defaulted rather than required so both implementations derive it instead of each
+                # choosing. A new language starts visible; a translator who wants a draft says so.
+                active:
+                    type: boolean
+                    default: true
+
+        UpdateLocaleRequest:
+            type: object
+            additionalProperties: false
+            description: >-
+                Every field optional: an omitted one means "leave it alone", never "clear it". The
+                tag is absent by design — see the operation description.
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                nativeName:
+                    type: string
+                    minLength: 1
+                direction:
+                    $ref: '#/components/schemas/LocaleDirection'
+                active:
+                    type: boolean
+
+        # Written out rather than `allOf: [LocaleEntryInput]`: `additionalProperties: false` is
+        # evaluated per subschema, so it cannot live on a schema used as an `allOf` base — the same
+        # reason the error envelopes in the root document are flat. The collision rule that governs
+        # `key` is documented once, on `LocaleEntryInput`.
+        CreateLocaleEntryRequest:
+            type: object
+            additionalProperties: false
+            required: [tenant, key, value]
+            properties:
+                tenant:
+                    $ref: '#/components/schemas/LocaleTenant'
+                key:
+                    type: string
+                    minLength: 1
+                    example: products.list.title
+                value:
+                    type: string
+                    example: Catálogo
+
+        UpdateLocaleEntryRequest:
+            type: object
+            additionalProperties: false
+            required: [value]
+            properties:
+                value:
+                    type: string
+
+        ReplaceLocaleEntriesRequest:
+            type: object
+            additionalProperties: false
+            required: [tenant, entries]
+            description: >-
+                The COMPLETE set of entries for this language IN ONE TENANT. Anything already stored
+                under that tenant and not named here is deleted; the other tenants are untouched.
+
+                The tenant is named once for the batch rather than per row, so a replace cannot
+                half-apply across dictionaries — the operation that deletes what it was not sent
+                has to know exactly what it is allowed to delete.
+            properties:
+                tenant:
+                    $ref: '#/components/schemas/LocaleTenant'
+                entries:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/LocaleEntryInput'
+
+        MergeLocaleEntriesRequest:
+            type: object
+            additionalProperties: false
+            required: [tenant, entries]
+            description: >-
+                Entries to upsert into ONE tenant. Anything already stored is left exactly as it was.
+            properties:
+                tenant:
+                    $ref: '#/components/schemas/LocaleTenant'
+                entries:
+                    type: array
+                    minItems: 1
+                    items:
+                        $ref: '#/components/schemas/LocaleEntryInput'
+
+        LocaleImportResult:
+            type: object
+            additionalProperties: false
+            required: [created, updated, removed, revision]
+            description: >-
+                What an import actually did, counted rather than implied. `removed` is always 0 for
+                a merge, which is the assertion a client can make to prove it called the operation
+                it meant to.
+            properties:
+                created:
+                    type: integer
+                    minimum: 0
+                updated:
+                    type: integer
+                    minimum: 0
+                removed:
+                    type: integer
+                    minimum: 0
+                revision:
+                    type: integer
+                    minimum: 0
+
+        LocaleImportResultEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LocaleImportResult'

@@ -1,223 +1,141 @@
-# Boilerplate Node Backend
+# boilerplate-node-api-mongodb-mongoose
 
-TypeScript Node.js backend with Express, JWT auth, Mongoose, and OpenAPI-first tooling.
+> Express 5 + TypeScript + Mongoose REST API. Contract-first, modular, observable.
+> Paired with [`boilerplate-vue-frontend`](https://github.com/Guebbit/boilerplate-vue-frontend).
 
-> CI/runtime baseline: Node.js 22.
+**📚 The documentation is the real reference — this file is only the door.**
+Run `npm run docs:dev` (or open `:3090` once the stack is up), or read `docs/`.
 
-## Instructions
+::: danger Uploaded images do not outlive the container
+`imageStore` (`src/infrastructure/adapters/image-store.ts`) writes uploads to the container's own
+filesystem. **Rebuild or remove the container and every uploaded image goes with it** — `docker
+compose down -v`, a redeploy, a moved host. Only `public/images/seed/` survives, because those files
+are committed. Two replicas do not share what they store either: an image uploaded to one is a 404
+on the other.
 
-- Create `.env` file using the example:
-    - `cp .env-example .env`
-- Create a MongoDB database and link it using `.env` variables:
-    - `NODE_DB_URI`
-- Optional: configure Redis for server-side response caching:
-    - `NODE_REDIS_URL`
-- Link external services using `.env` variables (for example SMTP/email responders on another server):
-    - `NODE_SMTP_HOST`, `NODE_SMTP_PORT`, `NODE_SMTP_USER`, `NODE_SMTP_PASS`, `NODE_SMTP_SENDER`
-- Optional: use Docker/Podman to run the app and its dependencies.
-- IMPORTANT:
-    - Remove `controllers/_development` and `routes/_development` before production deployments if you do not want development-only endpoints in your build.
+A bind-mounted volume is the stopgap. It works, and it pins the deployment to one disk. The durable
+answer is a second `ImageStore` implementation over an S3-compatible bucket or a CDN — nothing
+selects a backend yet, on purpose, and `image-store.ts` documents what such an implementation has to
+get right before anyone writes one.
+:::
 
-## Quickstart
+---
 
-1. Install dependencies:
-    - `npm install`
-2. Create env file:
-    - `cp .env-example .env`
-3. Set required environment variables in `.env`:
-    - `NODE_TOKEN_ACCESS`
-    - `NODE_TOKEN_REFRESH`
-    - Database config:
-        - Preferred: `NODE_DB_URI`
-        - Or fallback: `NODE_MONGODB_HOST` + `NODE_MONGODB_PORT` (+ optional `NODE_MONGODB_NAME`)
-4. Optional: enable Redis response caching by setting:
-    - Preferred: `NODE_REDIS_URL`
-    - Or fallback: `NODE_REDIS_HOST` + `NODE_REDIS_PORT`
-    - `NODE_REDIS_CACHE_ENABLED=1`
-5. Start development server:
-    - `npm run dev`
+## Start here
 
-## Redis caching
-
-- Redis is a super-fast in-memory key/value store.
-- "In-memory" means it keeps data in RAM, so reads/writes are usually much faster than going back to the database every time.
-- In this project, Redis is used as a temporary response cache for GET requests.
-- Simple idea: if the same GET request happens again, the API can answer from Redis instead of rebuilding the response from scratch.
-
-### Small visual
-
-```text
-First GET request
-Client -> Express -> MongoDB -> Response
-                  -> Redis saves a copy
-
-Next same GET request
-Client -> Express -> Redis -> Response
-                  -> MongoDB skipped
-
-Write request (POST/PUT/PATCH/DELETE)
-Client -> Express -> MongoDB update -> related Redis cache cleared
-```
-
-### What this project stores in Redis
-
-- A cached JSON response body
-- The HTTP status code for that response
-- Tags like `products`, `orders`, or `users` so related cache entries can be deleted together
-- A user-aware scope, so one user's private response is not served to another user
-
-### Why this helps
-
-- Faster repeated reads
-- Less repeated work for the API
-- Less unnecessary database traffic
-- Safer private caching because auth-related responses are scoped per user
-
-### Safety behavior
-
-- Cacheable GET routes now use Redis-backed server-side response caching when `NODE_REDIS_URL` is configured.
-- Cache entries are scoped per authenticated user to avoid cross-user data leakage.
-- Product, order, user, account, and checkout mutations invalidate related cached responses automatically.
-- If Redis is unavailable, the API continues without server-side caching.
-
-## Observability (metrics + traces)
-
-You now get:
-
-- **Trace headers** on every response:
-    - `x-trace-id`
-    - `traceparent` (W3C format)
-- **Metrics endpoint**:
-    - `GET /metrics` (Prometheus text format)
-
-### Quick visual
-
-```text
-Client
-  -> API request (optional traceparent)
-  -> Express middleware
-       -> requestId + trace context
-       -> route handler
-       -> metrics collector
-  <- response with x-request-id + x-trace-id + traceparent
-
-Prometheus
-  -> GET /metrics
-  <- http_requests_total, http_request_duration_milliseconds, process_* metrics
-```
-
-### Quick examples
+This stack is **container-first**: the shipped `.env` uses compose service hostnames, because the
+things that make it worth cloning — Tempo, Loki, Prometheus, Grafana, Alloy, Umami — only exist
+inside the compose stack.
 
 ```bash
-# 1) Check health and inspect trace headers
-curl -i http://localhost:3000/
-
-# 2) Continue an existing trace from another service
-curl -i \
-  -H "traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-1111111111111111-01" \
-  http://localhost:3000/products
-
-# 3) Scrape metrics
-curl http://localhost:3000/metrics
+npm install
+cp .env-example .env      # then set NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH
+npm run compose:restart   # docker or podman, auto-detected
 ```
 
-## Scripts
+That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting, so the
+database is migrated and seeded on first boot — you get demo products, users and orders rather
+than empty lists.
 
-- `npm run dev` - run API in watch mode
-- `npm run dev:docker` - docker/podman single-worker hot-reload mode
-- `npm run dev:docker:cluster` - docker/podman clustered dev mode
-- `npm run ts-check` - TypeScript type-check
-- `npm run lint` - lint checks
-- `npm run prettier:check` - prettier non-mutating formatting check
-- `npm run test` - unit + integration tests
-- `npm run test:unit` - unit tests
-- `npm run test:integration` - HTTP integration tests
-- `npm run build` - type-check + lint
-- `npm run db:migrate` - apply pending migrations (TypeScript runtime)
-- `npm run db:migrate:down` - rollback last migration
-- `npm run db:migrate:status` - list migration status
-- `npm run complete` - build + test + auto-fix lint/prettier
-- `npm run complete:check` - build + test + non-mutating lint/prettier checks
-
-Migrations run through a TypeScript-compatible runtime (`tsx`) so `db/migrations/*.ts` can import migration-safe helpers from `src/migrations/`.
-
-## Port variables (quick map)
-
-```text
-NODE_PORT          -> Express app listening port
-NODE_MONGODB_PORT  -> Mongo fallback port when NODE_DB_URI is not set
-NODE_REDIS_PORT    -> Redis fallback port when NODE_REDIS_URL is not set
+```bash
+curl http://localhost:3000/            # health probe, with trace headers
+curl http://localhost:3000/products    # the seeded demo data
 ```
 
-## CI pipeline (quick visual)
+::: warning Use the scripts, not a bare `compose up`
+The scripts pass the runtime's Promtail override with `-f`. A bare `compose up` runs the base file
+only: Loki stays empty and Grafana's log panels stay blank, with no error anywhere.
+:::
 
-```text
-npm ci
-  -> ts-check
-  -> lint
-  -> test:unit
-  -> test:integration
-  -> lint:openapi
+→ Host mode, the collections, the pre-commit gate: **[Getting Started](./docs/getting-started.md)**
+→ Ports and running the pair: **[Pairing & Ports](./docs/tools/pairing-and-ports.md)**
+
+---
+
+## What this is
+
+```mermaid
+flowchart LR
+    REQ["Request"] --> MW["kernel middlewares<br/>auth · locale · rate limit"]
+    MW --> CTRL["module controller"]
+    CTRL --> SVC["service"]
+    SVC --> REPO["repository"]
+    REPO --> DB[("MongoDB")]
+    SVC -.-> EV["domain events"]
+    SVC --> CACHE[("Redis")]
+    CTRL --> OTEL["traces · metrics · audit"]
+
+    classDef edge fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef mod fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef store fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef obs fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    class REQ,MW edge;
+    class CTRL,SVC,REPO,EV mod;
+    class DB,CACHE store;
+    class OTEL obs;
 ```
 
-## OpenAPI workflow
+Four ideas carry the whole repository:
 
-- Source of truth: `openapi.yaml`
-- Lint OpenAPI spec:
-    - `npm run lint:openapi`
-- Generate typed API client:
-    - `npm run genapi`
+1. **A module is a value, not a convention.** Every domain declares what it needs — routes,
+   locales, seeds, event subscriptions, contract fragments — in one typed object. `src/modules.ts`
+   lists them, and the registry validates the dependency graph at boot rather than at the first 500. Adding a domain is one folder plus one line; removing it is `rm -rf` plus that line.
+2. **The contract is an output, not a document.** `openapi.yaml` is assembled from per-module
+   fragments and generates the typed client and Zod schemas that both repositories import.
+3. **Layers stay honest.** `kernel` knows no domain, `infrastructure` knows no domain,
+   `modules/*` know each other only through declared dependencies or domain events.
+4. **Observability is wired, not planned.** OpenTelemetry traces, Prometheus metrics, Winston to
+   Loki, an audit trail, and Grafana dashboards, all running in the dev stack.
 
-Use the generated `api/` output as derived artifacts from `openapi.yaml`.
+---
 
-## Frontend/backend tandem sync discipline
+## Where things live
 
-- Treat `openapi.yaml` as the canonical contract for both paired boilerplates.
-- After any contract edit, regenerate derived artifacts (`npm run genapi`) and commit the generated `api/` changes.
-- Keep paired branches aligned (backend `api-mongodb-mongoose` with the intended frontend branch) before merging contract changes.
-- Local pairing reminder:
-    - Backend default URL: `http://localhost:3000`
-    - Frontend dev URL: `http://localhost:8080`
-    - Backend CORS should allow frontend origin `http://localhost:8080` (set `NODE_CORS_ORIGIN=http://localhost:8080`).
+|                      |                                                                |
+| -------------------- | -------------------------------------------------------------- |
+| `src/modules/*`      | the domains — each one deletable                               |
+| `src/kernel`         | registry, domain events, auth primitives                       |
+| `src/infrastructure` | http, persistence, adapters, observability, runtime            |
+| `src/app`            | assembly: routes, security, error handling, telemetry, workers |
+| `api/`               | generated types and Zod schemas — never edited by hand         |
+| `shared/`            | contract fragments and EJS email templates                     |
+| `db/`                | migrations and seeds                                           |
 
-## Mock/testing helpers
+---
 
-The `.dev/` folder contains Bruno/Mockoon/Insomnia assets for local API exploration and API mocking.
+## The map
 
-### Bruno (mock frontend consuming your API)
+| You want to                   | Read                                                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Get it running                | [Getting Started](./docs/getting-started.md)                                                                            |
+| **Read the code, first time** | **[Reading Path](./docs/theory/reading-path.md)** — nine files, in order                                                |
+| Know what one file _is_       | [File Glossary](./docs/reference/) — every file in the repo, one hop to an answer                                       |
+| Understand the shape          | [Architecture](./docs/theory/architecture.md) · [Layers](./docs/theory/layers.md) · [Modules](./docs/theory/modules.md) |
+| Add or remove a domain        | [Adding & Removing a Module](./docs/theory/module-lifecycle.md)                                                         |
+| Change an endpoint            | [OpenAPI Workflow](./docs/api/openapi-workflow.md) · [Regenerating](./docs/api/regenerating.md)                         |
+| Run the pair                  | [Pairing & Ports](./docs/tools/pairing-and-ports.md)                                                                    |
+| Look up a script              | [Package Scripts](./docs/tools/package-scripts.md)                                                                      |
+| Understand a dependency       | [Tools Explained](./docs/tools/tools-explained.md)                                                                      |
+| Test something                | [Testing overview](./docs/tools/testing-and-docs.md)                                                                    |
+| Deploy it                     | `.docker/Dockerfile.production` · `docker-compose.production.yml`                                                       |
 
-Use `openapi.yaml` with Bruno to quickly create and test requests as if you were a frontend client.
+---
 
-1. Open Bruno.
-2. In the left sidebar, click `+` -> `Import collection`.
-3. Import from `openapi.yaml`.
-4. Create/select a Bruno environment (for example `local`).
-5. Set environment variable `baseUrl` to:
-    - `http://localhost:3001` (Mockoon default)
-6. In the top-right environment selector, switch from `No environment` to your `local` environment.
-7. Send requests to verify payload shapes, status codes, and auth flow.
+## Before you commit
 
-Tip: keep one environment pointing to the real backend (`http://localhost:3000`) and one to Mockoon (`http://localhost:3001`) so you can switch quickly.
+```bash
+npm run complete    # build + all tests + lint + format check — ~90s
+```
 
-### Mockoon (mock API returning fake data)
+Exactly what the pre-commit hook runs; `npm run complete:fix` is the same gate with lint and
+formatting fixed rather than reported. Outside it, by hand: `npm run complete:manual`
+(`test:prism`), `npm run test:mutation`, `npm run test:fuzz`, and `npm run bench`.
 
-Use `openapi.yaml` with Mockoon to generate a fake backend that returns mock responses.
+Per-suite numbers, so a doubling reads as a regression rather than as a mood:
+[Test timings](./docs/tools/testing-and-docs.md#test-timings).
 
-1. Open Mockoon desktop app.
-2. In the top menu, select:
-    - `Import/Export` -> `Import OpenAPI/Swagger` (Swagger v2/OpenAPI import)
-3. Select `openapi.yaml`.
-4. Review generated routes and sample responses.
-5. Set Mockoon port to `3001` (or adjust Bruno `baseUrl` accordingly).
-6. Start the mock server.
-7. Call endpoints from Bruno/Postman/frontend to test client integration without using the real database.
+---
 
-Tip: enrich generated routes with realistic status codes (`200`, `400`, `401`, `404`, `500`) to test client error handling.
+## License
 
-# TODO
-
-- Complete .dev enviroment (Bruno, Mockoon, Insomnia (update))
-- Create a mysql sequelize version
-- Create a FASTIFY version
-- Create a NESTJS version
-- Add\Try graphql with graphql-yoga
+AGPL-3.0. See [LICENSE](./LICENSE).

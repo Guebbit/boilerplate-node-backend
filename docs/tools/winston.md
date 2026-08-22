@@ -2,12 +2,12 @@
 
 ## Two log streams
 
-| Stream | Purpose | Format |
-| --- | --- | --- |
-| `logger` | normal application logs (request access logs, errors, warnings) | JSON in production/test, pretty + colour in dev |
-| `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON |
+| Stream        | Purpose                                                               | Format                                          |
+| ------------- | --------------------------------------------------------------------- | ----------------------------------------------- |
+| `logger`      | normal application logs (request access logs, errors, warnings)       | JSON in production/test, pretty + colour in dev |
+| `auditLogger` | security/admin events (login attempts, role checks, token cleanup, …) | always JSON                                     |
 
-Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/utils/winston.ts`.
+Both write to **stdout**, which Docker captures. There is no Loki transport bundled — adding one later is a few lines in `src/infrastructure/adapters/logger.ts`.
 
 ## What an access log looks like
 
@@ -44,7 +44,7 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 ## Audit events
 
-`emitAuditEvent` (in `src/utils/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login.succeeded`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
+`emitAuditEvent` (in `src/infrastructure/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login.succeeded`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
 
 ```json
 {
@@ -60,27 +60,72 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 }
 ```
 
+The `action` vocabulary is a closed union, not free strings — an alert built on
+`auth.login.failed` cannot be defeated by a typo at a call site.
+
+It is assembled rather than declared in one place. Each module owns its own actions in
+`src/modules/<name>/audit.ts` as an `as const` object and augments core's `IAuditActionMap`, the
+same way modules declare domain events; `infrastructure` keeps only the three `security.*` actions emitted by
+the authorization middleware about requests that never reached a domain. So the union narrows when
+you delete a module, and `infrastructure` never names one. `tests/cross-cutting/audit-actions.test.ts` is
+what keeps two modules from claiming the same string, or inventing one that breaks the dotted
+convention log backends filter on.
+
+### Where an audit entry ends up
+
+Two destinations, from the single `emitAuditEvent` call:
+
+| Destination            | Role                                                              | Fails how                                                     |
+| ---------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `auditLogger` → stdout | the compliance record — append-only, shipped to [Loki](./loki.md) | a broken logger is a real problem                             |
+| Mongo `auditlogs`      | the queryable copy behind `GET /observability/audit`              | silently, into a warning — never fails the triggering request |
+
+The Mongo write goes through an `IAuditSink` port that `app.ts` registers after the database
+connects. `src/infrastructure/**` may not import `@modules/*`, so the dependency is inverted rather
+than smuggled — and the 53 `emitAuditEvent` call sites know about neither destination.
+
+Before this, the endpoint read a 200-entry in-process ring buffer. It could not answer
+"what has this user done": 200 entries **in total** across every actor, a different slice in each
+cluster worker, and empty after a restart.
+
+### Retention
+
+| Env var                     | Effect                                                                     |
+| --------------------------- | -------------------------------------------------------------------------- |
+| `NODE_AUDIT_RETENTION_DAYS` | how long the Mongo copy survives before its TTL index removes it (def. 90) |
+
+Only the queryable copy expires — log retention is [Loki](./loki.md)'s business.
+
+::: warning Changing the retention window
+Mongo will not alter an existing TTL index's `expireAfterSeconds`. On a database that already has
+the index, changing `NODE_AUDIT_RETENTION_DAYS` does nothing until a `collMod` migration under
+`db/migrations/` runs. A restart will not apply it.
+:::
+
 ## Configuration
 
-| Env var | Effect |
-| --- | --- |
-| `NODE_LOG_LEVEL` | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere. |
-| `NODE_SERVICE_NAME` | tag on every log entry. Useful when several services ship logs to the same aggregator. |
+| Env var             | Effect                                                                                                   |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| `NODE_LOG_LEVEL`    | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere. |
+| `NODE_SERVICE_NAME` | tag on every log entry. Useful when several services ship logs to the same aggregator.                   |
 
 ## Redaction
 
 `redactSensitiveFields` replaces values of well-known sensitive keys (`password`, `token`, `cookie`, `authorization`, …) with `[REDACTED]` before logging. It runs on every log entry and on every audit event.
 
-## Useful links
+## Works with
 
-- [Winston docs](https://github.com/winstonjs/winston#readme)
-- [Winston transports](https://github.com/winstonjs/winston/blob/master/docs/transports.md)
-- [Winston-Loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you later want to ship logs to Loki
-- [Grafana Loki overview](https://grafana.com/docs/loki/latest/get-started/overview/)
-- [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) — guidance for audit/security logs
+- **[OpenTelemetry](./opentelemetry.md)** — the OTel SDK automatically injects the active `trace_id` into Winston's logging context on every request. You write nothing; every log line just has it. → full explanation: [How logs and traces correlate](./opentelemetry.md#how-logs-and-traces-correlate)
+- **[Loki](./loki.md)** — Winston writes JSON to stdout; Promtail tails those lines and ships them to Loki. The `trace_id` on each line is what enables jumping from a log entry straight to a Tempo trace. → [Trace ↔ log correlation](./loki.md#trace-log-correlation)
+
+## External references
+
+- [OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html) — guidance for what audit/security logs should capture
+- [winston-loki transport](https://github.com/JaniAnttonen/winston-loki) — drop-in if you want to push logs directly to [Loki](./loki.md) instead of via Promtail
 
 ## Related pages
 
+- [Events & Logging](./events-and-logging.md) — how these two streams relate to analytics, metrics and queue jobs
 - [OpenTelemetry](./opentelemetry.md)
 - [Tempo](./tempo.md)
 - [Grafana](./grafana.md)

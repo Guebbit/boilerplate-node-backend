@@ -1,0 +1,31 @@
+{
+    "orders": {
+        "not-found": "L'ordine richiesto non è stato trovato",
+        "hard-deleted": "L'ordine è stato eliminato definitivamente.",
+        "soft-deleted": "L'ordine è stato eliminato logicamente (nascosto al cliente).",
+        "creation-success": "Ordine creato con successo.",
+        "cancel": {
+            "success": "Ordine annullato.",
+            "not-cancellable": "Questo ordine non può più essere annullato."
+        },
+        "transition": {
+            "not-allowed": "Questo ordine non può passare a quello stato dalla posizione in cui si trova.",
+            "cancel-elsewhere": "L'annullamento di un ordine esegue la sequenza di annullamento — annullalo tramite l'endpoint di annullamento dell'ordine."
+        },
+        "invoice": {
+            "meta-title": "Fattura — ordine {{order}}",
+            "title": "L'ordine è stato confermato",
+            "line": "{{title}} — {{quantity}} × {{price}}"
+        },
+        "email-confirm": {
+            "subject": "Ordine confermato",
+            "meta-title": "Ordine confermato",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Il tuo ordine è stato confermato.",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "total": "Totale: {{total}}"
+        },
+        "items-held": "Gli articoli di questo ordine non possono essere modificati mentre le scorte sono impegnate o già vendute.",
+        "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`."
+    }
+}

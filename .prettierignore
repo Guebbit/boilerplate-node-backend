@@ -1,3 +1,38 @@
 api
 .prism
-.dev
+contract.bruno.yml
+contract.insomnia.json
+contract.mockoon.json
+contract.postman.json
+src/types/asyncapi.generated.ts
+
+# The REST contract. `redocly bundle` decides its layout now — 2-space, its own key order — and
+# `check:contracts-bundle` asserts the committed bytes equal a fresh run. Prettier reformatting it
+# afterwards would make that check fail on a file nobody edited, exactly as it would for the demo
+# dataset below. The MODULE documents it is built from are formatted as normal.
+openapi.yaml
+
+# The demo dataset. `npm run seed:export` writes it by seeding a throwaway database and recording
+# what the API answers, and `check:seed-export` asserts the committed bytes match what a fresh run
+# produces. Prettier reformatting it afterwards makes that check fail on a file nobody edited — two
+# writers, one artefact — and the copy in the paired frontend is hash-compared against this one, so
+# a format-only difference would read as a forked dataset.
+db/demo/demo-data.json
+
+# Contract fragments are verbatim SLICES of a committed document, not standalone files: each one
+# starts at the indentation it holds inside its parent, and several are not even parseable alone —
+# half an object literal, a folder out of a YAML list, a run of JSON array entries. Prettier would
+# dedent, re-quote and re-comma them, and every bundle is asserted byte-identical against its
+# committed output, so formatting a fragment would corrupt the very thing it builds.
+#
+# The exceptions below are the point of the rule, not holes in it: `src/modules/<name>/openapi.yaml`,
+# `src/modules/<name>/asyncapi.yaml`, `src/modules/<name>/analytics.ts` and the two shared asyncapi
+# documents are WHOLE, valid files — a contract you can lint and open in a viewer on its own — so
+# prettier formats them like any other authored source. If a format-only change ever alters a
+# bundle, `check:contracts-bundle` says so.
+shared/contracts/*
+!shared/contracts/asyncapi.root.yaml
+!shared/contracts/asyncapi.workers.yaml
+
+# graphify cache — generated JSON, not ours to format
+graphify-out/

@@ -1,0 +1,12 @@
+{
+    "locales": {
+        "error-language-not-found": "Questa lingua non è disponibile.",
+        "error-language-exists": "La lingua {{tag}} è già registrata.",
+        "error-language-active": "Disattiva la lingua prima di eliminarla: verranno rimosse tutte le stringhe tradotte.",
+        "error-entry-not-found": "Questa traduzione non esiste più.",
+        "error-key-exists": "La chiave {{key}} è già tradotta in questa lingua.",
+        "error-key-collision": "La chiave {{key}} non può coesistere con {{existing}}: una delle due dovrebbe essere insieme un testo e un gruppo di testi.",
+        "error-key-invalid": "La chiave {{key}} non è utilizzabile come chiave di traduzione.",
+        "error-tenant-unknown": "Il tenant {{tenant}} non è tra quelli serviti da questa installazione — vedi GET /locales/tenants."
+    }
+}

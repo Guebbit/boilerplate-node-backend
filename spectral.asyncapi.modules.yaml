@@ -1,0 +1,41 @@
+# Linting ONE section of the async contract, on its own — `npm run lint:asyncapi:modules`.
+#
+# `src/modules/<name>/asyncapi.yaml` and `shared/contracts/asyncapi.workers.yaml` are complete
+# AsyncAPI documents, which is what lets each be linted and opened in Studio without the rest of the
+# contract. What neither is, is a complete API: the tag list, the id and the `info` prose describe
+# the service, and they are declared once in `shared/contracts/asyncapi.root.yaml` rather than
+# restated by every section.
+#
+# SERVERS ARE NOT AMONG THEM. A server is only reachable through the channels bound to it, so each
+# section declares its own — `sseLocal` in the observability module, `rabbitmqLocal` beside the
+# queues — and the server rules below stay ON. That is what makes a section lintable as the whole
+# document it claims to be, and it is what lets `asyncapi.public.yaml` drop the broker by dropping
+# the section: no second list of servers to keep in step.
+#
+# So the rules turned off below are exactly the ones that ask a section to restate a SERVICE-wide
+# fact. They stay ON for the bundles — `npm run lint:asyncapi` runs the AsyncAPI CLI against
+# `asyncapi.yaml` and `asyncapi.public.yaml`, where an undeclared content type is a real defect.
+# This is the async twin of `spectral.modules.yaml`, and it exists for the same reason.
+#
+# `spectral:asyncapi` rather than the AsyncAPI CLI: the CLI takes no custom ruleset, so a section
+# missing the root's `id` or `defaultContentType` fails it with an ERROR that cannot be waived.
+
+extends: [[spectral:asyncapi, recommended]]
+
+rules:
+    # The tag list groups the documentation across every domain, so it is the service's and is
+    # declared once in the root.
+    #
+    # `id` and `defaultContentType` are root-level facts too and are not named here, because
+    # `spectral:asyncapi` has no rule for either; the warnings about those come from the AsyncAPI
+    # CLI's ruleset, which lints the assembled bundles where they do belong.
+    #
+    # `asyncapi-servers` and `asyncapi-channel-servers` are deliberately NOT here: a section owns
+    # the server its channels bind to, so both rules are answerable on its own and a section that
+    # binds a channel to a server it never declared is a real defect.
+    asyncapi-tags: off
+
+    # A section's `info` block exists only to make the file a valid document. The real title,
+    # contact and licence are the deployment's.
+    asyncapi-info-contact: off
+    asyncapi-info-license: off

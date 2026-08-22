@@ -1,0 +1,140 @@
+openapi: 3.0.3
+info:
+    title: wishlist — module contract
+    version: '2.0.0'
+
+paths:
+    /wishlist:
+        get:
+            tags: [Wishlist]
+            summary: Get wishlist
+            description: Returns the authenticated user's saved products — ids only, like the cart's lines; clients render them from their own product store. Absence and emptiness are the same state, so this never answers 404.
+            operationId: getWishlist
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Saved products
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WishlistResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Wishlist]
+            summary: Save a product
+            description: Adds a product to the authenticated user's wishlist. Idempotent — saving what is already saved answers the same 200, because a double-clicked heart icon is not an error. The product must be publicly visible; a hidden or soft-deleted product answers 404 exactly as it would from the catalogue.
+            operationId: addWishlistItem
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AddWishlistItemRequest'
+            responses:
+                '200':
+                    description: The updated wishlist
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WishlistResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed product id that matches no publicly visible product.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /wishlist/{productId}:
+        delete:
+            tags: [Wishlist]
+            summary: Remove a saved product
+            description: Removes the line for the product identified by `{productId}` from the authenticated user's wishlist. A line the caller does not hold is a 404 — the client's view is stale and it needs to know.
+            operationId: removeWishlistItem
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: The updated wishlist
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WishlistResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /wishlist/{productId}/move-to-cart:
+        post:
+            tags: [Wishlist]
+            summary: Move a saved product into the cart
+            description: The wishlist's exit — the saved line becomes one cart line (quantity 1, incremented if the cart already holds the product) and leaves the wishlist. The cart is written before the wishlist line is removed, so a failure part-way leaves the product SAVED rather than lost. Returns the updated wishlist; read the cart for its own new state.
+            operationId: moveWishlistItemToCart
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdPathParam'
+            responses:
+                '200':
+                    description: The updated wishlist
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WishlistResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Not on the wishlist, or no longer purchasable — the cart's own validation
+                # answers for the product the same way `POST /cart` would.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- wishlist — the schemas only this module's paths reference. ----------
+        # A line is a product reference and nothing else — no quantity, deliberately: a wishlist
+        # answers "do I want this", not "how many". The moment an amount matters the line belongs
+        # in the cart, which is what the move-to-cart operation is for.
+        WishlistItem:
+            type: object
+            additionalProperties: false
+            required: [productId]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        WishlistResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/WishlistItem'
+
+        WishlistResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/WishlistResponse'
+
+        AddWishlistItemRequest:
+            type: object
+            additionalProperties: false
+            required: [productId]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'

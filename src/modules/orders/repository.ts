@@ -1,0 +1,212 @@
+import { orderModel, applyOrderTransform } from './model';
+import type { OrderDocument } from './model';
+import type { PipelineStage } from 'mongoose';
+import {
+    createBaseRepository,
+    toObjectId,
+    type SearchFilters,
+    type BaseRepository
+} from '@infrastructure/persistence/base-repository';
+import {
+    normalizePagination,
+    buildPaginatedMeta,
+    DEFAULT_SORT,
+    type PaginatedMeta
+} from '@infrastructure/persistence/search';
+
+/**
+ * Order Repository
+ *
+ * Unlike the other collections, orders are read through the aggregation framework: an order
+ * embeds a product snapshot, and filtering on `items.product._id` is a pipeline concern. The
+ * base factory still supplies plain CRUD; search is overridden below.
+ */
+const base = createBaseRepository<OrderDocument>(orderModel, {
+    transform: applyOrderTransform,
+    searchable: {
+        objectIds: {
+            id: '_id',
+            userId: 'userId',
+            // Product data is embedded, not referenced — the snapshot's own `_id` is what
+            // identifies which product an order line holds.
+            productId: 'items.product._id'
+        },
+        exact: { email: 'email' }
+    }
+});
+
+/**
+ * Run an aggregation pipeline against the Order collection.
+ */
+const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =>
+    orderModel.aggregate<T>(pipeline);
+
+/**
+ * Filter → count → page → normalize, over the aggregation framework.
+ *
+ * The `$match` is built from the same declared spec the other repositories use, so id coercion
+ * stays in one place. `$match` does NOT cast the way `find()` does, which is exactly why the
+ * coercion has to happen before the pipeline is assembled.
+ *
+ * `async` for the same reason as the base factory's `search`: `buildWhere` runs synchronously and
+ * can throw on a malformed id, and a function typed `Promise<T>` must reject rather than throw —
+ * otherwise the caller's `.catch()` is bypassed and the client gets a 500 instead of a 422.
+ */
+const search = async (
+    filters: SearchFilters = {},
+    scope: Record<string, unknown> = {}
+): Promise<{ items: OrderDocument[]; meta: PaginatedMeta }> => {
+    const pagination = normalizePagination(filters);
+    // Scope merged last: it is the authorization boundary, and no client filter may widen it.
+    const match = { ...base.buildWhere(filters), ...scope };
+
+    // `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
+    // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
+    // another. Orders arrive in bursts (a seed, a bulk import, two concurrent checkouts), which
+    // makes ties the normal case rather than the edge one.
+    const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: DEFAULT_SORT }];
+
+    return aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }]).then(
+        (countResults) => {
+            const totalItems = countResults.at(0)?.totalItems ?? 0;
+
+            return aggregate([
+                ...basePipeline,
+                { $skip: pagination.skip },
+                { $limit: pagination.pageSize }
+            ]).then((items) => ({
+                items: base.normalize(items),
+                meta: buildPaginatedMeta(pagination, totalItems)
+            }));
+        }
+    );
+};
+
+/**
+ * Fetch one order, optionally restricted to a caller's own rows.
+ *
+ * Goes through the pipeline rather than `findById` so the `_id` lookup and the authorization
+ * scope are applied by the same query — checking ownership after the read is how a scoped find
+ * turns into an information leak.
+ *
+ * **The return is polymorphic, deliberately: the scope picks the shape.** Unscoped (an admin,
+ * whose `callerScope` is `undefined`) resolves a *hydrated* Mongoose document — mutable,
+ * `save()`-able. Scoped (an owner) resolves an aggregate row already through
+ * `applyOrderTransform` — a plain object, and `search` does the same for the same reason. Both
+ * serialize identically on the wire, because the transform is also the schema's `toJSON`, so a
+ * response body never shows the difference.
+ *
+ * **What a caller may read is therefore `id`, never `_id`.** `id` resolves on both branches: on
+ * the document it is Mongoose's virtual, on the plain object it is written by the transform,
+ * which deletes `_id` on the very next line (`@infrastructure/persistence/serialize`). `_id`
+ * resolves only on the admin branch, and TypeScript cannot catch the difference — `OrderDocument`
+ * extends `Document`, so `_id` type-checks on a value that will not carry it at runtime. The
+ * failure is silent, role-dependent and survives a green suite: it reads as `undefined` for
+ * exactly the callers who are not admins. That is not hypothetical — the invoice filename and
+ * the invoice's own title both shipped that way.
+ */
+const findByIdScoped = (
+    id: string,
+    scope?: Record<string, unknown>
+): Promise<OrderDocument | undefined> => {
+    if (!scope) return base.findById(id).then((order) => order ?? undefined);
+
+    return aggregate([{ $match: { _id: toObjectId(id), ...scope } }, { $limit: 1 }]).then(
+        (results) => {
+            const result = results.at(0);
+            return result ? base.normalize([result])[0] : undefined;
+        }
+    );
+};
+
+/**
+ * Restrict a query to one user's own orders.
+ *
+ * The `userId` on an order is an ObjectId, so the caller's id has to be coerced before it can
+ * match — a raw string silently matches nothing inside a `$match`, which reads as "this user has
+ * no orders" rather than as a mistake.
+ */
+const ownerScope = (userId: string): Record<string, unknown> => ({
+    userId: toObjectId(userId)
+});
+
+/**
+ * What a non-admin caller is allowed to see: their own orders, not soft-deleted.
+ *
+ * The counterpart of `publicScope` in `@modules/products`, and it lives here for the same
+ * reason — it is a rule about which *rows* exist for a given audience, not about a request.
+ *
+ * Two axes, deliberately composed rather than merged: `ownerScope` answers "whose", the
+ * `deletedAt` clause answers "still there". An admin passes no scope at all, which is how they
+ * read both other people's orders and soft-deleted ones.
+ *
+ * `$exists: false` rather than `null`: `remove` unsets the field to restore, so a restored order
+ * has no `deletedAt` key rather than a null one.
+ */
+const visibleScope = (userId: string): Record<string, unknown> => ({
+    ...ownerScope(userId),
+    deletedAt: { $exists: false }
+});
+
+/**
+ * Move an order between statuses, but only from one of the expected ones — atomically.
+ *
+ * The condition rides IN THE FILTER, not in a preceding read, for the same reason the cart's
+ * checkout guard does: two requests racing an order (a customer cancelling while the admin marks
+ * it shipped) must not both read `pending` and both write. mongod evaluates the filter while
+ * holding the document, so exactly one of them matches; the loser gets `null` and the caller
+ * decides whether that means "gone" or "no longer cancellable" with a follow-up read that only
+ * informs the error message.
+ *
+ * The scope composes like everywhere else: the caller's `visibleScope` rides in the same filter,
+ * so a non-admin cannot move an order they cannot see — there is no window between an ownership
+ * check and the write because there is no separate ownership check.
+ */
+const updateStatusIfIn = (
+    id: string,
+    from: readonly string[],
+    to: string,
+    scope?: Record<string, unknown>
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), ...scope, status: { $in: [...from] } },
+            { $set: { status: to } },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
+ * `search` is narrower than the base signature (no caller-supplied sort — the pipeline fixes it),
+ * so it is omitted from the base contract rather than intersected with it.
+ *
+ * The type is written out because Mongoose's generics are too large for TypeScript to serialize
+ * an inferred one at an export boundary (TS7056).
+ */
+export const orderRepository: Omit<BaseRepository<OrderDocument>, 'search'> & {
+    aggregate: <T = OrderDocument>(pipeline: PipelineStage[]) => Promise<T[]>;
+    search: (
+        filters?: SearchFilters,
+        scope?: Record<string, unknown>
+    ) => Promise<{ items: OrderDocument[]; meta: PaginatedMeta }>;
+    findByIdScoped: (
+        id: string,
+        scope?: Record<string, unknown>
+    ) => Promise<OrderDocument | undefined>;
+    ownerScope: (userId: string) => Record<string, unknown>;
+    visibleScope: (userId: string) => Record<string, unknown>;
+    updateStatusIfIn: (
+        id: string,
+        from: readonly string[],
+        to: string,
+        scope?: Record<string, unknown>
+    ) => Promise<OrderDocument | null>;
+} = {
+    ...base,
+    aggregate,
+    search,
+    findByIdScoped,
+    ownerScope,
+    visibleScope,
+    updateStatusIfIn
+};
