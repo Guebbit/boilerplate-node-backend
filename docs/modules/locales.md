@@ -120,21 +120,21 @@ From model `Locale`. `_id` and `__v` are omitted — every document carries them
 
 <!-- gen:surface:start -->
 
-| Endpoint                                     | Middlewares                                               | Controller             | What it does                 |
-| -------------------------------------------- | --------------------------------------------------------- | ---------------------- | ---------------------------- |
-| `GET /locales`                               | `getAuth` → `isAuth` → `isAdmin` → `getAuth` → `(inline)` | `getLocales`           | Supported languages          |
-| `POST /locales`                              | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `createLocale`         | Add a language               |
-| `DELETE /locales/{locale}`                   | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `deleteLocale`         | Remove a language            |
-| `GET /locales/{locale}`                      | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `getLocaleDictionary`  | API message dictionary       |
-| `PUT /locales/{locale}`                      | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `updateLocale`         | Edit a language              |
-| `GET /locales/{locale}/entries`              | `getAuth` → `isAuth` → `isAdmin`                          | `getLocaleEntries`     | List translation entries     |
-| `PATCH /locales/{locale}/entries`            | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `mergeLocaleEntries`   | Merge entries                |
-| `POST /locales/{locale}/entries`             | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `createLocaleEntry`    | Add one translation entry    |
-| `PUT /locales/{locale}/entries`              | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `replaceLocaleEntries` | Replace every entry          |
-| `DELETE /locales/{locale}/entries/{entryId}` | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `deleteLocaleEntry`    | Remove one translation entry |
-| `PUT /locales/{locale}/entries/{entryId}`    | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `updateLocaleEntry`    | Edit one translation entry   |
-| `GET /locales/{locale}/messages`             | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `getLocaleMessages`    | Client message dictionary    |
-| `GET /locales/tenants`                       | `getAuth` → `isAuth` → `isAdmin` → `(inline)`             | `getLocaleTenants`     | Translation tenants          |
+| Endpoint                                     | Middlewares                                   | Controller             | What it does                 |
+| -------------------------------------------- | --------------------------------------------- | ---------------------- | ---------------------------- |
+| `GET /locales`                               | `getAuth` → `(inline)`                        | `getLocales`           | Supported languages          |
+| `POST /locales`                              | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `createLocale`         | Add a language               |
+| `DELETE /locales/{locale}`                   | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `deleteLocale`         | Remove a language            |
+| `GET /locales/{locale}`                      | `(inline)`                                    | `getLocaleDictionary`  | API message dictionary       |
+| `PUT /locales/{locale}`                      | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `updateLocale`         | Edit a language              |
+| `GET /locales/{locale}/entries`              | `getAuth` → `isAuth` → `isAdmin`              | `getLocaleEntries`     | List translation entries     |
+| `PATCH /locales/{locale}/entries`            | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `mergeLocaleEntries`   | Merge entries                |
+| `POST /locales/{locale}/entries`             | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `createLocaleEntry`    | Add one translation entry    |
+| `PUT /locales/{locale}/entries`              | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `replaceLocaleEntries` | Replace every entry          |
+| `DELETE /locales/{locale}/entries/{entryId}` | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `deleteLocaleEntry`    | Remove one translation entry |
+| `PUT /locales/{locale}/entries/{entryId}`    | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `updateLocaleEntry`    | Edit one translation entry   |
+| `GET /locales/{locale}/messages`             | `(inline)`                                    | `getLocaleMessages`    | Client message dictionary    |
+| `GET /locales/tenants`                       | `(inline)`                                    | `getLocaleTenants`     | Translation tenants          |
 
 Middlewares run left to right; the controller is the last handler on the route. Summaries come from this module’s own `openapi.yaml`, which is where they are edited.
 
@@ -182,7 +182,12 @@ Middlewares run left to right; the controller is the last handler on the route. 
 | `openapi.yaml`                        | This module's slice of the REST contract. The root `openapi.yaml` is bundled from these.                                                                     | [read](../api/contract-fragmentation.md) |
 | `repository.ts`                       | Every query this module makes, on the shared base repository. The only tier that talks to Mongoose.                                                          | [read](../tools/mongodb-mongoose.md)     |
 | `routes.ts`                           | The URL surface — one line per endpoint, naming its middlewares, the role it requires and the controller it lands on.                                        | [read](../api/endpoints.md)              |
-| `service.ts`                          | The domain decision, and the layer that owns status-code meaning.                                                                                            | [read](../theory/layers.md)              |
+| `services/capabilities.ts`            | Domain decisions, split by what the operations do rather than by which route reaches them.                                                                   | [read](../theory/layers.md)              |
+| `services/entries.ts`                 | Domain decisions, split by what the operations do rather than by which route reaches them.                                                                   | [read](../theory/layers.md)              |
+| `services/index.ts`                   | The service barrel, once the tier outgrew a single file.                                                                                                     | [read](../theory/layers.md)              |
+| `services/keys.ts`                    | Domain decisions, split by what the operations do rather than by which route reaches them.                                                                   | [read](../theory/layers.md)              |
+| `services/languages.ts`               | Domain decisions, split by what the operations do rather than by which route reaches them.                                                                   | [read](../theory/layers.md)              |
+| `services/messages.ts`                | Domain decisions, split by what the operations do rather than by which route reaches them.                                                                   | [read](../theory/layers.md)              |
 | `tenants.ts`                          | The tenant registry — which keyspaces this deployment holds words for, read from the environment and published by the module’s own route.                    | —                                        |
 | `tests/contract/api.contract.test.ts` | Contract suite — the responses, against the fragment.                                                                                                        | [read](../tools/contract-testing.md)     |
 | `tests/unit/audit.test.ts`            | Unit suite — the rules, in isolation.                                                                                                                        | [read](../tools/unit-testing.md)         |

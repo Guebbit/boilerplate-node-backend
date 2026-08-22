@@ -345,18 +345,23 @@ const readEndpoints = (appModule: AppModule): EndpointFact[] => {
 
     const stack = stackOf(appModule.routes);
 
-    /* Router-level `use(...)` layers apply to every route below them, so they are prefixed onto
-     * each middleware chain rather than reported as a separate row nobody would connect. */
-    const routerLevel = stack
-        .filter((layer) => !layer.route && layer.handle?.name)
-        .map((layer) => layer.handle?.name ?? '(inline)');
-
     const { basePath } = appModule;
+
+    /* Router-level `use(...)` layers guard the routes registered AFTER them and nothing before, so
+     * the chain is accumulated walking the stack in registration order. Applying every layer to
+     * every route instead reports a public route mounted above a positional guard as admin-only —
+     * which is the reverse of what the server enforces. */
+    const routerLevel: string[] = [];
 
     return stack
         .flatMap((layer) => {
-            const { route } = layer;
-            if (!route) return [];
+            const { route, handle } = layer;
+            if (!route) {
+                if (handle?.name) routerLevel.push(handle.name);
+                return [];
+            }
+
+            const guarding = [...routerLevel];
 
             const handlers = (route.stack ?? []).map((entry) => {
                 const name = entry.name ?? entry.handle?.name ?? '';
@@ -376,7 +381,7 @@ const readEndpoints = (appModule: AppModule): EndpointFact[] => {
                     return {
                         method: method.toUpperCase(),
                         path: fullPath,
-                        middlewares: [...routerLevel, ...handlers.slice(0, -1)],
+                        middlewares: [...guarding, ...handlers.slice(0, -1)],
                         controller: handlers.at(-1) ?? '—',
                         summary: operation?.summary,
                         security

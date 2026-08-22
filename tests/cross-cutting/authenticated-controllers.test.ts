@@ -12,10 +12,10 @@ import path from 'node:path';
  * controller that starts reading the caller and is mounted on a public route fails here rather
  * than answering `undefined.id` at runtime.
  *
- * It also catches the placement hazard the routers carry: `feedback` and `locales` call
- * `router.use(isAuth)` MID-FILE, so a route appended above that line is silently public. A
- * controller counts as authenticated only when its own mount is guarded, or when a `router.use`
- * appears BEFORE it in the file.
+ * It also catches the placement hazard a router can carry: `feedback` calls `router.use(isAuth)`
+ * MID-FILE, so a route appended above that line is silently public. A controller counts as
+ * authenticated only when its own mount is guarded, or when a `router.use` appears BEFORE it in
+ * the file.
  */
 
 const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');

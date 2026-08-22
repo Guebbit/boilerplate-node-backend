@@ -19,18 +19,23 @@ import { deleteLocaleEntry } from './controllers/delete-locale-entry';
  * Express router for locale discovery and translation administration.
  *
  * ── The reads are public, and that is not an oversight ───────────────────────────────────────
- * None of the three GETs above the `router.use` below REQUIRE a token. An unauthenticated client
- * that has just failed to reach the API is exactly who needs a dictionary, and requiring one
- * would make the copy unavailable in the one case it exists for. There is nothing to protect: it
- * is text written to be published. The manifest alone takes `getAuth` — reading the role without
- * demanding it — because an admin's copy also lists inactive languages.
+ * None of the four GETs REQUIRE a token. An unauthenticated client that has just failed to reach
+ * the API is exactly who needs a dictionary, and requiring one would make the copy unavailable in
+ * the one case it exists for. There is nothing to protect: it is text written to be published. The
+ * manifest alone takes `getAuth` — reading the role without demanding it — because an admin's copy
+ * also lists inactive languages.
  *
  * ── The writes are admin-only, and cache-invalidating ────────────────────────────────────────
- * Everything below the `router.use` changes what every visitor reads, so each write wraps in
- * `invalidateCache(['locales'])`. That call reaches shared Redis, where both the cached responses
- * and the tag sets live, so one call covers every app instance — there is no process-local tier
- * for a broadcast to invalidate. Clustered invalidation is already solved and needs no machinery
- * here.
+ * Every write changes what every visitor reads, so each one wraps in `invalidateCache(['locales'])`.
+ * That call reaches shared Redis, where both the cached responses and the tag sets live, so one
+ * call covers every app instance — there is no process-local tier for a broadcast to invalidate.
+ * Clustered invalidation is already solved and needs no machinery here.
+ *
+ * ── Each admin route names its own guard ─────────────────────────────────────────────────────
+ * `getAuth, isAuth, isAdmin` is spelled on every admin mount rather than set once by a `router.use`.
+ * The public reads have to be declared first (see the ordering note below), so a single gate could
+ * only sit mid-file, where it guards by line number: a route appended above it would be public
+ * without looking wrong. Spelled per route, a mount carries its own policy and cannot drift.
  *
  * ── Route order ──────────────────────────────────────────────────────────────────────────────
  * `/tenants` MUST be declared before `/:locale`: both are one segment, and Express takes the first
@@ -77,18 +82,51 @@ router.get('/:locale', publicLocaleCache, getLocaleDictionary);
  * Everything past here is an admin write on the dynamic tier — or, in one case, the read that
  * feeds the screen those writes are made from.
  */
-router.use(getAuth, isAuth, isAdmin);
-
-router.post('/', invalidateCache(['locales']), createLocale);
-router.put('/:locale', invalidateCache(['locales']), updateLocale);
-router.delete('/:locale', invalidateCache(['locales']), deleteLocale);
+router.post('/', getAuth, isAuth, isAdmin, invalidateCache(['locales']), createLocale);
+router.put('/:locale', getAuth, isAuth, isAdmin, invalidateCache(['locales']), updateLocale);
+router.delete('/:locale', getAuth, isAuth, isAdmin, invalidateCache(['locales']), deleteLocale);
 
 // Uncached on purpose — see the controller for why the editing screen is the one read that is not.
-router.get('/:locale/entries', getLocaleEntries);
-router.post('/:locale/entries', invalidateCache(['locales']), createLocaleEntry);
+router.get('/:locale/entries', getAuth, isAuth, isAdmin, getLocaleEntries);
+router.post(
+    '/:locale/entries',
+    getAuth,
+    isAuth,
+    isAdmin,
+    invalidateCache(['locales']),
+    createLocaleEntry
+);
 // PUT replaces, PATCH merges. See `controllers/write-locale-entries.ts`.
-router.put('/:locale/entries', invalidateCache(['locales']), replaceLocaleEntries);
-router.patch('/:locale/entries', invalidateCache(['locales']), mergeLocaleEntries);
+router.put(
+    '/:locale/entries',
+    getAuth,
+    isAuth,
+    isAdmin,
+    invalidateCache(['locales']),
+    replaceLocaleEntries
+);
+router.patch(
+    '/:locale/entries',
+    getAuth,
+    isAuth,
+    isAdmin,
+    invalidateCache(['locales']),
+    mergeLocaleEntries
+);
 
-router.put('/:locale/entries/:entryId', invalidateCache(['locales']), updateLocaleEntry);
-router.delete('/:locale/entries/:entryId', invalidateCache(['locales']), deleteLocaleEntry);
+router.put(
+    '/:locale/entries/:entryId',
+    getAuth,
+    isAuth,
+    isAdmin,
+    invalidateCache(['locales']),
+    updateLocaleEntry
+);
+router.delete(
+    '/:locale/entries/:entryId',
+    getAuth,
+    isAuth,
+    isAdmin,
+    invalidateCache(['locales']),
+    deleteLocaleEntry
+);

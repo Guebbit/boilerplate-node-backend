@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { listSupportedLocales, readLocaleDictionary, t } from '@infrastructure/i18n';
-import { localeService } from '../service';
+import { localeService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 
 /**

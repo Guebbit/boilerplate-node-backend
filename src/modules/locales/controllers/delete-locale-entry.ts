@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { localeService } from '../service';
+import { localeService } from '../services';
 import { localeAuditActions } from '../audit';
 import { catchAs, refused } from '@infrastructure/http/controller';
 

@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { localeService } from '../service';
+import { localeService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 
 /**

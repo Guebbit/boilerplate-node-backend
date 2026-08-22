@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
 import { router } from './routes';
-import { localeService } from './service';
+import { localeService } from './services';
 import { seedLocalesCollection, exportSeededLocales } from './demo';
 
 /**

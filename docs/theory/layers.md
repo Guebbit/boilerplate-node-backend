@@ -108,12 +108,24 @@ caller asks for by name. Export its **types** from the barrel, not its helpers.
 `account` took the same step: `services/` holds `authentication.ts`, `profile.ts`, `addresses.ts`,
 `verification.ts` and `token-cleanup.ts` behind one `index.ts` exporting `accountService`.
 
-**Four modules are over the threshold and have not been split:**
+`locales` is the third, and it carries the constraint worth knowing before a split like it: the
+module is `subdomain: 'generic'`, so `subdomain-discipline.test.ts` forbids a `domain/` here and
+the pure rules have nowhere below `services/` to go. `keys.ts` is where they live instead — the
+internal file, in `view.ts`'s role.
+
+| File              | What is in it                                                         |
+| ----------------- | --------------------------------------------------------------------- |
+| `keys.ts`         | the rules a key must pass to be stored and rendered (internal)        |
+| `capabilities.ts` | which languages the deployment offers, static tier and dynamic merged |
+| `languages.ts`    | registering, editing and removing a language                          |
+| `entries.ts`      | one language's rows: the editing page, the writes and the bulk import |
+| `messages.ts`     | the two reads that hand out stored copy                               |
+
+**Three modules are over the threshold and have not been split:**
 
 | File                   | Lines | Why it is over                                                     |
 | ---------------------- | ----- | ------------------------------------------------------------------ |
-| `locales/service.ts`   | 663   | ~180 lines of pure, database-free key rules above ~480 of CRUD     |
-| `orders/service.ts`    | 487   | the lifecycle writes, the cancel sequence and the read scopes      |
+| `orders/service.ts`    | 483   | the lifecycle writes, the cancel sequence and the read scopes      |
 | `inventory/service.ts` | 466   | reserve, commit, release, the sweep, and the operator's own writes |
 | `payments/service.ts`  | 352   | intent, confirm, refund, and the ownership scope around them       |
 
@@ -121,10 +133,6 @@ That is recorded rather than quietly fixed, because the number's job is to make 
 sanctioned instead of furtive — and a threshold silently re-fitted to whatever the largest file
 happens to measure is not a threshold. Read 300 as the line past which a split needs no
 justification, not as a limit something enforces: nothing in the suite checks it.
-
-`locales` is the clearest candidate, and the one constraint worth knowing before starting: it is
-`subdomain: 'generic'`, so `subdomain-discipline.test.ts` forbids moving its pure rules into
-`domain/`. `services/keys.ts` is the sanctioned home for them.
 
 These counts are hand-recorded and nothing in the suite checks them, so read them as a snapshot
 rather than a fact — a published number with no guard behind it drifts from the file it describes.

@@ -9,7 +9,7 @@
 
 import { LocaleDirection, LocaleSource } from '@types';
 import { BACKEND, FRONTEND } from './tenants.fixture';
-import { localeService } from '../../service';
+import { localeService } from '../../services';
 import type { LocaleDocument } from '../../model';
 
 /** A language row as `mergeCapabilities` reads it — the five fields it actually touches. */

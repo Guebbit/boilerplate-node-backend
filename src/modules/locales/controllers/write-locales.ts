@@ -4,7 +4,7 @@ import { CreateLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
 import type { CreateLocaleRequest, UpdateLocaleRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { localeService } from '../service';
+import { localeService } from '../services';
 import { localeAuditActions } from '../audit';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 

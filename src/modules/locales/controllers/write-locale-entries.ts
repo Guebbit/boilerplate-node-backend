@@ -17,7 +17,7 @@ import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { localeService } from '../service';
+import { localeService } from '../services';
 import { localeAuditActions } from '../audit';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 

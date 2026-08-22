@@ -49,16 +49,16 @@ controller each lands on, and why the domain is shaped that way — live on its
 | [`delivery`](../modules/delivery.md)           | `GET`    | `/delivery/order/{orderId}`           | user  | Get the shipment behind an order                            |
 | [`feedback`](../modules/feedback.md)           | `GET`    | `/feedback`                           | admin | List feedback requests                                      |
 | [`feedback`](../modules/feedback.md)           | `PUT`    | `/feedback/{id}`                      | admin | Update feedback request status                              |
-| [`feedback`](../modules/feedback.md)           | `POST`   | `/feedback/contact`                   | admin | Submit contact request                                      |
+| [`feedback`](../modules/feedback.md)           | `POST`   | `/feedback/contact`                   | none  | Submit contact request                                      |
 | [`inventory`](../modules/inventory.md)         | `POST`   | `/inventory/adjustments`              | admin | Adjust stock                                                |
 | [`inventory`](../modules/inventory.md)         | `GET`    | `/inventory/levels`                   | admin | Stock levels                                                |
 | [`inventory`](../modules/inventory.md)         | `GET`    | `/inventory/movements`                | admin | List stock movements                                        |
 | [`inventory`](../modules/inventory.md)         | `POST`   | `/inventory/receipts`                 | admin | Receive stock                                               |
 | [`inventory`](../modules/inventory.md)         | `POST`   | `/inventory/reservations/sweep`       | admin | Expire stale reservations                                   |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales`                            | admin | Supported languages                                         |
+| [`locales`](../modules/locales.md)             | `GET`    | `/locales`                            | none  | Supported languages                                         |
 | [`locales`](../modules/locales.md)             | `POST`   | `/locales`                            | admin | Add a language                                              |
 | [`locales`](../modules/locales.md)             | `DELETE` | `/locales/{locale}`                   | admin | Remove a language                                           |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}`                   | admin | API message dictionary                                      |
+| [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}`                   | none  | API message dictionary                                      |
 | [`locales`](../modules/locales.md)             | `PUT`    | `/locales/{locale}`                   | admin | Edit a language                                             |
 | [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}/entries`           | admin | List translation entries                                    |
 | [`locales`](../modules/locales.md)             | `PATCH`  | `/locales/{locale}/entries`           | admin | Merge entries                                               |
@@ -66,8 +66,8 @@ controller each lands on, and why the domain is shaped that way — live on its
 | [`locales`](../modules/locales.md)             | `PUT`    | `/locales/{locale}/entries`           | admin | Replace every entry                                         |
 | [`locales`](../modules/locales.md)             | `DELETE` | `/locales/{locale}/entries/{entryId}` | admin | Remove one translation entry                                |
 | [`locales`](../modules/locales.md)             | `PUT`    | `/locales/{locale}/entries/{entryId}` | admin | Edit one translation entry                                  |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}/messages`          | admin | Client message dictionary                                   |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales/tenants`                    | admin | Translation tenants                                         |
+| [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}/messages`          | none  | Client message dictionary                                   |
+| [`locales`](../modules/locales.md)             | `GET`    | `/locales/tenants`                    | none  | Translation tenants                                         |
 | [`observability`](../modules/observability.md) | `GET`    | `/observability/audit`                | admin | Recent audit events                                         |
 | [`observability`](../modules/observability.md) | `GET`    | `/observability/events`               | none  | Observability SSE stream                                    |
 | [`observability`](../modules/observability.md) | `GET`    | `/observability/health`               | admin | Health snapshot                                             |

@@ -3,7 +3,7 @@ import { isKnownTenant } from '../tenants';
 import { readInput } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { localeService } from '../service';
+import { localeService } from '../services';
 import { catchAs, rejectValidation } from '@infrastructure/http/controller';
 
 /**

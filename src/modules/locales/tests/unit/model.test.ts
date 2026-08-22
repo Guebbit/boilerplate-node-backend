@@ -16,7 +16,7 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { LocaleDirection } from '@types';
 import { localeRepository, localeMessageRepository } from '@modules/locales/repository';
-import { localeService } from '@modules/locales/service';
+import { localeService } from '@modules/locales/services';
 import { makeLocale } from '@modules/locales/factory';
 
 setupTestDb();
