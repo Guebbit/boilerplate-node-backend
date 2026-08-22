@@ -23,6 +23,7 @@
  * claim. None of them exist in a mocked repository.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import { cartService } from '@modules/cart';
@@ -74,20 +75,12 @@ const countersOf = async (productId: unknown) => {
 
 /*
  * Run `body` with the reservation window closed, so every hold it opens is already stale by the
- * time the sweep reads it. Restored afterwards rather than set globally: the TTL is read lazily on
- * each reserve precisely so a test can vary it, and leaving it at zero would make every case above
- * expire mid-run.
+ * time the sweep reads it. Scoped rather than set globally: the TTL is read lazily on each reserve
+ * precisely so a test can vary it, and leaving it at zero would make every case above expire
+ * mid-run.
  */
-const withoutWindow = async (body: () => Promise<void>) => {
-    const previous = process.env.NODE_RESERVATION_TTL_MINUTES;
-    process.env.NODE_RESERVATION_TTL_MINUTES = '0';
-    try {
-        await body();
-    } finally {
-        if (previous === undefined) delete process.env.NODE_RESERVATION_TTL_MINUTES;
-        else process.env.NODE_RESERVATION_TTL_MINUTES = previous;
-    }
-};
+const withoutWindow = (body: () => Promise<void>) =>
+    withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', body);
 
 describe('checkout holds units without selling them', () => {
     it('a completed checkout reserves the ordered units and takes none off the shelf', async () => {

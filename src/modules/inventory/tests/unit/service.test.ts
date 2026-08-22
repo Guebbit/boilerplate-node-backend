@@ -8,6 +8,7 @@
  * Real Mongo (`setupTestDb`) throughout, because every guarantee here is a conditional write.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironment } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factory';
 import { productRepository } from '@modules/products';
 import { StockMovementReason } from '@types';
@@ -40,18 +41,10 @@ const countersOf = async (productId: string) => {
  *
  * At module scope rather than inside the describe because the TTL is read lazily on each reserve
  * — precisely so a test can vary it — and leaving it at zero would expire the holds every other
- * case in this file depends on. The restore is in a `finally` for the same reason.
+ * case in this file depends on.
  */
-const withoutWindow = async (body: () => Promise<void>) => {
-    const previous = process.env.NODE_RESERVATION_TTL_MINUTES;
-    process.env.NODE_RESERVATION_TTL_MINUTES = '0';
-    try {
-        await body();
-    } finally {
-        if (previous === undefined) delete process.env.NODE_RESERVATION_TTL_MINUTES;
-        else process.env.NODE_RESERVATION_TTL_MINUTES = previous;
-    }
-};
+const withoutWindow = (body: () => Promise<void>) =>
+    withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', body);
 
 describe('reserveForOrder', () => {
     it('holds every line or none of them', async () => {

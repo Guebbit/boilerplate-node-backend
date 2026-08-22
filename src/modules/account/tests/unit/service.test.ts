@@ -22,25 +22,11 @@ import { createUser } from '@modules/users/tests/factory';
 import { accountService } from '@modules/account/services';
 import { userRepository } from '@modules/users';
 import { TokenType, type Token, type UserDocument } from '@modules/users';
-import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
+import { asReject, asSuccess } from '@tests/response';
 
 setupTestDb();
 
 const VALID_PASSWORD = 'correct-horse-battery';
-
-/** Narrow to the reject arm, failing the test (rather than the type check) when it succeeded. */
-const asReject = (response: ResponseSuccess<UserDocument> | ResponseReject): ResponseReject => {
-    expect(response.success).toBe(false);
-    return response as ResponseReject;
-};
-
-/** Narrow to the success arm, and to a present `data` — the reject arm declares it `undefined`. */
-const asSuccess = (
-    response: ResponseSuccess<UserDocument> | ResponseReject
-): ResponseSuccess<UserDocument> & { data: UserDocument } => {
-    expect(response.success).toBe(true);
-    return response as ResponseSuccess<UserDocument> & { data: UserDocument };
-};
 
 describe('signup', () => {
     it('creates the account and returns it', async () => {

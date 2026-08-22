@@ -36,6 +36,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import mongoose from 'mongoose';
 import { connect, disconnect } from '@tests/database';
+import { migrations, nativeDb, runMigrations } from '@tests/migrations';
 
 /*
  * Registering every model, by DISCOVERY rather than by name.
@@ -54,32 +55,6 @@ const registeredModels = fs
     .filter((name) => fs.existsSync(path.join(MODULES_ROOT, name, 'model.ts')))
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS under ts-jest; a synchronous require resolves the module in place
     .map((name) => require(path.join(MODULES_ROOT, name, 'model.ts')) as Record<string, unknown>);
-
-const MIGRATIONS_DIR = path.join(__dirname, '../../../db/migrations');
-
-/** Every migration module, in the order `migrate-mongo` would apply them. */
-const migrations = fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.js'))
-    .toSorted()
-    .map((file) => ({
-        name: file,
-        // eslint-disable-next-line @typescript-eslint/no-require-imports -- CommonJS under ts-jest; a synchronous require resolves the module in place
-        module: require(path.join(MIGRATIONS_DIR, file)) as {
-            up: (db: unknown) => Promise<void>;
-        }
-    }));
-
-const nativeDb = () => {
-    const { db } = mongoose.connection;
-    if (!db) throw new Error('no database handle — the test connection is not open');
-    return db;
-};
-
-/** Apply every migration's `up` against the live test database. */
-const runMigrations = async () => {
-    for (const { module } of migrations) await module.up(nativeDb());
-};
 
 /**
  * Build every model's schema-declared indexes, the way a booting app does.

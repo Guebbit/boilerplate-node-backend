@@ -2,6 +2,7 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import type { AuditEntry } from '@infrastructure/observability/audit';
 
 /**
  * Persisted audit trail — the durable half of `@infrastructure/observability/audit`.
@@ -20,24 +21,23 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
  */
 
 /**
- * A stored audit entry. Structurally identical to `AuditEntry` in
- * `@infrastructure/observability/audit`, which is deliberate — the sink persists what it is handed, and the
- * controller returns what it reads, so no shape translation exists in either direction to drift.
+ * A stored audit entry — `AuditEntry` from `@infrastructure/observability/audit`, as a document.
+ *
+ * DERIVED from that type rather than restated beside it, because the two are the same shape by
+ * design: the sink persists what it is handed and the controller returns what it reads, so no
+ * translation exists in either direction. Restated, they were the same fields written twice and a
+ * field added to one of them would have compiled fine against the other.
+ *
+ * `action` is the one field this widens, and it is widened on purpose. `AuditAction` is the set of
+ * actions THIS BUILD emits; a row already in the collection was written by whatever build was
+ * deployed when it happened, and may name an action since renamed or retired. `string` is what is
+ * actually in the database, and typing a read as the narrower union would be a claim about history
+ * that nothing enforces.
+ *
+ * The import is type-only, so nothing here depends on the sink at runtime.
  */
-export interface AuditLogDocument extends Document {
-    actor_user_id: string;
-    actor_role: 'admin' | 'user' | 'anonymous';
+export interface AuditLogDocument extends Document, Omit<AuditEntry, 'action'> {
     action: string;
-    outcome: 'success' | 'failure';
-    ip?: string;
-    user_agent?: string;
-    request_id?: string;
-    trace_id?: string;
-    target_type?: string;
-    target_id?: string;
-    metadata?: Record<string, unknown>;
-    timestamp: Date;
-    level: 'info' | 'warn';
 }
 
 export type AuditLogModel = Model<AuditLogDocument>;

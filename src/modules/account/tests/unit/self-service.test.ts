@@ -23,27 +23,12 @@ import {
     EMAIL_VERIFY_TOKEN_TYPE
 } from '@modules/account/services';
 import { userRepository, TokenType } from '@modules/users';
-import type { UserDocument } from '@modules/users';
-import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
+import { asReject, asSuccess } from '@tests/response';
 
 setupTestDb();
 
 const CURRENT_PASSWORD = 'correct-horse-battery';
 const NEW_PASSWORD = 'staple-gun-tuesday';
-
-/** Narrow to the reject arm, failing the test (rather than the type check) when it succeeded. */
-const asReject = (response: ResponseSuccess<UserDocument> | ResponseReject): ResponseReject => {
-    expect(response.success).toBe(false);
-    return response as ResponseReject;
-};
-
-/** Narrow to the success arm, and to a present `data`. */
-const asSuccess = (
-    response: ResponseSuccess<UserDocument> | ResponseReject
-): ResponseSuccess<UserDocument> & { data: UserDocument } => {
-    expect(response.success).toBe(true);
-    return response as ResponseSuccess<UserDocument> & { data: UserDocument };
-};
 
 /** The stored tokens of a user, credentials re-selected. */
 const readTokens = async (userId: string) => {

@@ -38,37 +38,10 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
-import mongoose from 'mongoose';
 import { connect, disconnect } from '@tests/database';
+import { migrations, nativeDb, runMigrations } from '@tests/migrations';
 import { assembleDemoDataset, DEMO_DATA_PATH } from '../../../db/demo/assemble';
 import { enabledModules } from '../../../src/modules';
-
-const MIGRATIONS_DIR = path.join(__dirname, '../../../db/migrations');
-
-/** Every migration module, in the order `migrate-mongo` would apply them. */
-const migrations = fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.js'))
-    .toSorted()
-    .map((file) => ({
-        name: file,
-        // eslint-disable-next-line @typescript-eslint/no-require-imports -- migrations are CommonJS; require is how migrate-mongo itself loads them
-        module: require(path.join(MIGRATIONS_DIR, file)) as {
-            up: (db: unknown) => Promise<void>;
-        }
-    }));
-
-const nativeDb = () => {
-    const { db } = mongoose.connection;
-    if (!db) throw new Error('no database handle — the test connection is not open');
-    return db;
-};
-
-/** Apply every migration's `up` against the live test database, as `migrate-mongo` would. */
-const runMigrations = async () => {
-    for (const { module } of migrations) await module.up(nativeDb());
-};
 
 /**
  * Seed the way `db/demo/index.ts` does, minus the runner.
