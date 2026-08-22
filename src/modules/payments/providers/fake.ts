@@ -16,6 +16,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
+import { cardLastFour } from './card';
 import type { PaymentProvider } from './index';
 
 /** The one number that is refused — the same digits Stripe's test mode declines. */
@@ -32,8 +33,6 @@ export const FAKE_DECLINE_CARD = '4000000000000002';
  * The card number is NEVER logged, only its last four digits — the same rule the payment document
  * follows. A stub is exactly where that discipline is easiest to drop and worst to learn late.
  */
-const lastFour = (cardNumber: string): string => cardNumber.replaceAll(/\s/g, '').slice(-4);
-
 export const fakePaymentProvider: PaymentProvider = {
     name: 'fake',
 
@@ -41,7 +40,7 @@ export const fakePaymentProvider: PaymentProvider = {
         const outcome =
             card.cardNumber.replaceAll(/\s/g, '') === FAKE_DECLINE_CARD ? 'declined' : 'succeeded';
         logger.info(
-            `[fake-psp] charge ${charge.amount} ${charge.currency} on card ****${lastFour(card.cardNumber)} → ${outcome}`
+            `[fake-psp] charge ${charge.amount} ${charge.currency} on card ****${cardLastFour(card.cardNumber)} → ${outcome}`
         );
         return Promise.resolve(outcome);
     },

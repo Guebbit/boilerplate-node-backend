@@ -39,7 +39,7 @@ import {
 import type { OrderDocument } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { userRepository } from '@modules/users';
-import { resolvePaymentProvider, type CardDetails } from './providers';
+import { resolvePaymentProvider, cardLastFour, type CardDetails } from './providers';
 import { paymentRepository } from './repository';
 import type { PaymentDocument } from './model';
 
@@ -169,7 +169,7 @@ export const confirmPayment = (
 
         const provider = resolvePaymentProvider();
         const charge = { amount: payment.amount, currency: payment.currency };
-        const cardLast4 = card.cardNumber.replaceAll(/\s/g, '').slice(-4);
+        const cardLast4 = cardLastFour(card.cardNumber);
 
         const outcome = await provider.charge(charge, card);
         if (outcome === 'declined') {

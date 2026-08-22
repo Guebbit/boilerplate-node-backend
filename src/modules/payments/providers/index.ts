@@ -13,11 +13,9 @@
  */
 
 import { fakePaymentProvider } from './fake';
+import type { CardDetails } from './card';
 
-/** What the provider needs to know about the card. The demo asks for no more than the number. */
-export interface CardDetails {
-    cardNumber: string;
-}
+export { cardLastFour, type CardDetails } from './card';
 
 /** What a charge attempt can come back as. Everything else a provider can say is a throw. */
 export type ChargeOutcome = 'succeeded' | 'declined';
