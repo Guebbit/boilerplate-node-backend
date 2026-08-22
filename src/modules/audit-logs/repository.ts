@@ -55,6 +55,10 @@ export const AUDIT_SORT: Record<string, 1 | -1> = { timestamp: -1, _id: -1 };
 const sinceScope = (since?: Date): Record<string, unknown> =>
     since ? { timestamp: { $gt: since } } : {};
 
+/*
+ * Three members, not the base repository's full surface. An audit trail is append-and-read: no
+ * `save`, no `deleteOne`, so the type is what refuses an edit rather than a reviewer.
+ */
 export const auditLogRepository = {
     create: base.create,
     search: base.search,

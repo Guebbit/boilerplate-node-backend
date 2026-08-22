@@ -8,6 +8,12 @@ import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
 import { type User } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
+/*
+ * Long, and deliberately one file: everything here describes the user record. The Zod wire schema
+ * and the token methods sit beside the schema because splitting would separate the password hash
+ * hook from the `select: false` that keeps the hash off every read.
+ */
+
 /**
  * Token types used in jwt-auth
  */

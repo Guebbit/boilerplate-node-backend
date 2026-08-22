@@ -159,6 +159,10 @@ language it ships). None of these is enumerated anywhere central — `audit.ts`,
 `events.ts` register or augment themselves, while `seeds` and `locales` are declared in the
 manifest so the seeder and the i18n boot can walk the registry without naming a domain.
 
+A module carries one of these only when it has something to declare, so they are not a per-module
+tax: the real spread is thirty files across thirteen modules, and `observability` has none of them.
+Collapsing them into central registries would trade that for a file every domain must edit.
+
 A module does not have to serve HTTP. The manifest is a union of two alternatives — one carrying
 `basePath` **and** `routes`, one carrying neither — so a domain that owns a collection and no URL is
 a first-class entry rather than a special case. `audit-logs` is the example: it owns the audit

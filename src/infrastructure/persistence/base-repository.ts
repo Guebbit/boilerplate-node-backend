@@ -213,6 +213,11 @@ export interface BaseRepository<TDocument extends Document> {
  *
  * Beyond plain CRUD this owns the three pieces of Mongo knowledge a service must not carry: id
  * coercion, the lean→normalized mapping, and turning a filter bag into a query.
+ *
+ * A factory returning a closure-backed object, consumed by SPREAD — not a base class. There is no
+ * `extends` and no protected hook, so a module that cannot honour part of the contract narrows its
+ * own type (`orders` omits `search`, `audit-logs` exposes three members) instead of inheriting a
+ * method it has to break. Do not unify this into a base class.
  */
 export function createBaseRepository<TDocument extends Document>(
     mongooseModel: Model<TDocument>,
