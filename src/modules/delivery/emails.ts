@@ -16,7 +16,7 @@ export const shipmentShippedEmail = (
 ): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'delivery.shipment-shipped.ejs',
+        template: 'delivery.shipment-shipped',
         subject: t('delivery.email-shipped.subject'),
         data: {
             locale,

@@ -39,7 +39,7 @@ export const orderConfirmEmail = (
 ): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'orders.order-confirm.ejs',
+        template: 'orders.order-confirm',
         subject: t('orders.email-confirm.subject'),
         data: {
             locale,

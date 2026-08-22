@@ -623,7 +623,7 @@ describe('orderConfirm', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(user.email);
-        expect(template).toBe('orders.order-confirm.ejs');
+        expect(template).toBe('orders.order-confirm');
         // The lines are the order's own snapshot, priced — not the cart's ids.
         expect(data?.lines).toEqual(['Keyboard — 2 × 25']);
         expect(data?.total).toBe('Total: 50');

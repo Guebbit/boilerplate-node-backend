@@ -124,7 +124,10 @@ components:
                     description: Optional sender override.
                 templateName:
                     type: string
-                    description: EJS template name to render.
+                    description: >-
+                        Outbox name of the mail to render, without a file extension — the consumer
+                        resolves it to a template file. Shared with the twin backend, which renders
+                        a different engine, so the name names the mail and not the file.
                 data:
                     type: object
                     description: >-

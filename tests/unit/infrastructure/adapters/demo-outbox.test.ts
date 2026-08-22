@@ -25,23 +25,23 @@ it('is demo mode exactly when NODE_DEMO is the string true', () => {
 });
 
 it('records newest first, with primitive template variables as readable lines', () => {
-    recordDemoEmail({ to: 'a@b.it', subject: 'First' }, 'one.ejs', { greeting: 'Hello', count: 2 });
-    recordDemoEmail({ to: 'c@d.it', subject: 'Second' }, 'two.ejs', {});
+    recordDemoEmail({ to: 'a@b.it', subject: 'First' }, 'one', { greeting: 'Hello', count: 2 });
+    recordDemoEmail({ to: 'c@d.it', subject: 'Second' }, 'two', {});
 
     const [newest, oldest] = readDemoOutbox();
-    expect(newest).toMatchObject({ to: 'c@d.it', template: 'two.ejs' });
+    expect(newest).toMatchObject({ to: 'c@d.it', template: 'two' });
     expect(oldest.lines).toEqual(expect.arrayContaining(['greeting: Hello', 'count: 2']));
 });
 
 it('lifts the token out of a link URL when no bare token variable exists', () => {
-    recordDemoEmail({ to: 'a@b.it', subject: 'Reset' }, 'reset.ejs', {
+    recordDemoEmail({ to: 'a@b.it', subject: 'Reset' }, 'reset', {
         linkUrl: 'http://localhost:3000/account/reset/d2740058f8b671c6ae12fc8618b09129'
     });
     expect(readDemoOutbox()[0].token).toBe('d2740058f8b671c6ae12fc8618b09129');
 });
 
 it('prefers a bare token variable over the link', () => {
-    recordDemoEmail({ to: 'a@b.it', subject: 'Verify' }, 'verify.ejs', {
+    recordDemoEmail({ to: 'a@b.it', subject: 'Verify' }, 'verify', {
         token: 'bare-token',
         linkUrl: 'http://localhost:3000/account/verify/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     });
@@ -49,12 +49,12 @@ it('prefers a bare token variable over the link', () => {
 });
 
 it('serializes a structured recipient rather than losing it', () => {
-    recordDemoEmail({ to: { name: 'G', address: 'g@p.it' }, subject: 'S' }, 't.ejs', {});
+    recordDemoEmail({ to: { name: 'G', address: 'g@p.it' }, subject: 'S' }, 't', {});
     expect(readDemoOutbox()[0].to).toContain('g@p.it');
 });
 
 it('clears to an empty inbox — the per-spec reset the demo router performs', () => {
-    recordDemoEmail({ to: 'a@b.it', subject: 'S' }, 't.ejs', {});
+    recordDemoEmail({ to: 'a@b.it', subject: 'S' }, 't', {});
     clearDemoOutbox();
     expect(readDemoOutbox()).toEqual([]);
 });

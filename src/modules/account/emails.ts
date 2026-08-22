@@ -34,7 +34,7 @@ const accountLink = (route: string, token: string): string =>
 export const registrationConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'account.registration-confirm.ejs',
+        template: 'account.registration-confirm',
         subject: t('account.email.registration-confirm.subject'),
         data: {
             locale,
@@ -51,7 +51,7 @@ export const registrationConfirmEmail = (locale: string, name: string): EmailCon
 export const verifyRequestEmail = (locale: string, name: string, token: string): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'account.verify-request.ejs',
+        template: 'account.verify-request',
         subject: t('account.email.verify-request.subject'),
         data: {
             locale,
@@ -71,7 +71,7 @@ export const verifyRequestEmail = (locale: string, name: string, token: string):
 export const resetRequestEmail = (locale: string, name: string, token: string): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'account.reset-request.ejs',
+        template: 'account.reset-request',
         subject: t('account.email.reset-request.subject'),
         data: {
             locale,
@@ -91,7 +91,7 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
 export const resetConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'account.reset-confirm.ejs',
+        template: 'account.reset-confirm',
         subject: t('account.email.reset-confirm.subject'),
         data: {
             locale,
@@ -108,7 +108,7 @@ export const resetConfirmEmail = (locale: string, name: string): EmailContent =>
 export const deleteRequestEmail = (locale: string, name: string, token: string): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'account.delete-request.ejs',
+        template: 'account.delete-request',
         subject: t('account.email.delete-request.subject'),
         data: {
             locale,
@@ -128,7 +128,7 @@ export const deleteRequestEmail = (locale: string, name: string, token: string):
 export const deleteConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'account.delete-confirm.ejs',
+        template: 'account.delete-confirm',
         subject: t('account.email.delete-confirm.subject'),
         data: {
             locale,

@@ -86,7 +86,7 @@ describe('shipOrder', () => {
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(order.email);
-        expect(template).toBe('delivery.shipment-shipped.ejs');
+        expect(template).toBe('delivery.shipment-shipped');
         expect(String(data?.tracking)).toContain(shipment!.trackingCode);
     });
 

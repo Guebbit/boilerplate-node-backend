@@ -27,7 +27,7 @@ export interface ContactRequest {
 export const contactRequestEmail = (locale: string, feedback: ContactRequest): EmailContent => {
     const t = translator(locale);
     return {
-        template: 'feedback.contact.ejs',
+        template: 'feedback.contact',
         // The ticket's own subject is appended to the translated prefix, so an operator scanning
         // the mailbox reads what it is about without opening it.
         subject: `${t('feedback.email-contact.subject')}: ${feedback.subject}`,

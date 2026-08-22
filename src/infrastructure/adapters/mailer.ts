@@ -55,6 +55,18 @@ export const emailTemplatesDirectory = (): string =>
         ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
         : path.resolve(process.cwd(), 'shared/views/templates-emails');
 
+/**
+ * The file an outbox name renders from.
+ *
+ * The single point where the identifier becomes a path, and so the single place `.ejs` is written.
+ * Which engine renders a mail is this backend's business; the name is not, because the demo outbox
+ * publishes it and the paired frontend asserts on it against both backends.
+ *
+ * @param templateName - an {@link EmailContent.template} name, without extension
+ */
+export const templateFile = (templateName: string): string =>
+    path.resolve(emailTemplatesDirectory(), `${templateName}.ejs`);
+
 /** The memoised SMTP transport. See {@link getTransporter}. */
 let transport: Transporter | undefined;
 
@@ -130,7 +142,7 @@ const getTransporter = (): Transporter => {
  *
  * @param request - nodemailer envelope (to, subject, attachments, ...). `from` and `html`
  *                  are filled in here, but anything passed in overrides them.
- * @param templateName - file name inside {@link emailTemplatesDirectory}
+ * @param templateName - the outbox name, without extension — see {@link EmailContent.template}
  * @param data - variables interpolated into the EJS template
  */
 export const nodemailer = (
@@ -172,7 +184,7 @@ export const nodemailer = (
                  * the worker that calls it, possibly in another process, hours later) does not
                  * need to know what a locale is.
                  */
-                .renderFile(path.resolve(emailTemplatesDirectory(), templateName), { ...data })
+                .renderFile(templateFile(templateName), { ...data })
                 /**
                  * Send email (nodemailer returns a Promise when no callback is provided)
                  */
@@ -235,10 +247,14 @@ export type EmailJob = EmailJobPayload;
  */
 export interface EmailContent {
     /**
-     * Template file name inside {@link emailTemplatesDirectory}, prefixed with the module that owns
-     * it — `orders.order-confirm.ejs`. The templates sit in one flat directory so this stays a
-     * bare name the queue can carry, and the prefix is what makes an orphan visible after its
-     * module is deleted.
+     * The name of this mail, prefixed with the module that owns it — `orders.order-confirm`. The
+     * templates sit in one flat directory so this stays a bare name the queue can carry, and the
+     * prefix is what makes an orphan visible after its module is deleted.
+     *
+     * No extension: the demo outbox publishes this field and the paired frontend's e2e specs read
+     * it to say WHICH mail they are looking at, so it is an identifier shared with a backend that
+     * renders Blade and has never heard of EJS. {@link templateFile} adds the suffix at the one
+     * point the name becomes a path. Guarded by `tests/cross-cutting/outbox-names.test.ts`.
      */
     template: string;
     /** Subject line, already translated. */

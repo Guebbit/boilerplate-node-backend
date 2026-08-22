@@ -63,7 +63,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
 const REQUEST: EmailRequest = { to: 'ada@example.com', subject: 'Reset your password' };
-const TEMPLATE = 'account.reset-request.ejs';
+const TEMPLATE = 'account.reset-request';
 /**
  * Every variable the chosen template interpolates — which, since templates stopped translating,
  * means the finished copy a producer would have resolved. The inline paths RENDER for real (only
