@@ -17,7 +17,8 @@ export interface AuditLogSearchFilters {
     outcome?: 'success' | 'failure';
     /** Exclusive lower bound on `timestamp`, matching the buffer's `> since` behaviour. */
     since?: Date;
-    limit?: number;
+    page?: unknown;
+    pageSize?: unknown;
 }
 
 const base = createBaseRepository<AuditLogDocument>(auditLogModel, {
@@ -35,32 +36,27 @@ const base = createBaseRepository<AuditLogDocument>(auditLogModel, {
 });
 
 /**
- * Filter → count → page, newest first.
+ * Newest first, with `_id` breaking ties.
  *
- * `since` is applied outside the declared search spec because the spec's `ranges` coerce their
- * bounds with `Number()`, which is right for a price and wrong for a date. The controller has
- * already validated and parsed it, so what arrives here is a real `Date` or nothing.
- *
- * `total` is the count of everything matching the filters, not the size of the returned page —
- * that is the whole point of counting separately, and it is what lets the dashboard say "50 of
- * 3,412" instead of "50 of 50".
+ * Not `DEFAULT_SORT`: this model sets `timestamps: false` and carries its own `timestamp`, so the
+ * shared constant would sort on a field that does not exist. The `_id` tiebreaker is what the
+ * shared one is for — `timestamp` is not unique, and a paged read whose tie order moves between
+ * its count and its page returns a document twice or not at all.
  */
-const search = (
-    filters: AuditLogSearchFilters = {}
-): Promise<{ items: AuditLogDocument[]; total: number }> => {
-    const where = base.buildWhere(filters);
-    if (filters.since) where.timestamp = { $gt: filters.since };
+export const AUDIT_SORT: Record<string, 1 | -1> = { timestamp: -1, _id: -1 };
 
-    return base
-        .count(where)
-        .then((total) =>
-            base
-                .findAll(where, { sort: { timestamp: -1 }, limit: filters.limit ?? 50 })
-                .then((items) => ({ items: base.normalize(items), total }))
-        );
-};
+/**
+ * `since` as a scope fragment rather than a declared filter.
+ *
+ * The spec's `ranges` coerce their bounds with `Number()`, which is right for a price and wrong
+ * for a date. `scope` is merged after `buildWhere` and never passes through it, so the bound
+ * arrives at Mongo as the `Date` the controller parsed.
+ */
+const sinceScope = (since?: Date): Record<string, unknown> =>
+    since ? { timestamp: { $gt: since } } : {};
 
 export const auditLogRepository = {
     create: base.create,
-    search
+    search: base.search,
+    sinceScope
 };

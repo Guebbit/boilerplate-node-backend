@@ -2,31 +2,31 @@ import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { auditLogService } from '@modules/audit-logs';
 import { t } from '@infrastructure/i18n';
-import { catchAs } from '@infrastructure/http/controller';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
 import { readInput } from '@infrastructure/http/request';
-import { limitSchema } from '@infrastructure/http/schemas';
+import { paginationSchema } from '@infrastructure/http/schemas';
 
 /**
  * GET /observability/audit
- * Recent audit events, filtered by actor, action, outcome, since, and limit.
+ * A page of audit events, filtered by actor, action, outcome and since.
  */
 export const getObservabilityAuditLogs = (request: Request, response: Response) => {
     // Through `readInput` like every other route, rather than reaching into `request.query`: the
     // sources a surface reads are a property of the route, not of this handler.
-    const { actor, action, outcome, since, limit } = readInput(request, {
+    const input = readInput(request, {
         surface: 'search',
         // Declared as ids so a repeated `?since=` collapses to its first entry rather than
         // arriving as an array — these are scalars, and `new Date([…])` is not a date.
         ids: ['actor', 'action', 'outcome', 'since']
     });
 
-    /*
-     * `limit` CLAMPS rather than refusing — see `limitSchema`, which owns the three numbers this
-     * endpoint answers by and which `openapi.yaml` declares. It is the one page-size rule in this
-     * API that does not answer 422, because this read has no pages: "as much as you can" is the
-     * honest reading of a number too large, and there is no second page to send anyone to.
-     */
-    const limitNumber = limitSchema.parse(limit);
+    // `page` / `pageSize` are bounded here and answer 422, as on every paged read: this trail
+    // has pages, so a page the caller cannot reach is a broken request rather than one to
+    // quietly rewrite. `normalizePagination` still owns what an absent page means.
+    const pagination = parseBody(paginationSchema, input, response);
+    if (!pagination) return;
+
+    const { actor, action, outcome, since } = input;
     const sinceDate = since ? new Date(since) : undefined;
 
     if (sinceDate !== undefined && Number.isNaN(sinceDate.getTime()))
@@ -43,8 +43,8 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
             // everything, which is what treating it as "no filter" would do if it reached Mongo.
             outcome: outcome === 'success' || outcome === 'failure' ? outcome : undefined,
             since: sinceDate,
-            limit: limitNumber
+            ...pagination
         })
-        .then(({ items, total }) => successResponse(response, { items, total }))
+        .then((result) => successResponse(response, result))
         .catch(catchAs(response, 'getObservabilityAuditLogs'));
 };

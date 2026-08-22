@@ -35,9 +35,13 @@ const readCounter = async (): Promise<number> => {
 };
 
 jest.mock('@modules/audit-logs/repository', () => ({
+    AUDIT_SORT: { timestamp: -1, _id: -1 },
     auditLogRepository: {
         create: jest.fn(),
-        search: jest.fn()
+        search: jest.fn(),
+        // The real fragment builder, not a stub: what the service must be shown to do is hand
+        // `since` to `scope`, and a stubbed one would pass whether it did or not.
+        sinceScope: (since?: Date) => (since ? { timestamp: { $gt: since } } : {})
     }
 }));
 
@@ -152,13 +156,36 @@ describe('auditLogService.record', () => {
 });
 
 describe('auditLogService.search', () => {
-    it('passes the filters through untouched', async () => {
-        const page = { items: [] as AuditLogDocument[], total: 0 };
-        mockedRepository.search.mockResolvedValue(page);
-        const filters = { actor: 'user-1', outcome: 'failure' as const, limit: 25 };
+    const emptyPage = {
+        items: [] as AuditLogDocument[],
+        meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 }
+    };
 
-        await expect(auditLogService.search(filters)).resolves.toBe(page);
-        expect(mockedRepository.search).toHaveBeenCalledWith(filters);
+    it('passes the filters through untouched, and pages them', async () => {
+        mockedRepository.search.mockResolvedValue(emptyPage);
+        const filters = { actor: 'user-1', outcome: 'failure' as const, page: 3, pageSize: 25 };
+
+        await expect(auditLogService.search(filters)).resolves.toBe(emptyPage);
+        expect(mockedRepository.search).toHaveBeenCalledWith(
+            filters,
+            {},
+            { timestamp: -1, _id: -1 }
+        );
+    });
+
+    it('hands `since` to the scope rather than to the filters', async () => {
+        // The scope is merged after `buildWhere` and never passes through it, which is what
+        // keeps the bound a Date instead of the number `Number()` would make of it.
+        mockedRepository.search.mockResolvedValue(emptyPage);
+        const since = new Date('2026-08-02T10:00:00.000Z');
+
+        await auditLogService.search({ since });
+
+        expect(mockedRepository.search).toHaveBeenCalledWith(
+            { since },
+            { timestamp: { $gt: since } },
+            { timestamp: -1, _id: -1 }
+        );
     });
 
     it('propagates a failed read rather than swallowing it', async () => {

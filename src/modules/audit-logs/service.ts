@@ -1,5 +1,6 @@
-import { auditLogRepository } from './repository';
+import { auditLogRepository, AUDIT_SORT } from './repository';
 import type { AuditLogSearchFilters } from './repository';
+import type { PaginatedResult } from '@infrastructure/persistence/base-repository';
 import type { AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from './model';
 import { logger } from '@infrastructure/adapters/logger';
@@ -40,12 +41,18 @@ export const record = (entry: AuditEntry): void => {
 /**
  * Read a filtered page of audit entries, newest first.
  *
+ * The base `search`, with this collection's two policies applied here rather than baked into the
+ * repository: `since` as a scope (see `sinceScope`) and a sort this model needs (see
+ * {@link AUDIT_SORT}). `meta.totalItems` counts every entry matching the filters, not the page —
+ * which is what lets the dashboard say "10 of 3,412" and then page through to the 3,412nd.
+ *
  * Rejections propagate, unlike in {@link record}: this one is answering an admin's explicit
  * request for the data, so a failed read is a failed request rather than something to hide.
  */
 export const search = (
     filters: AuditLogSearchFilters
-): Promise<{ items: AuditLogDocument[]; total: number }> => auditLogRepository.search(filters);
+): Promise<PaginatedResult<AuditLogDocument>> =>
+    auditLogRepository.search(filters, auditLogRepository.sinceScope(filters.since), AUDIT_SORT);
 
 export const auditLogService = {
     record,

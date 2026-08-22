@@ -79,31 +79,5 @@ export const pageSizeSchema = z.preprocess(
     z.coerce.number().int().min(1).max(PAGE_SIZE_MAX).optional()
 );
 
-/** The most rows a `limit` endpoint will return, and what it returns when none was asked for. */
-export const LIMIT_MAX = 200;
-
-/**
- * `limit` as a caller sends it — CLAMPED, not refused, and that is the deliberate difference from
- * `pageSize` above.
- *
- * `pageSize` belongs to a paged read: a page the caller cannot reach is a broken request, so an
- * out-of-range value answers 422 and the caller fixes their query. `limit` belongs to a capped
- * read with no pages at all, where "give me as much as you can" is the honest reading of any
- * number too large — so it is met rather than argued with.
- *
- * Every unusable input lands on {@link LIMIT_MAX}: absent, blank, `?limit=abc`, `?limit=1e9`. A
- * value that IS a number is clamped into `[1, LIMIT_MAX]`. So the endpoint answers with at most
- * 200 rows and never with a 422 about a page size, and `openapi.yaml` declares the same three
- * numbers.
- */
-export const limitSchema = z
-    .preprocess(blankToUndefined, z.coerce.number().int().optional())
-    // `?limit=abc` coerces to NaN and fails `int`; that is not a request worth refusing, it is a
-    // request that named no limit.
-    .catch(undefined)
-    .transform((value) =>
-        value === undefined ? LIMIT_MAX : Math.min(Math.max(value, 1), LIMIT_MAX)
-    );
-
 /** The pair, for an endpoint that validates nothing else. */
 export const paginationSchema = z.object({ page: pageSchema, pageSize: pageSizeSchema });

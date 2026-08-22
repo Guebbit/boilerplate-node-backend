@@ -198,11 +198,28 @@ describe('GET /observability/audit', () => {
          */
         await api().post('/account/login').send({ email: 'nobody@example.com', password: 'wrong' });
 
-        const response = await pollUntilAudited(bearer, '?outcome=failure&limit=10');
+        const response = await pollUntilAudited(bearer, '?outcome=failure&pageSize=10');
 
         expect(response.status).toBe(200);
         expect(response.body.data.items.length).toBeGreaterThan(0);
         for (const entry of response.body.data.items) expect(entry.outcome).toBe('failure');
+        // The page's own meta, not a bare count: `totalItems` is every failure matching the
+        // filter, and `totalPages` is how many requests reach the rest of them.
+        expect(response.body.data.meta.totalItems).toBeGreaterThan(0);
+        expect(response.body.data.meta.pageSize).toBe(10);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses a page size the contract does not allow', async () => {
+        // `maximum: 100`, answered with a 422 rather than a quietly smaller page — this endpoint
+        // pages, so an out-of-range page size is a broken request like anywhere else.
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get('/observability/audit?pageSize=5000')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 

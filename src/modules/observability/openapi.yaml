@@ -115,7 +115,7 @@ paths:
                 Returns the most recent audit events, newest first, from the persisted audit trail.
                 Events include auth flows, admin CRUD actions, and security blocks.
                 Entries are retained for `NODE_AUDIT_RETENTION_DAYS` (default 90) and expire after.
-                `total` counts every event matching the filters, not just the returned page.
+                `meta.totalItems` counts every event matching the filters, not just the returned page.
                 Requires admin role.
             operationId: getObservabilityAuditLogs
             security:
@@ -140,19 +140,9 @@ paths:
                   schema:
                       type: string
                       format: date-time
-                  description: Return events after this ISO-8601 timestamp
-                - name: limit
-                  in: query
-                  schema:
-                      type: integer
-                      minimum: 1
-                      maximum: 200
-                      default: 200
-                  description: >-
-                      Maximum number of events to return. CLAMPED rather than refused, unlike the
-                      `pageSize` every paged endpoint takes: this read has no pages, so a number
-                      above the maximum is met with the maximum instead of a 422, and anything
-                      unusable — absent, blank, non-numeric — is also the maximum.
+                  description: Return events strictly after this ISO-8601 timestamp — an exclusive bound
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
             responses:
                 '200':
                     description: Audit events
@@ -400,12 +390,13 @@ components:
         AuditLogsPage:
             type: object
             additionalProperties: false
-            required: [items, total]
+            required: [items, meta]
             properties:
                 items:
                     type: array
                     items: { $ref: '#/components/schemas/AuditEventItem' }
-                total: { type: integer, minimum: 0 }
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
         AuditEventItem:
             type: object
             additionalProperties: false
