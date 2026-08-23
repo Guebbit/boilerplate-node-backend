@@ -31,13 +31,27 @@ router.use(getAuth, isAuth, isAdmin);
  * to the key. Mounted ABOVE `/:id`-shaped routes for the same reason products does it — there is
  * none here today, but the ordering is what stops one added later from matching "search" as an id.
  *
- * Uncached, like the other three `/search` siblings: the query form is the cacheable one.
+ * Cached, and on the SAME key as the GET above — `keyAs: 'feedback:search'` — so whichever
+ * spelling asks first warms the other. The wire still says `no-store`: this is a Redis
+ * arrangement, not a browser-cacheable POST.
  */
-router.post('/search', getFeedback);
+router.post(
+    '/search',
+    setCache(600, {
+        tags: ['feedback'],
+        keyParameters: searchFeedbackKeyParameters,
+        keyAs: 'feedback:search'
+    }),
+    getFeedback
+);
 
 router.get(
     '/',
-    setCache(600, { tags: ['feedback'], keyParameters: searchFeedbackKeyParameters }),
+    setCache(600, {
+        tags: ['feedback'],
+        keyParameters: searchFeedbackKeyParameters,
+        keyAs: 'feedback:search'
+    }),
     getFeedback
 );
 router.put('/:id', invalidateCache(['feedback']), putFeedbackStatus);

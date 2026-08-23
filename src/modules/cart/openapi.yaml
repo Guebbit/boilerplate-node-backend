@@ -75,6 +75,7 @@ paths:
             summary: Set cart item quantity
             description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
             operationId: updateCartItemById
+            x-alias-of: upsertCartItem
             security:
                 - bearerAuth: []
             parameters:

@@ -15,12 +15,24 @@ export const router = Router();
 router.use(getAuth, isAuth, isAdmin);
 
 // POST /users/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', getUsers);
+router.post(
+    '/search',
+    setCache(3600, {
+        tags: ['users'],
+        keyParameters: searchUsersKeyParameters,
+        keyAs: 'users:search'
+    }),
+    getUsers
+);
 
 // GET /users
 router.get(
     '/',
-    setCache(3600, { tags: ['users'], keyParameters: searchUsersKeyParameters }),
+    setCache(3600, {
+        tags: ['users'],
+        keyParameters: searchUsersKeyParameters,
+        keyAs: 'users:search'
+    }),
     getUsers
 );
 

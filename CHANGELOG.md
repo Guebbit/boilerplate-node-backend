@@ -95,6 +95,12 @@ were removed and are kept out by a test.
   and `cartItemAddById` therefore answer a response envelope like the rest of the module.
   `services/reorder.ts` keeps its own resolution deliberately: a discontinued line there is SKIPPED
   rather than refused, and it resolves the whole order in one pass instead of one read per line.
+- The four searches cache under one identity per resource, so `GET /products?text=x` and
+  `POST /products/search {text}` are a single entry and whichever asks first warms the other. The
+  `POST` form is cached in Redis only; the wire says `no-store`, because a POST response is not
+  browser-cacheable under RFC 9110. Body values are normalised so a JSON `1` and a query-string
+  `'1'` agree, and the key is still built from the endpoint's declared parameter allowlist — an
+  undeclared field cannot mint an entry.
 - `GET /inventory/levels`, `GET /inventory/movements`, `GET /locales/{locale}/entries` and
   `GET /observability/audit` read the query string only. They declared a request body they could
   never receive, being GETs with no body-carrying sibling; `readInput` gained a `list` surface to
@@ -102,6 +108,14 @@ were removed and are kept out by a test.
 
 ### Added
 
+- `x-alias-of` on the fourteen operations that are a second spelling of another — the four
+  `POST /*/search` siblings, the collection `PUT`/`DELETE` forms, the `/hard` delete paths and
+  `PUT /cart/{productId}`. Each names the operation a caller should reach for by default, which
+  is what "functionally equivalent to X" never said. **No generated type changed** (verified
+  byte-for-byte): an `x-` extension is invisible to orval, which is the point — `deprecated: true`
+  would have put a warning in the paired frontend for routes this API intends to keep.
+  `tests/cross-cutting/contract-aliases.test.ts` asserts every alias resolves, is not itself
+  aliased, and answers success with its canonical's status AND schema.
 - `src/modules/wishlist/probes.ts` — the four requests a contract cannot describe for this module,
   wired into `scripts/contracts/generate-collections.ts`. The wishlist was the only routed
   storefront module whose generated collections carried no rejection requests at all.

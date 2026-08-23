@@ -73,6 +73,7 @@ paths:
             summary: Edit user
             description: Updates an existing user's email or password. Optional image can be uploaded.
             operationId: updateUser
+            x-alias-of: updateUserById
             security:
                 - bearerAuth: []
             requestBody:
@@ -100,6 +101,7 @@ paths:
             summary: Delete user
             description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
             operationId: deleteUser
+            x-alias-of: deleteUserById
             security:
                 - bearerAuth: []
             # The flag is readable from the query here too, exactly as it is on the `{id}` form:
@@ -207,6 +209,7 @@ paths:
             summary: Permanently delete user
             description: Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
             operationId: hardDeleteUserById
+            x-alias-of: deleteUserById
             security:
                 - bearerAuth: []
             parameters:
@@ -226,6 +229,7 @@ paths:
             summary: Search users (DTO-friendly)
             description: Searches and filters users via a JSON request body. Functionally equivalent to `GET /users` with query parameters
             operationId: searchUsers
+            x-alias-of: listUsers
             security:
                 - bearerAuth: []
             requestBody:

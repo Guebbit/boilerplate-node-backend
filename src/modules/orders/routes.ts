@@ -16,12 +16,24 @@ export const router = Router();
 router.use(getAuth, isAuth);
 
 // POST /orders/search — must come before /:id
-router.post('/search', getOrders);
+router.post(
+    '/search',
+    setCache(3600, {
+        tags: ['orders'],
+        keyParameters: searchOrdersKeyParameters,
+        keyAs: 'orders:search'
+    }),
+    getOrders
+);
 
 // GET /orders — list (non-admin sees own orders only)
 router.get(
     '/',
-    setCache(3600, { tags: ['orders'], keyParameters: searchOrdersKeyParameters }),
+    setCache(3600, {
+        tags: ['orders'],
+        keyParameters: searchOrdersKeyParameters,
+        keyAs: 'orders:search'
+    }),
     getOrders
 );
 

@@ -1226,6 +1226,7 @@ paths:
       summary: Edit user
       description: Updates an existing user's email or password. Optional image can be uploaded.
       operationId: updateUser
+      x-alias-of: updateUserById
       security:
         - bearerAuth: []
       requestBody:
@@ -1258,6 +1259,7 @@ paths:
       summary: Delete user
       description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
       operationId: deleteUser
+      x-alias-of: deleteUserById
       security:
         - bearerAuth: []
       parameters:
@@ -1382,6 +1384,7 @@ paths:
       summary: Permanently delete user
       description: Permanently removes the user identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /users/{id}?hardDelete=true`.
       operationId: hardDeleteUserById
+      x-alias-of: deleteUserById
       security:
         - bearerAuth: []
       parameters:
@@ -1406,6 +1409,7 @@ paths:
       summary: Search users (DTO-friendly)
       description: Searches and filters users via a JSON request body. Functionally equivalent to `GET /users` with query parameters
       operationId: searchUsers
+      x-alias-of: listUsers
       security:
         - bearerAuth: []
       requestBody:
@@ -1499,6 +1503,7 @@ paths:
       summary: Search feedback requests (DTO-friendly)
       description: Searches and filters feedback requests via a JSON request body. Functionally equivalent to `GET /feedback` with query parameters.
       operationId: searchFeedbackRequests
+      x-alias-of: listFeedbackRequests
       security:
         - bearerAuth: []
       requestBody:
@@ -1641,6 +1646,7 @@ paths:
       summary: Edit product
       description: Updates an existing product with optional image upload
       operationId: updateProduct
+      x-alias-of: updateProductById
       security:
         - bearerAuth: []
       requestBody:
@@ -1675,6 +1681,7 @@ paths:
       summary: Delete product
       description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
       operationId: deleteProduct
+      x-alias-of: deleteProductById
       security:
         - bearerAuth: []
       parameters:
@@ -1806,6 +1813,7 @@ paths:
       summary: Permanently delete product
       description: Permanently removes the product identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /products/{id}?hardDelete=true`.
       operationId: hardDeleteProductById
+      x-alias-of: deleteProductById
       security:
         - bearerAuth: []
       parameters:
@@ -1828,6 +1836,7 @@ paths:
       summary: Search products (DTO-friendly)
       description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters.
       operationId: searchProducts
+      x-alias-of: listProducts
       requestBody:
         required: true
         content:
@@ -1925,6 +1934,7 @@ paths:
       summary: Set cart item quantity
       description: Sets the quantity of the cart line for the product identified by `{productId}` in the path. Functionally equivalent to `POST /cart`. Returns the updated cart.
       operationId: updateCartItemById
+      x-alias-of: upsertCartItem
       security:
         - bearerAuth: []
       parameters:
@@ -2232,6 +2242,7 @@ paths:
       summary: Update order
       description: Updates an existing order identified by id in the request body.
       operationId: updateOrder
+      x-alias-of: updateOrderById
       security:
         - bearerAuth: []
       requestBody:
@@ -2265,6 +2276,7 @@ paths:
       summary: Delete order
       description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
       operationId: deleteOrder
+      x-alias-of: deleteOrderById
       security:
         - bearerAuth: []
       parameters:
@@ -2297,6 +2309,7 @@ paths:
         Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
         Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
       operationId: searchOrders
+      x-alias-of: listOrders
       security:
         - bearerAuth: []
       requestBody:
@@ -2420,6 +2433,7 @@ paths:
       summary: Permanently delete order
       description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`.
       operationId: hardDeleteOrderById
+      x-alias-of: deleteOrderById
       security:
         - bearerAuth: []
       parameters:

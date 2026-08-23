@@ -72,6 +72,7 @@ paths:
             summary: Search feedback requests (DTO-friendly)
             description: Searches and filters feedback requests via a JSON request body. Functionally equivalent to `GET /feedback` with query parameters.
             operationId: searchFeedbackRequests
+            x-alias-of: listFeedbackRequests
             security:
                 - bearerAuth: []
             requestBody:

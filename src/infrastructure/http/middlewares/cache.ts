@@ -134,6 +134,22 @@ interface CacheOptions {
     keyParameters: readonly string[];
 
     /**
+     * The cache identity two spellings of ONE question share.
+     *
+     * By default a key starts with `METHOD:path`, which is right for a route that is the only way
+     * to ask what it asks. It is wrong for the four searches, where `GET /products?text=x` and
+     * `POST /products/search {text}` reach the same controller, run the same Mongo query and
+     * return the same envelope — but would key differently on both halves of that prefix and so
+     * each pay for the other's work.
+     *
+     * Declaring the same `keyAs` on both makes them one entry: whichever spelling asks first
+     * warms the other. That is only sound because the two are the same question — the value
+     * normalisation below is what lets a query string's `'1'` and a JSON body's `1` agree, and
+     * `keyParameters` is what stops anything else from reaching the key at all.
+     */
+    keyAs?: string;
+
+    /**
      * Let the SERVER hold the answer for the full TTL, but make the browser check first.
      *
      * `invalidateCache` clears Redis on every write and cannot reach a copy already in someone's
@@ -153,6 +169,23 @@ const getCacheScope = (request: Request) => {
     if (!userId) return 'guest';
     return `user:${userId}`;
 };
+
+/**
+ * One spelling of a value, whichever transport carried it.
+ *
+ * A query string has no types — `?page=1` is the string `'1'`, `?tag=a&tag=b` is an array of
+ * strings — while a JSON body keeps its own, so `{page: 1}` and `?page=1` are the same request
+ * written two ways. Stringifying the scalars is what lets the two share a cache entry rather than
+ * each paying for the other's Mongo query.
+ *
+ * Array ORDER is preserved rather than sorted: for a repeated key it is the caller's, and nothing
+ * here knows whether the endpoint treats it as a set.
+ *
+ * This is not validation and must not become it. An unrecognisable value keys on its own spelling
+ * and reaches the controller, which answers 422 — the same answer an uncached request gets.
+ */
+const normalizeKeyValue = (value: unknown): unknown =>
+    Array.isArray(value) ? value.map(String) : String(value);
 
 /**
  * Build one cache key from method + path + the declared query parameters + user scope + language.
@@ -177,18 +210,30 @@ const getCacheScope = (request: Request) => {
  * is JSON-serialized so a repeated key (`?tag=a&tag=b`, which arrives as an array) stays
  * distinguishable from a single one.
  */
-const getCacheKey = (request: Request, sortedKeyParameters: readonly string[]) => {
+const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], keyAs?: string) => {
     // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
     // already joined, so it is split rather than reassembled from `baseUrl` + `path`.
     const [path] = request.originalUrl.split('?');
+    // A declared identity replaces BOTH halves of the default prefix, because the two spellings
+    // it unifies differ in both — `GET /products` and `POST /products/search`.
+    const identity = keyAs ?? `${request.method}:${path}`;
+    // Express 5 leaves `body` undefined when the request carries none, which every GET does.
+    const body = (request.body ?? {}) as Record<string, unknown>;
     // `Object.hasOwn`, not `in`: the latter walks the prototype chain, so a parameter named
     // `toString` would count as present on every request.
-    const query = sortedKeyParameters
-        .filter((name) => Object.hasOwn(request.query, name))
-        .map((name) => `${name}=${JSON.stringify(request.query[name])}`)
+    //
+    // Body BEFORE query, which is the `search` surface's own precedence — the key has to be built
+    // from the same value the controller will read, or the two disagree about which request this
+    // entry answers.
+    const values = sortedKeyParameters
+        .filter((name) => Object.hasOwn(body, name) || Object.hasOwn(request.query, name))
+        .map((name) => {
+            const raw = Object.hasOwn(body, name) ? body[name] : request.query[name];
+            return `${name}=${JSON.stringify(normalizeKeyValue(raw))}`;
+        })
         .join('&');
 
-    return `${request.method}:${path}?${query}:${getCacheScope(request)}:${request.locale ?? '-'}`;
+    return `${identity}?${values}:${getCacheScope(request)}:${request.locale ?? '-'}`;
 };
 
 /**
@@ -225,12 +270,35 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         // lifetime the server will actually honour.
         const ttl = resolveCacheTtl(seconds);
 
+        /*
+         * A cached POST is a SERVER-side arrangement only.
+         *
+         * `POST /x/search` is a read wearing a write's method — the method is there because the
+         * question does not fit in a URL, not because anything changes. Redis can key it, because
+         * the key is built from a declared allowlist below. A browser or proxy cannot: RFC 9110
+         * makes a POST response cacheable only under conditions nothing here meets, and any
+         * intermediary that stored one would be free to answer a LATER POST from it — including,
+         * on some other route, a real write. So the wire says `no-store` and the server caches
+         * anyway. `browserRevalidate` is meaningless here for the same reason and is refused
+         * rather than ignored: a route asking for both has a design error, not a header to tune.
+         */
+        const cacheableRead = request.method === 'GET';
+        if (!cacheableRead && options.browserRevalidate)
+            throw new Error(
+                'browserRevalidate is GET-only: a POST response is not browser-cacheable, so ' +
+                    'there is nothing for the browser to revalidate. See the comment in this file.'
+            );
+
         // Keep browser/proxy cache headers aligned with the server-side Redis cache policy —
         // unless the route asked for revalidation, which decouples the two on purpose.
         const scope = request.authContext ? 'private' : 'public';
         response.set(
             'Cache-Control',
-            options.browserRevalidate ? `${scope}, no-cache` : `${scope}, max-age=${ttl}`
+            cacheableRead
+                ? options.browserRevalidate
+                    ? `${scope}, no-cache`
+                    : `${scope}, max-age=${ttl}`
+                : 'no-store'
         );
 
         // The Redis key is scoped by user (see getCacheScope), but a cache in front of the API
@@ -257,12 +325,20 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         // other path still declares it. `vary` de-duplicates.
         response.vary('Accept-Language');
 
-        if (request.method !== 'GET' || ttl <= 0) {
+        /*
+         * POST is served from Redis only when the route declared a `keyAs`, which is the same
+         * declaration that unifies it with its GET twin. That is deliberate: without it a POST
+         * would key on `POST:/x/search` and quietly cache whatever the next POST route to mount
+         * `setCache` happened to be — including a write. Requiring the identity means caching a
+         * POST is always an explicit statement that this one is a read.
+         */
+        const servedFromCache = cacheableRead || options.keyAs !== undefined;
+        if (!servedFromCache || ttl <= 0) {
             next();
             return;
         }
 
-        const cacheKey = getCacheKey(request, sortedKeyParameters);
+        const cacheKey = getCacheKey(request, sortedKeyParameters, options.keyAs);
         return getCacheValue(cacheKey).then((raw) => {
             const cachedResponse = raw === undefined ? undefined : parseCachedResponse(raw);
 

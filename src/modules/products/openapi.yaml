@@ -83,6 +83,7 @@ paths:
             summary: Edit product
             description: Updates an existing product with optional image upload
             operationId: updateProduct
+            x-alias-of: updateProductById
             security:
                 - bearerAuth: []
             requestBody:
@@ -111,6 +112,7 @@ paths:
             summary: Delete product
             description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
             operationId: deleteProduct
+            x-alias-of: deleteProductById
             security:
                 - bearerAuth: []
             # The flag is readable from the query here too, exactly as it is on the `{id}` form:
@@ -229,6 +231,7 @@ paths:
             summary: Permanently delete product
             description: Permanently removes the product identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /products/{id}?hardDelete=true`.
             operationId: hardDeleteProductById
+            x-alias-of: deleteProductById
             security:
                 - bearerAuth: []
             parameters:
@@ -247,6 +250,7 @@ paths:
             summary: Search products (DTO-friendly)
             description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters.
             operationId: searchProducts
+            x-alias-of: listProducts
             requestBody:
                 required: true
                 content:

@@ -16,12 +16,24 @@ export const router = Router();
 router.use(getAuth);
 
 // POST /products/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', getProducts);
+router.post(
+    '/search',
+    setCache(3600, {
+        tags: ['products'],
+        keyParameters: searchProductsKeyParameters,
+        keyAs: 'products:search'
+    }),
+    getProducts
+);
 
 // GET /products — public
 router.get(
     '/',
-    setCache(3600, { tags: ['products'], keyParameters: searchProductsKeyParameters }),
+    setCache(3600, {
+        tags: ['products'],
+        keyParameters: searchProductsKeyParameters,
+        keyAs: 'products:search'
+    }),
     getProducts
 );
 

@@ -99,6 +99,50 @@ const keyFor = async (
     return calls.at(-1)?.[0];
 };
 
+/**
+ * The key for one request written as a POST body instead of a query string.
+ *
+ * `keyAs` is what unifies the two spellings, so it is passed on both sides of every comparison
+ * below — the point being tested is that transport and method stop mattering, not that they are
+ * ignored generally.
+ */
+const bodyKeyFor = async (
+    body: Record<string, unknown>,
+    keyParameters: readonly string[],
+    keyAs = 'products:search'
+) => {
+    mockedCache.getCacheValue.mockResolvedValue(undefined);
+    const middleware = setCache(60, { tags: ['products'], keyParameters, keyAs });
+    await middleware(
+        asStub<Request>({
+            method: 'POST',
+            originalUrl: '/products/search',
+            query: {},
+            body,
+            locale: 'en'
+        }),
+        createResponse().response,
+        jest.fn() as NextFunction
+    );
+    return mockedCache.getCacheValue.mock.calls.at(-1)?.[0];
+};
+
+/** The same, for the GET spelling — `keyFor` without a `keyAs` cannot be compared against it. */
+const sharedQueryKeyFor = async (
+    query: Record<string, unknown>,
+    keyParameters: readonly string[],
+    keyAs = 'products:search'
+) => {
+    mockedCache.getCacheValue.mockResolvedValue(undefined);
+    const middleware = setCache(60, { tags: ['products'], keyParameters, keyAs });
+    await middleware(
+        asStub<Request>({ method: 'GET', originalUrl: '/products', query, locale: 'en' }),
+        createResponse().response,
+        jest.fn() as NextFunction
+    );
+    return mockedCache.getCacheValue.mock.calls.at(-1)?.[0];
+};
+
 /** Drive one MISS through the middleware and let the controller answer with `body`. */
 const storeThrough = async (body: unknown, seconds = 60) => {
     mockedCache.getCacheValue.mockResolvedValue(undefined);
@@ -352,6 +396,149 @@ describe('setCache', () => {
         // request and put `toString=undefined` into every key.
         it('does not mistake an inherited property for a supplied parameter', async () => {
             expect(await keyFor({}, ['toString'])).toBe(await keyFor({}, []));
+        });
+    });
+
+    /*
+     * The four searches are one question with two spellings. `keyAs` is what says so, and these
+     * are the properties that make saying so safe.
+     */
+    describe('a search cached under a shared identity', () => {
+        const declared = ['page', 'pageSize', 'text'];
+
+        // The whole point: whichever spelling asks first pays for the Mongo query, and the other
+        // is served from that entry.
+        it('gives the query and body spellings of one search the same key', async () => {
+            expect(await bodyKeyFor({ page: '1', text: 'x' }, declared)).toBe(
+                await sharedQueryKeyFor({ page: '1', text: 'x' }, declared)
+            );
+        });
+
+        // A query string carries `1` as the string '1'; a JSON body carries the number. Without
+        // normalisation the two spell the same request differently and never share an entry.
+        it('reads a JSON number and a query string as the same value', async () => {
+            expect(await bodyKeyFor({ page: 1 }, declared)).toBe(
+                await sharedQueryKeyFor({ page: '1' }, declared)
+            );
+        });
+
+        // The allowlist is the whole defence: without it any caller mints an unbounded number of
+        // entries by adding a field the endpoint never reads.
+        it('ignores a body field nobody declared', async () => {
+            expect(await bodyKeyFor({ page: '1', junk: 'a' }, declared)).toBe(
+                await bodyKeyFor({ page: '1', junk: 'b' }, declared)
+            );
+        });
+
+        // Everything the query form separates, the body form must separate too.
+        it('separates bodies that differ in a declared parameter', async () => {
+            expect(await bodyKeyFor({ text: 'a' }, declared)).not.toBe(
+                await bodyKeyFor({ text: 'b' }, declared)
+            );
+        });
+
+        // `readInput`'s `search` surface reads body before query. The key has to agree, or it
+        // answers a request the controller is not about to serve.
+        it('prefers the body over the query, as the search surface does', async () => {
+            mockedCache.getCacheValue.mockResolvedValue(undefined);
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: declared,
+                keyAs: 'products:search'
+            });
+            await middleware(
+                asStub<Request>({
+                    method: 'POST',
+                    originalUrl: '/products/search',
+                    query: { text: 'from-query' },
+                    body: { text: 'from-body' },
+                    locale: 'en'
+                }),
+                createResponse().response,
+                jest.fn() as NextFunction
+            );
+            const key = mockedCache.getCacheValue.mock.calls.at(-1)?.[0];
+
+            expect(key).toBe(await bodyKeyFor({ text: 'from-body' }, declared));
+        });
+
+        // Two different searches sharing an entry is the bug this whole declaration exists to
+        // prevent; a shared identity must not reintroduce it across resources.
+        it('keeps two resources apart even when their parameters match', async () => {
+            expect(await bodyKeyFor({ page: '1' }, declared, 'products:search')).not.toBe(
+                await bodyKeyFor({ page: '1' }, declared, 'orders:search')
+            );
+        });
+
+        // A POST response is not browser-cacheable under RFC 9110, whatever Redis does with it.
+        it('tells the browser not to store the POST it is caching server-side', async () => {
+            mockedCache.getCacheValue.mockResolvedValue(undefined);
+            const { response, headers } = createResponse();
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: [],
+                keyAs: 'products:search'
+            });
+
+            await middleware(
+                asStub<Request>({
+                    method: 'POST',
+                    originalUrl: '/products/search',
+                    query: {},
+                    body: {},
+                    locale: 'en'
+                }),
+                response,
+                jest.fn() as NextFunction
+            );
+
+            expect(headers['cache-control']).toBe('no-store');
+            expect(mockedCache.getCacheValue).toHaveBeenCalled();
+        });
+
+        // Without the identity a POST would key on `POST:/path` and cache whatever mounted this
+        // next — a write included. Requiring it makes caching a POST an explicit claim.
+        it('refuses to cache a POST that declared no shared identity', async () => {
+            const middleware = setCache(60, { tags: ['products'], keyParameters: [] });
+            const next = jest.fn() as NextFunction;
+
+            await middleware(
+                asStub<Request>({
+                    method: 'POST',
+                    originalUrl: '/products',
+                    query: {},
+                    body: {},
+                    locale: 'en'
+                }),
+                createResponse().response,
+                next
+            );
+
+            expect(next).toHaveBeenCalledTimes(1);
+            expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+        });
+
+        // There is nothing for a browser to revalidate on a response it may not store.
+        it('refuses browserRevalidate on a POST rather than ignoring it', () => {
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: [],
+                keyAs: 'products:search',
+                browserRevalidate: true
+            });
+
+            expect(() =>
+                middleware(
+                    asStub<Request>({
+                        method: 'POST',
+                        originalUrl: '/products/search',
+                        query: {},
+                        body: {}
+                    }),
+                    createResponse().response,
+                    jest.fn() as NextFunction
+                )
+            ).toThrow(/GET-only/);
         });
     });
 
