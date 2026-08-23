@@ -160,6 +160,7 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ProductEnvelope'
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         # Same as PUT /products
         put:
