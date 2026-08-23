@@ -25,6 +25,6 @@ import type { Password } from './password';
 export interface LoginRequest {
   email: Email;
   password: Password;
-  /** How long the refresh cookie outlives the tab — the "remember me" tiers, sized by the deployment (`NODE_TOKEN_REFRESH_TIME_*`). Omitted, the cookie lives only as long as an access token. */
+  /** How long the refresh cookie outlives the tab — the "remember me" tiers, each sized by the deployment. Omitted, the cookie lives only as long as an access token. */
   remember?: LoginRequestRemember;
 }

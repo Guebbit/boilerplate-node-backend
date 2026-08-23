@@ -95,6 +95,14 @@ were removed and are kept out by a test.
   and `cartItemAddById` therefore answer a response envelope like the rest of the module.
   `services/reorder.ts` keeps its own resolution deliberately: a discontinued line there is SKIPPED
   rather than refused, and it resolves the whole order in one pass instead of one read per line.
+- The shared contract stopped describing one implementation. Five descriptions in `openapi.yaml`
+  named Node-only things — `NODE_METRICS_TOKEN`, `NODE_AUDIT_RETENTION_DAYS`,
+  `NODE_LOW_STOCK_THRESHOLD`, `NODE_TOKEN_REFRESH_TIME_*`, and worst,
+  `process.memoryUsage()` plus a TypeScript test path presented as what guarantees a claim. That
+  file is byte-identical in three repositories, so two of its three readers were being told
+  something untrue. The prose now says what the thing IS rather than what enforces it here. Prose
+  only: every generated change is a JSDoc comment or a `.describe()` string, verified by diffing
+  `api/` before and after.
 - `GET /feedback` declared `status` as a bare `type: string` while `POST /feedback/search`
   declared it as a four-value enum — one filter, documented as open on one spelling of a search
   and closed on the other. The closed set is now a single `FeedbackRequestStatus` schema, `$ref`d

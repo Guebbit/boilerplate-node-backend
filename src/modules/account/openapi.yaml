@@ -495,8 +495,8 @@ components:
                     enum: [short, medium, long]
                     description: >-
                         How long the refresh cookie outlives the tab — the "remember me" tiers,
-                        sized by the deployment (`NODE_TOKEN_REFRESH_TIME_*`). Omitted, the cookie
-                        lives only as long as an access token.
+                        each sized by the deployment. Omitted, the cookie lives only as long as an
+                        access token.
 
         SignupRequest:
             type: object

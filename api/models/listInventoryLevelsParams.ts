@@ -36,7 +36,7 @@ page?: PageParamParameter;
  */
 pageSize?: PageSizeParamParameter;
 /**
- * Only products at or under the low-availability threshold (`NODE_LOW_STOCK_THRESHOLD`).
+ * Only products at or under the deployment's low-availability threshold.
  */
 lowOnly?: boolean;
 };

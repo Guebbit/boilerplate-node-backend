@@ -76,6 +76,25 @@ export const createDeleteController = ({
 
             // `hardDelete` is a boolean the route accepts three ways — see docs/theory/request-input.md.
             // The path form (`DELETE /x/:id/hard`) reaches `params` through `routeFlag`.
+            //
+            // KNOWN, DELIBERATE, AND ARGUABLY WRONG: contradictory sources are resolved rather
+            // than refused. `DELETE /users/:id/hard` carrying `{"hardDelete": false}` destroys the
+            // record, because params outrank body and the merge below never sees that the request
+            // said both things. For a read that precedence is right — the URL a caller aimed at is
+            // the more explicit statement of intent. For an IRREVERSIBLE operation it is the one
+            // place a `||` chain is the wrong tool: a request that says "destroy" and "do not
+            // destroy" is a client bug, and guessing which half to honour destroys data on the
+            // strength of a coin flip.
+            //
+            // The suggested fix, NOT applied: read `hardDelete` from params, query and body
+            // separately, and answer 409 when two of them disagree rather than letting the
+            // highest-precedence source win. That is a behaviour change on a route that currently
+            // succeeds, so it is Andrea's call, not a cleanup — recorded here and in
+            // CONTRACT_PLAN_POLYMORPHISM.md rather than done.
+            //
+            // Note what is NOT the problem: `?hardDelete=false` alone already means false. That
+            // was a separate bug (presence treated as the switch) and it is fixed — see the
+            // Closed list in docs/theory/request-input.md.
             const input = readInput(request, { surface: 'delete', booleans: ['hardDelete'] });
             const parseResult = hardDeleteSchema.safeParse(input.hardDelete);
             if (!parseResult.success)

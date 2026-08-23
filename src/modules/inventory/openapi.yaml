@@ -21,7 +21,7 @@ paths:
                   schema:
                       type: boolean
                       default: false
-                  description: Only products at or under the low-availability threshold (`NODE_LOW_STOCK_THRESHOLD`).
+                  description: Only products at or under the deployment's low-availability threshold.
             responses:
                 '200':
                     description: A page of levels, most scarce first

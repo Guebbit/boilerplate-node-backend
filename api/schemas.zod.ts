@@ -694,7 +694,7 @@ export const GetObservabilityHealthResponse = zod.object({
   "heapUsed": zod.number().min(getObservabilityHealthResponseDataMemoryHeapUsedMin),
   "heapTotal": zod.number().min(getObservabilityHealthResponseDataMemoryHeapTotalMin),
   "external": zod.number().min(getObservabilityHealthResponseDataMemoryExternalMin)
-}).optional().describe('Process memory in BYTES, exactly as `process.memoryUsage()` reports it, published identically by every payload that describes this process.\nBytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module\'s `asyncapi.yaml`. The two documents cannot `$ref` each other, so `tests\/cross-cutting\/process-snapshot.test.ts` asserts they stay identical.'),
+}).optional().describe('Process memory in BYTES, exactly as the runtime reports it, published identically by every payload that describes this process.\nBytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module\'s `asyncapi.yaml`. The two documents cannot `$ref` each other, so each implementation owns a check that they stay identical.'),
   "system": zod.object({
   "platform": zod.string(),
   "cpuCount": zod.number(),
@@ -796,7 +796,7 @@ export const GetObservabilityMetricsOverviewResponse = zod.object({
   "heapUsed": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessMemoryHeapUsedMin),
   "heapTotal": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessMemoryHeapTotalMin),
   "external": zod.number().min(getObservabilityMetricsOverviewResponseDataProcessMemoryExternalMin)
-}).optional().describe('Process memory in BYTES, exactly as `process.memoryUsage()` reports it, published identically by every payload that describes this process.\nBytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module\'s `asyncapi.yaml`. The two documents cannot `$ref` each other, so `tests\/cross-cutting\/process-snapshot.test.ts` asserts they stay identical.')
+}).optional().describe('Process memory in BYTES, exactly as the runtime reports it, published identically by every payload that describes this process.\nBytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module\'s `asyncapi.yaml`. The two documents cannot `$ref` each other, so each implementation owns a check that they stay identical.')
 }),
   "timestamp": zod.iso.datetime({"offset":true})
 })
@@ -806,7 +806,7 @@ export const GetObservabilityMetricsOverviewResponse = zod.object({
 /**
  * Returns the most recent audit events, newest first, from the persisted audit trail.
  * Events include auth flows, admin CRUD actions, and security blocks.
- * Entries are retained for `NODE_AUDIT_RETENTION_DAYS` (default 90) and expire after.
+ * Entries are retained for a deployment-configured period (90 days by default) and expire after.
  * `meta.totalItems` counts every event matching the filters, not just the returned page.
  * Requires admin role.
  * @summary Recent audit events
@@ -1207,7 +1207,7 @@ export const loginBodyPasswordMin = 8;
 export const LoginBody = zod.object({
   "email": zod.email(),
   "password": zod.string().min(loginBodyPasswordMin),
-  "remember": zod.enum(['short', 'medium', 'long']).optional().describe('How long the refresh cookie outlives the tab — the \"remember me\" tiers, sized by the deployment (`NODE_TOKEN_REFRESH_TIME_\*`). Omitted, the cookie lives only as long as an access token.')
+  "remember": zod.enum(['short', 'medium', 'long']).optional().describe('How long the refresh cookie outlives the tab — the \"remember me\" tiers, each sized by the deployment. Omitted, the cookie lives only as long as an access token.')
 })
 
 export const LoginResponse = zod.object({
@@ -3693,7 +3693,7 @@ export const listInventoryLevelsQueryLowOnlyDefault = false;
 export const ListInventoryLevelsQueryParams = zod.object({
   "page": zod.number().min(1).default(listInventoryLevelsQueryPageDefault).describe('1-based page index'),
   "pageSize": zod.number().min(1).max(listInventoryLevelsQueryPageSizeMax).default(listInventoryLevelsQueryPageSizeDefault),
-  "lowOnly": zod.boolean().default(listInventoryLevelsQueryLowOnlyDefault).describe('Only products at or under the low-availability threshold (`NODE_LOW_STOCK_THRESHOLD`).')
+  "lowOnly": zod.boolean().default(listInventoryLevelsQueryLowOnlyDefault).describe('Only products at or under the deployment\'s low-availability threshold.')
 })
 
 export const listInventoryLevelsResponseDataItemsItemOnHandMin = 0;

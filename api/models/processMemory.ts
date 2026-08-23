@@ -20,8 +20,8 @@
  */
 
 /**
- * Process memory in BYTES, exactly as `process.memoryUsage()` reports it, published identically by every payload that describes this process.
- * Bytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module's `asyncapi.yaml`. The two documents cannot `$ref` each other, so `tests/cross-cutting/process-snapshot.test.ts` asserts they stay identical.
+ * Process memory in BYTES, exactly as the runtime reports it, published identically by every payload that describes this process.
+ * Bytes rather than megabytes because the conversion is a presentation decision and a lossy one: a rounded megabyte cannot express the 400 KB move between two polls that a leak hunter is looking for. The same four fields, in the same units and the same order, are on the SSE payload in this module's `asyncapi.yaml`. The two documents cannot `$ref` each other, so each implementation owns a check that they stay identical.
  */
 export interface ProcessMemory {
   /** @minimum 0 */
