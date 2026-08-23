@@ -28,7 +28,7 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
         status: overallStatus(dependencies),
         environment: process.env.NODE_ENV ?? 'development',
         service: process.env.NODE_SERVICE_NAME ?? 'boilerplate-node-backend',
-        nodeVersion: process.version,
+        runtimeVersion: process.version,
         uptimeSeconds: snapshot.uptimeSeconds,
         /*
          * One vocabulary for three unlike services, so the payload reads without a legend. Objects

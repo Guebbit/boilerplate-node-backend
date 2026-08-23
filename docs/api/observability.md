@@ -47,7 +47,7 @@ This is not the liveness probe. `GET /` is, and it is what the container HEALTHC
   "status": "ok",
   "environment": "production",
   "service": "boilerplate-node-backend",
-  "nodeVersion": "v22.x.x",
+  "runtimeVersion": "v22.x.x",
   "uptimeSeconds": 3600,
   "dependencies": {
     "database": { "status": "ready" },

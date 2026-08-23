@@ -666,7 +666,7 @@ export const GetObservabilityHealthResponse = zod.object({
   "status": zod.enum(['ok', 'degraded']).describe('READINESS: `ok` when every dependency is `ready` or `disabled`, `degraded` otherwise. Which part is missing is `dependencies`\' job to say.\nThis is not liveness. `GET \/` answers that, and is what the container HEALTHCHECK probes — an orchestrator restarts on liveness, and restarting this process would not bring a downed Redis back.'),
   "environment": zod.string(),
   "service": zod.string(),
-  "nodeVersion": zod.string(),
+  "runtimeVersion": zod.string().describe('The version of the language runtime serving this API, as that runtime reports it. Diagnostic only — what is actually deployed right now, which is the question a release leaves open.'),
   "uptimeSeconds": zod.number().min(getObservabilityHealthResponseDataUptimeSecondsMin),
   "dependencies": zod.object({
   "database": zod.object({

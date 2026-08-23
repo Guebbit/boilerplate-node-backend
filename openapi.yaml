@@ -4077,7 +4077,7 @@ components:
         - status
         - environment
         - service
-        - nodeVersion
+        - runtimeVersion
         - uptimeSeconds
         - dependencies
         - timestamp
@@ -4094,8 +4094,9 @@ components:
           type: string
         service:
           type: string
-        nodeVersion:
+        runtimeVersion:
           type: string
+          description: The version of the language runtime serving this API, as that runtime reports it. Diagnostic only — what is actually deployed right now, which is the question a release leaves open.
         uptimeSeconds:
           type: integer
           minimum: 0

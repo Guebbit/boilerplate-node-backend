@@ -32,7 +32,8 @@ export interface ObservabilityHealth {
   status: ObservabilityHealthStatus;
   environment: string;
   service: string;
-  nodeVersion: string;
+  /** The version of the language runtime serving this API, as that runtime reports it. Diagnostic only — what is actually deployed right now, which is the question a release leaves open. */
+  runtimeVersion: string;
   /** @minimum 0 */
   uptimeSeconds: number;
   dependencies: ObservabilityHealthDependencies;

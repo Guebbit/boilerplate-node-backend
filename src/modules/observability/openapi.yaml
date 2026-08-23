@@ -301,7 +301,7 @@ components:
             type: object
             additionalProperties: false
             required:
-                [status, environment, service, nodeVersion, uptimeSeconds, dependencies, timestamp]
+                [status, environment, service, runtimeVersion, uptimeSeconds, dependencies, timestamp]
             properties:
                 status:
                     type: string
@@ -315,7 +315,16 @@ components:
                         this process would not bring a downed Redis back.
                 environment: { type: string }
                 service: { type: string }
-                nodeVersion: { type: string }
+                # Named for what it IS, not for what produces it here. It was `nodeVersion`,
+                # which the PHP implementation had to satisfy with `PHP_VERSION` — a field named
+                # for one runtime carrying another's number. The description it never had is half
+                # the reason nobody noticed.
+                runtimeVersion:
+                    type: string
+                    description: >-
+                        The version of the language runtime serving this API, as that runtime
+                        reports it. Diagnostic only — what is actually deployed right now, which
+                        is the question a release leaves open.
                 uptimeSeconds: { type: integer, minimum: 0 }
                 dependencies: { $ref: '#/components/schemas/ObservabilityHealthDependencies' }
                 telemetry: { $ref: '#/components/schemas/ObservabilityHealthTelemetry' }

@@ -95,6 +95,14 @@ were removed and are kept out by a test.
   and `cartItemAddById` therefore answer a response envelope like the rest of the module.
   `services/reorder.ts` keeps its own resolution deliberately: a discontinued line there is SKIPPED
   rather than refused, and it resolves the whole order in one pass instead of one read per line.
+- **BREAKING (contract):** the readiness payload's `nodeVersion` is now `runtimeVersion`. The old
+  name forced every implementation to emit a Node-shaped key for its own runtime — the PHP twin
+  was satisfying it with `PHP_VERSION`, a field named for one runtime carrying another's number.
+  Same defect as the prose below, one layer down in the typed half. A consumer reading
+  `health.nodeVersion` now gets `undefined`; the only one in this working set is the admin
+  overview card, updated with it. The field also gains the `description` it never had, which is
+  half the reason nobody noticed. Not split into `runtime` + `runtimeVersion`: that buys a second
+  required field for information nothing has asked for.
 - The shared contract stopped describing one implementation. Five descriptions in `openapi.yaml`
   named Node-only things — `NODE_METRICS_TOKEN`, `NODE_AUDIT_RETENTION_DAYS`,
   `NODE_LOW_STOCK_THRESHOLD`, `NODE_TOKEN_REFRESH_TIME_*`, and worst,
