@@ -29,7 +29,7 @@ jobs:
             security-events: write
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@v7
 
             # Picks the query pack and sets up the extractor. No build step: JS/TS is analysed
             # from source, so unlike compiled languages nothing has to run first.
