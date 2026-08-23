@@ -95,7 +95,18 @@ module.exports = {
     testEnvironment: 'node',
     maxWorkers: resolveMaxWorkers(),
     testMatch: ['**/tests/**/*.test.ts'],
-    testPathIgnorePatterns: ['/node_modules/', '<rootDir>/.stryker-tmp/', '<rootDir>/.tmp/'],
+    /*
+     * `tests/cluster` is excluded here and run by `jest.config.cluster.js` instead. Those tests
+     * spawn `src/cluster.ts` as a child process, boot their own Mongo and need a Redis, so none of
+     * this file's setup applies to them and their runtime is measured in minutes rather than
+     * milliseconds. See the header of that config.
+     */
+    testPathIgnorePatterns: [
+        '/node_modules/',
+        '<rootDir>/.stryker-tmp/',
+        '<rootDir>/.tmp/',
+        '<rootDir>/tests/cluster/'
+    ],
     modulePathIgnorePatterns: ['<rootDir>/.stryker-tmp/', '<rootDir>/.tmp/'],
     collectCoverageFrom: [
         'src/**/*.ts',

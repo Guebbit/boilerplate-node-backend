@@ -3,6 +3,7 @@ import tseslint from 'typescript-eslint';
 import globals from 'globals';
 import configPrettier from 'eslint-config-prettier';
 import pluginUnicorn from 'eslint-plugin-unicorn';
+import pluginBoundaries from 'eslint-plugin-boundaries';
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import { globalIgnores } from 'eslint/config';
 import path from 'node:path';
@@ -111,7 +112,8 @@ export default tseslint.config(
         },
 
         plugins: {
-            local: { rules: localRules }
+            local: { rules: localRules },
+            boundaries: pluginBoundaries
         },
 
         rules: {
@@ -439,129 +441,376 @@ export default tseslint.config(
     },
 
     /**
-     * `src/infrastructure/**` is the technical substrate: bootstrap, adapters,
-     * observability and HTTP plumbing. It is the bottom of the dependency
-     * graph and must never reach up into application code — that inversion is
-     * what turned the old `src/utils/` into a dumping ground.
+     * ── THE TIER WALLS ────────────────────────────────────────────────────────────────────────
      *
-     * `@modules/*` and `@kernel/*` are in the list because infrastructure sits below both. Without them
-     * the rule was silently incomplete: `src/infrastructure/http/errors.ts` could import a domain service
-     * and lint stayed quiet, while `docs/theory/layers.md` claimed the tier was enforced.
+     * Which tier may depend on which, stated once as a graph instead of six times as file globs.
+     *
+     * The arrows point one way and only one way: `infrastructure` is the bottom and reaches
+     * nothing above it — that inversion is what turned the old `src/utils/` into a dumping ground;
+     * `kernel` IS the module system, so it knows modules exist but never which ones; a `module`
+     * owns its domain and may not reach the tier that assembles the application; and `domain` is
+     * plain TypeScript over plain data, reaching nothing at all.
+     *
+     * ── Why a plugin rather than `no-restricted-imports` ──────────────────────────────────────
+     * Two properties the built-in rule cannot express, both of which used to be carried by tests:
+     *
+     *   1. **Coverage, at both levels.** `no-restricted-imports` is scoped by file glob, so a NEW
+     *      top-level directory under `src/` matches no block, is bound by no wall, and is reported
+     *      by nothing. It is not violating a rule — it is invisible. Two things close that here,
+     *      and they are the guarantee `deptrac --fail-on-uncovered` gives the PHP twin:
+     *      `boundaries/no-unknown-files` refuses a FILE no descriptor claims, and the
+     *      `default: 'disallow'` below refuses an EDGE no policy claims — so classifying a new
+     *      tier is not enough either, its arrows have to be argued for before it can import
+     *      anything.
+     *   2. **Relation.** What a module's spec may import depends on WHICH module owns it, and a
+     *      glob cannot say "its own". `capture` reads the module name out of the path and
+     *      `{{ from.element.captured.module }}` compares the two sides, so one policy covers every
+     *      domain — including the one added tomorrow.
+     *
+     * ── The two doors, and why they are stated as files ───────────────────────────────────────
+     * A module publishes `index.ts` (its runtime API) and `demo.ts` (its fixtures), and nothing
+     * else. `fileInternalPath` names those two files inside the target element, so the rule is
+     * about the door rather than about the path spelling that reaches it.
      */
     {
-        files: ['src/infrastructure/**/*.ts'],
-        rules: {
-            'no-restricted-imports': [
-                'error',
+        settings: {
+            /*
+             * Only `src/`. The tiers live here, and this is the tree `no-unknown-files` is meant
+             * to hold exhaustively — `tests/`, `scripts/`, `db/` and `shared/` have no tier and
+             * would each need a descriptor for the sake of being ignored.
+             */
+            'boundaries/include': ['src/**/*.ts'],
+
+            /*
+             * Every wall below is stated in terms of the FILE an import resolves to, so an
+             * unresolved specifier is a silent pass: `@modules/products` reads as an npm package,
+             * belongs to no element, and matches no policy. The TypeScript resolver reads the
+             * `paths` map out of `tsconfig.json`, which is where `@modules`, `@kernel`,
+             * `@infrastructure` and `@app` are actually defined.
+             */
+            'import/resolver': {
+                typescript: { alwaysTryTypes: true, project: './tsconfig.json' }
+            },
+
+            /*
+             * Anchored at the repo root (`partialMatch: false`) rather than matched right-to-left.
+             * The default tries progressively longer suffixes, so a bare `modules/*` would also
+             * claim `src/infrastructure/modules/anything` — the anchored form says where each tier
+             * lives, which is the fact being stated.
+             *
+             * ORDER IS SIGNIFICANT: the first descriptor that matches wins, so `domain` must be
+             * declared before the `module` that contains it.
+             */
+            'boundaries/elements': [
                 {
-                    patterns: ['@kernel/*', '@modules/*', '@app/*']
-                }
+                    type: 'domain',
+                    pattern: 'src/modules/*/domain',
+                    capture: ['module'],
+                    partialMatch: false
+                },
+                {
+                    type: 'module',
+                    pattern: 'src/modules/*',
+                    capture: ['module'],
+                    partialMatch: false
+                },
+                { type: 'kernel', pattern: 'src/kernel', partialMatch: false },
+                { type: 'infrastructure', pattern: 'src/infrastructure', partialMatch: false },
+                { type: 'app', pattern: 'src/app', partialMatch: false },
+                { type: 'types', pattern: 'src/types', partialMatch: false }
+            ],
+
+            /*
+             * The file layer, for the four files that are a tier each on their own — an element
+             * descriptor matches folders, and these have no folder.
+             *
+             * Named one by one rather than as `src/*.ts`, deliberately: the whole point of
+             * `no-unknown-files` is that something new has to be classified before it can be
+             * imported, and a wildcard here would wave through the next file to land beside them.
+             */
+            'boundaries/files': [
+                { pattern: 'src/app.ts', category: 'composition-root' },
+                { pattern: 'src/cluster.ts', category: 'process-supervisor' },
+                { pattern: 'src/modules.ts', category: 'registry' },
+                { pattern: 'src/globals.d.ts', category: 'ambient' },
+                { pattern: 'src/modules/*/tests/**/*.ts', category: 'spec' }
             ]
-        }
-    },
-
-    /**
-     * A module's own specs, co-located under `src/modules/<name>/tests/`.
-     *
-     * Exempt from the boundary rule above, deliberately. That rule protects the RUNTIME import
-     * graph — it is what makes "delete the folder, delete the domain" true. A spec is deleted with
-     * the module it belongs to, so it cannot leave coupling behind that outlives either one, and
-     * it legitimately needs two things production code must not have: its own module's internals
-     * (a unit test of `service.ts` tests `service.ts`, not the barrel's view of it) and other
-     * modules' `module.ts` manifests, because asserting cross-module cleanup means running the
-     * real registry.
-     *
-     * Switched off here does NOT mean unenforced. The rule a spec must follow is relational —
-     * what it may import depends on which module owns it — and `no-restricted-imports` only
-     * matches file globs, so stating it here would take one near-identical block per module, with
-     * a new one silently missing the day someone adds a domain. It is asserted instead by
-     * `tests/cross-cutting/module-test-boundaries.test.ts`, which knows the owner of each spec and
-     * allows exactly four things: its own module, a sibling's barrel, a sibling's manifest, and a
-     * sibling's test helpers.
-     */
-    {
-        files: ['src/modules/*/tests/**/*.ts'],
+        },
         rules: {
-            'no-restricted-imports': 'off'
-        }
-    },
+            /*
+             * The uncovered check. A file under `src/` that matches no element and no category is
+             * an error here, one commit before it can quietly import anything it likes.
+             */
+            'boundaries/no-unknown-files': 'error',
 
-    /**
-     * `src/kernel/**` IS the module system — the registry, the bus between modules, and the auth
-     * port that keeps the shared guard out of a `users → account → users` cycle. It knows that
-     * modules exist but never which ones. It may reach `infrastructure`; a single import of `@modules/<name>`
-     * would make the mechanism depend on one of the things it is meant to carry, and "delete a
-     * domain, delete a folder" would stop being true.
-     *
-     * The test for what belongs here: would this file still make sense in an app with no modules
-     * at all? If yes it is `infrastructure`, however domain-free it looks — which is why the request
-     * pipeline lives in `infrastructure/http/middlewares` and the queue consumers in `infrastructure/adapters`.
-     */
-    {
-        files: ['src/kernel/**/*.ts'],
-        rules: {
-            'no-restricted-imports': [
+            'boundaries/dependencies': [
                 'error',
                 {
-                    patterns: ['@modules/*', '@app/*']
-                }
-            ]
-        }
-    },
-
-    /**
-     * Module boundaries.
-     *
-     * A module owns everything about its domain and exposes TWO surfaces, and no others:
-     *
-     *   `@modules/<name>`        the barrel — the runtime API a sibling may call
-     *   `@modules/<name>/demo`  the demo fixtures a sibling's seeder may point at
-     *
-     * Reaching `@modules/<name>/service` or any other internal is what this rule exists to stop,
-     * because the moment one happens the module stops being deletable.
-     *
-     * The second door is not a hole in the rule, it is the rest of it. Six modules have a
-     * `demo.ts` and a seeded cart line has to name a seeded product, so the coupling is real and
-     * has to go somewhere. With one entry point it went through the barrel — `products/index.ts`
-     * published `SEED_PRODUCT_IDS` and `productFixtures` beside `productService`, which made "what
-     * may a sibling import" and "what is the production API" stop being the same question. Naming
-     * the demo path separately answers both at the call site, and lets the two edges be counted
-     * apart: `tests/cross-cutting/module-test-boundaries.test.ts` asserts that nothing outside a
-     * `demo.ts` ever takes one, so demo data cannot reach the runtime import graph.
-     *
-     * The pattern matches two segments or more, so both doors stay legal while everything below
-     * them does not. A module reaches its own files relatively — `./service`,
-     * `./controllers/get-products` — which no pattern here touches.
-     *
-     * `src/modules.ts` sits outside `src/modules/` and so is not covered: the registry is the one
-     * caller allowed to import `@modules/<name>/module`, which is the manifest's whole purpose.
-     *
-     * The layer aliases (`@services/*`, `@controllers/*`, …) used to be banned here as well. They
-     * were removed from `tsconfig.json` when the directories went, so an import naming one is
-     * already an unresolved module — a TypeScript error before it is a lint one, and a rule that
-     * cannot fire is a rule nobody can trust.
-     */
-    {
-        files: ['src/modules/**/*.ts'],
-        // Co-located specs are exempt — see the block after this one.
-        ignores: ['src/modules/*/tests/**'],
-        rules: {
-            'no-restricted-imports': [
-                'error',
-                {
-                    patterns: [
+                    default: 'disallow',
+                    message:
+                        '{{from.element.type}} may not depend on {{to.element.type}} — see docs/theory/layers.md.',
+                    policies: [
+                        /*
+                         * ── What is permitted ─────────────────────────────────────────────────
+                         *
+                         * The default is `disallow`, so this half is not decoration: an edge no
+                         * policy names is refused. That is the property `--fail-on-uncovered` gives
+                         * the PHP twin's deptrac one level up — `no-unknown-files` refuses a FILE
+                         * no descriptor claims, and denying by default refuses an EDGE no policy
+                         * claims. With `allow` as the default, adding a tier to the element list
+                         * and forgetting to write its rules leaves it able to import anything, and
+                         * nothing says so.
+                         *
+                         * Read top to bottom: the last matching policy wins, so these open the
+                         * legitimate arrows and the walls below close the illegitimate ones.
+                         */
                         {
-                            // The negation keeps `@modules/<name>/demo` legal while every other
-                            // second segment stays banned. Two allowed shapes, no per-module list,
-                            // so adding a domain needs no edit here.
-                            group: ['@modules/*/*', '!@modules/*/demo'],
-                            message:
-                                'Import a sibling module through one of its two public paths: @modules/<name> for its runtime API, @modules/<name>/demo for its demo fixtures. Never its internals.'
+                            // npm. The graph being described is this repository's, and a package
+                            // belongs to no tier of it.
+                            allow: { to: { module: { origin: 'external' } } }
                         },
                         {
-                            group: ['@app/*'],
+                            // Downward, which is what the tiers are for: everything may reach the
+                            // substrate below it, and `types` is erased at compile time.
+                            allow: { to: { element: { type: ['infrastructure', 'types'] } } }
+                        },
+                        {
+                            // `kernel` is the module system, reachable by what sits above it.
+                            from: { element: { type: ['module', 'domain', 'app'] } },
+                            allow: { to: { element: { type: 'kernel' } } }
+                        },
+                        {
+                            // `app` assembles the application and is the one tier allowed to know
+                            // which domains exist.
+                            from: { element: { type: 'app' } },
+                            allow: { to: { element: { type: ['app', 'module'] } } }
+                        },
+                        {
+                            // A tier reaches its own files freely — that is what makes it a tier
+                            // rather than a pile of files that happen to share a folder.
+                            from: { element: { type: 'infrastructure' } },
+                            allow: { to: { element: { type: 'infrastructure' } } }
+                        },
+                        {
+                            from: { element: { type: 'kernel' } },
+                            allow: { to: { element: { type: 'kernel' } } }
+                        },
+                        {
+                            /*
+                             * The three files that are a tier each — `app.ts` composes,
+                             * `cluster.ts` supervises, `modules.ts` IS the registry and is the one
+                             * caller allowed to import `@modules/<name>/module`. They have no
+                             * element (an element descriptor matches folders), so they are named
+                             * by the file categories declared above.
+                             */
+                            from: {
+                                file: {
+                                    categories: [
+                                        'composition-root',
+                                        'process-supervisor',
+                                        'registry'
+                                    ]
+                                }
+                            },
+                            allow: { to: { element: { type: '*' } } }
+                        },
+                        {
+                            // …including each other: `cluster.ts` imports `app.ts`, and neither
+                            // belongs to an element, so the edge is named by category on both ends.
+                            from: {
+                                file: {
+                                    categories: [
+                                        'composition-root',
+                                        'process-supervisor',
+                                        'registry'
+                                    ]
+                                }
+                            },
+                            allow: {
+                                to: {
+                                    file: {
+                                        categories: [
+                                            'composition-root',
+                                            'process-supervisor',
+                                            'registry'
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+
+                        {
+                            /*
+                             * The registry is readable by the tier that composes the application
+                             * and by any spec that needs the real module list — `app/routes.ts`
+                             * mounts what it enumerates, and a co-located spec asserting
+                             * cross-module cleanup has to run the registry rather than a stand-in.
+                             *
+                             * Not by `infrastructure` or `kernel`: those sit below the domains, and
+                             * reading the list of them is knowing which ones exist.
+                             */
+                            from: [
+                                { element: { type: 'app' } },
+                                { file: { categories: ['spec'] } }
+                            ],
+                            allow: { to: { file: { categories: ['registry'] } } }
+                        },
+
+                        /*
+                         * ── What is refused ───────────────────────────────────────────────────
+                         */
+                        {
+                            from: { element: { type: 'infrastructure' } },
+                            disallow: {
+                                to: { element: { type: ['kernel', 'module', 'domain', 'app'] } }
+                            },
+                            message:
+                                'infrastructure is the bottom of the dependency graph. It may not reach up into application code — that inversion is what turned the old src/utils/ into a dumping ground.'
+                        },
+                        {
+                            from: { element: { type: 'kernel' } },
+                            disallow: { to: { element: { type: ['module', 'domain', 'app'] } } },
+                            message:
+                                'kernel IS the module system: it knows that modules exist but never which ones. One import of a named module would make the mechanism depend on a thing it carries, and "delete a domain, delete a folder" would stop being true.'
+                        },
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            disallow: { to: { element: { type: 'app' } } },
                             message:
                                 'A module may not reach the app tier. `app` assembles the application and is allowed to know every domain; reaching back would point the arrow both ways. A guard every module needs belongs in @kernel behind a port — see kernel/authentication.ts.'
+                        },
+
+                        /*
+                         * The two doors. A sibling is reachable through `index.ts` (its runtime
+                         * API) or `demo.ts` (its fixtures); every other file of it is internal.
+                         * The allow follows the disallow because the LAST matching policy wins.
+                         */
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            disallow: { to: { element: { type: ['module', 'domain'] } } },
+                            message:
+                                'Import a sibling module through one of its two public paths: @modules/<name> for its runtime API, @modules/<name>/demo for its demo fixtures. Never its internals — the moment one is reached the module stops being deletable.'
+                        },
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        type: 'module',
+                                        fileInternalPath: ['index.ts', 'demo.ts']
+                                    }
+                                }
+                            }
+                        },
+
+                        /*
+                         * The second door is narrower than the first, and the asymmetry is the
+                         * whole reason it exists: `demo.ts` is published so that a SEEDER may
+                         * point at a sibling's fixtures, and for no other reason.
+                         *
+                         * Before the split, `products/index.ts` published `SEED_PRODUCT_IDS` and
+                         * `productFixtures` beside `productService`, so a controller could have
+                         * imported demo rows without anything failing — the barrel made runtime
+                         * and demo the same surface, and nothing could tell the two edges apart.
+                         * Splitting the paths only helps while something asserts they carry
+                         * different traffic.
+                         *
+                         * The other half of that — a barrel re-exporting its own `demo.ts` — is
+                         * NOT expressible here: it is an edge inside one element, and this plugin
+                         * only weighs edges between them. It is asserted in
+                         * `tests/cross-cutting/module-shape.test.ts` instead.
+                         */
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            disallow: {
+                                to: { element: { type: 'module', fileInternalPath: 'demo.ts' } }
+                            },
+                            message:
+                                'Only a seeder may take a sibling’s /demo path. Demo data exists to be written by db/demo, and an import of it from runtime code puts fixtures into the graph the application actually runs.'
+                        },
+                        {
+                            from: { element: { fileInternalPath: 'demo.ts' } },
+                            allow: {
+                                to: { element: { type: 'module', fileInternalPath: 'demo.ts' } }
+                            }
+                        },
+
+                        /*
+                         * A module reaches its own files freely — a service imports its repository,
+                         * a controller imports its service — so "the same module" is compared by
+                         * the captured name rather than listed per domain.
+                         */
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        captured: { module: '{{ from.element.captured.module }}' }
+                                    }
+                                }
+                            }
+                        },
+
+                        /*
+                         * The domain layer: plain TypeScript over plain data. It is the only tier
+                         * whose rule is about what it may TOUCH rather than which tier it may
+                         * reach — no framework, no tier, no sibling, and not even the outer files
+                         * of its own module, so the arrow points inward only.
+                         *
+                         * `@types` is the one thing it may take, and always could: those are
+                         * ambient declarations, erased at compile time, so importing one adds no
+                         * edge to the runtime graph at all.
+                         *
+                         * Its own folder stays reachable, which the same-module allow above
+                         * already grants and the disallow here must not take back — hence the
+                         * final policy restoring it.
+                         */
+                        {
+                            from: { element: { type: 'domain' } },
+                            disallow: {
+                                to: {
+                                    element: {
+                                        type: ['infrastructure', 'kernel', 'app', 'module']
+                                    }
+                                }
+                            },
+                            message:
+                                'The domain layer imports nothing but plain TypeScript — no tier, no sibling module, and none of the outer files of its own module. If a rule needs i18n it is returning a message where it should return a verdict; if it needs a repository it is doing the job of the service layer.'
+                        },
+                        {
+                            from: { element: { type: 'domain' } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        type: 'domain',
+                                        captured: { module: '{{ from.element.captured.module }}' }
+                                    }
+                                }
+                            }
+                        },
+
+                        /*
+                         * Co-located specs, and the rule that used to need a test.
+                         *
+                         * A spec is deleted with the module it belongs to, so it cannot leave
+                         * coupling behind that outlives either one — and it legitimately needs two
+                         * things production code must not have: its own module's internals (a unit
+                         * test of `service.ts` tests `service.ts`, not the barrel's view of it) and
+                         * a sibling's `module.ts` manifest, because asserting cross-module cleanup
+                         * means running the real registry.
+                         *
+                         * Stated last so it overrides the module walls above for spec files only.
+                         */
+                        {
+                            from: { file: { categories: ['spec'] } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        type: ['module', 'domain'],
+                                        fileInternalPath: ['index.ts', 'module.ts', 'tests/**']
+                                    }
+                                }
+                            }
                         }
                     ]
                 }
@@ -570,14 +819,11 @@ export default tseslint.config(
     },
 
     /**
-     * The domain layer: `src/modules/<name>/domain/**` — pure business rules.
+     * What the domain layer may not TOUCH, as opposed to which tier it may reach.
      *
-     * The only rule here about what a file may TOUCH rather than which tier it may reach. Plain
-     * TypeScript over plain data: no framework, no tier, no sibling, and no `../` — the arrow
-     * points inward only, so domain cannot read `../model` or `../repository`.
-     *
-     * The folder is optional; most modules have none.
-     * See `docs/theory/domain-layer.md`.
+     * Left with `no-restricted-imports` on purpose: `mongoose` and `express` are external
+     * packages, not tiers, so they are not a boundary question and stating them as one would mean
+     * describing npm in the element graph.
      */
     {
         files: ['src/modules/*/domain/**/*.ts'],
@@ -596,26 +842,11 @@ export default tseslint.config(
                             message:
                                 'The domain layer may not know it is being called over HTTP. Return a verdict; the controller turns it into a status code.'
                         }
-                    ],
-                    patterns: [
-                        {
-                            group: [
-                                '@infrastructure/*',
-                                '@kernel/*',
-                                '@app/*',
-                                '@modules/*',
-                                '../*',
-                                '../../*'
-                            ],
-                            message:
-                                'The domain layer imports nothing but plain TypeScript — no tier, no sibling module, and none of the outer files of its own module. If a rule needs i18n it is returning a message where it should return a verdict; if it needs a repository it is doing the job of the service layer.'
-                        }
                     ]
                 }
             ]
         }
     },
-
     /**
      * The analytics event catalogue — the one namespace both repos write into.
      *
@@ -707,9 +938,18 @@ export default tseslint.config(
      * Tool configs at the repo root, and the VitePress config: TypeScript, but OUTSIDE the
      * `tsconfig` project, so the type-aware program is switched off — for these files it would be
      * a parser error, not a finding. Everything syntax-level still applies.
+     *
+     * `.dependency-cruiser.cjs` is CommonJS rather than TypeScript, and is here for the same
+     * reason: outside the project, so type-aware rules cannot run on it.
      */
     {
-        files: ['eslint.config.ts', 'orval.config.ts', 'docs/.vitepress/**/*.{ts,mts}'],
+        files: [
+            'eslint.config.ts',
+            'orval.config.ts',
+            '.dependency-cruiser.cjs',
+            'jest.config.cluster.js',
+            'docs/.vitepress/**/*.{ts,mts}'
+        ],
         extends: [tseslint.configs.disableTypeChecked],
         languageOptions: {
             globals: {
@@ -719,7 +959,11 @@ export default tseslint.config(
         rules: {
             'no-console': 'off',
             // `props`, `env`, `dir`: the VitePress/orval config surface spells its own keys.
-            'unicorn/prevent-abbreviations': 'off'
+            'unicorn/prevent-abbreviations': 'off',
+            // dependency-cruiser and jest both read CommonJS configs; `module.exports` and
+            // `require` are their interface, not a style choice.
+            'unicorn/prefer-module': 'off',
+            '@typescript-eslint/no-require-imports': 'off'
         }
     },
 
@@ -793,6 +1037,61 @@ export default tseslint.config(
             'no-restricted-syntax': ['error', ...bannedDoubleCasts]
         }
     },
+
+    /**
+     * The unit layer does not boot the application.
+     *
+     * "Unit" here means one thing only: no HTTP. A unit test may open a database — 36 of them call
+     * `setupTestDb()`, and that is a decision rather than a leak, because most of what a repository
+     * or a service does IS what Mongo does and a mocked driver would assert the mock. What it may
+     * not do is mount `src/app.ts`, because that pulls in every module, every middleware and the
+     * whole registry to exercise one function.
+     *
+     * The cost is not tidiness, it is the mutation run. Stryker executes the unit suite once per
+     * mutant, so anything the layer imports at module scope is paid thousands of times over — and
+     * an app boot is the most expensive import in the repository. A single spec reaching for
+     * `api()` because it was convenient moves the nightly by hours, and nothing in the result would
+     * say which file did it.
+     *
+     * `@app/*` is deliberately NOT banned. `tests/unit/app/process-error-handlers.test.ts` unit
+     * tests a file that lives in the app tier, which is the tier being tested rather than the
+     * application being started; the composition root is `src/app.ts`, and that is what the pattern
+     * below names.
+     *
+     * This block sits after the module-spec exemption above, which switches `no-restricted-imports`
+     * off wholesale — flat config gives the last match, so the order is what makes this apply to
+     * co-located unit specs at all.
+     */
+    {
+        files: ['tests/unit/**/*.ts', 'src/modules/*/tests/unit/**/*.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: 'supertest',
+                            message:
+                                'A unit test that sends a request is an integration test. Move it to tests/integration/, where the app is booted once for the whole suite.'
+                        },
+                        {
+                            name: '@tests/http',
+                            message:
+                                '`api()` mounts src/app.ts — every module, every middleware — to exercise one function. Move the spec to tests/integration/, or call the unit under test directly.'
+                        }
+                    ],
+                    patterns: [
+                        {
+                            group: ['**/src/app', '**/src/cluster'],
+                            message:
+                                'The composition root starts the application. A unit test importing it pays for the whole registry on every mutant Stryker runs.'
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+
     {
         files: ['**/*.d.ts'],
         rules: {

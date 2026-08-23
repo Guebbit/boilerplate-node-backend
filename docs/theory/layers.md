@@ -30,7 +30,7 @@ flowchart TD
     class C,DB base;
 ```
 
-The rule, enforced by `no-restricted-imports`:
+The rule, enforced by `eslint-plugin-boundaries` in `eslint.config.ts`:
 
 - `infrastructure` imports nothing above it;
 - `kernel` may import `infrastructure`, never a module and never `app`;
@@ -38,6 +38,20 @@ The rule, enforced by `no-restricted-imports`:
   `@modules/<name>`, never `@modules/<name>/service` — and never `app`;
 - `app` may import anything: it is the tier allowed to know which domains exist;
 - nothing outside a module imports its internals.
+
+Two things hold that beyond what a per-file rule can see:
+
+- **Nothing is permitted by default.** `boundaries/dependencies` runs `default: 'disallow'`, so an
+  edge no policy names is refused — the permitted arrows above are stated, not assumed. A tier
+  added to the element list without rules can import nothing until its rules are written.
+- **`boundaries/no-unknown-files`** refuses a file under `src/` that belongs to no tier at all. A
+  new top-level directory used to match no rule and therefore break none — invisible rather than
+  permitted — and together with the default above this is what makes the walls exhaustive instead
+  of merely present.
+- **`npm run check:dependencies`** ([dependency-cruiser](../tools/dependency-graph.md)) asks the
+  transitive form of the same questions: not "does this file import mongoose" but "can this tier
+  reach it at all", plus cycle detection, which no per-file rule can perform because no file in a
+  cycle is doing anything wrong on its own.
 
 Two modules that each need the other are not a dependency pair. Either they are one module, or the
 reverse edge becomes a domain event — see `src/kernel/events.ts`, and the catalogue/cart pair for

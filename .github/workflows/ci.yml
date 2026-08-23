@@ -362,6 +362,60 @@ jobs:
             - name: Check every environment variable is documented
               run: npm run check:environment-keys
 
+    cluster:
+        # The only suite that boots `src/cluster.ts` and forks real workers. It is not in
+        # `complete` — two clusters and a Redis is ~25s and needs a container engine — so CI is
+        # where it runs on every push. `complete:manual` is the local equivalent.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        services:
+            redis:
+                image: redis:7-alpine
+                ports:
+                    - 6379:6379
+                options: >-
+                    --health-cmd "redis-cli ping"
+                    --health-interval 5s
+                    --health-timeout 3s
+                    --health-retries 10
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Rate limiting spends one budget across workers
+              # The service container above is already listening, so the suite uses it instead of
+              # starting its own — see tests/cluster/support/redis.ts.
+              env:
+                  NODE_TEST_REDIS_URL: redis://127.0.0.1:6379
+              run: npm run test:cluster
+
+    dependency-graph:
+        # The two questions ESLint cannot answer, because it sees one file's imports and no
+        # further: does any cycle exist, and can a tier REACH something it may not import.
+        # The walls themselves are enforced by eslint-plugin-boundaries in the lint job.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check the dependency graph
+              run: npm run check:dependencies
+
     typecheck:
         # `tsc --noEmit` — types only. `build` below repeats it as part of its own script; this
         # job exists so a type error is reported as one, not as a build failure.

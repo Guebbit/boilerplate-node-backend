@@ -82,6 +82,22 @@ const redisUrl = (): string | undefined => {
  */
 let client: RedisClientType | undefined;
 
+/**
+ * The in-flight `connect()` for {@link client}, shared by every command that arrives before it
+ * settles.
+ *
+ * One connection needs one `connect()`. Without this, each command tested `isReady` for itself and
+ * called `connect()` when it was false — and `isReady` stays false for the whole handshake, so two
+ * commands issued together both tried to open the same socket. node-redis answers the second with
+ * `Socket already opened`, whose failure path below discards the client the FIRST one was still
+ * using, and that one then fails with `The client is closed`.
+ *
+ * It was not a rare interleaving: `RedisStore.init()` loads two Lua scripts back to back, so the
+ * pair raced on the first request every time, every worker fell back to passing requests through
+ * unbudgeted, and the log said Redis was unreachable while Redis was answering fine.
+ */
+let connecting: Promise<void> | undefined;
+
 /** Whether the last command failed, so an outage is logged once rather than once per request. */
 let degraded = false;
 
@@ -118,8 +134,10 @@ const send = (url: string, command: string[]): Promise<RedisReply> => {
     client ??= build(url);
     const redisClient = client;
 
+    if (!redisClient.isReady) connecting ??= redisClient.connect().then(() => undefined);
+
     return (
-        (redisClient.isReady ? Promise.resolve() : redisClient.connect().then(() => undefined))
+        (redisClient.isReady ? Promise.resolve() : (connecting ?? Promise.resolve()))
             /*
              * The reply type is stated rather than inferred: node-redis answers a wide `ReplyUnion`
              * for an arbitrary command, while only `INCR`, `DECR`, `PTTL` and `DEL` are ever sent from
@@ -139,6 +157,7 @@ const send = (url: string, command: string[]): Promise<RedisReply> => {
             })
             .catch((error: unknown) => {
                 client = undefined;
+                connecting = undefined;
                 redisClient.destroy();
 
                 if (!degraded) {
@@ -240,6 +259,7 @@ export const stopRateLimitStore = (): Promise<void> => {
 
     const redisClient = client;
     client = undefined;
+    connecting = undefined;
     degraded = false;
 
     return redisClient.quit().then(
