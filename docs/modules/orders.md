@@ -149,7 +149,7 @@ From model `Order`. `_id` and `__v` are omitted — every document carries them.
 | `POST /orders/{id}/cancel` | `getAuth` → `isAuth` → `(inline)`                          | `postCancelOrder` | Cancel order                 |
 | `DELETE /orders/{id}/hard` | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)` | `deleteOrder`     | Permanently delete order     |
 | `GET /orders/{id}/invoice` | `getAuth` → `isAuth` → `(inline)`                          | `getOrderInvoice` | Download order invoice (PDF) |
-| `POST /orders/search`      | `getAuth` → `isAuth`                                       | `getOrders`       | Search orders (DTO-friendly) |
+| `POST /orders/search`      | `getAuth` → `isAuth` → `(inline)`                          | `getOrders`       | Search orders (DTO-friendly) |
 
 Middlewares run left to right; the controller is the last handler on the route. Summaries come from this module’s own `openapi.yaml`, which is where they are edited.
 

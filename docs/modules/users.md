@@ -123,7 +123,7 @@ From model `User`. `_id` and `__v` are omitted — every document carries them.
 | `GET /users/{id}`         | `getAuth` → `isAuth` → `isAdmin` → `(inline)`                                                                 | `getUserItem` | User details                |
 | `PUT /users/{id}`         | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages` | `writeUsers`  | Edit user                   |
 | `DELETE /users/{id}/hard` | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)`                                                    | `deleteUser`  | Permanently delete user     |
-| `POST /users/search`      | `getAuth` → `isAuth` → `isAdmin`                                                                              | `getUsers`    | Search users (DTO-friendly) |
+| `POST /users/search`      | `getAuth` → `isAuth` → `isAdmin` → `(inline)`                                                                 | `getUsers`    | Search users (DTO-friendly) |
 
 Middlewares run left to right; the controller is the last handler on the route. Summaries come from this module’s own `openapi.yaml`, which is where they are edited.
 

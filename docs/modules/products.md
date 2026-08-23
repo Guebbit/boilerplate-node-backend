@@ -118,7 +118,7 @@ From model `Product`. `_id` and `__v` are omitted — every document carries the
 | `PUT /products/{id}`         | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)` → `validateUploadedImages` → `storeUploadedImages` | `writeProducts`      | Edit product                   |
 | `DELETE /products/{id}/hard` | `getAuth` → `isAuth` → `isAdmin` → `(inline)` → `(inline)`                                                    | `deleteProduct`      | Permanently delete product     |
 | `GET /products/categories`   | `getAuth` → `(inline)`                                                                                        | `getCatalogueFacets` | Catalogue facets               |
-| `POST /products/search`      | `getAuth`                                                                                                     | `getProducts`        | Search products (DTO-friendly) |
+| `POST /products/search`      | `getAuth` → `(inline)`                                                                                        | `getProducts`        | Search products (DTO-friendly) |
 
 Middlewares run left to right; the controller is the last handler on the route. Summaries come from this module’s own `openapi.yaml`, which is where they are edited.
 
