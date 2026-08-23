@@ -390,7 +390,7 @@ export const ListLocaleEntriesResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "locale": zod.string().regex(listLocaleEntriesResponseDataItemsItemLocaleRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "tenant": zod.string().min(1).max(listLocaleEntriesResponseDataItemsItemTenantMax).regex(listLocaleEntriesResponseDataItemsItemTenantRegExp).describe('The id of one tenant — one keyspace, authored by one team. Which ids exist is\nconfiguration, listed by `GET \/locales\/tenants`; a row naming an unknown tenant is\nrefused with a 422.\n\nOn a LANGUAGE it reports capability: the backend tenant means the API can answer\nrequests in it, because a dictionary file is deployed; a frontend tenant means a\nclient dictionary is downloadable for it.\n\nOn an ENTRY it says whose dictionary that row OVERRIDES. A frontend tenant\'s rows\nare what `GET \/locales\/{locale}\/messages` serves; the backend tenant\'s rows are\nlayered over the API\'s own deployed files at resolution time.\n'),
-  "key": zod.string().describe('Flat and dotted. Stored AS A STRING and never as a Mongo path — a document per language with `$set: { \"messages.products.list.title\": v }` would have Mongo read three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting.'),
+  "key": zod.string().describe('Flat and dotted. Stored AS A STRING, and never as a path INTO a nested structure: a store that interprets the dots reads three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting.'),
   "value": zod.string(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
@@ -446,7 +446,7 @@ export const CreateLocaleEntryResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "locale": zod.string().regex(createLocaleEntryResponseDataLocaleRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "tenant": zod.string().min(1).max(createLocaleEntryResponseDataTenantMax).regex(createLocaleEntryResponseDataTenantRegExp).describe('The id of one tenant — one keyspace, authored by one team. Which ids exist is\nconfiguration, listed by `GET \/locales\/tenants`; a row naming an unknown tenant is\nrefused with a 422.\n\nOn a LANGUAGE it reports capability: the backend tenant means the API can answer\nrequests in it, because a dictionary file is deployed; a frontend tenant means a\nclient dictionary is downloadable for it.\n\nOn an ENTRY it says whose dictionary that row OVERRIDES. A frontend tenant\'s rows\nare what `GET \/locales\/{locale}\/messages` serves; the backend tenant\'s rows are\nlayered over the API\'s own deployed files at resolution time.\n'),
-  "key": zod.string().describe('Flat and dotted. Stored AS A STRING and never as a Mongo path — a document per language with `$set: { \"messages.products.list.title\": v }` would have Mongo read three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting.'),
+  "key": zod.string().describe('Flat and dotted. Stored AS A STRING, and never as a path INTO a nested structure: a store that interprets the dots reads three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting.'),
   "value": zod.string(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
@@ -599,7 +599,7 @@ export const UpdateLocaleEntryResponse = zod.object({
   "id": zod.string().describe('Resource identifier'),
   "locale": zod.string().regex(updateLocaleEntryResponseDataLocaleRegExp).describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.'),
   "tenant": zod.string().min(1).max(updateLocaleEntryResponseDataTenantMax).regex(updateLocaleEntryResponseDataTenantRegExp).describe('The id of one tenant — one keyspace, authored by one team. Which ids exist is\nconfiguration, listed by `GET \/locales\/tenants`; a row naming an unknown tenant is\nrefused with a 422.\n\nOn a LANGUAGE it reports capability: the backend tenant means the API can answer\nrequests in it, because a dictionary file is deployed; a frontend tenant means a\nclient dictionary is downloadable for it.\n\nOn an ENTRY it says whose dictionary that row OVERRIDES. A frontend tenant\'s rows\nare what `GET \/locales\/{locale}\/messages` serves; the backend tenant\'s rows are\nlayered over the API\'s own deployed files at resolution time.\n'),
-  "key": zod.string().describe('Flat and dotted. Stored AS A STRING and never as a Mongo path — a document per language with `$set: { \"messages.products.list.title\": v }` would have Mongo read three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting.'),
+  "key": zod.string().describe('Flat and dotted. Stored AS A STRING, and never as a path INTO a nested structure: a store that interprets the dots reads three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting.'),
   "value": zod.string(),
   "createdAt": zod.iso.datetime({"offset":true}).optional(),
   "updatedAt": zod.iso.datetime({"offset":true}).optional()
@@ -2595,9 +2595,9 @@ export const CheckoutResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
   "actions": zod.object({
-  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
   "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
   "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
 }).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
@@ -2813,9 +2813,9 @@ export const ListOrdersResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
   "actions": zod.object({
-  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
   "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
   "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
 }).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
@@ -2910,9 +2910,9 @@ export const CreateOrderResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
   "actions": zod.object({
-  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
   "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
   "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
 }).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
@@ -3002,9 +3002,9 @@ export const UpdateOrderResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
   "actions": zod.object({
-  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
   "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
   "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
 }).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
@@ -3128,9 +3128,9 @@ export const SearchOrdersResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
   "actions": zod.object({
-  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
   "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
   "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
 }).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
@@ -3216,9 +3216,9 @@ export const GetOrderByIdResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
   "actions": zod.object({
-  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
   "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
   "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
 }).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
@@ -3311,9 +3311,9 @@ export const UpdateOrderByIdResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
   "actions": zod.object({
-  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
   "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
   "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
 }).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),
@@ -3438,9 +3438,9 @@ export const CancelOrderByIdResponse = zod.object({
   "country": zod.string(),
   "phone": zod.string().optional()
 }).optional(),
-  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.'),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
   "actions": zod.object({
-  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s `domain\/lifecycle.ts`, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
+  "transitions": zod.array(zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.')).describe('The statuses this caller may move the order to. Empty on a terminal order, and never contains the order\'s current status.'),
   "cancel": zod.boolean().describe('Whether `POST \/orders\/{id}\/cancel` would be accepted for this caller. A customer may cancel while unpaid or paid; an operator one step further.'),
   "pay": zod.boolean().describe('Whether this order is still awaiting payment — it can reach `paid`, which only a confirmed charge writes. Not in `transitions`, because no request may make that move: a client starts the flow with `POST \/payments\/intent` and the provider\'s yes does the rest.')
 }).optional().describe('What the requesting caller may do to this order, decided by the server. A client renders its controls from this rather than re-implementing the lifecycle: the rules depend on the caller\'s role, and a second copy in a separately deployed client is how the two come to disagree.'),

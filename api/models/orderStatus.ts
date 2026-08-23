@@ -20,7 +20,7 @@
  */
 
 /**
- * Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server's `domain/lifecycle.ts`, answered per caller by `OrderActions`.
+ * Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server's own lifecycle rules, answered per caller by `OrderActions`.
  */
 export type OrderStatus = typeof OrderStatus[keyof typeof OrderStatus];
 

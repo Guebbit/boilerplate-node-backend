@@ -30,7 +30,7 @@ export interface LocaleEntry {
   id: Id;
   locale: Locale;
   tenant: LocaleTenant;
-  /** Flat and dotted. Stored AS A STRING and never as a Mongo path — a document per language with `$set: { "messages.products.list.title": v }` would have Mongo read three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting. */
+  /** Flat and dotted. Stored AS A STRING, and never as a path INTO a nested structure: a store that interprets the dots reads three levels of nesting where one key was meant, which is a trap that bites once and then keeps biting. */
   key: string;
   value: string;
   createdAt?: string;

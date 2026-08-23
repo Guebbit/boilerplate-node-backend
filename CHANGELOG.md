@@ -102,7 +102,10 @@ were removed and are kept out by a test.
   file is byte-identical in three repositories, so two of its three readers were being told
   something untrue. The prose now says what the thing IS rather than what enforces it here. Prose
   only: every generated change is a JSDoc comment or a `.describe()` string, verified by diffing
-  `api/` before and after.
+  `api/` before and after. Two more surfaced on a second sweep and are fixed the same way:
+  `OrderStatus` cited `domain/lifecycle.ts` as the authority on which status may follow which,
+  and the locale entry `key` justified a correct rule (store it flat, dotted, as a string) with
+  MongoDB `$set` semantics — true here, meaningless where those rows are a relational table.
 - `GET /feedback` declared `status` as a bare `type: string` while `POST /feedback/search`
   declared it as a four-value enum — one filter, documented as open on one spelling of a search
   and closed on the other. The closed set is now a single `FeedbackRequestStatus` schema, `$ref`d

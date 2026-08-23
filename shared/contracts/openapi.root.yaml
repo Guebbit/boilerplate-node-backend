@@ -527,7 +527,7 @@ components:
             enum: [pending, paid, processing, shipped, delivered, cancelled]
             description: >-
                 Where an order is in its lifecycle. The set is closed here; which value may FOLLOW
-                which is the server's `domain/lifecycle.ts`, answered per caller by `OrderActions`.
+                which is the server's own lifecycle rules, answered per caller by `OrderActions`.
 
         OrderActions:
             type: object
