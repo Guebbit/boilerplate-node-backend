@@ -1480,7 +1480,7 @@ paths:
           in: query
           required: false
           schema:
-            type: string
+            $ref: '#/components/schemas/FeedbackRequestStatus'
       responses:
         '200':
           description: Feedback request list
@@ -4896,6 +4896,13 @@ components:
           type: string
         message:
           type: string
+    FeedbackRequestStatus:
+      type: string
+      enum:
+        - new
+        - in_progress
+        - resolved
+        - spam
     FeedbackRequest:
       type: object
       additionalProperties: false
@@ -4918,12 +4925,7 @@ components:
         message:
           type: string
         status:
-          type: string
-          enum:
-            - new
-            - in_progress
-            - resolved
-            - spam
+          $ref: '#/components/schemas/FeedbackRequestStatus'
         adminNotes:
           type: string
         respondedAt:
@@ -4993,12 +4995,7 @@ components:
         text:
           $ref: '#/components/schemas/Text'
         status:
-          type: string
-          enum:
-            - new
-            - in_progress
-            - resolved
-            - spam
+          $ref: '#/components/schemas/FeedbackRequestStatus'
         email:
           $ref: '#/components/schemas/Email'
     UpdateFeedbackRequestStatusRequest:
@@ -5006,12 +5003,7 @@ components:
       additionalProperties: false
       properties:
         status:
-          type: string
-          enum:
-            - new
-            - in_progress
-            - resolved
-            - spam
+          $ref: '#/components/schemas/FeedbackRequestStatus'
         adminNotes:
           type: string
     ProductsResponse:

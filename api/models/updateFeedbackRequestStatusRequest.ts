@@ -18,9 +18,9 @@
  *
  * OpenAPI spec version: 2.0.0
  */
-import type { UpdateFeedbackRequestStatusRequestStatus } from './updateFeedbackRequestStatusRequestStatus';
+import type { FeedbackRequestStatus } from './feedbackRequestStatus';
 
 export interface UpdateFeedbackRequestStatusRequest {
-  status?: UpdateFeedbackRequestStatusRequestStatus;
+  status?: FeedbackRequestStatus;
   adminNotes?: string;
 }

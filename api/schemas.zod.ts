@@ -1735,7 +1735,7 @@ export const ListFeedbackRequestsQueryParams = zod.object({
   "pageSize": zod.number().min(1).max(listFeedbackRequestsQueryPageSizeMax).default(listFeedbackRequestsQueryPageSizeDefault),
   "text": zod.string().min(1).optional(),
   "email": zod.email().optional(),
-  "status": zod.string().optional()
+  "status": zod.enum(['new', 'in_progress', 'resolved', 'spam']).optional()
 })
 
 export const listFeedbackRequestsResponseDataMetaPageDefault = 1;

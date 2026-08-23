@@ -80,6 +80,82 @@ other module does, and that is mostly correct:
 
 ---
 
+## Review — the duplicated filter set
+
+A resource with both spellings describes one filter set in **two places** in the contract: a
+`parameters` list on the `GET`, and a request schema on the `POST`. That produces four generated
+types per resource:
+
+```ts
+ListProductsParams; // TS,  from GET query parameters
+ListProductsQueryParams; // zod, from GET query parameters
+SearchProductsRequest; // TS,  from POST request body
+SearchProductsBody; // zod, from POST request body
+```
+
+**This duplication cannot be removed.** They are different operations, orval names types per
+operation, and the two live in structurally different parts of the document. `$ref`ing one shared
+schema from both makes the _source_ single without collapsing the generated names.
+
+### It had already drifted
+
+Comparing all four pairs on 2026-08-23 found one:
+
+| Filter   | `GET /feedback`       | `POST /feedback/search`      |
+| -------- | --------------------- | ---------------------------- |
+| `status` | `type: string` — open | enum of four values — closed |
+
+One filter, documented as unconstrained on one route and constrained on the other. Nobody wrote
+that deliberately; a constraint added to a request schema is simply not added to a `parameters`
+entry, because they are not the same lines.
+
+**Fixed.** The closed set is now one `FeedbackRequestStatus` schema, `$ref`d from all five places
+that had been spelling it out (or omitting it). The other three pairs already agreed.
+
+The NAME was the interesting part. `FeedbackStatus` is the tidier choice and would have been a
+silent breaking change: orval had already derived `FeedbackRequestStatus` from the inline copy on
+`FeedbackRequest.status`, and the paired frontend imports it in five places. Naming the extracted
+component after the type that already existed means the generated diff is pure deletion — two
+orval-invented duplicates (`SearchFeedbackRequestsRequestStatus`,
+`UpdateFeedbackRequestStatusRequestStatus`) disappear and nothing is renamed.
+
+**The rule that falls out:** when extracting a shared schema, name it after the type the generator
+already produced for one of its copies. A generated name is part of the contract even though
+nobody wrote it.
+
+**Guarded.** `tests/cross-cutting/contract-search-parity.test.ts` compares the validation shape of
+every filter across both spellings — type, enum, bounds, length, pattern — and fails on a filter
+present in one and missing from the other. It discovers pairs by walking `x-alias-of`, so a new
+search sibling is covered without editing the test. It deliberately ignores `description` (prose
+may differ) and `default` (a query string and a body need not agree about absence;
+`normalizePagination` owns defaults for both).
+
+### What this means for the trigger rule
+
+The real cost of a second spelling is not the row in the cost table at the top of this file — it is
+**paying attention to two declarations of one thing, forever.** The parity test collects that
+payment automatically, which lowers the cost but does not remove it: a filter still has to be added
+twice, correctly, in two shapes.
+
+That strengthens rather than weakens the trigger rule. Add the sibling when the filter set has
+outgrown a URL; do not add it because a neighbouring resource has one.
+
+### Related finding, NOT fixed — your call
+
+Both spellings **silently ignore an unrecognised `status`** rather than rejecting it.
+`toFeedbackStatus` maps an unknown string to `undefined`, which drops the filter, so
+`?status=bogus` returns the unfiltered list — a filter that looks like it worked. This is the same
+shape as the old `hardDelete` presence bug and the old `productId`/`id` rename, both recorded in
+`docs/theory/request-input.md`.
+
+It is inconsistent with the controller's own stated principle two lines above it: pagination is
+validated precisely so `?pageSize=500` answers `422` "rather than being silently clamped". Now
+that the contract declares the closed set on both spellings, validating against it would be a
+small change in `get-feedback.ts` — but it turns a currently-succeeding request into a `422`, so it
+is a deliberate behaviour change rather than a cleanup.
+
+---
+
 ## The one real defect still open
 
 Not a missing spelling — a resolved contradiction.
@@ -144,12 +220,6 @@ Fifteen `*Params` models exist today. The naming is the only thing to learn:
 | `parameters` (query) | `XParams`       | `XQueryParams` |
 | `requestBody`        | `XRequest`      | `XBody`        |
 
-**The genuine asymmetry** — and probably what prompted the question — is that a resource with both
-spellings gets **four** types describing one filter set: `ListProductsParams`,
-`ListProductsQueryParams`, `SearchProductsRequest`, `SearchProductsBody`. That duplication is real
-and orval offers no way out of it: the query form and the body form are different operations, and
-it names types per operation. `$ref`ing one shared schema from both makes the _source_ single
-without collapsing the generated names.
-
-That is an argument for having fewer `/search` siblings — the trigger rule at the top — not for
-declaring bodies on GETs.
+The genuine asymmetry — four types for one filter set — is real, and is reviewed above under
+[Review — the duplicated filter set](#review--the-duplicated-filter-set). It is an argument for
+having fewer `/search` siblings, not for declaring bodies on GETs.

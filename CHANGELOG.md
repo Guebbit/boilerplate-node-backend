@@ -95,6 +95,14 @@ were removed and are kept out by a test.
   and `cartItemAddById` therefore answer a response envelope like the rest of the module.
   `services/reorder.ts` keeps its own resolution deliberately: a discontinued line there is SKIPPED
   rather than refused, and it resolves the whole order in one pass instead of one read per line.
+- `GET /feedback` declared `status` as a bare `type: string` while `POST /feedback/search`
+  declared it as a four-value enum — one filter, documented as open on one spelling of a search
+  and closed on the other. The closed set is now a single `FeedbackRequestStatus` schema, `$ref`d
+  from all five places that had been spelling it out or omitting it. No generated type is renamed:
+  the extracted component takes the name orval had already derived from the inline copy, so the
+  client diff is the deletion of two invented duplicates.
+  `tests/cross-cutting/contract-search-parity.test.ts` compares the validation shape of every
+  filter across both spellings, so the next one cannot drift silently.
 - The four searches cache under one identity per resource, so `GET /products?text=x` and
   `POST /products/search {text}` are a single entry and whichever asks first warms the other. The
   `POST` form is cached in Redis only; the wire says `no-store`, because a POST response is not

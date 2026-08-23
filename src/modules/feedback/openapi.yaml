@@ -53,7 +53,7 @@ paths:
                   in: query
                   required: false
                   schema:
-                      type: string
+                      $ref: '#/components/schemas/FeedbackRequestStatus'
             responses:
                 '200':
                     description: Feedback request list
@@ -171,8 +171,7 @@ components:
                 message:
                     type: string
                 status:
-                    type: string
-                    enum: [new, in_progress, resolved, spam]
+                    $ref: '#/components/schemas/FeedbackRequestStatus'
                 adminNotes:
                     type: string
                 respondedAt:
@@ -184,6 +183,20 @@ components:
                 updatedAt:
                     type: string
                     format: date-time
+
+        # The closed set, written ONCE. Named for the type orval ALREADY derived from the inline
+        # copy on `FeedbackRequest.status`, so extracting it renames nothing: the paired frontend
+        # imports `FeedbackRequestStatus` in five places. A tidier `FeedbackStatus` would have
+        # been a silent breaking change to a generated type — the duplication is what goes away,
+        # not the name.
+        #
+        # It was written out four times and omitted from a fifth —
+        # `GET /feedback`'s `status` query parameter declared a bare `type: string` while
+        # `POST /feedback/search` declared the enum, so the two spellings of one filter validated
+        # differently. That is the drift a duplicated filter set invites; `$ref` is the answer.
+        FeedbackRequestStatus:
+            type: string
+            enum: [new, in_progress, resolved, spam]
 
         CreateFeedbackRequest:
             type: object
@@ -210,8 +223,7 @@ components:
                 text:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
                 status:
-                    type: string
-                    enum: [new, in_progress, resolved, spam]
+                    $ref: '#/components/schemas/FeedbackRequestStatus'
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
 
@@ -220,8 +232,7 @@ components:
             additionalProperties: false
             properties:
                 status:
-                    type: string
-                    enum: [new, in_progress, resolved, spam]
+                    $ref: '#/components/schemas/FeedbackRequestStatus'
                 adminNotes:
                     type: string
 

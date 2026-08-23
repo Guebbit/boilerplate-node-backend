@@ -19,15 +19,15 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
+import type { FeedbackRequestStatus } from './feedbackRequestStatus';
 import type { Page } from './page';
 import type { PageSize } from './pageSize';
-import type { SearchFeedbackRequestsRequestStatus } from './searchFeedbackRequestsRequestStatus';
 import type { Text } from './text';
 
 export interface SearchFeedbackRequestsRequest {
   page?: Page;
   pageSize?: PageSize;
   text?: Text;
-  status?: SearchFeedbackRequestsRequestStatus;
+  status?: FeedbackRequestStatus;
   email?: Email;
 }

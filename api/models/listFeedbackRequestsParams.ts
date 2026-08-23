@@ -19,6 +19,7 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
+import type { FeedbackRequestStatus } from './feedbackRequestStatus';
 import type { Page } from './page';
 import type { PageParamParameter } from './pageParamParameter';
 import type { PageSize } from './pageSize';
@@ -44,5 +45,5 @@ pageSize?: PageSizeParamParameter;
  */
 text?: TextParamParameter;
 email?: Email;
-status?: string;
+status?: FeedbackRequestStatus;
 };
