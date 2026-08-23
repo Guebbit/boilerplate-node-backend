@@ -73,10 +73,17 @@ const wishlistRemove = (
 /**
  * Move a saved product into the cart — the wishlist's exit.
  *
+ * Two questions, then two writes, and only the FIRST question is this module's.
+ *
+ * Whether the product may go in a cart is the cart's rule and is asked by asking the cart: a
+ * refusal comes back as a reject envelope and becomes this operation's 404. A wishlist outlives
+ * the catalogue by design — `PRODUCT_DELETED` clears hard deletions, so a line pointing at a
+ * merely deactivated product is the state that survives — and re-deriving "is it still on sale"
+ * here would be a second copy of a rule the cart already enforces for every other caller.
+ *
  * Cart first, wishlist second, deliberately in that order: if the cart write fails the line is
  * still saved (retryable, nothing lost), while the reverse order could drop the line and then
- * fail to add it — the one outcome a shopper cannot repair. The cart's own service re-validates
- * the product, so a stale line answers its 404 rather than planting a broken cart line.
+ * fail to add it — the one outcome a shopper cannot repair.
  */
 const wishlistMoveToCart = (
     userId: string,
@@ -86,15 +93,17 @@ const wishlistMoveToCart = (
         const saved = wishlist?.items.some((item) => String(item.productId) === productId);
         if (!saved) return generateReject(404, [t('wishlist.not-found')]);
 
-        return cartService
-            .cartItemAddById(userId, productId)
-            .then(() =>
-                wishlistRepository
-                    .removeLine(userId, productId)
-                    .then((updated) =>
-                        generateSuccess(toWishlistView(updated), 200, t('wishlist.moved-to-cart'))
-                    )
-            );
+        return cartService.cartItemAddById(userId, productId).then((added) => {
+            // The line stays saved. A product can come back, and a refusal to buy it now is not a
+            // reason to throw away the fact that somebody wants it.
+            if (!added.success) return generateReject(404, [t('wishlist.product-not-found')]);
+
+            return wishlistRepository
+                .removeLine(userId, productId)
+                .then((updated) =>
+                    generateSuccess(toWishlistView(updated), 200, t('wishlist.moved-to-cart'))
+                );
+        });
     });
 
 /** What a hard user deletion owes the wishlists — see `module.ts`'s subscription. */

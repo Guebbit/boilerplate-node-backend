@@ -57,7 +57,7 @@ import ordersModule from '@modules/orders/module';
 import accountModule from '@modules/account/module';
 import deliveryModule from '@modules/delivery/module';
 import { orderRepository } from '@modules/orders';
-import { productRepository } from '@modules/products';
+import { productRepository, productService } from '@modules/products';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 
@@ -272,12 +272,58 @@ describe('cartItemSetById', () => {
         const user = await createUser();
         const product = await createProduct({ price: 25 });
 
-        const cart = await cartItemSetById(user.id, String(product._id), 2);
+        const result = await cartItemSetById(user.id, String(product._id), 2);
 
-        expect(cart).toEqual({
+        expect(result.success).toBe(true);
+        expect(result.data).toEqual({
             items: [{ productId: String(product._id), quantity: 2 }],
             summary: { itemsCount: 1, totalQuantity: 2, total: 50 }
         });
+    });
+
+    /*
+     * The catalogue gate, from the service rather than through a route.
+     *
+     * Both halves of `findPublicById`'s predicate get their own case: they are independent
+     * conditions, and one fixture cannot say which of them did the refusing.
+     */
+    it('refuses a product the storefront would not show, and writes nothing', async () => {
+        const user = await createUser();
+        const hidden = await createProduct({ active: false });
+
+        const result = await cartItemSetById(user.id, String(hidden._id), 1);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+        await expect(storedQuantity(user.id, String(hidden._id))).resolves.toBeUndefined();
+    });
+
+    it('refuses a soft-deleted product, and writes nothing', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await productService.removeById(String(product._id));
+
+        const result = await cartItemSetById(user.id, String(product._id), 1);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+        await expect(storedQuantity(user.id, String(product._id))).resolves.toBeUndefined();
+    });
+
+    /*
+     * The quietest failure the gate prevents: a well-formed id no product has ever had. Without
+     * the check it stores a line that every response then omits — `readCartLines` drops a
+     * reference resolving to nothing — so the write looks like it did nothing at all.
+     */
+    it('refuses an id no product has ever had, and writes nothing', async () => {
+        const user = await createUser();
+        const missing = '65dc8a99604c307b702b5ccc';
+
+        const result = await cartItemSetById(user.id, missing, 1);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+        await expect(storedQuantity(user.id, missing)).resolves.toBeUndefined();
     });
 
     it('touches only the calling user cart', async () => {

@@ -15,6 +15,15 @@ setupTestDb();
 /** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
 const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
+/**
+ * An id no ObjectId can be built from — the 422 branch.
+ *
+ * `Id` is a plain string in the contract, so every id-taking route makes its own Mongo-shaped
+ * check and answers 422 for a malformed one. Each of those is a declared response, and a
+ * declared response nothing sends is a contract nobody is holding the API to.
+ */
+const MALFORMED_ID = 'not-an-object-id';
+
 /** Logs a user in and saves one product, returning both. */
 const authenticateWithWishlist = async () => {
     const { bearer } = await authenticateAs('user');
@@ -82,6 +91,19 @@ describe('POST /wishlist', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it('matches the error contract for a malformed product id', async () => {
+        // The body parses — `productId` is a string — and the ObjectId check is what refuses it.
+        // The empty-body case above never reaches that branch.
+        const { bearer } = await authenticateAs('user');
+        const response = await api()
+            .post('/wishlist')
+            .set('Authorization', bearer)
+            .send({ productId: MALFORMED_ID });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('matches the error contract for a product that does not exist', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api()
@@ -123,6 +145,17 @@ describe('DELETE /wishlist/{productId}', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it('matches the error contract for a malformed product id', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .delete(`/wishlist/${MALFORMED_ID}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('matches the error contract when unauthenticated', async () => {
         const response = await api().delete(`/wishlist/${MISSING_ID}`);
 
@@ -155,6 +188,17 @@ describe('POST /wishlist/{productId}/move-to-cart', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a malformed product id', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .post(`/wishlist/${MALFORMED_ID}/move-to-cart`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 

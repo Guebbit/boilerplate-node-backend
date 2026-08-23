@@ -40,6 +40,7 @@ import { probes as accountProbes } from '../../src/modules/account/probes';
 import { probes as cartProbes } from '../../src/modules/cart/probes';
 import { probes as ordersProbes } from '../../src/modules/orders/probes';
 import { probes as productsProbes } from '../../src/modules/products/probes';
+import { probes as wishlistProbes } from '../../src/modules/wishlist/probes';
 import dataset from '../../db/demo/demo-data.json';
 
 /** The four tools, and the order this file names them in. */
@@ -220,14 +221,15 @@ const values: ValueSources = {
  * `tests/cross-cutting/probes-are-wired.test.ts` closes that half, so the compile-time failure is
  * kept rather than traded for a directory scan.
  *
- * Eight modules and the `system` section declare none. That is deliberate rather than a backlog —
+ * Seven modules and the `system` section declare none. That is deliberate rather than a backlog —
  * a probe exists where a rejection is interesting, and most read endpoints have none.
  */
 const PROBES: Partial<Record<SectionName, Probe[]>> = {
     account: accountProbes,
     cart: cartProbes,
     orders: ordersProbes,
-    products: productsProbes
+    products: productsProbes,
+    wishlist: wishlistProbes
 };
 
 /** Which sections {@link PROBES} carries. Read by the completeness guard, nothing else. */

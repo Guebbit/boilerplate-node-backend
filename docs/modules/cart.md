@@ -170,11 +170,12 @@ Middlewares run left to right; the controller is the last handler on the route. 
 
 Requests the contract cannot describe — the calls that prove this module refuses things.
 
-| Call                  | Probe                                    |
-| --------------------- | ---------------------------------------- |
-| `POST /cart/checkout` | Probe: checkout with an empty cart       |
-| `POST /cart`          | Probe: add a product that does not exist |
-| `POST /cart`          | Probe: a quantity the schema forbids     |
+| Call                                  | Probe                                                           |
+| ------------------------------------- | --------------------------------------------------------------- |
+| `POST /cart/checkout`                 | Probe: checkout with an empty cart                              |
+| `POST /cart`                          | Probe: add a product that does not exist                        |
+| `PUT /cart/{{seedInactiveProductId}}` | Probe: set a quantity on a product the storefront will not show |
+| `POST /cart`                          | Probe: a quantity the schema forbids                            |
 
 <!-- gen:signals:end -->
 

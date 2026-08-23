@@ -13,9 +13,8 @@ import {
  *
  * Every one of them is keyed by `userId` — `unique` on the schema makes that a complete address —
  * so no caller ever fetches a wishlist before changing it. Unlike the cart there is no retry
- * loop: a line is `{ productId }` alone, so `$addToSet` IS the whole upsert. Two requests adding
- * the same product cannot produce two lines, because a set cannot hold the same member twice —
- * the race the cart resolves with a filtered two-step write does not exist here.
+ * loop, and two independent facts are what excuse it — see {@link wishlistRepository.addLine},
+ * which is the write both of them are about.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
@@ -42,8 +41,22 @@ export const wishlistRepository: BaseRepository<WishlistDocument> & {
         wishlistModel.findOne({ userId: toObjectId(userId) }).exec(),
 
     /**
-     * Add one product, creating the wishlist if the user has none. Idempotent by `$addToSet`:
-     * saving what is already saved is the state the caller asked for, not an error.
+     * Add one product, creating the wishlist if the user has none.
+     *
+     * Two races, and neither needs the retry budget `../cart/repository`'s `upsertLine` carries.
+     *
+     * The LINE: `$addToSet` settles it outright — a set cannot hold the same member twice, so no
+     * interleaving of saves puts one product on two lines, and saving what is already saved is
+     * the state the caller asked for rather than an error.
+     *
+     * The DOCUMENT: the filter is an exact equality on `userId`, which is the unique index's own
+     * key, and that is the shape mongod resolves atomically — the upsert cannot lose to itself
+     * and no E11000 reaches here. The cart's second step filters on
+     * `{ userId, 'items.productId': { $ne } }`, which is NOT an exact match on its unique key, so
+     * two of them can both conclude "absent" and one loses; that difference is the whole reason
+     * one write retries and this one does not. Measured at 25-way contention:
+     * `tests/integration/concurrency/wishlist-races.test.ts` is the case that would go red if the
+     * filter ever stopped being an equality.
      */
     addLine: async (userId: string, productId: string) =>
         wishlistModel

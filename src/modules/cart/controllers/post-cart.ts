@@ -2,18 +2,20 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { productService } from '@modules/products';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { UpsertCartItemRequest } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { authContextOf, isValidObjectId } from '@infrastructure/http/request';
-import { catchAs, parseBody } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /cart
- * Add a product (with its quantity) to the cart.
- * Checks product availability, then sets (or replaces) the quantity in the cart.
+ * Add a product (with its quantity) to the cart — or replace the quantity of a line already there.
+ *
+ * Whether the product may be in a cart at all is the SERVICE's answer, not this file's: the same
+ * rule has to hold for `PUT /cart/{productId}` and for the wishlist's move-to-cart, and a check
+ * written here would only ever cover this route.
  */
 export const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,
@@ -32,22 +34,17 @@ export const postCart = (
         return;
     }
 
-    return productService
-        .getById(productId)
-        .then((product) => {
-            if (!product) {
-                rejectResponse(response, 404, [t('products.not-found')]);
-                return;
-            }
+    return cartService
+        .cartItemSetById(userId, productId, quantity)
+        .then((result) => {
+            if (refused(response, result)) return;
 
-            return cartService.cartItemSetById(userId, productId, quantity).then((cart) => {
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    event: cartAnalyticsEvents.CART_ITEM_ADDED,
-                    properties: { product_id: productId, quantity }
-                });
-                successResponse(response, cart, 200, t('cart.product-added'));
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(request),
+                event: cartAnalyticsEvents.CART_ITEM_ADDED,
+                properties: { product_id: productId, quantity }
             });
+            successResponse(response, result.data, 200, t('cart.product-added'));
         })
         .catch(catchAs(response, 'upsertCartItem'));
 };

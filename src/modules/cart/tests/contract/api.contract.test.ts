@@ -104,6 +104,20 @@ describe('POST /cart', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it('matches the error contract for a product outside the public catalogue', async () => {
+        // A real row with a well-formed id, which is what separates this from the case above:
+        // the 404 is the SCOPE refusing it, not the id matching nothing.
+        const { bearer } = await authenticateAs('user');
+        const hidden = await createProduct({ active: false });
+        const response = await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(hidden._id), quantity: 1 });
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('matches the error contract when unauthenticated', async () => {
         const response = await api().post('/cart').send({ productId: MISSING_ID, quantity: 1 });
 
@@ -163,6 +177,31 @@ describe('PUT /cart/{productId}', () => {
             .send({ quantity: 0 });
 
         expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a product that does not exist', async () => {
+        // The declared 404 on this operation is only reachable because the gate lives in
+        // `cartItemSetById`: nothing in the route itself asks the catalogue anything.
+        const { bearer } = await authenticateAs('user');
+        const response = await api()
+            .put(`/cart/${MISSING_ID}`)
+            .set('Authorization', bearer)
+            .send({ quantity: 1 });
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a product outside the public catalogue', async () => {
+        const { bearer } = await authenticateAs('user');
+        const hidden = await createProduct({ active: false });
+        const response = await api()
+            .put(`/cart/${String(hidden._id)}`)
+            .set('Authorization', bearer)
+            .send({ quantity: 1 });
+
+        expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
     });
 

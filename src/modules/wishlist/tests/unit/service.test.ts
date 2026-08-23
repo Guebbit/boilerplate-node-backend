@@ -4,7 +4,7 @@
  *   - saving is idempotent (`$addToSet`), so no interleaving of double-clicks produces two lines;
  *   - only publicly visible products can be saved, the same gate the catalogue itself applies;
  *   - move-to-cart writes the cart BEFORE dropping the line, so the failure mode is "still
- *     saved", never "vanished";
+ *     saved", never "vanished" — including when the cart REFUSES the product;
  *   - the module's event subscriptions clean up after product and user deletions.
  */
 import { setupTestDb } from '@tests/setup-test-db';
@@ -114,6 +114,49 @@ describe('wishlistMoveToCart', () => {
     it('answers 404 for a product that was never saved — and writes no cart line', async () => {
         const user = await createUser();
         const product = await createProduct();
+
+        const result = await wishlistService.wishlistMoveToCart(user.id, String(product._id));
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+        const cart = await cartService.cartGetWithSummary(user.id);
+        expect(cart.items).toEqual([]);
+    });
+
+    /*
+     * The catalogue gate, reached THROUGH the cart. `cartItemAddById` refuses a product the
+     * storefront would not show, and this module turns that refusal into its own 404 rather than
+     * asking the catalogue a second time — so these two cases fail if either half breaks: the
+     * cart's rule, or this module's reading of it.
+     *
+     * Withdrawal is the interesting shape, not deletion: `PRODUCT_DELETED` clears hard deletions
+     * out of every wishlist, so a saved line pointing at a hidden product is the state that
+     * actually survives.
+     */
+    it('answers 404 once the product leaves the public catalogue, and writes no cart line', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await wishlistService.wishlistAdd(user.id, String(product._id));
+
+        await productService.updateById(String(product._id), { active: false });
+
+        const result = await wishlistService.wishlistMoveToCart(user.id, String(product._id));
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+        const cart = await cartService.cartGetWithSummary(user.id);
+        expect(cart.items).toEqual([]);
+        // Still saved. The refusal is about buying it now, not about forgetting it — a product
+        // can come back, and dropping the line would take the shopper's list with it.
+        expect(await savedIds(user.id)).toEqual([String(product._id)]);
+    });
+
+    it('answers 404 once the product is soft-deleted, and writes no cart line', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await wishlistService.wishlistAdd(user.id, String(product._id));
+
+        await productService.removeById(String(product._id));
 
         const result = await wishlistService.wishlistMoveToCart(user.id, String(product._id));
 

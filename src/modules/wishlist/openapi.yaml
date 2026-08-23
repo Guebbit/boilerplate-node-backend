@@ -87,8 +87,10 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/WishlistResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # Not on the wishlist, or no longer purchasable — the cart's own validation
-                # answers for the product the same way `POST /cart` would.
+                # Not on the wishlist, or no longer publicly visible. The second of those is the
+                # CART's answer, not this module's: a saved line outlives the catalogue, and
+                # whether a product may be in a basket is decided once, where every caller of the
+                # cart inherits it.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }

@@ -38,10 +38,17 @@ interface ReorderLine {
  * privilege, it is a leak of what they bought.
  *
  * The order carries product SNAPSHOTS, so each line is re-resolved against the catalogue as it
- * is today, through `publicScope`: a product that has since been deleted, deactivated or hidden
- * is skipped rather than re-added, exactly as it could not be added from the product page. The
- * quantities come from the order; an item already in the cart is INCREMENTED, matching what
+ * is today, through `findPublicById`: a product that has since been deleted, deactivated or
+ * hidden is skipped rather than re-added, exactly as it could not be added from the product page.
+ * The quantities come from the order; an item already in the cart is INCREMENTED, matching what
  * "add to cart" does everywhere else.
+ *
+ * This is the one path that answers the catalogue question for itself instead of letting
+ * `./items`' `upsertCartItem` answer it, and SKIPPING is the reason: that function refuses, which
+ * is the right answer for a caller naming one product and the wrong one for a basket being
+ * refilled from a year-old order. Resolving the batch in a single parallel pass is also what
+ * keeps a ten-line reorder at one round of reads rather than ten. The predicate is the same call
+ * in both places, so the two cannot disagree about what "on sale" means.
  *
  * Skipping everything is a refusal, not a success: an order whose every product has vanished
  * answers 409 with `REORDER_UNAVAILABLE`, because "your cart now holds none of what you asked
