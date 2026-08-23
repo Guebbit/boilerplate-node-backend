@@ -129,6 +129,64 @@ describe('GET /feedback', () => {
     });
 });
 
+/*
+ * The DTO form of the list above. It exists because `GET /feedback` used to declare a JSON body
+ * and read filters from it — a body no browser will send, and one `setCache` cannot key on, so
+ * two different searches shared a cached page. These assert the sibling carries what the body was
+ * claiming to.
+ */
+describe('POST /feedback/search', () => {
+    it('matches the contract', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createFeedbackRequest();
+        const response = await api()
+            .post('/feedback/search')
+            .set('Authorization', bearer)
+            .send({ page: 1, pageSize: 10 });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('filters on a body field, which is the whole point of the route', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createFeedbackRequest();
+        const response = await api()
+            .post('/feedback/search')
+            .set('Authorization', bearer)
+            .send({ status: 'resolved' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(0);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // The same bounds as the query form, from the same shared schema — the two spellings of one
+    // search cannot disagree about what a legal page size is.
+    it.each([{ pageSize: 500 }, { page: 0 }])(
+        'rejects out-of-range pagination exactly as the query form does (%p)',
+        async (body) => {
+            const { bearer } = await authenticateAs('admin');
+            const response = await api()
+                .post('/feedback/search')
+                .set('Authorization', bearer)
+                .send(body);
+
+            expect(response.status).toBe(422);
+            expect(response.body.success).toBe(false);
+            expect(response).toSatisfyApiSpec();
+        }
+    );
+
+    it('matches the error contract for a non-admin caller', async () => {
+        const { bearer } = await authenticateAs('user');
+        const response = await api().post('/feedback/search').set('Authorization', bearer).send({});
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('PUT /feedback/{id}', () => {
     it('matches the contract when updating status and notes', async () => {
         const { bearer } = await authenticateAs('admin');

@@ -23,9 +23,10 @@ export const getLocaleEntries = (
     request: Request<{ locale: string }, unknown, unknown, Record<string, string>>,
     response: Response
 ) => {
-    // Body first, then query — the search surface, same as every other list in this API, so
-    // `?text=` and a JSON body reach one controller. See docs/theory/request-input.md.
-    const { page, pageSize, text, tenant } = readInput(request, { surface: 'search' }) as Record<
+    // Query only — the `list` surface. The editing screen reaches this over a GET and there is
+    // no `POST /locales/:locale/entries/search` to carry a body, so declaring one would claim a
+    // source no client can send. See docs/theory/request-input.md.
+    const { page, pageSize, text, tenant } = readInput(request, { surface: 'list' }) as Record<
         string,
         string | undefined
     >;

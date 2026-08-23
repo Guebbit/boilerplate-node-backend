@@ -25,6 +25,16 @@ router.post('/contact', invalidateCache(['feedback']), postFeedbackContact);
  */
 router.use(getAuth, isAuth, isAdmin);
 
+/*
+ * The DTO form of `GET /`, and the reason that route declares no body: a GET body has no defined
+ * semantics and `setCache` keys only on query parameters, so filters sent that way were invisible
+ * to the key. Mounted ABOVE `/:id`-shaped routes for the same reason products does it — there is
+ * none here today, but the ordering is what stops one added later from matching "search" as an id.
+ *
+ * Uncached, like the other three `/search` siblings: the query form is the cacheable one.
+ */
+router.post('/search', getFeedback);
+
 router.get(
     '/',
     setCache(600, { tags: ['feedback'], keyParameters: searchFeedbackKeyParameters }),

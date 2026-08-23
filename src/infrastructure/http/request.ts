@@ -110,13 +110,20 @@ export type RequestInputSource = 'params' | 'body' | 'query';
  *
  * See: docs/theory/request-input.md
  */
-export type RequestSurface = 'search' | 'write' | 'delete' | 'path';
+export type RequestSurface = 'search' | 'list' | 'write' | 'delete' | 'path';
 
 /**
  * The sources each surface reads, HIGHEST precedence first.
  *
  * - `search` — body before query, so `POST /products/search {text}` and `GET /products?text=x`
  *   are one controller. Never reads `params`: a search has no id in its path.
+ * - `list` — query only: a collection read whose filters have nowhere else to arrive, because the
+ *   route is a GET and has no `POST …/search` sibling. Distinct from `search` and not a
+ *   convenience: content on a GET has no defined semantics (RFC 9110 9.3.1) and the Fetch spec
+ *   refuses to send it, so a `search` declaration on a GET-only route claims a source no client
+ *   can use — and, where the route is cached, one `setCache` cannot key on. Four list endpoints
+ *   held that claim; `GET /feedback` held it and was cached, which is how two different filter
+ *   sets came to share one entry.
  * - `write` — params before body, so `PUT /products/:id` and `PUT /products` (id in body) are one
  *   controller, and the explicit path id wins when a request carries both.
  * - `delete` — params, then query, then body: the full delete surface, where `hardDelete` arrives
@@ -127,6 +134,7 @@ export type RequestSurface = 'search' | 'write' | 'delete' | 'path';
  */
 const SURFACE_SOURCES: Record<RequestSurface, readonly RequestInputSource[]> = {
     search: ['body', 'query'],
+    list: ['query'],
     write: ['params', 'body'],
     delete: ['params', 'query', 'body'],
     path: ['params']

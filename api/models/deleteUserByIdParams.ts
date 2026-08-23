@@ -18,7 +18,11 @@
  *
  * OpenAPI spec version: 2.0.0
  */
+import type { HardDeleteParamParameter } from './hardDeleteParamParameter';
 
 export type DeleteUserByIdParams = {
-hardDelete?: boolean;
+/**
+ * Permanently remove the record instead of soft-deleting it.
+ */
+hardDelete?: HardDeleteParamParameter;
 };

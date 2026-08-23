@@ -98,10 +98,15 @@ paths:
         delete:
             tags: [Users]
             summary: Delete user
-            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true` to permanently remove the record.
+            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
             operationId: deleteUser
             security:
                 - bearerAuth: []
+            # The flag is readable from the query here too, exactly as it is on the `{id}` form:
+            # one controller serves both, and `surface: 'delete'` reads params, query and body on
+            # whichever route it is mounted on. Declared rather than merely tolerated.
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
             requestBody:
                 required: true
                 content:
@@ -179,10 +184,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
-                - name: hardDelete
-                  in: query
-                  schema:
-                      type: boolean
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
             requestBody:
                 required: false
                 content:

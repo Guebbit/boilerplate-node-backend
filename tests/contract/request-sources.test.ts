@@ -162,24 +162,84 @@ const readMountedRoutes = (): MountedRoute[] => {
 };
 
 /**
+ * `SURFACE_SOURCES` as `@infrastructure/http/request` declares it, read from the source rather
+ * than imported.
+ *
+ * Read, not duplicated: a copy here would drift the moment a surface is added, and a fifth row is
+ * exactly the change this comparison exists to police. Read STATICALLY rather than imported
+ * because importing that module pulls in express, mongoose and i18next to answer a question about
+ * four lines of literal — this whole test compares two written claims and boots nothing.
+ *
+ * The `expect` below is deliberate. A regex that stops matching is how this check went quiet the
+ * last time (see `readDeclaredSources`), and a table that parsed to `{}` would make every
+ * declaration below read as "declares nothing" and every assertion pass vacuously.
+ */
+const readSurfaceSources = (): Record<string, Source[]> => {
+    const block = /SURFACE_SOURCES[^=]*=\s*{([^}]*)}/.exec(
+        read('src/infrastructure/http/request.ts')
+    )?.[1];
+    const table: Record<string, Source[]> = {};
+
+    for (const [, surface, list] of (block ?? '').matchAll(/(\w+):\s*\[([^\]]*)]/g))
+        table[surface] = [...list.matchAll(/'(params|body|query)'/g)].map(
+            ([, name]) => name as Source
+        );
+
+    return table;
+};
+
+const SURFACE_SOURCES = readSurfaceSources();
+
+/**
+ * Controllers that declare nothing themselves because a shared factory declares it for them.
+ *
+ * `createDeleteController` IS the delete controller — the module file is a six-line spec of what
+ * makes that entity's delete different — so the sources it reads are the module's sources, and a
+ * scanner that only looked at the module file would find an empty declaration and wave all three
+ * delete controllers through.
+ */
+const SHARED_DECLARATION_FILES: Record<string, string> = {
+    'createDeleteController(': 'src/infrastructure/http/delete-controller.ts'
+};
+
+/**
  * The sources a controller module declares.
  *
- * `extractAndValidateId` is folded in because it is `readInput` with a fixed declaration
- * (`['params', 'body']`) that happens to also respond — a controller calling it reads those two
- * sources just as surely as if it had written them out.
+ * A controller names a SURFACE — `surface: 'delete'` — and the table above maps that to the
+ * sources it reads. This used to scan for `sources: ['params', ...]`, the spelling that predates
+ * the surface refactor; when the last of those disappeared the regex kept matching nothing and
+ * this check passed for every controller in the repo without reading a single declaration. Hence
+ * the tripwire test below, which asserts the scanner still finds declarations at all.
+ *
+ * `extractAndValidateId` is folded in because it is `readInput` with the same surface parameter
+ * that happens to also respond — a controller calling it reads those sources just as surely as if
+ * it had written them out. Its surface is the optional fourth argument, defaulting to `'write'`.
  */
-const readDeclaredSources = (controllerFile: string): Set<Source> => {
+const readDeclaredSources = (controllerFile: string, seen = new Set<string>()): Set<Source> => {
+    // A shared factory is followed once; the guard is for a cycle, not for performance.
+    if (seen.has(controllerFile)) return new Set();
+    seen.add(controllerFile);
+
     const source = read(controllerFile);
     const declared = new Set<Source>();
 
-    for (const [, list] of source.matchAll(/sources:\s*\[([^\]]*)]/g))
-        for (const [, name] of list.matchAll(/'(params|body|query)'/g))
-            declared.add(name as Source);
+    const add = (surface: string) => {
+        for (const name of SURFACE_SOURCES[surface] ?? []) declared.add(name);
+    };
 
-    if (source.includes('extractAndValidateId(')) {
-        declared.add('params');
-        declared.add('body');
+    for (const [, surface] of source.matchAll(/surface:\s*'(\w+)'/g)) add(surface);
+
+    for (const [, argumentList] of source.matchAll(/extractAndValidateId\(([^)]*)\)/g)) {
+        // The surface is the last argument when it is given at all. A trailing string that is not
+        // a surface name is the three-argument form, whose default the signature spells `'write'`.
+        const trailing = /'(\w+)'\s*$/.exec(argumentList.trim())?.[1];
+        add(trailing !== undefined && trailing in SURFACE_SOURCES ? trailing : 'write');
     }
+
+    for (const [marker, file] of Object.entries(SHARED_DECLARATION_FILES))
+        if (source.includes(marker))
+            for (const name of readDeclaredSources(file, seen)) declared.add(name);
+
     return declared;
 };
 
@@ -204,7 +264,19 @@ type SpecPathItem = Record<string, SpecOperation | undefined> & {
 
 interface Spec {
     paths: Record<string, SpecPathItem>;
+    components?: { parameters?: Record<string, SpecParameter> };
 }
+
+/**
+ * Follow a `#/components/parameters/X` reference to the parameter it names.
+ *
+ * Local references only, which is all the bundle contains: `npm run contracts:bundle` resolves
+ * every module's `../../../shared/contracts/...` reference into `#/components/...` on the way in.
+ */
+const resolveParameter = (spec: Spec, reference?: string): SpecParameter | undefined => {
+    const name = /^#\/components\/parameters\/(.+)$/.exec(reference ?? '')?.[1];
+    return name === undefined ? undefined : spec.components?.parameters?.[name];
+};
 
 /** The sources `openapi.yaml` allows for one operation. */
 const readAllowedSources = (
@@ -223,9 +295,12 @@ const readAllowedSources = (
     ];
 
     for (const parameter of parameters) {
-        // A `$ref`'d parameter carries its location in the reference name, which is enough:
-        // every shared parameter in this spec is a path parameter.
-        const location = parameter.in ?? (parameter.$ref?.includes('Path') ? 'path' : undefined);
+        // Resolved, not guessed from the name. This used to read `$ref.includes('Path')` on the
+        // claim that "every shared parameter in this spec is a path parameter" — which was never
+        // true (`PageParam`, `TextParam` and `IdParam` are all `in: query`) and survived only
+        // because every route using them also had an inline query parameter to be found instead.
+        // The bundle inlines every component, so the reference resolves here with no I/O.
+        const location = parameter.in ?? resolveParameter(spec, parameter.$ref)?.in;
         if (location === 'path') allowed.add('params');
         if (location === 'query') allowed.add('query');
     }
@@ -245,6 +320,38 @@ describe('request sources agree with openapi.yaml', () => {
         // A regex that silently stops matching would turn every assertion below into a vacuous
         // pass. This is the tripwire for that.
         expect(mountedRoutes.length).toBeGreaterThan(30);
+    });
+
+    /**
+     * The check below is a subset assertion, and a subset assertion over an empty set passes. Both
+     * halves of it are recovered by regex from source that is free to be re-spelled, and both have
+     * gone quiet in this repo's history: `SURFACE_SOURCES` parsed from a table whose name could
+     * change, and `readDeclaredSources` scanning for a `sources: [...]` spelling that no longer
+     * exists. Neither failure would have shown up as a red test — the suite would simply have
+     * stopped comparing anything, which is worse than not having the test.
+     *
+     * So: assert the scanner found the table, and that it recovers a declaration from a
+     * substantial share of the controllers rather than from none.
+     */
+    it('recovered the surface table and the declarations that use it', () => {
+        // Pinned, not merely non-empty. `RequestSurface` is a CLOSED set on purpose — precedence
+        // is meant to be a property of the route's kind, not an ordering the newest controller
+        // picked — so a sixth row should fail here once and be added deliberately, alongside its
+        // row in `docs/theory/request-input.md` and a look at what the spec declares for it.
+        expect(Object.keys(SURFACE_SOURCES).toSorted()).toEqual([
+            'delete',
+            'list',
+            'path',
+            'search',
+            'write'
+        ]);
+
+        const controllerFiles = new Set(
+            mountedRoutes.map(({ controllerFile }) => controllerFile).filter(Boolean) as string[]
+        );
+        const declaring = [...controllerFiles].filter((file) => readDeclaredSources(file).size > 0);
+
+        expect(declaring.length).toBeGreaterThan(10);
     });
 
     it('every mounted route exists in the spec', () => {

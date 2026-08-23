@@ -23,7 +23,8 @@ const movementsQuerySchema = ListStockMovementsQueryParams.extend({
  */
 export const getStockMovements = (request: Request, response: Response) => {
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
-    const input = readInput(request, { surface: 'search', ids: ['productId'] });
+    // `list`, not `search`: a GET with no body-carrying sibling, so the query is the only source.
+    const input = readInput(request, { surface: 'list', ids: ['productId'] });
 
     const parseResult = movementsQuerySchema.safeParse(input);
     if (!parseResult.success) {

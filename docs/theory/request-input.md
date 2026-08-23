@@ -24,7 +24,7 @@ flowchart TD
     Q --> RI
     B --> RI
 
-    RI --> SS["SURFACE_SOURCES<br/>search · write · delete · path"]
+    RI --> SS["SURFACE_SOURCES<br/>search · list · write · delete · path"]
     SS --> MERGE["merge in precedence order<br/>highest source wins"]
     MERGE --> ZOD["Zod schema<br/>coerce · validate"]
     ZOD -->|"ok"| CTRL["controller logic"]
@@ -47,17 +47,28 @@ array the newest controller happened to pass.
 ## The table
 
 Read "sources" left-to-right as precedence, highest first. A controller does not spell this array:
-it names the **surface** it is (`search`, `write`, `delete`, `path`) and `SURFACE_SOURCES` in
-`@infrastructure/http/request` maps that to the row below. The set is closed, so precedence is a property of
-the surface rather than of whichever array the newest controller happened to pass — and a fifth
-combination has to be added there deliberately, where it can be reviewed against the spec.
+it names the **surface** it is (`search`, `list`, `write`, `delete`, `path`) and `SURFACE_SOURCES`
+in `@infrastructure/http/request` maps that to the row below. The set is closed, so precedence is a
+property of the surface rather than of whichever array the newest controller happened to pass — and
+a sixth combination has to be added there deliberately, where it can be reviewed against the spec.
+`tests/contract/request-sources.test.ts` pins the set for exactly that reason: adding one fails
+that test once, which is the prompt to update this page alongside it.
 
-| Surface  | Sources (highest first) | Used by                                              |
-| -------- | ----------------------- | ---------------------------------------------------- |
-| `search` | body, query             | the four list/search endpoints                       |
-| `write`  | params, body            | `writeProducts`/`writeUsers`/`writeOrders`, cart PUT |
-| `delete` | params, query, body     | the three soft/hard delete controllers               |
-| `path`   | params                  | `DELETE /cart/{productId}`, which declares no body   |
+| Surface  | Sources (highest first) | Used by                                                        |
+| -------- | ----------------------- | -------------------------------------------------------------- |
+| `search` | body, query             | the four endpoints with a `POST …/search` sibling              |
+| `list`   | query                   | the four GET-only collection reads, which have no such sibling |
+| `write`  | params, body            | `writeProducts`/`writeUsers`/`writeOrders`, cart PUT           |
+| `delete` | params, query, body     | the three soft/hard delete controllers                         |
+| `path`   | params                  | `DELETE /cart/{productId}`, which declares no body             |
+
+`search` and `list` differ on one question: **is there a route that can carry a body?** A GET
+cannot — RFC 9110 §9.3.1 gives content on a GET no defined semantics and the Fetch spec refuses to
+send it, so the paired frontend could never use one — which makes `search` on a GET-only route a
+claim about a source no client has. Where such a route is also cached the claim is worse than
+decorative: `setCache` keys on the declared **query** parameters, so a body-borne filter is
+invisible to the key. Give a collection read a real DTO form by adding `POST /x/search`, not by
+declaring a body on its GET.
 
 | Endpoint(s)                                                             | Parameter                                       | Sources (highest first) | Treatment                                      |
 | ----------------------------------------------------------------------- | ----------------------------------------------- | ----------------------- | ---------------------------------------------- |
@@ -90,8 +101,14 @@ combination has to be added there deliberately, where it can be reviewed against
 | `PUT /cart/:productId`                                                  | `productId`                                     | params, body            | first non-empty wins, then `isValidObjectId`   |
 |                                                                         | `quantity`                                      | body                    | Zod                                            |
 | `DELETE /cart/:productId`                                               | `productId`                                     | params, body            | first non-empty wins, then `isValidObjectId`   |
-| `GET /feedback`                                                         | `page`, `pageSize`                              | body, query             | merged, then the shared pagination schema      |
+| `GET /feedback`, `POST /feedback/search`                                | `page`, `pageSize`                              | body, query             | merged, then the shared pagination schema      |
 |                                                                         | `text`, `email`, `status`                       | body, query             | merged, passed through as strings              |
+| `GET /inventory/levels`                                                 | `page`, `pageSize`, `lowOnly`                   | query                   | `lowOnly` decoded as a boolean, then Zod       |
+| `GET /inventory/movements`                                              | `productId`                                     | query                   | first non-empty wins                           |
+|                                                                         | `page`, `pageSize`, `reason`                    | query                   | then Zod                                       |
+| `GET /locales/{locale}/entries`                                         | `page`, `pageSize`, `text`, `tenant`            | query                   | then the shared pagination schema              |
+| `GET /observability/audit`                                              | `actor`, `action`, `outcome`, `since`           | query                   | first non-empty wins                           |
+|                                                                         | `page`, `pageSize`                              | query                   | then the shared pagination schema              |
 
 Pagination has exactly two authorities, and they answer different questions. `@infrastructure/http/schemas`
 owns the **bounds** — `openapi.yaml` declares `minimum: 1` / `maximum: 100`, and every one of the
@@ -203,6 +220,23 @@ is the real defect — a controller reading a source **no** route it serves decl
 shape of all five closed discrepancies below. Splitting the declaration per operation is what
 would let it tighten to per-route, and is the remaining work.
 
+**A subset assertion over an empty set passes.** Both halves of that comparison are recovered by
+regex from source that is free to be re-spelled, and both have gone quiet here. The scanner looked
+for `sources: ['params', …]`, the spelling that predates the surface refactor; when the last of
+those disappeared it matched nothing, every controller read as declaring nothing, and the check
+passed for the whole repo without comparing a single declaration. It also read a `$ref`'d
+parameter's location off the reference NAME, on the claim that "every shared parameter in this
+spec is a path parameter" — which was never true (`PageParam`, `TextParam` and `IdParam` are all
+`in: query`) and survived only because every route using them also carried an inline query
+parameter to be found instead.
+
+Both are fixed — the scanner reads `surface:` and maps it through `SURFACE_SOURCES` parsed from
+`request.ts` itself, and references resolve against `components.parameters` — and the test now
+carries a tripwire that asserts it recovered the surface table and a declaration from more than
+ten controllers. Turning it back on immediately produced four findings, all the same shape: four
+GET-only list controllers declaring `search`, and so reading a body no route of theirs declares.
+That is what the `list` surface exists to say instead.
+
 That test is also what makes generating the router safe. Routes written by hand sit next to a spec
 written by hand, so a mismatch at least shows up in a diff; routes generated from a descriptor do
 not, and a typo would silently mount something the spec never declared and orval never generated a
@@ -210,11 +244,31 @@ client for.
 
 ## Known discrepancies
 
-None outstanding. The five recorded here were resolved by correcting `openapi.yaml` in both this
-repo and the paired frontend — see the _Closed_ list below, which keeps each one's mechanism
-because every one of them names a way the same class of bug can return.
+None outstanding. Every one recorded here was resolved by correcting `openapi.yaml` — in both this
+repo and the paired frontend — or the declaration that disagreed with it. See the _Closed_ list
+below, which keeps each one's mechanism because every one of them names a way the same class of
+bug can return.
+
+The open item is not a discrepancy but a granularity: the comparison is per controller against the
+union of its routes, so a source declared on one route it serves excuses that source on all of
+them. `deleteUsers` is the live example — `DELETE /users/{id}` declares the `hardDelete` query
+parameter, which until now silently excused `DELETE /users` reading a query parameter it did not
+declare. That one is closed by declaring it (see below), but the mechanism that hid it is still
+there, and per-operation declarations are what would remove it.
 
 ### Closed
+
+- **Four GET-only list controllers declared the `search` surface,** and so read a body none of
+  their routes declares: `GET /inventory/levels`, `GET /inventory/movements`,
+  `GET /locales/{locale}/entries` and `GET /observability/audit`. None is cached, so none carried
+  `GET /feedback`'s cache bug, but all four claimed a source no client can send. They declare
+  `list` now. The check that should have caught them was the one that had gone quiet.
+- **The collection deletes read `hardDelete` from a query they did not declare.** `DELETE /users`,
+  `DELETE /products` and `DELETE /orders` share their controller with the `{id}` forms, so
+  `surface: 'delete'` reads params, query and body on all three routes — but only the `{id}` forms
+  declared the query parameter, and the per-controller union is what let the omission pass. The
+  flag is now a shared `HardDeleteParam` referenced by all six delete operations, which is also
+  what stops a fourth soft-deleting domain from offering two of the three spellings.
 
 - **`GET /products` declared `productId` as its query filter while the controller read `id`.**
   The generated client sent the parameter, the API ignored it, and filtering the catalogue by id
@@ -238,8 +292,12 @@ because every one of them names a way the same class of bug can return.
   rather than the spec gaining one. `PUT /cart/{productId}` keeps it, because
   `UpdateCartItemByIdRequest` genuinely declares `productId`.
 - **`GET /feedback` declared a JSON body and no query parameters** while the controller read both.
-  The query parameters are now declared. The body stays: it is read, and unlike the other three
-  resources this one has no `POST /feedback/search` sibling to carry the DTO form.
+  The query parameters were declared first and the body kept, on the reasoning that it was read and
+  had no `POST /feedback/search` sibling to carry the DTO form. That reasoning was wrong twice
+  over, and the body is now gone: no browser could have sent it (the Fetch spec rejects a body on
+  a GET), and `setCache(600, …)` keys on the declared **query** parameters, so a filter that did
+  arrive in a body was invisible to the key — two different searches by the same admin shared one
+  cached page for the cache's whole lifetime. The sibling exists now; `GET /feedback` is `list`.
 - **`hardDelete` treated presence as the switch,** so `DELETE /products/:id?hardDelete=false`
   permanently deleted the product — the query value is the string `'false'`, which is truthy —
   while the spec typed the parameter `boolean` with `default: false`. A caller could destroy data

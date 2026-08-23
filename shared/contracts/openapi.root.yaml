@@ -105,6 +105,18 @@ components:
         #     schema:
         #         $ref: '#/components/schemas/Id'
 
+        # The delete flag, shared because every soft-deleting domain offers the same three
+        # spellings of it: `/hard` in the path, `?hardDelete=true` in the query, `hardDelete` in
+        # the body. Params outrank query, which outranks body — see docs/theory/request-input.md.
+        # Declared here once so a fourth domain cannot accidentally offer only two of the three.
+        HardDeleteParam:
+            name: hardDelete
+            in: query
+            required: false
+            schema:
+                type: boolean
+            description: Permanently remove the record instead of soft-deleting it.
+
         # Path ID parameters (for resource lookup)
         IdPathParam:
             name: id
@@ -750,6 +762,8 @@ paths:
         $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1contact'
     /feedback:
         $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback'
+    /feedback/search:
+        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1search'
     /feedback/{id}:
         $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1{id}'
 

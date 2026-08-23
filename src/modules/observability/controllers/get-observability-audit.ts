@@ -14,7 +14,8 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
     // Through `readInput` like every other route, rather than reaching into `request.query`: the
     // sources a surface reads are a property of the route, not of this handler.
     const input = readInput(request, {
-        surface: 'search',
+        // `list`: a GET-only route, so the query string is the whole input surface.
+        surface: 'list',
         // Declared as ids so a repeated `?since=` collapses to its first entry rather than
         // arriving as an array — these are scalars, and `new Date([…])` is not a date.
         ids: ['actor', 'action', 'outcome', 'since']

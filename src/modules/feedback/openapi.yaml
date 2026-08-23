@@ -35,9 +35,11 @@ paths:
             operationId: listFeedbackRequests
             security:
                 - bearerAuth: []
-            # The controller merges query and body, so every filter below is reachable either way.
-            # The body stays declared because it is read; unlike the other three resources this
-            # one has no `POST /feedback/search` sibling to carry the DTO form.
+            # Query only, and the DTO form of the same filters is `POST /feedback/search`. A body
+            # on a GET has no defined semantics (RFC 9110 9.3.1) and the Fetch spec rejects it
+            # outright, so the paired frontend could never have sent one; worse, `setCache` keys
+            # on the declared query parameters, so a body-borne filter was invisible to the key
+            # and two different filters shared one entry for the cache's whole lifetime.
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -52,15 +54,35 @@ paths:
                   required: false
                   schema:
                       type: string
+            responses:
+                '200':
+                    description: Feedback request list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequestsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /feedback/search:
+        post:
+            tags: [Feedback]
+            summary: Search feedback requests (DTO-friendly)
+            description: Searches and filters feedback requests via a JSON request body. Functionally equivalent to `GET /feedback` with query parameters.
+            operationId: searchFeedbackRequests
+            security:
+                - bearerAuth: []
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/SearchFeedbackRequestsRequest'
             responses:
                 '200':
-                    description: Feedback request list
+                    description: Feedback request search results
                     content:
                         application/json:
                             schema:

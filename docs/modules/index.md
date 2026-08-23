@@ -120,7 +120,7 @@ so a module that gains a route or a collection gains it here on the next `npm ru
 
 | Modules | core | supporting | generic | Collections | Routes | Context edges |
 | ------- | ---- | ---------- | ------- | ----------- | ------ | ------------- |
-| 13      | 3    | 4          | 6       | 14          | 96     | 19            |
+| 13      | 3    | 4          | 6       | 14          | 97     | 19            |
 
 <!-- gen:tally:end -->
 
@@ -132,7 +132,7 @@ so a module that gains a route or a collection gains it here on the next `npm ru
 | [`audit-logs`](./audit-logs.md)       | `generic`    | _headless_       | `auditlogs`                       | 0      | 0          | 1              |
 | [`cart`](./cart.md)                   | `core`       | `/cart`          | `carts`                           | 8      | 6          | 1              |
 | [`delivery`](./delivery.md)           | `supporting` | `/delivery`      | `shipments`                       | 3      | 2          | 1              |
-| [`feedback`](./feedback.md)           | `generic`    | `/feedback`      | `feedbackrequests`                | 3      | 0          | 0              |
+| [`feedback`](./feedback.md)           | `generic`    | `/feedback`      | `feedbackrequests`                | 4      | 0          | 0              |
 | [`inventory`](./inventory.md)         | `supporting` | `/inventory`     | `reservations` · `stockmovements` | 5      | 1          | 3              |
 | [`locales`](./locales.md)             | `generic`    | `/locales`       | `localemessages` · `locales`      | 13     | 0          | 0              |
 | [`observability`](./observability.md) | `generic`    | `/observability` | —                                 | 5      | 1          | 0              |

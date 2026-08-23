@@ -85,11 +85,12 @@ From model `FeedbackRequest`. `_id` and `__v` are omitted — every document car
 
 <!-- gen:surface:start -->
 
-| Endpoint                 | Middlewares                                   | Controller            | What it does                   |
-| ------------------------ | --------------------------------------------- | --------------------- | ------------------------------ |
-| `GET /feedback`          | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `getFeedback`         | List feedback requests         |
-| `PUT /feedback/{id}`     | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `putFeedbackStatus`   | Update feedback request status |
-| `POST /feedback/contact` | `(inline)`                                    | `postFeedbackContact` | Submit contact request         |
+| Endpoint                 | Middlewares                                   | Controller            | What it does                            |
+| ------------------------ | --------------------------------------------- | --------------------- | --------------------------------------- |
+| `GET /feedback`          | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `getFeedback`         | List feedback requests                  |
+| `PUT /feedback/{id}`     | `getAuth` → `isAuth` → `isAdmin` → `(inline)` | `putFeedbackStatus`   | Update feedback request status          |
+| `POST /feedback/contact` | `(inline)`                                    | `postFeedbackContact` | Submit contact request                  |
+| `POST /feedback/search`  | `getAuth` → `isAuth` → `isAdmin`              | `getFeedback`         | Search feedback requests (DTO-friendly) |
 
 Middlewares run left to right; the controller is the last handler on the route. Summaries come from this module’s own `openapi.yaml`, which is where they are edited.
 

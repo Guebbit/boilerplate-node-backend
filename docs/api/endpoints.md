@@ -50,6 +50,7 @@ controller each lands on, and why the domain is shaped that way — live on its
 | [`feedback`](../modules/feedback.md)           | `GET`    | `/feedback`                           | admin | List feedback requests                                      |
 | [`feedback`](../modules/feedback.md)           | `PUT`    | `/feedback/{id}`                      | admin | Update feedback request status                              |
 | [`feedback`](../modules/feedback.md)           | `POST`   | `/feedback/contact`                   | none  | Submit contact request                                      |
+| [`feedback`](../modules/feedback.md)           | `POST`   | `/feedback/search`                    | admin | Search feedback requests (DTO-friendly)                     |
 | [`inventory`](../modules/inventory.md)         | `POST`   | `/inventory/adjustments`              | admin | Adjust stock                                                |
 | [`inventory`](../modules/inventory.md)         | `GET`    | `/inventory/levels`                   | admin | Stock levels                                                |
 | [`inventory`](../modules/inventory.md)         | `GET`    | `/inventory/movements`                | admin | List stock movements                                        |
@@ -112,7 +113,7 @@ controller each lands on, and why the domain is shaped that way — live on its
 | [`wishlist`](../modules/wishlist.md)           | `DELETE` | `/wishlist/{productId}`               | user  | Remove a saved product                                      |
 | [`wishlist`](../modules/wishlist.md)           | `POST`   | `/wishlist/{productId}/move-to-cart`  | user  | Move a saved product into the cart                          |
 
-96 routes across 12 modules. The **Auth** column reads the mounted middleware chain rather than the contract, so it is what the server actually enforces. Each module page carries the same routes with their full middleware chain and controller.
+97 routes across 12 modules. The **Auth** column reads the mounted middleware chain rather than the contract, so it is what the server actually enforces. Each module page carries the same routes with their full middleware chain and controller.
 
 <!-- gen:all-endpoints:end -->
 

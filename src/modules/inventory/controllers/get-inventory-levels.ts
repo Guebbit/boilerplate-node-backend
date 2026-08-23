@@ -23,8 +23,10 @@ const levelsQuerySchema = ListInventoryLevelsQueryParams.extend({
  */
 export const getInventoryLevels = (request: Request, response: Response) => {
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+    // `list`, not `search`: this route is a GET with no `POST /inventory/levels/search` sibling,
+    // so the query string is the only place a filter can arrive from.
     // `lowOnly` is a boolean the query string can only carry as text.
-    const input = readInput(request, { surface: 'search', booleans: ['lowOnly'] });
+    const input = readInput(request, { surface: 'list', booleans: ['lowOnly'] });
 
     const parseResult = levelsQuerySchema.safeParse(input);
     if (!parseResult.success) {

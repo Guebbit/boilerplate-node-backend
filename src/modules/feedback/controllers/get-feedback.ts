@@ -18,12 +18,21 @@ type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>
  * remaining filters are free text it forwards to the service. It must stay in step with what
  * `getFeedback` destructures below: a parameter read here but missing from the key would let two
  * different searches share one cached response.
+ *
+ * Only the QUERY form is keyable, which is why `GET /feedback` declares no body and the DTO form
+ * is `POST /feedback/search` — an uncached route. A filter that arrived in a body could not reach
+ * this list, so it would have been invisible to the key and two different searches would have
+ * shared an entry for the cache's whole lifetime.
  */
 export const searchFeedbackKeyParameters = ['page', 'pageSize', 'text', 'email', 'status'];
 
 /**
- * GET /feedback (admin)
+ * GET /feedback and POST /feedback/search (admin)
  * Search and paginate feedback tickets by status, email, or text.
+ *
+ * One controller, two spellings — the same pairing products, users and orders each have. The
+ * query form is the cacheable one; the body form is what carries a filter set that does not
+ * belong in a URL.
  */
 export const getFeedback = (
     request: Request<ParamsDictionary, unknown, SearchFeedbackRequestsRequest, FeedbackQuery>,

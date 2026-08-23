@@ -20,7 +20,7 @@
  */
 import type { HardDeleteParamParameter } from './hardDeleteParamParameter';
 
-export type DeleteOrderByIdParams = {
+export type DeleteOrderParams = {
 /**
  * Permanently remove the record instead of soft-deleting it.
  */
