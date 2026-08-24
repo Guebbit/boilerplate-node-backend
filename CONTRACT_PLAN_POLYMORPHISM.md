@@ -2,11 +2,62 @@
 
 Where this API offers several spellings of one operation, where it does not, and what it would
 cost to close each gap. Written 2026-08-23, after the `GET /feedback` body was removed and the
-`list` surface was added.
+`list` surface was added. Updated 2026-08-24: the two open questions below are now decided — see
+**Dispositions** — and `CONTRACT_PLAN_POST_AS_GET.md` was absorbed into this file and deleted.
 
 **Read the theory first if you have not:** `docs/theory/request-input.md` explains _how_
 multi-source input works (`readInput`, the surface table, the precedence rules). This file is the
 _where and whether_ — a backlog with verdicts, not a description of the machinery.
+
+---
+
+## Dispositions
+
+The rules that resolve the two questions several spellings of one operation keep raising. Both are
+implemented, tested and mirrored in the code that reads polymorphic routes.
+
+### 1. Sources are ranked — except `hardDelete`
+
+Default: **params > query > body**, per surface, as `SURFACE_SOURCES` declares. The higher source
+is taken to be the more explicit statement of intent.
+
+`hardDelete` is the one declared exception. It is OR'd:
+
+| Sources say             | Result                                                      |
+| ----------------------- | ----------------------------------------------------------- |
+| any of them `true`      | `true`                                                      |
+| all `false`             | `false`                                                     |
+| none of them, or blank  | absent — the schema applies the contract's `default: false` |
+| any of them undecodable | passed through → 422, never outvoted by a `true` elsewhere  |
+
+**Why.** `false` is the default, so it is a value nobody normally types. Under a ranking, a `false`
+that only meant "unset" would outrank a `true` a caller deliberately spelled, purely because it
+rode the higher-precedence transport. OR has no such asymmetry: the only way to get a hard delete
+is for someone to have asked for one, and the only way to avoid one is for nobody to have.
+
+The last row is the safety property — OR must not become a way to launder a malformed value into a
+destroy.
+
+**Where it lives.** `anyTrue` on the `readInput` declaration
+(`src/infrastructure/http/request.ts`), declared by `createDeleteController`. Listing a field there
+also decodes it as a boolean, so it does not additionally belong in `booleans`. Pinned by
+`tests/unit/infrastructure/http/request.test.ts` and, on the wire, by the products contract suite.
+
+### 2. A value outside a closed set — read vs write
+
+| Where           | Value outside the set                                         |
+| --------------- | ------------------------------------------------------------- |
+| absent          | the filter is simply not applied                              |
+| a READ's filter | **matches nothing** — never widened to "return everything"    |
+| a WRITE's field | **422**, from the generated Zod enum, before any handler runs |
+
+**Why the two differ.** A read can fail closed and still answer honestly. A write has no safe
+narrowing of a value it cannot understand — only a rejection.
+
+**Where it lives.** `toFeedbackStatus` in `src/modules/feedback/service.ts` is the read half:
+`search` still sets the scope key, and `{ status: undefined }` matches no document.
+`put-feedback-status.ts` is the write half, where `UpdateFeedbackRequestStatusBody` rejects first.
+Both halves carry the disposition as a comment.
 
 ---
 
@@ -31,6 +82,87 @@ if the second one's filters have outgrown a query string.
 
 **Rough threshold: ~8 filters, or any filter that is an array or a nested object.** `GET /products`
 sits at 8 and has a sibling. `GET /inventory/levels` sits at 3 and does not need one.
+
+---
+
+## What a `/search` sibling is, and the rules that keep it legitimate
+
+_Absorbed from `CONTRACT_PLAN_POST_AS_GET.md`, which this file replaces._
+
+`POST /products/search` does not create a product. It is a **read wearing a write's method**,
+because the question does not fit in a URL. That is the recognised escape hatch — Elasticsearch,
+GitHub and Stripe all spell it this way — and the alternative is the thing that is actually
+non-standard: RFC 9110 §9.3.1 gives content on a `GET` no defined semantics, and the Fetch spec
+throws a `TypeError` if you pass a body with `GET`, so no browser can send one.
+
+Four rules. Break one and it stops being a read.
+
+1. **No side effects.** The method is a transport decision. If the handler cannot be run twice with
+   identical results, it is not this pattern.
+2. **A sub-resource, never an overload.** `POST /products` creates; `POST /products/search` asks.
+   Never one URL doing both depending on the body's shape.
+3. **Mount `/search` before `/:id`.** Express matches in mount order, so a `/:id`-shaped route
+   registered first matches the literal string `search` as an id. `src/modules/products/routes.ts`
+   is the reference. This applies to any static segment beside a wildcard — `GET
+/products/categories` has the same requirement, and the frontend's response-schema map has the
+   mirror of it.
+4. **Not browser-cacheable — server-cacheable only.** The wire says `Cache-Control: no-store`;
+   Redis caches it anyway, keyed server-side. `setCache` refuses `browserRevalidate` on a `POST`
+   rather than ignoring it, and a `POST` is served from cache **only** when the route declares
+   `keyAs` — without that requirement the next `POST` route to mount `setCache` would be cached by
+   accident, a write included.
+
+### Cache identity — the part worth copying
+
+The two spellings ask one question, so they share one cache entry: `GET /products?text=x` warms
+`POST /products/search {text}` and vice versa. Both routes declare the same `keyAs`, which replaces
+the default `METHOD:path` prefix — the thing that otherwise separates them, since they differ in
+**both** halves of it.
+
+```ts
+setCache(3600, {
+    tags: ['products'],
+    keyParameters: searchProductsKeyParameters,
+    keyAs: 'products:search'
+});
+```
+
+Three properties make sharing correct rather than merely clever:
+
+| Property                       | Why it is load-bearing                                                                                                            |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Key built from `keyParameters` | An allowlist. Keying on the whole body would let any caller mint unbounded entries with fields the endpoint never reads.          |
+| Values normalised              | A query string carries `1` as `'1'`; a JSON body keeps the number. Without normalisation the two spellings never meet.            |
+| Body read **before** query     | The `search` surface's own precedence. A key that disagreed with the controller would answer a request it was not about to serve. |
+
+`tests/unit/infrastructure/http/middlewares/cache.test.ts` pins all three.
+
+### The checklist, when one does qualify
+
+Eight touch points:
+
+1. `src/modules/<name>/openapi.yaml` — the operation, `x-alias-of` naming its `GET` twin
+2. `shared/contracts/openapi.root.yaml` — the path `$ref` (**forget this and the bundler silently drops the route**)
+3. `src/modules/<name>/routes.ts` — mount above any wildcard, with the shared `setCache`
+4. the controller — usually unchanged; `surface: 'list'` becomes `surface: 'search'`
+5. `src/modules/<name>/tests/contract/` — both spellings, including the shared pagination bounds
+6. frontend `src/modules/<name>/response-schemas.ts` — one row
+7. frontend `tests/unit/infrastructure/http/response-schema-map.spec.ts` — one row in `ROUTES`
+8. `CHANGELOG.md`, then `npm run contracts:bundle` and `npm run sync:frontend`
+
+Steps 6 and 7 are the ones that bite: **the backend gate stays fully green while the frontend goes
+red.** `check:spec-identity` proves the two `openapi.yaml` copies are byte-identical, which says
+nothing about whether the frontend has acted on what the contract now declares.
+
+### Carried to another API
+
+- Keep it a **sub-resource** (`/search`), so the URL alone says which operation it is.
+- Keep it **side-effect free**, or the method stops being a lie you can defend.
+- Declare `no-store` on the wire and cache server-side if you cache at all.
+- If you cache both spellings, key from a **declared allowlist** and normalise values, or you have
+  built a cache-poisoning surface rather than a cache.
+- Name which spelling is canonical. This API uses `x-alias-of`; the mechanism matters less than
+  answering the question.
 
 ---
 
@@ -140,42 +272,46 @@ twice, correctly, in two shapes.
 That strengthens rather than weakens the trigger rule. Add the sibling when the filter set has
 outgrown a URL; do not add it because a neighbouring resource has one.
 
-### Related finding, NOT fixed — your call
+### Related finding — decided, and the earlier reading of it was wrong
 
-Both spellings **silently ignore an unrecognised `status`** rather than rejecting it.
-`toFeedbackStatus` maps an unknown string to `undefined`, which drops the filter, so
-`?status=bogus` returns the unfiltered list — a filter that looks like it worked. This is the same
-shape as the old `hardDelete` presence bug and the old `productId`/`id` rename, both recorded in
-`docs/theory/request-input.md`.
+An earlier draft of this file claimed both spellings **silently ignore** an unrecognised `status`
+and return the unfiltered list. They do not, and nothing needs changing.
 
-It is inconsistent with the controller's own stated principle two lines above it: pagination is
-validated precisely so `?pageSize=500` answers `422` "rather than being silently clamped". Now
-that the contract declares the closed set on both spellings, validating against it would be a
-small change in `get-feedback.ts` — but it turns a currently-succeeding request into a `422`, so it
-is a deliberate behaviour change rather than a cleanup.
+`search` sets the scope key whenever `filters.status` is truthy, so a bogus value produces
+`{ status: undefined }` — which matches no document. The filter narrows to nothing, which is the
+direction that is safe. `src/modules/feedback/tests/unit/service.test.ts` has asserted exactly this
+all along, in two cases: an unknown status and the removed uppercase aliases both return zero
+items.
+
+So `?status=bogus` is not a filter that looks like it worked; it is a filter that worked and
+matched nothing. That is Disposition 2 above, and it is why a read here does **not** answer `422`
+the way `?pageSize=500` does: pagination has a correct value to clamp toward and therefore a lie
+to refuse, while an unparseable enum has no members to return.
 
 ---
 
-## The one real defect still open
+## The delete flag — closed
 
-Not a missing spelling — a resolved contradiction.
+Was the one open defect in this file. Contradictory sources used to be resolved by rank, so the
+answer depended on which transport a `false` happened to ride:
 
 ```
-DELETE /users/{id}/hard      with body {"hardDelete": false}   →  deletes permanently
-DELETE /users/{id}?hardDelete=false  with body {"hardDelete": true}  →  soft-deletes
+DELETE /users/{id}/hard              body {"hardDelete": false}  →  destroyed
+DELETE /users/{id}?hardDelete=false  body {"hardDelete": true}   →  soft-deleted
 ```
 
-Precedence (`params > query > body`) silently picks a winner. For a read that is fine and
-deliberate. For an **irreversible** operation, a request that says both "destroy" and "do not
-destroy" is a client bug, and the honest answer is `409`, not a coin flip decided by transport.
+Two spellings of one contradiction, answered two different ways.
 
-The work: `hardDelete` is read once, in `createDeleteController`
-(`src/infrastructure/http/delete-controller.ts`). Collect the value from each source _separately_
-rather than through the merged `readInput` result, and refuse when two sources disagree. Roughly
-one helper, one branch, and a contract test per delete route.
+**Resolved by OR, not by `409`.** Refusing a contradiction was the other candidate and was
+rejected: it makes a client that sends a defensive `hardDelete: false` alongside the `/hard` path
+form fail, when what it asked for is unambiguous. Under Disposition 1 both lines above now destroy
+the record, because in each one a source said `true`. Nothing else about the delete surface moved:
+`?hardDelete=false` alone still soft-deletes, an absent flag still soft-deletes, and
+`?hardDelete=maybe` still answers `422` — including when another source says `true`.
 
-**This is the highest-value item in this file.** Everything else above is "not yet"; this one
-destroys data today on a request that explicitly asked it not to.
+The spec prose changed with it. `DELETE /products`, `/users` and `/orders` each said "the query
+wins if both are sent", and the shared `HardDeleteParam` said nothing; all four now state the OR
+rule. `openapi.yaml` and `api/` are regenerated.
 
 ---
 

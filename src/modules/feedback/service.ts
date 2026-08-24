@@ -29,6 +29,19 @@ const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
     spam: FeedbackRequestStatus.spam
 };
 
+/**
+ * DISPOSITION — a value outside the closed set.
+ *
+ *   absent           → the filter is not applied at all
+ *   present, invalid → READ:  narrows to nothing. `search` still sets the scope key, and
+ *                             `{ status: undefined }` matches no document.
+ *                      WRITE: unreachable — the generated Zod enum answers 422 before this runs
+ *                             (`put-feedback-status.ts`).
+ *
+ * The direction is the point: a filter the server could not parse must narrow to nothing, never
+ * fall through to "return everything". A write does not get that treatment, because there is no
+ * safe narrowing of an invalid value to write — only a rejection.
+ */
 const toFeedbackStatus = (status?: string): FeedbackRequestStatus | undefined =>
     status ? STATUS_MAP[status] : undefined;
 

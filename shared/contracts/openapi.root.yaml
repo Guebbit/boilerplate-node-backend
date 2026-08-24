@@ -115,7 +115,7 @@ components:
             required: false
             schema:
                 type: boolean
-            description: Permanently remove the record instead of soft-deleting it.
+            description: Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.
 
         # Path ID parameters (for resource lookup)
         IdPathParam:

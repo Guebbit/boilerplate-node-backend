@@ -127,7 +127,8 @@ export type RequestSurface = 'search' | 'list' | 'write' | 'delete' | 'path';
  * - `write` — params before body, so `PUT /products/:id` and `PUT /products` (id in body) are one
  *   controller, and the explicit path id wins when a request carries both.
  * - `delete` — params, then query, then body: the full delete surface, where `hardDelete` arrives
- *   as a path segment (via `routeFlag`), a query parameter, or a body field.
+ *   as a path segment (via `routeFlag`), a query parameter, or a body field. `hardDelete` itself
+ *   is declared `anyTrue` and so escapes this ranking — see the field on the declaration below.
  * - `path` — params only, for a route whose value cannot arrive any other way. `DELETE
  *   /cart/{productId}` declares no body, and could not use one: the route cannot match without
  *   the segment, so a body `productId` was unreachable rather than merely undocumented.
@@ -155,6 +156,19 @@ export interface RequestInputDeclaration<TId extends string> {
     ids?: readonly TId[];
     /** Fields declared boolean by the contract — decoded on the string transports. */
     booleans?: readonly string[];
+    /**
+     * Fields resolved by OR across the sources instead of by precedence, and decoded as booleans
+     * without also being listed in `booleans`.
+     *
+     *   any source `true`   → `true`
+     *   otherwise            → `false`, or absent if no source stated one
+     *   any undecodable value → passed through, so the schema answers 422
+     *
+     * For a flag whose default is `false` and which is therefore rarely sent, a stated `true` is
+     * the only real signal in the request; ranking sources lets a default-shaped `false` outrank
+     * it. `hardDelete` is the case this exists for — see `delete-controller.ts`.
+     */
+    anyTrue?: readonly string[];
     /** Fields declared numeric by the contract — decoded on the string transports. */
     numbers?: readonly string[];
     /** Fields declared `string[]` by the contract — decoded on the string transports. */
@@ -186,12 +200,19 @@ export type RequestInput<TId extends string> = Record<string, unknown> &
  *   construction — there is no type in them to destroy — so a declared boolean or string array
  *   coming from either is always decoded. A body is decoded only when it is multipart, because a
  *   JSON body carries its own types and coercing it is what swallows a contract violation.
+ *
+ * One declared exception to the first rule: **`anyTrue` fields are OR'd, not ranked.** Precedence
+ * asks which source is the more explicit statement; that question has no honest answer for a flag
+ * whose `false` is a default nobody typed. See the field on the declaration above.
  */
 export const readInput = <TId extends string = never>(
     request: Request,
     declaration: RequestInputDeclaration<TId>
 ): RequestInput<TId> => {
-    const booleans = declaration.booleans ?? [];
+    const anyTrue = declaration.anyTrue ?? [];
+    // `anyTrue` fields are booleans too. Folded in here rather than asked of the caller twice,
+    // because an `anyTrue` field left undecoded would never see the `true` a query string spells.
+    const booleans = [...(declaration.booleans ?? []), ...anyTrue];
     const numbers = declaration.numbers ?? [];
     const stringArrays = declaration.stringArrays ?? [];
     const decodes = booleans.length > 0 || numbers.length > 0 || stringArrays.length > 0;
@@ -249,6 +270,20 @@ export const readInput = <TId extends string = never>(
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- stripping the caller-named key from a plain record is the whole job
         if (resolved === undefined) delete result[key];
         else result[key] = resolved;
+    }
+
+    // OR across the sources rather than a ranking of them.
+    for (const key of anyTrue) {
+        // Blank and null are "not stated", exactly as `hardDeleteSchema`'s own preprocess reads
+        // them — otherwise `?hardDelete=` would outvote a body that said true.
+        const stated = sources
+            .map((source) => source[key])
+            .filter((value) => value !== undefined && value !== null && value !== '');
+        if (stated.length === 0) continue;
+        // A value this layer could not decode is never outvoted: it reaches the schema and answers
+        // 422, instead of a `true` somewhere else deciding on its behalf.
+        const undecoded = stated.find((value) => typeof value !== 'boolean');
+        result[key] = undecoded ?? stated.includes(true);
     }
 
     // The declared shape is what the loops above just built; a record cannot express it.

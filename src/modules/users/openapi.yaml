@@ -99,7 +99,7 @@ paths:
         delete:
             tags: [Users]
             summary: Delete user
-            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
+            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
             operationId: deleteUser
             x-alias-of: deleteUserById
             security:

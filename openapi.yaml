@@ -1257,7 +1257,7 @@ paths:
       tags:
         - Users
       summary: Delete user
-      description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
+      description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
       operationId: deleteUser
       x-alias-of: deleteUserById
       security:
@@ -1679,7 +1679,7 @@ paths:
       tags:
         - Products
       summary: Delete product
-      description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
+      description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
       operationId: deleteProduct
       x-alias-of: deleteProductById
       security:
@@ -2274,7 +2274,7 @@ paths:
       tags:
         - Orders
       summary: Delete order
-      description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
+      description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
       operationId: deleteOrder
       x-alias-of: deleteOrderById
       security:
@@ -2930,7 +2930,7 @@ components:
       required: false
       schema:
         type: boolean
-      description: Permanently remove the record instead of soft-deleting it.
+      description: Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.
     IdPathParam:
       name: id
       in: path

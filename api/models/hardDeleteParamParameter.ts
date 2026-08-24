@@ -20,6 +20,6 @@
  */
 
 /**
- * Permanently remove the record instead of soft-deleting it.
+ * Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.
  */
 export type HardDeleteParamParameter = boolean;

@@ -46,7 +46,8 @@ array the newest controller happened to pass.
 
 ## The table
 
-Read "sources" left-to-right as precedence, highest first. A controller does not spell this array:
+Read "sources" left-to-right as precedence, highest first — with one declared exception,
+`hardDelete`, whose sources are OR'd instead (see the rules below). A controller does not spell this array:
 it names the **surface** it is (`search`, `list`, `write`, `delete`, `path`) and `SURFACE_SOURCES`
 in `@infrastructure/http/request` maps that to the row below. The set is closed, so precedence is a
 property of the surface rather than of whichever array the newest controller happened to pass — and
@@ -70,45 +71,45 @@ decorative: `setCache` keys on the declared **query** parameters, so a body-born
 invisible to the key. Give a collection read a real DTO form by adding `POST /x/search`, not by
 declaring a body on its GET.
 
-| Endpoint(s)                                                             | Parameter                                       | Sources (highest first) | Treatment                                      |
-| ----------------------------------------------------------------------- | ----------------------------------------------- | ----------------------- | ---------------------------------------------- |
-| `GET /products`, `POST /products/search`                                | `id`                                            | body, query             | first non-empty wins                           |
-|                                                                         | `category`, `tag`                               | body, query             | merged, then `coerceStringArray(...)[0]`       |
-|                                                                         | `page`, `pageSize`                              | body, query             | merged, then the shared pagination schema      |
-|                                                                         | `text`, `minPrice`, `maxPrice`                  | body, query             | merged, then Zod                               |
-| `GET /users`, `POST /users/search`                                      | `id`                                            | body, query             | first non-empty wins                           |
-|                                                                         | `active`                                        | body, query             | merged, then Zod `value === 'true'`            |
-|                                                                         | `page`, `pageSize`, `text`, `email`, `username` | body, query             | merged, then Zod (pagination shared)           |
-| `GET /orders`, `POST /orders/search`                                    | `id`                                            | body, query             | first non-empty wins                           |
-|                                                                         | `userId`                                        | body, query             | merged; **ignored for non-admin callers**      |
-|                                                                         | `page`, `pageSize`, `productId`, `email`        | body, query             | merged, then Zod (pagination shared)           |
-| `DELETE /products`, `DELETE /products/:id`, `DELETE /products/:id/hard` | `id`                                            | params, body            | validated as an ObjectId, 422 on failure       |
-|                                                                         | `hardDelete`                                    | params, query, body     | boolean; 422 for anything that is not one      |
-| `DELETE /users`, `DELETE /users/:id`, `DELETE /users/:id/hard`          | `id`                                            | params, body            | validated as an ObjectId, 422 on failure       |
-|                                                                         | `hardDelete`                                    | params, query, body     | boolean; 422 for anything that is not one      |
-| `DELETE /orders`, `DELETE /orders/:id`, `DELETE /orders/:id/hard`       | `id`                                            | params, body            | validated as an ObjectId, 422 on failure       |
-|                                                                         | `hardDelete`                                    | params, query, body     | boolean; 422 for anything that is not one      |
-| `POST /orders`, `PUT /orders`, `PUT /orders/:id`                        | `id`                                            | params, body            | first non-empty wins                           |
-|                                                                         | everything else                                 | body                    | untouched                                      |
-| `POST /products`, `PUT /products`, `PUT /products/:id`                  | `id`                                            | params, body            | first non-empty wins                           |
-|                                                                         | `active`                                        | body                    | boolean; decoded only on `multipart/form-data` |
-|                                                                         | `categories`, `tags`                            | body                    | string array; decoded only on multipart        |
-|                                                                         | everything else                                 | body                    | untouched                                      |
-| `POST /users`, `PUT /users`, `PUT /users/:id`                           | `id`                                            | params, body            | first non-empty wins                           |
-|                                                                         | `admin`, `active`                               | body                    | boolean; decoded only on multipart             |
-|                                                                         | everything else                                 | body                    | untouched                                      |
-| `POST /cart`                                                            | `productId`, `quantity`                         | body                    | Zod, then `isValidObjectId`                    |
-| `PUT /cart/:productId`                                                  | `productId`                                     | params, body            | first non-empty wins, then `isValidObjectId`   |
-|                                                                         | `quantity`                                      | body                    | Zod                                            |
-| `DELETE /cart/:productId`                                               | `productId`                                     | params, body            | first non-empty wins, then `isValidObjectId`   |
-| `GET /feedback`, `POST /feedback/search`                                | `page`, `pageSize`                              | body, query             | merged, then the shared pagination schema      |
-|                                                                         | `text`, `email`, `status`                       | body, query             | merged, passed through as strings              |
-| `GET /inventory/levels`                                                 | `page`, `pageSize`, `lowOnly`                   | query                   | `lowOnly` decoded as a boolean, then Zod       |
-| `GET /inventory/movements`                                              | `productId`                                     | query                   | first non-empty wins                           |
-|                                                                         | `page`, `pageSize`, `reason`                    | query                   | then Zod                                       |
-| `GET /locales/{locale}/entries`                                         | `page`, `pageSize`, `text`, `tenant`            | query                   | then the shared pagination schema              |
-| `GET /observability/audit`                                              | `actor`, `action`, `outcome`, `since`           | query                   | first non-empty wins                           |
-|                                                                         | `page`, `pageSize`                              | query                   | then the shared pagination schema              |
+| Endpoint(s)                                                             | Parameter                                       | Sources (highest first)                    | Treatment                                                  |
+| ----------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------ | ---------------------------------------------------------- |
+| `GET /products`, `POST /products/search`                                | `id`                                            | body, query                                | first non-empty wins                                       |
+|                                                                         | `category`, `tag`                               | body, query                                | merged, then `coerceStringArray(...)[0]`                   |
+|                                                                         | `page`, `pageSize`                              | body, query                                | merged, then the shared pagination schema                  |
+|                                                                         | `text`, `minPrice`, `maxPrice`                  | body, query                                | merged, then Zod                                           |
+| `GET /users`, `POST /users/search`                                      | `id`                                            | body, query                                | first non-empty wins                                       |
+|                                                                         | `active`                                        | body, query                                | merged, then Zod `value === 'true'`                        |
+|                                                                         | `page`, `pageSize`, `text`, `email`, `username` | body, query                                | merged, then Zod (pagination shared)                       |
+| `GET /orders`, `POST /orders/search`                                    | `id`                                            | body, query                                | first non-empty wins                                       |
+|                                                                         | `userId`                                        | body, query                                | merged; **ignored for non-admin callers**                  |
+|                                                                         | `page`, `pageSize`, `productId`, `email`        | body, query                                | merged, then Zod (pagination shared)                       |
+| `DELETE /products`, `DELETE /products/:id`, `DELETE /products/:id/hard` | `id`                                            | params, body                               | validated as an ObjectId, 422 on failure                   |
+|                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one |
+| `DELETE /users`, `DELETE /users/:id`, `DELETE /users/:id/hard`          | `id`                                            | params, body                               | validated as an ObjectId, 422 on failure                   |
+|                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one |
+| `DELETE /orders`, `DELETE /orders/:id`, `DELETE /orders/:id/hard`       | `id`                                            | params, body                               | validated as an ObjectId, 422 on failure                   |
+|                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one |
+| `POST /orders`, `PUT /orders`, `PUT /orders/:id`                        | `id`                                            | params, body                               | first non-empty wins                                       |
+|                                                                         | everything else                                 | body                                       | untouched                                                  |
+| `POST /products`, `PUT /products`, `PUT /products/:id`                  | `id`                                            | params, body                               | first non-empty wins                                       |
+|                                                                         | `active`                                        | body                                       | boolean; decoded only on `multipart/form-data`             |
+|                                                                         | `categories`, `tags`                            | body                                       | string array; decoded only on multipart                    |
+|                                                                         | everything else                                 | body                                       | untouched                                                  |
+| `POST /users`, `PUT /users`, `PUT /users/:id`                           | `id`                                            | params, body                               | first non-empty wins                                       |
+|                                                                         | `admin`, `active`                               | body                                       | boolean; decoded only on multipart                         |
+|                                                                         | everything else                                 | body                                       | untouched                                                  |
+| `POST /cart`                                                            | `productId`, `quantity`                         | body                                       | Zod, then `isValidObjectId`                                |
+| `PUT /cart/:productId`                                                  | `productId`                                     | params, body                               | first non-empty wins, then `isValidObjectId`               |
+|                                                                         | `quantity`                                      | body                                       | Zod                                                        |
+| `DELETE /cart/:productId`                                               | `productId`                                     | params, body                               | first non-empty wins, then `isValidObjectId`               |
+| `GET /feedback`, `POST /feedback/search`                                | `page`, `pageSize`                              | body, query                                | merged, then the shared pagination schema                  |
+|                                                                         | `text`, `email`, `status`                       | body, query                                | merged, passed through as strings                          |
+| `GET /inventory/levels`                                                 | `page`, `pageSize`, `lowOnly`                   | query                                      | `lowOnly` decoded as a boolean, then Zod                   |
+| `GET /inventory/movements`                                              | `productId`                                     | query                                      | first non-empty wins                                       |
+|                                                                         | `page`, `pageSize`, `reason`                    | query                                      | then Zod                                                   |
+| `GET /locales/{locale}/entries`                                         | `page`, `pageSize`, `text`, `tenant`            | query                                      | then the shared pagination schema                          |
+| `GET /observability/audit`                                              | `actor`, `action`, `outcome`, `since`           | query                                      | first non-empty wins                                       |
+|                                                                         | `page`, `pageSize`                              | query                                      | then the shared pagination schema                          |
 
 Pagination has exactly two authorities, and they answer different questions. `@infrastructure/http/schemas`
 owns the **bounds** — `openapi.yaml` declares `minimum: 1` / `maximum: 100`, and every one of the
@@ -147,6 +148,36 @@ perfectly good `true` and answered 201 where the contract promises 422.
 unchanged, so `?hardDelete=maybe` reaches a schema and answers 422 rather than being guessed at.
 The schemas for the scalars more than one endpoint accepts live in `@infrastructure/http/schemas`.
 
+**`anyTrue` fields are OR'd, not ranked.** The one declared exception to precedence, and today it
+has one member: `hardDelete`.
+
+| Sources say             | Result                                                      |
+| ----------------------- | ----------------------------------------------------------- |
+| any of them `true`      | `true`                                                      |
+| all `false`             | `false`                                                     |
+| none of them (or blank) | absent — the schema applies the contract's `default: false` |
+| any of them undecodable | passed through → 422, never outvoted by a `true` elsewhere  |
+
+Precedence asks which source is the more explicit statement of intent. For `hardDelete` that
+question has no honest answer, because `false` is the default and therefore a value nobody
+normally types: a `false` that only means "unset" would outrank a `true` a caller deliberately
+spelled, purely on the strength of its transport. OR has no such asymmetry — the only way to get
+a hard delete is for someone to have asked for one, and the only way to avoid one is for nobody
+to have.
+
+**An unparseable enum filter narrows; an unparseable enum on a write is refused.** The same input,
+two dispositions, because the safe direction differs:
+
+| Where           | Value outside the closed set                                   |
+| --------------- | -------------------------------------------------------------- |
+| absent          | the filter is not applied                                      |
+| a READ's filter | matches nothing — never widened to "return everything"         |
+| a WRITE's field | 422, from the generated Zod enum, before any handler code runs |
+
+A read can fail closed and still answer; a write has no safe narrowing of a value it cannot
+understand, only a rejection. `status` on feedback is the live pair — `toFeedbackStatus` in
+`src/modules/feedback/service.ts` for the read, `put-feedback-status.ts` for the write.
+
 ## Declaring it
 
 `readInput` (`@infrastructure/http/request`) takes the row of the table above as an argument:
@@ -156,7 +187,10 @@ const input = readInput(request, {
     // which surface this is; the sources and their precedence follow from it
     surface: 'delete',
     ids: ['id'],
-    booleans: ['active', 'hardDelete'],
+    booleans: ['active'],
+    // OR'd across the sources instead of ranked, and decoded as a boolean without also
+    // appearing above
+    anyTrue: ['hardDelete'],
     stringArrays: ['categories', 'tags']
 });
 ```
@@ -169,12 +203,17 @@ const input = readInput(request, {
 - `booleans` / `stringArrays` — fields whose type survives a JSON body but not a string transport.
   Decoded per the rule above. Anything unrecognisable is passed through so the validator
   downstream rejects it rather than this layer inventing a value.
+- `anyTrue` — booleans resolved by OR across the sources rather than by the surface's precedence,
+  per the table above. Listing a field here decodes it too, so it does not also belong in
+  `booleans`.
 
 One route may also state a flag in its path rather than as a value. `DELETE /products/:id/hard`
 means what `DELETE /products/:id?hardDelete=true` means; the `routeFlag('hardDelete')` middleware
 (`@middlewares/route-flag`) writes it onto `request.params` so the controller keeps a single
-declaration instead of growing a second entry point. Being a param, it also outranks a query entry
-that contradicts it — the URL a caller aimed at is the more explicit statement of intent.
+declaration instead of growing a second entry point. Being a param, it does **not** thereby
+outrank a query or body entry that contradicts it: `hardDelete` is declared `anyTrue`, so
+`/products/:id/hard` carrying `{"hardDelete": false}` hard-deletes because one source said
+`true` — not because the path won a ranking.
 
 Every domain that deletes a persisted record offers the same three spellings, and offers them for
 the same reason: the shape is a property of the domain, not a decision three route files each make.

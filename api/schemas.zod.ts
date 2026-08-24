@@ -1490,11 +1490,11 @@ export const UpdateUserResponse = zod.object({
 
 
 /**
- * Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
+ * Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
  * @summary Delete user
  */
 export const DeleteUserQueryParams = zod.object({
-  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it.')
+  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.')
 })
 
 export const deleteUserBodyHardDeleteDefault = false;
@@ -1595,7 +1595,7 @@ export const DeleteUserByIdParams = zod.object({
 })
 
 export const DeleteUserByIdQueryParams = zod.object({
-  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it.')
+  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.')
 })
 
 export const deleteUserByIdBodyHardDeleteDefault = false;
@@ -2051,11 +2051,11 @@ export const UpdateProductResponse = zod.object({
 
 
 /**
- * Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
+ * Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
  * @summary Delete product
  */
 export const DeleteProductQueryParams = zod.object({
-  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it.')
+  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.')
 })
 
 export const deleteProductBodyHardDeleteDefault = false;
@@ -2202,7 +2202,7 @@ export const DeleteProductByIdParams = zod.object({
 })
 
 export const DeleteProductByIdQueryParams = zod.object({
-  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it.')
+  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.')
 })
 
 export const deleteProductByIdBodyHardDeleteDefault = false;
@@ -3016,11 +3016,11 @@ export const UpdateOrderResponse = zod.object({
 
 
 /**
- * Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; the query wins if both are sent.
+ * Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
  * @summary Delete order
  */
 export const DeleteOrderQueryParams = zod.object({
-  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it.')
+  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.')
 })
 
 export const deleteOrderBodyHardDeleteDefault = false;
@@ -3333,7 +3333,7 @@ export const DeleteOrderByIdParams = zod.object({
 })
 
 export const DeleteOrderByIdQueryParams = zod.object({
-  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it.')
+  "hardDelete": zod.boolean().optional().describe('Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.')
 })
 
 export const deleteOrderByIdBodyHardDeleteDefault = false;

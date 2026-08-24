@@ -25,6 +25,8 @@ export const putFeedbackStatus = (
     request: Request<{ id: string }, unknown, UpdateFeedbackRequestStatusRequest>,
     response: Response
 ) => {
+    // DISPOSITION — a value outside the closed set. This is the WRITE half: the generated enum
+    // rejects it with a 422. The READ half narrows to nothing instead — see `toFeedbackStatus`.
     const body = parseBody(updateFeedbackStatusSchema, request.body, response);
     if (!body) return;
 

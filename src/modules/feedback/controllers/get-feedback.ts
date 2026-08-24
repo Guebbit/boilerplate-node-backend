@@ -56,7 +56,8 @@ export const getFeedback = (
             ...parseResult.data,
             text,
             email,
-            // Pass as string — the service's toFeedbackStatus() handles the string→enum mapping
+            // Pass as string — the service's toFeedbackStatus() handles the string→enum mapping.
+            // An invalid one is not a 422 here: on a READ it narrows to nothing. See that helper.
             status: status || undefined
         })
         .then((result) => {

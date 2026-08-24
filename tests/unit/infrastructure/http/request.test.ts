@@ -459,7 +459,8 @@ describe('readInput', () => {
         });
 
         // `false` from a higher-precedence source has to survive the undefined-dropping pass —
-        // it is a value, not an absence.
+        // it is a value, not an absence. This is the plain `booleans` rule; `hardDelete` as the
+        // delete controller declares it is `anyTrue` and answers `true` here — see below.
         it('does not let a decoded false fall through to a lower source', () => {
             const request = makeRequest({
                 query: { hardDelete: 'false' },
@@ -468,6 +469,91 @@ describe('readInput', () => {
             });
 
             expect(readInput(request, declaration).hardDelete).toBe(false);
+        });
+    });
+
+    /**
+     * The one declared exception to precedence. `false` is `hardDelete`'s default and so is a
+     * value nobody normally types; ranking sources would let a `false` that only means "unset"
+     * outrank a `true` a caller deliberately spelled, on the strength of its transport.
+     */
+    describe('anyTrue', () => {
+        const declaration = { surface: 'delete', anyTrue: ['hardDelete'] } as const;
+
+        const read = (request: Parameters<typeof readInput>[0]) =>
+            readInput(request, declaration).hardDelete;
+
+        it('answers true when a lower-precedence source says true', () => {
+            // The inversion of the precedence case above: params outrank body, and do not here.
+            expect(
+                read(
+                    makeRequest({
+                        params: { hardDelete: 'false' },
+                        body: { hardDelete: true },
+                        contentType: JSON_TYPE
+                    })
+                )
+            ).toBe(true);
+        });
+
+        it('answers true when a higher-precedence source says true', () => {
+            expect(
+                read(
+                    makeRequest({
+                        params: { hardDelete: 'true' },
+                        body: { hardDelete: false },
+                        contentType: JSON_TYPE
+                    })
+                )
+            ).toBe(true);
+        });
+
+        it('answers false when every source that spoke said false', () => {
+            expect(
+                read(
+                    makeRequest({
+                        query: { hardDelete: 'false' },
+                        body: { hardDelete: false },
+                        contentType: JSON_TYPE
+                    })
+                )
+            ).toBe(false);
+        });
+
+        it('stays absent when no source carries it, so the schema applies its default', () => {
+            expect('hardDelete' in readInput(makeRequest(), declaration)).toBe(false);
+        });
+
+        // `?hardDelete=` is an untouched form field, not a statement of false — the same reading
+        // `hardDeleteSchema` gives it. Were it counted, it would silently veto the body.
+        it('does not let a blank query entry outvote a stated true', () => {
+            expect(
+                read(
+                    makeRequest({
+                        query: { hardDelete: '' },
+                        body: { hardDelete: true },
+                        contentType: JSON_TYPE
+                    })
+                )
+            ).toBe(true);
+        });
+
+        // The safety property: OR must not become a way to launder a malformed value into a
+        // destroy. The undecodable value reaches the schema and answers 422.
+        it('passes an undecodable value through even when another source says true', () => {
+            expect(
+                read(
+                    makeRequest({
+                        query: { hardDelete: 'maybe' },
+                        body: { hardDelete: true },
+                        contentType: JSON_TYPE
+                    })
+                )
+            ).toBe('maybe');
+        });
+
+        it('decodes the string transports without a separate booleans declaration', () => {
+            expect(read(makeRequest({ query: { hardDelete: 'true' } }))).toBe(true);
         });
     });
 });

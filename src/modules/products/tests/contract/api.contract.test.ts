@@ -159,6 +159,45 @@ describe('DELETE /products/{id}', () => {
         expect(await stored(String(product._id))).not.toBeNull();
         expect(response).toSatisfyApiSpec();
     });
+
+    /**
+     * Contradictory sources: OR, not precedence. `false` is the default, so it is a value nobody
+     * normally types — a `false` meaning "unset" must not outrank a `true` someone spelled just
+     * because it rode the higher-precedence transport.
+     */
+    describe('hardDelete stated twice', () => {
+        it.each([
+            ['query false, body true', 'false', true],
+            ['query true, body false', 'true', false]
+        ])('hard-deletes for %s', async (_case, query, body) => {
+            const { bearer } = await authenticateAs('admin');
+            const product = await createProduct();
+
+            const response = await api()
+                .delete(`/products/${String(product._id)}?hardDelete=${query}`)
+                .set('Authorization', bearer)
+                .send({ hardDelete: body });
+
+            expect(response.status).toBe(200);
+            expect(await stored(String(product._id))).toBeNull();
+            expect(response).toSatisfyApiSpec();
+        });
+
+        // OR must not become a way to launder a malformed value into a destroy.
+        it('still rejects an undecodable value when the other source says true', async () => {
+            const { bearer } = await authenticateAs('admin');
+            const product = await createProduct();
+
+            const response = await api()
+                .delete(`/products/${String(product._id)}?hardDelete=maybe`)
+                .set('Authorization', bearer)
+                .send({ hardDelete: true });
+
+            expect(response.status).toBe(422);
+            expect(await stored(String(product._id))).not.toBeNull();
+            expect(response).toSatisfyApiSpec();
+        });
+    });
 });
 
 describe('DELETE /products/{id}/hard', () => {
