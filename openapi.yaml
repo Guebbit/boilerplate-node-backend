@@ -1173,6 +1173,14 @@ paths:
           in: query
           schema:
             type: boolean
+        - name: admin
+          in: query
+          schema:
+            type: boolean
+        - name: verified
+          in: query
+          schema:
+            type: boolean
       responses:
         '200':
           description: Users list page
@@ -1597,6 +1605,14 @@ paths:
             type: number
             format: double
             minimum: 0
+        - name: title
+          in: query
+          schema:
+            type: string
+        - name: active
+          in: query
+          schema:
+            type: boolean
       responses:
         '200':
           description: Products page
@@ -2192,6 +2208,14 @@ paths:
           in: query
           schema:
             $ref: '#/components/schemas/Email'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+        - name: notes
+          in: query
+          schema:
+            type: string
       responses:
         '200':
           description: Orders page
@@ -4881,6 +4905,10 @@ components:
           type: string
         active:
           type: boolean
+        admin:
+          type: boolean
+        verified:
+          type: boolean
     CreateFeedbackRequest:
       type: object
       additionalProperties: false
@@ -5317,6 +5345,10 @@ components:
           type: string
         tag:
           type: string
+        title:
+          type: string
+        active:
+          type: boolean
     CartSummaryResponse:
       type: object
       additionalProperties: false
@@ -5622,6 +5654,10 @@ components:
           $ref: '#/components/schemas/Id'
         email:
           $ref: '#/components/schemas/Email'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        notes:
+          type: string
     UpdateOrderByIdRequest:
       type: object
       additionalProperties: false

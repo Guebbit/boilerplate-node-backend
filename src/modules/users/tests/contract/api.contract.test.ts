@@ -13,6 +13,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { createUser } from '@modules/users/tests/factory';
 
 setupTestDb();
 
@@ -31,6 +32,40 @@ describe('GET /users', () => {
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
+    });
+});
+
+const usernames = (response: { body: { data: { items: { username: string }[] } } }) =>
+    response.body.data.items.map((user) => user.username);
+
+describe('GET /users — the role filters', () => {
+    /*
+     * `admin` and `verified` were applied by the repository and named nowhere in the contract, so
+     * a generated client had no way to know they worked. Declared now, which makes these the first
+     * tests that a caller sending them gets what the schema promises.
+     *
+     * One case per value rather than a count, so a failure names which rule moved.
+     */
+    it('narrows to admins, and to the unverified', async () => {
+        // Asserted by membership, not by an exact list: the authenticated admin is a fixture this
+        // test does not own, and pinning the whole page would break on any change to it.
+        const { bearer } = await authenticateAs('admin');
+        await createUser({ username: 'plain-verified', email: 'pv@example.com', verified: true });
+        await createUser({
+            username: 'plain-unverified',
+            email: 'pu@example.com',
+            verified: false
+        });
+
+        const admins = await api().get('/users?admin=true').set('Authorization', bearer);
+        expect(admins.status).toBe(200);
+        expect(usernames(admins)).not.toContain('plain-verified');
+        expect(usernames(admins)).not.toContain('plain-unverified');
+
+        const unverified = await api().get('/users?verified=false').set('Authorization', bearer);
+        expect(unverified.status).toBe(200);
+        expect(usernames(unverified)).toContain('plain-unverified');
+        expect(usernames(unverified)).not.toContain('plain-verified');
     });
 });
 

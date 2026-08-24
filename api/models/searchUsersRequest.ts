@@ -32,4 +32,6 @@ export interface SearchUsersRequest {
   email?: Email;
   username?: string;
   active?: boolean;
+  admin?: boolean;
+  verified?: boolean;
 }

@@ -98,6 +98,7 @@ export const makeOrder = ({
     shippingMethod,
     shippingCost,
     shippingAddress,
+    notes,
     deletedAt
 }: OrderOverrides = {}): OrderFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
@@ -121,6 +122,7 @@ export const makeOrder = ({
         shippingMethod,
         shippingCost,
         shippingAddress,
+        notes,
         deletedAt: toDate(deletedAt)
     })
 });

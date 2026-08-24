@@ -21,6 +21,7 @@
 import type { Email } from './email';
 import type { Id } from './id';
 import type { IdParamParameter } from './idParamParameter';
+import type { OrderStatus } from './orderStatus';
 import type { Page } from './page';
 import type { PageParamParameter } from './pageParamParameter';
 import type { PageSize } from './pageSize';
@@ -53,4 +54,6 @@ userId?: UserIdParamParameter;
  */
 productId?: ProductIdParamParameter;
 email?: Email;
+status?: OrderStatus;
+notes?: string;
 };

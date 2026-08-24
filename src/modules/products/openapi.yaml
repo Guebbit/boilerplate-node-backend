@@ -42,6 +42,14 @@ paths:
                       type: number
                       format: double
                       minimum: 0
+                - name: title
+                  in: query
+                  schema:
+                      type: string
+                - name: active
+                  in: query
+                  schema:
+                      type: boolean
             responses:
                 '200':
                     description: Products page
@@ -364,6 +372,14 @@ components:
                     type: string
                 tag:
                     type: string
+                # A title fragment, and the only one of this pair a stranger can use.
+                title:
+                    type: string
+                # Admin-effective: a stranger sending `active: false` meets the visibility
+                # scope, which pins `active: true` for them, so the two clauses contradict
+                # and the page is empty rather than revealing the unlisted catalogue.
+                active:
+                    type: boolean
 
         CreateProductRequest:
             type: object

@@ -16,19 +16,24 @@ export type GetUsersQuery = Partial<Record<keyof SearchUsersRequest, string>>;
 
 /**
  * Built on the orval-generated SearchUsersBody (kept in sync with
- * openapi.yaml); page/pageSize/active are coerced from strings since GET
+ * openapi.yaml); page/pageSize and the three booleans are coerced from strings since GET
  * requests carry them as query-string text, not JSON numbers/booleans.
  *
  * `page`/`pageSize` come from `@infrastructure/http/schemas` so all four search endpoints agree on what a
  * legal one is; absent stays absent, because `normalizePagination` owns the defaults.
  */
+/** A boolean as a query string spells it. Named once: three filters here need the same coercion. */
+const queryBoolean = z.preprocess(
+    (value) => (typeof value === 'string' ? value === 'true' : value),
+    z.boolean().optional()
+);
+
 const searchUsersQuerySchema = SearchUsersBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
-    active: z.preprocess(
-        (value) => (typeof value === 'string' ? value === 'true' : value),
-        z.boolean().optional()
-    )
+    active: queryBoolean,
+    admin: queryBoolean,
+    verified: queryBoolean
 });
 
 /**

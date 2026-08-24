@@ -52,4 +52,6 @@ id?: IdParamParameter;
 email?: Email;
 username?: string;
 active?: boolean;
+admin?: boolean;
+verified?: boolean;
 };

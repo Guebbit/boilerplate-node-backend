@@ -1360,7 +1360,9 @@ export const ListUsersQueryParams = zod.object({
   "id": zod.string().optional(),
   "email": zod.email().optional(),
   "username": zod.string().optional(),
-  "active": zod.boolean().optional()
+  "active": zod.boolean().optional(),
+  "admin": zod.boolean().optional(),
+  "verified": zod.boolean().optional()
 })
 
 export const listUsersResponseDataItemsItemLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
@@ -1645,7 +1647,9 @@ export const SearchUsersBody = zod.object({
   "id": zod.string().optional().describe('Resource identifier'),
   "email": zod.email().optional(),
   "username": zod.string().optional(),
-  "active": zod.boolean().optional()
+  "active": zod.boolean().optional(),
+  "admin": zod.boolean().optional(),
+  "verified": zod.boolean().optional()
 })
 
 export const searchUsersResponseDataItemsItemLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
@@ -1890,7 +1894,9 @@ export const ListProductsQueryParams = zod.object({
   "category": zod.string().optional(),
   "tag": zod.string().optional(),
   "minPrice": zod.number().min(listProductsQueryMinPriceMin).optional(),
-  "maxPrice": zod.number().min(listProductsQueryMaxPriceMin).optional()
+  "maxPrice": zod.number().min(listProductsQueryMaxPriceMin).optional(),
+  "title": zod.string().optional(),
+  "active": zod.boolean().optional()
 })
 
 export const listProductsResponseDataItemsItemPriceMin = 0;
@@ -2257,7 +2263,9 @@ export const SearchProductsBody = zod.object({
   "minPrice": zod.number().min(searchProductsBodyMinPriceMin).optional(),
   "maxPrice": zod.number().min(searchProductsBodyMaxPriceMin).optional(),
   "category": zod.string().optional(),
-  "tag": zod.string().optional()
+  "tag": zod.string().optional(),
+  "title": zod.string().optional(),
+  "active": zod.boolean().optional()
 })
 
 export const searchProductsResponseDataItemsItemPriceMin = 0;
@@ -2740,7 +2748,9 @@ export const ListOrdersQueryParams = zod.object({
   "id": zod.string().optional(),
   "userId": zod.string().optional(),
   "productId": zod.string().optional(),
-  "email": zod.email().optional()
+  "email": zod.email().optional(),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).optional(),
+  "notes": zod.string().optional()
 })
 
 export const listOrdersResponseDataItemsItemItemsItemProductPriceMin = 0;
@@ -3055,7 +3065,9 @@ export const SearchOrdersBody = zod.object({
   "id": zod.string().optional().describe('Resource identifier'),
   "userId": zod.string().optional().describe('Resource identifier'),
   "productId": zod.string().optional().describe('Resource identifier'),
-  "email": zod.email().optional()
+  "email": zod.email().optional(),
+  "status": zod.enum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']).optional().describe('Where an order is in its lifecycle. The set is closed here; which value may FOLLOW which is the server\'s own lifecycle rules, answered per caller by `OrderActions`.'),
+  "notes": zod.string().optional()
 })
 
 export const searchOrdersResponseDataItemsItemItemsItemProductPriceMin = 0;

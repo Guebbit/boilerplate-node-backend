@@ -39,6 +39,11 @@ const searchProductsQuerySchema = SearchProductsBody.extend({
     maxPrice: z.preprocess(
         (value) => (value === '' || value === null ? undefined : value),
         z.coerce.number().min(searchProductsBodyMaxPriceMin).optional()
+    ),
+    // A query string spells a boolean as text; the body carries a real one.
+    active: z.preprocess(
+        (value) => (typeof value === 'string' ? value === 'true' : value),
+        z.boolean().optional()
     )
 });
 

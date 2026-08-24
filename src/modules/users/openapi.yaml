@@ -30,6 +30,14 @@ paths:
                   in: query
                   schema:
                       type: boolean
+                - name: admin
+                  in: query
+                  schema:
+                      type: boolean
+                - name: verified
+                  in: query
+                  schema:
+                      type: boolean
             responses:
                 '200':
                     description: Users list page
@@ -288,6 +296,13 @@ components:
                 # there is no filter for it here. `active: false` means "deactivated", never
                 # "deleted".
                 active:
+                    type: boolean
+                # Both narrow an ALREADY admin-only listing, which is what makes publishing
+                # them safe: the endpoint answers 403 to anyone who is not staff before a
+                # filter is read at all.
+                admin:
+                    type: boolean
+                verified:
                     type: boolean
 
         CreateUserRequest:

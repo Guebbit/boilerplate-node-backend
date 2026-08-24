@@ -34,4 +34,6 @@ export interface SearchProductsRequest {
   maxPrice?: number;
   category?: string;
   tag?: string;
+  title?: string;
+  active?: boolean;
 }

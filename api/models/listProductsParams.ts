@@ -58,4 +58,6 @@ minPrice?: number;
  * @minimum 0
  */
 maxPrice?: number;
+title?: string;
+active?: boolean;
 };

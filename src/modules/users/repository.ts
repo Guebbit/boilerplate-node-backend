@@ -46,7 +46,11 @@ export const userRepository: BaseRepository<UserDocument> & {
              * `active` filters the real column, not `deletedAt: { $exists: … }`: "show me
              * deactivated accounts" and "show me deleted accounts" are different questions.
              */
-            booleans: { active: 'active' }
+            /*
+             * `admin` and `verified` narrow a listing that already answers 403 to anyone who is
+             * not staff, which is what makes publishing them safe.
+             */
+            booleans: { active: 'active', admin: 'admin', verified: 'verified' }
         }
     }),
 

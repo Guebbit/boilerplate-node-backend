@@ -24,6 +24,14 @@ paths:
                   in: query
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - name: status
+                  in: query
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
+                - name: notes
+                  in: query
+                  schema:
+                      type: string
             responses:
                 '200':
                     description: Orders page
@@ -383,6 +391,12 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                # Narrows a listing already scoped to the caller: a customer filtering by
+                # status is filtering their own orders, and staff see the same shape.
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
+                notes:
+                    type: string
 
         CreateOrderRequest:
             type: object

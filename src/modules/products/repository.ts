@@ -63,6 +63,13 @@ export const productRepository: BaseRepository<ProductDocument> & {
             objectIds: { id: '_id' },
             text: ['title', 'description'],
             arrayRegex: { category: 'categories', tag: 'tags' },
+            // `title` searches the same column the public catalogue already exposes.
+            regex: { title: 'title' },
+            /*
+             * Admin-effective: a stranger's visibility scope pins `active: true`, so the two
+             * clauses contradict and the page is empty rather than listing the unlisted catalogue.
+             */
+            booleans: { active: 'active' },
             ranges: { price: { min: 'minPrice', max: 'maxPrice' } }
         }
     }),

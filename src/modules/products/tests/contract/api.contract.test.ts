@@ -14,6 +14,48 @@ import { productRepository } from '@modules/products';
 
 setupTestDb();
 
+describe('GET /products — the filters it now publishes', () => {
+    /*
+     * `title` and `active` were applied by the repository and named nowhere in the contract.
+     * `title` is the one of the pair a stranger can use; `active` is admin-effective, because a
+     * stranger's visibility scope pins `active: true` and the two clauses contradict rather than
+     * revealing the unlisted catalogue — asserted, so publishing the filter cannot quietly become
+     * a way to read past the scope.
+     */
+    it('narrows by title, and refuses to show a stranger past the scope', async () => {
+        await createProduct({ title: 'Walnut desk' });
+        await createProduct({ title: 'Oak stool' });
+        await createProduct({ title: 'Walnut prototype', active: false });
+
+        const { bearer } = await authenticateAs('admin');
+        const staff = await api().get('/products?title=Walnut').set('Authorization', bearer);
+        expect(staff.status).toBe(200);
+        expect(staff.body.data.items.map((p: { title: string }) => p.title).toSorted()).toEqual([
+            'Walnut desk',
+            'Walnut prototype'
+        ]);
+
+        const stranger = await api().get('/products?title=Walnut');
+        expect(stranger.status).toBe(200);
+        expect(stranger.body.data.items.map((p: { title: string }) => p.title)).toEqual([
+            'Walnut desk'
+        ]);
+
+        /*
+         * The invariant, asserted rather than the page shape: a stranger asking for the unlisted
+         * rows does not get them. HOW that is achieved differs by backend — here the caller's scope
+         * is merged last and overwrites the filter, so the answer is the active catalogue; the PHP
+         * twin adds both clauses and answers an empty page. Either is safe, and pinning one would
+         * make this a test of the merge order rather than of the guarantee.
+         */
+        const asking = await api().get('/products?active=false');
+        expect(asking.status).toBe(200);
+        expect(asking.body.data.items.map((p: { title: string }) => p.title)).not.toContain(
+            'Walnut prototype'
+        );
+    });
+});
+
 describe('GET /products', () => {
     it('matches the contract for an anonymous caller', async () => {
         await createProduct();

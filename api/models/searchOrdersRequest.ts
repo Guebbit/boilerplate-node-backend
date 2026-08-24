@@ -20,6 +20,7 @@
  */
 import type { Email } from './email';
 import type { Id } from './id';
+import type { OrderStatus } from './orderStatus';
 import type { Page } from './page';
 import type { PageSize } from './pageSize';
 
@@ -30,4 +31,6 @@ export interface SearchOrdersRequest {
   userId?: Id;
   productId?: Id;
   email?: Email;
+  status?: OrderStatus;
+  notes?: string;
 }
