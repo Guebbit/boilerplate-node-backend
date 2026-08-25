@@ -239,7 +239,8 @@ components:
             properties:
                 templatePath:
                     type: string
-                    description: Path to the EJS template file.
+                    description: >-
+                        Template to render, named the way the consumer resolves it — a file path here, a Blade view name in the twin. Neutral for the same reason `EmailJobPayload.templateName` is: the two backends render different engines and the payload is not the place that decides which.
                 templateData:
                     type: object
                     description: >-
