@@ -81,7 +81,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * service has, queues included; `asyncapi.public.yaml` is the same document minus the sections
      * an API client cannot reach, and it is that subset the frontend receives as its own
      * `asyncapi.yaml`. Both come out of one set of section documents, so the two bundles cannot
-     * describe a shared channel differently — see `scripts/contracts/asyncapi.ts`.
+     * describe a shared channel differently — see `scripts/contracts/asyncapi-bundles.ts`.
      */
     { backend: 'asyncapi.public.yaml', frontend: 'asyncapi.yaml' },
     /*

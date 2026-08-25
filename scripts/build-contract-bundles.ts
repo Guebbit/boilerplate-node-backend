@@ -27,7 +27,7 @@ import {
     readCommittedBundle,
     REPO_ROOT,
     type ContractBundle
-} from './contracts';
+} from './contracts/bundle-registry';
 
 const arguments_ = process.argv.slice(2);
 const checkOnly = arguments_.includes('--check');

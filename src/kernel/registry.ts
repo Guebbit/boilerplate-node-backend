@@ -115,7 +115,7 @@ type DemoExport =
     | {
           /**
            * Read this module's seeded rows back in the shape the API serves them, keyed by
-           * collection. `scripts/export-seed.ts` walks `enabledModules` and publishes what it finds.
+           * collection. `scripts/export-demo-dataset.ts` walks `enabledModules` and publishes what it finds.
            *
            * **Must read back through the model's `toJSON`** — the real serializer — rather than
            * returning the fixtures it wrote. Returning fixtures publishes a guess labelled as truth.

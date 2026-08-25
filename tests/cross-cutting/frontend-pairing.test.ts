@@ -29,7 +29,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { enabledModules } from '../../src/modules';
-import { resolveFrontendPath } from '../../scripts/frontend-path';
+import { resolveFrontendPath } from '../../scripts/paired-frontend-path';
 
 /** One module's counterpart in `boilerplate-vue-frontend`. */
 interface Pairing {

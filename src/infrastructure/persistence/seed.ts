@@ -29,7 +29,7 @@ export interface SeedRepository<TFixture> {
  *
  * A fixture states its own `createdAt` — read off its pinned `_id`, see `./factory` — and Mongoose's
  * `timestamps: true` would overwrite it with the instant the seeder ran. That is not a cosmetic
- * loss: `scripts/export-seed.ts` commits what it reads back, so a run-dependent timestamp would
+ * loss: `scripts/export-demo-dataset.ts` commits what it reads back, so a run-dependent timestamp would
  * make `db/demo/demo-data.json` differ on every export and its staleness check could never pass.
  */
 export const SEED_SAVE_OPTIONS = { timestamps: false } as const;

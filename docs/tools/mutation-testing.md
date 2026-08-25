@@ -276,16 +276,16 @@ sandbox, so:
 
 ```bash
 find . -name '*.heapsnapshot'
-npx tsx scripts/heap-report.ts <file.heapsnapshot>                       # what is in there
+npx tsx scripts/report-heap-summary.ts <file.heapsnapshot>                       # what is in there
 NODE_OPTIONS=--max-old-space-size=10240 \
-  npx tsx scripts/heap-retainers.ts <file.heapsnapshot>                  # who is holding it
+  npx tsx scripts/report-heap-retainers.ts <file.heapsnapshot>                  # who is holding it
 ```
 
-`scripts/heap-report.ts` groups every object by kind and prints the largest. **One dominant kind is a
+`scripts/report-heap-summary.ts` groups every object by kind and prints the largest. **One dominant kind is a
 finding; an even spread is a working set** — and that single line is the difference between "we have
 a leak" and "this suite is simply heavy".
 
-Then run `scripts/heap-retainers.ts`, and do not skip it. Knowing the kind tells you nothing about
+Then run `scripts/report-heap-retainers.ts`, and do not skip it. Knowing the kind tells you nothing about
 the owner: the dominant kind here was megabyte-sized binary buffers, which look exactly like network
 I/O and were not. The second script walks the graph backwards and names the variable holding them.
 Chrome DevTools reads the same file and computes true dominators, which is better still once you
@@ -445,7 +445,7 @@ phase, and the `useDb` work would have been a week spent on 0.1% of the problem.
 
 **What they actually were.** A heap snapshot forces a full GC before it is written, so everything in
 one is genuinely reachable rather than merely uncollected. Walking the reference graph _backwards_
-from the buffers — which `scripts/heap-report.ts` cannot do, since it aggregates nodes and never
+from the buffers — which `scripts/report-heap-summary.ts` cannot do, since it aggregates nodes and never
 reads edges — named the owner immediately:
 
 ```
@@ -863,8 +863,8 @@ and a floor moved twice is worse than a floor moved once.
 | `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.  |
 | `scripts/mutation-baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                    |
 | `scripts/check-mutation-baseline.ts` | CLI for the two commands below                                                 |
-| `scripts/heap-report.ts`             | Groups a `.heapsnapshot` by kind — what a runaway worker is holding            |
-| `scripts/heap-retainers.ts`          | Walks the same snapshot backwards — which code is holding it                   |
+| `scripts/report-heap-summary.ts`     | Groups a `.heapsnapshot` by kind — what a runaway worker is holding            |
+| `scripts/report-heap-retainers.ts`   | Walks the same snapshot backwards — which code is holding it                   |
 | `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                |
 | `reports/mutation/index.html`        | Human-readable report (generated per run)                                      |
 | `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                      |

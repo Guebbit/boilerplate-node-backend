@@ -8,7 +8,7 @@
  * `imageUrl`, `categories` and `tags` all have a `default:` in `./model`, so a caller who says
  * nothing about them gets no key at all and Mongoose fills it in.
  *
- * That omission is the point. `scripts/export-seed.ts` reads the seeded rows back out through the
+ * That omission is the point. `scripts/export-demo-dataset.ts` reads the seeded rows back out through the
  * real serializer, so `demo-data.json` records what the schema actually does — and the paired
  * frontend's mock stops guessing. It used to guess: `mocks/register.ts` over there carried a
  * hand-written `active: true` with a comment admitting it was mirroring a backend default nobody

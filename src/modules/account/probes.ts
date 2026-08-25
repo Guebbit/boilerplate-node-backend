@@ -6,7 +6,7 @@
  * things have no home in it.
  *
  * Seed facts are referred to as `{{seedToken}}` — never pasted — so a probe cannot drift from the
- * dataset it is probing. The tokens are declared in `scripts/contracts/generate-collections.ts`, and
+ * dataset it is probing. The tokens are declared in `scripts/contracts/client-collections-bundle.ts`, and
  * one this module invents fails the generator with the list of known ones.
  */
 

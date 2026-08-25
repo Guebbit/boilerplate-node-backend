@@ -3,7 +3,7 @@
  *
  * A book is addressed by its owner — `addressBooks.userId` is `unique` and no book id reaches the
  * wire — so, like the cart and the wishlist, this pins an `_id` it does not need as a handle. The
- * reason is the same one `../cart/factory` gives at length: `scripts/export-seed.ts` commits what
+ * reason is the same one `../cart/factory` gives at length: `scripts/export-demo-dataset.ts` commits what
  * it reads back, and a generated id is 24 different characters on every run.
  *
  * ## Why an ENTRY pins its id too, unlike a cart line

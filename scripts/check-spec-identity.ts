@@ -16,7 +16,7 @@
  * See: docs/tools/pairing-and-ports.md#keeping-the-pair-in-step
  */
 import { existsSync } from 'node:fs';
-import { DEFAULT_FRONTEND_PATH, resolveFrontendPath } from './frontend-path';
+import { DEFAULT_FRONTEND_PATH, resolveFrontendPath } from './paired-frontend-path';
 import {
     compareSharedFiles,
     formatSharedFileProblems,

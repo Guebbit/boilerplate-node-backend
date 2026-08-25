@@ -42,10 +42,10 @@ import {
     readCommittedBundle,
     REPO_ROOT,
     type ContractBundle
-} from '../../scripts/contracts';
-import { MODULE_SECTIONS, moduleSpec } from '../../scripts/contracts/openapi';
-import { ANALYTICS_SECTIONS } from '../../scripts/contracts/analytics-events';
-import { allProbes } from '../../scripts/contracts/generate-collections';
+} from '../../scripts/contracts/bundle-registry';
+import { MODULE_SECTIONS, moduleSpec } from '../../scripts/contracts/openapi-bundle';
+import { ANALYTICS_SECTIONS } from '../../scripts/contracts/analytics-events-bundle';
+import { allProbes } from '../../scripts/contracts/client-collections-bundle';
 import { SHARED_FILES } from '../../scripts/spec-identity';
 import { analyticsEvents } from '../../src/infrastructure/observability/analytics-events.frontend';
 import type { AnalyticsEventName } from '../../src/infrastructure/observability/analytics';

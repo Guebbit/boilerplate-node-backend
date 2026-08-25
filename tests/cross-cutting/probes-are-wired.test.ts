@@ -1,6 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { PROBED_SECTIONS } from '../../scripts/contracts/generate-collections';
+import { PROBED_SECTIONS } from '../../scripts/contracts/client-collections-bundle';
 
 /**
  * Guard: a module that declares `probes.ts` is actually wired into the generated collections.
@@ -8,7 +8,7 @@ import { PROBED_SECTIONS } from '../../scripts/contracts/generate-collections';
  * `probes.ts` is the one module-owned file the registry does not reach. Its four siblings plug into
  * extension points that name no domain — `audit.ts`/`analytics.ts` by declaration merging,
  * `events.ts` through `DomainEventMap`, `metrics.ts` through the shared registry — while probes are
- * listed in a hand-maintained map in `scripts/contracts/generate-collections.ts`, typed
+ * listed in a hand-maintained map in `scripts/contracts/client-collections-bundle.ts`, typed
  * `Partial<Record<…>>` so an omission is perfectly legal.
  *
  * The static import in that file is deliberate and stays: deleting a module stops it compiling,

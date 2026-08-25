@@ -314,7 +314,7 @@ describe('the exported dataset conforms to the generated contract', () => {
         it('name only languages the dataset also publishes', () => {
             /* The referential integrity a tag string buys instead of an ObjectId reference. An
              * entry pointing at a language nobody registered would render as a dictionary the
-             * manifest never lists — and `scripts/export-seed.ts`'s dangling-reference sweep
+             * manifest never lists — and `scripts/export-demo-dataset.ts`'s dangling-reference sweep
              * cannot see it, because it matches keys ending in `Id`. */
             const tags = new Set(collections.locales.map((language) => language.tag));
             for (const entry of collections.localeMessages) {
@@ -376,7 +376,7 @@ describe('the exported dataset conforms to the generated contract', () => {
      * `_meta.shapes` — what the consumer is allowed to do with each collection.
      *
      * The map is the artefact's answer to the only question a mock author asks of it: can I return
-     * this row as it stands? `scripts/export-seed.ts` refuses to publish an unclassified
+     * this row as it stands? `scripts/export-demo-dataset.ts` refuses to publish an unclassified
      * collection, so these cases are the second net — they hold the COMMITTED file to the rule, in
      * both repos, which is what covers the frontend's copy between exports.
      */

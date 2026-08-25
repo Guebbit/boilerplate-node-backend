@@ -5,7 +5,7 @@
  *
  * `carts.userId` is `unique`, every query here reaches a cart through it, and no cart id ever
  * reaches the wire — so for a long time these fixtures pinned nothing and let mongod assign one.
- * `scripts/export-seed.ts` is what changed the calculus: a generated id is a different 24 characters
+ * `scripts/export-demo-dataset.ts` is what changed the calculus: a generated id is a different 24 characters
  * on every run, which lands in `demo-data.json`, which is committed and hash-compared against the
  * paired frontend. One unpinnable value is enough to make the whole artefact permanently stale.
  *

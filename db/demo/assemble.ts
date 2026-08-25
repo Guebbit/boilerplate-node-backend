@@ -10,7 +10,7 @@
  *
  * Two callers need the same answer from the same rows:
  *
- *   - `scripts/export-seed.ts` publishes it, against a database it seeded from scratch;
+ *   - `scripts/export-demo-dataset.ts` publishes it, against a database it seeded from scratch;
  *   - `tests/unit/db/migration-demo-data.test.ts` re-derives it, against a database that has also
  *     run every migration, and compares the two.
  *
@@ -33,7 +33,7 @@ import { seedCredentials } from '../../src/kernel/seed-accounts';
 import { enabledModules } from '../../src/modules';
 
 /* `__dirname`, not `import.meta.dirname` — tsx and ts-jest both load this as CommonJS, where the
- * latter is undefined. `scripts/contracts/fragments.ts` resolves its own root the same way. */
+ * latter is undefined. `scripts/contracts/bundle-kinds.ts` resolves its own root the same way. */
 export const DEMO_DATA_PATH = path.join(__dirname, 'demo-data.json');
 
 /**

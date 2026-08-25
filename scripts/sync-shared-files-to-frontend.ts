@@ -17,7 +17,7 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { SHARED_FILES, hashFile, THIS_REPO } from './spec-identity';
-import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './frontend-path';
+import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './paired-frontend-path';
 
 const dryRun = process.argv.includes('--dry');
 const forcedRun = process.argv.includes('--forced');
@@ -49,8 +49,8 @@ if (!existsSync(frontendRoot))
  * not re-bundle.
  */
 const STALENESS_GATES = [
-    { label: 'the contract bundles', argv: ['scripts/bundle-contracts.ts', '--check'] },
-    { label: 'the demo dataset', argv: ['scripts/export-seed.ts', '--check'] }
+    { label: 'the contract bundles', argv: ['scripts/build-contract-bundles.ts', '--check'] },
+    { label: 'the demo dataset', argv: ['scripts/export-demo-dataset.ts', '--check'] }
 ] as const;
 
 for (const gate of STALENESS_GATES) {

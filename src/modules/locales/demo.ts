@@ -281,7 +281,7 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
 };
 
 /**
- * Read both collections back as stored — `module.ts` declares this, `scripts/export-seed.ts` calls
+ * Read both collections back as stored — `module.ts` declares this, `scripts/export-demo-dataset.ts` calls
  * it.
  *
  * These are STORED ROWS, and neither collection is what any endpoint returns: the manifest is a

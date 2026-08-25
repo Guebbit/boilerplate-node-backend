@@ -37,7 +37,7 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 | Bundle                   | Verb          | What does it                                                             |
 | ------------------------ | ------------- | ------------------------------------------------------------------------ |
 | `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents                  |
-| `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi.ts` copies four maps; `$ref`s stay untouched |
+| `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies four maps; `$ref`s stay untouched |
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
 | `analytics-events.frontend.ts` | **assembled** | the frontend section's `as const` body sliced verbatim out of its source |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
@@ -54,8 +54,8 @@ npm run check:contracts-bundle        # fail if any committed bundle is stale
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
 every run, so a fragment edited without re-bundling fails the build rather than drifting.
 
-Nothing else is shared. `spectral.yaml`, `check-mutation-baseline.ts`, `test-report.ts` and
-`gen-asyncapi-types.ts` were on the list once, hand-maintained on both sides and compared but never
+Nothing else is shared. `spectral.yaml`, `check-mutation-baseline.ts`, `report-test-results.ts` and
+`generate-asyncapi-types.ts` were on the list once, hand-maintained on both sides and compared but never
 written — a fork in one of those was a question (which copy is right?) that no script could answer.
 They came off it: the two repos still keep them identical because it is convenient, and convenience
 does not earn a gate. `src/types/asyncapi.generated.ts` is absent for the opposite reason — it is generated from a bundle by
@@ -223,7 +223,7 @@ npm run check:contracts-bundle        # fail if any committed bundle is stale
 ```
 
 To rebuild one document while iterating, name it: `npm run contracts:bundle -- openapi`. The
-ordering lives inside `scripts/bundle-contracts.ts` rather than as an `&&` chain in `package.json`,
+ordering lives inside `scripts/build-contract-bundles.ts` rather than as an `&&` chain in `package.json`,
 which is what makes that flag narrow the run instead of silently doing everything else. See
 [Regenerating After a Change](./regenerating.md#regenerate-one-bundle-only).
 
@@ -266,7 +266,7 @@ Concatenation survives in exactly one bundle now, and it is no longer shared mac
 `analytics-events.frontend.ts` splices verbatim line slices out of each module's `analytics.ts`
 because those declarations carry comments no parse survives, and it owns that logic itself — the
 comma **between** slices and none after the last is a rule inside
-`scripts/contracts/analytics-events.ts`. `scripts/contracts/fragments.ts` used to hold a general
+`scripts/contracts/analytics-events-bundle.ts`. `scripts/contracts/bundle-kinds.ts` used to hold a general
 segment/separator engine for every bundle; once the REST and AsyncAPI contracts moved to whole
 documents, nothing declared a segment any more and it was removed.
 
@@ -341,10 +341,10 @@ the right indentation.
 documents, is to shell out to `@asyncapi/cli` the way `openapi` shells out to Redocly. It was tried
 and it does the wrong thing: **`asyncapi bundle` dereferences.** Every `$ref` is inlined, the
 document grows from 239 lines to 819, each payload is repeated once per channel that names it *and*
-kept under `components` — and `scripts/gen-asyncapi-types.ts`, which walks
+kept under `components` — and `scripts/generate-asyncapi-types.ts`, which walks
 `channels[*].{publish,subscribe}.message.$ref` to decide what to name a generated model, is left
 with nothing to follow. So the merge happens in about thirty lines in
-`scripts/contracts/asyncapi.ts`, deliberately dumber than a bundler: it copies four maps and
+`scripts/contracts/asyncapi-bundles.ts`, deliberately dumber than a bundler: it copies four maps and
 refuses on a collision, carrying `$ref` strings across untouched because every section already
 resolves its own refs internally. That file's header is the full argument, and it is the file to
 read before anyone tries the symmetry again.
@@ -434,7 +434,7 @@ than incomplete: its bodies predated the response envelope, so it mocked a bare 
 `{ success, error, traceId }` shape. **A mock server serving shapes the frontend cannot parse is
 worse than no mock server.**
 
-So `scripts/contracts/generate-collections.ts` produces them instead — **one committed file per
+So `scripts/contracts/client-collections-bundle.ts` produces them instead — **one committed file per
 tool, generated whole.** There is no intermediate on disk: no per-module slice to hand-edit, no
 header to keep in step with a footer, and nothing under `src/` that must never be opened.
 
@@ -470,7 +470,7 @@ requests, it does not send them.
 
 They are TypeScript rather than YAML, and the generator is called with them directly. That buys two
 things a data file cannot: the seed tokens and the probe shape are typechecked, and a module deleted
-without its probes leaving `scripts/contracts/generate-collections.ts` stops the build — which is the
+without its probes leaving `scripts/contracts/client-collections-bundle.ts` stops the build — which is the
 failure [module lifecycle](../theory/module-lifecycle.md) asks for, rather than a collection that
 silently comes out short.
 

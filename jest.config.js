@@ -29,7 +29,7 @@ const { parseEnv } = require('node:util');
 /**
  * `JEST_WORKERS` out of `.env`, without importing the rest of the file.
  *
- * `scripts/mutation.ts` reads its own settings with `process.loadEnvFile()`, and that would be the
+ * `scripts/run-mutation-tests.ts` reads its own settings with `process.loadEnvFile()`, and that would be the
  * obvious thing to copy here — but it is a standalone script and this is the test runner's config.
  * `loadEnvFile` MERGES `.env` into `process.env`, and jest hands its environment to every worker,
  * so doing it here silently republishes the whole development environment into the suite. It was

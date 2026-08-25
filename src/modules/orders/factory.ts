@@ -13,7 +13,7 @@
  * The totals are absent for the same class of reason: `totalItems`, `totalQuantity` and
  * `totalPrice` are required on the wire but never stored — `applyOrderTransform` derives them at
  * serialization time. A fixture stating them would be inventing a stored column, and
- * `scripts/export-seed.ts` would publish the invention as though the API had produced it.
+ * `scripts/export-demo-dataset.ts` would publish the invention as though the API had produced it.
  */
 
 import { Types } from 'mongoose';
@@ -51,7 +51,7 @@ export type OrderLineInput = Omit<OrderItem, 'product'> & { product: OrderSnapsh
  *
  * The three totals and `status` are dropped rather than made optional: they are required on the
  * wire but never stored — `applyOrderTransform` derives them at serialization time — so a fixture
- * that could state one would be inventing a column, and `scripts/export-seed.ts` would publish the
+ * that could state one would be inventing a column, and `scripts/export-demo-dataset.ts` would publish the
  * invention as though the API had produced it. `items` is replaced because a line here takes a
  * snapshot as DATA; see `OrderLineInput`.
  */

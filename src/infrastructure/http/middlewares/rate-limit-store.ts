@@ -23,7 +23,7 @@
  *
  * ── Lazy, and driven by traffic ──────────────────────────────────────────────────────────────
  * No socket is opened by importing this file — only by the first request that needs one. A process
- * that imports the limiters and never serves a request (a test file, `export-seed`, `sync-frontend`)
+ * that imports the limiters and never serves a request (a test file, `export-demo-dataset`, `sync-shared-files-to-frontend`)
  * must not be left holding a connection open, and one retrying a Redis that is not there would
  * never exit at all. That is not hypothetical: it is what the first version of this file did to the
  * test suite.

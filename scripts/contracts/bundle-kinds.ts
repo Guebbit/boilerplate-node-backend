@@ -1,5 +1,5 @@
 /**
- * What a contract bundle IS: the shape every entry in `index.ts` declares, and the three questions
+ * What a contract bundle IS: the shape every entry in `bundle-registry.ts` declares, and the three questions
  * the CLI and the staleness check ask of one.
  *
  * Two kinds, and the only difference is where the input comes from. A COMPILED bundle is built
@@ -99,7 +99,7 @@ export const isGenerated = (bundle: ContractBundle): bundle is GeneratedBundle =
  *
  * A single call because the two kinds differ in where their input comes from, not in how the text
  * is made: each one already knows how to build itself, and the ordering that keeps a generated
- * bundle reading a fresh contract is `bundle-contracts.ts`'s job, not this function's.
+ * bundle reading a fresh contract is `build-contract-bundles.ts`'s job, not this function's.
  */
 export const assembleBundle = (bundle: ContractBundle): string => bundle.content();
 

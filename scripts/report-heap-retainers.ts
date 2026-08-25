@@ -1,20 +1,20 @@
 #!/usr/bin/env tsx
 /**
- * Answers "who is holding these?" for one kind of heap object — the question `heap-report.ts`
+ * Answers "who is holding these?" for one kind of heap object — the question `report-heap-summary.ts`
  * cannot, because it aggregates nodes and never reads the edges between them.
  *
  * A snapshot is a graph: `edges` records are handed out to nodes in order, so walking forwards
  * gives "what does X point at". This builds the REVERSE index to give "what points at X".
  *
- * Separate from `heap-report.ts` because the memory profiles are opposite: retainers need the whole
+ * Separate from `report-heap-summary.ts` because the memory profiles are opposite: retainers need the whole
  * graph resident. Expect to pass `NODE_OPTIONS=--max-old-space-size=10240` for a large snapshot.
- * Run `heap-report.ts` first to find the dominant kind, then this to find its owner.
+ * Run `report-heap-summary.ts` first to find the dominant kind, then this to find its owner.
  *
  * ONE LIMIT: it picks *a* retainer at each step, not the *dominating* one. Past three or four
  * levels the chains wander into V8's own optimisation metadata, so read a deep run as a hint and a
  * shallow one as evidence.
  *
- * Usage: tsx scripts/heap-retainers.ts <file.heapsnapshot> [kind] [depth]
+ * Usage: tsx scripts/report-heap-retainers.ts <file.heapsnapshot> [kind] [depth]
  *
  * See: docs/tools/mutation-testing.md#finding-the-culprit
  */
@@ -25,7 +25,7 @@ const file = process.argv[2];
 const wantedKind = process.argv[3] ?? 'JSArrayBufferData';
 const depth = Number(process.argv[4] ?? 3);
 if (!file) {
-    console.error('usage: tsx scripts/heap-retainers.ts <file.heapsnapshot> [kind] [depth]');
+    console.error('usage: tsx scripts/report-heap-retainers.ts <file.heapsnapshot> [kind] [depth]');
     process.exit(2);
 }
 

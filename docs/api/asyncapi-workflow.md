@@ -24,7 +24,7 @@ The async contract is published twice, from one set of sources:
 The queues are backend-only because a browser can neither publish to nor consume from RabbitMQ. A
 frontend holding `EmailJobPayload` would carry the shape of a message it cannot send, and read as a
 contract it is expected to honour. So the split is by SECTION, one field in
-`scripts/contracts/asyncapi.ts`:
+`scripts/contracts/asyncapi-bundles.ts`:
 
 ```ts
 const SHARED_SECTIONS: readonly AsyncSectionName[] = ['observability'];
@@ -67,8 +67,8 @@ npm run check:contracts-bundle  # fail if a committed bundle is stale
 ```
 
 **It is a merge, not `asyncapi bundle`.** The CLI dereferences — inlining every payload into every
-channel that names it, 239 lines to 819, and leaving `scripts/gen-asyncapi-types.ts` with no `$ref`
-to follow. `scripts/contracts/asyncapi.ts` copies four maps instead and refuses on a collision; its
+channel that names it, 239 lines to 819, and leaving `scripts/generate-asyncapi-types.ts` with no `$ref`
+to follow. `scripts/contracts/asyncapi-bundles.ts` copies four maps instead and refuses on a collision; its
 header carries the full argument, and is the file to read before trying the CLI again.
 
 See [Contract Ownership & Fragmentation](./contract-fragmentation.md) for the whole picture,
@@ -83,7 +83,7 @@ including why each bundle uses the verb it does.
 
 ## Generated TypeScript types
 
-Types are generated from `asyncapi.yaml` into `src/types/asyncapi.generated.ts` by a custom script (`scripts/gen-asyncapi-types.ts`).  
+Types are generated from `asyncapi.yaml` into `src/types/asyncapi.generated.ts` by a custom script (`scripts/generate-asyncapi-types.ts`).  
 They are re-exported from `src/types/index.ts` so all app code can import them consistently:
 
 ```ts
@@ -97,17 +97,17 @@ Regenerate types after editing `asyncapi.yaml`:
 npm run gen:asyncapi
 ```
 
-The generator (`scripts/gen-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
+The generator (`scripts/generate-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
 
 ### Shared with the frontend
 
-This script is **byte-identical** to `scripts/gen-asyncapi-types.ts` in `boilerplate-vue-frontend`,
+This script is **byte-identical** to `scripts/generate-asyncapi-types.ts` in `boilerplate-vue-frontend`,
 and both write the same path:
 
 | Repo | Command | Reads |
 | --- | --- | --- |
-| Backend | `tsx scripts/gen-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | this repo's `asyncapi.yaml` — every channel |
-| Frontend | `tsx scripts/gen-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | its `asyncapi.yaml`, which is a copy of `asyncapi.public.yaml` |
+| Backend | `tsx scripts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | this repo's `asyncapi.yaml` — every channel |
+| Frontend | `tsx scripts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | its `asyncapi.yaml`, which is a copy of `asyncapi.public.yaml` |
 
 The script is the same, the INPUT is not — so the two outputs differ, and are meant to: only this
 repo's carries `EmailJobPayload`, `PdfJobPayload` and `WORKER_CHANNELS`. Everything the frontend's
@@ -126,7 +126,7 @@ same gate over its own copy.
 
 ## Tooling used here
 
-- `@asyncapi/modelina`: schema-to-code generator used by `scripts/gen-asyncapi-types.ts` to turn `asyncapi.yaml` schemas into TypeScript models/types (then the script appends repo-specific helper exports).
+- `@asyncapi/modelina`: schema-to-code generator used by `scripts/generate-asyncapi-types.ts` to turn `asyncapi.yaml` schemas into TypeScript models/types (then the script appends repo-specific helper exports).
 - `@asyncapi/cli`: CLI tooling used by this repo to validate `asyncapi.yaml` and open AsyncAPI Studio.
 
 ## Commands used in this repo

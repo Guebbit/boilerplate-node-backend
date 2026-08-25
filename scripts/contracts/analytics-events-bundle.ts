@@ -19,7 +19,7 @@
 
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { REPO_ROOT, type CompiledBundle } from './fragments';
+import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
 
 import { accountAnalyticsEvents } from '../../src/modules/account/analytics';
 import { productsAnalyticsEvents } from '../../src/modules/products/analytics';

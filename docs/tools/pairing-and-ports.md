@@ -122,7 +122,7 @@ fails on that trains people to ignore it.
 
 The list used to carry a second kind of entry, flagged `owner: 'mirror'`: files both repos
 maintained by hand and kept identical because it was convenient — `spectral.yaml` and three shared
-scripts (`check-mutation-baseline.ts`, `test-report.ts`, `gen-asyncapi-types.ts`). A fork in one of
+scripts (`check-mutation-baseline.ts`, `report-test-results.ts`, `generate-asyncapi-types.ts`). A fork in one of
 those was a question no script could answer, so `sync:frontend` could only report it and walk away.
 
 They were removed, and the flag with them. Nothing breaks _silently_ when two repos lint under

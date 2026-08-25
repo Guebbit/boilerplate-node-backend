@@ -5,7 +5,7 @@
  * the demo catalogue with it. They used to live in a `seed-identities.fragment.ts` beside this file
  * that no module could import — a text slice concatenated into one cross-repo file — because the
  * paired frontend needed the same records and the only way to give them to it was to share source.
- * It no longer shares source: `scripts/export-seed.ts` seeds these rows and publishes what the API
+ * It no longer shares source: `scripts/export-demo-dataset.ts` seeds these rows and publishes what the API
  * actually serves as `db/demo/demo-data.json`, so the facts can live in one normal TypeScript file
  * that this module's own code imports like any other.
  *
@@ -157,7 +157,7 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
 
 /**
  * Read the seeded catalogue back as the API serves it — `module.ts` declares this, and
- * `scripts/export-seed.ts` calls it. Sorted by `_id` so the published file is byte-stable across
+ * `scripts/export-demo-dataset.ts` calls it. Sorted by `_id` so the published file is byte-stable across
  * runs rather than dependent on Mongo's natural order.
  */
 export const exportSeededProducts = async (): Promise<Record<string, unknown[]>> => ({

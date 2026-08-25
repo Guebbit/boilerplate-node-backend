@@ -65,7 +65,7 @@ const addressItemSchema = new Schema(
  * snapshot embedded in an order line does.
  *
  * `./services/addresses` maps entries by hand for the wire and does not go through this, so nothing
- * in a request path changes. What does go through it is `scripts/export-seed.ts`, which publishes
+ * in a request path changes. What does go through it is `scripts/export-demo-dataset.ts`, which publishes
  * stored rows via `toJSON()`: without this, the demo dataset would be the only place in the repo
  * where an addressable record announced itself as `_id`.
  */

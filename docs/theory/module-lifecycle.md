@@ -21,10 +21,10 @@ apply to your domain is most of both procedures:
 | Registry              | File                                           | Applies when                       |
 | --------------------- | ---------------------------------------------- | ---------------------------------- |
 | `enabledModules`      | `src/modules.ts`                               | **always**                         |
-| `MODULE_SECTIONS`     | `scripts/contracts/openapi.ts`                 | the domain serves HTTP             |
-| `ANALYTICS_SECTIONS`  | `scripts/contracts/analytics-events.ts`        | the domain has an `analytics.ts`   |
-| `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi.ts`                | the domain owns an `asyncapi.yaml` |
-| `SHARED_SECTIONS`     | `scripts/contracts/asyncapi.ts`                | …and an API client can reach it    |
+| `MODULE_SECTIONS`     | `scripts/contracts/openapi-bundle.ts`          | the domain serves HTTP             |
+| `ANALYTICS_SECTIONS`  | `scripts/contracts/analytics-events-bundle.ts` | the domain has an `analytics.ts`   |
+| `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi-bundles.ts`        | the domain owns an `asyncapi.yaml` |
+| `SHARED_SECTIONS`     | `scripts/contracts/asyncapi-bundles.ts`        | …and an API client can reach it    |
 | `FRONTEND_PAIRING`    | `tests/cross-cutting/frontend-pairing.test.ts` | **always**                         |
 
 `FRONTEND_PAIRING` is the newest of the five and the only one that names the other repository: which
@@ -33,7 +33,7 @@ frontend module answers this domain, or a sentence saying why none does.
 FE/BE gap from widening unnoticed.
 
 A sixth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
-imported by name in `scripts/contracts/generate-collections.ts`. Deleting the module stops the build
+imported by name in `scripts/contracts/client-collections-bundle.ts`. Deleting the module stops the build
 on its own rather than waiting for a bundle to come out quietly short — but ADDING one needs the map
 edited, and forgetting that is silent, so `tests/cross-cutting/probes-are-wired.test.ts` fails when a
 `probes.ts` on disk is missing from it. The import stays static: the compile-time deletion failure is
@@ -297,7 +297,7 @@ flowchart LR
 rm -rf src/modules/<name>
 # delete the import and the array entry in src/modules.ts
 # delete its entry from MODULE_SECTIONS / ANALYTICS_SECTIONS / ASYNC_SECTION_ORDER
-# and, if it declared probes, from scripts/contracts/generate-collections.ts
+# and, if it declared probes, from scripts/contracts/client-collections-bundle.ts
 ```
 
 Deleting a module named in another module's `dependsOn` stops the boot with the offending pair
@@ -441,7 +441,7 @@ dependents too or pick a different set. An earlier run of this check reported "z
 still at zero\*\*, and that is the number this exercise is actually defending.
 
 **Correct — the section lists and the co-located specs that assert a deleted domain.** Six of the
-errors are `scripts/contracts/analytics-events.ts` and `generate-collections.ts` naming
+errors are `scripts/contracts/analytics-events-bundle.ts` and `generate-collections.ts` naming
 `products`/`cart`/`orders`, which is step 3 of the removal procedure announcing itself rather than
 residue. Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
 go with their modules.

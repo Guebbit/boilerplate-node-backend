@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Summarises a V8 heap snapshot — `npx tsx scripts/heap-report.ts <file.heapsnapshot> [topN]`.
+ * Summarises a V8 heap snapshot — `npx tsx scripts/report-heap-summary.ts <file.heapsnapshot> [topN]`.
  *
  * Node writes a snapshot as it is about to die when started with:
  *
@@ -20,7 +20,7 @@ import { open } from 'node:fs/promises';
 
 const file = process.argv[2];
 if (!file) {
-    console.error('usage: tsx scripts/heap-report.ts <file.heapsnapshot> [topN]');
+    console.error('usage: tsx scripts/report-heap-summary.ts <file.heapsnapshot> [topN]');
     process.exit(2);
 }
 const topN = Number(process.argv[3] ?? 25);

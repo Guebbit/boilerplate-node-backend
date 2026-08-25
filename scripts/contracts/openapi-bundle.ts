@@ -19,7 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 import path from 'node:path';
-import { REPO_ROOT, type CompiledBundle } from './fragments';
+import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
 
 /**
  * The modules contributing a standalone document, in the order the contract is assembled in.

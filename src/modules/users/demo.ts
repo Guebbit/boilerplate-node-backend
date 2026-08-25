@@ -60,7 +60,7 @@ export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
  * Read the seeded accounts back as the API serves them — see `../products/demo`.
  *
  * No password comes out, and that is `applyUserTransform` doing its job rather than an omission
- * here: credentials never reach a response, so `scripts/export-seed.ts` publishes them separately
+ * here: credentials never reach a response, so `scripts/export-demo-dataset.ts` publishes them separately
  * from `@kernel/seed-accounts`.
  */
 export const exportSeededUsers = async (): Promise<Record<string, unknown[]>> => ({

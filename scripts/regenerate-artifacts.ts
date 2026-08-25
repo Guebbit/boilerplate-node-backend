@@ -21,7 +21,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './frontend-path';
+import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './paired-frontend-path';
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 

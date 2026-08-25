@@ -34,8 +34,8 @@ import {
     type Section,
     type ValueSources
 } from '@guebbit/openapi-runnable-collections';
-import { REPO_ROOT, type ContractBundle } from './fragments';
-import { SECTION_ORDER, sectionPaths, type SectionName } from './openapi';
+import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
+import { SECTION_ORDER, sectionPaths, type SectionName } from './openapi-bundle';
 import { probes as accountProbes } from '../../src/modules/account/probes';
 import { probes as cartProbes } from '../../src/modules/cart/probes';
 import { probes as ordersProbes } from '../../src/modules/orders/probes';
@@ -242,7 +242,7 @@ export const PROBED_SECTIONS: readonly SectionName[] = Object.keys(PROBES) as Se
 /**
  * One run of the generator.
  *
- * Deliberately not memoised: `bundle-contracts.ts` writes `openapi.yaml` in phase 1 and generates
+ * Deliberately not memoised: `build-contract-bundles.ts` writes `openapi.yaml` in phase 1 and generates
  * from it in phase 2, so a cached result would be one taken before the contract it claims to derive
  * from existed.
  */

@@ -18,11 +18,16 @@
  * See: docs/api/contract-fragmentation.md#the-eight-bundles
  */
 
-import type { ContractBundle } from './fragments';
-import { openapiBundle } from './openapi';
-import { asyncapiBundle, asyncapiPublicBundle } from './asyncapi';
-import { analyticsEventsBundle } from './analytics-events';
-import { brunoBundle, insomniaBundle, mockoonBundle, postmanBundle } from './generate-collections';
+import type { ContractBundle } from './bundle-kinds';
+import { openapiBundle } from './openapi-bundle';
+import { asyncapiBundle, asyncapiPublicBundle } from './asyncapi-bundles';
+import { analyticsEventsBundle } from './analytics-events-bundle';
+import {
+    brunoBundle,
+    insomniaBundle,
+    mockoonBundle,
+    postmanBundle
+} from './client-collections-bundle';
 
 export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     openapiBundle,
@@ -39,4 +44,4 @@ export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
 export const findBundle = (name: string): ContractBundle | undefined =>
     CONTRACT_BUNDLES.find((bundle) => bundle.name === name);
 
-export * from './fragments';
+export * from './bundle-kinds';

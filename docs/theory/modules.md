@@ -303,7 +303,7 @@ contain the calls the contract describes, and a contract describes valid calls a
 answers — so the requests that prove the API _rejects_ things have nowhere to come from. A module
 declares those as data (method, path, headers, body, and a `why` that becomes the description) and
 the collection generator emits them after its contract-derived requests. Four modules carry one, and
-a module deleted without removing its entry from `scripts/contracts/generate-collections.ts` stops
+a module deleted without removing its entry from `scripts/contracts/client-collections-bundle.ts` stops
 the build rather than shipping a short collection. See
 [Contract Ownership & Fragmentation](../api/contract-fragmentation.md#the-client-collections-generated).
 
