@@ -31,7 +31,7 @@
  * A document store, a cache and a message broker have nothing in common technically, and each
  * describing itself in its own words is a payload that needs a legend. One enum makes it readable
  * as it stands, and makes `overallStatus` a fold rather than three special cases. `connecting` is kept as its own value rather than folded into `unavailable` because the
- * production HEALTHCHECK allows a 40-second start period: during it, "not yet" and "broken" look
+ * production HEALTHCHECK allows a start period: during it, "not yet" and "broken" look
  * identical on the wire and mean opposite things to whoever is watching a deploy.
  */
 

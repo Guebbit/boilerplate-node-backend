@@ -151,7 +151,7 @@ services:
             # How many consecutive failures needed to consider the container unhealthy
             retries: 3
             # Initial grace period to wait before starting health check
-            start_period: 10s
+            start_period: 30s
 
     # Another container
     database:
@@ -186,7 +186,7 @@ services:
             interval: 5s
             timeout: 5s
             retries: 12
-            start_period: 10s
+            start_period: 30s
 
     # Redis is used as an in-memory cache layer. The app stores response data here with a TTL so repeated
     # requests are served from memory instead of hitting MongoDB again. On restart the cache is cold (data is lost),

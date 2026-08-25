@@ -90,7 +90,7 @@ describe('when the dependency is switched off', () => {
 /*
  * The reason this file exists. `connecting` means one thing — an attempt is in flight — for every
  * dependency that reports through it, so two entries in one health payload cannot disagree about
- * what the word means. The production HEALTHCHECK allows a 40-second start period, during which
+ * what the word means. The production HEALTHCHECK allows a start period, during which
  * "not yet" and "broken" look identical on the wire and mean opposite things to whoever is
  * watching a deploy.
  */
