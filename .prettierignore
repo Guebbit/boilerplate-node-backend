@@ -21,3 +21,12 @@ db/demo/demo-data.json
 
 # graphify cache — generated JSON, not ours to format
 graphify-out/
+
+# Working directories that belong to tooling rather than to this codebase, and to whoever is
+# running it rather than to this repo's formatting rules. Prettier scans the whole tree, so an
+# unformatted scratch directory here fails `prettier:check` — which is in `npm run complete`, which
+# the pre-commit hook runs. One person's working notes would otherwise block every commit in every
+# concurrent session, and the way out people find is `--no-verify`, which costs the whole gate.
+2repo/
+.codeboarding/
+CLAUDE.md
