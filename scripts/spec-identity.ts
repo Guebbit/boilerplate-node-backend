@@ -211,13 +211,12 @@ export const formatSharedFileProblems = (
 
     return (
         `Shared contract mismatch against ${siblingRoot}:\n${lines.join('\n')}\n\n` +
-        `  Both repos must carry byte-identical copies of ${SHARED_FILES.length} files.\n` +
-        `  Four of them are PRODUCED IN THE BACKEND from per-module sources:\n` +
+        `  Both repos carry byte-identical copies of ${SHARED_FILES.length} files, and EVERY ONE\n` +
+        `  is produced in the backend from per-module sources — so this never needs a decision\n` +
+        `  about which copy is right. The frontend's is an output. Rebuild it and hand it over:\n` +
         `    cd <backend> && npm run contracts:bundle   # the shared specs and the analytics names\n` +
-        `    cd <backend> && npm run seed:export        # the demo dataset\n` +
-        `    cd <backend> && npm run sync:frontend      # copies all four over\n` +
-        `  The rest are hand-maintained on both sides: decide which copy is right and copy it\n` +
-        `  over the other. Either way, regenerate each repo's OWN outputs afterwards:\n` +
+        `    cd <backend> && npm run sync:frontend      # copies them across\n` +
+        `  Then regenerate each repo's OWN outputs, which are not shared and not copied:\n` +
         `    npm run gen:api && npm run gen:asyncapi`
     );
 };
