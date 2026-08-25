@@ -3,6 +3,8 @@
  *
  * A save funnel with one exit into the purchase funnel, which is the event worth watching.
  *
+ * Naming rule: docs/tools/analytics.md#naming.
+ *
  * Declared by augmenting the analytics port's name map rather than by editing a shared file,
  * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
  * their names, and `infrastructure` keeps knowing no domain at all.

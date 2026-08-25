@@ -8,6 +8,8 @@
  * to attribute it to; and a checkout request that never arrived is, from here, indistinguishable
  * from one that was never made.
  *
+ * Naming rule: docs/tools/analytics.md#naming.
+ *
  * WHY THEY ARE DECLARED HERE AT ALL. Both repos write into one Umami website, so the event names
  * form ONE namespace across the two. Declaring the client's half here is what makes that namespace
  * have an owner: `contract-bundles.test.ts` checks every name in this file against every name the

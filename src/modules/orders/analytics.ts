@@ -5,6 +5,8 @@
  * because `POST /cart/checkout` is what reports it. The paired frontend emits `ORDER_*` from its
  * orders store, which is why ownership is a per-repo mapping while the NAMES are shared.
  *
+ * Naming rule: docs/tools/analytics.md#naming.
+ *
  * Declared by augmenting the analytics port's name map rather than by editing a shared file,
  * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
  * their names, and `infrastructure` keeps knowing no domain at all.

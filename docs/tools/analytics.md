@@ -68,6 +68,43 @@ API container _is_ the API. Unset, the ingest host falls back to the public one,
 only where both reach Umami at the same address.
 :::
 
+## Naming
+
+> **`<subject>_<past-tense verb>`, snake_case, lower-case ASCII. Subject first, always.**
+
+Four clauses, derived from the names already emitted rather than invented:
+
+1. **Subject leads, verb closes**, and the verb is past tense — the event already happened.
+   `cart_viewed`, `order_created`, `payment_succeeded`, `user_signed_up`.
+2. **Singular subject = one instance. Plural = the collection.** `product_viewed` is one product;
+   `products_searched` is the catalogue. `order_created` against `orders_viewed`.
+3. **A thing inside a thing takes a compound subject**: `<container>_<item>_<verb>`.
+   `cart_item_added`, `cart_item_removed`, `wishlist_item_added`.
+4. **One noun per domain.** Never two words for the same thing — the products domain is
+   `product`/`products` throughout, never `catalogue`.
+
+### An outcome is a different event, not a property
+
+`checkout_completed`/`checkout_failed` and `payment_succeeded`/`payment_declined` are pairs on
+purpose, and must not be collapsed into one name plus an `outcome` property. The
+[audit trail](./events-and-logging.md) does the opposite — there `outcome` is a mandatory field and
+never appears in the action name — because the two systems are asked different questions. Audit is
+sliced **across** actions (_"show me everything that failed"_); analytics is counted **per name**
+(_"how many reached this step"_), and Umami keys on the name. In audit the outcome is a _dimension_
+of one action; in analytics it is a _different event_.
+
+### Renaming is not free
+
+Umami keys on the string and carries no history forward, so a rename after deployment ends one
+series and starts another. Decide the name once, here, rather than after a dashboard depends on it.
+
+### Where a name lives
+
+With the code that emits it — `src/modules/<name>/analytics.ts`, one module, one owner. Names only
+a browser can produce live in `shared/contracts/analytics.frontend.ts` and are published to the
+paired frontend. Both halves share ONE Umami website, so the two form one namespace:
+`contracts:bundle` refuses to build a catalogue in which two sections claim one name.
+
 ## Two things Umami does not tell you
 
 **A missing `User-Agent` header discards the event, and returns `200`.** Verified against umami

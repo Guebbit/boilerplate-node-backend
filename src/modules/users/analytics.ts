@@ -1,8 +1,9 @@
 /**
  * The analytics event names this module emits.
  *
- * Discovery, not purchase: a search and a product view are the top of the funnel, and their ratio
- * to `CART_ITEM_ADDED` is what says whether the catalogue is doing its job.
+ * The administrative half of "an account came into existence". `account`'s `USER_SIGNED_UP` is a
+ * person signing themselves up; these two are an operator acting on somebody else's record, and
+ * the month's account total is the sum of both — which is why neither module can carry both names.
  *
  * Naming rule: docs/tools/analytics.md#naming.
  *
@@ -16,14 +17,16 @@
  * published to the paired frontend, which is what keeps one event from being counted twice.
  */
 
-export const productsAnalyticsEvents = {
-    // Product discovery
-    PRODUCTS_SEARCHED: 'products_searched',
-    PRODUCT_VIEWED: 'product_viewed'
+export const usersAnalyticsEvents = {
+    // Administrative account lifecycle
+    USER_CREATED: 'user_created',
+    // Deactivation is a product event as well as an administrative one: it is what a churn
+    // dashboard counts, and it is invisible in a plain "updated" signal.
+    USER_DEACTIVATED: 'user_deactivated'
 } as const;
 
 declare module '@infrastructure/observability/analytics' {
     interface AnalyticsEventMap {
-        products: (typeof productsAnalyticsEvents)[keyof typeof productsAnalyticsEvents];
+        users: (typeof usersAnalyticsEvents)[keyof typeof usersAnalyticsEvents];
     }
 }

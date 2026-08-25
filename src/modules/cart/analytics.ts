@@ -5,6 +5,8 @@
  * reports it. A name belongs to the code that EMITS it: delete this module and the two checkout
  * outcomes leave the funnel with the endpoint that produced them.
  *
+ * Naming rule: docs/tools/analytics.md#naming.
+ *
  * Declared by augmenting the analytics port's name map rather than by editing a shared file,
  * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
  * their names, and `infrastructure` keeps knowing no domain at all.

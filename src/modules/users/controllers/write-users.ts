@@ -19,6 +19,8 @@ import type {
 import type { UserRecord } from '../model';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { usersAuditActions } from '../audit';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { usersAnalyticsEvents } from '../analytics';
 
 /**
  * POST /users — create a new user (admin).
@@ -109,6 +111,12 @@ export const writeUsers = (
                         target_id: String(user._id)
                     })
                 );
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(request),
+                    distinctId: String(user._id),
+                    event: usersAnalyticsEvents.USER_CREATED,
+                    properties: { admin_created: true }
+                });
                 // create() returns the in-memory document; the schema's toJSON transform
                 // strips the hashed password before it ever reaches res.json
                 successResponse(response, user, 201);
@@ -138,6 +146,14 @@ export const writeUsers = (
                     target_id: id
                 })
             );
+            // Deactivation is a product event as well as an administrative one: it is what a
+            // churn dashboard counts, and it is invisible in a plain "updated" signal.
+            if (active === false)
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(request),
+                    distinctId: id,
+                    event: usersAnalyticsEvents.USER_DEACTIVATED
+                });
             successResponse(response, result.data);
         })
         .catch((error: Error) =>

@@ -4,6 +4,8 @@
  * The funnel's last gate: succeeded over (succeeded + declined) is the conversion number a payment
  * provider change would move.
  *
+ * Naming rule: docs/tools/analytics.md#naming.
+ *
  * Declared by augmenting the analytics port's name map rather than by editing a shared file,
  * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
  * their names, and `infrastructure` keeps knowing no domain at all.
