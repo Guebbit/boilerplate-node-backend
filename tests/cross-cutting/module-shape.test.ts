@@ -8,7 +8,7 @@
  *   1. **`name` matches the folder.** The manifest's docblock already requires it ("Must match the
  *      folder name under `src/modules/`") and nothing enforced it. The name is what every other
  *      guard keys on — `context-map.test.ts` resolves `dependsOn` edges by it, the registry logs
- *      by it, `docs/modules/<name>.md` is generated for it — so a manifest naming itself something
+ *      by it, `docs/modules/<name>.md` is named for it — so a manifest naming itself something
  *      the folder is not makes each of those quietly describe a module that does not exist.
  *   2. **Every folder is enabled, or is deliberately not.** A domain added and never listed
  *      compiles, lints, tests clean and serves nothing: its routes are never mounted, its
@@ -163,6 +163,44 @@ describe('the shape every module declares', () => {
             .map(({ name }) => `${name}: index.ts re-exports its own demo.ts`);
 
         expect(leaky).toEqual([]);
+    });
+
+    it('gives every module a page, and every page a module', () => {
+        /*
+         * `docs/modules/` is hand-written now, so nothing regenerates a page into existence and
+         * nothing deletes one that outlived its domain. Both directions are worth a check: a module
+         * with no page is a domain nobody documented, and a page with no module documents something
+         * the application does not serve — which is worse, because it reads as current.
+         *
+         * Sub-pages are the exception and are listed rather than discovered: a flow deep enough to
+         * earn its own page is a deliberate act, and the list is short enough to state.
+         */
+        const SUB_PAGES = [
+            'cart-checkout',
+            'account-sessions',
+            'inventory-reservations',
+            'payments-provider-port'
+        ];
+
+        const docsDir = path.join(__dirname, '../../docs/modules');
+        const pages = readdirSync(docsDir)
+            .filter((entry) => entry.endsWith('.md') && entry !== 'index.md')
+            .map((entry) => entry.replace(/\.md$/, ''));
+        const names = new Set(enabledModules.map(({ name }) => name));
+
+        expect(pages.length).toBeGreaterThan(0);
+
+        const undocumented = [...names]
+            .filter((name) => !pages.includes(name))
+            .map((name) => `${name}: no docs/modules/${name}.md`);
+        const orphaned = pages
+            .filter((page) => !names.has(page) && !SUB_PAGES.includes(page))
+            .map((page) => `docs/modules/${page}.md documents nothing enabled`);
+        const missingSubPages = SUB_PAGES.filter((slug) => !pages.includes(slug)).map(
+            (slug) => `docs/modules/${slug}.md is listed as a sub-page and does not exist`
+        );
+
+        expect([...undocumented, ...orphaned, ...missingSubPages]).toEqual([]);
     });
 
     it('starts every base path with a single slash and no trailing one', () => {

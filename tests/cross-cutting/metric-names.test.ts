@@ -31,9 +31,6 @@
  * One owner per name. `prom-client` throws `A metric with the name X has already been registered`
  * when a registry sees a duplicate, so a collision cannot reach a running process. A case here
  * would assert a property the library already guarantees.
- *
- * Nor documentation coverage: `docs/modules/<name>.md` publishes each module's metric table and
- * `check:module-docs` regenerates it from these same declarations, so a rename moves both.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';

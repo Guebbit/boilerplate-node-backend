@@ -18,19 +18,19 @@ one line.
 A module is named in exactly five places, and three of them are conditional. Knowing which ones
 apply to your domain is most of both procedures:
 
-| Registry              | File                                    | Applies when                       |
-| --------------------- | --------------------------------------- | ---------------------------------- |
-| `enabledModules`      | `src/modules.ts`                        | **always**                         |
-| `MODULE_SECTIONS`     | `scripts/contracts/openapi.ts`          | the domain serves HTTP             |
-| `ANALYTICS_SECTIONS`  | `scripts/contracts/analytics-events.ts` | the domain has an `analytics.ts`   |
-| `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi.ts`         | the domain owns an `asyncapi.yaml` |
-| `SHARED_SECTIONS`     | `scripts/contracts/asyncapi.ts`         | …and an API client can reach it    |
-| `FRONTEND_PAIRING`    | `scripts/module-docs/pairing.ts`        | **always**                         |
+| Registry              | File                                           | Applies when                       |
+| --------------------- | ---------------------------------------------- | ---------------------------------- |
+| `enabledModules`      | `src/modules.ts`                               | **always**                         |
+| `MODULE_SECTIONS`     | `scripts/contracts/openapi.ts`                 | the domain serves HTTP             |
+| `ANALYTICS_SECTIONS`  | `scripts/contracts/analytics-events.ts`        | the domain has an `analytics.ts`   |
+| `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi.ts`                | the domain owns an `asyncapi.yaml` |
+| `SHARED_SECTIONS`     | `scripts/contracts/asyncapi.ts`                | …and an API client can reach it    |
+| `FRONTEND_PAIRING`    | `tests/cross-cutting/frontend-pairing.test.ts` | **always**                         |
 
 `FRONTEND_PAIRING` is the newest of the five and the only one that names the other repository: which
 frontend module answers this domain, or a sentence saying why none does.
-`npm run check:module-docs` fails on a missing entry, which is what stops the FE/BE gap from widening
-unnoticed.
+`tests/cross-cutting/frontend-pairing.test.ts` fails on a missing entry, which is what stops the
+FE/BE gap from widening unnoticed.
 
 A sixth list is _nearly_ one and is worth knowing about: a module that declares `probes.ts` is
 imported by name in `scripts/contracts/generate-collections.ts`. Deleting the module stops the build
@@ -71,7 +71,7 @@ flowchart LR
     A["1 · mkdir src/modules/&lt;name&gt;/<br/>write module.ts"] --> B["2 · one line in<br/>src/modules.ts"]
     B --> C["3 · fragments + section order<br/><i>if it serves HTTP</i>"]
     C --> D["4 · npm run contracts:bundle"]
-    D --> E["5 · npm run docs:modules<br/>then write two sections"]
+    D --> E["5 · write<br/>docs/modules/&lt;name&gt;.md"]
     E --> F["6 · copy shared files<br/>to the frontend"]
     F --> G["7 · npm run complete"]
     classDef s fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -221,23 +221,29 @@ contract cannot describe belongs in that module's `probes.ts`.
 
 ### 5 · The page
 
-```bash
-npm run docs:modules
-```
-
-The generator creates `docs/modules/<name>.md` from the template and fills its seven generated
-blocks from the manifest, the router, the schema and the contract fragment. Two sections are left
-for you:
+Write `docs/modules/<name>.md` by hand. Nothing generates it, and the shape every existing page
+follows is three parts:
 
 - the **At a glance** box — what it owns, what it depends on, what breaks if you change it
 - **The story** — why the domain exists, the decisions that are not obvious from the code, the traps
+- **Related pages** — the siblings and the horizontal pages a reader will want next
 
-Then add the entry to `FRONTEND_PAIRING` in `scripts/module-docs/pairing.ts`, and the page to the
-`/modules/` sidebar in `docs/.vitepress/config.mts`. `npm run check:module-docs` fails until the
-pairing entry exists.
+Copy the smallest page in the section, [`wishlist`](../modules/wishlist.md), and replace it. Do not
+restate what the code already says — the routes are in `src/modules/<name>/routes.ts` and
+`openapi.yaml`, the fields are in `model.ts`, and a page repeating either goes stale the first time
+someone edits the source and not the prose. A module page owns the DECISION; the mechanism belongs
+to a page under [Tools](../tools/) or [Theory](../theory/).
 
-If the domain carries a file shape no other module has, add one line to
-`scripts/module-docs/shapes.ts` describing it — the same check fails on a shape nothing documents.
+Then three registrations, each with a test behind it:
+
+- the entry in `FRONTEND_PAIRING`, in `tests/cross-cutting/frontend-pairing.test.ts`
+- the page in the `/modules/` sidebar, in `docs/.vitepress/config.mts`
+- if the domain carries a file shape no other module has, its pattern in
+  `tests/cross-cutting/module-file-shapes.test.ts`, and its row in
+  [`docs/reference/src-modules.md`](../reference/src-modules.md)
+
+`npm run test` fails on a module with no page, on a missing pairing entry, and on a file shape
+nothing names.
 
 ### 6 · The paired repo
 
@@ -301,20 +307,21 @@ named. That is the registry working — either delete the dependant too, or drop
 
 ```bash
 rm docs/modules/<name>.md
-# and any sub-pages declared for it in scripts/module-docs/subpages.ts
+# and any sub-pages it had, e.g. docs/modules/<name>-<flow>.md
 ```
 
-Then drop its entry from `FRONTEND_PAIRING`, its sub-pages from `SUB_PAGES`, and its sidebar entries
-from `docs/.vitepress/config.mts`.
+Then drop its entry from `FRONTEND_PAIRING` and its sub-page slugs from `SUB_PAGES` (both in
+`tests/cross-cutting/`), and its sidebar entries from `docs/.vitepress/config.mts`.
 
-`npm run check:module-docs` reports each of those four independently, by name, so there is no order
-to get right — run it and work the list:
+The cross-cutting suite reports each of those independently, by name, so there is no order to get
+right — run `npm run test` and work the list:
 
 ```
-✖ module docs — 2 problem(s):
-  · docs/modules/wishlist.md documents nothing enabled. Delete it, add the module back to
-    src/modules.ts, or declare it in scripts/module-docs/subpages.ts.
-  · scripts/module-docs/pairing.ts names "wishlist", which is not an enabled module.
+● the shape every module declares › gives every module a page, and every page a module
+    - docs/modules/wishlist.md documents nothing enabled
+
+● the two repositories, module by module › names no module that is not enabled
+    - wishlist
 ```
 
 ### 5 · Re-bundle and mirror

@@ -1,126 +1,18 @@
 # Endpoints
 
-Every HTTP route the application serves, in one place. The **Auth** column is the minimum access
-level the mounted middleware actually enforces.
+Why the application's HTTP surface is shaped the way it is, domain by domain — the reasoning that
+does not fit in a table row.
 
-::: tip Where the detail is
-This page is the whole-app index. Each domain's routes — with their full middleware chain, the
-controller each lands on, and why the domain is shaped that way — live on its
-[module page](../modules/). Both are generated from the same routers, so they cannot disagree.
+::: tip Looking for the exhaustive list?
+The complete, authoritative list of routes is [`openapi.yaml`](./openapi-workflow.md) — every path,
+its parameters, its bodies and its declared responses, and the document every client and every
+generated type is built from. Open it in any viewer, or run `npm run contracts:bundle -- bruno`
+for a collection you can send requests from.
+
+What each route's middleware chain actually enforces is `src/modules/<name>/routes.ts`, one line
+per endpoint. This page is the *why* around both.
 :::
 
-## Every route
-
-<!-- gen:all-endpoints:start -->
-
-| Module                                         | Method   | Path                                  | Auth  | What it does                                                |
-| ---------------------------------------------- | -------- | ------------------------------------- | ----- | ----------------------------------------------------------- |
-| [`account`](../modules/account.md)             | `DELETE` | `/account`                            | user  | Request account deletion                                    |
-| [`account`](../modules/account.md)             | `GET`    | `/account`                            | user  | Current user info                                           |
-| [`account`](../modules/account.md)             | `PUT`    | `/account`                            | user  | Update own profile                                          |
-| [`account`](../modules/account.md)             | `GET`    | `/account/addresses`                  | user  | List saved addresses                                        |
-| [`account`](../modules/account.md)             | `POST`   | `/account/addresses`                  | user  | Add an address                                              |
-| [`account`](../modules/account.md)             | `DELETE` | `/account/addresses/{addressId}`      | user  | Remove an address                                           |
-| [`account`](../modules/account.md)             | `PUT`    | `/account/addresses/{addressId}`      | user  | Update an address                                           |
-| [`account`](../modules/account.md)             | `DELETE` | `/account/delete-confirm`             | none  | Confirm account deletion                                    |
-| [`account`](../modules/account.md)             | `POST`   | `/account/login`                      | none  | Login                                                       |
-| [`account`](../modules/account.md)             | `POST`   | `/account/logout`                     | none  | Logout this session                                         |
-| [`account`](../modules/account.md)             | `POST`   | `/account/logout-all`                 | user  | Logout from all devices                                     |
-| [`account`](../modules/account.md)             | `POST`   | `/account/password`                   | user  | Change password                                             |
-| [`account`](../modules/account.md)             | `GET`    | `/account/refresh`                    | none  | Refresh access token                                        |
-| [`account`](../modules/account.md)             | `POST`   | `/account/reset`                      | none  | Request password reset                                      |
-| [`account`](../modules/account.md)             | `POST`   | `/account/reset-confirm`              | none  | Confirm password reset                                      |
-| [`account`](../modules/account.md)             | `GET`    | `/account/sessions`                   | user  | List active sessions                                        |
-| [`account`](../modules/account.md)             | `DELETE` | `/account/sessions/{sessionId}`       | user  | Revoke one session                                          |
-| [`account`](../modules/account.md)             | `POST`   | `/account/signup`                     | none  | Signup                                                      |
-| [`account`](../modules/account.md)             | `DELETE` | `/account/tokens/expired`             | admin | Remove expired tokens                                       |
-| [`account`](../modules/account.md)             | `POST`   | `/account/verify-confirm`             | none  | Confirm email verification                                  |
-| [`account`](../modules/account.md)             | `POST`   | `/account/verify-request`             | user  | Request email verification                                  |
-| [`cart`](../modules/cart.md)                   | `DELETE` | `/cart`                               | user  | Empty cart or, if productId is set, remove target cart item |
-| [`cart`](../modules/cart.md)                   | `GET`    | `/cart`                               | user  | Get cart                                                    |
-| [`cart`](../modules/cart.md)                   | `POST`   | `/cart`                               | user  | Add/Edit cart item                                          |
-| [`cart`](../modules/cart.md)                   | `DELETE` | `/cart/{productId}`                   | user  | Remove item from cart                                       |
-| [`cart`](../modules/cart.md)                   | `PUT`    | `/cart/{productId}`                   | user  | Set cart item quantity                                      |
-| [`cart`](../modules/cart.md)                   | `POST`   | `/cart/checkout`                      | user  | Checkout (place order from cart)                            |
-| [`cart`](../modules/cart.md)                   | `POST`   | `/cart/reorder/{orderId}`             | user  | Reorder (refill cart from a past order)                     |
-| [`cart`](../modules/cart.md)                   | `GET`    | `/cart/summary`                       | user  | Get cart summary                                            |
-| [`delivery`](../modules/delivery.md)           | `POST`   | `/delivery/advance`                   | admin | Advance the fake courier                                    |
-| [`delivery`](../modules/delivery.md)           | `GET`    | `/delivery/methods`                   | none  | List shipping methods                                       |
-| [`delivery`](../modules/delivery.md)           | `GET`    | `/delivery/order/{orderId}`           | user  | Get the shipment behind an order                            |
-| [`feedback`](../modules/feedback.md)           | `GET`    | `/feedback`                           | admin | List feedback requests                                      |
-| [`feedback`](../modules/feedback.md)           | `PUT`    | `/feedback/{id}`                      | admin | Update feedback request status                              |
-| [`feedback`](../modules/feedback.md)           | `POST`   | `/feedback/contact`                   | none  | Submit contact request                                      |
-| [`feedback`](../modules/feedback.md)           | `POST`   | `/feedback/search`                    | admin | Search feedback requests (DTO-friendly)                     |
-| [`inventory`](../modules/inventory.md)         | `POST`   | `/inventory/adjustments`              | admin | Adjust stock                                                |
-| [`inventory`](../modules/inventory.md)         | `GET`    | `/inventory/levels`                   | admin | Stock levels                                                |
-| [`inventory`](../modules/inventory.md)         | `GET`    | `/inventory/movements`                | admin | List stock movements                                        |
-| [`inventory`](../modules/inventory.md)         | `POST`   | `/inventory/receipts`                 | admin | Receive stock                                               |
-| [`inventory`](../modules/inventory.md)         | `POST`   | `/inventory/reservations/sweep`       | admin | Expire stale reservations                                   |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales`                            | none  | Supported languages                                         |
-| [`locales`](../modules/locales.md)             | `POST`   | `/locales`                            | admin | Add a language                                              |
-| [`locales`](../modules/locales.md)             | `DELETE` | `/locales/{locale}`                   | admin | Remove a language                                           |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}`                   | none  | API message dictionary                                      |
-| [`locales`](../modules/locales.md)             | `PUT`    | `/locales/{locale}`                   | admin | Edit a language                                             |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}/entries`           | admin | List translation entries                                    |
-| [`locales`](../modules/locales.md)             | `PATCH`  | `/locales/{locale}/entries`           | admin | Merge entries                                               |
-| [`locales`](../modules/locales.md)             | `POST`   | `/locales/{locale}/entries`           | admin | Add one translation entry                                   |
-| [`locales`](../modules/locales.md)             | `PUT`    | `/locales/{locale}/entries`           | admin | Replace every entry                                         |
-| [`locales`](../modules/locales.md)             | `DELETE` | `/locales/{locale}/entries/{entryId}` | admin | Remove one translation entry                                |
-| [`locales`](../modules/locales.md)             | `PUT`    | `/locales/{locale}/entries/{entryId}` | admin | Edit one translation entry                                  |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales/{locale}/messages`          | none  | Client message dictionary                                   |
-| [`locales`](../modules/locales.md)             | `GET`    | `/locales/tenants`                    | none  | Translation tenants                                         |
-| [`observability`](../modules/observability.md) | `GET`    | `/observability/audit`                | admin | Recent audit events                                         |
-| [`observability`](../modules/observability.md) | `GET`    | `/observability/events`               | none  | Observability SSE stream                                    |
-| [`observability`](../modules/observability.md) | `GET`    | `/observability/health`               | admin | Health snapshot                                             |
-| [`observability`](../modules/observability.md) | `GET`    | `/observability/metrics`              | none  | Prometheus metrics                                          |
-| [`observability`](../modules/observability.md) | `GET`    | `/observability/metrics/overview`     | admin | Metrics overview (JSON)                                     |
-| [`orders`](../modules/orders.md)               | `DELETE` | `/orders`                             | admin | Delete order                                                |
-| [`orders`](../modules/orders.md)               | `GET`    | `/orders`                             | user  | List orders (paginated)                                     |
-| [`orders`](../modules/orders.md)               | `POST`   | `/orders`                             | admin | Create order                                                |
-| [`orders`](../modules/orders.md)               | `PUT`    | `/orders`                             | admin | Update order                                                |
-| [`orders`](../modules/orders.md)               | `DELETE` | `/orders/{id}`                        | admin | Delete order                                                |
-| [`orders`](../modules/orders.md)               | `GET`    | `/orders/{id}`                        | user  | Order details                                               |
-| [`orders`](../modules/orders.md)               | `PUT`    | `/orders/{id}`                        | admin | Edit order                                                  |
-| [`orders`](../modules/orders.md)               | `POST`   | `/orders/{id}/cancel`                 | user  | Cancel order                                                |
-| [`orders`](../modules/orders.md)               | `DELETE` | `/orders/{id}/hard`                   | admin | Permanently delete order                                    |
-| [`orders`](../modules/orders.md)               | `GET`    | `/orders/{id}/invoice`                | user  | Download order invoice (PDF)                                |
-| [`orders`](../modules/orders.md)               | `POST`   | `/orders/search`                      | user  | Search orders (DTO-friendly)                                |
-| [`payments`](../modules/payments.md)           | `POST`   | `/payments/{id}/confirm`              | user  | Confirm a payment                                           |
-| [`payments`](../modules/payments.md)           | `POST`   | `/payments/intent`                    | user  | Create a payment intent                                     |
-| [`payments`](../modules/payments.md)           | `GET`    | `/payments/order/{orderId}`           | user  | Get the payment behind an order                             |
-| [`payments`](../modules/payments.md)           | `POST`   | `/payments/order/{orderId}/refund`    | admin | Refund an order's payment                                   |
-| [`products`](../modules/products.md)           | `DELETE` | `/products`                           | admin | Delete product                                              |
-| [`products`](../modules/products.md)           | `GET`    | `/products`                           | none  | List products (paginated)                                   |
-| [`products`](../modules/products.md)           | `POST`   | `/products`                           | admin | Create product                                              |
-| [`products`](../modules/products.md)           | `PUT`    | `/products`                           | admin | Edit product                                                |
-| [`products`](../modules/products.md)           | `DELETE` | `/products/{id}`                      | admin | Delete product                                              |
-| [`products`](../modules/products.md)           | `GET`    | `/products/{id}`                      | none  | Product details                                             |
-| [`products`](../modules/products.md)           | `PUT`    | `/products/{id}`                      | admin | Edit product                                                |
-| [`products`](../modules/products.md)           | `DELETE` | `/products/{id}/hard`                 | admin | Permanently delete product                                  |
-| [`products`](../modules/products.md)           | `GET`    | `/products/categories`                | none  | Catalogue facets                                            |
-| [`products`](../modules/products.md)           | `POST`   | `/products/search`                    | none  | Search products (DTO-friendly)                              |
-| [`users`](../modules/users.md)                 | `DELETE` | `/users`                              | admin | Delete user                                                 |
-| [`users`](../modules/users.md)                 | `GET`    | `/users`                              | admin | List users (paginated)                                      |
-| [`users`](../modules/users.md)                 | `POST`   | `/users`                              | admin | Create user                                                 |
-| [`users`](../modules/users.md)                 | `PUT`    | `/users`                              | admin | Edit user                                                   |
-| [`users`](../modules/users.md)                 | `DELETE` | `/users/{id}`                         | admin | Delete user                                                 |
-| [`users`](../modules/users.md)                 | `GET`    | `/users/{id}`                         | admin | User details                                                |
-| [`users`](../modules/users.md)                 | `PUT`    | `/users/{id}`                         | admin | Edit user                                                   |
-| [`users`](../modules/users.md)                 | `DELETE` | `/users/{id}/hard`                    | admin | Permanently delete user                                     |
-| [`users`](../modules/users.md)                 | `POST`   | `/users/search`                       | admin | Search users (DTO-friendly)                                 |
-| [`wishlist`](../modules/wishlist.md)           | `GET`    | `/wishlist`                           | user  | Get wishlist                                                |
-| [`wishlist`](../modules/wishlist.md)           | `POST`   | `/wishlist`                           | user  | Save a product                                              |
-| [`wishlist`](../modules/wishlist.md)           | `DELETE` | `/wishlist/{productId}`               | user  | Remove a saved product                                      |
-| [`wishlist`](../modules/wishlist.md)           | `POST`   | `/wishlist/{productId}/move-to-cart`  | user  | Move a saved product into the cart                          |
-
-97 routes across 12 modules. The **Auth** column reads the mounted middleware chain rather than the contract, so it is what the server actually enforces. Each module page carries the same routes with their full middleware chain and controller.
-
-<!-- gen:all-endpoints:end -->
-
-## Notes by domain
-
-The tables above are the complete list. What follows is the reasoning that does not fit in a table
-row, per domain, with a link to the domain's own page.
 
 ## System (public)
 
@@ -128,13 +20,13 @@ A minimal root endpoint used to verify the process is alive.
 
 ## Observability
 
-> Routes, middleware chains and controllers: [`observability`](../modules/observability.md#surface)
+> The domain behind these routes: [`observability`](../modules/observability.md) · routes and middleware: `src/modules/observability/routes.ts`
 
 Endpoints for health checks, metrics, and audit logs. The two public routes feed external scrapers (Prometheus) and the live dashboard (SSE). The admin routes are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
 
 ## Account & Auth
 
-> Routes, middleware chains and controllers: [`account`](../modules/account.md#surface)
+> The domain behind these routes: [`account`](../modules/account.md) · routes and middleware: `src/modules/account/routes.ts`
 
 JWT-based authentication. Login returns an `accessToken` (short-lived) and a `refreshToken` (long-lived, stored in a cookie). The refresh endpoints issue a new access token without re-authenticating. Password reset is a two-step flow: request sends an email with a signed link, confirm validates it and updates the password. Email verification follows the same two-step shape — signup sends the first link automatically, and `verified` on the `User` is informational only (no endpoint refuses an unverified account).
 
@@ -143,7 +35,7 @@ JWT-based authentication. Login returns an `accessToken` (short-lived) and a `re
 
 ## Products
 
-> Routes, middleware chains and controllers: [`products`](../modules/products.md#surface)
+> The domain behind these routes: [`products`](../modules/products.md) · routes and middleware: `src/modules/products/routes.ts`
 
 Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints (create, update, delete) are admin-only and invalidate the cache on change. Both single-item and bulk operations are supported.
 
@@ -151,37 +43,37 @@ Stock is read-only on this surface. `onHand`, `reserved` and `available` are ser
 
 ## Cart
 
-> Routes, middleware chains and controllers: [`cart`](../modules/cart.md#surface)
+> The domain behind these routes: [`cart`](../modules/cart.md) · routes and middleware: `src/modules/cart/routes.ts`
 
 Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `CHECKOUT_COMPLETED` analytics event.
 
 ## Wishlist
 
-> Routes, middleware chains and controllers: [`wishlist`](../modules/wishlist.md#surface)
+> The domain behind these routes: [`wishlist`](../modules/wishlist.md) · routes and middleware: `src/modules/wishlist/routes.ts`
 
 Per-user saved products — ids only, joined client-side like the cart's lines. `POST /wishlist/:productId/move-to-cart` is the exit: the saved line becomes a cart line (quantity 1, incremented if already present) and leaves the wishlist.
 
 ## Orders
 
-> Routes, middleware chains and controllers: [`orders`](../modules/orders.md#surface)
+> The domain behind these routes: [`orders`](../modules/orders.md) · routes and middleware: `src/modules/orders/routes.ts`
 
 Orders are normally created via checkout but can also be created manually by an admin. Each order has a PDF invoice available for download. Read endpoints for regular users are scoped to their own orders only; admins can reach all orders through the write endpoints.
 
 ## Payments
 
-> Routes, middleware chains and controllers: [`payments`](../modules/payments.md#surface)
+> The domain behind these routes: [`payments`](../modules/payments.md) · routes and middleware: `src/modules/payments/routes.ts`
 
 An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, default `fake` — magic test cards, no outside calls). The intent freezes the order's total; the confirm charges and moves the order `pending → paid` atomically; cancelling a paid order refunds automatically (the `ORDER_CANCELLED` event). The fake provider declines exactly `4000000000000002` and accepts everything else.
 
 ## Delivery
 
-> Routes, middleware chains and controllers: [`delivery`](../modules/delivery.md#surface)
+> The domain behind these routes: [`delivery`](../modules/delivery.md) · routes and middleware: `src/modules/delivery/routes.ts`
 
 Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. An order reaching `shipped` (admin status write) automatically gets a shipment, a tracking code and the shipped email; the fake courier is a button, not a schedule — this repo deliberately has no cron.
 
 ## Inventory
 
-> Routes, middleware chains and controllers: [`inventory`](../modules/inventory.md#surface)
+> The domain behind these routes: [`inventory`](../modules/inventory.md) · routes and middleware: `src/modules/inventory/routes.ts`
 
 The only writer of stock in the application. A product carries two counters — `onHand` (units that exist) and `reserved` (units an open order has claimed) — and what a customer may buy is the difference, published as the derived `available`. Both counters live on the product document so a catalogue read needs no join; neither is written anywhere but here.
 
@@ -204,7 +96,7 @@ Both reads page and report `meta.totalItems`, and neither is bounded in the serv
 
 ## Users (admin)
 
-> Routes, middleware chains and controllers: [`users`](../modules/users.md#surface)
+> The domain behind these routes: [`users`](../modules/users.md) · routes and middleware: `src/modules/users/routes.ts`
 
 Full user management, admin-only. Supports individual and bulk operations. The equivalent self-service actions (profile read, account deletion) live under `/account`.
 
@@ -215,7 +107,7 @@ set by accident.
 
 ## Locales
 
-> Routes, middleware chains and controllers: [`locales`](../modules/locales.md#surface)
+> The domain behind these routes: [`locales`](../modules/locales.md) · routes and middleware: `src/modules/locales/routes.ts`
 
 Language discovery and the API's own message dictionary. Public and uncached-by-token on purpose:
 an unauthenticated client that has just failed to reach the API is exactly who needs the
@@ -224,7 +116,7 @@ responses are cached for an hour — the copy changes only on deploy.
 
 ## Feedback
 
-> Routes, middleware chains and controllers: [`feedback`](../modules/feedback.md#surface)
+> The domain behind these routes: [`feedback`](../modules/feedback.md) · routes and middleware: `src/modules/feedback/routes.ts`
 
 Contact form submissions from anonymous or authenticated users. Admins can list all submissions and update their status (e.g. mark as resolved). Submitting a contact form also triggers a confirmation email via the mail worker.
 

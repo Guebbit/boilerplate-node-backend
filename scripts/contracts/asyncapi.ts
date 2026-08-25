@@ -52,12 +52,7 @@ const asyncSectionDocument = (section: AsyncSectionName): string =>
         : path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');
 
 /** Preamble: version, id, info, content type, tags. Holds no channel and no server. */
-const ASYNC_ROOT_DOCUMENT = path.join(
-    REPO_ROOT,
-    'shared',
-    'contracts',
-    'asyncapi.root.yaml'
-);
+const ASYNC_ROOT_DOCUMENT = path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.root.yaml');
 
 /**
  * The four places a section contributes to, in the order the document declares them.

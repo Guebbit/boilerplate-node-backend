@@ -13,9 +13,10 @@ Everything below describes a **file shape** — what a `repository.ts` is, where
 What each domain does with those shapes, which of them it carries, and what it owns is on its own
 page under [Modules](../modules/).
 
-The shapes below are also enforced. `scripts/module-docs/shapes.ts` holds the same catalogue in
-code, and `npm run check:module-docs` fails on a file in a module folder that matches none of them —
-so a new shape costs one line here and one there, and stops being invisible.
+The shapes below are also enforced. `tests/cross-cutting/module-file-shapes.test.ts` holds the same
+catalogue as patterns, and fails on a file in a module folder that matches none of them — so a new
+shape costs one line there and one row here, and stops being invisible. The test carries patterns
+only; what a shape IS, is this page.
 :::
 
 ---
@@ -63,30 +64,31 @@ Every module has these, and a reader who knows them knows twelve of the thirteen
 
 Present when the domain needs it. A module that has none of these is not incomplete; it is small.
 
-| Pattern                       | What it is                                                                                                                                                                  | Read next                                                                             |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `src/modules/*/index.ts`      | The public barrel: what siblings are allowed to import. Reaching past it into a module's internals is a lint error, so this file _is_ the module's published surface.       | [Strategic DDD](../theory/strategic-ddd.md)                                           |
-| `src/modules/*/domain/*.ts`   | Pure rules over plain data — no Mongoose, no Express, and lint-guaranteed free of both. A rule returns a verdict and the service maps it to a status code.                  | [Domain Layer](../theory/domain-layer.md) · [Tactical DDD](../theory/tactical-ddd.md) |
-| `src/modules/*/events.ts`     | The domain events this module publishes and subscribes to — the sanctioned channel between two modules that cannot own each other.                                          | [Events & Logging](../tools/events-and-logging.md)                                    |
-| `src/modules/*/audit.ts`      | Which of this module's operations are written to the audit trail, and under what action names. `tests/cross-cutting/audit-actions.test.ts` holds the vocabulary together.   | [Winston & Audit Logs](../tools/winston.md)                                           |
-| `src/modules/*/metrics.ts`    | The domain counters and histograms this module registers with Prometheus, beyond the HTTP metrics every route already gets.                                                 | [Prometheus](../tools/prometheus.md)                                                  |
-| `src/modules/*/analytics.ts`  | The product-analytics events this module emits. Also a contract fragment: `npm run contracts:bundle` publishes the names to the paired frontend.                            | [Product Analytics](../tools/analytics.md)                                            |
-| `src/modules/*/emails.ts`     | Which templates this module sends and what they are given. The templates themselves are EJS files under `shared/views/`.                                                    | [Email & PDF Rendering](../tools/email-and-rendering.md)                              |
-| `src/modules/*/probes.ts`     | The module's contribution to the readiness answer — what "this domain is healthy" means beyond the process being up.                                                        | [The Observability Layer](../tools/observability-layer.md)                            |
-| `src/modules/*/demo.ts`       | The module's seed fixtures, upserted through the shared seeding primitive. What `npm run db:seed` and the demo profile put in the database.                                 | [Data](./data.md) · [Demo profile](../tools/demo-profile.md)                          |
-| `src/modules/*/factory.ts`    | Fixture builders for tests, on top of the shared persistence factory. Production code, deliberately — a sibling's contract suite may need to build this module's documents. | [Unit Testing](../tools/unit-testing.md)                                              |
-| `src/modules/*/asyncapi.yaml` | This module's slice of the realtime contract, bundled into the root `asyncapi.yaml` the same way the REST fragments are.                                                    | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                      |
+| Pattern                       | What it is                                                                                                                                                                   | Read next                                                                             |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `src/modules/*/index.ts`      | The public barrel: what siblings are allowed to import. Reaching past it into a module's internals is a lint error, so this file _is_ the module's published surface.        | [Strategic DDD](../theory/strategic-ddd.md)                                           |
+| `src/modules/*/domain/*.ts`   | Pure rules over plain data — no Mongoose, no Express, and lint-guaranteed free of both. A rule returns a verdict and the service maps it to a status code.                   | [Domain Layer](../theory/domain-layer.md) · [Tactical DDD](../theory/tactical-ddd.md) |
+| `src/modules/*/events.ts`     | The domain events this module publishes and subscribes to — the sanctioned channel between two modules that cannot own each other.                                           | [Events & Logging](../tools/events-and-logging.md)                                    |
+| `src/modules/*/audit.ts`      | Which of this module's operations are written to the audit trail, and under what action names. `tests/cross-cutting/audit-actions.test.ts` holds the vocabulary together.    | [Winston & Audit Logs](../tools/winston.md)                                           |
+| `src/modules/*/metrics.ts`    | The domain counters and histograms this module registers with Prometheus, beyond the HTTP metrics every route already gets.                                                  | [Prometheus](../tools/prometheus.md)                                                  |
+| `src/modules/*/analytics.ts`  | The product-analytics events this module emits. Also a contract fragment: `npm run contracts:bundle` publishes the names to the paired frontend.                             | [Product Analytics](../tools/analytics.md)                                            |
+| `src/modules/*/emails.ts`     | Which templates this module sends and what they are given. The templates themselves are EJS files under `shared/views/`.                                                     | [Email & PDF Rendering](../tools/email-and-rendering.md)                              |
+| `src/modules/*/probes.ts`     | The requests the contract cannot describe — the calls that prove the API REJECTS things. Emitted into every client collection after this module's contract-derived requests. | [Contract request data](../tools/contract-request-data.md)                            |
+| `src/modules/*/demo.ts`       | The module's seed fixtures, upserted through the shared seeding primitive. What `npm run db:seed` and the demo profile put in the database.                                  | [Data](./data.md) · [Demo profile](../tools/demo-profile.md)                          |
+| `src/modules/*/factory.ts`    | Fixture builders for tests, on top of the shared persistence factory. Production code, deliberately — a sibling's contract suite may need to build this module's documents.  | [Unit Testing](../tools/unit-testing.md)                                              |
+| `src/modules/*/asyncapi.yaml` | This module's slice of the realtime contract, bundled into the root `asyncapi.yaml` the same way the REST fragments are.                                                     | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                      |
 
 ## The one-offs
 
-Three shapes exist in exactly one module each. They are genuine one-offs rather than a naming
+Four shapes exist in exactly one module each. They are genuine one-offs rather than a naming
 drift — each is a piece of a domain no other domain has.
 
-| Pattern                        | What it is                                                                                                                                         | Read next                        |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `src/modules/*/session/*.ts`   | `account` only. The session mechanics kept out of the services: JWT signing and verification, cookie shape and flags, and the lifetimes both read. | [Security](../tools/security.md) |
-| `src/modules/*/providers/*.ts` | `payments` only. The payment provider port and the fake implementation behind it, so nothing above the port knows which processor is wired in.     | [Layers](../theory/layers.md)    |
-| `src/modules/*/config.ts`      | `inventory` only. The reservation and threshold settings, in one place because several of its transitions read the same numbers.                   | —                                |
+| Pattern                        | What it is                                                                                                                                                | Read next                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `src/modules/*/session/*.ts`   | `account` only. The session mechanics kept out of the services: JWT signing and verification, cookie shape and flags, and the lifetimes both read.        | [Security](../tools/security.md) |
+| `src/modules/*/providers/*.ts` | `payments` only. The payment provider port and the fake implementation behind it, so nothing above the port knows which processor is wired in.            | [Layers](../theory/layers.md)    |
+| `src/modules/*/config.ts`      | `inventory` only. The reservation and threshold settings, in one place because several of its transitions read the same numbers.                          | —                                |
+| `src/modules/*/tenants.ts`     | `locales` only. The tenant registry — which keyspaces this deployment holds words for, read from the environment and published by the module's own route. | [i18n](../tools/i18n.md)         |
 
 ::: tip Where the tests are
 Every module also carries its own unit, contract and factory files. They are catalogued on
@@ -95,9 +97,13 @@ Every module also carries its own unit, contract and factory files. They are cat
 
 ## Which module carries which
 
-Per-module answers live on the [Modules](../modules/) pages, one per domain, and the whole set is
-[the matrix on its overview](../modules/index.md#every-module).
+Per-module answers live on the [Modules](../modules/) pages, one per domain, listed on
+[its overview](../modules/index.md#every-module).
 
-Both are generated from the manifests rather than transcribed, which is the reason they are there
-and not here: a module that gains a metrics file gains the word on the next `npm run docs:modules`,
-and `npm run check:module-docs` fails while it has not.
+Deliberately not restated here. This page says what a SHAPE is — one answer for all thirteen
+domains; a module page says what its domain DECIDED. Which module happens to carry a `metrics.ts`
+today is neither, and is answered in one command:
+
+```bash
+ls src/modules/*/metrics.ts
+```
