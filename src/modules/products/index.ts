@@ -36,6 +36,6 @@ export { PRODUCT_DELETED } from './events';
  * is the production API" stopped being the same question — a domain's public surface included
  * test-and-demo data, and the deletability figures could not tell a runtime edge from a demo one.
  * Two named doors separate them without hiding either: the coupling is as declared as it ever was,
- * and `tests/cross-cutting/module-test-boundaries.test.ts` now asserts that only a seeder walks
+ * and `eslint-plugin-boundaries` now asserts that only a seeder walks
  * through the second one.
  */

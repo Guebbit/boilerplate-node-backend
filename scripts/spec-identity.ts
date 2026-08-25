@@ -32,14 +32,6 @@ export type RepoRole = 'backend' | 'frontend';
 export interface SharedFile {
     backend: string;
     frontend: string;
-    /**
-     * Which side decides what this file says. `backend` — the frontend's copy is an output, so a
-     * fork has one correct resolution and `sync:frontend` applies it. `mirror` — both sides
-     * maintain it by hand, so a fork is a question no script may answer.
-     *
-     * See: docs/tools/pairing-and-ports.md#owned-versus-mirrored
-     */
-    owner: 'backend' | 'mirror';
 }
 
 /** Which side this checkout is. The one value that differs from the frontend's copy. */
@@ -57,34 +49,33 @@ export const siblingRole = (role: RepoRole): RepoRole =>
  * sides keep building, keep passing their own suites, and disagree only in production or in a
  * live-API run.
  *
- * `spectral.yaml` is here alongside the specs because it is the ruleset both `lint:openapi` jobs
- * enforce: if the two repos lint the same document under different rules, one of them passes a
- * spec the other would reject.
+ * EVERY ENTRY IS PRODUCED IN THIS REPO and copied to the frontend, which is what makes a fork
+ * answerable: the frontend's copy is an OUTPUT, so "which side is right" has one answer, and
+ * `sync:frontend` applies it. Editing the copy is the failure this list is worst at describing and
+ * best at catching — the next regeneration reverts it, and the diff looks like the backend broke
+ * something. `asyncapi.public.yaml` is the one whose name differs on arrival: it lands as the
+ * frontend's `asyncapi.yaml`, because the shared subset is the whole of the async contract as far
+ * as that repo is concerned.
  *
- * Deliberately NOT here: `public/favicon/*`, `.prettierrc`, `.dockerignore`, `.husky/*`,
- * `.docker/nginx.docs.conf` and `docs/.vitepress/theme/*`. They are identical by convention, not
- * by requirement — either repo may legitimately change its own icon or formatting width, and a
- * gate that fails on that trains people to ignore it.
+ * That is the whole membership rule, and it is narrower than it once was. Files the two repos keep
+ * identical FOR CONVENIENCE used to be here under an `owner: 'mirror'` flag — `spectral.yaml` and
+ * three shared scripts — hand-maintained on both sides, so a fork was a question no script could
+ * answer and the gate could only report it. Convenience is not necessity: nothing silently breaks
+ * when two repos lint under rulesets that have drifted apart, or when one holds a newer test
+ * reporter. They were removed rather than kept as a flag with one member, and the flag with them.
  *
- * THREE OF THESE ARE PRODUCED IN THIS REPO and copied to the frontend — the two specs and the
- * analytics names. (The demo dataset used to be the fourth: the frontend's MSW mocks loaded a
- * byte-identical copy. The mocks retired in favour of the backend's own demo profile, which
- * seeds from the same fixtures directly, so there is no second copy left to compare.) `asyncapi.public.yaml` is the one whose name differs on arrival:
- * it lands as the frontend's `asyncapi.yaml`, because the shared subset is the whole of the async
- * contract as far as that repo is concerned. Every one of them covers every domain, so every one is produced
- * from per-module sources by `npm run contracts:bundle`. For those, "decide
- * which side is right" has one answer: this repo's, because the frontend's copy is an output.
- * Editing the copy is the failure this list is worst at describing and best at catching — the next
- * regeneration reverts it, and the diff looks like the backend broke something.
+ * Also deliberately absent, for the same reason: `public/favicon/*`, `.prettierrc`,
+ * `.dockerignore`, `.husky/*`, `.docker/nginx.docs.conf` and `docs/.vitepress/theme/*`. Identical
+ * by convention, and a gate that fails on an icon trains people to ignore it.
  *
- * Nothing that either repo can REGENERATE from a file already in this list belongs here. Such a
- * copy carries no fact the list does not already compare, and every entry costs a manual step per
- * contract change. The generated realtime types and the `contract.<tool>.*` collections are both
- * out for that reason; each is guarded instead by a freshness check inside its own repo.
+ * Nothing either repo can REGENERATE from a file already here belongs here either. Such a copy
+ * carries no fact the list does not already compare, and every entry costs a manual step per
+ * contract change. The generated realtime types and the `contract.<tool>.*` collections are out for
+ * that reason; each is guarded by a freshness check inside its own repo.
  */
 export const SHARED_FILES: readonly SharedFile[] = [
-    /* The contract itself, and the ruleset both sides lint it under. */
-    { backend: 'openapi.yaml', frontend: 'openapi.yaml', owner: 'backend' },
+    /* The contract itself. */
+    { backend: 'openapi.yaml', frontend: 'openapi.yaml' },
     /*
      * The async contract, in its SHARED half only. `asyncapi.yaml` here holds every channel this
      * service has, queues included; `asyncapi.public.yaml` is the same document minus the sections
@@ -92,9 +83,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * `asyncapi.yaml`. Both come out of one set of section documents, so the two bundles cannot
      * describe a shared channel differently — see `scripts/contracts/asyncapi.ts`.
      */
-    { backend: 'asyncapi.public.yaml', frontend: 'asyncapi.yaml', owner: 'backend' },
-    { backend: 'spectral.yaml', frontend: 'spectral.yaml', owner: 'mirror' },
-
+    { backend: 'asyncapi.public.yaml', frontend: 'asyncapi.yaml' },
     /*
      * `src/types/asyncapi.generated.ts` is deliberately absent: an OUTPUT whose every input is
      * already compared, and the two are not meant to match — this repo's carries the queue
@@ -114,39 +103,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      */
     {
         backend: 'src/infrastructure/observability/analytics-events.frontend.ts',
-        frontend: 'src/infrastructure/observability/analytics-events.ts',
-        owner: 'backend'
-    },
-
-    /*
-     * Shared tooling, duplicated rather than packaged for the reason in this file's header. Both
-     * are read by CI on both sides, so a fix applied to one copy and not the other is a CI job
-     * that behaves differently per repo while claiming to be the same gate.
-     *
-     * `spec-identity.ts` and `mutation-baseline.ts` are NOT here: they carry per-repo prose (this
-     * file names the frontend as its sibling; the frontend's names the backend), so they are
-     * mirrors rather than copies.
-     */
-    {
-        backend: 'scripts/check-mutation-baseline.ts',
-        frontend: 'scripts/check-mutation-baseline.ts',
-        owner: 'mirror'
-    },
-    /*
-     * The per-module test report. Shared for a reason the others are not: it parses a runner's
-     * JSON, and Vitest's `json` reporter emits the same shape Jest's `--json` does — so one reader
-     * genuinely serves both, and two copies drifting would mean the two repos disagreeing about
-     * what their own test suites cost.
-     */
-    {
-        backend: 'scripts/test-report.ts',
-        frontend: 'scripts/test-report.ts',
-        owner: 'mirror'
-    },
-    {
-        backend: 'scripts/gen-asyncapi-types.ts',
-        frontend: 'scripts/gen-asyncapi-types.ts',
-        owner: 'mirror'
+        frontend: 'src/infrastructure/observability/analytics-events.ts'
     }
 ] as const;
 

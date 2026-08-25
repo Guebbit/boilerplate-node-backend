@@ -7,9 +7,18 @@
  *
  * STATED, NOT DERIVED. A name matcher would call `audit-logs` unpaired, which is exactly the wrong
  * answer: the trail lives here, the endpoint that reads it belongs to `observability`, and the
- * screen that renders it is the frontend's admin dashboard. Three names, one domain. So the map is
- * declared, and this file is what stops the declaration from going quietly out of date — a module
- * added here with no entry fails, and an entry naming a module that no longer exists fails too.
+ * screen that renders it is the frontend's admin dashboard. Three names, one domain.
+ *
+ * TWO HALVES, AND ONLY ONE OF THEM WORKS WITHOUT THE SIBLING. The cases against this repo hold the
+ * map to the modules here: an added module with no entry, an entry for a module that is gone. On
+ * their own they would be a completeness check on a hand-written list — they cannot notice the
+ * FRONTEND renaming `admin`, dropping `realtime` or adding a module, which is most of the drift the
+ * map exists to catch. So the second half reads the sibling checkout and holds the names to what is
+ * actually over there, in both directions.
+ *
+ * That half is conditional on the sibling being present, and says so out loud rather than passing
+ * quietly — the same bargain `tests/unit/scripts/spec-identity.test.ts` makes, for the same reason:
+ * a guard that evaporates in silence is worse than one that is visibly absent.
  *
  * `why` is required whenever the counterpart is not simply the same name, because that is the case
  * where a reader cannot guess and the pairing is worth having written down at all.
@@ -17,7 +26,10 @@
  * See: docs/modules/index.md#the-two-repositories
  */
 
+import { existsSync, readdirSync } from 'node:fs';
+import path from 'node:path';
 import { enabledModules } from '../../src/modules';
+import { resolveFrontendPath } from '../../scripts/frontend-path';
 
 /** One module's counterpart in `boilerplate-vue-frontend`. */
 interface Pairing {
@@ -84,5 +96,54 @@ describe('the two repositories, module by module', () => {
     it('explains every frontend module that stands alone', () => {
         // The other direction, and the one no walk of this repository could ever discover.
         expect(Object.entries(FRONTEND_ONLY).filter(([, why]) => !why.trim())).toEqual([]);
+    });
+});
+
+/*
+ * The live pair. Everything above is about this repo's list; everything below is about whether the
+ * names in it still mean anything on the other side.
+ */
+const siblingRoot = resolveFrontendPath();
+const siblingModules = path.join(siblingRoot, 'src', 'modules');
+const siblingPresent = existsSync(siblingModules);
+
+/** Every module folder in the paired frontend. */
+const frontendModules = (): string[] =>
+    readdirSync(siblingModules, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+
+/** Every frontend name this map claims exists, counterparts and stand-alones together. */
+const claimedNames = (): string[] => [
+    ...new Set([
+        ...Object.values(FRONTEND_PAIRING).flatMap((pairing) => [...(pairing?.counterparts ?? [])]),
+        ...Object.keys(FRONTEND_ONLY)
+    ])
+];
+
+describe(`the paired frontend at ${siblingRoot}`, () => {
+    it('is checked out, or this half is knowingly incomplete', () => {
+        if (siblingPresent) return;
+
+        const message = `Cross-repo pairing checks skipped: no frontend modules at ${siblingModules}.`;
+        // eslint-disable-next-line no-console -- the skip warning must reach a terminal with no logger configured
+        if (!process.env.CI) console.warn(`⚠️  ${message}`);
+        expect(process.env.CI ? message : '').toBe('');
+    });
+
+    if (!siblingPresent) return;
+
+    it('names only modules that exist over there', () => {
+        const actual = new Set(frontendModules());
+
+        expect(claimedNames().filter((name) => !actual.has(name))).toEqual([]);
+    });
+
+    it('accounts for every module over there', () => {
+        // The direction nothing in this repository could ever discover on its own: a frontend
+        // module that answers to no domain here and is not declared as standing alone.
+        const claimed = new Set(claimedNames());
+
+        expect(frontendModules().filter((name) => !claimed.has(name))).toEqual([]);
     });
 });

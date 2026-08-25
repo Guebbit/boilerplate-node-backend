@@ -71,7 +71,8 @@ const sharedFiles = (role: RepoRole, suffix = ''): Record<string, string> =>
  */
 const OPENAPI = 'openapi.yaml';
 const ASYNCAPI = 'asyncapi.public.yaml';
-const SPECTRAL = 'spectral.yaml';
+/** Kept identical by convention, deliberately NOT shared — the negative case below. */
+const CONVENIENCE = 'spectral.yaml';
 
 /** `sharedFiles(role)` with one entry replaced. */
 const sharedFilesWith = (
@@ -117,13 +118,15 @@ describe('SHARED_FILES', () => {
 
         expect(backendPaths).toContain(OPENAPI);
         expect(backendPaths).toContain(ASYNCAPI);
-        expect(backendPaths).toContain(SPECTRAL);
         // The one that went unguarded until the list could hold differing paths. (The demo
         // dataset left the list with the frontend's MSW mocks: the demo profile seeds from
         // this repo's own fixtures, so there is no second copy left to compare.)
         expect(backendPaths).toContain(
             'src/infrastructure/observability/analytics-events.frontend.ts'
         );
+        // And nothing else. Three files, every one produced here, which is what makes a fork
+        // answerable at all.
+        expect(backendPaths.size).toBe(3);
     });
 
     it('excludes anything either repo regenerates from a file already in the list', () => {
@@ -211,14 +214,18 @@ describe('compareSharedFiles', () => {
         expect(drifted[0]?.ours).not.toBe(drifted[0]?.theirs);
     });
 
-    it('names spectral.yaml too, not only the two specs', () => {
-        // The ruleset is as shared as the documents it lints — see the note in spec-identity.ts.
-        const here = root(sharedFiles(HERE));
-        const there = root(sharedFilesWith(THERE, SPECTRAL, 'different rules'));
+    it('says nothing about a file the two repos merely keep identical', () => {
+        /*
+         * `spectral.yaml` was on the list once, as a hand-maintained mirror. It is convenience, not
+         * necessity: two repos linting under rulesets that have drifted apart break nothing
+         * silently — one job is simply stricter, and it says so. A gate that cannot resolve what it
+         * reports is a gate people learn to skip, so the membership rule is now "produced here,
+         * copied there", and this is the case that holds the line.
+         */
+        const here = root({ ...sharedFiles(HERE), [CONVENIENCE]: 'one ruleset' });
+        const there = root({ ...sharedFiles(THERE), [CONVENIENCE]: 'a different ruleset' });
 
-        expect(
-            sharedFileProblems(compareSharedFiles(there, here, HERE)).map(({ file }) => file)
-        ).toEqual([SPECTRAL]);
+        expect(sharedFileProblems(compareSharedFiles(there, here, HERE))).toEqual([]);
     });
 
     it('distinguishes a missing sibling checkout from a forked contract', () => {
@@ -234,12 +241,12 @@ describe('compareSharedFiles', () => {
     });
 
     it('reports a file deleted on this side', () => {
-        const here = root(withoutFile(HERE, SPECTRAL));
+        const here = root(withoutFile(HERE, OPENAPI));
         const there = root(sharedFiles(THERE));
 
         const comparisons = compareSharedFiles(there, here, HERE);
 
-        expect(comparisons.find(({ file }) => file === SPECTRAL)?.status).toBe('missing-here');
+        expect(comparisons.find(({ file }) => file === OPENAPI)?.status).toBe('missing-here');
     });
 
     it('does not throw when neither side has anything', () => {

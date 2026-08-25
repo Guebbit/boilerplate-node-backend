@@ -306,7 +306,7 @@ describe('adjust', () => {
         const spy = jest
             .spyOn(productRepository, 'adjustUnits')
             .mockImplementation(async (id, delta) => {
-                // Through the barrel, like any cross-module reach — `module-test-boundaries`
+                // Through the barrel, like any cross-module reach — `eslint-plugin-boundaries`
                 // fails a spec that touches a sibling's model directly, and it is right to.
                 const doomed = await productRepository.findById(id);
                 if (doomed) await productRepository.deleteOne(doomed);

@@ -101,28 +101,35 @@ favicons to `.prettierrc` — but **"does a fork cause a silent bug?"** Everythi
 quietly: both sides keep building, keep passing their own suites, and disagree only in production
 or in a live-API run.
 
-`spectral.yaml` sits there alongside the specs for that reason: if the two repos lint the same
-document under different rules, one of them passes a spec the other would reject.
+Three files are on it, and the rule is one line: **produced here, copied there.** Each one is an
+_output_ on the frontend's side, which is what makes a fork answerable — there is one correct
+resolution, and `npm run sync:frontend` applies it without asking. Editing the copy is the failure
+this list is worst at describing and best at catching: the next regeneration reverts it, and the
+diff looks like the backend broke something.
+
+| Produced here                                                   | Lands over there as                                                                                     |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `openapi.yaml`                                                  | `openapi.yaml`                                                                                          |
+| `asyncapi.public.yaml`                                          | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned |
+| `src/infrastructure/observability/analytics-events.frontend.ts` | `src/infrastructure/observability/analytics-events.ts` — the two lint configs disagree on filename case |
 
 Deliberately **not** on it: `public/favicon/*`, `.prettierrc`, `.dockerignore`, `.husky/*`,
 `.docker/nginx.docs.conf`, `docs/.vitepress/theme/*`. They are identical by convention, not by
 requirement — either repo may legitimately change its own icon or formatting width, and a gate that
 fails on that trains people to ignore it.
 
-### Owned versus mirrored
+### Convenience is not necessity
 
-Each entry records **which side decides what it says**, because that is the difference between a
-one-command fix and a decision:
+The list used to carry a second kind of entry, flagged `owner: 'mirror'`: files both repos
+maintained by hand and kept identical because it was convenient — `spectral.yaml` and three shared
+scripts (`check-mutation-baseline.ts`, `test-report.ts`, `gen-asyncapi-types.ts`). A fork in one of
+those was a question no script could answer, so `sync:frontend` could only report it and walk away.
 
-- **`backend`** — the frontend's copy is an _output_, produced here from per-module sources and
-  copied over. A fork has one correct resolution, and `npm run sync:frontend` applies it without
-  asking. Editing the copy is the failure this list is worst at describing and best at catching:
-  the next regeneration reverts it, and the diff looks like the backend broke something.
-- **`mirror`** — both sides maintain it by hand, so a fork is a question no script may answer.
-
-`asyncapi.public.yaml` is the one whose name changes on arrival: it lands as the frontend's
-`asyncapi.yaml`, because the shared subset is the whole of the async contract as far as that repo
-is concerned.
+They were removed, and the flag with them. Nothing breaks _silently_ when two repos lint under
+rulesets that have drifted apart — one job is simply stricter, and it says so on the run. A gate
+that cannot resolve what it reports is a gate people learn to skip, and every entry on this list
+costs a manual step per contract change. The files still exist on both sides; nothing compares them
+any more, and nothing needs to.
 
 ### Nothing regenerable belongs on it
 

@@ -195,8 +195,8 @@ npm run check:spec-identity         # the gate: hashes both sides, fails on a fo
 
 `sync:frontend` refuses to run on stale sources — `check:contracts-bundle` and `check:seed-export`
 go first, because copying a stale bundle makes both repos agree on a document neither one's sources
-produce. It also never writes the four hand-maintained files: it reports them as differing and
-leaves the decision to you.
+produce. Everything it copies is produced here, so every difference it finds has one correct
+resolution and it applies it.
 
 The sibling is found beside this repo, or wherever `FRONTEND_PATH` in `.env` points. The pre-commit
 hook runs `regenerate -- --no-sync`, because a commit here must not write into a checkout you are

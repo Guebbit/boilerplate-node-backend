@@ -15,7 +15,7 @@
  *
  * The half of that sentence about PAYMENT lives in `payments/tests/unit/service.test.ts`, because
  * committing a hold is something the payments service does and reaching its internals from here
- * would cross a module boundary `tests/cross-cutting/module-test-boundaries.test.ts` forbids. What
+ * would cross a module boundary `eslint-plugin-boundaries` forbids. What
  * is here is everything a cart, an order and the sweep can do on their own.
  *
  * Real Mongo throughout (`setupTestDb`), because every guarantee here is a conditional write: the

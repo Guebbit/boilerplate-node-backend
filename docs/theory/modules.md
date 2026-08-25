@@ -571,7 +571,7 @@ Some of these rules are relational — what a file may import depends on which m
 | ------------------------------------------------------------------------------------- | ------------------------------------ |
 | No module imports a sibling's internals                                               | ESLint `no-restricted-imports`       |
 | `infrastructure` and `kernel` never import a module                                   | ESLint, per-tier blocks              |
-| A spec may reach its own module, a sibling's barrel, manifest or tests — nothing else | `module-test-boundaries.test.ts`     |
+| A spec may reach its own module, a sibling's barrel, manifest or tests — nothing else | `eslint-plugin-boundaries`           |
 | Two modules never claim the same audit action, and every action is dotted             | `audit-actions.test.ts`              |
 | No module shadows a shared locale key, or writes outside its own namespace            | `locale-namespaces.test.ts`          |
 | Every language declares the same keys across every module                             | `locale-parity.test.ts`              |

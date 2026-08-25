@@ -2,11 +2,15 @@
 /**
  * Copy every backend-owned shared file into the paired frontend — `npm run sync:frontend`.
  *
- * Four files are produced here and held byte-identical over there, three of them named differently
- * on the other side. The list, the per-side paths and the ownership all come from `SHARED_FILES`,
- * so a file added there is synced without touching this script.
+ * Three files are produced here and held byte-identical over there, one of them named differently
+ * on the other side. The list and the per-side paths both come from `SHARED_FILES`, so a file added
+ * there is synced without touching this script.
  *
- * See: docs/tools/pairing-and-ports.md#owned-versus-mirrored
+ * Every shared file is backend-owned, which is why this script may write at all: the frontend's
+ * copy is an output, so a difference has one correct resolution. Files the two repos merely keep
+ * identical for convenience are not on the list and are nobody's to overwrite.
+ *
+ * See: docs/tools/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */
 
 import { execFileSync } from 'node:child_process';
@@ -67,7 +71,7 @@ for (const gate of STALENESS_GATES) {
 interface Outcome {
     from: string;
     to: string;
-    state: 'copied' | 'already-identical' | 'would-copy' | 'missing-here' | 'needs-a-decision';
+    state: 'copied' | 'already-identical' | 'would-copy' | 'missing-here';
 }
 
 const outcomes: Outcome[] = SHARED_FILES.map((shared) => {
@@ -79,10 +83,6 @@ const outcomes: Outcome[] = SHARED_FILES.map((shared) => {
 
     if (!forcedRun && existsSync(to) && hashFile(from) === hashFile(to))
         return { from: shared.backend, to: shared.frontend, state: 'already-identical' };
-
-    // A hand-maintained mirror that differs is a question, not a chore. Say so; write nothing.
-    if (shared.owner === 'mirror')
-        return { from: shared.backend, to: shared.frontend, state: 'needs-a-decision' };
 
     if (dryRun) return { from: shared.backend, to: shared.frontend, state: 'would-copy' };
 
@@ -106,20 +106,12 @@ if (missing.length > 0)
     );
 
 const moved = [...of('copied'), ...of('would-copy')];
-const decisions = of('needs-a-decision');
 
 console.info(
     moved.length === 0
         ? `[sync] Every backend-owned file already matches ${frontendRoot}.`
         : `[sync] ${dryRun ? 'Would copy' : 'Copied'} ${moved.length} file(s) to ${frontendRoot}:\n${list(moved)}`
 );
-
-if (decisions.length > 0)
-    console.info(
-        `\n[sync] ${decisions.length} hand-maintained file(s) differ and were NOT touched:\n` +
-            list(decisions) +
-            `\n  Both repos maintain these. Decide which copy is right and move it yourself.`
-    );
 
 /*
  * Both repos generate typed clients FROM the files just copied, and those outputs live only in
@@ -166,7 +158,7 @@ if (moved.length > 0 && regenerate) {
  * exactly that reason — this is what would notice if that ever stopped being true.
  */
 if (!dryRun)
-    for (const shared of SHARED_FILES.filter((item) => item.owner === 'backend')) {
+    for (const shared of SHARED_FILES) {
         const from = path.resolve(process.cwd(), shared[THIS_REPO]);
         const to = path.join(frontendRoot, shared.frontend);
         if (readFileSync(from).equals(readFileSync(to))) continue;

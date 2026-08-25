@@ -16,7 +16,7 @@
  *      attached, which is the only enforcement a judgement call can have.
  *
  * Imports are read from the source rather than resolved, for the same reason
- * `module-test-boundaries.test.ts` does it: the question is what the code SAYS, and a spec that
+ * `eslint-plugin-boundaries` does it: the question is what the code SAYS, and a spec that
  * needed the app booted to answer it would be an integration test.
  */
 

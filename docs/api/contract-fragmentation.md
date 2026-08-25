@@ -54,12 +54,11 @@ npm run check:contracts-bundle        # fail if any committed bundle is stale
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
 every run, so a fragment edited without re-bundling fails the build rather than drifting.
 
-The four shared files that are **not** bundled are the four that name no domain: `spectral.yaml`
-is a lint ruleset, and `check-mutation-baseline.ts`, `test-report.ts` and `gen-asyncapi-types.ts`
-are tooling. All four are hand-maintained on both sides — `npm run sync:frontend` reports them as
-differing and never writes them, because a fork in one of those is a question (which copy is
-right?) that no script may answer on its own.
-`src/types/asyncapi.generated.ts` is absent for the opposite reason — it is generated from a bundle by
+Nothing else is shared. `spectral.yaml`, `check-mutation-baseline.ts`, `test-report.ts` and
+`gen-asyncapi-types.ts` were on the list once, hand-maintained on both sides and compared but never
+written — a fork in one of those was a question (which copy is right?) that no script could answer.
+They came off it: the two repos still keep them identical because it is convenient, and convenience
+does not earn a gate. `src/types/asyncapi.generated.ts` is absent for the opposite reason — it is generated from a bundle by
 `npm run gen:asyncapi`, so it follows one rather than being one. `asyncapi.yaml` is absent for a third:
 it is a bundle, but not a SHARED one — the frontend receives `asyncapi.public.yaml` instead, so the
 full contract is compared against nothing and is marked `shared: false` to say so.

@@ -280,7 +280,7 @@ describe('refund on cancel', () => {
  *
  * These live here rather than in `cart/tests/unit/stock.test.ts` for the ordinary boundary
  * reason: committing is this service's work, and reaching `@modules/payments/service` from the
- * cart's suite is what `tests/cross-cutting/module-test-boundaries.test.ts` forbids. The rest of
+ * cart's suite is what `eslint-plugin-boundaries` forbids. The rest of
  * the lifecycle — checkout holds, cancel releases, the sweep expires — is asserted over there.
  *
  * The orders are placed through `orderService.create` rather than written as fixtures, because a

@@ -51,7 +51,7 @@ handling.
 | `src/app/system-routes.ts`   | The routes that belong to no module: the `GET /` liveness ping, and the other process-level endpoints.                                                                                                                                 | [Observability Endpoints](../api/observability.md) |
 | `src/app/error-handling.ts`  | The global Express error handler plus the process-level `uncaughtException` / `unhandledRejection` handlers. Grouped because all three answer the same question: what happens to a failure nobody else handled.                        | [Request Flow](../theory/request-flow.md)          |
 | `src/app/workers.ts`         | Registers every queue consumer at startup. A no-op when RabbitMQ is disabled, so a machine without a broker still boots.                                                                                                               | [RabbitMQ](../tools/rabbitmq.md)                   |
-| `src/app/demo.ts`            | The demo profile's control surface — two routes, mounted only when `NODE_DEMO=true`. Consumed by the paired frontend's e2e suite, and fenced off by `tests/cross-cutting/demo-boundary.test.ts`.                                       | [Demo profile](../tools/demo-profile.md)           |
+| `src/app/demo.ts`            | The demo profile's control surface — two routes, mounted only when `NODE_DEMO=true`. Consumed by the paired frontend's e2e suite, and fenced off by the `eslint-plugin-boundaries` element graph in `eslint.config.ts`.                | [Demo profile](../tools/demo-profile.md)           |
 
 ## `src/kernel/` — the module system
 

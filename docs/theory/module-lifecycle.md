@@ -452,8 +452,8 @@ go with their modules.
 `tests/integration/concurrency/cart-races.test.ts` (correct — no modules, no race) and
 `tests/contract/request-contract.test.ts`. Plus one worth naming separately: `account`'s own
 address-book specs import `products` and `cart` factories from a module `account` does not depend
-on, which `module-test-boundaries.test.ts` permits (a sibling's `tests/` is a legal reach) and only
-this exercise makes visible.
+on, which `eslint-plugin-boundaries` permits (a sibling's `tests/` is a legal reach) and only this
+exercise makes visible.
 
 The sweep canaries are **no longer in that pile.** They stated their floor as a literal calibrated
 to the nine-module build — `expect(files.length).toBeGreaterThanOrEqual(6)` and friends — and the
@@ -494,7 +494,7 @@ ones a sweep cannot express:
   module names _and_ infrastructure folder names, and `db/migrations/**` names collections forever
   by design. The false-positive rate makes it unusable.
 
-What the suite does cover is the neighbouring ground: `module-test-boundaries.test.ts` holds a
+What the suite does cover is the neighbouring ground: `eslint-plugin-boundaries` holds a
 co-located spec to its sibling's barrel, and `request-sources.test.ts` keeps every mounted route in
 the spec and every spec operation mounted. Neither is a substitute for actually deleting a folder.
 
