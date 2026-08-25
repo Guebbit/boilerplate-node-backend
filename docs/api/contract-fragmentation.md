@@ -263,11 +263,13 @@ property's value position is not the `allOf` problem the anchors were avoiding. 
 verified by dereferencing both contracts and deep-comparing: **82 operations before and after, three
 added schemas, nothing else.**
 
-The remaining concatenated bundles keep the one rule concatenation needs: a JSON array and a
-TypeScript object literal need a comma **between** slices and none after the last, which is a
-property of the join rather than of any fragment — so a segment is either a file pasted verbatim or
-a group of files joined by a separator, and a module fragment never has to know whether it happens
-to be last.
+Concatenation survives in exactly one bundle now, and it is no longer shared machinery.
+`analytics-events.frontend.ts` splices verbatim line slices out of each module's `analytics.ts`
+because those declarations carry comments no parse survives, and it owns that logic itself — the
+comma **between** slices and none after the last is a rule inside
+`scripts/contracts/analytics-events.ts`. `scripts/contracts/fragments.ts` used to hold a general
+segment/separator engine for every bundle; once the REST and AsyncAPI contracts moved to whole
+documents, nothing declared a segment any more and it was removed.
 
 ### Which schemas stayed shared, and why
 

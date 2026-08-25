@@ -1,18 +1,23 @@
 /**
- * The fragment bundler every shared, domain-shaped file in this repo is built with.
+ * What a contract bundle IS: the shape every entry in `index.ts` declares, and the three questions
+ * the CLI and the staleness check ask of one.
  *
- * A module owns its slice as a fragment on disk; the published document is the concatenation, and
- * deleting a domain is deleting its folder plus one entry in an ordered list.
+ * Two kinds, and the only difference is where the input comes from. A COMPILED bundle is built
+ * from authored files in this repo. A GENERATED one is built from a document this repo has already
+ * committed. That single distinction is what orders a full run: everything compiled is written
+ * first, so the client collections downstream read a current `openapi.yaml` rather than the
+ * previous one.
  *
- * IT NEVER PARSES. These documents carry comments, key order and quoting that a
- * parse-and-re-serialise round trip destroys, and the bundle has to stay byte-identical with the
- * frontend's copy — so a fragment is a VERBATIM SLICE and bundling is string concatenation.
- * `tests/cross-cutting/contract-bundles.test.ts` asserts round-trip identity on every run.
+ * NO BUNDLE IS CONCATENATED BY THIS FILE. Each one owns its own build and they no longer share a
+ * mechanism — `openapi.yaml` goes through `redocly bundle`, the AsyncAPI pair through the YAML AST,
+ * and `analytics-events.frontend.ts` splices verbatim slices out of its sources itself, because
+ * those declarations carry comments no parse survives. What is left here is only what all of them
+ * have in common: an identity, a way to produce the text, and a way to read the committed copy so
+ * the two can be compared.
  *
- * The one thing concatenation cannot do is separate list items, so a segment is either a file or a
- * group of files joined by a separator — and a fragment never has to know whether it is last.
+ * `tests/cross-cutting/contract-bundles.test.ts` asserts that comparison on every run.
  *
- * See: docs/api/contract-fragmentation.md#what-a-fragment-contains
+ * See: docs/api/contract-fragmentation.md#the-eight-bundles
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -20,21 +25,6 @@ import path from 'node:path';
 
 /** Repo root, from `scripts/contracts/`. */
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
-
-/**
- * Fragments that are list items, joined rather than pasted.
- *
- * `separator` is what goes between two slices and nowhere else — `',\n'` for the entries of a JSON
- * array or a TypeScript object. Each fragment is right-trimmed before joining so it can be stored
- * with the trailing newline every editor adds.
- */
-export interface FragmentGroup {
-    parts: readonly string[];
-    separator: string;
-}
-
-/** A slice of a bundle: one file pasted verbatim, or several joined into a list. */
-export type Segment = string | FragmentGroup;
 
 /** What every committed document declares, however it is produced. */
 interface BundleIdentity {
@@ -48,10 +38,10 @@ interface BundleIdentity {
      * Whether the paired frontend holds a copy of this document, and so whether it belongs in
      * `scripts/spec-identity.ts`.
      *
-     * Absent means yes, because that is what a document assembled from every domain's fragments is
-     * for. `asyncapi.yaml` is the one `false`: the frontend receives `asyncapi.public.yaml`, the
-     * subset holding the channels it can actually reach, so the full contract — queues included —
-     * stays here and is compared against nothing.
+     * Absent means yes, because publishing a document built from every domain's sources is what
+     * these bundles are for. `asyncapi.yaml` is the one `false`: the frontend receives
+     * `asyncapi.public.yaml`, the subset holding the channels it can actually reach, so the full
+     * contract — queues included — stays here and is compared against nothing.
      *
      * Declared rather than inferred from the path so `contract-bundles.test.ts` can hold both
      * halves of the rule: shared bundles must be in the cross-repo list, and a bundle marked
@@ -60,27 +50,14 @@ interface BundleIdentity {
     shared?: false;
 }
 
-/** A document assembled from authored fragments on disk. */
-export interface AssembledBundle extends BundleIdentity {
-    /**
-     * The document, in order. A function rather than an array so a bundle can derive its segments
-     * from its section list instead of restating every path.
-     */
-    segments: () => readonly Segment[];
-    generated?: false;
-}
-
 /**
- * A document produced from authored source files by an EXTERNAL bundler.
+ * A document produced from AUTHORED SOURCE FILES in this repo.
  *
- * `openapi.yaml` is the one. Its sources are standalone OpenAPI documents — one per module, plus a
- * root holding what no module owns — joined by `redocly bundle`, which resolves `$ref` the way the
- * rest of the ecosystem does. That trades the bundle's comments away, because a parse cannot keep
- * them; the comments that mattered are the ones in the module files, and those survive where they
- * were written.
- *
- * Like an assembled bundle and unlike a generated one, this is authored source, so it runs in the
- * FIRST phase of a full run and the collections downstream read a current contract.
+ * Three of the four: `openapi.yaml` joined by `redocly bundle`, the two AsyncAPI documents merged
+ * through the YAML AST, and the frontend analytics catalogue spliced out of each module's
+ * `analytics.ts`. How is each bundle's own business — what this kind declares is that its inputs
+ * are hand-written, which is why it runs in the FIRST phase of a full run and the collections
+ * downstream read a current contract.
  */
 export interface CompiledBundle extends BundleIdentity {
     content: () => string;
@@ -93,9 +70,9 @@ export interface CompiledBundle extends BundleIdentity {
  * A document produced whole, from a document this repo already committed.
  *
  * The client collections are these: they are derived from `openapi.yaml` rather than written, so
- * there is nothing on disk to concatenate and no intermediate for anyone to hand-edit. `generated`
- * is what orders a full run — every authored bundle is assembled first, so the generator has a
- * current contract to read.
+ * there is nothing authored standing between the contract and the document, and no intermediate for
+ * anyone to hand-edit. `generated` is what orders a full run — every compiled bundle is written
+ * first, so the generator has a current contract to read.
  */
 export interface GeneratedBundle extends BundleIdentity {
     content: () => string;
@@ -103,62 +80,28 @@ export interface GeneratedBundle extends BundleIdentity {
 }
 
 /** One committed document, and how it comes to exist. */
-export type ContractBundle = AssembledBundle | CompiledBundle | GeneratedBundle;
+export type ContractBundle = CompiledBundle | GeneratedBundle;
 
 /**
  * Whether this bundle is derived from another committed document rather than from authored source.
  *
- * It is what orders a full run: everything authored — concatenated or compiled — is produced first,
- * so the client collections downstream read a current contract rather than the previous one.
+ * It is what orders a full run: everything compiled is produced first, so the client collections
+ * downstream read a current contract rather than the previous one.
+ *
+ * The flag's PRESENCE is the discriminant — only a generated bundle carries the key at all, so
+ * there is no value to compare against.
  */
 export const isGenerated = (bundle: ContractBundle): bundle is GeneratedBundle =>
-    'generated' in bundle && bundle.generated === true;
-
-const isCompiled = (bundle: ContractBundle): bundle is CompiledBundle =>
-    'compiled' in bundle && bundle.compiled;
+    'generated' in bundle;
 
 /**
- * Read a fragment, failing with the reason rather than an ENOENT.
+ * Produce a document by asking the bundle for it.
  *
- * A missing fragment means a module was deleted without its entry leaving the bundle's section
- * list. That is deliberately an error and not a silent skip: these documents are shared with the
- * paired repo, and a bundler that quietly dropped a section would fork them — this side serving
- * endpoints, events or fixtures the other no longer has, with `check:spec-identity` the only thing
- * left to notice.
+ * A single call because the two kinds differ in where their input comes from, not in how the text
+ * is made: each one already knows how to build itself, and the ordering that keeps a generated
+ * bundle reading a fresh contract is `bundle-contracts.ts`'s job, not this function's.
  */
-const readFragment = (bundle: ContractBundle, file: string): string => {
-    if (!existsSync(file))
-        throw new Error(
-            `[${bundle.name}] ${bundle.label} names a fragment that does not exist:\n` +
-                `  ${path.relative(REPO_ROOT, file)}\n` +
-                `  Deleting a domain means deleting its entry from the bundle's section list too —` +
-                ` and mirroring both in the paired repo.`
-        );
-    return readFileSync(file, 'utf8');
-};
-
-/** One segment as it appears in the output: a verbatim paste, or a separator-joined list. */
-const renderSegment = (bundle: ContractBundle, segment: Segment): string =>
-    typeof segment === 'string'
-        ? readFragment(bundle, segment)
-        : segment.parts
-              .map((part) => readFragment(bundle, part).trimEnd())
-              .join(segment.separator) + '\n';
-
-/**
- * Produce a document: concatenate its fragments, or ask the generator for the whole thing.
- *
- * The assembled path does no parse and no serialise, so nothing can normalise a quote or drop a
- * comment. The generated path has no fragments to preserve — its input is `openapi.yaml`, which the
- * assembled path already produced faithfully.
- */
-export const assembleBundle = (bundle: ContractBundle): string =>
-    isGenerated(bundle) || isCompiled(bundle)
-        ? bundle.content()
-        : bundle
-              .segments()
-              .map((segment) => renderSegment(bundle, segment))
-              .join('');
+export const assembleBundle = (bundle: ContractBundle): string => bundle.content();
 
 /**
  * The bundle as committed on disk.
@@ -172,17 +115,9 @@ export const readCommittedBundle = (bundle: ContractBundle): string =>
     existsSync(bundle.output) ? readFileSync(bundle.output, 'utf8') : '';
 
 /**
- * Every fragment a bundle is built from, flattened — what a staleness check watches.
+ * Every authored file a bundle is built from — what a staleness check watches.
  *
- * A generated bundle has none: nothing on disk stands between `openapi.yaml` and its output.
+ * A generated bundle has none: nothing authored stands between `openapi.yaml` and its output.
  */
 export const bundleFragments = (bundle: ContractBundle): string[] =>
-    isGenerated(bundle)
-        ? []
-        : isCompiled(bundle)
-          ? [...bundle.sources()]
-          : bundle
-                .segments()
-                .flatMap((segment) =>
-                    typeof segment === 'string' ? [segment] : [...segment.parts]
-                );
+    isGenerated(bundle) ? [] : [...bundle.sources()];

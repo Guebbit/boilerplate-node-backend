@@ -36,7 +36,7 @@ import { frontendAnalyticsEvents } from '../../shared/contracts/analytics.fronte
  * are published, and this repo cannot emit them: they are absent from `AnalyticsEventMap`, so
  * `emitAnalyticsEvent` rejects them at compile time.
  */
-export type AnalyticsScope = 'backend' | 'frontend';
+type AnalyticsScope = 'backend' | 'frontend';
 
 /**
  * The order the groups appear in — auth first, then the path a user walks through the shop, and
@@ -114,7 +114,7 @@ const sectionsInScope = (scope: AnalyticsScope): readonly (typeof SECTIONS)[numb
  * The client's names sit under `shared/contracts/` for the same reason the queue channels do: they
  * belong to no domain, so no module folder is the honest place to put them.
  */
-export const analyticsSource = (module: string): string =>
+const analyticsSource = (module: string): string =>
     module === 'frontend'
         ? path.join(REPO_ROOT, 'shared', 'contracts', 'analytics.frontend.ts')
         : path.join(REPO_ROOT, 'src', 'modules', module, 'analytics.ts');

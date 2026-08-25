@@ -1,18 +1,16 @@
 /**
  * Every document is exactly what it says it is built from.
  *
- * The documents come in three kinds, and what each kind can be asked differs.
+ * The documents come in two kinds, and what each kind can be asked differs.
  *
- * COMPILED — `openapi.yaml`. Its sources are standalone OpenAPI documents, one per module plus the
- * root, joined by `redocly bundle` resolving `$ref` the way the rest of the ecosystem does.
+ * COMPILED — built from authored sources in this repo. `openapi.yaml` from standalone OpenAPI
+ * documents, one per module plus the root, joined by `redocly bundle` resolving `$ref` the way the
+ * rest of the ecosystem does; the two AsyncAPI bundles merged through the YAML AST from one
+ * document per section; the frontend's analytics event names concatenated from verbatim line
+ * slices, because those declarations carry comments no parser preserves.
  *
- * ASSEMBLED — the frontend's analytics event names, still concatenated from verbatim line slices.
- * These carry comments the bundle itself has to keep, and no parser preserves those. The two
- * AsyncAPI bundles are COMPILED as well, merged through the YAML AST from one document per
- * section.
- *
- * Both are COMMITTED, so both can be asked the strongest question: does the file on disk equal a
- * fresh assembly. Two sources for one document is a fork waiting to happen — that is what
+ * These are COMMITTED, so they can be asked the strongest question: does the file on disk equal a
+ * fresh build. Two sources for one document is a fork waiting to happen — that is what
  * `check:contracts-bundle --check` asserts, in `complete` on every run, so it is not repeated here
  * as a second Jest case over the same two function calls.
  *
@@ -24,8 +22,9 @@
  * that mattered anyway — a stale committed copy was only ever a proxy for a generator that had
  * stopped covering the contract.
  *
- * WHERE THE COMMENTS LIVE differs between the first two kinds. A parse drops them, so an
- * assembled bundle cannot use one. The REST contract stopped needing that guarantee once its
+ * WHERE THE COMMENTS LIVE differs between the compiled bundles. A parse drops them, so the
+ * analytics catalogue — the one still spliced rather than parsed — is the only bundle whose own
+ * text can carry one. The REST contract stopped needing that guarantee once its
  * sources became whole documents: the explanations now sit in the module files where the thing
  * they explain is written, and nobody reads the bundle by hand. That placement is a design choice
  * rather than a property this file checks — a comment count is a floor nothing can tell apart from

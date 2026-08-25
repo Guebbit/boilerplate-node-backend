@@ -19,20 +19,5 @@ openapi.yaml
 # a format-only difference would read as a forked dataset.
 db/demo/demo-data.json
 
-# Contract fragments are verbatim SLICES of a committed document, not standalone files: each one
-# starts at the indentation it holds inside its parent, and several are not even parseable alone —
-# half an object literal, a folder out of a YAML list, a run of JSON array entries. Prettier would
-# dedent, re-quote and re-comma them, and every bundle is asserted byte-identical against its
-# committed output, so formatting a fragment would corrupt the very thing it builds.
-#
-# The exceptions below are the point of the rule, not holes in it: `src/modules/<name>/openapi.yaml`,
-# `src/modules/<name>/asyncapi.yaml`, `src/modules/<name>/analytics.ts` and the two shared asyncapi
-# documents are WHOLE, valid files — a contract you can lint and open in a viewer on its own — so
-# prettier formats them like any other authored source. If a format-only change ever alters a
-# bundle, `check:contracts-bundle` says so.
-shared/contracts/*
-!shared/contracts/asyncapi.root.yaml
-!shared/contracts/asyncapi.workers.yaml
-
 # graphify cache — generated JSON, not ours to format
 graphify-out/

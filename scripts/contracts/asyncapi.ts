@@ -29,12 +29,12 @@ import { REPO_ROOT, type ContractBundle } from './fragments';
  * and a frontend that held their payload types would carry a contract it can neither publish to nor
  * consume from.
  */
-export type AsyncScope = 'shared' | 'backend';
+type AsyncScope = 'shared' | 'backend';
 
 /** The order sections are merged in, and therefore the order they appear in the output. */
 export const ASYNC_SECTION_ORDER = ['observability', 'workers'] as const;
 
-export type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
+type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
 
 /** Which sections an API client shares. Everything absent from here is backend-only. */
 const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability']);
@@ -46,13 +46,13 @@ const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>
         : ASYNC_SECTION_ORDER.filter((section) => SHARED_SECTIONS.has(section));
 
 /** Where a section's document lives — a module's own file, or the shared one for the queues. */
-export const asyncSectionDocument = (section: AsyncSectionName): string =>
+const asyncSectionDocument = (section: AsyncSectionName): string =>
     section === 'workers'
         ? path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml')
         : path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');
 
 /** Preamble: version, id, info, content type, tags. Holds no channel and no server. */
-export const ASYNC_ROOT_DOCUMENT = path.join(
+const ASYNC_ROOT_DOCUMENT = path.join(
     REPO_ROOT,
     'shared',
     'contracts',

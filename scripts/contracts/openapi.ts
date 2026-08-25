@@ -43,7 +43,7 @@ export const MODULE_SECTIONS = [
     'inventory'
 ] as const;
 
-export type ModuleSection = (typeof MODULE_SECTIONS)[number];
+type ModuleSection = (typeof MODULE_SECTIONS)[number];
 
 /**
  * Every section a path can be filed under: the modules, plus the shell.
@@ -61,10 +61,10 @@ export const moduleSpec = (section: ModuleSection): string =>
     path.join(REPO_ROOT, 'src', 'modules', section, 'openapi.yaml');
 
 /** What no module owns: the preamble, the shared components, and `GET /`. */
-export const ROOT_SPEC = path.join(REPO_ROOT, 'shared', 'contracts', 'openapi.root.yaml');
+const ROOT_SPEC = path.join(REPO_ROOT, 'shared', 'contracts', 'openapi.root.yaml');
 
 /** The committed contract every tool reads. */
-export const OPENAPI_OUTPUT = path.join(REPO_ROOT, 'openapi.yaml');
+const OPENAPI_OUTPUT = path.join(REPO_ROOT, 'openapi.yaml');
 
 /**
  * A path key as it appears in a module document: four spaces, then the path.

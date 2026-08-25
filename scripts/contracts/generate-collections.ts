@@ -44,7 +44,7 @@ import { probes as wishlistProbes } from '../../src/modules/wishlist/probes';
 import dataset from '../../db/demo/demo-data.json';
 
 /** The four tools, and the order this file names them in. */
-export const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
+const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
 
 /** The name every collection carries, in the tools that show one. */
 const COLLECTION_NAME = 'Ecommerce Demo API';
