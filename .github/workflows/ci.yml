@@ -10,10 +10,11 @@ name: CI
 # The jobs fall into four groups:
 #   - style           commitlint, lint, prettier
 #   - contract        lint-openapi, lint-asyncapi, their per-module counterparts,
-#                     api-freshness, asyncapi-types-freshness, contracts-bundle-freshness,
-#                     seed-export-freshness, module-docs-freshness, spec-identity — the spec is
-#                     valid, its generated output is committed and current, and the paired
-#                     frontend still agrees with it
+#                     contracts-bundle-freshness, seed-export-freshness, module-docs-freshness,
+#                     spec-identity — the spec is valid, and the paired frontend still agrees with
+#                     it. api/ and src/types/asyncapi.generated.ts are no longer committed — see
+#                     `postinstall` in package.json — so there is nothing left to go stale for
+#                     them to check.
 #   - correctness     typecheck, build, test-unit, test-integration, test-contract
 #   - supply chain    audit
 #
@@ -138,49 +139,6 @@ jobs:
 
             - name: Lint AsyncAPI spec
               run: npm run lint:asyncapi
-
-    asyncapi-types-freshness:
-        # Verify the committed generated AsyncAPI types are up-to-date with asyncapi.yaml.
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        permissions:
-            contents: read
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Setup
-              uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-
-            # The generator itself compares, so the committed file is never overwritten here and
-            # the job needs no git state to read a verdict out of.
-            - name: Check generated AsyncAPI types are fresh
-              run: npm run check:asyncapi-types
-
-    api-freshness:
-        # Verify the committed generated API client is up-to-date with openapi.yaml.
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        permissions:
-            contents: read
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Setup
-              uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-
-            - name: Check generated API client is fresh
-              run: |
-                  npm run gen:api
-                  if ! git diff --exit-code -- api/; then
-                      echo "Generated api/ is stale. Run 'npm run gen:api' and commit the changes."
-                      exit 1
-                  fi
 
     spec-identity:
         # The cross-repo contract gate. Mirrors the job of the same name in the frontend.
@@ -584,8 +542,6 @@ jobs:
             - prettier
             - lint-openapi
             - lint-asyncapi
-            - asyncapi-types-freshness
-            - api-freshness
             - spec-identity
             - lint-openapi-modules
             - lint-asyncapi-modules

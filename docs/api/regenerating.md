@@ -5,6 +5,16 @@ The cheat sheet for "I edited a fragment — now what?".
 [Contract Ownership & Fragmentation](./contract-fragmentation.md) explains **why** the pipeline has
 this shape. This page is the short version you keep open while working.
 
+## `openapi.yaml`, `api/` and the AsyncAPI types are not committed
+
+`postinstall` runs `contracts:bundle` + `gen:api` + `gen:asyncapi` automatically after `npm install`/
+`npm ci`, so a fresh clone has them without anyone doing anything. The rest of this page still
+matters the moment you're actively editing a fragment mid-session — `postinstall` only fires on
+install, not on every save — but there is no committed copy of these three to go stale, forget to
+regenerate, or diff in a PR. `db/demo/demo-data.json` and the AsyncAPI bundles
+(`asyncapi.yaml`/`asyncapi.public.yaml`) are the exception: those stay committed — see
+[The generated output and what is committed](#the-generated-output-and-what-is-committed).
+
 ## The one command
 
 Whatever you edited — a path, a schema, an event name, a seed record, a probe:
@@ -45,7 +55,7 @@ flowchart LR
 
     MF --> B[contracts:bundle]
     SH --> B
-    B --> ROOT["openapi.yaml<br/><i>committed</i>"]
+    B --> ROOT["openapi.yaml<br/><i>generated, gitignored</i>"]
 
     ROOT --> COL[generate]
     PR --> COL
@@ -74,8 +84,9 @@ openapi.yaml  ──►  api/  ──►  demo-data.json  ──►  the four cl
 
 Nothing has to sequence that for you, because nothing generates a collection unless you ask. Ask
 last — after `regenerate` has settled the contract and the dataset — and what you get is current by
-construction. There is no committed copy to go stale in the meantime, which is why neither
-`npm run complete` nor `check:contracts-bundle` has anything to say about them.
+construction. There is no committed copy of a collection to go stale in the meantime, and — since
+`postinstall` — the same is true of `openapi.yaml` and `api/` themselves: neither `npm run complete`
+nor `check:contracts-bundle` has a "stale committed copy" to report on any of them.
 
 The ordering deliberately does not live in `package.json` as commands joined by `&&`: npm appends
 `--` arguments to the LAST command of a chain only, so a narrowing flag would silently apply to one
@@ -147,31 +158,33 @@ npm run test:contract             # do real responses match the contract?
 | `check:spec-identity` fails                                         | this repo and the frontend hold different bytes of a shared document                       | copy the bundle over; never re-bundle on both sides     |
 | `prettier:check` fails on `analytics-events.frontend.ts`              | a section's `as const` ends with a trailing comma — the join adds the separator, not the source | drop the trailing comma from that section's last entry    |
 | `check:seed-export` says the dataset is STALE                         | a fixture changed and the dataset was not re-exported                                       | `npm run seed:export`, then copy the result to the frontend |
-| `gen:api` produces a diff in CI                                      | `api/` was not regenerated after a contract change                                         | `npm run gen:api` and commit the result                   |
 | spectral reports a dangling `$ref`                                   | a schema moved into a module document while another module still references it              | move it to `shared/contracts/openapi.root.yaml`         |
 
-Two guards run without you asking: `tests/cross-cutting/contract-bundles.test.ts` asserts every
-bundle equals a fresh assembly on **every** test run (so the pre-commit `complete` covers it),
-and CI re-runs `gen:api` and `gen:asyncapi` to prove the committed output is fresh.
+One guard runs without you asking: `tests/cross-cutting/contract-bundles.test.ts` asserts every
+bundle equals a fresh assembly on **every** test run, so the pre-commit `complete` covers it. There
+used to be a second — CI re-running `gen:api`/`gen:asyncapi` to prove a *committed* `api/`/
+`asyncapi.generated.ts` was fresh — but `postinstall` regenerates both before anything else runs, so
+there is no longer a committed copy for that comparison to be about.
 
-## The generated output is committed, all of it
+## The generated output and what is committed
 
-Not one of these is a build artefact you can delete and forget:
+Not everything generated is a build artefact you can delete and forget — but as of `postinstall`,
+three of them are exactly that:
 
-| Committed output                                       | Read by                                                       |
-| ------------------------------------------------------ | ------------------------------------------------------------- |
-| `openapi.yaml`                                         | spectral · orval · Prism · `jest-openapi` · the frontend      |
-| `asyncapi.yaml`                                        | the AsyncAPI CLI · `gen:asyncapi`                              |
-| `asyncapi.public.yaml`                                 | the AsyncAPI CLI · the frontend's whole realtime pipeline      |
-| `api/models/` · `api/schemas.zod.ts`                   | `@types` and the services that validate input                 |
-| `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                   |
-| `src/infrastructure/observability/analytics-events.frontend.ts` | the analytics tracker                                         |
-| `db/demo/demo-data.json`                                | the generated collections and the paired frontend's mocks     |
-| `contract.{bruno,insomnia,mockoon,postman}.*`          | you, and whoever explores the API without running it          |
+| Generated output                                                | Read by                                                    | Committed?                                                                                                                             |
+| ----------------------------------------------------------------| ------------------------------------------------------------------------------------------------------- | ---------- |
+| `openapi.yaml`                                                  | spectral · orval · Prism · `jest-openapi` · the frontend                                                 | no — gitignored, rebuilt by `postinstall` |
+| `api/models/` · `api/schemas.zod.ts`                            | `@types` and the services that validate input                                                            | no — gitignored, rebuilt by `postinstall` |
+| `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
+| `asyncapi.yaml`                                                 | the AsyncAPI CLI · `gen:asyncapi`                                                                        | yes |
+| `asyncapi.public.yaml`                                          | the AsyncAPI CLI · the frontend's whole realtime pipeline                                                | yes |
+| `src/infrastructure/observability/analytics-events.frontend.ts` | the analytics tracker                                                                                    | yes |
+| `db/demo/demo-data.json`                                        | the generated collections and the paired frontend's mocks                                                | yes — regenerating it needs a real (seeded, then read back) database, materially heavier and more fragile to ask of `postinstall` than a pure text transform |
+| `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                     | no — generated on demand, see above |
 
-`api/` is the one exception to "review the diff": `npm run gen:api` starts with `rm -rf ./api`, so it
-is fully derived, and the only thing to check is that the diff is limited to what you changed.
-**Never hand-edit anything in `api/`.**
+For the three gitignored ones: **never hand-edit anything under `api/`, `openapi.yaml`, or
+`src/types/asyncapi.generated.ts`.** `npm run gen:api` starts with `rm -rf ./api`, and all three are
+fully derived — there is no diff to review because there is nothing committed to diff against.
 
 ## Handing the contract to the frontend
 

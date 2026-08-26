@@ -113,10 +113,18 @@ which the old fragment layout could never do, because a fragment parsed as nothi
 concatenated.
 
 `contracts:bundle` is safe to run at any time: it compares before it writes and touches only the
-bundles that actually drifted. A full run covers the **committed** documents only. The client
+bundles that actually drifted. A full run covers the committed documents plus `openapi.yaml`
+(no longer committed itself — see below), never the client collections. The client
 collections are generated from `openapi.yaml` and `.gitignore`d, so they are produced by name —
 `npm run contracts:bundle -- bruno insomnia mockoon postman` — and `--check` refuses them, because an
 uncommitted file cannot be stale.
+
+`openapi.yaml`, `api/` (from `gen:api`) and `src/types/asyncapi.generated.ts` (from `gen:asyncapi`,
+`check:asyncapi-types`'s target) are gitignored too, for the same reason: `postinstall` rebuilds all
+three automatically after `npm install`/`npm ci`, so there's nothing committed left to go stale
+between them and the fragments they're built from. `asyncapi.yaml`/`asyncapi.public.yaml` themselves
+stay committed — see [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed)
+for exactly which is which.
 
 ## Docs scripts
 
@@ -186,10 +194,11 @@ live in `.env` and this one cannot.
 
 ## Maintenance & publishing scripts
 
-| Script       | Job                                                               | Read more              |
-| ------------ | ----------------------------------------------------------------- | ---------------------- |
-| `update:all` | bump dependency ranges with `npm-check-updates`                   | dependency maintenance |
-| `prepare`    | npm lifecycle hook — installs the husky hooks after `npm install` | not run by hand        |
+| Script        | Job                                                                                                      | Read more                                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `update:all`  | bump dependency ranges with `npm-check-updates`                                                          | dependency maintenance                                                                           |
+| `postinstall` | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci` | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
+| `prepare`     | npm lifecycle hook — installs the husky hooks after `npm install`                                        | not run by hand                                                                                  |
 
 ## Related pages
 

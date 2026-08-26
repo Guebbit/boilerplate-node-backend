@@ -27,12 +27,17 @@
 # at, and possibly one with its own work in progress. Hand the files over deliberately, with
 # `npm run regenerate` by itself, when you mean to.
 #
-# `git add` is required: a file rewritten after staging is not in the commit, so the gate below
-# would pass against content that is not what gets committed. Note this widens a partial
-# `git add -p` to include the whole regenerated output — which is what you want for a generated
-# file, and a surprise exactly once.
+# `git add` is required for what's still committed: a file rewritten after staging is not in the
+# commit, so the gate below would pass against content that is not what gets committed. Note this
+# widens a partial `git add -p` to include the whole regenerated output — which is what you want
+# for a generated file, and a surprise exactly once.
+#
+# `openapi.yaml`, `api/` and `src/types/asyncapi.generated.ts` are NOT named here — they are
+# gitignored (postinstall rebuilds them, see package.json), and `git add` errors outright on an
+# explicitly-named ignored path. `regenerate` above still has to build them: the gate that follows
+# reads them off disk regardless of git's opinion of them.
 npm run regenerate -- --no-sync
-git add openapi.yaml asyncapi.yaml asyncapi.public.yaml api src/types/asyncapi.generated.ts \
-        db/demo/demo-data.json src/infrastructure/observability/analytics-events.frontend.ts
+git add asyncapi.yaml asyncapi.public.yaml db/demo/demo-data.json \
+        src/infrastructure/observability/analytics-events.frontend.ts
 
 npm run complete
