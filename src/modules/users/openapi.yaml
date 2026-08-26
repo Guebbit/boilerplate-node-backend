@@ -417,6 +417,8 @@ components:
                     type: boolean
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
 
         UpdateUserByIdRequestMultipart:
             type: object
@@ -437,6 +439,8 @@ components:
                     type: string
                     format: binary
                     description: Optional user profile image
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
 
         DeleteUserRequest:
             type: object

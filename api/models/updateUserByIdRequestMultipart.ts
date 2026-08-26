@@ -19,6 +19,7 @@
  * OpenAPI spec version: 2.0.0
  */
 import type { Email } from './email';
+import type { Locale } from './locale';
 import type { Password } from './password';
 
 export interface UpdateUserByIdRequestMultipart {
@@ -29,4 +30,5 @@ export interface UpdateUserByIdRequestMultipart {
   active?: boolean;
   /** Optional user profile image */
   imageUpload?: Blob;
+  locale?: Locale;
 }

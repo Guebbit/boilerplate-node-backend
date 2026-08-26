@@ -1,5 +1,6 @@
 import { addressBookModel, applyAddressBookTransform } from './model';
-import type { AddressBookDocument, AddressItem } from './model';
+import type { AddressBookDocument } from './model';
+import type { AddressInput, UpdateAddressRequest } from '@types';
 import {
     createBaseRepository,
     toObjectId,
@@ -22,11 +23,11 @@ import {
  */
 export const addressBookRepository: BaseRepository<AddressBookDocument> & {
     findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
-    addEntry: (userId: string, entry: Omit<AddressItem, '_id'>) => Promise<AddressBookDocument>;
+    addEntry: (userId: string, entry: AddressInput) => Promise<AddressBookDocument>;
     updateEntry: (
         userId: string,
         addressId: string,
-        changes: Partial<Omit<AddressItem, '_id'>>
+        changes: UpdateAddressRequest
     ) => Promise<AddressBookDocument | null>;
     removeEntry: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
@@ -49,12 +50,12 @@ export const addressBookRepository: BaseRepository<AddressBookDocument> & {
      * asked, a later entry claiming `default: true` demotes the current holder, and a later
      * entry that claims nothing changes nothing.
      */
-    addEntry: async (userId: string, entry: Omit<AddressItem, '_id'>) => {
+    addEntry: async (userId: string, entry: AddressInput) => {
         const book =
             (await addressBookModel.findOne({ userId: toObjectId(userId) }).exec()) ??
             new addressBookModel({ userId: toObjectId(userId), items: [] });
 
-        const wantsDefault = entry.default || book.items.length === 0;
+        const wantsDefault = (entry.default ?? false) || book.items.length === 0;
         if (wantsDefault) for (const item of book.items) item.default = false;
 
         book.items.push({ ...entry, default: wantsDefault });
@@ -69,11 +70,7 @@ export const addressBookRepository: BaseRepository<AddressBookDocument> & {
      * `default: true` claims the slot; `false`/absent leave the assignment alone (see the
      * contract note — demoting without a successor would leave the book with none).
      */
-    updateEntry: async (
-        userId: string,
-        addressId: string,
-        changes: Partial<Omit<AddressItem, '_id'>>
-    ) => {
+    updateEntry: async (userId: string, addressId: string, changes: UpdateAddressRequest) => {
         const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();
         const entry = book?.items.find((item) => String(item._id) === addressId);
         if (!book || !entry) return null;

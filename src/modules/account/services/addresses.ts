@@ -5,7 +5,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { Address } from '@types';
+import type { Address, AddressInput, UpdateAddressRequest } from '@types';
 import { addressBookRepository } from '../repository';
 import type { AddressBookDocument, AddressItem } from '../model';
 
@@ -50,7 +50,7 @@ export const addressesGet = (userId: string): Promise<AddressesView> =>
 /** Add an entry. The repository decides the default slot — see `addEntry`. */
 export const addressAdd = (
     userId: string,
-    entry: Omit<AddressItem, '_id' | 'default'> & { default?: boolean }
+    entry: AddressInput
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository
         .addEntry(userId, { ...entry, default: entry.default ?? false })
@@ -60,7 +60,7 @@ export const addressAdd = (
 export const addressUpdate = (
     userId: string,
     addressId: string,
-    changes: Partial<Omit<AddressItem, '_id'>>
+    changes: UpdateAddressRequest
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository.updateEntry(userId, addressId, changes).then((book) => {
         if (!book) return generateReject(404, [t('account.addresses.not-found')]);

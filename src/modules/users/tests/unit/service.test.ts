@@ -344,6 +344,28 @@ describe('userService.updateById', () => {
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
     });
+
+    it('actually deactivates the account, not just the USER_DEACTIVATED event', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        const result = await userService.updateById(id, { active: false }, testCallerContext);
+
+        expect(result.success).toBe(true);
+        expect((result as { data: UserDocument }).data.active).toBe(false);
+        const refreshed = await userRepository.findById(id);
+        expect(refreshed!.active).toBe(false);
+    });
+
+    it('persists a locale change, the same as at creation', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        const result = await userService.updateById(id, { locale: 'fr' }, testCallerContext);
+
+        expect(result.success).toBe(true);
+        expect((result as { data: UserDocument }).data.locale).toBe('fr');
+    });
 });
 
 describe('userService.update', () => {

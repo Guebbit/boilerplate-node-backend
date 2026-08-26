@@ -4869,6 +4869,8 @@ components:
           type: boolean
         imageUrl:
           $ref: '#/components/schemas/ImageUrl'
+        locale:
+          $ref: '#/components/schemas/Locale'
     UpdateUserByIdRequestMultipart:
       type: object
       additionalProperties: false
@@ -4887,6 +4889,8 @@ components:
           type: string
           format: binary
           description: Optional user profile image
+        locale:
+          $ref: '#/components/schemas/Locale'
     SearchUsersRequest:
       type: object
       additionalProperties: false

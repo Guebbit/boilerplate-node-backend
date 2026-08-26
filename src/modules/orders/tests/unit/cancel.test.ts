@@ -10,14 +10,21 @@
  *     that difference — refresh the list vs explain the state.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
 import { orderService } from '@modules/orders/service';
 import { orderRepository, ORDER_CANCELLED } from '@modules/orders';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import * as auditPort from '@infrastructure/observability/audit';
+import * as analyticsPort from '@infrastructure/observability/analytics';
+import { ordersAuditActions } from '../../audit';
+import { ordersAnalyticsEvents } from '../../analytics';
 
 setupTestDb();
+
+afterEach(() => jest.restoreAllMocks());
 
 const seedOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
     const product = await createProduct();
@@ -174,6 +181,61 @@ describe('cancelById — who gets their money back', () => {
         await orderService.cancelById(String(order._id), { admin: true }, { refund: false });
 
         expect(cancellations).toHaveLength(1);
+    });
+});
+
+describe('cancelById — audit and analytics', () => {
+    it('a customer cancel reports order_cancelled, audited as the customer', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const analyticsSpy = jest.spyOn(analyticsPort, 'emitAnalyticsEvent');
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: ordersAuditActions.ORDER_CANCELLED,
+                outcome: 'success',
+                actor_role: 'anonymous'
+            })
+        );
+        expect(analyticsSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
+        );
+    });
+
+    it('a reservation timing out (no context) is audited as the system, not left silent', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext.
+        await orderService.cancelById(String(order._id), { admin: true });
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: ordersAuditActions.ORDER_CANCELLED,
+                outcome: 'success',
+                actor_role: 'admin',
+                actor_user_id: 'system'
+            })
+        );
+    });
+
+    it('a reservation timing out reports order_reservation_expired, not order_cancelled', async () => {
+        const analyticsSpy = jest.spyOn(analyticsPort, 'emitAnalyticsEvent');
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelById(String(order._id), { admin: true });
+
+        expect(analyticsSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED })
+        );
+        expect(analyticsSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
+        );
     });
 });
 

@@ -20,6 +20,7 @@
  */
 import type { Email } from './email';
 import type { ImageUrl } from './imageUrl';
+import type { Locale } from './locale';
 import type { Password } from './password';
 
 export interface UpdateUserByIdRequest {
@@ -29,4 +30,5 @@ export interface UpdateUserByIdRequest {
   admin?: boolean;
   active?: boolean;
   imageUrl?: ImageUrl;
+  locale?: Locale;
 }

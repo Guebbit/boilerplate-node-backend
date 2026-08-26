@@ -7,8 +7,8 @@ import {
     type ResponseErrorItem
 } from '@infrastructure/http/response';
 import { zodUserSchema } from './model';
-import type { UserDocument, UserRecord } from './model';
-import type { SearchUsersRequest } from '@types';
+import type { UserDocument } from './model';
+import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
 import { userRepository } from './repository';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
@@ -75,14 +75,15 @@ export const getById = (id?: string) => {
  *
  * The self-service path is `accountService.signup`, which sends a verification email and leaves
  * `verified` at the schema's `false`. This one exists for the admin write endpoints, where an
- * operator vouches for the address — which is why `verified` defaults to `true` here, spread
- * first so a caller that explicitly passes one still wins.
+ * operator vouches for the address — which is why `verified` is hardcoded `true` here rather than
+ * accepted from the caller: it is not a field `CreateUserRequest` exposes, and no caller in this
+ * codebase has ever needed to override it.
+ *
+ * Typed off `CreateUserRequest` — the contract's own generated shape — rather than a hand-picked
+ * `Pick<UserRecord, ...>`. `products/service.ts`'s `update`/`updateById` do the same off `Product`;
+ * a hand-copied field list is what silently dropped `active` from this module's `update()` below.
  */
-export const create = (
-    data: Pick<UserRecord, 'email' | 'username' | 'password'> &
-        Partial<Pick<UserRecord, 'admin' | 'imageUrl' | 'locale' | 'verified'>>,
-    context: CallerContext
-): Promise<UserDocument> =>
+export const create = (data: CreateUserRequest, context: CallerContext): Promise<UserDocument> =>
     userRepository.create({ verified: true, ...data }).then((user) => {
         emitAuditEvent(
             buildAuditEvent(context, {
@@ -106,16 +107,21 @@ export const create = (
 /**
  * Update an existing user document.
  * Returns a result envelope instead of throwing (LSP) — the protocol every service here follows.
+ *
+ * Typed off `UpdateUserByIdRequest` — the generated contract shape, shared with `updateById()`
+ * below — rather than a hand-picked `Pick<UserRecord, ...>`. That hand-picked list was missing
+ * `active`, so a `PUT /users/:id` with `active: false` fired `USER_DEACTIVATED` (see
+ * `updateById()`) while never actually writing the field: the document stayed active. Typing this
+ * off the contract's own shape means a field the contract declares cannot go unhandled here again.
  */
 export const update = (
     user: UserDocument,
-    data: Partial<
-        Pick<UserRecord, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>
-    >
+    data: UpdateUserByIdRequest
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
     if (data.username !== undefined) user.username = data.username;
     if (data.admin !== undefined) user.admin = data.admin;
+    if (data.active !== undefined) user.active = data.active;
     if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
     // The preference that outlives the request — see the `locale` field on the user schema.
     if (data.locale !== undefined) user.locale = data.locale;
@@ -130,9 +136,7 @@ export const update = (
  */
 export const updateById = (
     id: string,
-    data: Partial<
-        Pick<UserRecord, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>
-    > & { active?: boolean },
+    data: UpdateUserByIdRequest,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.

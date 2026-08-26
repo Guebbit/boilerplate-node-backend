@@ -1,6 +1,6 @@
 import { t } from '@infrastructure/i18n';
 import { OrderStatus } from '@types';
-import type { SearchOrdersRequest, CartItem, Caller } from '@types';
+import type { SearchOrdersRequest, CartItem, Caller, UpdateOrderByIdRequest } from '@types';
 import type { OrderDocument, OrderDocumentItem } from './model';
 import {
     generateReject,
@@ -210,12 +210,7 @@ export const create = (
 // malformed id, and a function typed `Promise<T>` must reject rather than throw synchronously.
 export const update = async (
     order: OrderDocument,
-    data: {
-        status?: string;
-        email?: string;
-        userId?: string;
-        items?: CartItem[];
-    }
+    data: UpdateOrderByIdRequest
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const previousStatus = order.status;
 
@@ -224,7 +219,7 @@ export const update = async (
      * Zod schema already validated the VALUE against the generated enum; what is decided here is
      * whether the MOVE exists. See `docs/theory/tactical-ddd.md` §1.
      */
-    const nextStatus = data.status as OrderStatus | undefined;
+    const nextStatus = data.status;
     if (nextStatus !== undefined && !canTransition(previousStatus, nextStatus, 'admin'))
         return generateReject(409, [
             {
@@ -317,12 +312,7 @@ export const update = async (
  */
 export const updateById = (
     id: string,
-    data: {
-        status?: string;
-        email?: string;
-        userId?: string;
-        items?: CartItem[];
-    },
+    data: UpdateOrderByIdRequest,
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     orderRepository.findById(id).then((order) => {
@@ -457,7 +447,8 @@ function withActions(
 }
 
 /**
- * Cancel an order — the one write a customer may make to one.
+ * Cancel an order — the one write a customer may make to one, or the system makes when a
+ * reservation times out unpaid.
  *
  * A conditional status move, not a read-check-write: the repository's filter carries the
  * caller's scope AND the `pending` requirement, so a cancel racing the admin's "shipped" (or a
@@ -467,10 +458,12 @@ function withActions(
  *
  * @param id - the order to cancel
  * @param authContext - whose view of the collection the write happens in ({@link callerScope})
- * @param context - caller context for the `order_cancelled` analytics/audit emit. Optional: the
- *   reservation-sweep expiry (`module.ts`'s `RESERVATION_EXPIRED` handler) also calls this with no
- *   context at all — a lease timing out is not a request, has nothing to attribute the event to,
- *   and does not emit one, matching what it does today.
+ * @param context - caller context for the audit/analytics emit. Optional: the reservation-sweep
+ *   expiry (`module.ts`'s `RESERVATION_EXPIRED` handler) calls this with no context at all — a
+ *   lease timing out is not a request, so there is nothing to attribute it to. The audit entry
+ *   still fires (tagged `actor_role: 'admin'`, `actor_user_id: 'system'` — the order's state still
+ *   changed and the trail must say so), and analytics reports `order_reservation_expired` rather
+ *   than `order_cancelled`: the same status move, a different reason for it.
  */
 export const cancelById = (
     id: string,
@@ -520,21 +513,28 @@ export const cancelById = (
                 // is part of that. The fact is announced either way.
                 await emitDomainEvent(ORDER_CANCELLED, { orderId: String(order._id), refund });
 
-                if (context) {
-                    emitAuditEvent(
-                        buildAuditEvent(context, {
-                            action: ordersAuditActions.ORDER_CANCELLED,
-                            outcome: 'success',
-                            target_type: 'order',
-                            target_id: String(order._id)
-                        })
-                    );
-                    emitAnalyticsEvent({
-                        ...buildAnalyticsBase(context),
-                        event: ordersAnalyticsEvents.ORDER_CANCELLED,
-                        properties: { order_id: String(order._id) }
-                    });
-                }
+                // No context: the reservation-sweep expiry, not a request. Audited as a system
+                // actor rather than skipped — see the docblock above — and reported under its own
+                // analytics name so a timeout is never counted as a customer's choice to cancel.
+                const isSystemExpiry = !context;
+                const emitContext = context ?? { caller: {} };
+
+                emitAuditEvent(
+                    buildAuditEvent(emitContext, {
+                        action: ordersAuditActions.ORDER_CANCELLED,
+                        outcome: 'success',
+                        target_type: 'order',
+                        target_id: String(order._id),
+                        ...(isSystemExpiry ? { actor_role: 'admin', actor_user_id: 'system' } : {})
+                    })
+                );
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(emitContext),
+                    event: isSystemExpiry
+                        ? ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED
+                        : ordersAnalyticsEvents.ORDER_CANCELLED,
+                    properties: { order_id: String(order._id) }
+                });
 
                 return generateSuccess(order, 200, t('orders.cancel.success'));
             }

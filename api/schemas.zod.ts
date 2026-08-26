@@ -1554,6 +1554,7 @@ export const UpdateUserByIdParams = zod.object({
 
 export const updateUserByIdBodyPasswordMin = 8;
 
+export const updateUserByIdBodyLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
 
 
 export const UpdateUserByIdBody = zod.object({
@@ -1562,7 +1563,8 @@ export const UpdateUserByIdBody = zod.object({
   "username": zod.string().optional(),
   "admin": zod.boolean().optional(),
   "active": zod.boolean().optional(),
-  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.')
+  "imageUrl": zod.string().optional().describe('Absolute URL or server-relative upload path (e.g. `\/uploads\/abc.jpg`). `uri-reference`, not `uri`: an uploaded image is stored and returned as a path relative to the API host, which is not a valid absolute URI.'),
+  "locale": zod.string().regex(updateUserByIdBodyLocaleRegExp).optional().describe('BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports is a runtime fact, not a contract one — ask `GET \/locales`.')
 })
 
 export const updateUserByIdResponseDataLocaleRegExp = new RegExp('^[a-z]{2}(-[A-Za-z0-9]+)*$');
