@@ -16,6 +16,9 @@ import {
 import type { LocaleDocument } from '../model';
 import { localeRepository } from '../repository';
 import { isKnownTenant } from '../tenants';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { localeAuditActions } from '../audit';
 
 /** Not found, phrased the one way every route in this module phrases it. */
 export const languageNotFound = (): ResponseReject =>
@@ -27,9 +30,14 @@ export const rejectUnknownTenant = (tenant: string): ResponseReject | undefined 
         ? undefined
         : generateReject(422, [t('locales.error-tenant-unknown', { tenant })]);
 
-/** Register a language in the dynamic tier. */
+/**
+ * Register a language in the dynamic tier.
+ * @param context - caller context for the `ADMIN_LOCALE_CREATED` audit emit; omitted by tests
+ *   that call this as a plain helper — no context means no emit
+ */
 export const createLanguage = async (
-    payload: CreateLocaleRequest
+    payload: CreateLocaleRequest,
+    context?: CallerContext
 ): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> => {
     const tag = payload.tag.trim().toLowerCase();
 
@@ -46,6 +54,17 @@ export const createLanguage = async (
         active: payload.active ?? true
     } as Partial<LocaleDocument>);
 
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: localeAuditActions.ADMIN_LOCALE_CREATED,
+                outcome: 'success',
+                target_type: 'locale',
+                target_id: tag,
+                metadata: { active: language.active }
+            })
+        );
+
     return generateSuccess(language, 201);
 };
 
@@ -57,7 +76,8 @@ export const createLanguage = async (
  */
 export const updateLanguage = async (
     tag: string,
-    payload: UpdateLocaleRequest
+    payload: UpdateLocaleRequest,
+    context?: CallerContext
 ): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
@@ -67,7 +87,23 @@ export const updateLanguage = async (
     if (payload.direction !== undefined) language.direction = payload.direction;
     if (payload.active !== undefined) language.active = payload.active;
 
-    return generateSuccess(await localeRepository.save(language));
+    const saved = await localeRepository.save(language);
+
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: localeAuditActions.ADMIN_LOCALE_UPDATED,
+                outcome: 'success',
+                target_type: 'locale',
+                target_id: tag,
+                // The visibility flag is the field worth having in the trail on its own: it is
+                // what makes a half-finished translation public, and the only edit here that
+                // changes what an anonymous caller can see.
+                metadata: { active: saved.active }
+            })
+        );
+
+    return generateSuccess(saved);
 };
 
 /**
@@ -79,14 +115,26 @@ export const updateLanguage = async (
  * nothing artificial.
  */
 export const deleteLanguage = async (
-    tag: string
+    tag: string,
+    context?: CallerContext
 ): Promise<ResponseSuccess<{ removedEntries: number }> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
 
     if (language.active) return generateReject(409, [t('locales.error-language-active')]);
 
-    return generateSuccess({
-        removedEntries: await localeRepository.deleteLocaleCascade(language)
-    });
+    const removedEntries = await localeRepository.deleteLocaleCascade(language);
+
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: localeAuditActions.ADMIN_LOCALE_DELETED,
+                outcome: 'success',
+                target_type: 'locale',
+                target_id: tag,
+                metadata: { removedEntries }
+            })
+        );
+
+    return generateSuccess({ removedEntries });
 };

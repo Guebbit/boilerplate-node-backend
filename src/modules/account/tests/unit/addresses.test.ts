@@ -4,6 +4,7 @@
  * answers like an invented one) and the checkout resolver's three-way answer.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factory';
 import { accountService } from '@modules/account/services';
 import { cartService } from '@modules/cart';
@@ -132,7 +133,7 @@ describe('checkout and the address', () => {
         await accountService.addressAdd(user.id, HOME);
         await cartWith(user.id);
 
-        const result = await cartService.orderConfirm(user.id);
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress).toMatchObject({
@@ -149,7 +150,7 @@ describe('checkout and the address', () => {
         const view = await accountService.addressesGet(user.id);
         const office = view.addresses.find(({ label }) => label === 'office');
 
-        const result = await cartService.orderConfirm(user.id, office!.id);
+        const result = await cartService.orderConfirm(user.id, testCallerContext, office!.id);
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress?.street).toBe('Via Milano 2');
@@ -160,7 +161,11 @@ describe('checkout and the address', () => {
         await accountService.addressAdd(user.id, HOME);
         const product = await cartWith(user.id);
 
-        const result = await cartService.orderConfirm(user.id, '65dc8a99604c307b702b5ccc');
+        const result = await cartService.orderConfirm(
+            user.id,
+            testCallerContext,
+            '65dc8a99604c307b702b5ccc'
+        );
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
@@ -168,7 +173,7 @@ describe('checkout and the address', () => {
         const stored = await productRepository.findById(String(product._id));
         expect(stored?.onHand).toBe(10);
         expect(stored?.reserved).toBe(0);
-        const cart = await cartService.cartGetWithSummary(user.id);
+        const cart = await cartService.cartGetForBadge(user.id);
         expect(cart.items).toHaveLength(1);
     });
 
@@ -176,7 +181,7 @@ describe('checkout and the address', () => {
         const user = await createUser();
         await cartWith(user.id);
 
-        const result = await cartService.orderConfirm(user.id);
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress).toBeUndefined();

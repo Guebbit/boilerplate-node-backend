@@ -1,12 +1,9 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { paymentsAnalyticsEvents } from '../analytics';
 import { ConfirmPaymentBody } from '@api/schemas.zod';
-import { paymentsAuditActions } from '../audit';
 import { paymentConfirmTotal } from '../metrics';
 import { paymentService } from '../service';
+import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
@@ -26,30 +23,17 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
 
     const paymentId = String(request.params.id);
     return paymentService
-        .confirmPayment(paymentId, { cardNumber: parseResult.data.cardNumber }, request.authContext)
+        .confirmPayment(
+            paymentId,
+            { cardNumber: parseResult.data.cardNumber },
+            request.authContext,
+            callerContextOf(request)
+        )
         .then((result) => {
             const declined =
                 !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
-
-            if (result.success || declined) {
+            if (result.success || declined)
                 paymentConfirmTotal.inc({ outcome: result.success ? 'succeeded' : 'declined' });
-                emitAuditEvent(
-                    buildAuditEvent(request, {
-                        action: result.success
-                            ? paymentsAuditActions.USER_PAYMENT_SUCCEEDED
-                            : paymentsAuditActions.USER_PAYMENT_DECLINED,
-                        outcome: result.success ? 'success' : 'failure',
-                        metadata: { payment_id: paymentId }
-                    })
-                );
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    event: result.success
-                        ? paymentsAnalyticsEvents.PAYMENT_SUCCEEDED
-                        : paymentsAnalyticsEvents.PAYMENT_DECLINED,
-                    properties: { payment_id: paymentId }
-                });
-            }
 
             if (refused(response, result)) return;
             successResponse(response, result.data, 200, result.message);

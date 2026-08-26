@@ -13,6 +13,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factory';
 import * as accountService from '@modules/account/services';
 import { userRepository, userService } from '@modules/users';
@@ -25,7 +26,14 @@ setupTestDb();
 describe('a user’s persisted locale', () => {
     it('is captured from the request they signed up in', async () => {
         const result = await runWithLocale('it', () =>
-            accountService.signup('nuovo@example.com', 'nuovo', 'Password1!', 'Password1!')
+            accountService.signup(
+                'nuovo@example.com',
+                'nuovo',
+                'Password1!',
+                'Password1!',
+                undefined,
+                testCallerContext
+            )
         );
 
         expect(result.success).toBe(true);
@@ -37,7 +45,9 @@ describe('a user’s persisted locale', () => {
             'plain@example.com',
             'plain',
             'Password1!',
-            'Password1!'
+            'Password1!',
+            undefined,
+            testCallerContext
         );
 
         expect((result as ResponseSuccess<UserDocument>).data!.locale).toBe(getDefaultLocale());
@@ -46,7 +56,11 @@ describe('a user’s persisted locale', () => {
     it('is editable afterwards', async () => {
         const user = await createUser({ email: 'switcher@example.com' });
 
-        const updated = await userService.updateById(String(user._id), { locale: 'it' });
+        const updated = await userService.updateById(
+            String(user._id),
+            { locale: 'it' },
+            testCallerContext
+        );
 
         expect(updated.success).toBe(true);
         expect((updated as ResponseSuccess<UserDocument>).data!.locale).toBe('it');
@@ -54,9 +68,9 @@ describe('a user’s persisted locale', () => {
 
     it('is left alone by an update that does not mention it', async () => {
         const user = await createUser({ email: 'untouched@example.com' });
-        await userService.updateById(String(user._id), { locale: 'it' });
+        await userService.updateById(String(user._id), { locale: 'it' }, testCallerContext);
 
-        await userService.updateById(String(user._id), { username: 'renamed' });
+        await userService.updateById(String(user._id), { username: 'renamed' }, testCallerContext);
 
         const reloaded = await userRepository.findById(String(user._id));
         expect(reloaded!.locale).toBe('it');
@@ -64,7 +78,7 @@ describe('a user’s persisted locale', () => {
 
     it('reaches the client, since it is part of the User contract', async () => {
         const user = await createUser({ email: 'exposed@example.com' });
-        await userService.updateById(String(user._id), { locale: 'it' });
+        await userService.updateById(String(user._id), { locale: 'it' }, testCallerContext);
 
         const reloaded = await userRepository.findById(String(user._id));
 

@@ -14,6 +14,6 @@ import { ordersAuditActions } from '../audit';
 export const deleteOrders = createDeleteController({
     entity: 'order',
     remove: (id, hardDelete) => orderService.removeById(id, hardDelete),
-    auditAction: ordersAuditActions.ADMIN_ORDER_DELETED,
+    auditAction: ordersAuditActions.ORDER_DELETED,
     notFoundKey: 'orders.not-found'
 });

@@ -21,6 +21,9 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { localeAuditActions } from '../audit';
 import type { LocaleMessageDocument } from '../model';
 import { localeMessageRepository, localeRepository } from '../repository';
 import {
@@ -56,10 +59,15 @@ export const searchEntries = async (
     );
 };
 
-/** Add one key to one language. */
+/**
+ * Add one key to one language.
+ * @param context - caller context for the `ADMIN_LOCALE_ENTRY_CREATED` audit emit; omitted by
+ *   tests that call this as a plain helper — no context means no emit
+ */
 export const createEntry = async (
     tag: string,
-    payload: CreateLocaleEntryRequest
+    payload: CreateLocaleEntryRequest,
+    context?: CallerContext
 ): Promise<ResponseSuccess<LocaleMessageDocument> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
@@ -87,6 +95,17 @@ export const createEntry = async (
         value: payload.value
     });
 
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: localeAuditActions.ADMIN_LOCALE_ENTRY_CREATED,
+                outcome: 'success',
+                target_type: 'locale_entry',
+                target_id: String(entry._id),
+                metadata: { locale: language.tag, tenant: payload.tenant, key: payload.key }
+            })
+        );
+
     return generateSuccess(entry, 201);
 };
 
@@ -101,7 +120,8 @@ export const createEntry = async (
 export const updateEntry = async (
     tag: string,
     entryId: string,
-    payload: UpdateLocaleEntryRequest
+    payload: UpdateLocaleEntryRequest,
+    context?: CallerContext
 ): Promise<ResponseSuccess<LocaleMessageDocument> | ResponseReject> => {
     const entry = await localeMessageRepository.findById(entryId);
     if (entry?.locale !== tag.trim().toLowerCase())
@@ -109,13 +129,32 @@ export const updateEntry = async (
 
     const { entry: saved } = await localeMessageRepository.saveEntryValue(entry, payload.value);
 
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
+                outcome: 'success',
+                target_type: 'locale_entry',
+                target_id: entryId,
+                // The key, not the new text. An audit trail records that the Spanish product
+                // title changed and who changed it; storing the copy itself would make the trail
+                // a second, unmanaged copy of the dictionary.
+                metadata: { locale: tag, key: saved.key }
+            })
+        );
+
     return generateSuccess(saved);
 };
 
-/** Remove one key from one language. The other languages keep theirs. */
+/**
+ * Remove one key from one language. The other languages keep theirs.
+ * @param context - caller context for the `ADMIN_LOCALE_ENTRY_DELETED` audit emit; omitted by
+ *   tests that call this as a plain helper — no context means no emit
+ */
 export const deleteEntry = async (
     tag: string,
-    entryId: string
+    entryId: string,
+    context?: CallerContext
 ): Promise<ResponseSuccess<{ key: string }> | ResponseReject> => {
     const entry = await localeMessageRepository.findById(entryId);
     if (entry?.locale !== tag.trim().toLowerCase())
@@ -123,6 +162,17 @@ export const deleteEntry = async (
 
     const { key } = entry;
     await localeMessageRepository.removeEntry(entry);
+
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: localeAuditActions.ADMIN_LOCALE_ENTRY_DELETED,
+                outcome: 'success',
+                target_type: 'locale_entry',
+                target_id: entryId,
+                metadata: { locale: tag, key }
+            })
+        );
 
     return generateSuccess({ key });
 };
@@ -142,7 +192,8 @@ export const importEntries = async (
     tag: string,
     tenant: LocaleTenant,
     entries: readonly LocaleEntryInput[],
-    mode: 'replace' | 'merge'
+    mode: 'replace' | 'merge',
+    context?: CallerContext
 ): Promise<ResponseSuccess<LocaleImportResult> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
@@ -191,6 +242,21 @@ export const importEntries = async (
         inputs,
         { replace: mode === 'replace' }
     );
+
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: localeAuditActions.ADMIN_LOCALE_ENTRY_IMPORTED,
+                outcome: 'success',
+                target_type: 'locale',
+                target_id: language.tag,
+                // `mode` is the field that makes this record worth keeping: a replace that
+                // removed three hundred keys and a merge that added two are the same action name
+                // and very different events. `tenant` says whose dictionary it happened to, which
+                // the counts alone cannot.
+                metadata: { mode, tenant, ...counts, revision }
+            })
+        );
 
     return generateSuccess({ ...counts, revision });
 };

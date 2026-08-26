@@ -24,6 +24,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
 // The queue, not the copy: what checkout owes the customer is that a confirmation was DISPATCHED
@@ -37,7 +38,7 @@ import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import {
     cartGet,
-    cartGetWithSummary,
+    cartGetForBadge,
     cartItemSetById,
     cartItemAddById,
     cartItemRemoveById,
@@ -83,7 +84,7 @@ describe('cart storage', () => {
         const user = await createUser();
 
         await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
-        await expect(cartGetWithSummary(user.id)).resolves.toEqual(EMPTY_CART);
+        await expect(cartGetForBadge(user.id)).resolves.toEqual(EMPTY_CART);
     });
 
     it('creates the cart on the first add', async () => {
@@ -171,7 +172,7 @@ describe('cartGet', () => {
         expect(items[0].productId).toBe(String(product._id));
         expect(items[0].quantity).toBe(2);
         // This is the variant that deliberately DOES carry the product — it is what prices the
-        // cart. See cartGetWithSummary for the one that must not.
+        // cart. See cartGetForBadge for the one that must not.
         expect(items[0].product).toMatchObject({ title: 'Keyboard' });
     });
 
@@ -192,13 +193,13 @@ describe('cartGet', () => {
     });
 });
 
-describe('cartGetWithSummary', () => {
+describe('cartGetForBadge', () => {
     it('drops the populated product from every line', async () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Keyboard', price: 25 });
         await cartItemSetById(user.id, String(product._id), 2);
 
-        const { items } = await cartGetWithSummary(user.id);
+        const { items } = await cartGetForBadge(user.id);
 
         // `CartItem` is additionalProperties:false — an extra key here is a contract violation.
         expect(items).toEqual([{ productId: String(product._id), quantity: 2 }]);
@@ -212,7 +213,7 @@ describe('cartGetWithSummary', () => {
         await cartItemSetById(user.id, String(keyboard._id), 2);
         await cartItemSetById(user.id, String(mouse._id), 3);
 
-        const { summary } = await cartGetWithSummary(user.id);
+        const { summary } = await cartGetForBadge(user.id);
 
         // Distinct numbers on purpose: 2 lines, 5 units, 80.00 total — no two of the three can
         // be confused for each other if one is computed wrongly.
@@ -222,7 +223,7 @@ describe('cartGetWithSummary', () => {
     it('reports a zeroed summary for an empty cart', async () => {
         const user = await createUser();
 
-        await expect(cartGetWithSummary(user.id)).resolves.toEqual(EMPTY_CART);
+        await expect(cartGetForBadge(user.id)).resolves.toEqual(EMPTY_CART);
     });
 });
 
@@ -436,7 +437,7 @@ describe('cartItemRemoveById', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 2);
 
-        const result = await cartItemRemoveById(user.id, String(product._id));
+        const result = await cartItemRemoveById(user.id, String(product._id), testCallerContext);
 
         expect(result.success).toBe(true);
         expect(result.data).toEqual(EMPTY_CART);
@@ -450,7 +451,7 @@ describe('cartItemRemoveById', () => {
         await cartItemSetById(user.id, String(keyboard._id), 1);
         await cartItemSetById(user.id, String(mouse._id), 2);
 
-        await cartItemRemoveById(user.id, String(keyboard._id));
+        await cartItemRemoveById(user.id, String(keyboard._id), testCallerContext);
 
         const items = await cartGet(user.id);
         expect(items).toHaveLength(1);
@@ -465,7 +466,7 @@ describe('cartItemRemoveById', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(other._id), 1);
 
-        const result = await cartItemRemoveById(user.id, String(product._id));
+        const result = await cartItemRemoveById(user.id, String(product._id), testCallerContext);
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(404);
@@ -476,7 +477,7 @@ describe('cartItemRemoveById', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await cartItemRemoveById(user.id, String(product._id));
+        const result = await cartItemRemoveById(user.id, String(product._id), testCallerContext);
 
         expect(asReject(result).status).toBe(404);
     });
@@ -486,7 +487,7 @@ describe('cartItemRemoveById', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        const result = await cartItemRemoveById(user.id, String(product._id));
+        const result = await cartItemRemoveById(user.id, String(product._id), testCallerContext);
 
         expect(result.success).toBe(true);
         await expect(cartGet(user.id)).resolves.toEqual([]);
@@ -501,7 +502,7 @@ describe('cartRemove', () => {
         await cartItemSetById(user.id, String(keyboard._id), 1);
         await cartItemSetById(user.id, String(mouse._id), 2);
 
-        await expect(cartRemove(user.id)).resolves.toEqual(EMPTY_CART);
+        await expect(cartRemove(user.id, testCallerContext)).resolves.toEqual(EMPTY_CART);
         await expect(cartGet(user.id)).resolves.toEqual([]);
     });
 
@@ -510,16 +511,16 @@ describe('cartRemove', () => {
         const user = await createUser();
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
-        await cartRemove(user.id);
+        await cartRemove(user.id, testCallerContext);
 
-        await expect(cartRemove(user.id)).resolves.toEqual(EMPTY_CART);
+        await expect(cartRemove(user.id, testCallerContext)).resolves.toEqual(EMPTY_CART);
     });
 
     it('writes nothing for a user who never had a cart', async () => {
         // Clearing must not be the thing that brings a cart document into existence.
         const user = await createUser();
 
-        await expect(cartRemove(user.id)).resolves.toEqual(EMPTY_CART);
+        await expect(cartRemove(user.id, testCallerContext)).resolves.toEqual(EMPTY_CART);
         await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
     });
 });
@@ -532,7 +533,7 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(keyboard._id), 2);
         await cartItemSetById(user.id, String(mouse._id), 1);
 
-        const result = await orderConfirm(user.id);
+        const result = await orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(1);
@@ -546,7 +547,7 @@ describe('orderConfirm', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        await orderConfirm(user.id);
+        await orderConfirm(user.id, testCallerContext);
 
         // Ordering matters: the cart must only be cleared after the order was created, or a
         // failure mid-checkout loses the basket.
@@ -556,7 +557,7 @@ describe('orderConfirm', () => {
     it('rejects an empty cart with 409 and creates nothing', async () => {
         const user = await createUser();
 
-        const result = await orderConfirm(user.id);
+        const result = await orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(409);
@@ -572,7 +573,7 @@ describe('orderConfirm', () => {
     it('names an empty cart CART_EMPTY, with translated copy for the user', async () => {
         const user = await createUser();
 
-        const result = await orderConfirm(user.id);
+        const result = await orderConfirm(user.id, testCallerContext);
 
         const [error] = asReject(result).errors;
         expect(error.code).toBe('CART_EMPTY');
@@ -582,7 +583,7 @@ describe('orderConfirm', () => {
     it('rejects with 404 for a user that does not exist', async () => {
         // The one cart operation that still needs the user: an order records the address it was
         // placed from, and there is none to record.
-        const result = await orderConfirm(MISSING_ID);
+        const result = await orderConfirm(MISSING_ID, testCallerContext);
 
         expect(asReject(result).status).toBe(404);
     });
@@ -594,7 +595,7 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(product._id), 1);
         await product.deleteOne();
 
-        const result = await orderConfirm(user.id);
+        const result = await orderConfirm(user.id, testCallerContext);
 
         expect(asReject(result).status).toBe(404);
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
@@ -605,7 +606,7 @@ describe('orderConfirm', () => {
         const product = await createProduct({ price: 25 });
         await cartItemSetById(user.id, String(product._id), 2);
 
-        const result = await orderConfirm(user.id, undefined, 'express');
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
 
         expect(result.success).toBe(true);
         const order = await orderRepository.findOne({ userId: user._id });
@@ -618,7 +619,7 @@ describe('orderConfirm', () => {
         const product = await createProduct({ price: 60 });
         await cartItemSetById(user.id, String(product._id), 2); // 120 ≥ standard's 100
 
-        const result = await orderConfirm(user.id, undefined, 'standard');
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
 
         expect(result.success).toBe(true);
         const order = await orderRepository.findOne({ userId: user._id });
@@ -630,7 +631,7 @@ describe('orderConfirm', () => {
         const product = await createProduct({ onHand: 5 });
         await cartItemSetById(user.id, String(product._id), 2);
 
-        const result = await orderConfirm(user.id, undefined, 'teleport');
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'teleport');
 
         expect(asReject(result).status).toBe(404);
         expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
@@ -646,7 +647,7 @@ describe('orderConfirm', () => {
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
-        await orderConfirm(user.id);
+        await orderConfirm(user.id, testCallerContext);
 
         const order = await orderRepository.findOne({ userId: user._id });
         // The two columns answer different questions and are absent for different reasons. No
@@ -663,7 +664,7 @@ describe('orderConfirm', () => {
         const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
         await cartItemSetById(user.id, String(keyboard._id), 2);
 
-        const result = await orderConfirm(user.id);
+        const result = await orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
@@ -681,7 +682,7 @@ describe('orderConfirm', () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
 
-        await orderConfirm(user.id);
+        await orderConfirm(user.id, testCallerContext);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
@@ -692,7 +693,7 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(product._id), 1);
         await product.deleteOne();
 
-        const result = await orderConfirm(user.id);
+        const result = await orderConfirm(user.id, testCallerContext);
 
         const [error] = asReject(result).errors;
         expect(error.code).toBe('CART_PRODUCT_UNAVAILABLE');

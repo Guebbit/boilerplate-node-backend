@@ -1,5 +1,6 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import * as userService from '@modules/users/service';
 import { userRepository } from '@modules/users';
@@ -262,11 +263,14 @@ describe('userService.getById', () => {
 
 describe('userService.create', () => {
     it('creates a user and returns the Mongoose document', async () => {
-        const user = await userService.create({
-            email: 'created@example.com',
-            username: 'createduser',
-            password: PLAIN_PASSWORD
-        });
+        const user = await userService.create(
+            {
+                email: 'created@example.com',
+                username: 'createduser',
+                password: PLAIN_PASSWORD
+            },
+            testCallerContext
+        );
 
         expect(user._id).toBeDefined();
         expect(user.email).toBe('created@example.com');
@@ -275,12 +279,15 @@ describe('userService.create', () => {
     });
 
     it('can create an admin user when admin flag is set', async () => {
-        const user = await userService.create({
-            email: 'superadmin@example.com',
-            username: 'superadmin',
-            password: PLAIN_PASSWORD,
-            admin: true
-        });
+        const user = await userService.create(
+            {
+                email: 'superadmin@example.com',
+                username: 'superadmin',
+                password: PLAIN_PASSWORD,
+                admin: true
+            },
+            testCallerContext
+        );
 
         expect(user.admin).toBe(true);
     });
@@ -291,10 +298,14 @@ describe('userService.updateById', () => {
         const user = await createUser();
         const id = user._id.toString();
 
-        const result = await userService.updateById(id, {
-            username: 'new-name',
-            admin: true
-        });
+        const result = await userService.updateById(
+            id,
+            {
+                username: 'new-name',
+                admin: true
+            },
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         const updated = (result as { data: UserDocument }).data;
@@ -307,7 +318,7 @@ describe('userService.updateById', () => {
         const id = user._id.toString();
         const originalHash = user.password;
 
-        await userService.updateById(id, { password: 'UpdatedPwd1!' });
+        await userService.updateById(id, { password: 'UpdatedPwd1!' }, testCallerContext);
 
         const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).not.toBe(originalHash);
@@ -318,16 +329,18 @@ describe('userService.updateById', () => {
         const id = user._id.toString();
         const originalHash = user.password;
 
-        await userService.updateById(id, { password: '' });
+        await userService.updateById(id, { password: '' }, testCallerContext);
 
         const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).toBe(originalHash);
     });
 
     it('returns reject result when the user does not exist', async () => {
-        const result = await userService.updateById('000000000000000000000000', {
-            username: 'x'
-        });
+        const result = await userService.updateById(
+            '000000000000000000000000',
+            { username: 'x' },
+            testCallerContext
+        );
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
     });

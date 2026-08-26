@@ -1,12 +1,10 @@
 import type { Request, Response } from 'express';
 import { AddWishlistItemBody } from '@api/schemas.zod';
 import { t } from '@infrastructure/i18n';
-import { authContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AddWishlistItemRequest } from '@types';
 import { wishlistService } from '../service';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { wishlistAnalyticsEvents } from '../analytics';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -33,15 +31,9 @@ export const postWishlist = (
     }
 
     return wishlistService
-        .wishlistAdd(userId, productId)
+        .wishlistAdd(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
-                properties: { product_id: productId }
-            });
 
             successResponse(response, result.data, 200, result.message);
         })

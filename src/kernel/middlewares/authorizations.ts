@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { resolveAccessToken, resolveRefreshToken } from '@kernel/authentication';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
+import { callerContextOf } from '@infrastructure/http/request';
 import {
     emitAuditEvent,
     coreAuditActions,
@@ -60,7 +61,7 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
     // Audited before rejecting: a failed auth attempt is exactly what the trail exists to record.
     if (!request.authContext || !token) {
         emitAuditEvent(
-            buildAuditEvent(request, {
+            buildAuditEvent(callerContextOf(request), {
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
                 actor_user_id: 'anonymous',
                 actor_role: 'anonymous',
@@ -91,7 +92,7 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
      */
     if (!request.authContext) {
         emitAuditEvent(
-            buildAuditEvent(request, {
+            buildAuditEvent(callerContextOf(request), {
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
                 actor_user_id: 'anonymous',
                 actor_role: 'anonymous',
@@ -108,7 +109,7 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
     }
     if (!request.authContext.admin) {
         emitAuditEvent(
-            buildAuditEvent(request, {
+            buildAuditEvent(callerContextOf(request), {
                 action: coreAuditActions.SECURITY_FORBIDDEN,
                 outcome: 'failure',
                 metadata: { route: request.path, method: request.method, reason: 'not_admin' }
@@ -147,7 +148,7 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
         .then((user) => {
             if (!user?.admin) {
                 emitAuditEvent(
-                    buildAuditEvent(request, {
+                    buildAuditEvent(callerContextOf(request), {
                         action: coreAuditActions.SECURITY_FORBIDDEN,
                         actor_user_id: user?.id ?? 'anonymous',
                         outcome: 'failure'

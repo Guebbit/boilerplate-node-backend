@@ -3,11 +3,9 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '../service';
 import { successResponse } from '@infrastructure/http/response';
-import { readInput } from '@infrastructure/http/request';
+import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import type { SearchOrdersRequest } from '@types';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { ordersAnalyticsEvents } from '../analytics';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
@@ -62,12 +60,8 @@ export const getOrders = (
     if (!parsed) return;
 
     return orderService
-        .search(parsed, orderService.callerScope(request.authContext))
+        .search(parsed, orderService.callerScope(request.authContext), callerContextOf(request))
         .then((result) => {
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: ordersAnalyticsEvents.ORDERS_VIEWED
-            });
             successResponse(response, result);
         })
         .catch(catchAs(response, 'getOrders'));

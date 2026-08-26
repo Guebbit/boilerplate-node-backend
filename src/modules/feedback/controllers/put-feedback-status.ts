@@ -4,8 +4,7 @@ import { UpdateFeedbackRequestStatusBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import type { UpdateFeedbackRequestStatusRequest } from '@types';
 import { feedbackRequestService } from '../service';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { feedbackAuditActions } from '../audit';
+import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -31,18 +30,9 @@ export const putFeedbackStatus = (
     if (!body) return;
 
     return feedbackRequestService
-        .updateStatusById(request.params.id, body)
+        .updateStatusById(request.params.id, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
-                    outcome: 'success',
-                    target_type: 'feedback',
-                    target_id: request.params.id,
-                    metadata: { status: body.status }
-                })
-            );
             return successResponse(response, result.data);
         })
         .catch(catchAs(response, 'putFeedbackStatus'));

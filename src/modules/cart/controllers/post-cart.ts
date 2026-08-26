@@ -4,9 +4,7 @@ import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { UpsertCartItemRequest } from '@types';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { cartAnalyticsEvents } from '../analytics';
-import { authContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { authContextOf, isValidObjectId, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -35,15 +33,10 @@ export const postCart = (
     }
 
     return cartService
-        .cartItemSetById(userId, productId, quantity)
+        .cartItemAdd(userId, productId, quantity, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: cartAnalyticsEvents.CART_ITEM_ADDED,
-                properties: { product_id: productId, quantity }
-            });
             successResponse(response, result.data, 200, t('cart.product-added'));
         })
         .catch(catchAs(response, 'upsertCartItem'));

@@ -3,9 +3,8 @@ import { z } from 'zod';
 import { CreateLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
 import type { CreateLocaleRequest, UpdateLocaleRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
-import { localeAuditActions } from '../audit';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
@@ -49,19 +48,9 @@ export const createLocale = (
     if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
     return localeService
-        .createLanguage(parseResult.data)
+        .createLanguage(parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: localeAuditActions.ADMIN_LOCALE_CREATED,
-                    outcome: 'success',
-                    target_type: 'locale',
-                    target_id: parseResult.data.tag,
-                    metadata: { active: parseResult.data.active }
-                })
-            );
 
             return successResponse(response, result.data, 201);
         })
@@ -86,22 +75,9 @@ export const updateLocale = (
     if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
     return localeService
-        .updateLanguage(request.params.locale, parseResult.data)
+        .updateLanguage(request.params.locale, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: localeAuditActions.ADMIN_LOCALE_UPDATED,
-                    outcome: 'success',
-                    target_type: 'locale',
-                    target_id: request.params.locale,
-                    // The visibility flag is the field worth having in the trail on its own: it is
-                    // what makes a half-finished translation public, and the only edit here that
-                    // changes what an anonymous caller can see.
-                    metadata: { active: parseResult.data.active }
-                })
-            );
 
             return successResponse(response, result.data);
         })

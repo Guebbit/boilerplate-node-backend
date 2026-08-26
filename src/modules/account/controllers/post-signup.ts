@@ -7,10 +7,7 @@ import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { accountAnalyticsEvents } from '../analytics';
+import { callerContextOf } from '@infrastructure/http/request';
 import { sendVerificationEmail } from '../services';
 
 /**
@@ -44,38 +41,16 @@ export const postSignup = (
      * Register
      */
     return accountService
-        .signup(email, username, password, passwordConfirm, imageUrl)
+        .signup(email, username, password, passwordConfirm, imageUrl, callerContextOf(request))
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {
                     authSignupTotal.inc({ status: 'failure' });
-                    emitAuditEvent(
-                        buildAuditEvent(request, {
-                            action: accountAuditActions.AUTH_SIGNUP_FAILED,
-                            actor_user_id: 'anonymous',
-                            actor_role: 'anonymous',
-                            outcome: 'failure'
-                        })
-                    );
                     rejectResponse(response, result.status, result.errors);
                 });
 
             // Registration successful
             authSignupTotal.inc({ status: 'success' });
-            const newUserId = result.data?.id ?? 'unknown';
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: accountAuditActions.AUTH_SIGNUP_SUCCEEDED,
-                    actor_user_id: newUserId,
-                    actor_role: 'user',
-                    outcome: 'success'
-                })
-            );
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                distinctId: newUserId,
-                event: accountAnalyticsEvents.USER_SIGNED_UP
-            });
             /*
              * Start email verification — the account works either way (`verified` is
              * informational), so this is fire-and-forget like every other account email and the

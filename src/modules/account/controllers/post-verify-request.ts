@@ -2,11 +2,9 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { userRepository } from '@modules/users';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
-import { sendVerificationEmail } from '../services';
+import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
+import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/verify-request
@@ -35,16 +33,11 @@ export const postVerifyRequest = (request: Request, response: Response) => {
                     return;
                 }
 
-                return sendVerificationEmail(user, request.locale).then(() => {
-                    emitAuditEvent(
-                        buildAuditEvent(request, {
-                            action: accountAuditActions.AUTH_EMAIL_VERIFY_REQUESTED,
-                            outcome: 'success'
-                        })
-                    );
-
-                    successResponse(response, undefined, 200, t('account.verify.email-sent'));
-                });
+                return accountService
+                    .requestEmailVerification(user, callerContextOf(request), request.locale)
+                    .then(() => {
+                        successResponse(response, undefined, 200, t('account.verify.email-sent'));
+                    });
             })
             .catch(catchAs(response, 'postVerifyRequest'))
     );

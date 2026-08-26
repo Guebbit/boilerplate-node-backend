@@ -89,6 +89,29 @@ were removed and are kept out by a test.
 
 ### Changed
 
+- **The audit vocabulary stopped repeating what a typed field already says.** Every `AuditEvent`
+  already carries `outcome` (`success`/`failure`) and `actor_role`, so an action name that also
+  encoded one — `auth.signup.succeeded` and `auth.signup.failed`, `auth.logout.succeeded`,
+  `auth.logout_all.succeeded`, `auth.refresh.succeeded`/`.failed`,
+  `auth.password_change.completed`/`.failed` — collapsed to one action per idea
+  (`auth.signup`, `auth.logout`, `auth.logout_all`, `auth.token.refreshed`,
+  `auth.password.changed`), with the field carrying the distinction the name used to. Two-step
+  flows (`auth.password_reset.requested`/`.completed`, `auth.email_verify.*`,
+  `auth.account_delete.*`) are unaffected — they name two distinct requests, not one request's
+  outcome. `auth.account.updated` is now `auth.profile.updated`, matching the PHP twin's more
+  specific naming while keeping the `auth.` prefix external saved searches key on. Orders dropped
+  its `admin.`/`user.` prefixes entirely (`admin.order.created` → `order.created`, and so on) —
+  `actor_role` already says who acted, so the prefix was the same fact twice, and it was also
+  inconsistent with itself in the PHP twin (`order.created` bare, `admin.order.updated` prefixed).
+  `user.payment.succeeded`/`.declined` are now `payment.confirmed`/`.failed`, matching the PHP
+  twin's existing spelling. None of this is contract-breaking: `AuditEventItem.action` is a
+  free-form string in `openapi.yaml`, not an enum, and no action name appears in demo data or is
+  read by the frontend. `tests/cross-cutting/audit-actions.test.ts` gained a fourth check —
+  `EXPECTED_NON_AUDITING`, the same allowlist shape `module-shape.test.ts` already uses for
+  deliberately-disabled modules — so a module silently dropped from "expected to audit nothing"
+  now fails a test instead of passing by omission. Its shape regex also relaxed from a 3-segment
+  floor to 2, since several of the collapsed actions above are two segments
+  (`auth.signup`, `order.created`) and none existed at that length before.
 - Whether a product may be in a cart is decided once, in `cart/services/items.ts`, so every caller
   adding a single product inherits it — the two routes above and the wishlist's exit, which reads
   the cart's refusal rather than re-deriving "is it still on sale" for itself. `cartItemSetById`

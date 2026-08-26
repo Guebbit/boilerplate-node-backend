@@ -11,6 +11,7 @@ import {
 } from '@infrastructure/observability/audit';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * Default window and per-address budget, used when the `NODE_RATE_LIMIT_*` variables are unset:
@@ -49,7 +50,7 @@ const refuse =
     (request: Request, response: Response): Response => {
         if (audit)
             emitAuditEvent(
-                buildAuditEvent(request, {
+                buildAuditEvent(callerContextOf(request), {
                     action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
                     outcome: 'failure',
                     metadata: { route: request.path, method: request.method }

@@ -14,6 +14,16 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAuditActions } from '../audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { accountAnalyticsEvents } from '../analytics';
+import { callerContextOf } from '@infrastructure/http/request';
+
+/*
+ * Deliberately NOT moved into `accountService.login` with the rest of this batch: the SUCCESS
+ * emit fires only after the refresh token, cookies and access token are all created below —
+ * `login()` itself only proves the credentials matched. Folding the emit into the service would
+ * make it fire a step earlier than it does today, reporting a session that might still fail to
+ * establish. The failure emit stays here too, for symmetry with success and because there is
+ * nothing gained by splitting one flow's observability across two layers.
+ */
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
 const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optional() });
@@ -24,7 +34,7 @@ const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optio
 const recordLoginFailure = (request: Request) => {
     authLoginTotal.inc({ status: 'failure' });
     emitAuditEvent(
-        buildAuditEvent(request, {
+        buildAuditEvent(callerContextOf(request), {
             action: accountAuditActions.AUTH_LOGIN_FAILED,
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
@@ -38,9 +48,10 @@ const recordLoginFailure = (request: Request) => {
  */
 const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) => {
     const role = isAdmin ? 'admin' : 'user';
+    const context = callerContextOf(request);
     authLoginTotal.inc({ status: 'success' });
     emitAuditEvent(
-        buildAuditEvent(request, {
+        buildAuditEvent(context, {
             action: accountAuditActions.AUTH_LOGIN_SUCCEEDED,
             actor_user_id: userId,
             actor_role: role,
@@ -48,7 +59,7 @@ const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) 
         })
     );
     emitAnalyticsEvent({
-        ...buildAnalyticsBase(request),
+        ...buildAnalyticsBase(context),
         distinctId: userId,
         event: accountAnalyticsEvents.USER_LOGGED_IN,
         properties: { role }

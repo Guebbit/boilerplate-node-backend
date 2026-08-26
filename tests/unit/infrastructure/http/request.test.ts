@@ -12,7 +12,12 @@
  */
 import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
-import { extractAndValidateId, isValidObjectId, readInput } from '@infrastructure/http/request';
+import {
+    callerContextOf,
+    extractAndValidateId,
+    isValidObjectId,
+    readInput
+} from '@infrastructure/http/request';
 
 /** A valid 24-hex ObjectId, used wherever the format has to pass. */
 const OBJECT_ID = '65dc8a99604c307b702b5ccc';
@@ -599,5 +604,63 @@ describe('extractAndValidateId', () => {
 
         expect(extractAndValidateId(request, response, 'Product')).toBeUndefined();
         expect(sent.status).toBe(422);
+    });
+});
+
+/**
+ * A request stand-in carrying only what `callerContextOf` reads — deliberately not `makeRequest`
+ * above, which stubs the body/query/params machinery this has no use for.
+ */
+const makeCallerRequest = (
+    overrides: {
+        ip?: string;
+        headers?: Record<string, string | string[] | undefined>;
+        authContext?: Request['authContext'];
+        requestId?: string;
+    } = {}
+) =>
+    asStub<Request>({
+        ip: overrides.ip,
+        headers: overrides.headers ?? {},
+        authContext: overrides.authContext,
+        requestId: overrides.requestId
+    });
+
+describe('callerContextOf', () => {
+    it('extracts ip, user-agent, host, requestId and the authenticated caller', () => {
+        const context = callerContextOf(
+            makeCallerRequest({
+                ip: '10.0.0.1',
+                headers: { 'user-agent': 'Mozilla/5.0', host: 'shop.example.com' },
+                authContext: { id: 'user-1', email: 'a@b.c', username: 'a', admin: false },
+                requestId: 'req-111'
+            })
+        );
+
+        expect(context).toEqual({
+            caller: { id: 'user-1', email: 'a@b.c', username: 'a', admin: false },
+            ip: '10.0.0.1',
+            userAgent: 'Mozilla/5.0',
+            host: 'shop.example.com',
+            requestId: 'req-111'
+        });
+    });
+
+    it('normalizes a repeated user-agent header to its first element', () => {
+        const context = callerContextOf(
+            makeCallerRequest({ headers: { 'user-agent': ['agent-a', 'agent-b'] } })
+        );
+
+        expect(context.userAgent).toBe('agent-a');
+    });
+
+    it('defaults to an anonymous caller ({}) when the request carries no auth context', () => {
+        const context = callerContextOf(makeCallerRequest({ ip: '9.9.9.9' }));
+
+        expect(context.caller).toEqual({});
+        expect(context.ip).toBe('9.9.9.9');
+        expect(context.userAgent).toBeUndefined();
+        expect(context.host).toBeUndefined();
+        expect(context.requestId).toBeUndefined();
     });
 });

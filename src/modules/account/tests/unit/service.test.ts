@@ -18,6 +18,7 @@
  * incident if it regresses.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factory';
 import { accountService } from '@modules/account/services';
 import { userRepository } from '@modules/users';
@@ -35,7 +36,9 @@ describe('signup', () => {
                 'new@example.com',
                 'newuser',
                 VALID_PASSWORD,
-                VALID_PASSWORD
+                VALID_PASSWORD,
+                undefined,
+                testCallerContext
             )
         );
 
@@ -55,7 +58,9 @@ describe('signup', () => {
             'hashed@example.com',
             'hasheduser',
             VALID_PASSWORD,
-            VALID_PASSWORD
+            VALID_PASSWORD,
+            undefined,
+            testCallerContext
         );
 
         const stored = await userRepository.findOneWithCredentials({ email: 'hashed@example.com' });
@@ -72,7 +77,9 @@ describe('signup', () => {
                 'mismatch@example.com',
                 'mismatchuser',
                 VALID_PASSWORD,
-                'something-else'
+                'something-else',
+                undefined,
+                testCallerContext
             )
         );
 
@@ -90,7 +97,9 @@ describe('signup', () => {
                 'taken@example.com',
                 'someoneelse',
                 VALID_PASSWORD,
-                VALID_PASSWORD
+                VALID_PASSWORD,
+                undefined,
+                testCallerContext
             )
         );
 
@@ -102,7 +111,16 @@ describe('signup', () => {
         ['bad-username@example.com', 'ab', VALID_PASSWORD],
         ['short-password@example.com', 'gooduser', 'abc']
     ])('rejects invalid input (%s / %s) with 422', async (email, username, password) => {
-        const response = asReject(await accountService.signup(email, username, password, password));
+        const response = asReject(
+            await accountService.signup(
+                email,
+                username,
+                password,
+                password,
+                undefined,
+                testCallerContext
+            )
+        );
 
         expect(response.status).toBe(422);
         expect(response.errors.length).toBeGreaterThan(0);
@@ -117,7 +135,9 @@ describe('signup', () => {
             'noimage@example.com',
             'noimageuser',
             VALID_PASSWORD,
-            VALID_PASSWORD
+            VALID_PASSWORD,
+            undefined,
+            testCallerContext
         );
 
         const stored = await userRepository.findOne({ email: 'noimage@example.com' });
@@ -364,7 +384,13 @@ describe('tokenRemoveAll', () => {
     it('removes every token of the given type', async () => {
         const user = await createUserWithBothTokenTypes();
 
-        asSuccess(await accountService.tokenRemoveAll(String(user._id), TokenType.REFRESH));
+        asSuccess(
+            await accountService.tokenRemoveAll(
+                String(user._id),
+                TokenType.REFRESH,
+                testCallerContext
+            )
+        );
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['reset-a']);
@@ -377,7 +403,11 @@ describe('tokenRemoveAll', () => {
         // removed type alone would catch.
         const user = await createUserWithBothTokenTypes();
 
-        await accountService.tokenRemoveAll(String(user._id), TokenType.PASSWORD_RESET);
+        await accountService.tokenRemoveAll(
+            String(user._id),
+            TokenType.PASSWORD_RESET,
+            testCallerContext
+        );
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['refresh-a', 'refresh-b']);
@@ -385,7 +415,11 @@ describe('tokenRemoveAll', () => {
 
     it('answers 404 for a user that does not exist', async () => {
         const response = asReject(
-            await accountService.tokenRemoveAll('64b7f2a1c2d3e4f5a6b7c8d9', TokenType.REFRESH)
+            await accountService.tokenRemoveAll(
+                '64b7f2a1c2d3e4f5a6b7c8d9',
+                TokenType.REFRESH,
+                testCallerContext
+            )
         );
 
         expect(response.status).toBe(404);
@@ -405,7 +439,7 @@ describe('tokenRemoveAll', () => {
         const user = await createUserWithBothTokenTypes();
         const staleCopy = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
-        await accountService.tokenRemoveAll(String(user._id), TokenType.REFRESH);
+        await accountService.tokenRemoveAll(String(user._id), TokenType.REFRESH, testCallerContext);
         await accountService.tokenAdd(staleCopy, 'delete', 3600);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
@@ -417,7 +451,7 @@ describe('tokenRemoveAll', () => {
         // not as the 500 an uncaught cast produces — the same failure `databaseErrorInterpreter`
         // was fixed for elsewhere.
         const response = asReject(
-            await accountService.tokenRemoveAll('not-an-id', TokenType.REFRESH)
+            await accountService.tokenRemoveAll('not-an-id', TokenType.REFRESH, testCallerContext)
         );
 
         expect(response.status).toBe(422);

@@ -1,12 +1,12 @@
 import type { Request, Response } from 'express';
-import { createAccessToken, recordRefreshTokenUse } from '../session/jwt';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
-import { runTokenCleanup } from '../services';
+import { accountService, runTokenCleanup } from '../services';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { authRefreshTotal } from '../metrics';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /account/refresh
@@ -31,8 +31,8 @@ export const getRefreshToken = (request: Request, response: Response) => {
     if (!refreshToken) {
         authRefreshTotal.inc({ status: 'failure' });
         emitAuditEvent(
-            buildAuditEvent(request, {
-                action: accountAuditActions.AUTH_REFRESH_FAILED,
+            buildAuditEvent(callerContextOf(request), {
+                action: accountAuditActions.AUTH_TOKEN_REFRESHED,
                 actor_user_id: 'anonymous',
                 actor_role: 'anonymous',
                 outcome: 'failure',
@@ -48,31 +48,14 @@ export const getRefreshToken = (request: Request, response: Response) => {
      */
     return runTokenCleanup()
         .then(() =>
-            createAccessToken(refreshToken)
-                // This route IS the session making a request, and the only place that is true:
-                // login issues a session rather than using one. See `recordRefreshTokenUse`.
-                .then((token) => recordRefreshTokenUse(refreshToken).then(() => token))
+            accountService
+                .refreshAccessToken(refreshToken, callerContextOf(request))
                 .then((token) => {
                     authRefreshTotal.inc({ status: 'success' });
-                    emitAuditEvent(
-                        buildAuditEvent(request, {
-                            action: accountAuditActions.AUTH_REFRESH_SUCCEEDED,
-                            outcome: 'success'
-                        })
-                    );
                     successResponse(response, { token });
                 })
                 .catch(() => {
                     authRefreshTotal.inc({ status: 'failure' });
-                    emitAuditEvent(
-                        buildAuditEvent(request, {
-                            action: accountAuditActions.AUTH_REFRESH_FAILED,
-                            actor_user_id: 'anonymous',
-                            actor_role: 'anonymous',
-                            outcome: 'failure',
-                            metadata: { reason: 'invalid_token' }
-                        })
-                    );
                     rejectResponse(response, 401);
                 })
         )

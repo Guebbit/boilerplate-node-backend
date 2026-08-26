@@ -2,31 +2,25 @@ import { asStub } from '@tests/stub';
 import { postLogin } from '@modules/account/controllers/post-login';
 import { getRefreshToken } from '@modules/account/controllers/get-refresh-token';
 import { accountService, runTokenCleanup } from '@modules/account/services';
-import { createAccessToken } from '@modules/account/session/jwt';
 
 /*
  * One factory for the whole service folder. `runTokenCleanup` and `login` used to be two modules
  * (`../token-cleanup` and `../service`) and so took a `jest.mock` each; they are two members of one
  * barrel now, and a second `jest.mock` of the same path REPLACES the first rather than merging with
  * it — which would leave whichever half came first undefined at call time.
+ *
+ * `refreshAccessToken` joined the barrel this session: `getRefreshToken` no longer reaches
+ * `../session/jwt`'s `createAccessToken` directly, it calls this wrapper, which is what now emits
+ * the audit record — see `authentication.ts`. Mocked here rather than left to call through, so
+ * this suite keeps testing only the one thing it owns: that cleanup runs BEFORE it.
  */
 jest.mock('@modules/account/services', () => ({
     __esModule: true,
     runTokenCleanup: jest.fn(),
     accountService: {
-        login: jest.fn()
+        login: jest.fn(),
+        refreshAccessToken: jest.fn()
     }
-}));
-
-/*
- * The controllers reach `../jwt` and `../cookies` directly, not through this module's barrel, so
- * the mocks have to name the implementation files. Mocking the barrel would replace a surface
- * nothing under test imports and every assertion would count zero calls.
- */
-jest.mock('@modules/account/session/jwt', () => ({
-    __esModule: true,
-    createRefreshToken: jest.fn(),
-    createAccessToken: jest.fn()
 }));
 
 jest.mock('@modules/account/session/cookies', () => ({
@@ -43,7 +37,9 @@ jest.mock('@infrastructure/http/response', () => ({
 
 const mockRunTokenCleanup = runTokenCleanup as jest.MockedFunction<typeof runTokenCleanup>;
 const mockLogin = accountService.login as jest.MockedFunction<typeof accountService.login>;
-const mockCreateAccessToken = createAccessToken as jest.MockedFunction<typeof createAccessToken>;
+const mockRefreshAccessToken = accountService.refreshAccessToken as jest.MockedFunction<
+    typeof accountService.refreshAccessToken
+>;
 
 describe('Auth controllers token cleanup trigger', () => {
     beforeEach(() => {
@@ -83,7 +79,7 @@ describe('Auth controllers token cleanup trigger', () => {
     });
 
     it('runs cleanup before refresh-token access token creation', async () => {
-        mockCreateAccessToken.mockResolvedValue('new-access-token');
+        mockRefreshAccessToken.mockResolvedValue('new-access-token');
 
         const request = {
             params: {},
@@ -96,9 +92,9 @@ describe('Auth controllers token cleanup trigger', () => {
         await getRefreshToken(asStub<Parameters<typeof getRefreshToken>[0]>(request), response);
 
         expect(mockRunTokenCleanup).toHaveBeenCalledTimes(1);
-        expect(mockCreateAccessToken).toHaveBeenCalledWith('refresh-token');
+        expect(mockRefreshAccessToken).toHaveBeenCalledWith('refresh-token', expect.anything());
         expect(mockRunTokenCleanup.mock.invocationCallOrder[0]).toBeLessThan(
-            mockCreateAccessToken.mock.invocationCallOrder[0]
+            mockRefreshAccessToken.mock.invocationCallOrder[0]
         );
     });
 
@@ -112,6 +108,6 @@ describe('Auth controllers token cleanup trigger', () => {
         await getRefreshToken(asStub<Parameters<typeof getRefreshToken>[0]>(request), response);
 
         expect(mockRunTokenCleanup).not.toHaveBeenCalled();
-        expect(mockCreateAccessToken).not.toHaveBeenCalled();
+        expect(mockRefreshAccessToken).not.toHaveBeenCalled();
     });
 });

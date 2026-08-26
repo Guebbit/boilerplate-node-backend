@@ -4,9 +4,12 @@ import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { UpdateCartItemByIdRequest } from '@types';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { cartAnalyticsEvents } from '../analytics';
-import { authContextOf, isValidObjectId, readInput } from '@infrastructure/http/request';
+import {
+    authContextOf,
+    isValidObjectId,
+    readInput,
+    callerContextOf
+} from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -36,15 +39,10 @@ export const putCartItem = (
     }
 
     return cartService
-        .cartItemSetById(userId, productId, quantity)
+        .cartItemUpdateQuantity(userId, productId, quantity, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: cartAnalyticsEvents.CART_ITEM_UPDATED,
-                properties: { product_id: productId, quantity }
-            });
             successResponse(response, result.data);
         })
         .catch(catchAs(response, 'updateCartItemById'));

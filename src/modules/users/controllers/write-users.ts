@@ -4,7 +4,7 @@ import { t } from '@infrastructure/i18n';
 import { userService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { readInput } from '@infrastructure/http/request';
+import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { resolveImageUrl } from '@infrastructure/http/uploads';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import type {
@@ -17,10 +17,6 @@ import type {
     User
 } from '@types';
 import type { UserRecord } from '../model';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { usersAuditActions } from '../audit';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { usersAnalyticsEvents } from '../analytics';
 
 /**
  * POST /users — create a new user (admin).
@@ -97,26 +93,15 @@ export const writeUsers = (
         }
 
         return userService
-            .create({
-                // After validation it will be compatible for sure
-                ...(request.body as UserRecord),
-                ...validated
-            })
+            .create(
+                {
+                    // After validation it will be compatible for sure
+                    ...(request.body as UserRecord),
+                    ...validated
+                },
+                callerContextOf(request)
+            )
             .then((user) => {
-                emitAuditEvent(
-                    buildAuditEvent(request, {
-                        action: usersAuditActions.ADMIN_USER_CREATED,
-                        outcome: 'success',
-                        target_type: 'user',
-                        target_id: String(user._id)
-                    })
-                );
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    distinctId: String(user._id),
-                    event: usersAnalyticsEvents.USER_CREATED,
-                    properties: { admin_created: true }
-                });
                 // create() returns the in-memory document; the schema's toJSON transform
                 // strips the hashed password before it ever reaches res.json
                 successResponse(response, user, 201);
@@ -132,27 +117,11 @@ export const writeUsers = (
      * ID = edit user
      */
     return userService
-        .updateById(id, { ...request.body, ...validated })
+        .updateById(id, { ...request.body, ...validated }, callerContextOf(request))
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {
                     rejectResponse(response, result.status, result.errors);
-                });
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: usersAuditActions.ADMIN_USER_UPDATED,
-                    outcome: 'success',
-                    target_type: 'user',
-                    target_id: id
-                })
-            );
-            // Deactivation is a product event as well as an administrative one: it is what a
-            // churn dashboard counts, and it is invisible in a plain "updated" signal.
-            if (active === false)
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    distinctId: id,
-                    event: usersAnalyticsEvents.USER_DEACTIVATED
                 });
             successResponse(response, result.data);
         })

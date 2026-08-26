@@ -19,6 +19,9 @@ import {
 } from '@infrastructure/http/response';
 import type { ShippingMethod, Caller } from '@types';
 import { emitDomainEvent } from '@kernel/events';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { deliveryAuditActions } from './audit';
 import { orderService, orderRepository, ORDER_STATUS_CHANGED } from '@modules/orders';
 import { userRepository } from '@modules/users';
 import { SHIPPING_METHODS } from './domain';
@@ -97,7 +100,7 @@ export const shipOrder = async (orderId: string): Promise<void> => {
  *
  * @returns how many parcels arrived
  */
-export const runCourierAdvance = async (): Promise<number> => {
+export const runCourierAdvance = async (context: CallerContext): Promise<number> => {
     const shipments = await shipmentRepository.findAllShipped();
     let advanced = 0;
 
@@ -123,6 +126,15 @@ export const runCourierAdvance = async (): Promise<number> => {
     }
 
     logger.info(`Courier advance: ${advanced} of ${shipments.length} parcels delivered`);
+
+    emitAuditEvent(
+        buildAuditEvent(context, {
+            action: deliveryAuditActions.ADMIN_COURIER_ADVANCED,
+            outcome: 'success',
+            metadata: { advanced }
+        })
+    );
+
     return advanced;
 };
 

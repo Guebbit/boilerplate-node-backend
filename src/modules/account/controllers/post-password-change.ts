@@ -4,13 +4,11 @@ import { t } from '@infrastructure/i18n';
 import { ChangePasswordBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import type { ChangePasswordRequest } from '@types';
 import { accountService } from '../services';
-import { accountAuditActions } from '../audit';
 import { authPasswordChangeTotal } from '../metrics';
 import { rejectValidation } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
+import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/password
@@ -37,27 +35,21 @@ export const postPasswordChange = (
     const { currentPassword, password, passwordConfirm } = parseResult.data;
 
     return accountService
-        .passwordChangeWithCurrent(id, currentPassword, password, passwordConfirm)
+        .passwordChangeWithCurrent(
+            id,
+            currentPassword,
+            password,
+            passwordConfirm,
+            callerContextOf(request)
+        )
         .then((result) => {
             if (!result.success) {
                 authPasswordChangeTotal.inc({ status: 'failure' });
-                emitAuditEvent(
-                    buildAuditEvent(request, {
-                        action: accountAuditActions.AUTH_PASSWORD_CHANGE_FAILED,
-                        outcome: 'failure'
-                    })
-                );
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
 
             authPasswordChangeTotal.inc({ status: 'success' });
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: accountAuditActions.AUTH_PASSWORD_CHANGE_COMPLETED,
-                    outcome: 'success'
-                })
-            );
             successResponse(response, undefined, 200, t('account.password-change.success'));
         })
         .catch((error: CastError | Error) => {

@@ -11,6 +11,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
@@ -107,7 +108,7 @@ describe('runCourierAdvance', () => {
         const { order } = await shippedOrderFor();
         await shipOrder(String(order._id));
 
-        const advanced = await runCourierAdvance();
+        const advanced = await runCourierAdvance(testCallerContext);
 
         expect(advanced).toBe(1);
         const stored = await orderService.getById(String(order._id));
@@ -120,9 +121,9 @@ describe('runCourierAdvance', () => {
     it('a second tick finds an empty truck', async () => {
         const { order } = await shippedOrderFor();
         await shipOrder(String(order._id));
-        await runCourierAdvance();
+        await runCourierAdvance(testCallerContext);
 
-        await expect(runCourierAdvance()).resolves.toBe(0);
+        await expect(runCourierAdvance(testCallerContext)).resolves.toBe(0);
     });
 });
 

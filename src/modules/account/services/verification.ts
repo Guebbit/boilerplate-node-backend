@@ -14,9 +14,12 @@
 
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import type { UserDocument } from '@modules/users';
+import { userRepository, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
 import { verifyRequestEmail } from '../emails';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { accountAuditActions } from '../audit';
 
 /**
  * The `tokens.type` under which verification tokens are stored.
@@ -58,3 +61,50 @@ export const sendVerificationEmail = (user: UserDocument, requestLocale?: string
                 mail.data
             );
         });
+
+/**
+ * The explicit re-send, `POST /account/verify-request` — the one of this function's three callers
+ * that is a user asking for something, rather than a side effect of signup or an email change.
+ *
+ * A wrapper around {@link sendVerificationEmail} rather than an emit inside it: signup and the
+ * email-change path in `./profile` call that function too, and neither is "a request" in the
+ * sense this audit action means — an emit inside the shared function would count both of them.
+ */
+export const requestEmailVerification = (
+    user: UserDocument,
+    context: CallerContext,
+    requestLocale?: string
+): Promise<void> =>
+    sendVerificationEmail(user, requestLocale).then(() => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: accountAuditActions.AUTH_EMAIL_VERIFY_REQUESTED,
+                outcome: 'success'
+            })
+        );
+    });
+
+/**
+ * Spend a verification token and mark the account verified.
+ *
+ * `postVerifyConfirm` has already found the user and checked the token itself — the race between
+ * two simultaneous clicks is settled by `userService.consumeToken`'s atomic `$pull`, one layer up
+ * — so this is deliberately just the write and its emit, not a second copy of that check.
+ */
+export const completeEmailVerification = (
+    user: UserDocument,
+    context: CallerContext
+): Promise<UserDocument> => {
+    user.verified = true;
+    return userRepository.save(user).then((saved) => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
+                actor_user_id: saved.id,
+                actor_role: saved.admin ? 'admin' : 'user',
+                outcome: 'success'
+            })
+        );
+        return saved;
+    });
+};

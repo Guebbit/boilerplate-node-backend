@@ -12,7 +12,7 @@
  */
 
 import type { Request, Response } from 'express';
-import type { AuthContext } from '@types';
+import type { AuthContext, Caller } from '@types';
 // `ParamsDictionary` is Express' default type for `request.params` (a `Record<string, string>`).
 // Naming it explicitly in generics keeps `request.params.id` typed instead of `any`.
 // i18next translation function — messages are resolved against the request's locale, which the
@@ -313,6 +313,50 @@ export const readInput = <TId extends string = never>(
  */
 export const authContextOf = (request: { authContext?: AuthContext }): AuthContext =>
     request.authContext!;
+
+/**
+ * Everything a service-tier emit (analytics or audit) needs about who made the request and where
+ * it came from — built once in the controller and passed down as a parameter, because the service
+ * tier is defined by never seeing a `Request`. See `docs/tools/analytics.md#caller-context` for why
+ * this is threaded rather than read off an `AsyncLocalStorage`: a missing `CallerContext` is a
+ * compile error at the call site, where an ALS-backed accessor would return the wrong request (or
+ * none) silently, across an async boundary, at the exact moment nobody is looking.
+ */
+export interface CallerContext {
+    /** The authenticated caller, or `{}` for anonymous — same shape authorization rules use. */
+    caller: Caller;
+    ip?: string;
+    userAgent?: string;
+    host?: string;
+    requestId?: string;
+}
+
+/**
+ * Build the `CallerContext` for the current request. Call once per controller, at the top, and
+ * pass the result down to whichever service call ends up emitting.
+ *
+ * Structurally typed rather than `express.Request`, for the reason `authContextOf`'s docblock
+ * gives: a controller typed `Request<SpecificParams, ..., SpecificBody>` narrows past what the
+ * generic `Request` accepts, and Express' handler contravariance means asking for more than the
+ * minimum a helper actually reads is what breaks a route that otherwise mounts fine.
+ */
+export const callerContextOf = (request: {
+    authContext?: Caller;
+    ip?: string;
+    headers?: { 'user-agent'?: string | string[]; host?: string };
+    requestId?: string;
+}): CallerContext => {
+    const rawUserAgent = request.headers?.['user-agent'];
+    return {
+        caller: request.authContext ?? {},
+        ip: request.ip,
+        // Node exposes a repeated header as an array; take the first rather than logging
+        // '[object Object]'-style noise.
+        userAgent: Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent,
+        host: request.headers?.host,
+        requestId: request.requestId
+    };
+};
 
 /**
  * Validate a MongoDB ObjectId from request params/body.

@@ -464,9 +464,10 @@ describe('shutdownAnalytics', () => {
 describe('buildAnalyticsBase', () => {
     it('lifts the attribution a server-side event has no other way to carry', () => {
         const base = buildAnalyticsBase({
-            authContext: { id: 'user-9' },
+            caller: { id: 'user-9' },
             ip: '198.51.100.4',
-            headers: { 'user-agent': 'Chrome/131', host: 'api.example.com' }
+            userAgent: 'Chrome/131',
+            host: 'api.example.com'
         });
 
         expect(base).toMatchObject({
@@ -478,12 +479,12 @@ describe('buildAnalyticsBase', () => {
     });
 
     it("falls back to 'anonymous' for unauthenticated traffic", () => {
-        expect(buildAnalyticsBase({}).distinctId).toBe('anonymous');
-        expect(buildAnalyticsBase({ authContext: null }).distinctId).toBe('anonymous');
+        expect(buildAnalyticsBase({ caller: {} }).distinctId).toBe('anonymous');
+        expect(buildAnalyticsBase({ caller: { admin: false } }).distinctId).toBe('anonymous');
     });
 
     it('leaves attribution undefined rather than inventing it', () => {
-        const base = buildAnalyticsBase({ authContext: { id: 'u1' } });
+        const base = buildAnalyticsBase({ caller: { id: 'u1' } });
 
         expect(base.clientIp).toBeUndefined();
         expect(base.userAgent).toBeUndefined();

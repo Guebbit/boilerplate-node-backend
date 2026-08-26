@@ -23,7 +23,7 @@ import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse, successResponse, type ResponseErrorItem } from './response';
 import { rejectDatabaseError } from './errors';
-import { extractAndValidateId, readInput } from './request';
+import { extractAndValidateId, readInput, callerContextOf } from './request';
 import { hardDeleteSchema } from './schemas';
 import { refused, rejectValidation } from './controller';
 import {
@@ -100,7 +100,7 @@ export const createDeleteController = ({
                     if (refused(response, result)) return;
 
                     emitAuditEvent(
-                        buildAuditEvent(request, {
+                        buildAuditEvent(callerContextOf(request), {
                             action: auditAction,
                             outcome: 'success',
                             target_type: entity,

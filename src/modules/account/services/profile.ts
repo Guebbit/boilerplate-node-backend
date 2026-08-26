@@ -25,6 +25,11 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema, userRepository, userService, type UserDocument } from '@modules/users';
 import { validationErrors } from '@infrastructure/http/controller';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { accountAnalyticsEvents } from '../analytics';
+import { accountAuditActions } from '../audit';
 
 /**
  * Validate a new-password pair without touching the user.
@@ -85,6 +90,81 @@ export const passwordChange = (
 };
 
 /**
+ * Read the caller's own profile.
+ *
+ * A wrapper rather than an emit inside `userService.getById` itself: that read is shared with
+ * `users/controllers/get-user-item.ts` (an admin looking up someone else's account), and an
+ * unconditional `user_profile_viewed` there would count every admin lookup as the user's own
+ * profile view. This is the one caller for whom that event is actually true.
+ */
+export const getOwnProfile = (userId: string, context: CallerContext) => {
+    emitAnalyticsEvent({
+        ...buildAnalyticsBase(context),
+        event: accountAnalyticsEvents.USER_PROFILE_VIEWED
+    });
+    return userService.getById(userId);
+};
+
+/**
+ * Change the password from a reset link, and record that it happened.
+ *
+ * A wrapper around {@link passwordChange} rather than an emit inside it: that function is also
+ * `passwordChangeWithCurrent`'s last step, which reports its own `AUTH_PASSWORD_CHANGED` action —
+ * an emit inside `passwordChange` itself would double up on that flow and misname this one's.
+ */
+export const passwordResetChange = (
+    user: UserDocument,
+    password: string,
+    passwordConfirm: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    passwordChange(user, password, passwordConfirm).then((result) => {
+        if (result.success)
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
+                    actor_user_id: String(user._id),
+                    actor_role: user.admin ? 'admin' : 'user',
+                    outcome: 'success'
+                })
+            );
+        return result;
+    });
+
+/**
+ * Hard-delete the caller's own account, confirmed by a one-time token.
+ *
+ * A wrapper around `userService.remove` rather than an emit inside it: `remove` is also
+ * `removeById`'s last step, reached from the admin `DELETE /users/:id`, which already reports its
+ * own `ADMIN_USER_DELETED` from `createDeleteController`. An emit inside `remove` itself would
+ * fire on the admin path too, and — worse than a duplicate — would misattribute it: this event's
+ * `actor_user_id`/`actor_role` are the deleted account's own, correct for a self-delete but
+ * backwards for an admin's, where they would report the person removed as the one who acted.
+ */
+export const removeOwnAccount = (
+    user: UserDocument,
+    context: CallerContext
+): ReturnType<typeof userService.remove> =>
+    userService.remove(user, true).then((result) => {
+        if (result.success) {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
+                    actor_user_id: String(user._id),
+                    actor_role: user.admin ? 'admin' : 'user',
+                    outcome: 'success'
+                })
+            );
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                distinctId: String(user._id),
+                event: accountAnalyticsEvents.ACCOUNT_DELETED
+            });
+        }
+        return result;
+    });
+
+/**
  * What `PUT /account` accepts, validated with this codebase's messages.
  *
  * `email` and `username` come from `zodUserSchema`, whose overrides carry the i18n thunks;
@@ -120,28 +200,37 @@ const zodProfileSchema = zodUserSchema
  */
 export const updateProfile = (
     userId: string,
-    data: unknown
+    data: unknown,
+    context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const parseResult = zodProfileSchema.safeParse(data);
 
-    if (!parseResult.success)
-        return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
+    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
+        ? userRepository
+              // Credentials included: the caller may follow a successful email change with
+              // `sendVerificationEmail`, which pushes a token onto this same document.
+              .findByIdWithCredentials(userId)
+              .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+                  if (!user) return generateReject(404, []);
 
-    return (
-        userRepository
-            // Credentials included: the caller may follow a successful email change with
-            // `sendVerificationEmail`, which pushes a token onto this same document.
-            .findByIdWithCredentials(userId)
-            .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                if (!user) return generateReject(404, []);
+                  if (parseResult.data.email !== undefined && parseResult.data.email !== user.email)
+                      user.verified = false;
 
-                if (parseResult.data.email !== undefined && parseResult.data.email !== user.email)
-                    user.verified = false;
+                  return userService.update(user, parseResult.data);
+              })
+              .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
+        : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
-                return userService.update(user, parseResult.data);
-            })
-            .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
-    );
+    return outcome.then((result) => {
+        if (result.success)
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_PROFILE_UPDATED,
+                    outcome: 'success'
+                })
+            );
+        return result;
+    });
 };
 
 /**
@@ -158,26 +247,39 @@ export const updateProfile = (
  */
 export const passwordChangeWithCurrent = (
     userId: string,
-    currentPassword = '',
-    password = '',
-    passwordConfirm = ''
+    currentPassword: string,
+    password: string,
+    passwordConfirm: string,
+    context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
-    if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
-    return (
-        userRepository
-            // `password` is select:false — comparing against it is this flow's whole point.
-            .findByIdWithCredentials(userId)
-            .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                if (!user) return generateReject(404, []);
+    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> =
+        errors.length > 0
+            ? Promise.resolve(generateReject(422, errors))
+            : userRepository
+                  // `password` is select:false — comparing against it is this flow's whole point.
+                  .findByIdWithCredentials(userId)
+                  .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+                      if (!user) return generateReject(404, []);
 
-                return bcrypt.compare(currentPassword, user.password).then((doMatch) => {
-                    if (!doMatch)
-                        return generateReject(422, [t('account.password-change.wrong-current')]);
-                    return passwordChange(user, password, passwordConfirm);
-                });
+                      return bcrypt.compare(currentPassword, user.password).then((doMatch) => {
+                          if (!doMatch)
+                              return generateReject(422, [
+                                  t('account.password-change.wrong-current')
+                              ]);
+                          return passwordChange(user, password, passwordConfirm);
+                      });
+                  })
+                  .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+
+    return outcome.then((result) => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: accountAuditActions.AUTH_PASSWORD_CHANGED,
+                outcome: result.success ? 'success' : 'failure'
             })
-            .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
-    );
+        );
+        return result;
+    });
 };

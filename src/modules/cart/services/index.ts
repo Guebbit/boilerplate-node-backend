@@ -14,8 +14,11 @@
 
 import {
     cartGet,
-    cartGetWithSummary,
+    cartGetForBadge,
+    cartGetForView,
     cartItemSetById,
+    cartItemAdd,
+    cartItemUpdateQuantity,
     cartItemAddById,
     cartItemRemoveById,
     cartRemove
@@ -32,8 +35,11 @@ import { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
  */
 export {
     cartGet,
-    cartGetWithSummary,
+    cartGetForBadge,
+    cartGetForView,
     cartItemSetById,
+    cartItemAdd,
+    cartItemUpdateQuantity,
     cartItemAddById,
     cartItemRemoveById,
     cartRemove
@@ -43,8 +49,11 @@ export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
 
 export const cartService = {
     cartGet,
-    cartGetWithSummary,
+    cartGetForBadge,
+    cartGetForView,
     cartItemSetById,
+    cartItemAdd,
+    cartItemUpdateQuantity,
     cartItemAddById,
     cartItemRemoveById,
     cartRemove,

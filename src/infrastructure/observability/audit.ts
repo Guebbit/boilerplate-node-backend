@@ -10,7 +10,7 @@
 
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
-import type { Caller } from '@types';
+import type { CallerContext } from '@infrastructure/http/request';
 
 /*
  * Action constants — domain.resource.verb dot-notation.
@@ -158,64 +158,49 @@ export const emitAuditEvent = (event: AuditEvent): void => {
 };
 
 /*
- * Extract common request fields (ip, user-agent, request-id, trace-id) for audit events.
- * @param request - minimal request shape
+ * Extract common caller-context fields (ip, user-agent, request-id, trace-id) for audit events.
+ * @param context - the caller context built once in the controller, see `callerContextOf`
  * @returns partial AuditEvent with context fields
  */
-export const extractRequestContext = (request: {
-    ip?: string;
-    headers?: Record<string, string | string[] | undefined>;
-    requestId?: string;
-    // Structurally typed rather than `express.Request`: it keeps this callable from workers and
-    // unit tests with a plain object literal, no Express instance required.
-}): Pick<AuditEvent, 'ip' | 'user_agent' | 'request_id' | 'trace_id'> => {
-    const rawUserAgent = request.headers?.['user-agent'];
-    return {
-        // Note: `request.ip` reflects the proxy's address unless Express `trust proxy` is
-        // configured — behind a load balancer that setting is what makes this field meaningful.
-        ip: request.ip,
-        // Node exposes repeated headers as an array; take the first rather than logging
-        // '[object Object]'-style noise.
-        user_agent: Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent,
-        // Assigned by the request-id middleware.
-        request_id: request.requestId,
-        // Pulled from ambient OTel context, so audit entries join up with traces.
-        trace_id: getActiveSpanContext().traceId
-    };
-};
+export const extractRequestContext = (
+    context: CallerContext
+): Pick<AuditEvent, 'ip' | 'user_agent' | 'request_id' | 'trace_id'> => ({
+    // Note: `ip` reflects the proxy's address unless Express `trust proxy` is configured —
+    // behind a load balancer that setting is what makes this field meaningful.
+    ip: context.ip,
+    user_agent: context.userAgent,
+    // Assigned by the request-id middleware.
+    request_id: context.requestId,
+    // Pulled from ambient OTel context, so audit entries join up with traces. Safe unlike a
+    // "current request" accessor would be — see `CallerContext`'s docblock.
+    trace_id: getActiveSpanContext().traceId
+});
 
 /*
- * Resolve actor role from request auth context.
+ * Resolve actor role from the caller context.
  * Returns 'admin', 'user', or 'anonymous'.
- * @param request - request with optional authContext
+ * @param context - the caller context built once in the controller
  * @returns actor role string
  */
-export const resolveActorRole = (request: {
-    authContext?: Caller | null;
-}): AuditEvent['actor_role'] => {
+export const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
     // Order matters: most-privileged first, since an admin also satisfies the `user` check.
-    if (request.authContext?.admin) return 'admin';
-    // Context present but not admin → an authenticated regular user.
-    if (request.authContext) return 'user';
-    // No auth context at all: an unauthenticated request. Still audited — failed logins and
+    if (context.caller.admin) return 'admin';
+    // A caller id present but not admin → an authenticated regular user.
+    if (context.caller.id) return 'user';
+    // No caller id at all: an unauthenticated request. Still audited — failed logins and
     // blocked access attempts are exactly the events worth keeping.
     return 'anonymous';
 };
 
 /*
- * Build a complete audit event from request context + action-specific fields.
+ * Build a complete audit event from caller context + action-specific fields.
  * Caller-provided actor_user_id / actor_role override the derived defaults.
- * @param request - Express-like request with auth context
+ * @param context - the caller context built once in the controller, see `callerContextOf`
  * @param fields - action, outcome, and optional overrides
  * @returns fully populated AuditEvent
  */
 export const buildAuditEvent = (
-    request: {
-        ip?: string;
-        headers?: Record<string, string | string[] | undefined>;
-        requestId?: string;
-        authContext?: Caller | null;
-    },
+    context: CallerContext,
     // The type says: `action` and `outcome` are mandatory, everything else optional. That is the
     // whole ergonomic point — a call site cannot forget what happened or whether it succeeded,
     // but never has to restate context the request already carries.
@@ -227,14 +212,14 @@ export const buildAuditEvent = (
             >
         >
 ): AuditEvent => ({
-    // Explicit override wins, then the authenticated user, then 'unknown'. The override matters
-    // for failed logins, where there is no auth context but the *attempted* identity (the
-    // submitted email) is the single most useful field in the record.
-    actor_user_id: fields.actor_user_id ?? request.authContext?.id ?? 'unknown',
-    actor_role: fields.actor_role ?? resolveActorRole(request),
+    // Explicit override wins, then the authenticated caller, then 'unknown'. The override matters
+    // for failed logins, where there is no caller id but the *attempted* identity (the submitted
+    // email) is the single most useful field in the record.
+    actor_user_id: fields.actor_user_id ?? context.caller.id ?? 'unknown',
+    actor_role: fields.actor_role ?? resolveActorRole(context),
     // Spread after the defaults so caller values replace them.
     ...fields,
-    // Spread last, deliberately: request-derived context (ip, trace_id, ...) is not
+    // Spread last, deliberately: context-derived fields (ip, trace_id, ...) are not
     // caller-overridable, so an audit entry cannot misreport where it came from.
-    ...extractRequestContext(request)
+    ...extractRequestContext(context)
 });

@@ -4,9 +4,7 @@ import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { cartCheckoutTotal } from '../metrics';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { cartAnalyticsEvents } from '../analytics';
-import { authContextOf } from '@infrastructure/http/request';
+import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /cart/checkout
@@ -20,25 +18,14 @@ export const postCheckout = (request: Request, response: Response) => {
         shippingMethodId?: string;
     };
     return cartService
-        .orderConfirm(userId, addressId, shippingMethodId)
+        .orderConfirm(userId, callerContextOf(request), addressId, shippingMethodId)
         .then((result) => {
             if (!result.success) {
                 cartCheckoutTotal.inc({ status: 'failure' });
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    event: cartAnalyticsEvents.CHECKOUT_FAILED,
-                    properties: { reason: result.errors[0]?.code }
-                });
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
             cartCheckoutTotal.inc({ status: 'success' });
-            const orderId = result.data?._id.toString() ?? '';
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
-                properties: { order_id: orderId }
-            });
             successResponse(
                 response,
                 { order: result.data, message: t('orders.creation-success') },

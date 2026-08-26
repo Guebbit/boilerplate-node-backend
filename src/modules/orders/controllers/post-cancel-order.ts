@@ -2,10 +2,7 @@ import type { Request, Response } from 'express';
 import { orderService } from '../service';
 import type { CancelOrderRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { ordersAuditActions } from '../audit';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { ordersAnalyticsEvents } from '../analytics';
+import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -27,24 +24,14 @@ export const postCancelOrder = (
     response: Response
 ) =>
     orderService
-        .cancelById(String(request.params.id), request.authContext, {
-            refund: request.body?.refund
-        })
+        .cancelById(
+            String(request.params.id),
+            request.authContext,
+            { refund: request.body?.refund },
+            callerContextOf(request)
+        )
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: ordersAuditActions.USER_ORDER_CANCELLED,
-                    outcome: 'success',
-                    metadata: { order_id: String(request.params.id) }
-                })
-            );
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: ordersAnalyticsEvents.ORDER_CANCELLED,
-                properties: { order_id: String(request.params.id) }
-            });
 
             successResponse(
                 response,

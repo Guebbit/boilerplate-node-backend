@@ -7,10 +7,9 @@ import { destroyRefreshCookie, destroyLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { PasswordResetConfirmRequest } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
 import { resetConfirmEmail } from '../emails';
 import { parseBody, refused } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/reset-confirm
@@ -75,7 +74,7 @@ export const postResetConfirm = (
                  * Change password
                  */
                 return accountService
-                    .passwordChange(user, password, passwordConfirm)
+                    .passwordResetChange(user, password, passwordConfirm, callerContextOf(request))
                     .then((result) => {
                         if (refused(response, result)) return;
                         // send confirmation email (no need to wait)
@@ -94,15 +93,6 @@ export const postResetConfirm = (
                             { to: user.email, subject: mail.subject },
                             mail.template,
                             mail.data
-                        );
-
-                        emitAuditEvent(
-                            buildAuditEvent(request, {
-                                action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
-                                actor_user_id: String(user._id),
-                                actor_role: user.admin ? 'admin' : 'user',
-                                outcome: 'success'
-                            })
                         );
 
                         destroyRefreshCookie(response);

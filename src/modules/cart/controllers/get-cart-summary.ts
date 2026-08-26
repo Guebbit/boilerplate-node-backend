@@ -10,7 +10,7 @@ import { authContextOf } from '@infrastructure/http/request';
  */
 export const getCartSummary = (request: Request, response: Response) => {
     return cartService
-        .cartGetWithSummary(authContextOf(request).id)
+        .cartGetForBadge(authContextOf(request).id)
         .then((cart) => {
             successResponse(response, cart.summary);
         })

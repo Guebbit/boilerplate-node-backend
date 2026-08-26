@@ -35,6 +35,9 @@ import { reservationTtlMinutes, lowStockThreshold } from './config';
 import { stockMovementRepository, reservationRepository } from './repository';
 import { RESERVATION_EXPIRED } from './events';
 import type { StockMovementDocument } from './model';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { inventoryAuditActions } from './audit';
 
 /** A line being held or given back. Ids as strings — the repository converts. */
 export interface StockLine {
@@ -305,8 +308,10 @@ const isStockBoundToOrder = (orderId: string): Promise<boolean> =>
  * `releaseForOrder` and finds the hold already released, so neither path can double-release.
  *
  * @returns how many holds were expired
+ * @param context - caller context for the `ADMIN_RESERVATIONS_SWEPT` audit emit; omitted by the
+ *   property/unit tests that call this as a plain helper — no context means no emit
  */
-export const runReservationSweep = async (): Promise<number> => {
+export const runReservationSweep = async (context?: CallerContext): Promise<number> => {
     const stale = await reservationRepository.findExpired(new Date(), SWEEP_BATCH_SIZE);
     let expired = 0;
 
@@ -326,6 +331,17 @@ export const runReservationSweep = async (): Promise<number> => {
         );
 
     logger.info(`Reservation sweep: ${expired} of ${stale.length} stale holds expired`);
+
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: inventoryAuditActions.ADMIN_RESERVATIONS_SWEPT,
+                outcome: 'success',
+                target_type: 'reservation',
+                metadata: { expired }
+            })
+        );
+
     return expired;
 };
 
@@ -337,12 +353,15 @@ export const runReservationSweep = async (): Promise<number> => {
  * @param productId - the product
  * @param quantity - how many arrived; strictly positive, the contract enforces it too
  * @param note - what to record on the row: the supplier, the delivery note, the operator's words
+ * @param context - caller context for the `ADMIN_STOCK_RECEIVED` audit emit; omitted by tests that
+ *   call this as a plain helper — no context means no emit
  * @returns the counters after the delivery, or 404 if the product is unknown
  */
 export const receive = async (
     productId: string,
     quantity: number,
-    note?: string
+    note?: string,
+    context?: CallerContext
 ): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> => {
     const received = await applyTransition(
         StockMovementReason.receive,
@@ -353,9 +372,20 @@ export const receive = async (
     if (!received) return generateReject(404, [t('inventory.product-not-found')]);
 
     const level = await levelFor(productId);
-    return level
-        ? generateSuccess(level, 200, t('inventory.receive-success'))
-        : generateReject(404, [t('inventory.product-not-found')]);
+    if (!level) return generateReject(404, [t('inventory.product-not-found')]);
+
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: inventoryAuditActions.ADMIN_STOCK_RECEIVED,
+                outcome: 'success',
+                target_type: 'product',
+                target_id: productId,
+                metadata: { quantity, onHand: level.onHand }
+            })
+        );
+
+    return generateSuccess(level, 200, t('inventory.receive-success'));
 };
 
 /**
@@ -368,13 +398,16 @@ export const receive = async (
  * @param productId - the product
  * @param delta - signed and non-zero; the controller rejects zero
  * @param note - why. An unexplained correction is what an audit is looking for.
+ * @param context - caller context for the `ADMIN_STOCK_ADJUSTED` audit emit; omitted by tests that
+ *   call this as a plain helper — no context means no emit
  * @returns the counters after the correction, 404 if the product is unknown, or 409 if it would
  *          fall below what is reserved
  */
 export const adjust = async (
     productId: string,
     delta: number,
-    note?: string
+    note?: string,
+    context?: CallerContext
 ): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> => {
     const product = await productRepository.findByIdRaw(productId);
     if (!product) return generateReject(404, [t('inventory.product-not-found')]);
@@ -405,9 +438,20 @@ export const adjust = async (
     }
 
     const level = await levelFor(productId);
-    return level
-        ? generateSuccess(level, 200, t('inventory.adjust-success'))
-        : generateReject(404, [t('inventory.product-not-found')]);
+    if (!level) return generateReject(404, [t('inventory.product-not-found')]);
+
+    if (context)
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: inventoryAuditActions.ADMIN_STOCK_ADJUSTED,
+                outcome: 'success',
+                target_type: 'product',
+                target_id: productId,
+                metadata: { delta, note, onHand: level.onHand }
+            })
+        );
+
+    return generateSuccess(level, 200, t('inventory.adjust-success'));
 };
 
 /**

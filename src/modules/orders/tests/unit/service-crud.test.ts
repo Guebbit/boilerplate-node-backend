@@ -21,6 +21,7 @@
 import { asStub } from '@tests/stub';
 import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import {
@@ -53,10 +54,15 @@ const seedOrder = async () => {
     const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
     const mouse = await createProduct({ title: 'Mouse', price: 10 });
 
-    const result = await create(String(user._id), user.email, [
-        { productId: String(keyboard._id), quantity: 2 },
-        { productId: String(mouse._id), quantity: 1 }
-    ]);
+    const result = await create(
+        String(user._id),
+        user.email,
+        [
+            { productId: String(keyboard._id), quantity: 2 },
+            { productId: String(mouse._id), quantity: 1 }
+        ],
+        testCallerContext
+    );
 
     return { user, keyboard, mouse, order: asSuccess(result).data! };
 };
@@ -77,9 +83,12 @@ describe('create', () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Keyboard', price: 25 });
 
-        const result = await create(String(user._id), user.email, [
-            { productId: String(product._id), quantity: 2 }
-        ]);
+        const result = await create(
+            String(user._id),
+            user.email,
+            [{ productId: String(product._id), quantity: 2 }],
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         expect(result.status).toBe(201);
@@ -125,7 +134,7 @@ describe('create', () => {
     it('rejects an empty item list with 422', async () => {
         const user = await createUser();
 
-        const result = await create(String(user._id), user.email, []);
+        const result = await create(String(user._id), user.email, [], testCallerContext);
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(422);
@@ -135,10 +144,15 @@ describe('create', () => {
         const user = await createUser();
         const product = await createProduct();
 
-        const result = await create(String(user._id), user.email, [
-            { productId: String(product._id), quantity: 1 },
-            { productId: MISSING_ID, quantity: 1 }
-        ]);
+        const result = await create(
+            String(user._id),
+            user.email,
+            [
+                { productId: String(product._id), quantity: 1 },
+                { productId: MISSING_ID, quantity: 1 }
+            ],
+            testCallerContext
+        );
 
         expect(asReject(result).status).toBe(404);
     });
@@ -147,7 +161,12 @@ describe('create', () => {
         // All-or-nothing: a partially-fulfilled order would charge for items nobody ordered.
         const user = await createUser();
 
-        await create(String(user._id), user.email, [{ productId: MISSING_ID, quantity: 1 }]);
+        await create(
+            String(user._id),
+            user.email,
+            [{ productId: MISSING_ID, quantity: 1 }],
+            testCallerContext
+        );
 
         await expect(orderRepository.count({})).resolves.toBe(0);
     });
@@ -448,14 +467,22 @@ describe('updateById', () => {
     it('updates an existing order', async () => {
         const { order } = await seedOrder();
 
-        const result = await updateById(String(order._id), { email: 'moved@example.com' });
+        const result = await updateById(
+            String(order._id),
+            { email: 'moved@example.com' },
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         expect(asSuccess(result).data!.email).toBe('moved@example.com');
     });
 
     it('rejects with 404 for an id that does not exist', async () => {
-        const result = await updateById(MISSING_ID, { email: 'moved@example.com' });
+        const result = await updateById(
+            MISSING_ID,
+            { email: 'moved@example.com' },
+            testCallerContext
+        );
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(404);

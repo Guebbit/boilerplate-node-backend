@@ -39,6 +39,11 @@ import {
 import type { OrderDocument } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { userRepository } from '@modules/users';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { paymentsAnalyticsEvents } from './analytics';
+import { paymentsAuditActions } from './audit';
 import { resolvePaymentProvider, cardLastFour, type CardDetails } from './providers';
 import { paymentRepository } from './repository';
 import type { PaymentDocument } from './model';
@@ -158,74 +163,104 @@ export const createIntent = (
 export const confirmPayment = (
     paymentId: string,
     card: CardDetails,
-    authContext?: Caller
+    authContext: Caller | undefined,
+    context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then(async (payment) => {
-        if (!payment) return generateReject(404, [t('payments.not-found')]);
-        if (payment.status !== 'requires_confirmation' && payment.status !== 'declined')
-            return generateReject(409, [
-                { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
-            ]);
+    paymentRepository
+        .findByIdScoped(paymentId, callerScope(authContext))
+        .then(async (payment) => {
+            if (!payment) return generateReject(404, [t('payments.not-found')]);
+            if (payment.status !== 'requires_confirmation' && payment.status !== 'declined')
+                return generateReject(409, [
+                    { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
+                ]);
 
-        const provider = resolvePaymentProvider();
-        const charge = { amount: payment.amount, currency: payment.currency };
-        const cardLast4 = cardLastFour(card.cardNumber);
+            const provider = resolvePaymentProvider();
+            const charge = { amount: payment.amount, currency: payment.currency };
+            const cardLast4 = cardLastFour(card.cardNumber);
 
-        const outcome = await provider.charge(charge, card);
-        if (outcome === 'declined') {
-            await paymentRepository.updateStatusIfIn(
+            const outcome = await provider.charge(charge, card);
+            if (outcome === 'declined') {
+                await paymentRepository.updateStatusIfIn(
+                    String(payment.orderId),
+                    ['requires_confirmation', 'declined'],
+                    'declined',
+                    { cardLast4 }
+                );
+                return generateReject(409, [
+                    { code: 'PAYMENT_DECLINED', message: t('payments.declined') }
+                ]);
+            }
+
+            const paidOrder = await orderRepository.updateStatusIfIn(
+                String(payment.orderId),
+                // Same row as the precondition above, read the other way round.
+                statusesLeadingTo(OrderStatus.paid, 'system'),
+                OrderStatus.paid,
+                {}
+            );
+            if (!paidOrder) {
+                // The money moved but the order was gone (cancelled, or a racing tab won). Put it
+                // straight back — the invariant is the module docblock's rule 2.
+                await provider.refund(charge);
+                return generateReject(409, [
+                    { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
+                ]);
+            }
+
+            const confirmed = await paymentRepository.updateStatusIfIn(
                 String(payment.orderId),
                 ['requires_confirmation', 'declined'],
-                'declined',
+                'succeeded',
                 { cardLast4 }
             );
-            return generateReject(409, [
-                { code: 'PAYMENT_DECLINED', message: t('payments.declined') }
-            ]);
-        }
 
-        const paidOrder = await orderRepository.updateStatusIfIn(
-            String(payment.orderId),
-            // Same row as the precondition above, read the other way round.
-            statusesLeadingTo(OrderStatus.paid, 'system'),
-            OrderStatus.paid,
-            {}
-        );
-        if (!paidOrder) {
-            // The money moved but the order was gone (cancelled, or a racing tab won). Put it
-            // straight back — the invariant is the module docblock's rule 2.
-            await provider.refund(charge);
-            return generateReject(409, [
-                { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
-            ]);
-        }
+            /*
+             * The units finally leave. Until now they were HELD — unavailable since checkout, still
+             * on the shelf, still recoverable if the customer never paid.
+             *
+             * After the order move, for the same reason rule 2 gives for the charge: the conditional
+             * `pending → paid` is what makes this at most once. The answer is not checked — `false`
+             * means an expiry sweep beat the payment to the hold, which this module cannot fix and
+             * `inventory` logs; the customer has a paid order either way.
+             */
+            await inventoryService.commitForOrder(String(payment.orderId));
 
-        const confirmed = await paymentRepository.updateStatusIfIn(
-            String(payment.orderId),
-            ['requires_confirmation', 'declined'],
-            'succeeded',
-            { cardLast4 }
-        );
+            await emitDomainEvent(ORDER_STATUS_CHANGED, {
+                orderId: String(payment.orderId),
+                from: 'pending',
+                to: 'paid'
+            });
 
-        /*
-         * The units finally leave. Until now they were HELD — unavailable since checkout, still
-         * on the shelf, still recoverable if the customer never paid.
-         *
-         * After the order move, for the same reason rule 2 gives for the charge: the conditional
-         * `pending → paid` is what makes this at most once. The answer is not checked — `false`
-         * means an expiry sweep beat the payment to the hold, which this module cannot fix and
-         * `inventory` logs; the customer has a paid order either way.
-         */
-        await inventoryService.commitForOrder(String(payment.orderId));
-
-        await emitDomainEvent(ORDER_STATUS_CHANGED, {
-            orderId: String(payment.orderId),
-            from: 'pending',
-            to: 'paid'
+            return generateSuccess(confirmed ?? payment, 200, t('payments.confirm-success'));
+        })
+        .then((result) => {
+            // Only these two outcomes are events: `PAYMENT_DECLINED` is a card the provider refused,
+            // reportable like any other confirm attempt. The other rejections (payment not found, not
+            // in a confirmable state, the order gone) are request-shape or race problems, not a fact
+            // about the money — nothing here to attribute to a card.
+            const declined =
+                !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
+            if (result.success || declined) {
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: result.success
+                            ? paymentsAuditActions.PAYMENT_CONFIRMED
+                            : paymentsAuditActions.PAYMENT_FAILED,
+                        outcome: result.success ? 'success' : 'failure',
+                        metadata: { payment_id: paymentId }
+                    })
+                );
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    event: result.success
+                        ? paymentsAnalyticsEvents.PAYMENT_SUCCEEDED
+                        : paymentsAnalyticsEvents.PAYMENT_DECLINED,
+                    properties: { payment_id: paymentId }
+                });
+            }
+            return result;
         });
-
-        return generateSuccess(confirmed ?? payment, 200, t('payments.confirm-success'));
-    });
 
 /**
  * The payment behind an order, for the order page's payment panel.

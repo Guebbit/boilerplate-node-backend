@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
-import { userService } from '@modules/users';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { accountAnalyticsEvents } from '../analytics';
+import { accountService } from '../services';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /account
@@ -20,12 +19,8 @@ export const getAccount = (request: Request, response: Response): void => {
         rejectResponse(response, 401);
         return;
     }
-    emitAnalyticsEvent({
-        ...buildAnalyticsBase(request),
-        event: accountAnalyticsEvents.USER_PROFILE_VIEWED
-    });
-    userService
-        .getById(authContext.id)
+    accountService
+        .getOwnProfile(authContext.id, callerContextOf(request))
         .then((user) => {
             // A valid token whose row is gone is a dead session, not a server fault.
             if (user) successResponse(response, user);

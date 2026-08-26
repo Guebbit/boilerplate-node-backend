@@ -1,10 +1,8 @@
 import type { Request, Response } from 'express';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { cartAnalyticsEvents } from '../analytics';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
+import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /cart
@@ -13,12 +11,8 @@ import { authContextOf } from '@infrastructure/http/request';
  */
 export const getCart = (request: Request, response: Response) => {
     return cartService
-        .cartGetWithSummary(authContextOf(request).id)
+        .cartGetForView(authContextOf(request).id, callerContextOf(request))
         .then((cart) => {
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: cartAnalyticsEvents.CART_VIEWED
-            });
             successResponse(response, cart);
         })
         .catch(catchAs(response, 'getCart'));

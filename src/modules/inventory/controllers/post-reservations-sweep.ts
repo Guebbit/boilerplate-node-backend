@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
-import { inventoryAuditActions } from '../audit';
 import { inventoryService } from '../service';
 import { catchAs } from '@infrastructure/http/controller';
 
@@ -20,16 +19,8 @@ import { catchAs } from '@infrastructure/http/controller';
  */
 export const postReservationsSweep = (request: Request, response: Response) =>
     inventoryService
-        .runReservationSweep()
+        .runReservationSweep(callerContextOf(request))
         .then((expired) => {
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: inventoryAuditActions.ADMIN_RESERVATIONS_SWEPT,
-                    outcome: 'success',
-                    target_type: 'reservation',
-                    metadata: { expired }
-                })
-            );
             successResponse(response, { expired }, 200, t('inventory.sweep-success'));
         })
         .catch(catchAs(response, 'postReservationsSweep'));

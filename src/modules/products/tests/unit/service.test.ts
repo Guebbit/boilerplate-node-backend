@@ -1,5 +1,6 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import * as productService from '@modules/products/service';
@@ -351,13 +352,16 @@ describe('productService.getById', () => {
 
 describe('productService.create', () => {
     it('inserts a product and returns the Mongoose document', async () => {
-        const product = await productService.create({
-            title: 'New Product',
-            price: 29.99,
-            imageUrl: 'https://example.com/img.jpg',
-            active: false,
-            description: 'A brand-new product.'
-        });
+        const product = await productService.create(
+            {
+                title: 'New Product',
+                price: 29.99,
+                imageUrl: 'https://example.com/img.jpg',
+                active: false,
+                description: 'A brand-new product.'
+            },
+            testCallerContext
+        );
 
         expect(product._id).toBeDefined();
         expect(product.title).toBe('New Product');
@@ -370,11 +374,15 @@ describe('productService.updateById', () => {
         const product = await createProduct();
         const id = product._id.toString();
 
-        const result = await productService.updateById(id, {
-            title: 'Updated Title',
-            price: 49.99,
-            description: 'New description'
-        });
+        const result = await productService.updateById(
+            id,
+            {
+                title: 'Updated Title',
+                price: 49.99,
+                description: 'New description'
+            },
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         const updated = (result as { data: ProductDocument }).data;
@@ -387,7 +395,7 @@ describe('productService.updateById', () => {
         const product = await createProduct({ active: true });
         const id = product._id.toString();
 
-        const result = await productService.updateById(id, { active: false });
+        const result = await productService.updateById(id, { active: false }, testCallerContext);
 
         expect((result as { data: ProductDocument }).data.active).toBe(false);
     });
@@ -396,7 +404,7 @@ describe('productService.updateById', () => {
         const product = await createProduct({ imageUrl: '/images/old.jpg' });
         const id = product._id.toString();
 
-        await productService.updateById(id, { imageUrl: '/images/new.jpg' });
+        await productService.updateById(id, { imageUrl: '/images/new.jpg' }, testCallerContext);
 
         // The OLD image goes, and it goes by its stored url — the service must not construct a
         // path, because under a bucket backend there is none to construct.
@@ -409,7 +417,11 @@ describe('productService.updateById', () => {
         const product = await createProduct({ imageUrl: '/images/keep.jpg' });
         const id = product._id.toString();
 
-        const result = await productService.updateById(id, { title: 'Renamed Product' });
+        const result = await productService.updateById(
+            id,
+            { title: 'Renamed Product' },
+            testCallerContext
+        );
 
         expect(imageStore.remove).not.toHaveBeenCalled();
         expect((result as { data: ProductDocument }).data.imageUrl).toBe('/images/keep.jpg');
@@ -420,7 +432,7 @@ describe('productService.updateById', () => {
         const product = await createProduct({ imageUrl: '/images/same.jpg' });
         const id = product._id.toString();
 
-        await productService.updateById(id, { imageUrl: '/images/same.jpg' });
+        await productService.updateById(id, { imageUrl: '/images/same.jpg' }, testCallerContext);
 
         expect(imageStore.remove).not.toHaveBeenCalled();
     });
@@ -433,7 +445,11 @@ describe('productService.updateById', () => {
          * reported it this way; now all three agree, which is what lets one controller shape
          * serve all of them.
          */
-        const result = await productService.updateById('000000000000000000000000', { title: 'X' });
+        const result = await productService.updateById(
+            '000000000000000000000000',
+            { title: 'X' },
+            testCallerContext
+        );
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);

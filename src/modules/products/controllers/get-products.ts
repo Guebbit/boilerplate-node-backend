@@ -9,11 +9,9 @@ import {
 } from '@api/schemas.zod';
 import { productService } from '../service';
 import { successResponse } from '@infrastructure/http/response';
-import { readInput } from '@infrastructure/http/request';
+import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import type { SearchProductsRequest } from '@types';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { productsAnalyticsEvents } from '../analytics';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
@@ -81,23 +79,13 @@ export const getProducts = (
     );
     if (!parsed) return;
 
-    const { text } = parsed;
-
     return productService
-        .search(parsed, productService.callerScope(request.authContext))
+        .searchViewed(
+            parsed,
+            productService.callerScope(request.authContext),
+            callerContextOf(request)
+        )
         .then((result) => {
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: productsAnalyticsEvents.PRODUCTS_SEARCHED,
-                properties: {
-                    text,
-                    // Reported from the result rather than the request: the caller may not have
-                    // asked for a page at all, and `normalizePagination` decides what they got.
-                    page: result.meta.page,
-                    pageSize: result.meta.pageSize,
-                    result_count: result.items.length
-                }
-            });
             successResponse(response, result);
         })
         .catch(catchAs(response, 'getProducts'));

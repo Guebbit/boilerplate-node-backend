@@ -4,22 +4,28 @@ import { userService } from '@modules/users';
 import { accountService } from '@modules/account/services';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { emitAuditEvent } from '@infrastructure/observability/audit';
 import { authAccountDeleteTotal } from '@modules/account/metrics';
 
 jest.mock('@modules/users', () => ({
     __esModule: true,
     userService: {
         findByEmail: jest.fn(),
-        findByAccountDeleteToken: jest.fn(),
-        remove: jest.fn()
+        findByAccountDeleteToken: jest.fn()
     }
 }));
 
+/*
+ * `requestAccountDeletion` and `removeOwnAccount` are the two functions under test here now, not
+ * `tokenAdd`/`userService.remove` directly: both moved behind these wrappers this session, along
+ * with the audit/analytics emit each one carries — see `profile.ts`/`authentication.ts`. This
+ * suite asserts the controller reaches the right wrapper with the right arguments; the emit itself
+ * is that wrapper's own unit test's job, not this one's.
+ */
 jest.mock('@modules/account/services', () => ({
     __esModule: true,
     accountService: {
-        tokenAdd: jest.fn()
+        requestAccountDeletion: jest.fn(),
+        removeOwnAccount: jest.fn()
     }
 }));
 
@@ -32,17 +38,6 @@ jest.mock('@infrastructure/http/response', () => ({
     __esModule: true,
     successResponse: jest.fn(),
     rejectResponse: jest.fn()
-}));
-
-jest.mock('@infrastructure/observability/audit', () => ({
-    __esModule: true,
-    emitAuditEvent: jest.fn(),
-    buildAuditEvent: jest.fn().mockReturnValue({})
-}));
-
-jest.mock('@infrastructure/observability/analytics', () => ({
-    __esModule: true,
-    emitAnalyticsEvent: jest.fn()
 }));
 
 jest.mock('@modules/account/metrics', () => ({
@@ -63,12 +58,15 @@ const mockFindByEmail = userService.findByEmail as jest.MockedFunction<
 const mockFindByAccountDeleteToken = userService.findByAccountDeleteToken as jest.MockedFunction<
     typeof userService.findByAccountDeleteToken
 >;
-const mockRemove = userService.remove as jest.MockedFunction<typeof userService.remove>;
-const mockTokenAdd = accountService.tokenAdd as jest.MockedFunction<typeof accountService.tokenAdd>;
+const mockRequestAccountDeletion = accountService.requestAccountDeletion as jest.MockedFunction<
+    typeof accountService.requestAccountDeletion
+>;
+const mockRemoveOwnAccount = accountService.removeOwnAccount as jest.MockedFunction<
+    typeof accountService.removeOwnAccount
+>;
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 const mockSuccessResponse = successResponse as jest.MockedFunction<typeof successResponse>;
 const mockRejectResponse = rejectResponse as jest.MockedFunction<typeof rejectResponse>;
-const mockEmitAuditEvent = emitAuditEvent as jest.MockedFunction<typeof emitAuditEvent>;
 const mockIncCounter = authAccountDeleteTotal.inc as jest.MockedFunction<() => void>;
 
 const makeResponse = () => ({ locals: {} }) as Parameters<typeof deleteAccountRequest>[1];
@@ -79,7 +77,7 @@ describe('DELETE /account — deleteAccountRequest', () => {
     it('sends email and returns 200 when user exists', async () => {
         const fakeUser = { email: 'user@example.com', username: 'testuser' };
         mockFindByEmail.mockResolvedValue(fakeUser as never);
-        mockTokenAdd.mockResolvedValue('abc123');
+        mockRequestAccountDeletion.mockResolvedValue('abc123');
         mockEnqueueEmail.mockResolvedValue();
 
         const req = {
@@ -95,9 +93,8 @@ describe('DELETE /account — deleteAccountRequest', () => {
         await deleteAccountRequest(req as never, res);
 
         expect(mockFindByEmail).toHaveBeenCalledWith('user@example.com');
-        expect(mockTokenAdd).toHaveBeenCalledWith(fakeUser, 'delete', 3_600_000);
+        expect(mockRequestAccountDeletion).toHaveBeenCalledWith(fakeUser, expect.anything());
         expect(mockEnqueueEmail).toHaveBeenCalled();
-        expect(mockEmitAuditEvent).toHaveBeenCalled();
         expect(mockIncCounter).toHaveBeenCalledWith({ status: 'success' });
         expect(mockSuccessResponse).toHaveBeenCalled();
     });
@@ -112,7 +109,7 @@ describe('DELETE /account — deleteAccountRequest', () => {
 
         await deleteAccountRequest(req as never, res);
 
-        expect(mockTokenAdd).not.toHaveBeenCalled();
+        expect(mockRequestAccountDeletion).not.toHaveBeenCalled();
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
         expect(mockIncCounter).toHaveBeenCalledWith({ status: 'failure' });
         expect(mockSuccessResponse).toHaveBeenCalled();
@@ -147,7 +144,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
 
     it('deletes account and returns 200 for valid token', async () => {
         mockFindByAccountDeleteToken.mockResolvedValue(fakeUser as never);
-        mockRemove.mockResolvedValue({
+        mockRemoveOwnAccount.mockResolvedValue({
             success: true,
             status: 200,
             message: '',
@@ -161,9 +158,8 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         await deleteAccountConfirm(req as never, res);
 
         expect(mockFindByAccountDeleteToken).toHaveBeenCalledWith('valid-token');
-        expect(mockRemove).toHaveBeenCalledWith(fakeUser, true);
+        expect(mockRemoveOwnAccount).toHaveBeenCalledWith(fakeUser, expect.anything());
         expect(mockEnqueueEmail).toHaveBeenCalled();
-        expect(mockEmitAuditEvent).toHaveBeenCalled();
         expect(mockSuccessResponse).toHaveBeenCalled();
     });
 
@@ -175,7 +171,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
 
         await deleteAccountConfirm(req as never, res);
 
-        expect(mockRemove).not.toHaveBeenCalled();
+        expect(mockRemoveOwnAccount).not.toHaveBeenCalled();
         expect(mockRejectResponse).toHaveBeenCalledWith(res, 422, expect.any(Array));
     });
 
@@ -197,7 +193,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
 
         await deleteAccountConfirm(req as never, res);
 
-        expect(mockRemove).not.toHaveBeenCalled();
+        expect(mockRemoveOwnAccount).not.toHaveBeenCalled();
         expect(mockRejectResponse).toHaveBeenCalledWith(res, 422, expect.any(Array));
     });
 

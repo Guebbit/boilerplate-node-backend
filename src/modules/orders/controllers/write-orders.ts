@@ -4,15 +4,11 @@ import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { CreateOrderBody, UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { readInput } from '@infrastructure/http/request';
+import { readInput, callerContextOf } from '@infrastructure/http/request';
 import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { orderConfirmEmail } from '../emails';
 import { orderCreatedTotal } from '../metrics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { ordersAuditActions } from '../audit';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { ordersAnalyticsEvents } from '../analytics';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
@@ -57,7 +53,7 @@ export const writeOrders = (
         const { userId, email, items } = parseResult.data;
 
         return orderService
-            .create(userId, email, items)
+            .create(userId, email, items, callerContextOf(request))
             .then((result) => {
                 if (refused(response, result)) return;
 
@@ -77,20 +73,6 @@ export const writeOrders = (
                 }
 
                 orderCreatedTotal.inc();
-                const orderId = result.data?._id.toString() ?? '';
-                emitAuditEvent(
-                    buildAuditEvent(request, {
-                        action: ordersAuditActions.ADMIN_ORDER_CREATED,
-                        outcome: 'success',
-                        target_type: 'order',
-                        target_id: orderId
-                    })
-                );
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(request),
-                    event: ordersAnalyticsEvents.ORDER_CREATED,
-                    properties: { order_id: orderId }
-                });
                 successResponse(
                     response,
                     orderService.withActions(result.data, request.authContext),
@@ -112,18 +94,9 @@ export const writeOrders = (
     }
 
     return orderService
-        .updateById(id, parseResult.data)
+        .updateById(id, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: ordersAuditActions.ADMIN_ORDER_UPDATED,
-                    outcome: 'success',
-                    target_type: 'order',
-                    target_id: id
-                })
-            );
 
             successResponse(response, orderService.withActions(result.data, request.authContext));
         })

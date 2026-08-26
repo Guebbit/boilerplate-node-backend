@@ -1,10 +1,9 @@
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { userModel as Users } from '@modules/users';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
+import { accountService } from '../services';
 import { authTokenCleanupTotal } from '../metrics';
 import { catchAs } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/tokens/expired
@@ -15,16 +14,11 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
     /**
      * Remove all expired tokens stored in the server
      */
-    return Users.tokenRemoveExpired()
+    return accountService
+        .adminTokenCleanup(callerContextOf(request))
         .then(({ status, success }) => {
             if (!success) return rejectResponse(response, status);
             authTokenCleanupTotal.inc();
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP,
-                    outcome: 'success'
-                })
-            );
             return successResponse(response, undefined, status);
         })
         .catch(catchAs(response, 'deleteExpiredTokens'));

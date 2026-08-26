@@ -8,20 +8,42 @@
  * So the properties are asserted structurally instead. Each is a real failure that has no other
  * guard:
  *
- *   1. **Uniqueness across modules.** Two modules independently choosing `admin.order.updated`
+ *   1. **Uniqueness across modules.** Two modules independently choosing `order.updated`
  *      type-checks — the union just collapses the duplicate — and produces an audit trail where a
  *      compliance query cannot tell which domain acted.
  *   2. **The dotted convention.** Log backends filter by prefix (`auth.*`, `admin.product.*`), so
- *      an action that is not `noun.noun.verb` is invisible to every saved search built on it.
+ *      an action that is not `noun.noun` or `noun.noun.verb` is invisible to every saved search
+ *      built on it.
  *   3. **Every module's file is reachable from the sweep.** A module whose actions live somewhere
  *      this test does not look is a module whose actions are unguarded, and the failure would be
  *      silence.
+ *   4. **Coverage, not just shape.** The three checks above only ever see what a module declares —
+ *      a module that should audit something and doesn't looks identical to one that legitimately
+ *      has nothing to record. `EXPECTED_NON_AUDITING` below is the explicit, reviewed answer for
+ *      the modules where that absence is a decision rather than an oversight; see
+ *      `AUDIT_COVERAGE_GAPS.md` for the reasoning behind each entry.
  */
 
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 const MODULES_ROOT = path.join(__dirname, '../../src/modules');
+
+/**
+ * Modules that deliberately emit no audit action at all.
+ *
+ * `audit-logs` owns and reads the trail — it is the destination, not a writer. `observability` is
+ * infrastructure (health, metrics, the audit read endpoint, the SSE stream) and records nothing of
+ * its own. `wishlist` saves and unsaves product references — low-stakes user data with no money,
+ * no stock and no identity attached. A fourth entry needs the same kind of argument in review.
+ */
+const EXPECTED_NON_AUDITING: string[] = ['audit-logs', 'observability', 'wishlist'];
+
+/** Every directory under `src/modules/`. */
+const moduleFolders = (): string[] =>
+    readdirSync(MODULES_ROOT).filter((entry) =>
+        statSync(path.join(MODULES_ROOT, entry)).isDirectory()
+    );
 
 /** Every `src/modules/<name>/audit.ts`, discovered rather than listed. */
 const listAuditFiles = (): { module: string; file: string }[] =>
@@ -85,10 +107,37 @@ describe('audit actions across modules', () => {
 
         for (const { module, file } of listAuditFiles())
             for (const action of Object.values(await readActions(file)))
-                // noun.noun.verb — at least three segments, each lower snake_case.
-                if (!/^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){2,}$/.test(action))
+                // domain.verb or domain.resource.verb — two to four segments, each lower
+                // snake_case. Matches BE's identical bound, so a renamed action satisfies both
+                // repositories' guards at once.
+                if (!/^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){1,3}$/.test(action))
                     malformed.push(`${module}: "${action}"`);
 
         expect(malformed).toEqual([]);
+    });
+
+    it('keeps every module either auditing or explicitly excused', () => {
+        const auditing = new Set(listAuditFiles().map(({ module }) => module));
+
+        const unaccounted = moduleFolders()
+            .filter((folder) => !auditing.has(folder))
+            .filter((folder) => !EXPECTED_NON_AUDITING.includes(folder))
+            .map(
+                (folder) =>
+                    `${folder}: no audit.ts and not in EXPECTED_NON_AUDITING — decide whether it should audit`
+            );
+
+        expect(unaccounted).toEqual([]);
+    });
+
+    it('keeps the non-auditing list free of modules that started auditing, or stopped existing', () => {
+        const auditing = new Set(listAuditFiles().map(({ module }) => module));
+        const folders = moduleFolders();
+
+        const stale = EXPECTED_NON_AUDITING.filter(
+            (module) => !folders.includes(module) || auditing.has(module)
+        );
+
+        expect(stale).toEqual([]);
     });
 });

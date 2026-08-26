@@ -12,6 +12,11 @@ import { productRepository } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
 import { createOwnerScope } from '@kernel/authorization';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { ordersAnalyticsEvents } from './analytics';
+import { ordersAuditActions } from './audit';
 import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 import { orderRepository } from './repository';
 import {
@@ -44,14 +49,26 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
  *
  * @param search
  * @param scope - Additional query filters merged into the $match stage
+ * @param context - caller context for the `orders_viewed` analytics emit; omitted by callers that
+ *   are not a request answering `GET /orders` (tests, and any future internal reuse of this as a
+ *   plain query helper) — no context means no emit, rather than a synthetic one.
  */
 export const search = (
     search: SearchOrdersRequest = {},
-    scope?: Record<string, unknown>
+    scope?: Record<string, unknown>,
+    context?: CallerContext
 ): Promise<{
     items: OrderDocument[];
     meta: PaginatedMeta;
-}> => orderRepository.search(search, scope);
+}> =>
+    orderRepository.search(search, scope).then((result) => {
+        if (context)
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: ordersAnalyticsEvents.ORDERS_VIEWED
+            });
+        return result;
+    });
 
 /**
  * Get a single order by ID.
@@ -69,17 +86,51 @@ export const getById = (
 };
 
 /**
+ * Report that an order was created — from wherever it was: the admin route (this module's own
+ * `create`) or a customer's checkout (`@modules/cart`'s `orderConfirm`).
+ *
+ * Split out rather than folded into `create()`, because the two paths' writes cannot share more
+ * than this: checkout resolves stock and its own rejection codes differently, holds a race-safe
+ * cart-clear, and sends its own confirmation mail — the fact that an order now exists is the one
+ * thing both are reporting. `actorRole` defaults to the caller's own role, but checkout overrides
+ * it to `'user'` unconditionally — a purchase is a customer action regardless of whether the
+ * account making it happens to be an admin's.
+ */
+export const recordCreated = (
+    order: OrderDocument,
+    context: CallerContext,
+    actorRole?: 'user' | 'admin'
+): void => {
+    emitAuditEvent(
+        buildAuditEvent(context, {
+            action: ordersAuditActions.ORDER_CREATED,
+            outcome: 'success',
+            ...(actorRole ? { actor_role: actorRole } : {}),
+            target_type: 'order',
+            target_id: String(order._id)
+        })
+    );
+    emitAnalyticsEvent({
+        ...buildAnalyticsBase(context),
+        event: ordersAnalyticsEvents.ORDER_CREATED,
+        properties: { order_id: String(order._id) }
+    });
+};
+
+/**
  * Create a new order from a list of { productId, quantity } items.
  * Looks up each product and stores a full snapshot in the order document.
  *
  * @param userId
  * @param email
  * @param items - Array of { productId, quantity }
+ * @param context - caller context for the `order_created` analytics/audit emit
  */
 export const create = (
     userId: string,
     email: string,
-    items: CartItem[]
+    items: CartItem[],
+    context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     // One rule call, two outcomes. `Promise.all([])` settles without a query, so an empty basket
     // still costs no round trip. The rule is in `domain/rules.ts`; mapping it to a status code
@@ -139,6 +190,7 @@ export const create = (
                     ]);
                 }
 
+                recordCreated(order, context);
                 return generateSuccess(order, 201, t('orders.creation-success'));
             });
     });
@@ -270,11 +322,23 @@ export const updateById = (
         email?: string;
         userId?: string;
         items?: CartItem[];
-    }
+    },
+    context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     orderRepository.findById(id).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
-        return update(order, data);
+        return update(order, data).then((result) => {
+            if (result.success)
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: ordersAuditActions.ORDER_UPDATED,
+                        outcome: 'success',
+                        target_type: 'order',
+                        target_id: id
+                    })
+                );
+            return result;
+        });
     });
 
 /**
@@ -403,11 +467,16 @@ function withActions(
  *
  * @param id - the order to cancel
  * @param authContext - whose view of the collection the write happens in ({@link callerScope})
+ * @param context - caller context for the `order_cancelled` analytics/audit emit. Optional: the
+ *   reservation-sweep expiry (`module.ts`'s `RESERVATION_EXPIRED` handler) also calls this with no
+ *   context at all — a lease timing out is not a request, has nothing to attribute the event to,
+ *   and does not emit one, matching what it does today.
  */
 export const cancelById = (
     id: string,
     authContext?: Caller,
-    options: { refund?: boolean } = {}
+    options: { refund?: boolean } = {},
+    context?: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     /*
      * A customer is always refunded — that is the promise `paid` is cancellable on, and it is not
@@ -451,6 +520,22 @@ export const cancelById = (
                 // is part of that. The fact is announced either way.
                 await emitDomainEvent(ORDER_CANCELLED, { orderId: String(order._id), refund });
 
+                if (context) {
+                    emitAuditEvent(
+                        buildAuditEvent(context, {
+                            action: ordersAuditActions.ORDER_CANCELLED,
+                            outcome: 'success',
+                            target_type: 'order',
+                            target_id: String(order._id)
+                        })
+                    );
+                    emitAnalyticsEvent({
+                        ...buildAnalyticsBase(context),
+                        event: ordersAnalyticsEvents.ORDER_CANCELLED,
+                        properties: { order_id: String(order._id) }
+                    });
+                }
+
                 return generateSuccess(order, 200, t('orders.cancel.success'));
             }
 
@@ -474,6 +559,7 @@ export const orderService = {
     getById,
     callerScope,
     create,
+    recordCreated,
     update,
     updateById,
     remove,

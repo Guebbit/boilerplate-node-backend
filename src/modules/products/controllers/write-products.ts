@@ -4,7 +4,7 @@ import { t } from '@infrastructure/i18n';
 import { productService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { readInput } from '@infrastructure/http/request';
+import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { resolveImageUrl } from '@infrastructure/http/uploads';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import type {
@@ -16,8 +16,6 @@ import type {
     UpdateProductByIdRequestMultipart,
     Product
 } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { productsAuditActions } from '../audit';
 
 /**
  * POST /products — create a new product (admin).
@@ -119,20 +117,15 @@ export const writeProducts = (
         }
 
         return productService
-            .create({
-                ...request.body,
-                ...validated,
-                ...(openingCount === undefined ? {} : { onHand: openingCount })
-            })
+            .create(
+                {
+                    ...request.body,
+                    ...validated,
+                    ...(openingCount === undefined ? {} : { onHand: openingCount })
+                },
+                callerContextOf(request)
+            )
             .then((product) => {
-                emitAuditEvent(
-                    buildAuditEvent(request, {
-                        action: productsAuditActions.ADMIN_PRODUCT_CREATED,
-                        outcome: 'success',
-                        target_type: 'product',
-                        target_id: String(product._id)
-                    })
-                );
                 successResponse(response, product, 201);
             })
             .catch((error: Error) =>
@@ -146,23 +139,19 @@ export const writeProducts = (
      * ID = edit product
      */
     return productService
-        .updateById(id, {
-            ...request.body,
-            ...validated
-        })
+        .updateById(
+            id,
+            {
+                ...request.body,
+                ...validated
+            },
+            callerContextOf(request)
+        )
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {
                     rejectResponse(response, result.status, result.errors);
                 });
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
-                    outcome: 'success',
-                    target_type: 'product',
-                    target_id: id
-                })
-            );
             successResponse(response, result.data);
         })
         .catch((error: Error) =>

@@ -8,6 +8,9 @@ import {
 import { productRepository } from '@modules/products';
 import { cartService } from '@modules/cart';
 import type { WishlistItem } from '@types';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { wishlistAnalyticsEvents } from './analytics';
 import { wishlistRepository } from './repository';
 import type { WishlistDocument } from './model';
 
@@ -44,15 +47,19 @@ const wishlistGet = (userId: string): Promise<WishlistView> =>
  */
 const wishlistAdd = (
     userId: string,
-    productId: string
+    productId: string,
+    context: CallerContext
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
     productRepository.findPublicById(productId).then((product) => {
         if (!product) return generateReject(404, [t('wishlist.product-not-found')]);
-        return wishlistRepository
-            .addLine(userId, productId)
-            .then((wishlist) =>
-                generateSuccess(toWishlistView(wishlist), 200, t('wishlist.added'))
-            );
+        return wishlistRepository.addLine(userId, productId).then((wishlist) => {
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
+                properties: { product_id: productId }
+            });
+            return generateSuccess(toWishlistView(wishlist), 200, t('wishlist.added'));
+        });
     });
 
 /**
@@ -63,10 +70,16 @@ const wishlistAdd = (
  */
 const wishlistRemove = (
     userId: string,
-    productId: string
+    productId: string,
+    context: CallerContext
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
     wishlistRepository.removeLine(userId, productId).then((wishlist) => {
         if (!wishlist) return generateReject(404, [t('wishlist.not-found')]);
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            event: wishlistAnalyticsEvents.WISHLIST_ITEM_REMOVED,
+            properties: { product_id: productId }
+        });
         return generateSuccess(toWishlistView(wishlist), 200, t('wishlist.removed'));
     });
 
@@ -87,7 +100,8 @@ const wishlistRemove = (
  */
 const wishlistMoveToCart = (
     userId: string,
-    productId: string
+    productId: string,
+    context: CallerContext
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
     wishlistRepository.findByUserId(userId).then((wishlist) => {
         const saved = wishlist?.items.some((item) => String(item.productId) === productId);
@@ -98,11 +112,14 @@ const wishlistMoveToCart = (
             // reason to throw away the fact that somebody wants it.
             if (!added.success) return generateReject(404, [t('wishlist.product-not-found')]);
 
-            return wishlistRepository
-                .removeLine(userId, productId)
-                .then((updated) =>
-                    generateSuccess(toWishlistView(updated), 200, t('wishlist.moved-to-cart'))
-                );
+            return wishlistRepository.removeLine(userId, productId).then((updated) => {
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    event: wishlistAnalyticsEvents.WISHLIST_MOVED_TO_CART,
+                    properties: { product_id: productId }
+                });
+                return generateSuccess(toWishlistView(updated), 200, t('wishlist.moved-to-cart'));
+            });
         });
     });
 

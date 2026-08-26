@@ -1,10 +1,8 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { authContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { wishlistAnalyticsEvents } from '../analytics';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -24,15 +22,9 @@ export const deleteWishlistItem = (request: Request<{ productId: string }>, resp
     }
 
     return wishlistService
-        .wishlistRemove(userId, productId)
+        .wishlistRemove(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: wishlistAnalyticsEvents.WISHLIST_ITEM_REMOVED,
-                properties: { product_id: productId }
-            });
 
             successResponse(response, result.data, 200, result.message);
         })

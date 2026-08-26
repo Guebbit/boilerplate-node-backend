@@ -11,6 +11,11 @@ import type { UserDocument, UserRecord } from './model';
 import type { SearchUsersRequest } from '@types';
 import { userRepository } from './repository';
 import { emitDomainEvent } from '@kernel/events';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { usersAnalyticsEvents } from './analytics';
+import { usersAuditActions } from './audit';
 import { USER_DELETED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { validationErrors } from '@infrastructure/http/controller';
@@ -75,8 +80,28 @@ export const getById = (id?: string) => {
  */
 export const create = (
     data: Pick<UserRecord, 'email' | 'username' | 'password'> &
-        Partial<Pick<UserRecord, 'admin' | 'imageUrl' | 'locale' | 'verified'>>
-): Promise<UserDocument> => userRepository.create({ verified: true, ...data });
+        Partial<Pick<UserRecord, 'admin' | 'imageUrl' | 'locale' | 'verified'>>,
+    context: CallerContext
+): Promise<UserDocument> =>
+    userRepository.create({ verified: true, ...data }).then((user) => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: usersAuditActions.ADMIN_USER_CREATED,
+                outcome: 'success',
+                target_type: 'user',
+                target_id: String(user._id)
+            })
+        );
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            // The new user, not the admin who created it — the funnel counts who came into
+            // existence, not who did the typing.
+            distinctId: String(user._id),
+            event: usersAnalyticsEvents.USER_CREATED,
+            properties: { admin_created: true }
+        });
+        return user;
+    });
 
 /**
  * Update an existing user document.
@@ -107,12 +132,33 @@ export const updateById = (
     id: string,
     data: Partial<
         Pick<UserRecord, 'email' | 'username' | 'password' | 'admin' | 'imageUrl' | 'locale'>
-    >
+    > & { active?: boolean },
+    context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.
     userRepository.findByIdWithCredentials(id).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
-        return update(user, data);
+        return update(user, data).then((result) => {
+            if (result.success) {
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: usersAuditActions.ADMIN_USER_UPDATED,
+                        outcome: 'success',
+                        target_type: 'user',
+                        target_id: id
+                    })
+                );
+                // Deactivation is a product event as well as an administrative one: it is what a
+                // churn dashboard counts, and it is invisible in a plain "updated" signal.
+                if (data.active === false)
+                    emitAnalyticsEvent({
+                        ...buildAnalyticsBase(context),
+                        distinctId: id,
+                        event: usersAnalyticsEvents.USER_DEACTIVATED
+                    });
+            }
+            return result;
+        });
     });
 
 /**

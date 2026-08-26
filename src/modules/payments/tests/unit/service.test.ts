@@ -16,6 +16,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
@@ -64,7 +65,8 @@ const paidOrder = async () => {
     await confirmPayment(
         String((intent as { data?: { _id?: unknown } }).data?._id),
         { cardNumber: GOOD_CARD },
-        auth(user)
+        auth(user),
+        testCallerContext
     );
     return { user, order };
 };
@@ -144,7 +146,12 @@ describe('confirmPayment', () => {
         expect(intent.success).toBe(true);
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
 
-        const result = await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+        const result = await confirmPayment(
+            paymentId,
+            { cardNumber: GOOD_CARD },
+            auth(user),
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         const storedOrder = await orderService.getById(String(order._id));
@@ -162,7 +169,8 @@ describe('confirmPayment', () => {
         const declined = await confirmPayment(
             paymentId,
             { cardNumber: FAKE_DECLINE_CARD },
-            auth(user)
+            auth(user),
+            testCallerContext
         );
 
         expect(asReject(declined).status).toBe(409);
@@ -172,7 +180,12 @@ describe('confirmPayment', () => {
         ).resolves.toBe('pending');
 
         // The decline is a state, not a dead end: the same document confirms with a better card.
-        const retried = await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+        const retried = await confirmPayment(
+            paymentId,
+            { cardNumber: GOOD_CARD },
+            auth(user),
+            testCallerContext
+        );
         expect(retried.success).toBe(true);
     });
 
@@ -182,7 +195,12 @@ describe('confirmPayment', () => {
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        const result = await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(stranger));
+        const result = await confirmPayment(
+            paymentId,
+            { cardNumber: GOOD_CARD },
+            auth(stranger),
+            testCallerContext
+        );
 
         expect(asReject(result).status).toBe(404);
     });
@@ -191,9 +209,14 @@ describe('confirmPayment', () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
-        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user), testCallerContext);
 
-        const again = await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+        const again = await confirmPayment(
+            paymentId,
+            { cardNumber: GOOD_CARD },
+            auth(user),
+            testCallerContext
+        );
 
         expect(asReject(again).status).toBe(409);
         expect(asReject(again).errors[0].code).toBe('PAYMENT_NOT_CONFIRMABLE');
@@ -203,7 +226,7 @@ describe('confirmPayment', () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
-        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user), testCallerContext);
 
         const result = await createIntent(String(order._id), auth(user));
 
@@ -253,7 +276,7 @@ describe('refund on cancel', () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
         const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
-        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user), testCallerContext);
 
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
@@ -297,9 +320,12 @@ const countersOf = async (productId: unknown) => {
 const placedOrder = async (onHand = 10, quantity = 3) => {
     const user = await createUser();
     const product = await createProduct({ onHand });
-    const created = await orderService.create(user.id, user.email, [
-        { productId: String(product._id), quantity }
-    ]);
+    const created = await orderService.create(
+        user.id,
+        user.email,
+        [{ productId: String(product._id), quantity }],
+        testCallerContext
+    );
     return { user, product, order: created.data! };
 };
 
@@ -308,7 +334,8 @@ const payFor = async (orderId: string, user: { id: string }) => {
     return confirmPayment(
         String(intent.success && intent.data?._id),
         { cardNumber: GOOD_CARD },
-        auth(user)
+        auth(user),
+        testCallerContext
     );
 };
 
@@ -331,7 +358,8 @@ describe('the confirm commits the order’s held units', () => {
         const declined = await confirmPayment(
             String(intent.success && intent.data?._id),
             { cardNumber: FAKE_DECLINE_CARD },
-            auth(user)
+            auth(user),
+            testCallerContext
         );
 
         expect(declined.success).toBe(false);
@@ -345,8 +373,8 @@ describe('the confirm commits the order’s held units', () => {
         const intent = await createIntent(String(order._id), auth(user));
         const paymentId = String(intent.success && intent.data?._id);
 
-        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
-        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user));
+        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user), testCallerContext);
+        await confirmPayment(paymentId, { cardNumber: GOOD_CARD }, auth(user), testCallerContext);
 
         // Seven, not four. Two guards refuse the replay independently — the order's conditional
         // `pending → paid` and the reservation's own `held → committed` claim.
@@ -404,7 +432,8 @@ describe('getForOrder — what the caller may do', () => {
         await confirmPayment(
             String((intent as { data?: { _id?: unknown } }).data?._id),
             { cardNumber: GOOD_CARD },
-            auth(user)
+            auth(user),
+            testCallerContext
         );
 
         const before = await getForOrder(String(order._id), { admin: true });
@@ -426,7 +455,8 @@ describe('getForOrder — what the caller may do', () => {
         await confirmPayment(
             String((intent as { data?: { _id?: unknown } }).data?._id),
             { cardNumber: GOOD_CARD },
-            auth(user)
+            auth(user),
+            testCallerContext
         );
 
         const result = await getForOrder(String(order._id), auth(user));

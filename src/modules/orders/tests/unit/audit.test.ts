@@ -22,10 +22,10 @@ import { ordersAuditActions } from '../../audit';
 describe('the orders audit vocabulary', () => {
     it('spells every action exactly as the log tooling expects', () => {
         expect(ordersAuditActions).toEqual({
-            ADMIN_ORDER_CREATED: 'admin.order.created',
-            ADMIN_ORDER_UPDATED: 'admin.order.updated',
-            ADMIN_ORDER_DELETED: 'admin.order.deleted',
-            USER_ORDER_CANCELLED: 'user.order.cancelled'
+            ORDER_CREATED: 'order.created',
+            ORDER_UPDATED: 'order.updated',
+            ORDER_DELETED: 'order.deleted',
+            ORDER_CANCELLED: 'order.cancelled'
         });
     });
 
@@ -37,8 +37,8 @@ describe('the orders audit vocabulary', () => {
      * does not type-check it.
      */
     it('registers its actions in the app-wide union', () => {
-        const action: AuditAction = ordersAuditActions.ADMIN_ORDER_CREATED;
+        const action: AuditAction = ordersAuditActions.ORDER_CREATED;
 
-        expect(action).toBe('admin.order.created');
+        expect(action).toBe('order.created');
     });
 });

@@ -16,9 +16,8 @@ import type {
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
-import { localeAuditActions } from '../audit';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
@@ -64,23 +63,9 @@ export const createLocaleEntry = (
     if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return localeService
-        .createEntry(request.params.locale, parseResult.data)
+        .createEntry(request.params.locale, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: localeAuditActions.ADMIN_LOCALE_ENTRY_CREATED,
-                    outcome: 'success',
-                    target_type: 'locale_entry',
-                    target_id: String(result.data?._id),
-                    metadata: {
-                        locale: request.params.locale,
-                        tenant: parseResult.data.tenant,
-                        key: parseResult.data.key
-                    }
-                })
-            );
 
             refreshOverrides();
 
@@ -104,22 +89,14 @@ export const updateLocaleEntry = (
     if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return localeService
-        .updateEntry(request.params.locale, request.params.entryId, parseResult.data)
+        .updateEntry(
+            request.params.locale,
+            request.params.entryId,
+            parseResult.data,
+            callerContextOf(request)
+        )
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
-                    outcome: 'success',
-                    target_type: 'locale_entry',
-                    target_id: request.params.entryId,
-                    // The key, not the new text. An audit trail records that the Spanish product
-                    // title changed and who changed it; storing the copy itself would make the
-                    // trail a second, unmanaged copy of the dictionary.
-                    metadata: { locale: request.params.locale, key: result.data?.key }
-                })
-            );
 
             refreshOverrides();
 
@@ -137,23 +114,9 @@ const importEntries = (
     entries: LocaleEntryInput[]
 ) =>
     localeService
-        .importEntries(request.params.locale, tenant, entries, mode)
+        .importEntries(request.params.locale, tenant, entries, mode, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: localeAuditActions.ADMIN_LOCALE_ENTRY_IMPORTED,
-                    outcome: 'success',
-                    target_type: 'locale',
-                    target_id: request.params.locale,
-                    // `mode` is the field that makes this record worth keeping: a replace that
-                    // removed three hundred keys and a merge that added two are the same action
-                    // name and very different events. `tenant` says whose dictionary it happened
-                    // to, which the counts alone cannot.
-                    metadata: { mode, tenant, ...result.data }
-                })
-            );
 
             refreshOverrides();
 

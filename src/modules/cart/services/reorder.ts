@@ -19,6 +19,11 @@ import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { orderRepository } from '@modules/orders';
 import { productRepository } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { cartAnalyticsEvents } from '../analytics';
+import { cartAuditActions } from '../audit';
 import { cartRepository } from '../repository';
 import { toCartView, type CartView } from './view';
 
@@ -61,7 +66,8 @@ interface ReorderLine {
  */
 export const reorderIntoCart = (
     userId: string,
-    orderId: string
+    orderId: string,
+    context: CallerContext
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     orderRepository
         .findByIdScoped(orderId, orderRepository.visibleScope(userId))
@@ -113,4 +119,21 @@ export const reorderIntoCart = (
                     .then((view) => generateSuccess(view, 200, t('cart.reorder.success')));
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error));
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error))
+        .then((result) => {
+            if (result.success) {
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: cartAuditActions.USER_CART_REORDERED,
+                        outcome: 'success',
+                        metadata: { order_id: orderId }
+                    })
+                );
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    event: cartAnalyticsEvents.CART_REORDERED,
+                    properties: { order_id: orderId }
+                });
+            }
+            return result;
+        });

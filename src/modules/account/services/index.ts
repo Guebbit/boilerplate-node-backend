@@ -19,12 +19,24 @@
  * config they both read. Nothing outside this module imports either — see `../index`.
  */
 
-import { tokenAdd, signup, login, tokenRemoveAll } from './authentication';
+import {
+    tokenAdd,
+    signup,
+    login,
+    tokenRemoveAll,
+    requestAccountDeletion,
+    sessionRevoke,
+    logoutCurrentSession,
+    refreshAccessToken
+} from './authentication';
 import {
     validatePasswordChange,
     passwordChange,
     passwordChangeWithCurrent,
-    updateProfile
+    passwordResetChange,
+    updateProfile,
+    getOwnProfile,
+    removeOwnAccount
 } from './profile';
 import {
     addressesGet,
@@ -34,8 +46,12 @@ import {
     addressForCheckout,
     addressesDeleteByUserId
 } from './addresses';
-import { sendVerificationEmail } from './verification';
-import { runTokenCleanup } from './token-cleanup';
+import {
+    sendVerificationEmail,
+    requestEmailVerification,
+    completeEmailVerification
+} from './verification';
+import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
 
 /*
  * Published by name as well as through the namespace, because something reaches for the function
@@ -73,10 +89,17 @@ export const accountService = {
     signup,
     login,
     tokenRemoveAll,
+    requestAccountDeletion,
+    sessionRevoke,
+    logoutCurrentSession,
+    refreshAccessToken,
     validatePasswordChange,
     passwordChange,
     passwordChangeWithCurrent,
+    passwordResetChange,
     updateProfile,
+    getOwnProfile,
+    removeOwnAccount,
     addressesGet,
     addressAdd,
     addressUpdate,
@@ -84,5 +107,8 @@ export const accountService = {
     addressForCheckout,
     addressesDeleteByUserId,
     sendVerificationEmail,
-    runTokenCleanup
+    requestEmailVerification,
+    completeEmailVerification,
+    runTokenCleanup,
+    adminTokenCleanup
 };

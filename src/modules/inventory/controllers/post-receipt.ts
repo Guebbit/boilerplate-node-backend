@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { callerContextOf } from '@infrastructure/http/request';
 import { ReceiveStockBody } from '@api/schemas.zod';
-import { inventoryAuditActions } from '../audit';
 import { inventoryService } from '../service';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
@@ -20,18 +19,9 @@ export const postReceipt = (request: Request, response: Response) => {
 
     const { productId, quantity, note } = parseResult.data;
     return inventoryService
-        .receive(productId, quantity, note)
+        .receive(productId, quantity, note, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: inventoryAuditActions.ADMIN_STOCK_RECEIVED,
-                    outcome: 'success',
-                    target_type: 'product',
-                    target_id: productId,
-                    metadata: { quantity, onHand: result.data?.onHand }
-                })
-            );
             successResponse(response, result.data, 200, result.message);
         })
         .catch(catchAs(response, 'postReceipt'));

@@ -1,11 +1,10 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
-import { userRepository } from '@modules/users';
 import { destroyLoggedCookie, destroyRefreshCookie } from '../session/cookies';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
+import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/logout
@@ -22,17 +21,11 @@ import { catchAs } from '@infrastructure/http/controller';
 export const postLogout = (request: Request, response: Response) => {
     const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
 
-    return (refreshToken ? userRepository.tokenRemoveByValue(refreshToken) : Promise.resolve())
+    return accountService
+        .logoutCurrentSession(refreshToken, callerContextOf(request))
         .then(() => {
             destroyRefreshCookie(response);
             destroyLoggedCookie(response);
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: accountAuditActions.AUTH_LOGOUT_SUCCEEDED,
-                    outcome: 'success'
-                })
-            );
 
             successResponse(response, undefined, 200, t('account.logout.success'));
         })

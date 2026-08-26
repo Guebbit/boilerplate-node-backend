@@ -17,8 +17,11 @@
  * exclusive — which is what makes a forced `true`/`false` fail.
  */
 import { userModel as Users } from '@modules/users';
-import { runTokenCleanup } from '@modules/account/services';
+import { runTokenCleanup, accountService } from '@modules/account/services';
 import { logger } from '@infrastructure/adapters/logger';
+import { testCallerContext } from '@tests/caller-context';
+import * as auditPort from '@infrastructure/observability/audit';
+import { accountAuditActions } from '../../audit';
 
 /*
  * Only `userModel` is replaced. The rest has to stay REAL because this file reaches the job through
@@ -148,5 +151,37 @@ describe('runTokenCleanup — the two branches are mutually exclusive', () => {
         const failed = mockedLogger.error.mock.calls.length;
 
         expect(completed + failed).toBe(1);
+    });
+});
+
+describe('adminTokenCleanup — the admin-triggered, audited counterpart', () => {
+    it('audits a successful cleanup', async () => {
+        // `mockImplementation` rather than a call-through spy: this file replaces
+        // `@infrastructure/adapters/logger`'s `logger` export only, and the real `emitAuditEvent`
+        // also reaches that module's `auditLogger` export, which the mock leaves undefined.
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent').mockImplementation(() => {});
+        mockTokenRemoveExpired.mockResolvedValueOnce({ status: 200, success: true });
+
+        const result = await accountService.adminTokenCleanup(testCallerContext);
+
+        expect(result).toEqual({ status: 200, success: true });
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP,
+                outcome: 'success'
+            })
+        );
+        auditSpy.mockRestore();
+    });
+
+    it('does not audit a failed cleanup — nothing to report happened', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        mockTokenRemoveExpired.mockResolvedValueOnce({ status: 500, success: false });
+
+        const result = await accountService.adminTokenCleanup(testCallerContext);
+
+        expect(result).toEqual({ status: 500, success: false });
+        expect(auditSpy).not.toHaveBeenCalled();
+        auditSpy.mockRestore();
     });
 });

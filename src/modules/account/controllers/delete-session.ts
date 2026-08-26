@@ -1,11 +1,9 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { userRepository } from '@modules/users';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
+import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
+import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/sessions/:sessionId
@@ -25,20 +23,13 @@ export const deleteSession = (request: Request<{ sessionId: string }>, response:
     const { id } = authContextOf(request);
     const { sessionId } = request.params;
 
-    return userRepository
-        .sessionRemove(id, sessionId)
+    return accountService
+        .sessionRevoke(id, sessionId, callerContextOf(request))
         .then(({ modifiedCount }) => {
             if (modifiedCount === 0) {
                 rejectResponse(response, 404, [t('account.sessions.not-found')]);
                 return;
             }
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: accountAuditActions.AUTH_SESSION_REVOKED,
-                    outcome: 'success'
-                })
-            );
 
             successResponse(response, undefined, 200, t('account.sessions.revoked'));
         })

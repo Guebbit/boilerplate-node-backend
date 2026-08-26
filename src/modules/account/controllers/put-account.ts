@@ -5,12 +5,10 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { resolveImageUrl } from '@infrastructure/http/uploads';
 import { imageStore } from '@infrastructure/adapters/image-store';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import type { UpdateAccountRequest, UpdateAccountRequestMultipart } from '@types';
 import { accountService } from '../services';
-import { accountAuditActions } from '../audit';
 import { sendVerificationEmail } from '../services';
-import { authContextOf } from '@infrastructure/http/request';
+import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * PUT /account
@@ -43,19 +41,12 @@ export const putAccount = (
     const { email, username, locale } = request.body as UpdateAccountRequest;
 
     return accountService
-        .updateProfile(id, { email, username, locale, imageUrl })
+        .updateProfile(id, { email, username, locale, imageUrl }, callerContextOf(request))
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {
                     rejectResponse(response, result.status, result.errors);
                 });
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: accountAuditActions.AUTH_ACCOUNT_UPDATED,
-                    outcome: 'success'
-                })
-            );
 
             /*
              * A changed address restarts verification: `updateProfile` has already unset

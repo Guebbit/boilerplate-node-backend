@@ -14,6 +14,9 @@ import {
 } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { feedbackAuditActions } from './audit';
 
 /**
  * OCP-compliant status mapping: adding a new status only requires adding one entry here.
@@ -62,7 +65,10 @@ export const search = (
         status?: string;
         page?: string | number;
         pageSize?: string | number;
-    } = {}
+    } = {},
+    // Omitted by callers that are not a request answering `GET /feedback` (tests, and any future
+    // internal reuse of this as a plain query helper) — no context means no emit.
+    context?: CallerContext
 ): Promise<{
     items: FeedbackRequestDocument[];
     meta: PaginatedMeta;
@@ -70,10 +76,18 @@ export const search = (
     // `status` is mapped here rather than declared on the repository: turning a raw string into
     // a member of the closed `FeedbackRequestStatus` enum is a domain rule, so it is passed down
     // as a scope once resolved.
-    feedbackRequestRepository.search(
-        filters,
-        filters.status ? { status: toFeedbackStatus(filters.status) } : {}
-    );
+    feedbackRequestRepository
+        .search(filters, filters.status ? { status: toFeedbackStatus(filters.status) } : {})
+        .then((result) => {
+            if (context)
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: feedbackAuditActions.ADMIN_FEEDBACK_VIEWED,
+                        outcome: 'success'
+                    })
+                );
+            return result;
+        });
 
 export const updateStatus = (
     feedback: FeedbackRequestDocument,
@@ -89,11 +103,24 @@ export const updateStatus = (
 
 export const updateStatusById = (
     id: string,
-    payload: UpdateFeedbackRequestStatusRequest
+    payload: UpdateFeedbackRequestStatusRequest,
+    context?: CallerContext
 ): Promise<ResponseSuccess<FeedbackRequestDocument> | ResponseReject> =>
     feedbackRequestRepository.findById(id).then((feedback) => {
         if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
-        return updateStatus(feedback, payload);
+        return updateStatus(feedback, payload).then((result) => {
+            if (context && result.success)
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
+                        outcome: 'success',
+                        target_type: 'feedback',
+                        target_id: id,
+                        metadata: { status: payload.status }
+                    })
+                );
+            return result;
+        });
     });
 
 export const feedbackRequestService = {

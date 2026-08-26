@@ -23,6 +23,10 @@
  */
 
 export { orderService } from './service';
+// `cart` reports `order_created` from its own checkout the same way it sends the confirmation
+// mail: only the checkout knows the order stood, so it calls back into the module that owns the
+// event rather than this module reaching up for a `Request` it must never see. See
+// `orderService.recordCreated`'s docblock for why this is not folded into `create()` itself.
 export { orderRepository } from './repository';
 export { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 // `cart` sends the customer's confirmation itself: only the checkout knows the order stood, and

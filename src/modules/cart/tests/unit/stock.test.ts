@@ -24,6 +24,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import { cartService } from '@modules/cart';
@@ -88,7 +89,7 @@ describe('checkout holds units without selling them', () => {
         const product = await createProduct({ onHand: 10 });
         await cartService.cartItemAddById(user.id, String(product._id), 3);
 
-        const result = await cartService.orderConfirm(user.id);
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
         // THE assertion of the whole rework: the units are spoken for, not gone.
@@ -104,7 +105,7 @@ describe('checkout holds units without selling them', () => {
         const product = await createProduct({ onHand: 2 });
         await cartService.cartItemAddById(user.id, String(product._id), 3);
 
-        const result = await cartService.orderConfirm(user.id);
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
@@ -128,7 +129,7 @@ describe('checkout holds units without selling them', () => {
             available: 2
         });
         // And the cart survives — a refused checkout is not a lost basket.
-        const cart = await cartService.cartGetWithSummary(user.id);
+        const cart = await cartService.cartGetForBadge(user.id);
         expect(cart.items).toEqual([{ productId: String(product._id), quantity: 3 }]);
     });
 
@@ -138,11 +139,11 @@ describe('checkout holds units without selling them', () => {
         const product = await createProduct({ onHand: 4 });
 
         await cartService.cartItemAddById(holder.id, String(product._id), 4);
-        const firstCheckout = await cartService.orderConfirm(holder.id);
+        const firstCheckout = await cartService.orderConfirm(holder.id, testCallerContext);
         expect(firstCheckout.success).toBe(true);
 
         await cartService.cartItemAddById(latecomer.id, String(product._id), 1);
-        const result = await cartService.orderConfirm(latecomer.id);
+        const result = await cartService.orderConfirm(latecomer.id, testCallerContext);
 
         // Four units are physically present and none of them is for sale. This is the state the
         // single-`stock` model had no way to represent.
@@ -163,7 +164,7 @@ describe('checkout holds units without selling them', () => {
         await cartService.cartItemAddById(user.id, String(shortB._id), 5);
         await cartService.cartItemAddById(user.id, String(fine._id), 1);
 
-        const result = await cartService.orderConfirm(user.id);
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(false);
         const details = result.success ? undefined : result.errors[0].details;
@@ -182,7 +183,7 @@ describe('checkout holds units without selling them', () => {
         await cartService.cartItemAddById(user.id, String(plenty._id), 2);
         await cartService.cartItemAddById(user.id, String(scarce._id), 2);
 
-        const result = await cartService.orderConfirm(user.id);
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(false);
         expect(await countersOf(plenty._id)).toMatchObject({ reserved: 0, available: 50 });
@@ -197,8 +198,8 @@ describe('checkout holds units without selling them', () => {
         await cartService.cartItemAddById(bob.id, String(lastOne._id), 1);
 
         const [first, second] = await Promise.all([
-            cartService.orderConfirm(alice.id),
-            cartService.orderConfirm(bob.id)
+            cartService.orderConfirm(alice.id, testCallerContext),
+            cartService.orderConfirm(bob.id, testCallerContext)
         ]);
 
         const outcomes = [first.success, second.success].toSorted();
@@ -231,9 +232,12 @@ describe('the admin order create holds units like checkout', () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 10 });
 
-        const result = await orderService.create(user.id, user.email, [
-            { productId: String(product._id), quantity: 4 }
-        ]);
+        const result = await orderService.create(
+            user.id,
+            user.email,
+            [{ productId: String(product._id), quantity: 4 }],
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         expect(await countersOf(product._id)).toEqual({
@@ -248,10 +252,15 @@ describe('the admin order create holds units like checkout', () => {
         const plenty = await createProduct({ title: 'Plenty', onHand: 50 });
         const scarce = await createProduct({ title: 'Scarce', onHand: 1 });
 
-        const result = await orderService.create(user.id, user.email, [
-            { productId: String(plenty._id), quantity: 2 },
-            { productId: String(scarce._id), quantity: 5 }
-        ]);
+        const result = await orderService.create(
+            user.id,
+            user.email,
+            [
+                { productId: String(plenty._id), quantity: 2 },
+                { productId: String(scarce._id), quantity: 5 }
+            ],
+            testCallerContext
+        );
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
@@ -272,7 +281,7 @@ describe('cancel releases the hold', () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 10 });
         await cartService.cartItemAddById(user.id, String(product._id), 4);
-        const checkout = await cartService.orderConfirm(user.id);
+        const checkout = await cartService.orderConfirm(user.id, testCallerContext);
         expect(await countersOf(product._id)).toMatchObject({ reserved: 4, available: 6 });
 
         const orderId = String(checkout.success && checkout.data?._id);
@@ -290,7 +299,7 @@ describe('cancel releases the hold', () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 10 });
         await cartService.cartItemAddById(user.id, String(product._id), 4);
-        const checkout = await cartService.orderConfirm(user.id);
+        const checkout = await cartService.orderConfirm(user.id, testCallerContext);
         const orderId = String(checkout.success && checkout.data?._id);
 
         await orderService.cancelById(orderId, { id: user.id, admin: false });
@@ -310,7 +319,7 @@ describe('cancel releases the hold', () => {
         const bought = await createProduct({ title: 'Bought', onHand: 10 });
         const untouched = await createProduct({ title: 'Untouched', onHand: 5 });
         await cartService.cartItemAddById(user.id, String(bought._id), 1);
-        const checkout = await cartService.orderConfirm(user.id);
+        const checkout = await cartService.orderConfirm(user.id, testCallerContext);
         const orderId = String(checkout.success && checkout.data?._id);
 
         await orderService.cancelById(orderId, { id: user.id, admin: false });
@@ -329,7 +338,7 @@ describe('the expiry sweep', () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 10 });
             await cartService.cartItemAddById(user.id, String(product._id), 4);
-            const checkout = await cartService.orderConfirm(user.id);
+            const checkout = await cartService.orderConfirm(user.id, testCallerContext);
             const orderId = String(checkout.success && checkout.data?._id);
 
             const expired = await inventoryService.runReservationSweep();
@@ -355,7 +364,7 @@ describe('the expiry sweep', () => {
             const user = await createUser();
             const product = await createProduct({ onHand: 10 });
             await cartService.cartItemAddById(user.id, String(product._id), 4);
-            await cartService.orderConfirm(user.id);
+            await cartService.orderConfirm(user.id, testCallerContext);
 
             await inventoryService.runReservationSweep();
             const second = await inventoryService.runReservationSweep();

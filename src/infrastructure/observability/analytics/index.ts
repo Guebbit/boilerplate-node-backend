@@ -13,6 +13,7 @@
  */
 
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
+import type { CallerContext } from '@infrastructure/http/request';
 import { umamiAnalyticsProvider } from './umami';
 import { posthogAnalyticsProvider } from './posthog';
 import { noneAnalyticsProvider } from './none';
@@ -155,24 +156,24 @@ export const resetAnalyticsProvider = (): void => {
  *
  * Typed as `Pick<...>` so it stays in lockstep with `AnalyticsEvent`: renaming a field there
  * breaks this signature at compile time instead of silently producing a wrong shape.
- * Usage: `emitAnalyticsEvent({ ...buildAnalyticsBase(request), event: cartAnalyticsEvents.CART_VIEWED })`
+ * Usage: `emitAnalyticsEvent({ ...buildAnalyticsBase(context), event: cartAnalyticsEvents.CART_VIEWED })`
  *
- * @param request - the express request the event happened during
+ * @param context - the caller context built once in the controller, see `callerContextOf`
  */
-export const buildAnalyticsBase = (request: {
-    authContext?: { id?: string } | null;
-    ip?: string;
-    headers?: { 'user-agent'?: string; host?: string };
-}): Pick<AnalyticsEvent, 'distinctId' | 'traceId' | 'clientIp' | 'userAgent' | 'hostname'> => ({
+export const buildAnalyticsBase = (
+    context: CallerContext
+): Pick<AnalyticsEvent, 'distinctId' | 'traceId' | 'clientIp' | 'userAgent' | 'hostname'> => ({
     // CAVEAT: unauthenticated traffic all collapses onto the literal 'anonymous' id, so
     // pre-login events cannot be told apart per visitor *by this field*. Under Umami the
     // IP + user-agent hash below still separates them; under PostHog they do not separate.
-    distinctId: request.authContext?.id ?? 'anonymous',
-    // Read from the ambient OTel context — no plumbing needed at the call site.
+    distinctId: context.caller.id ?? 'anonymous',
+    // Read from the ambient OTel context — no plumbing needed at the call site. Safe unlike a
+    // "current request" accessor would be: OTel's context manager is built to survive exactly
+    // the async hops a service-tier call adds, which is not true of an ad hoc ALS lookup.
     traceId: getActiveSpanContext().traceId,
-    clientIp: request.ip,
-    userAgent: request.headers?.['user-agent'],
-    hostname: request.headers?.host
+    clientIp: context.ip,
+    userAgent: context.userAgent,
+    hostname: context.host
 });
 
 /**

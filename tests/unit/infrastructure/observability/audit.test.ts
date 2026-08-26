@@ -164,16 +164,12 @@ describe('registerAuditSink', () => {
 
 describe('extractRequestContext', () => {
     it('extracts ip, user_agent, and request_id', () => {
-        const mockHeaders: Record<string, string | string[] | undefined> = {
-            ['user-agent']: 'Mozilla/5.0'
-        };
-        const request = {
+        const ctx = extractRequestContext({
+            caller: {},
             ip: '10.0.0.1',
-            headers: mockHeaders,
+            userAgent: 'Mozilla/5.0',
             requestId: 'req-111'
-        };
-
-        const ctx = extractRequestContext(request);
+        });
 
         expect(ctx.ip).toBe('10.0.0.1');
         expect(ctx.user_agent).toBe('Mozilla/5.0');
@@ -183,25 +179,11 @@ describe('extractRequestContext', () => {
     });
 
     it('returns undefined for missing fields', () => {
-        const ctx = extractRequestContext({});
+        const ctx = extractRequestContext({ caller: {} });
 
         expect(ctx.ip).toBeUndefined();
         expect(ctx.user_agent).toBeUndefined();
         expect(ctx.request_id).toBeUndefined();
         expect(ctx.trace_id).toBeUndefined();
-    });
-
-    it('normalizes array user-agent to first element', () => {
-        const mockHeaders: Record<string, string | string[] | undefined> = {
-            ['user-agent']: ['agent-a', 'agent-b']
-        };
-        const ctx = extractRequestContext({ headers: mockHeaders });
-        expect(ctx.user_agent).toBe('agent-a');
-    });
-
-    it('handles missing headers object', () => {
-        const ctx = extractRequestContext({ ip: '9.9.9.9' });
-        expect(ctx.ip).toBe('9.9.9.9');
-        expect(ctx.user_agent).toBeUndefined();
     });
 });

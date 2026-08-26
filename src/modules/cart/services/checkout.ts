@@ -16,6 +16,7 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import {
     orderRepository,
+    orderService,
     orderConfirmEmail,
     sumLineItems,
     type OrderDocument
@@ -24,6 +25,9 @@ import { userRepository } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
 import { addressForCheckout, type AddressItem } from '@modules/account';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
 import { evaluateCheckout } from '../domain';
 import { isJoined, readCartLines, type JoinedCartLine } from './view';
@@ -80,6 +84,7 @@ const toShippingAddress = (address: AddressItem) => ({
  */
 export const orderConfirm = (
     userId: string,
+    context: CallerContext,
     addressId?: string,
     shippingMethodId?: string
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
@@ -261,4 +266,29 @@ export const orderConfirm = (
                 });
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error));
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error))
+        .then((result) => {
+            /*
+             * `order_created` reports from here, not just from the admin route's `create()` —
+             * this is what §0 of `OBSERVABILITY_EMISSION_LAYER.md` calls the whole case: a
+             * customer completing checkout creates an order exactly as much as an admin typing
+             * one in does, so the event that says "an order exists" has to fire on both paths.
+             * `actorRole` is forced to `'user'`: a purchase is a customer action even when the
+             * account making it happens to belong to an admin.
+             */
+            if (result.success && result.data) {
+                orderService.recordCreated(result.data, context, 'user');
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
+                    properties: { order_id: String(result.data._id) }
+                });
+            } else if (!result.success) {
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    event: cartAnalyticsEvents.CHECKOUT_FAILED,
+                    properties: { reason: result.errors[0]?.code }
+                });
+            }
+            return result;
+        });

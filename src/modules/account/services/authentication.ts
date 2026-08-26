@@ -24,6 +24,12 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema, userRepository, type TokenType, type UserDocument } from '@modules/users';
 import { validationErrors } from '@infrastructure/http/controller';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { accountAnalyticsEvents } from '../analytics';
+import { accountAuditActions } from '../audit';
+import { createAccessToken, recordRefreshTokenUse } from '../session/jwt';
 
 /**
  * Add a token to the user (e.g. password reset).
@@ -45,6 +51,109 @@ export const tokenAdd = (
 };
 
 /**
+ * Issue a delete-confirmation token and record that the caller asked for one.
+ *
+ * A wrapper around `tokenAdd(user, 'delete', ...)` rather than an emit inside `tokenAdd` itself:
+ * that function's third caller, `sendVerificationEmail`, must stay silent — pushing a
+ * verification token is a side effect of signup and profile updates, not a request anyone made.
+ * `tokenAdd` cannot tell those apart from its own arguments without a flag, so the callers that
+ * DO want an audit record wrap it instead.
+ */
+export const requestAccountDeletion = (
+    user: UserDocument,
+    context: CallerContext
+): Promise<string> =>
+    tokenAdd(user, 'delete', 3_600_000).then((token) => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
+                actor_user_id: user.id,
+                outcome: 'success'
+            })
+        );
+        return token;
+    });
+
+/**
+ * Revoke one of the caller's own sessions.
+ *
+ * `emitAuditEvent` only when a token actually matched — `deleteSession` reports the same 404 as
+ * an invented id for someone else's session or a stale one, and an audit row would misrepresent a
+ * revoke that never happened.
+ */
+export const sessionRevoke = (
+    userId: string,
+    sessionId: string,
+    context: CallerContext
+): Promise<{ modifiedCount: number }> =>
+    userRepository.sessionRemove(userId, sessionId).then((result) => {
+        if (result.modifiedCount > 0)
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_SESSION_REVOKED,
+                    outcome: 'success'
+                })
+            );
+        return result;
+    });
+
+/**
+ * Log out of the current session only: revoke the refresh token the caller's cookie names, if
+ * any, and record it either way.
+ *
+ * A missing cookie is not a failure — `postLogout` answers 200 for it, matching "the caller is
+ * not logged in here," which is the state they asked for — so the audit event still fires; there
+ * is simply nothing to revoke.
+ */
+export const logoutCurrentSession = (
+    refreshToken: string | undefined,
+    context: CallerContext
+): Promise<void> =>
+    (refreshToken ? userRepository.tokenRemoveByValue(refreshToken) : Promise.resolve()).then(
+        () => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_LOGGED_OUT,
+                    outcome: 'success'
+                })
+            );
+        }
+    );
+
+/**
+ * Exchange a refresh token for a fresh access token, recording the attempt either way.
+ *
+ * Does not cover the "no cookie at all" case — `getRefreshToken` answers that one itself, before
+ * any token exists to operate on, so there is nothing here for a service call to report on yet.
+ */
+export const refreshAccessToken = (refreshToken: string, context: CallerContext): Promise<string> =>
+    createAccessToken(refreshToken)
+        // This route IS the session making a request, and the only place that is true: login
+        // issues a session rather than using one. See `recordRefreshTokenUse`.
+        .then((token) => recordRefreshTokenUse(refreshToken).then(() => token))
+        .then((token) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_TOKEN_REFRESHED,
+                    outcome: 'success'
+                })
+            );
+            return token;
+        })
+        .catch((error: unknown) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_TOKEN_REFRESHED,
+                    actor_user_id: 'anonymous',
+                    actor_role: 'anonymous',
+                    outcome: 'failure',
+                    metadata: { reason: 'invalid_token' }
+                })
+            );
+            throw error;
+        });
+
+/**
  * Register new user.
  */
 export const signup = (
@@ -55,15 +164,16 @@ export const signup = (
     // Not `| null`: the contract declares `imageUrl` a string, so a null reaches zod as
     // "expected string, received null" and is rejected before the `?? ''` below could see it.
     // The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
-    imageUrl?: string
+    imageUrl: string | undefined,
+    callerContext: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const parseResult = zodUserSchema
         .extend({
             passwordConfirm: z.string()
         })
-        .superRefine(({ passwordConfirm, password }, context) => {
+        .superRefine(({ passwordConfirm, password }, refinementContext) => {
             if (passwordConfirm !== password)
-                context.addIssue({
+                refinementContext.addIssue({
                     code: 'custom',
                     message: t('account.signup.password-dont-match')
                 });
@@ -76,27 +186,56 @@ export const signup = (
             passwordConfirm
         });
 
-    if (!parseResult.success)
-        return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
+    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
+        ? userRepository
+              .findOne({ email })
+              .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+                  if (user) return generateReject(409, [t('account.signup.email-already-used')]);
+                  return userRepository
+                      .create({
+                          username,
+                          email,
+                          imageUrl: imageUrl ?? '',
+                          password,
+                          // The language they signed up in, kept for work that happens later
+                          // without a request to read `Accept-Language` from — a queued email, a
+                          // nightly job. Editable afterwards from the user endpoints.
+                          locale: getCurrentLocale()
+                      })
+                      .then((createdUser) => generateSuccess<UserDocument>(createdUser));
+              })
+              .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
+        : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
-    return userRepository
-        .findOne({ email })
-        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-            if (user) return generateReject(409, [t('account.signup.email-already-used')]);
-            return userRepository
-                .create({
-                    username,
-                    email,
-                    imageUrl: imageUrl ?? '',
-                    password,
-                    // The language they signed up in, kept for work that happens later without
-                    // a request to read `Accept-Language` from — a queued email, a nightly job.
-                    // Editable afterwards from the user endpoints.
-                    locale: getCurrentLocale()
+    return outcome.then((result) => {
+        if (!result.success) {
+            emitAuditEvent(
+                buildAuditEvent(callerContext, {
+                    action: accountAuditActions.AUTH_SIGNED_UP,
+                    actor_user_id: 'anonymous',
+                    actor_role: 'anonymous',
+                    outcome: 'failure'
                 })
-                .then((createdUser) => generateSuccess<UserDocument>(createdUser));
-        })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+            );
+            return result;
+        }
+
+        const newUserId = result.data?.id ?? 'unknown';
+        emitAuditEvent(
+            buildAuditEvent(callerContext, {
+                action: accountAuditActions.AUTH_SIGNED_UP,
+                actor_user_id: newUserId,
+                actor_role: 'user',
+                outcome: 'success'
+            })
+        );
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(callerContext),
+            distinctId: newUserId,
+            event: accountAnalyticsEvents.USER_SIGNED_UP
+        });
+        return result;
+    });
 };
 
 /**
@@ -133,10 +272,16 @@ export const login = (
 /**
  * Remove all tokens of a given type for the user identified by userId.
  * Used by logout-everywhere flows.
+ *
+ * The audit emit fires unconditionally, matching the controller it moved down from: whatever this
+ * resolves to, the caller's next step is "destroy the local cookies and answer success" either
+ * way, so the emit was never actually gated on `result.success` and this preserves that exactly
+ * rather than introducing a new condition on the way down.
  */
 export const tokenRemoveAll = (
     userId: string,
-    type: TokenType
+    type: TokenType,
+    context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     userRepository
         // `tokens` is select:false — needed here to filter and re-save them
@@ -158,4 +303,13 @@ export const tokenRemoveAll = (
                 return user.tokenRemoveAll(type).then(() => generateSuccess<UserDocument>(user));
             }
         )
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
+        .then((result) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_LOGGED_OUT_EVERYWHERE,
+                    outcome: 'success'
+                })
+            );
+            return result;
+        });

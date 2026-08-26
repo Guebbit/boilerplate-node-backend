@@ -15,6 +15,7 @@
  * visible.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import * as accountService from '@modules/account/services';
 import { userRepository } from '@modules/users';
@@ -29,7 +30,9 @@ describe('accountService.signup', () => {
             'new@example.com',
             'newuser',
             'Password1!',
-            'Password1!'
+            'Password1!',
+            undefined,
+            testCallerContext
         );
 
         expect(result.success).toBe(true);
@@ -41,7 +44,9 @@ describe('accountService.signup', () => {
             'new@example.com',
             'newuser',
             'Password1!',
-            'Different1!'
+            'Different1!',
+            undefined,
+            testCallerContext
         );
 
         expect(result.success).toBe(false);
@@ -55,7 +60,9 @@ describe('accountService.signup', () => {
             'taken@example.com',
             'anotheruser',
             'Password1!',
-            'Password1!'
+            'Password1!',
+            undefined,
+            testCallerContext
         );
 
         expect(result.success).toBe(false);
@@ -67,7 +74,9 @@ describe('accountService.signup', () => {
             'not-an-email',
             'user',
             'Password1!',
-            'Password1!'
+            'Password1!',
+            undefined,
+            testCallerContext
         );
 
         expect(result.success).toBe(false);
@@ -77,7 +86,14 @@ describe('accountService.signup', () => {
     });
 
     it('rejects with 422 when the password is too short', async () => {
-        const result = await accountService.signup('short@example.com', 'shortpwd', 'abc', 'abc');
+        const result = await accountService.signup(
+            'short@example.com',
+            'shortpwd',
+            'abc',
+            'abc',
+            undefined,
+            testCallerContext
+        );
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(422);

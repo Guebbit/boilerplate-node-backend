@@ -1,7 +1,6 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { deliveryAuditActions } from '../audit';
+import { callerContextOf } from '@infrastructure/http/request';
 import { deliveryService } from '../service';
 import { catchAs } from '@infrastructure/http/controller';
 
@@ -13,15 +12,8 @@ import { catchAs } from '@infrastructure/http/controller';
  */
 export const postCourierAdvance = (request: Request, response: Response) =>
     deliveryService
-        .runCourierAdvance()
+        .runCourierAdvance(callerContextOf(request))
         .then((advanced) => {
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: deliveryAuditActions.ADMIN_COURIER_ADVANCED,
-                    outcome: 'success',
-                    metadata: { advanced }
-                })
-            );
             successResponse(response, { advanced });
         })
         .catch(catchAs(response, 'postCourierAdvance'));

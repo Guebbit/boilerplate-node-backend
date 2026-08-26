@@ -7,14 +7,14 @@ Product analytics answers **business** questions — "how many users abandon che
 per-request ones. Signup, login, product view, cart, checkout and order events show where that
 belongs without polluting every file.
 
-Twenty-one controllers emit through one helper, and none of them knows where the event lands.
+Every module emits through one helper, and none of them knows where the event lands.
 
 ## Event flow
 
 ```mermaid
 flowchart LR
-    UserAction[User or business action] --> Controller
-    Controller --> Emit["emitAnalyticsEvent()"]
+    UserAction[User or business action] --> Service
+    Service --> Emit["emitAnalyticsEvent()"]
     Emit --> Port{"NODE_ANALYTICS_PROVIDER"}
     Port -->|umami, default| Umami["Umami — POST /api/send"]
     Port -->|posthog| PostHog["PostHog — buffered capture()"]
@@ -24,6 +24,45 @@ flowchart LR
 Which implementation answers is a deployment decision, not a code path — the same shape
 `NODE_PAYMENT_PROVIDER` uses in `@modules/payments/providers`. A name this build does not carry
 throws at the first event rather than recording nothing quietly.
+
+## Where an event is emitted from
+
+**From the service that performs the operation, always.** The controller layer emits per
+_route_; the service layer emits per _operation_ — and where more than one route reaches one
+operation, or one route reaches an operation by more than one path, those two are not the same
+set. `order_created` is the proof this rule exists for at all: for a while it fired only from the
+admin-order route, and a customer completing checkout — a second path to the same fact, "an order
+now exists" — created one and reported nothing. Two different routes producing the same
+operation is common enough (checkout and the admin order form, a wishlist move-to-cart and a
+plain add) that a controller-level emit is a coverage bet the controller cannot see itself making.
+
+**A method serving more than one meaning is split first, emitted second.** `cartGetForView` and
+`cartGetForBadge` read the identical cart; only the first is a `cart_viewed` moment, and each is
+its own named function rather than one function with a flag — a flag is one more thing a future
+call site can get wrong, a name is not. The same shape applies to `cartItemAdd`/
+`cartItemUpdateQuantity` (one write, two routes, two meanings) and to a shared read wrapped by a
+dedicated caller-specific function (`getOwnProfile` beside the admin-shared `userService.getById`)
+rather than an emit added to the shared function itself.
+
+See `OBSERVABILITY_EMISSION_CHECKLIST.md`, alongside this repo and `boilerplate-php-laravel-backend`
+in the shared workspace root, for the full per-function inventory this rule was applied against.
+
+## Caller context
+
+A service function that emits needs the caller's address, user-agent and trace id, and the
+service tier is defined by never seeing a `Request` — so those fields travel as a `CallerContext`
+(`src/infrastructure/http/request.ts`), built once by `callerContextOf(request)` at the top of the
+controller and passed down as an ordinary parameter to whichever service call ends up emitting.
+
+**This is deliberately not how the PHP twin does it**, and that is the one place the two backends
+are meant to differ rather than converge. BE's services read `AnalyticsContext::current()` off an
+ambient value, which is safe there because a PHP-FPM request _is_ the process — there is no
+concurrent second request whose context could bleed into this one. Node serves every request in
+one process, so "the current request" exists only inside an `AsyncLocalStorage`, which any async
+boundary can drop; an ambient accessor here would occasionally return the wrong request, or none,
+silently — the exact failure mode this file's naming discipline and the checklist's coverage rule
+both exist to remove. Threading a plain parameter instead means a missing context is a compile
+error, not a row attributed to nobody.
 
 ## Choosing a provider
 
@@ -104,6 +143,29 @@ With the code that emits it — `src/modules/<name>/analytics.ts`, one module, o
 a browser can produce live in `shared/contracts/analytics.frontend.ts` and are published to the
 paired frontend. Both halves share ONE Umami website, so the two form one namespace:
 `contracts:bundle` refuses to build a catalogue in which two sections claim one name.
+
+## One namespace, two repositories
+
+Both backends and the paired frontend write into ONE Umami website, so every name they emit shares a
+single namespace. Three things keep it coherent, and deliberately not a fourth.
+
+**Each repository refuses a collision inside itself.** `contracts:bundle` fails when two sections
+claim one name or one value — a module against another module, or a module against the client's
+half. It is why a module that declares no names is worth noticing: one that emits nothing used to be
+indistinguishable from one with nothing to emit.
+
+**The published catalogue is compared across the pair.** `check:spec-identity` hashes it against the
+paired repository's copy, and either backend writes the same bytes, so the frontend's copy is true
+of whichever backend is deployed.
+
+**The two backends' own vocabularies are NOT compared, and that is a decision rather than a gap.**
+The deployment model is one backend at a time — the PHP one with the frontend, or the Node one with
+the frontend, never both — so a gate diffing the two would guard a state that cannot occur in a
+deployment. It also has no honest home: neither repository can see the other, so it would live
+outside both or be duplicated in each. What replaces it is that the two vocabularies are identical
+today, and that the rule above is written in both trees, at the place where the next name is chosen.
+
+Written down because that argument is not obvious and will otherwise be re-derived.
 
 ## Two things Umami does not tell you
 

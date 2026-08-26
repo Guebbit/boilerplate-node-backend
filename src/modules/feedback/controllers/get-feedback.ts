@@ -1,12 +1,10 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import type { SearchFeedbackRequestsRequest } from '@types';
-import { readInput } from '@infrastructure/http/request';
+import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { successResponse } from '@infrastructure/http/response';
 import { feedbackRequestService } from '../service';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { feedbackAuditActions } from '../audit';
 import { catchAs, rejectValidation } from '@infrastructure/http/controller';
 
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
@@ -52,22 +50,17 @@ export const getFeedback = (
     if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
     return feedbackRequestService
-        .search({
-            ...parseResult.data,
-            text,
-            email,
-            // Pass as string — the service's toFeedbackStatus() handles the string→enum mapping.
-            // An invalid one is not a 422 here: on a READ it narrows to nothing. See that helper.
-            status: status || undefined
-        })
-        .then((result) => {
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: feedbackAuditActions.ADMIN_FEEDBACK_VIEWED,
-                    outcome: 'success'
-                })
-            );
-            return successResponse(response, result);
-        })
+        .search(
+            {
+                ...parseResult.data,
+                text,
+                email,
+                // Pass as string — the service's toFeedbackStatus() handles the string→enum mapping.
+                // An invalid one is not a 422 here: on a READ it narrows to nothing. See that helper.
+                status: status || undefined
+            },
+            callerContextOf(request)
+        )
+        .then((result) => successResponse(response, result))
         .catch(catchAs(response, 'getFeedback'));
 };

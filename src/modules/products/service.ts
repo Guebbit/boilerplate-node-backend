@@ -10,6 +10,11 @@ import {
 import type { FacetCount } from '@types';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { emitDomainEvent } from '@kernel/events';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { productsAnalyticsEvents } from './analytics';
+import { productsAuditActions } from './audit';
 import { PRODUCT_DELETED } from './events';
 import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
@@ -75,6 +80,32 @@ export const search = (
     productRepository.search(filters, scope);
 
 /**
+ * `GET /products` / `POST /products/search` — search, and report that a search happened.
+ *
+ * Wraps rather than folds into `search()`: every other caller — unit tests, `facets` below — reads
+ * the catalogue without a `CallerContext` to give and without it being a `products_searched`
+ * moment.
+ */
+export const searchViewed = (
+    filters: SearchProductsRequest,
+    scope: Record<string, unknown> | undefined,
+    context: CallerContext
+): Promise<{ items: ProductDocument[]; meta: PaginatedMeta }> =>
+    search(filters, scope).then((result) => {
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            event: productsAnalyticsEvents.PRODUCTS_SEARCHED,
+            properties: {
+                text: filters.text,
+                page: result.meta.page,
+                pageSize: result.meta.pageSize,
+                result_count: result.items.length
+            }
+        });
+        return result;
+    });
+
+/**
  * Get a single product by ID.
  * Returns undefined if the id is falsy; null if no matching document is found.
  *
@@ -88,18 +119,53 @@ export const getById = (id: string | undefined, scope?: Record<string, unknown>)
 };
 
 /**
+ * `GET /products/:id` — get a product, and report that it was viewed.
+ *
+ * Wraps rather than folds into `getById()`, for the same reason `searchViewed` does: most callers
+ * (unit tests, other services resolving a product they already know about) have no `CallerContext`
+ * and are not a `product_viewed` moment.
+ */
+export const getByIdViewed = (
+    id: string | undefined,
+    scope: Record<string, unknown> | undefined,
+    context: CallerContext
+) =>
+    getById(id, scope).then((product) => {
+        if (product)
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: productsAnalyticsEvents.PRODUCT_VIEWED,
+                properties: { product_id: id }
+            });
+        return product;
+    });
+
+/**
  * Create a new product document in the database.
  *
  * @param data
  */
 export const create = (
-    data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>
+    data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>,
+    context: CallerContext
 ): Promise<ProductDocument> =>
-    productRepository.create({
-        ...data,
-        categories: sanitizeStringArray(data.categories),
-        tags: sanitizeStringArray(data.tags)
-    });
+    productRepository
+        .create({
+            ...data,
+            categories: sanitizeStringArray(data.categories),
+            tags: sanitizeStringArray(data.tags)
+        })
+        .then((product) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: productsAuditActions.ADMIN_PRODUCT_CREATED,
+                    outcome: 'success',
+                    target_type: 'product',
+                    target_id: String(product._id)
+                })
+            );
+            return product;
+        });
 
 /**
  * Update an existing product document.
@@ -162,11 +228,22 @@ export const update = (
  */
 export const updateById = (
     id: string,
-    data: Partial<Omit<Product, 'id'>>
+    data: Partial<Omit<Product, 'id'>>,
+    context: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
     productRepository.findById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
-        return update(product, data).then((updated) => generateSuccess(updated));
+        return update(product, data).then((updated) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
+                    outcome: 'success',
+                    target_type: 'product',
+                    target_id: id
+                })
+            );
+            return generateSuccess(updated);
+        });
     });
 
 /**
@@ -237,8 +314,10 @@ export const productService = {
     validateData,
     callerScope,
     search,
+    searchViewed,
     facets,
     getById,
+    getByIdViewed,
     create,
     update,
     updateById,

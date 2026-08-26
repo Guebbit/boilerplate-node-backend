@@ -4,8 +4,7 @@ import { productService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { CastError } from 'mongoose';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { productsAnalyticsEvents } from '../analytics';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /products/:id
@@ -15,17 +14,16 @@ import { productsAnalyticsEvents } from '../analytics';
 export const getProductItem = (request: Request, response: Response) =>
     // Which rows this caller may read — `getAuth` on the route is what makes the role readable here.
     productService
-        .getById(String(request.params.id), productService.callerScope(request.authContext))
+        .getByIdViewed(
+            String(request.params.id),
+            productService.callerScope(request.authContext),
+            callerContextOf(request)
+        )
         .then((product) => {
             if (!product) {
                 rejectResponse(response, 404, [t('products.not-found')]);
                 return;
             }
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(request),
-                event: productsAnalyticsEvents.PRODUCT_VIEWED,
-                properties: { product_id: String(request.params.id) }
-            });
             successResponse(response, product);
         })
         .catch((error: CastError) => {

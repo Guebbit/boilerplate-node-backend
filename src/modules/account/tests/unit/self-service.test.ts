@@ -14,6 +14,7 @@
  *   - at most one verification link may work at a time, and it must be the newest.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import {
     accountService,
@@ -24,8 +25,14 @@ import {
 } from '@modules/account/services';
 import { userRepository, TokenType } from '@modules/users';
 import { asReject, asSuccess } from '@tests/response';
+import * as auditPort from '@infrastructure/observability/audit';
+import * as analyticsPort from '@infrastructure/observability/analytics';
+import { accountAuditActions } from '../../audit';
+import { accountAnalyticsEvents } from '../../analytics';
 
 setupTestDb();
+
+afterEach(() => jest.restoreAllMocks());
 
 const CURRENT_PASSWORD = 'correct-horse-battery';
 const NEW_PASSWORD = 'staple-gun-tuesday';
@@ -41,7 +48,7 @@ describe('updateProfile', () => {
         const user = await createUser({ email: 'own@example.com' });
 
         const response = asSuccess(
-            await updateProfile(user.id, { username: 'renamed', locale: 'it' })
+            await updateProfile(user.id, { username: 'renamed', locale: 'it' }, testCallerContext)
         );
 
         expect(response.data.username).toBe('renamed');
@@ -53,7 +60,9 @@ describe('updateProfile', () => {
     it('rejects an invalid email with 422', async () => {
         const user = await createUser();
 
-        const response = asReject(await updateProfile(user.id, { email: 'not-an-email' }));
+        const response = asReject(
+            await updateProfile(user.id, { email: 'not-an-email' }, testCallerContext)
+        );
 
         expect(response.status).toBe(422);
     });
@@ -62,7 +71,9 @@ describe('updateProfile', () => {
         const user = await createUser();
         await userRepository.deleteOne(user);
 
-        const response = asReject(await updateProfile(user.id, { username: 'ghost' }));
+        const response = asReject(
+            await updateProfile(user.id, { username: 'ghost' }, testCallerContext)
+        );
 
         expect(response.status).toBe(404);
     });
@@ -71,12 +82,16 @@ describe('updateProfile', () => {
         const user = await createUser();
 
         asSuccess(
-            await updateProfile(user.id, {
-                username: 'still-plain',
-                admin: true,
-                active: false,
-                password: 'injected-password'
-            })
+            await updateProfile(
+                user.id,
+                {
+                    username: 'still-plain',
+                    admin: true,
+                    active: false,
+                    password: 'injected-password'
+                },
+                testCallerContext
+            )
         );
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
@@ -90,7 +105,9 @@ describe('updateProfile', () => {
     it('unverifies the account when the email changes', async () => {
         const user = await createUser({ email: 'before@example.com', verified: true });
 
-        const response = asSuccess(await updateProfile(user.id, { email: 'after@example.com' }));
+        const response = asSuccess(
+            await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext)
+        );
 
         expect(response.data.verified).toBe(false);
     });
@@ -98,7 +115,9 @@ describe('updateProfile', () => {
     it('keeps the verification when the email is restated unchanged', async () => {
         const user = await createUser({ email: 'same@example.com', verified: true });
 
-        const response = asSuccess(await updateProfile(user.id, { email: 'same@example.com' }));
+        const response = asSuccess(
+            await updateProfile(user.id, { email: 'same@example.com' }, testCallerContext)
+        );
 
         expect(response.data.verified).toBe(true);
     });
@@ -107,7 +126,9 @@ describe('updateProfile', () => {
         await createUser({ email: 'taken@example.com', username: 'first' });
         const user = await createUser({ email: 'second@example.com', username: 'second' });
 
-        const response = asReject(await updateProfile(user.id, { email: 'taken@example.com' }));
+        const response = asReject(
+            await updateProfile(user.id, { email: 'taken@example.com' }, testCallerContext)
+        );
 
         expect(response.status).toBe(409);
     });
@@ -118,7 +139,13 @@ describe('passwordChangeWithCurrent', () => {
         const user = await createUser({ password: CURRENT_PASSWORD });
 
         asSuccess(
-            await passwordChangeWithCurrent(user.id, CURRENT_PASSWORD, NEW_PASSWORD, NEW_PASSWORD)
+            await passwordChangeWithCurrent(
+                user.id,
+                CURRENT_PASSWORD,
+                NEW_PASSWORD,
+                NEW_PASSWORD,
+                testCallerContext
+            )
         );
 
         // The new credential works and the old one is dead — both directions, or the test
@@ -133,7 +160,13 @@ describe('passwordChangeWithCurrent', () => {
         const user = await createUser({ password: CURRENT_PASSWORD });
 
         const response = asReject(
-            await passwordChangeWithCurrent(user.id, 'wrong-guess', NEW_PASSWORD, NEW_PASSWORD)
+            await passwordChangeWithCurrent(
+                user.id,
+                'wrong-guess',
+                NEW_PASSWORD,
+                NEW_PASSWORD,
+                testCallerContext
+            )
         );
 
         expect(response.status).toBe(422);
@@ -146,7 +179,13 @@ describe('passwordChangeWithCurrent', () => {
         const user = await createUser({ password: CURRENT_PASSWORD });
 
         const response = asReject(
-            await passwordChangeWithCurrent(user.id, CURRENT_PASSWORD, NEW_PASSWORD, 'different')
+            await passwordChangeWithCurrent(
+                user.id,
+                CURRENT_PASSWORD,
+                NEW_PASSWORD,
+                'different',
+                testCallerContext
+            )
         );
 
         expect(response.status).toBe(422);
@@ -195,6 +234,43 @@ describe('sessionRemove', () => {
     });
 });
 
+describe('sessionRevoke', () => {
+    it('audits a revoke that actually matched a token', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser();
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-a');
+        const [target] = await readTokens(user.id);
+
+        const result = await accountService.sessionRevoke(
+            user.id,
+            String(target?._id),
+            testCallerContext
+        );
+
+        expect(result.modifiedCount).toBe(1);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_SESSION_REVOKED,
+                outcome: 'success'
+            })
+        );
+    });
+
+    it('does not audit a revoke that matched nothing — an invented id must not misrepresent one', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser();
+
+        const result = await accountService.sessionRevoke(
+            user.id,
+            String(user._id),
+            testCallerContext
+        );
+
+        expect(result.modifiedCount).toBe(0);
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+});
+
 describe('tokenRemoveByValue', () => {
     it('removes one session and leaves the siblings', async () => {
         const user = await createUser();
@@ -211,6 +287,41 @@ describe('tokenRemoveByValue', () => {
         const result = await userRepository.tokenRemoveByValue('never-issued');
 
         expect(result.modifiedCount).toBe(0);
+    });
+});
+
+describe('logoutCurrentSession', () => {
+    it('revokes the named refresh token and records the logout', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser();
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'phone');
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'laptop');
+
+        await accountService.logoutCurrentSession('phone', testCallerContext);
+
+        const remaining = await readTokens(user.id);
+        expect(remaining.map(({ token }) => token)).toEqual(['laptop']);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_LOGGED_OUT,
+                outcome: 'success'
+            })
+        );
+    });
+
+    it('records the logout even with no cookie to revoke', async () => {
+        // `getRefreshToken` answers 200 for "already logged out here" — the audit event fires
+        // either way, matching that: there is simply nothing to revoke.
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+
+        await accountService.logoutCurrentSession(undefined, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_LOGGED_OUT,
+                outcome: 'success'
+            })
+        );
     });
 });
 
@@ -240,5 +351,147 @@ describe('sendVerificationEmail', () => {
 
         const tokens = await readTokens(user.id);
         expect(tokens.find(({ token }) => token === 'live-session')).toBeDefined();
+    });
+});
+
+describe('requestEmailVerification', () => {
+    it('sends the mail and audits the explicit re-send', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser();
+
+        await accountService.requestEmailVerification(user, testCallerContext);
+
+        const tokens = await readTokens(user.id);
+        expect(tokens.some(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)).toBe(true);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_EMAIL_VERIFY_REQUESTED,
+                outcome: 'success'
+            })
+        );
+    });
+});
+
+describe('completeEmailVerification', () => {
+    it('marks the account verified and audits it', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser({ verified: false });
+
+        const saved = await accountService.completeEmailVerification(user, testCallerContext);
+
+        expect(saved.verified).toBe(true);
+        const stored = await userRepository.findById(user.id);
+        expect(stored?.verified).toBe(true);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
+                actor_user_id: user.id,
+                outcome: 'success'
+            })
+        );
+    });
+});
+
+describe('getOwnProfile', () => {
+    it('reports a view and returns the profile', async () => {
+        const analyticsSpy = jest.spyOn(analyticsPort, 'emitAnalyticsEvent');
+        const user = await createUser({ email: 'viewer@example.com' });
+
+        const profile = await accountService.getOwnProfile(user.id, testCallerContext);
+
+        expect(profile?.email).toBe('viewer@example.com');
+        expect(analyticsSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ event: accountAnalyticsEvents.USER_PROFILE_VIEWED })
+        );
+    });
+});
+
+describe('removeOwnAccount', () => {
+    it('hard-deletes the account and reports it', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const analyticsSpy = jest.spyOn(analyticsPort, 'emitAnalyticsEvent');
+        const user = await createUser();
+
+        const result = await accountService.removeOwnAccount(user, testCallerContext);
+
+        expect(result.success).toBe(true);
+        expect(await userRepository.findById(user.id)).toBeNull();
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
+                actor_user_id: user.id,
+                outcome: 'success'
+            })
+        );
+        expect(analyticsSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: accountAnalyticsEvents.ACCOUNT_DELETED,
+                distinctId: user.id
+            })
+        );
+    });
+});
+
+describe('passwordResetChange', () => {
+    it('changes the password and audits a reset completion, distinct from a logged-in change', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser({ password: CURRENT_PASSWORD });
+
+        asSuccess(
+            await accountService.passwordResetChange(
+                user,
+                NEW_PASSWORD,
+                NEW_PASSWORD,
+                testCallerContext
+            )
+        );
+
+        const withNew = await accountService.login(user.email, NEW_PASSWORD);
+        expect(withNew.success).toBe(true);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
+                outcome: 'success'
+            })
+        );
+    });
+
+    it('does not audit a rejected pair', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser({ password: CURRENT_PASSWORD });
+
+        const response = asReject(
+            await accountService.passwordResetChange(
+                user,
+                NEW_PASSWORD,
+                'different',
+                testCallerContext
+            )
+        );
+
+        expect(response.status).toBe(422);
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('requestAccountDeletion', () => {
+    it('issues a delete token and audits the request', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const user = await createUser();
+
+        const token = await accountService.requestAccountDeletion(user, testCallerContext);
+
+        expect(typeof token).toBe('string');
+        const tokens = await readTokens(user.id);
+        expect(
+            tokens.some(({ type, token: stored }) => type === 'delete' && stored === token)
+        ).toBe(true);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
+                actor_user_id: user.id,
+                outcome: 'success'
+            })
+        );
     });
 });

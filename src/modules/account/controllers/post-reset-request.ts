@@ -11,6 +11,16 @@ import { accountAuditActions } from '../audit';
 import { resetRequestEmail } from '../emails';
 import { authPasswordResetTotal } from '../metrics';
 import { parseBody } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
+
+/*
+ * The audit emit below stays at the controller, not moved into `tokenAdd`/a wrapper: it fires
+ * UNCONDITIONALLY, whether or not the email belongs to a real account, which is what keeps the
+ * response identical either way and prevents user enumeration. A service function reachable only
+ * once a user is found (the shape every other wrapper in this batch takes) cannot reproduce that
+ * — moving it would make the audit trail leak account existence that the response deliberately
+ * does not.
+ */
 
 /**
  * POST /account/reset-request
@@ -78,7 +88,7 @@ export const postResetRequest = (
                 }
 
                 emitAuditEvent(
-                    buildAuditEvent(request, {
+                    buildAuditEvent(callerContextOf(request), {
                         action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
                         actor_user_id: 'anonymous',
                         actor_role: 'anonymous',

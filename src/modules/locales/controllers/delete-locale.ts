@@ -1,9 +1,8 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
-import { localeAuditActions } from '../audit';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -21,19 +20,9 @@ import { catchAs, refused } from '@infrastructure/http/controller';
  */
 export const deleteLocale = (request: Request<{ locale: string }>, response: Response) =>
     localeService
-        .deleteLanguage(request.params.locale)
+        .deleteLanguage(request.params.locale, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: localeAuditActions.ADMIN_LOCALE_DELETED,
-                    outcome: 'success',
-                    target_type: 'locale',
-                    target_id: request.params.locale,
-                    metadata: { removedEntries: result.data?.removedEntries }
-                })
-            );
 
             // A deleted override must stop answering on this worker at once; the others
             // pick it up on their next scheduled refresh. Not awaited — see

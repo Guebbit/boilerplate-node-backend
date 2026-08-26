@@ -1,9 +1,8 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { AdjustStockBody } from '@api/schemas.zod';
-import { inventoryAuditActions } from '../audit';
 import { inventoryService } from '../service';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
@@ -33,18 +32,9 @@ export const postAdjustment = (request: Request, response: Response) => {
     }
 
     return inventoryService
-        .adjust(productId, delta, note)
+        .adjust(productId, delta, note, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            emitAuditEvent(
-                buildAuditEvent(request, {
-                    action: inventoryAuditActions.ADMIN_STOCK_ADJUSTED,
-                    outcome: 'success',
-                    target_type: 'product',
-                    target_id: productId,
-                    metadata: { delta, note, onHand: result.data?.onHand }
-                })
-            );
             successResponse(response, result.data, 200, result.message);
         })
         .catch(catchAs(response, 'postAdjustment'));

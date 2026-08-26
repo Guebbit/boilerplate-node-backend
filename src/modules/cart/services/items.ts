@@ -15,6 +15,11 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { productRepository } from '@modules/products';
+import type { CallerContext } from '@infrastructure/http/request';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { cartAnalyticsEvents } from '../analytics';
+import { cartAuditActions } from '../audit';
 import { cartRepository } from '../repository';
 import { readCartLines, toCartView, type CartLine, type CartView } from './view';
 
@@ -26,9 +31,25 @@ export const cartGet = (userId: string): Promise<CartLine[]> =>
 
 /**
  * Get user cart with computed summary (item count, total quantity, total price).
+ *
+ * Split by caller intent, not by data: a person opening their basket and a badge polling a count
+ * run the identical read, but only one of them is a `cart_viewed` moment.
  */
-export const cartGetWithSummary = (userId: string): Promise<CartView> =>
+const cartViewOf = (userId: string): Promise<CartView> =>
     cartRepository.findByUserId(userId).then((cart) => toCartView(cart));
+
+/** GET /cart/summary — the header badge polling a count. Never counts as viewing the cart. */
+export const cartGetForBadge = cartViewOf;
+
+/** GET /cart — a person looking at their basket. The one of the two that is a `cart_viewed` moment. */
+export const cartGetForView = (userId: string, context: CallerContext): Promise<CartView> =>
+    cartViewOf(userId).then((view) => {
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            event: cartAnalyticsEvents.CART_VIEWED
+        });
+        return view;
+    });
 
 /**
  * Shared logic for adding/setting a cart item quantity.
@@ -92,6 +113,51 @@ export const cartItemSetById = (
     upsertCartItem(userId, id, quantity, 'set');
 
 /**
+ * `POST /cart` — add a product to the cart, or replace the quantity of a line already there.
+ *
+ * Named apart from `PUT /cart/{productId}`'s wrapper below for the same reason each already
+ * carried its own analytics event at the controller: the two routes say different things about
+ * the identical write (`cartItemSetById`, unchanged — this does not switch the route to
+ * increment). Wrapping rather than folding the emit into `cartItemSetById` itself keeps every
+ * other caller — the dozens of unit tests that use it as a plain setup step, `PUT`'s own wrapper
+ * below — free of a `CallerContext` neither one needs.
+ */
+export const cartItemAdd = (
+    userId: string,
+    id: string,
+    quantity: number,
+    context: CallerContext
+): Promise<ResponseSuccess<CartView> | ResponseReject> =>
+    cartItemSetById(userId, id, quantity).then((result) => {
+        if (result.success)
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: cartAnalyticsEvents.CART_ITEM_ADDED,
+                properties: { product_id: id, quantity }
+            });
+        return result;
+    });
+
+/**
+ * `PUT /cart/{productId}` — set the quantity of a specific cart item. See {@link cartItemAdd}.
+ */
+export const cartItemUpdateQuantity = (
+    userId: string,
+    id: string,
+    quantity: number,
+    context: CallerContext
+): Promise<ResponseSuccess<CartView> | ResponseReject> =>
+    cartItemSetById(userId, id, quantity).then((result) => {
+        if (result.success)
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: cartAnalyticsEvents.CART_ITEM_UPDATED,
+                properties: { product_id: id, quantity }
+            });
+        return result;
+    });
+
+/**
  * Add quantity of target product to existing quantity in cart (by ID).
  */
 export const cartItemAddById = (
@@ -110,10 +176,25 @@ export const cartItemAddById = (
  */
 export const cartItemRemoveById = (
     userId: string,
-    id: string
+    id: string,
+    context: CallerContext
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     cartRepository.removeLine(userId, id).then((cart) => {
         if (!cart) return generateReject(404, []);
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: cartAuditActions.USER_CART_ITEM_REMOVED,
+                actor_role: 'user',
+                outcome: 'success',
+                target_type: 'product',
+                target_id: id
+            })
+        );
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            event: cartAnalyticsEvents.CART_ITEM_REMOVED,
+            properties: { product_id: id }
+        });
         return toCartView(cart).then((view) => generateSuccess(view, 200));
     });
 
@@ -123,5 +204,14 @@ export const cartItemRemoveById = (
  * Idempotent: a user with no cart document is already in the state this asks for, and the empty
  * view says so.
  */
-export const cartRemove = (userId: string): Promise<CartView> =>
-    cartRepository.clearLines(userId).then((cart) => toCartView(cart));
+export const cartRemove = (userId: string, context: CallerContext): Promise<CartView> =>
+    cartRepository.clearLines(userId).then((cart) =>
+        toCartView(cart).then((view) => {
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: cartAnalyticsEvents.CART_CLEARED,
+                properties: {}
+            });
+            return view;
+        })
+    );

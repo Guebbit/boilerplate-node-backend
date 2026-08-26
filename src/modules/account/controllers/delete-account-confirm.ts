@@ -2,16 +2,14 @@ import type { Request, Response } from 'express';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
 import { userService } from '@modules/users';
+import { accountService } from '../services';
 import { destroyRefreshCookie, destroyLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AccountDeleteConfirmRequest } from '@types';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
 import { deleteConfirmEmail } from '../emails';
-import { emitAnalyticsEvent } from '@infrastructure/observability/analytics';
-import { accountAnalyticsEvents } from '../analytics';
 import { parseBody } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/delete-confirm
@@ -40,10 +38,10 @@ export const deleteAccountConfirm = (
                 return;
             }
 
-            const { email, username, _id, admin, locale } = user;
+            const { email, username, locale } = user;
 
             /* Hard-delete the account */
-            return userService.remove(user, true).then(() => {
+            return accountService.removeOwnAccount(user, callerContextOf(request)).then(() => {
                 /* Send goodbye email (no need to wait) */
                 /*
                  * The recipient's OWN language, not the language of the request that triggered
@@ -57,20 +55,6 @@ export const deleteAccountConfirm = (
                     username
                 );
                 void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
-
-                emitAuditEvent(
-                    buildAuditEvent(request, {
-                        action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
-                        actor_user_id: String(_id),
-                        actor_role: admin ? 'admin' : 'user',
-                        outcome: 'success'
-                    })
-                );
-
-                emitAnalyticsEvent({
-                    distinctId: String(_id),
-                    event: accountAnalyticsEvents.ACCOUNT_DELETED
-                });
 
                 destroyRefreshCookie(response);
                 destroyLoggedCookie(response);

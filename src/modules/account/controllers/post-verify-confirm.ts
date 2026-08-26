@@ -2,14 +2,12 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { ConfirmEmailVerificationBody } from '@api/schemas.zod';
 import { userService } from '@modules/users';
-import { userRepository } from '@modules/users';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { VerifyEmailConfirmRequest } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
 import { authEmailVerifyTotal } from '../metrics';
-import { EMAIL_VERIFY_TOKEN_TYPE } from '../services';
+import { accountService, EMAIL_VERIFY_TOKEN_TYPE } from '../services';
 import { rejectValidation } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/verify-confirm
@@ -59,20 +57,12 @@ export const postVerifyConfirm = (
                     return;
                 }
 
-                user.verified = true;
-                return userRepository.save(user).then(() => {
-                    authEmailVerifyTotal.inc({ status: 'success' });
-                    emitAuditEvent(
-                        buildAuditEvent(request, {
-                            action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
-                            actor_user_id: user.id,
-                            actor_role: user.admin ? 'admin' : 'user',
-                            outcome: 'success'
-                        })
-                    );
-
-                    successResponse(response, undefined, 200, t('account.verify.success'));
-                });
+                return accountService
+                    .completeEmailVerification(user, callerContextOf(request))
+                    .then(() => {
+                        authEmailVerifyTotal.inc({ status: 'success' });
+                        successResponse(response, undefined, 200, t('account.verify.success'));
+                    });
             });
         })
         .catch(() => {
