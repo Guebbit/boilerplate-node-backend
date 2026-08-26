@@ -44,9 +44,6 @@ call site can get wrong, a name is not. The same shape applies to `cartItemAdd`/
 dedicated caller-specific function (`getOwnProfile` beside the admin-shared `userService.getById`)
 rather than an emit added to the shared function itself.
 
-See `OBSERVABILITY_EMISSION_CHECKLIST.md`, alongside this repo and `boilerplate-php-laravel-backend`
-in the shared workspace root, for the full per-function inventory this rule was applied against.
-
 ## Caller context
 
 A service function that emits needs the caller's address, user-agent and trace id, and the
