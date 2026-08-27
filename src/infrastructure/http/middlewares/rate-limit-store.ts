@@ -205,7 +205,21 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
             });
             // The options `init` was given at construction, replayed now that there is a store to
             // give them to. `windowMs` is the only one `RedisStore` reads, and it needs it.
-            if (options) void inner.init(options);
+            //
+            // The `.catch()` is load-bearing, not defensive styling: `init()` awaits both Lua
+            // script loads internally, so ANY failure there — Redis unreachable, or a reply
+            // `rate-limit-redis` does not recognise — rejects the promise this fires and forgets.
+            // An uncaught rejection is fatal by default (Node 15+), which would turn "Redis had a
+            // bad moment" into "the process is gone" — exactly the outage this file's `send()`
+            // is written to fail open from instead.
+            if (options)
+                void inner.init(options).catch((error: unknown) => {
+                    logger.error({
+                        message:
+                            'Rate-limit Redis store failed to initialise — requests are passing unbudgeted until it recovers.',
+                        error: error instanceof Error ? error.message : String(error)
+                    });
+                });
         }
 
         return inner;
