@@ -130,6 +130,14 @@
         "global percentage lets a strong file carry a weak one. Raise `break` only when a score",
         "SUSTAINS a higher band; never lower it to make a run pass.",
         "",
+        "`break: 60` is a DELIBERATE EXCEPTION to that rule, kept here anyway: it mirrors the",
+        "frontend's own 60 on purpose (both configs were written together and are meant to read as",
+        "one pair), even though today's observed band — 28.66% total / 51.57% covered, the first",
+        "measurement since controllers/routes/etc. came back into `mutate` scope — sits below it. This",
+        "WILL fail every run until real unit coverage closes that gap; that failure is the point, not",
+        "a bug to silence by lowering the number. Once a run sustains 60+ on its own, this stops being",
+        "an exception and becomes an ordinary floor like the frontend's.",
+        "",
         "Read `total` against `covered` before spending effort. Far apart means mutants with NO",
         "COVERAGE — write tests that reach the code. Close together means tests run it without",
         "asserting — sharpen what exists. The single percentage hides which.",
@@ -233,7 +241,7 @@
     "thresholds": {
         "high": 80,
         "low": 60,
-        "break": null
+        "break": 60
     },
     "timeoutMS": 30000,
     "concurrency": 4,
