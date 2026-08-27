@@ -79,6 +79,16 @@ process.env.NODE_RATE_LIMIT_REDIS_ENABLED ??= '0';
  */
 process.env.NODE_METRICS_TOKEN ??= 'test-metrics-token';
 
+/**
+ * JWT signing secrets. `src/modules/account/session/config.ts` defaults both to `''` when unset,
+ * and `jsonwebtoken.sign()` throws `secretOrPrivateKey must have a value` on an empty secret — so
+ * any suite that signs in for real (`tests/contract`, most of `tests/integration`) needs these
+ * set before the first login. A local `.env` supplies them via `dotenv/config` in `src/app.ts`;
+ * CI has no `.env`, which is exactly what left `test-contract` failing there.
+ */
+process.env.NODE_TOKEN_ACCESS ??= 'test-access-secret';
+process.env.NODE_TOKEN_REFRESH ??= 'test-refresh-secret';
+
 //
 //
 /**
