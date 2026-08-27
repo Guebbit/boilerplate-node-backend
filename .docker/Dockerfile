@@ -15,8 +15,13 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-freefont
 
-# Copies package.json and package-lock.json from the host folder into the /app in the image
-COPY package*.json ./
+# Copy the whole build context, not just package*.json: `npm ci`'s postinstall runs
+# contracts:bundle + gen:api + gen:asyncapi (scripts/, shared/contracts/, orval.config.ts,
+# asyncapi.yaml, ...), which npm ci needs on disk before it can run them. This is still a
+# dev-only image — the bind mount in docker-compose.yml (`.:/app:Z`) overlays this copy with
+# the live host tree at runtime, so `npm ci`'s only lasting effect is populating the
+# `/app/node_modules` anonymous volume.
+COPY . .
 
 # Command to be executed inside the image at BUILD time.
 #   In production we need it instead of "npm install" because it's cleaner (remove node_modules before installing) and more deterministic
@@ -25,10 +30,6 @@ COPY package*.json ./
 #   You can use npm install in development because you want devDependencies and you don't mind about possible non-determinism.
 #   add --omit=dev to omit dev dependencies in production
 RUN npm ci
-
-# Production only (code backed into the image)
-# Copy all the files and directories from the host machine to the current working directory inside the image (ex: /app)
-# COPY . .
 
 # It declares that container listens to port 3000. In the docker-compose you expose the port 3000 so it's reachable from the host
 EXPOSE 3000

@@ -5,14 +5,15 @@ FROM docker.io/library/node:25-alpine AS builder
 
 WORKDIR /app
 
-# Copy dependency manifests first (better layer caching)
-COPY package*.json ./
+# Copy the whole build context before `npm ci`, not just the manifests: `npm ci`'s postinstall
+# runs contracts:bundle + gen:api + gen:asyncapi, which need scripts/, shared/contracts/,
+# orval.config.ts, etc. on disk to run at all. Costs the dependency-layer cache (any source change
+# now invalidates `npm ci` too), but this is a from-scratch `--no-cache` build already, and the
+# postinstall step needs the source present before it, not after.
+COPY . .
 
 # Install all dependencies (including devDeps needed by VitePress)
 RUN npm ci
-
-# Copy source + docs
-COPY . .
 
 # Build the static VitePress site into docs/.vitepress/dist
 RUN npm run docs:build
