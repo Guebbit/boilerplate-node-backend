@@ -1,5 +1,5 @@
 {
-    "generatedAt": "2026-08-27T16:37:38.872Z",
+    "generatedAt": "2026-08-27T19:29:50.475Z",
     "files": {
         "src/infrastructure/adapters/cache.ts": 77.78,
         "src/infrastructure/adapters/demo-outbox.ts": 75,
@@ -18,7 +18,7 @@
         "src/infrastructure/http/errors.ts": 100,
         "src/infrastructure/http/middlewares/cache.ts": 83.58,
         "src/infrastructure/http/middlewares/locale.ts": 100,
-        "src/infrastructure/http/middlewares/rate-limit-store.ts": 33.72,
+        "src/infrastructure/http/middlewares/rate-limit-store.ts": 65.12,
         "src/infrastructure/http/middlewares/request-logger.ts": 70,
         "src/infrastructure/http/middlewares/route-flag.ts": 100,
         "src/infrastructure/http/middlewares/security.ts": 24.39,
@@ -42,7 +42,7 @@
         "src/infrastructure/observability/process-snapshot.ts": 100,
         "src/infrastructure/observability/stream.ts": 100,
         "src/infrastructure/observability/tracer.ts": 60.61,
-        "src/infrastructure/persistence/base-repository.ts": 1.18,
+        "src/infrastructure/persistence/base-repository.ts": 71.76,
         "src/infrastructure/persistence/factory.ts": 0,
         "src/infrastructure/persistence/search.ts": 84.48,
         "src/infrastructure/persistence/seed.ts": 55.56,
@@ -67,7 +67,7 @@
         "src/modules/account/controllers/get-addresses.ts": 0,
         "src/modules/account/controllers/get-refresh-token.ts": 15.38,
         "src/modules/account/controllers/get-sessions.ts": 0,
-        "src/modules/account/controllers/post-login.ts": 9.52,
+        "src/modules/account/controllers/post-login.ts": 10.53,
         "src/modules/account/controllers/post-logout-everywhere.ts": 0,
         "src/modules/account/controllers/post-logout.ts": 0,
         "src/modules/account/controllers/post-password-change.ts": 0,

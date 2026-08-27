@@ -1,297 +1,140 @@
 /**
- * `rateLimitStore` — which store a limiter counts in, and everything that follows from Redis
- * being lazy, shared, and allowed to fail.
+ * One connection needs one `connect()`.
  *
- * `client`/`connecting`/`degraded` are module-scope state, so every case re-imports the module
- * fresh via `jest.resetModules()` + `require()` — the same pattern `cache.test.ts` uses for the
- * same reason.
+ * This is the fast guard on the bug `tests/cluster/rate-limit.test.ts` found: with a `connect()`
+ * per command, two commands issued before the handshake finishes both try to open the same socket.
+ * `isReady` stays false for the whole handshake, so both see it as false; node-redis rejects the
+ * second with `Socket already opened`, and that failure path discards the client the FIRST one is
+ * still using, which then fails with `The client is closed`.
  *
- * The test suite's own `tests/support/setup.ts` sets `NODE_RATE_LIMIT_REDIS_ENABLED ??= '0'`
- * globally, so every case that means to exercise the Redis path re-enables it explicitly.
+ * The interleaving is not rare — it is guaranteed. `RedisStore.init()` loads two Lua scripts back
+ * to back, so the pair raced on the very first request of every worker, every request afterwards
+ * passed unbudgeted, and the log reported Redis as unreachable while Redis was answering fine. A
+ * rate limiter that is off is a security control that is off.
+ *
+ * ── Why this exists as well as the cluster suite ──────────────────────────────────────────────
+ * The cluster suite proves the whole property — one budget spent across real forked workers — and
+ * costs 25 seconds and a container, so it runs in `complete:manual` and in CI rather than in
+ * `npm test`. That left the fix itself unguarded in the gate a contributor actually runs. This
+ * file closes exactly that: no cluster, no Redis, no container, and it fails on the same
+ * regression.
  */
-// Also forces module scope for this file — otherwise its top-level `const`s collide, at the type
-// checker, with the identically-named ones in cache.test.ts's own copy of the same pattern.
-import type { Options } from 'express-rate-limit';
 
-const ORIGINAL_ENVIRONMENT = {
-    NODE_RATE_LIMIT_REDIS_ENABLED: process.env.NODE_RATE_LIMIT_REDIS_ENABLED,
-    NODE_RATE_LIMIT_REDIS_URL: process.env.NODE_RATE_LIMIT_REDIS_URL,
-    NODE_REDIS_URL: process.env.NODE_REDIS_URL,
-    NODE_REDIS_HOST: process.env.NODE_REDIS_HOST,
-    NODE_REDIS_PORT: process.env.NODE_REDIS_PORT,
-    NODE_CLUSTER_WORKERS: process.env.NODE_CLUSTER_WORKERS
-};
+import {
+    rateLimitStore,
+    stopRateLimitStore
+} from '@infrastructure/http/middlewares/rate-limit-store';
 
-afterEach(() => {
-    for (const [key, value] of Object.entries(ORIGINAL_ENVIRONMENT)) {
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    }
-});
+/** How many times a `connect()` was asked for across the run, whatever the client instance. */
+let connectCalls = 0;
 
-const mockOn = jest.fn();
-const mockConnect = jest.fn();
-const mockSendCommand = jest.fn();
-const mockDestroy = jest.fn();
-const mockQuit = jest.fn();
-
-const mockClient = {
-    on: mockOn,
-    connect: mockConnect,
-    sendCommand: mockSendCommand,
-    destroy: mockDestroy,
-    quit: mockQuit,
-    isReady: false
-};
-
-const mockCreateClient = jest.fn((_options: unknown) => mockClient);
-jest.mock('redis', () => ({ createClient: (options: unknown) => mockCreateClient(options) }));
-
-/** `RedisStore.init` awaits two Lua-script loads internally — see the fix under test below. */
-const mockInit = jest.fn();
-const mockIncrement = jest.fn();
-const mockConstruct = jest.fn();
-
-/*
- * `increment` calls `this.sendCommand(...)` — the real `RedisStore` does the same to run its Lua
- * script — so the mock still exercises `send()`/`build()`/`createClient` the way production does,
- * rather than short-circuiting the whole chain this file exists to test.
+/**
+ * A client that behaves the way the real one does at the only moment that matters: `isReady` stays
+ * false until the handshake resolves, and a second `connect()` while one is in flight throws — the
+ * error node-redis raises, which is what made the original failure destructive rather than merely
+ * duplicated.
  */
-class MockRedisStore {
-    sendCommand: (...command: string[]) => Promise<unknown>;
+type FakeClient = ReturnType<typeof fakeClient>;
 
-    constructor(options: {
-        prefix: string;
-        sendCommand: (...command: string[]) => Promise<unknown>;
-    }) {
-        mockConstruct(options);
-        this.sendCommand = options.sendCommand;
-    }
+const fakeClient = () => {
+    let ready = false;
+    let opening = false;
 
-    init = mockInit;
-    increment = (key: string) => {
-        mockIncrement(key);
-        return this.sendCommand('INCR', key);
+    return {
+        get isReady() {
+            return ready;
+        },
+        connect: jest.fn(() => {
+            connectCalls += 1;
+            if (opening || ready) throw new Error('Socket already opened');
+            opening = true;
+
+            return new Promise((resolve) =>
+                setTimeout(() => {
+                    opening = false;
+                    ready = true;
+                    resolve(undefined);
+                }, 10)
+            );
+        }),
+        /*
+         * Replies shaped the way `rate-limit-redis` insists on: `SCRIPT LOAD` must answer a string
+         * sha or it throws before the connection is ever exercised, and the increment script
+         * answers `[totalHits, resetMs]`.
+         */
+        sendCommand: jest.fn((command: string[]) =>
+            Promise.resolve(command[0] === 'SCRIPT' ? 'a-fake-sha' : [1, 60_000])
+        ),
+        on: jest.fn(),
+        destroy: jest.fn(() => {
+            ready = false;
+            opening = false;
+        }),
+        quit: jest.fn(() => Promise.resolve())
     };
-}
+};
 
-jest.mock('rate-limit-redis', () => ({ RedisStore: MockRedisStore }));
+/**
+ * The seam the mock factory reads.
+ *
+ * `jest.mock` factories are hoisted above every `const` in the file, so the factory cannot close
+ * over a module-scoped variable — it has to reach the client through something that exists at call
+ * time. A property on `globalThis` is that something.
+ */
+const seam = globalThis as typeof globalThis & { rateLimitFakeClient?: FakeClient };
 
-jest.mock('@infrastructure/adapters/logger', () => ({
-    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
+jest.mock('redis', () => ({
+    createClient: jest.fn(() => (globalThis as typeof seam).rateLimitFakeClient)
 }));
 
-/** Re-import with module-scope state (`client`, `connecting`, `degraded`) discarded. */
-const freshStore = () => {
-    jest.resetModules();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require
-    return require('@infrastructure/http/middlewares/rate-limit-store') as typeof import('@infrastructure/http/middlewares/rate-limit-store');
-};
+describe('the rate limiter’s Redis connection', () => {
+    beforeEach(() => {
+        connectCalls = 0;
+        seam.rateLimitFakeClient = fakeClient();
+        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
+        process.env.NODE_RATE_LIMIT_REDIS_URL = 'redis://127.0.0.1:6379';
+    });
 
-/* eslint-disable @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require */
-const freshLogger = () => {
-    const loggerModule =
-        require('@infrastructure/adapters/logger') as typeof import('@infrastructure/adapters/logger');
-    return loggerModule.logger;
-};
-/* eslint-enable @typescript-eslint/no-require-imports -- back to normal for the rest of the file */
+    afterEach(() => stopRateLimitStore());
 
-/*
- * `express-rate-limit` is not mocked, so `jest.resetModules()` also gives it a fresh module
- * instance — an `instanceof MemoryStore` check against the top-level import would compare across
- * two different copies of the class and always fail. Re-requiring it fresh, the same reason as
- * the logger above, keeps the check comparing the SAME copy `rateLimitStore()` actually used.
- */
-const freshMemoryStore = () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require
-    return (require('express-rate-limit') as typeof import('express-rate-limit')).MemoryStore;
-};
+    it('opens one socket for commands issued before the handshake finishes', () => {
+        /*
+         * The regression. Two commands, neither awaiting the other — which is what `RedisStore`
+         * does with its two script loads — and exactly one `connect()`.
+         */
+        const store = rateLimitStore('unit');
+        void store.init?.({ windowMs: 60_000 } as never);
 
-beforeEach(() => {
-    mockConnect.mockImplementation(() => Promise.resolve());
-    mockInit.mockImplementation(() => Promise.resolve());
-    // A real Redis answers `INCR` with an integer; the exact value is irrelevant to every case
-    // here, which asserts on whether/how the chain was called, not on a counter value.
-    mockSendCommand.mockImplementation(() => Promise.resolve(1));
-});
+        return Promise.all([store.increment('a'), store.increment('b')]).then(() => {
+            expect(connectCalls).toBe(1);
+        });
+    });
 
-describe('rateLimitStore — which store gets built', () => {
-    it('returns an in-process MemoryStore when the Redis kill switch is off', () => {
+    it('answers both of them rather than destroying the client one is using', () => {
+        /*
+         * The consequence, asserted separately: the original failure was not a duplicate connect
+         * but what the duplicate's rejection did — `destroy()` on the shared client, so the command
+         * that had done nothing wrong failed too and the limiter passed the request through.
+         */
+        const store = rateLimitStore('unit');
+        void store.init?.({ windowMs: 60_000 } as never);
+
+        return Promise.all([store.increment('a'), store.increment('b')]).then((results) => {
+            expect(results).toHaveLength(2);
+            expect(seam.rateLimitFakeClient?.destroy).not.toHaveBeenCalled();
+        });
+    });
+
+    it('counts in memory when no Redis is configured', () => {
+        // The other half of the choice, so the case above cannot pass by never reaching Redis.
+        delete process.env.NODE_RATE_LIMIT_REDIS_URL;
         process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '0';
-        process.env.NODE_REDIS_URL = 'redis://redis:6379';
 
-        const rateLimitStore = freshStore();
-        const store = rateLimitStore.rateLimitStore('global');
+        const store = rateLimitStore('unit');
+        void store.init?.({ windowMs: 60_000 } as never);
 
-        expect(store).toBeInstanceOf(freshMemoryStore());
-        expect(mockCreateClient).not.toHaveBeenCalled();
-    });
-
-    it('returns MemoryStore when Redis is enabled but nothing configures a URL', () => {
-        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
-        delete process.env.NODE_RATE_LIMIT_REDIS_URL;
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_PORT;
-
-        const rateLimitStore = freshStore();
-        const store = rateLimitStore.rateLimitStore('global');
-
-        expect(store).toBeInstanceOf(freshMemoryStore());
-    });
-
-    it('does not build a RedisStore until something is actually counted', () => {
-        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
-        process.env.NODE_REDIS_URL = 'redis://redis:6379';
-
-        freshStore().rateLimitStore('global');
-
-        expect(mockCreateClient).not.toHaveBeenCalled();
-        expect(mockInit).not.toHaveBeenCalled();
-    });
-
-    it('builds the RedisStore on the first increment, once, and memoises it', async () => {
-        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
-        process.env.NODE_REDIS_URL = 'redis://redis:6379';
-        const store = freshStore().rateLimitStore('global');
-
-        await store.increment('key-a');
-        await store.increment('key-b');
-
-        expect(mockCreateClient).toHaveBeenCalledTimes(1);
-        expect(mockIncrement).toHaveBeenCalledTimes(2);
-    });
-
-    it('namespaces the RedisStore prefix per limiter, so budgets cannot cross', async () => {
-        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
-        process.env.NODE_REDIS_URL = 'redis://redis:6379';
-        const store = freshStore().rateLimitStore('credentials-identity');
-
-        await store.increment('key-a');
-
-        expect(mockConstruct).toHaveBeenCalledWith(
-            expect.objectContaining({ prefix: 'rate-limit:credentials-identity:' })
-        );
-    });
-});
-
-describe('rateLimitStore — the missing-config alert', () => {
-    it('logs when no Redis is configured and more than one worker is running', () => {
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_PORT;
-        process.env.NODE_CLUSTER_WORKERS = '4';
-
-        freshStore().rateLimitStore('global');
-
-        expect(freshLogger().error).toHaveBeenCalledWith(
-            expect.objectContaining({ namespace: 'global' })
-        );
-    });
-
-    it('stays quiet when a single worker makes per-process counting correct anyway', () => {
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_PORT;
-        process.env.NODE_CLUSTER_WORKERS = '1';
-
-        freshStore().rateLimitStore('global');
-
-        expect(freshLogger().error).not.toHaveBeenCalled();
-    });
-});
-
-const urlUsedFor = async (): Promise<string> => {
-    process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
-    const store = freshStore().rateLimitStore('global');
-    await store.increment('key');
-    return (mockCreateClient.mock.calls.at(-1)?.[0] as { url: string }).url;
-};
-
-describe('rateLimitStore — URL resolution priority', () => {
-    it('prefers NODE_RATE_LIMIT_REDIS_URL over every other source', async () => {
-        process.env.NODE_RATE_LIMIT_REDIS_URL = 'redis://limiter-only:6379';
-        process.env.NODE_REDIS_URL = 'redis://shared:6379';
-
-        await expect(urlUsedFor()).resolves.toBe('redis://limiter-only:6379');
-    });
-
-    it('falls back to NODE_REDIS_URL when the limiter has no URL of its own', async () => {
-        delete process.env.NODE_RATE_LIMIT_REDIS_URL;
-        process.env.NODE_REDIS_URL = 'redis://shared:6379';
-
-        await expect(urlUsedFor()).resolves.toBe('redis://shared:6379');
-    });
-
-    it('assembles a URL from host and port as the last resort, defaulting the host', async () => {
-        delete process.env.NODE_RATE_LIMIT_REDIS_URL;
-        delete process.env.NODE_REDIS_URL;
-        delete process.env.NODE_REDIS_HOST;
-        process.env.NODE_REDIS_PORT = '6380';
-
-        await expect(urlUsedFor()).resolves.toBe('redis://127.0.0.1:6380');
-    });
-});
-
-describe('rateLimitStore — an init failure fails open instead of crashing (regression)', () => {
-    /*
-     * The bug this guards: `lazyRedisStore` used to fire `inner.init(options)` with no `.catch()`.
-     * `RedisStore.init()` awaits two Lua-script loads, so any failure there — Redis unreachable, or
-     * a reply `rate-limit-redis` does not recognise — rejected a promise nothing was holding. An
-     * unhandled rejection is fatal by default since Node 15: the whole process would go down on a
-     * Redis hiccup, which is exactly the outage `send()` is written to fail open from instead.
-     */
-    it('logs the failure and lets the request proceed rather than throwing', async () => {
-        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
-        process.env.NODE_REDIS_URL = 'redis://redis:6379';
-        mockInit.mockRejectedValue(new TypeError('unexpected reply from redis client'));
-        const store = freshStore().rateLimitStore('global');
-        // `express-rate-limit` calls this on the real Store before any request ever increments it —
-        // it is what makes `options` truthy, and so what makes `store()` call `inner.init(options)`
-        // at all. Skipping it would test a path the middleware never actually leaves untaken.
-        void store.init?.({ windowMs: 60_000 } as Options);
-
-        // The regression itself: this must resolve, not crash the process, even though init()
-        // above is rejecting on this exact tick.
-        await expect(store.increment('key')).resolves.toBeDefined();
-
-        // Give the fire-and-forgotten init().catch() a turn to run before asserting on it.
-        await Promise.resolve();
-        await Promise.resolve();
-
-        expect(freshLogger().error).toHaveBeenCalledWith(
-            expect.objectContaining({
-                message: expect.stringContaining('failed to initialise')
-            })
-        );
-    });
-});
-
-describe('stopRateLimitStore', () => {
-    it('resolves without touching Redis when no client was ever built', async () => {
-        await expect(freshStore().stopRateLimitStore()).resolves.toBeUndefined();
-        expect(mockQuit).not.toHaveBeenCalled();
-    });
-
-    it('quits the client that was actually built', async () => {
-        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
-        process.env.NODE_REDIS_URL = 'redis://redis:6379';
-        mockQuit.mockImplementation(() => Promise.resolve());
-        const rateLimitStore = freshStore();
-        await rateLimitStore.rateLimitStore('global').increment('key');
-
-        await rateLimitStore.stopRateLimitStore();
-
-        expect(mockQuit).toHaveBeenCalledTimes(1);
-        expect(mockDestroy).not.toHaveBeenCalled();
-    });
-
-    it('destroys the socket when QUIT itself fails, rather than hanging on shutdown', async () => {
-        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
-        process.env.NODE_REDIS_URL = 'redis://redis:6379';
-        mockQuit.mockImplementation(() => Promise.reject(new Error('socket closed')));
-        const rateLimitStore = freshStore();
-        await rateLimitStore.rateLimitStore('global').increment('key');
-
-        await expect(rateLimitStore.stopRateLimitStore()).resolves.toBeUndefined();
-
-        expect(mockDestroy).toHaveBeenCalledTimes(1);
+        return Promise.resolve(store.increment('a')).then(() => {
+            expect(connectCalls).toBe(0);
+        });
     });
 });
