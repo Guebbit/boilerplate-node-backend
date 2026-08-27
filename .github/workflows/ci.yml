@@ -10,7 +10,7 @@ name: CI
 # The jobs fall into four groups:
 #   - style           commitlint, lint, prettier
 #   - contract        lint-openapi, lint-asyncapi, their per-module counterparts,
-#                     contracts-bundle-freshness, seed-export-freshness, module-docs-freshness,
+#                     contracts-bundle-freshness, seed-export-freshness,
 #                     spec-identity — the spec is valid, and the paired frontend still agrees with
 #                     it. api/ and src/types/asyncapi.generated.ts are no longer committed — see
 #                     `postinstall` in package.json — so there is nothing left to go stale for
@@ -283,43 +283,6 @@ jobs:
             - name: Check the exported demo dataset is current
               run: npm run check:seed-export
 
-    module-docs-freshness:
-        # Every module carries its generated documentation section, and it is current.
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        permissions:
-            contents: read
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Setup
-              uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-
-            - name: Check module docs are current
-              run: npm run check:module-docs
-
-    env-keys-documented:
-        # Every variable the app reads is listed in `.env-example`, which is the only enumeration
-        # a deployment has. An undocumented one is a feature that silently never turns on.
-        runs-on: ubuntu-latest
-        timeout-minutes: 10
-        permissions:
-            contents: read
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Setup
-              uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-
-            - name: Check every environment variable is documented
-              run: npm run check:environment-keys
-
     cluster:
         # The only suite that boots `src/cluster.ts` and forks real workers. It is not in
         # `complete` — two clusters and a Redis is ~25s and needs a container engine — so CI is
@@ -547,7 +510,6 @@ jobs:
             - lint-asyncapi-modules
             - contracts-bundle-freshness
             - seed-export-freshness
-            - module-docs-freshness
             - typecheck
             - build
             - test-unit

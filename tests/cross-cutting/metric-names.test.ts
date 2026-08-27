@@ -47,8 +47,7 @@ const OVERVIEW_CONTROLLER = path.join(
  *
  * `account/metrics.ts` carries exactly that — a line explaining the naming convention, sitting
  * where the pattern below expects the first field — and the sweep read straight past the counter
- * the overview endpoint depends on most. `scripts/check-environment-keys.ts` strips the same way
- * and for the same reason.
+ * the overview endpoint depends on most.
  */
 const withoutComments = (source: string): string =>
     source.replaceAll(/\/\*[\S\s]*?\*\//g, '').replaceAll(/^[^\S\n]*\/\/.*$/gm, '');
