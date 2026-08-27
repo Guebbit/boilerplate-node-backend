@@ -2,6 +2,53 @@
 
 Every other layer on this site answers "does the code do the right thing?" This one answers a different question: **do the _tests_ actually notice when it doesn't?** Line coverage can be satisfied by executing a line without asserting anything about its result; mutation testing can't — it edits the source thousands of times (`>` to `>=`, `&&` to `||`, a function body emptied out) and reports every edit the suite failed to catch. A **surviving mutant** is a bug the tests are structurally blind to.
 
+## Start here — the short version
+
+**Line coverage asks "did this code run?" Mutation testing asks "if I break this code, does anything notice?"** Those are different questions, and a file can score 100% on the first and 0% on the second — the tests execute every line and check nothing about what it does.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
+flowchart TD
+    Code["your source code"] --> Break["Stryker breaks ONE thing\n(a > b becomes a >= b, etc.)\nthousands of times, one at a time"]
+    Break --> Run["your real test suite runs\nagainst each broken version"]
+    Run --> K["KILLED\na test failed — good,\nsomething actually checks this"]
+    Run --> S["SURVIVED\neverything still passed —\nTHE FINDING: a bug your\ntests are blind to"]
+    Run --> N["NO COVERAGE\nnothing even ran this code —\nnobody wrote a test that reaches it"]
+
+    classDef src fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef proc fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    classDef out fill:#fef3c7,stroke:#d97706,color:#111827;
+    class Code src;
+    class Break,Run proc;
+    class K good;
+    class S bad;
+    class N out;
+```
+
+**The two things this finds, and they need different fixes:**
+
+| You see         | It means                                                                                                    | The fix                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Survived**    | A test runs this code but checks nothing that would catch it breaking — a useless assertion, or none at all | Sharpen the test: assert on the actual behaviour, not just "it didn't throw" |
+| **No coverage** | No test runs this code at all                                                                               | Write a test that reaches it — there is nothing to sharpen yet               |
+
+Both look like "coverage is fine" from the outside — 70%+ line coverage says nothing about either one. The tool lands one word on each so you don't have to guess which problem you have. (Full outcome list, including `killed`/`timeout`/`error`: [Glossary](#glossary) below; one mutant walked through step by step: [What a mutant actually is](#what-a-mutant-actually-is).)
+
+### The four numbers people mix up
+
+This came up in practice: "didn't we set a 70% threshold?" — yes, but for a different tool measuring a different thing. Four separate percentages exist across this project, and only one of them is what you're probably thinking of:
+
+| Where                                             | Measures                                                          | Number                                                                                                 | What happens if it's missed                                               |
+| ------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `jest.config.js` → `coverageThreshold`            | **Line coverage** — did this code execute at all, during any test | 70% per file (some files exempted, with the exemption recorded)                                        | `npm run test:unit:coverage` fails outright, in CI's `test-unit` job      |
+| `stryker.config.json` → `thresholds.high` / `low` | Nothing enforced — just colours the HTML report green/yellow/red  | 80 / 60                                                                                                | Nothing. Decoration only.                                                 |
+| `stryker.config.json` → `thresholds.break`        | Has the **whole run's** score collapsed                           | **60** (mirrors the frontend's own `break: 60` — see [Thresholds](#thresholds--measured-not-invented)) | The mutation run itself exits non-zero                                    |
+| `mutation-baseline.json` (**the ratchet**)        | Did **this one file** score worse than it did last time           | no fixed number — compares each file only to its own history                                           | `npm run test:mutation:check` fails, naming the exact file that got worse |
+
+The one that actually gates day-to-day work is the **last row** — the ratchet. `break` is a single global number, which means one strong file can hide one collapsing file behind the average; the ratchet can't be fooled that way because it checks every file against itself. See [The per-file ratchet](#the-per-file-ratchet) for how that comparison works, with a diagram.
+
 ## Glossary
 
 Read this first. The rest of the page uses these words precisely, and several of them mean something narrower than they sound.
@@ -825,35 +872,35 @@ test is needed to defend it.
 
 ## Thresholds — measured, not invented
 
-`high` and `low` only colour the report. `break` is the one that fails a run, and it comes from a real measurement or it is not set at all — which is why it is currently `null`: the scope was repointed at the current module layout and nothing has measured it yet. The first full run supplies the number, and it goes in below that run's score, so it answers "has something collapsed" rather than "did the number move".
+`high` and `low` only colour the report. `break` is the one that fails a run.
 
-After that the rule is: raise `break` when a score **sustains** a higher band; never lower it to make a run pass. The single sanctioned exception is a change to `mutate` — which changes the population, so old and new numbers are not measurements of the same thing — re-recorded in the same commit with both numbers and the reason.
+As of 2026-08-27, `break` is **60** — copied directly from the frontend's own `thresholds.break`, on request, because the two `stryker.config.json` files were written together and are meant to stay one pair. That is a **deliberate exception** to the rule everywhere else in this file: `break` normally sits at the bottom of the observed band, and 60 is currently well above it (see the numbers below). It is expected to keep failing until real coverage closes the gap — that failure is the intended pressure, not a misconfiguration to quietly "fix" by lowering the number.
 
-### The measurement backlog
+Ordinarily the rule is: raise `break` when a score **sustains** a higher band; never lower it to make a run pass. The single sanctioned exception besides the one above is a change to `mutate` — which changes the population, so old and new numbers are not measurements of the same thing — re-recorded in the same commit with both numbers and the reason.
 
-`break` wants to be **70**, with `high: 80` as the aspirational band. Getting there is a sequence,
-and doing it out of order is how a threshold becomes something everyone passes `--force` past.
+### The first real baseline, and why the number dropped
 
-The last completed full run was 2026-08-12 — **65.69% overall, 72.22% on covered code** — and it is
-now several feature commits stale. It also predates two changes that move the number in opposite
-directions: thirteen modules of newer code that has never been measured, and the `src/app/**`
-exclusion above (~+2.6 points, and a change of population, so it is not comparable to the 65.69%
-at all).
+No `mutation-baseline.json` existed in this checkout at all until 2026-08-27 — the 2.0.0 modular-architecture rewrite (`1a0aeb43`) dropped the old one along with the old module layout, and nothing had run a full `npm run test:mutation` since. This is that first run: **8163 mutants, 277 files, 57m5s at `--concurrency 3`** — 2258 killed, 26 timed out, 2145 survived, 3539 had no coverage, 198 errored.
 
-| Area                    | Mutants | Score | Note                                        |
-| ----------------------- | ------- | ----- | ------------------------------------------- |
-| `src/kernel/**`         | 127     | 80.3% | already past the target                     |
-| `src/infrastructure/**` | 1584    | 72.2% |                                             |
-| `src/modules/**`        | 1404    | 63.0% | where the remaining points and findings are |
+|               | Total      | Covered    |
+| ------------- | ---------- | ---------- |
+| **All files** | **28.66%** | **51.57%** |
 
-**The order:**
+That reads much lower than the last pre-rewrite measurement (65.69% / 72.22%, 2026-08-12) — expected, not a regression. Controllers, `module.ts`, `demo.ts` and the runtime wiring had all fallen out of `mutate` scope at some point and only came back recently; this is the first time they were actually measured, and most have zero unit tests by design (`tests/contract`/`tests/integration` cover them instead — see [Reading a 0%](#reading-a-0--and-the-one-case-where-it-was-excluded-instead)). Per-area, that shows up as one area dragging the whole number down:
 
-1. **Take a fresh baseline.** `mutation-baseline.json` is absent deliberately — its keys were
-   pre-migration paths, and the ratchet seeds a fresh one from the first report rather than being
-   edited into shape. `npm run test:mutation` is the step; nothing gates on it, because `break` is
-   `null` until a real run supplies a number.
-2. **Work the `src/modules/**` number\*\*, which is the only area below the target.
-3. **Then** move `break`, once a run has actually sustained the new floor.
+| Area                  | Mutants | Total     | Covered | Note                                                                                        |
+| --------------------- | ------- | --------- | ------- | ------------------------------------------------------------------------------------------- |
+| `src/kernel/`         | 148     | 79.45%    | 80.0%   | already clears 60 comfortably                                                               |
+| `src/infrastructure/` | 2396    | 63.85%    | 75.14%  | just above 60                                                                               |
+| `src/modules/`        | 5622    | **12.4%** | 29.54%  | most of the mutants in the whole run, and the entire reason the aggregate fails `break: 60` |
+
+Reading `total` against `covered` for `src/modules/`: they're far apart (12.4 vs 29.54), which per the rule in [`total` versus `covered`](#total-versus-covered--two-different-jobs) means most of the gap is **no coverage**, not weak assertions — write tests that reach the code before trying to sharpen anything.
+
+**What is actually left to do, in order:**
+
+1. **Decide, per module, whether controllers/routes/`service.ts` are meant to ever get unit coverage**, or whether they're structurally contract/integration-only — the same shape as `src/app/**`, already excluded on exactly that reasoning. If the latter, exclude them from `mutate` the same way, and say why in the commit.
+2. **Re-baseline once the population is settled** (`npm run test:mutation:baseline`), so the ratchet is tracking a scope that isn't about to move again.
+3. **Then work `src/modules/**`'s real number up\*\*, file by file, ranked by [blast radius](#agnostic-before-applicable) — not by raw percentage.
 
 Two files also lost their coverage floor in the modular migration and have not had it restored.
 Both have since moved again, and neither move restored the floor: `src/modules/account/tokens.ts` <!-- doc-paths:ignore -->
