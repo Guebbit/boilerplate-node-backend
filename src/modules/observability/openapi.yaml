@@ -128,7 +128,7 @@ paths:
                 - name: action
                   in: query
                   schema: { type: string }
-                  description: 'Filter by action name (e.g. auth.login.failed)'
+                  description: 'Filter by action name (e.g. order.created)'
                 - name: outcome
                   in: query
                   schema:
@@ -418,7 +418,7 @@ components:
                 action:
                     {
                         type: string,
-                        description: 'Dot-notation action name (e.g. auth.login.succeeded)'
+                        description: 'Dot-notation action name (e.g. order.created)'
                     }
                 outcome:
                     type: string

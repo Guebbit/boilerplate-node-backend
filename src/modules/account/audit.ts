@@ -11,8 +11,7 @@
  */
 
 export const accountAuditActions = {
-    AUTH_LOGIN_SUCCEEDED: 'auth.login.succeeded',
-    AUTH_LOGIN_FAILED: 'auth.login.failed',
+    AUTH_LOGIN: 'auth.login',
     AUTH_SIGNED_UP: 'auth.signup',
     AUTH_PROFILE_UPDATED: 'auth.profile.updated',
     AUTH_PASSWORD_RESET_REQUESTED: 'auth.password_reset.requested',

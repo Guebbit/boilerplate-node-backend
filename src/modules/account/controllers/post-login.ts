@@ -35,7 +35,7 @@ const recordLoginFailure = (request: Request) => {
     authLoginTotal.inc({ status: 'failure' });
     emitAuditEvent(
         buildAuditEvent(callerContextOf(request), {
-            action: accountAuditActions.AUTH_LOGIN_FAILED,
+            action: accountAuditActions.AUTH_LOGIN,
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
             outcome: 'failure'
@@ -52,7 +52,7 @@ const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) 
     authLoginTotal.inc({ status: 'success' });
     emitAuditEvent(
         buildAuditEvent(context, {
-            action: accountAuditActions.AUTH_LOGIN_SUCCEEDED,
+            action: accountAuditActions.AUTH_LOGIN,
             actor_user_id: userId,
             actor_role: role,
             outcome: 'success'

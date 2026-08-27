@@ -191,10 +191,9 @@ describe('GET /observability/audit', () => {
     it('matches the contract for a log holding rows, narrowed by outcome', async () => {
         const { bearer } = await authenticateAs('admin');
         /*
-         * A REAL failed login rather than a synthetic entry. The action vocabulary is a union the
-         * modules declare (`account/audit.ts` owns `auth.login.failed`), so inventing a string
-         * here would not compile — and a test that drives the endpoint that emits is worth more
-         * than one that writes the row it then reads.
+         * A REAL failed login rather than a synthetic entry. `account/audit.ts` owns `auth.login`,
+         * and `outcome: 'failure'` is what this filter narrows by — a test that drives the
+         * endpoint that emits is worth more than one that writes the row it then reads.
          */
         await api().post('/account/login').send({ email: 'nobody@example.com', password: 'wrong' });
 

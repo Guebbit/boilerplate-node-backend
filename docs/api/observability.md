@@ -118,7 +118,7 @@ Returns recent audit events. Supports query filters:
 | Param | Type | Description |
 | --- | --- | --- |
 | `actor` | string | Filter by actor user ID |
-| `action` | string | Filter by action (e.g. `auth.login.failed`) |
+| `action` | string | Filter by action (e.g. `order.created`) |
 | `outcome` | `success` \| `failure` | Filter by outcome |
 | `since` | ISO-8601 | Return events after this timestamp |
 | `limit` | integer (1–200) | Max events to return. Defaults to 200, and CLAMPS rather than refusing: a larger number, a blank one or `?limit=abc` all answer with 200. This read has no pages, so there is no second page to send a caller to — every paged endpoint answers 422 instead. |

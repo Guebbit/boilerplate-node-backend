@@ -44,13 +44,13 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 ## Audit events
 
-`emitAuditEvent` (in `src/infrastructure/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login.succeeded`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
+`emitAuditEvent` (in `src/infrastructure/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
 
 ```json
 {
     "level": "info",
     "log_type": "audit",
-    "action": "auth.login.succeeded",
+    "action": "auth.login",
     "actor_user_id": "user-123",
     "actor_role": "user",
     "outcome": "success",
@@ -61,7 +61,7 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 ```
 
 The `action` vocabulary is a closed union, not free strings — an alert built on
-`auth.login.failed` cannot be defeated by a typo at a call site.
+`auth.login` cannot be defeated by a typo at a call site.
 
 It is assembled rather than declared in one place. Each module owns its own actions in
 `src/modules/<name>/audit.ts` as an `as const` object and augments core's `IAuditActionMap`, the

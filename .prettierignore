@@ -19,6 +19,11 @@ openapi.yaml
 # a format-only difference would read as a forked dataset.
 db/demo/demo-data.json
 
+# The mutation incremental cache. Committed on purpose — see the note in `.gitignore` and
+# `stryker.config.json` — and written by Stryker, not by anyone typing JSON. Same reasoning as the
+# two files above: reformatting a file only a tool writes fails the check on a commit nobody made.
+reports/stryker-incremental.json
+
 # graphify cache — generated JSON, not ours to format
 graphify-out/
 
@@ -27,6 +32,6 @@ graphify-out/
 # unformatted scratch directory here fails `prettier:check` — which is in `npm run complete`, which
 # the pre-commit hook runs. One person's working notes would otherwise block every commit in every
 # concurrent session, and the way out people find is `--no-verify`, which costs the whole gate.
-2repo/
+.2repo/
 .codeboarding/
 CLAUDE.md

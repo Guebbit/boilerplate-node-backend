@@ -56,7 +56,7 @@ const makeEntry = (overrides: Partial<AuditEntry> = {}): AuditEntry =>
     ({
         actor_user_id: 'user-1',
         actor_role: 'user',
-        action: 'auth.login.succeeded',
+        action: 'auth.login',
         outcome: 'success',
         timestamp: new Date('2026-08-01T10:00:00.000Z'),
         level: 'info',
@@ -94,7 +94,7 @@ describe('auditLogService.record', () => {
         expect(mockedLogger.warn).toHaveBeenCalledWith(
             expect.objectContaining({
                 message: 'audit entry not persisted',
-                action: 'auth.login.succeeded',
+                action: 'auth.login',
                 error: 'mongo is down'
             })
         );
@@ -143,14 +143,14 @@ describe('auditLogService.record', () => {
     it('names the failing action in the warning, so a lost entry is identifiable', async () => {
         mockedRepository.create.mockRejectedValue(new Error('boom'));
 
-        auditLogService.record(makeEntry({ action: 'auth.login.failed' }));
+        auditLogService.record(makeEntry({ action: 'auth.logout' }));
 
         // The rejection is handled a couple of microtasks later, same as the case above.
         await Promise.resolve();
         await Promise.resolve();
 
         expect(mockedLogger.warn).toHaveBeenCalledWith(
-            expect.objectContaining({ action: 'auth.login.failed' })
+            expect.objectContaining({ action: 'auth.logout' })
         );
     });
 });

@@ -16,7 +16,7 @@ import type { CallerContext } from '@infrastructure/http/request';
  * Action constants — domain.resource.verb dot-notation.
  * The dotted convention lets a log backend filter by prefix: `auth.*` for all authentication
  * activity, `admin.product.*` for one resource. A closed vocabulary (not raw strings) is what
- * stops an alert built on `auth.login.failed` being defeated by a typo at a call site.
+ * stops an alert built on `auth.login` being defeated by a typo at a call site.
  *
  * Only the app-level actions live here. Every domain action belongs to the module that performs
  * it — `modules/account/audit.ts`, `modules/products/audit.ts`, and so on — because this file sits

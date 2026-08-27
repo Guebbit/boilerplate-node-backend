@@ -29,7 +29,7 @@ describe('emitAuditEvent', () => {
 
     it('calls auditLogger.log with "info" level for success outcome', () => {
         const event: AuditEvent = {
-            action: 'auth.login.succeeded',
+            action: 'auth.login',
             actor_user_id: 'user-123',
             actor_role: 'user',
             outcome: 'success',
@@ -42,14 +42,14 @@ describe('emitAuditEvent', () => {
         expect(auditLogger.log).toHaveBeenCalledTimes(1);
         const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, AuditEvent];
         expect(call[0]).toBe('info');
-        expect(call[1]).toBe('auth.login.succeeded');
+        expect(call[1]).toBe('auth.login');
         expect(call[2].actor_user_id).toBe('user-123');
         expect(call[2].outcome).toBe('success');
     });
 
     it('calls auditLogger.log with "warn" level for failure outcome', () => {
         const event: AuditEvent = {
-            action: 'auth.login.failed',
+            action: 'auth.login',
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
             outcome: 'failure',
@@ -105,7 +105,7 @@ describe('registerAuditSink', () => {
     afterEach(() => registerAuditSink(() => {}));
 
     const event: AuditEvent = {
-        action: 'auth.login.succeeded',
+        action: 'auth.login',
         actor_user_id: 'user-123',
         actor_role: 'user',
         outcome: 'success'
@@ -119,7 +119,7 @@ describe('registerAuditSink', () => {
 
         expect(sink).toHaveBeenCalledTimes(1);
         const entry = sink.mock.calls[0][0] as AuditEntry;
-        expect(entry.action).toBe('auth.login.succeeded');
+        expect(entry.action).toBe('auth.login');
         expect(entry.actor_user_id).toBe('user-123');
     });
 

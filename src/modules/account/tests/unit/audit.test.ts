@@ -22,8 +22,7 @@ import { accountAuditActions } from '../../audit';
 describe('the account audit vocabulary', () => {
     it('spells every action exactly as the log tooling expects', () => {
         expect(accountAuditActions).toEqual({
-            AUTH_LOGIN_SUCCEEDED: 'auth.login.succeeded',
-            AUTH_LOGIN_FAILED: 'auth.login.failed',
+            AUTH_LOGIN: 'auth.login',
             AUTH_SIGNED_UP: 'auth.signup',
             AUTH_PROFILE_UPDATED: 'auth.profile.updated',
             AUTH_PASSWORD_RESET_REQUESTED: 'auth.password_reset.requested',
@@ -60,8 +59,8 @@ describe('the account audit vocabulary', () => {
      * does not type-check it.
      */
     it('registers its actions in the app-wide union', () => {
-        const action: AuditAction = accountAuditActions.AUTH_LOGIN_SUCCEEDED;
+        const action: AuditAction = accountAuditActions.AUTH_LOGIN;
 
-        expect(action).toBe('auth.login.succeeded');
+        expect(action).toBe('auth.login');
     });
 });
