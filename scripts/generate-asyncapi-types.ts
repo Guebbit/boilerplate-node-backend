@@ -183,26 +183,52 @@ const schemaToType = (schema: JsonSchema | undefined, depth = 0): string => {
 };
 
 /*
+ * The real payload type a message carries — never the message's own alias name, which
+ * `messageTypeBlocks` may have deduped away. Two things in this file need "what type does this
+ * message resolve to" (the SSE payload map below, and the alias declarations themselves), and
+ * both go through this so neither can name a type the other dropped.
+ *
+ * @param messageName Key into `components.messages`.
+ * @param messages The document's message definitions.
+ * @returns The resolved payload type name, or 'unknown' when the message is not declared.
+ */
+const resolveMessagePayloadType = (
+    messageName: string,
+    messages: Record<string, AsyncApiMessage>
+): string => {
+    const { payload } = messages[messageName];
+    if (!payload) return 'unknown';
+    return payload.$ref ? refToTypeName(payload.$ref) : schemaToType(payload);
+};
+
+/*
  * Builds channel-to-message-type entries from channel prefixes and operation kind.
  *
  * @param channels AsyncAPI channels map.
+ * @param messages AsyncAPI message definitions, resolved to their PAYLOAD type — never the
+ *   message's own (possibly deduped-away) alias name.
  * @param prefix Channel prefix selector.
  * @param operation Operation direction (`publish` or `subscribe`).
  * @returns Ordered entries containing channel names and referenced message type names.
  */
 const collectChannelMessageEntries = (
     channels: Record<string, AsyncApiChannel>,
+    messages: Record<string, AsyncApiMessage>,
     prefix: string,
     operation: 'publish' | 'subscribe'
 ): { channelName: string; messageType: string }[] =>
     Object.entries(channels)
         .filter(([channelName]) => channelName.startsWith(prefix))
-        .map(([channelName, channel]) => ({
-            channelName,
-            messageType: channel[operation]?.message?.$ref
-                ? refToTypeName(channel[operation].message.$ref)
-                : 'unknown'
-        }))
+        .map(([channelName, channel]) => {
+            const ref = channel[operation]?.message?.$ref;
+            const messageName = ref ? (ref.split('/').pop() ?? '') : '';
+            return {
+                channelName,
+                messageType: messageName
+                    ? resolveMessagePayloadType(messageName, messages)
+                    : 'unknown'
+            };
+        })
         .toSorted((a, b) => a.channelName.localeCompare(b.channelName));
 
 /*
@@ -314,22 +340,35 @@ const document = parse(specText) as AsyncApiDocument;
 const channels = document.channels ?? {};
 const messages = document.components?.messages ?? {};
 
-const sseEntries = collectChannelMessageEntries(channels, 'observability.', 'subscribe');
+const sseEntries = collectChannelMessageEntries(channels, messages, 'observability.', 'subscribe');
 
 const channelNamespaceBlocks = [...groupChannelsByNamespace(Object.keys(channels))].map(
     ([namespace, channelNames]) => renderChannelNamespace(namespace, channelNames)
 );
 
+/*
+ * Every target type this pass has already aliased. Several messages in this contract share one
+ * payload — `observability.metrics.snapshot`/`.updated`/`heartbeat` all carry
+ * `ObservabilityMetricsPayload` — and aliasing each separately produced three names for one
+ * shape, none of which any hand-written caller used: real code imports the shared payload type
+ * directly, the same way `mailer.ts` names its own `EmailJob` rather than importing a generated
+ * `EmailJobMessage`. One alias per shape, kept in declaration order, is what a caller who does
+ * want the message-level name actually finds — the others were never a second fact, just a second
+ * spelling of the first. `sseEntries` above resolves through the same `resolveMessagePayloadType`
+ * this loop uses, which is what makes deduping here safe: `SseEventPayloadMap` never names a
+ * message-level alias, so it cannot be left pointing at one this loop just dropped.
+ */
+const seenTargets = new Set<string>();
+
 const messageTypeBlocks = Object.entries(messages)
-    .map(([messageName, message]) => {
+    .map(([messageName]) => {
         const aliasName = toModelName(messageName);
-        if (message.payload?.$ref) {
-            const targetName = refToTypeName(message.payload.$ref);
-            // Skip self-referential aliases (message name resolves to same type as schema)
-            if (aliasName === targetName) return '';
-            return `export type ${aliasName} = ${targetName};`;
-        }
-        return `export type ${aliasName} = ${schemaToType(message.payload)};`;
+        const targetName = resolveMessagePayloadType(messageName, messages);
+        // Skip self-referential aliases (message name resolves to same type as schema)
+        if (aliasName === targetName) return '';
+        if (seenTargets.has(targetName)) return '';
+        seenTargets.add(targetName);
+        return `export type ${aliasName} = ${targetName};`;
     })
     .filter(Boolean);
 

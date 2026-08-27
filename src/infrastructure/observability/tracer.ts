@@ -9,7 +9,6 @@
 
 // `@opentelemetry/api` is the *interface* package, deliberately separate from the SDK:
 //  - `trace`   — the global tracer registry; also `trace.getActiveSpan()`.
-//  - `context` — the async-context propagation API (re-exported at the bottom).
 //  - `SpanStatusCode` — the OK/ERROR/UNSET enum used to mark span outcome.
 //  - `Span` — one timed operation; `Attributes` — its key/value metadata.
 // Because this is only the API, importing it when no SDK is registered is harmless: every
@@ -136,12 +135,3 @@ export const recordErrorOnActiveSpan = (error: unknown): void => {
     // Note: deliberately does NOT call `span.end()`. The span belongs to whoever opened it
     // (usually the auto-instrumentation's request span) and ending it here would truncate it.
 };
-
-// Re-export OTel primitives for callers that need them without importing @opentelemetry/api directly.
-// Keeping the dependency behind this module means a future change of tracing library touches
-// one file instead of every call site.
-export { SpanStatusCode } from '@opentelemetry/api';
-export { trace } from '@opentelemetry/api';
-// `context` is needed for manual propagation across boundaries OTel cannot follow on its own —
-// e.g. resuming a trace inside a queue consumer from headers carried on the message.
-export { context } from '@opentelemetry/api';
