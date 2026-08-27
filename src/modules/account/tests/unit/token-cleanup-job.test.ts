@@ -47,6 +47,19 @@ jest.mock('@infrastructure/adapters/logger', () => ({
     }
 }));
 
+/*
+ * `emitAuditEvent` is replaced too, rather than reached with `jest.spyOn(auditPort, ...)` on the
+ * namespace import below. TypeScript's CommonJS `__importStar` interop copies a namespace import's
+ * properties as non-configurable getters, which `jest.spyOn` cannot redefine — a mismatch some
+ * transpile paths mask and some (Stryker's instrumented sandbox, at minimum) do not. Mocking the
+ * module gives every consumer a plain, always-configurable `jest.fn()` instead.
+ */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
+
 const mockTokenRemoveExpired = Users.tokenRemoveExpired as jest.MockedFunction<
     typeof Users.tokenRemoveExpired
 >;
@@ -155,33 +168,30 @@ describe('runTokenCleanup — the two branches are mutually exclusive', () => {
 });
 
 describe('adminTokenCleanup — the admin-triggered, audited counterpart', () => {
+    const mockedEmitAuditEvent = auditPort.emitAuditEvent as jest.MockedFunction<
+        typeof auditPort.emitAuditEvent
+    >;
+
     it('audits a successful cleanup', async () => {
-        // `mockImplementation` rather than a call-through spy: this file replaces
-        // `@infrastructure/adapters/logger`'s `logger` export only, and the real `emitAuditEvent`
-        // also reaches that module's `auditLogger` export, which the mock leaves undefined.
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent').mockImplementation(() => {});
         mockTokenRemoveExpired.mockResolvedValueOnce({ status: 200, success: true });
 
         const result = await accountService.adminTokenCleanup(testCallerContext);
 
         expect(result).toEqual({ status: 200, success: true });
-        expect(auditSpy).toHaveBeenCalledWith(
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP,
                 outcome: 'success'
             })
         );
-        auditSpy.mockRestore();
     });
 
     it('does not audit a failed cleanup — nothing to report happened', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
         mockTokenRemoveExpired.mockResolvedValueOnce({ status: 500, success: false });
 
         const result = await accountService.adminTokenCleanup(testCallerContext);
 
         expect(result).toEqual({ status: 500, success: false });
-        expect(auditSpy).not.toHaveBeenCalled();
-        auditSpy.mockRestore();
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
     });
 });
