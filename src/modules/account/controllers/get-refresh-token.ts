@@ -3,8 +3,6 @@ import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
 import { accountService, runTokenCleanup } from '../services';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
 import { authRefreshTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 
@@ -26,27 +24,14 @@ export const getRefreshToken = (request: Request, response: Response) => {
     const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
 
     /**
-     * Check if refresh token is missing
-     */
-    if (!refreshToken) {
-        authRefreshTotal.inc({ status: 'failure' });
-        emitAuditEvent(
-            buildAuditEvent(callerContextOf(request), {
-                action: accountAuditActions.AUTH_TOKEN_REFRESHED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
-                outcome: 'failure',
-                metadata: { reason: 'missing_token' }
-            })
-        );
-        rejectResponse(response, 401);
-        return;
-    }
-
-    /**
      * Create new access token using refresh token stored in the server
+     *
+     * Cleanup is skipped when there is no cookie. It is a collection-wide sweep, and a request that
+     * cannot succeed is the cheapest rejection this API has — running the sweep for it would let
+     * anonymous traffic schedule database work. The refusal itself is `refreshAccessToken`'s to
+     * make and to record: absence is one of the three outcomes it reports on.
      */
-    return runTokenCleanup()
+    return (refreshToken ? runTokenCleanup() : Promise.resolve())
         .then(() =>
             accountService
                 .refreshAccessToken(refreshToken, callerContextOf(request))

@@ -18,6 +18,12 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import * as accountService from '@modules/account/services';
+// The namespace above is this file's house style, and `refreshAccessToken` is published on the
+// service object rather than as a bare name — so it is reached through the object, not the barrel.
+import { accountService as account } from '@modules/account/services';
+import * as auditPort from '@infrastructure/observability/audit';
+import { createRefreshToken } from '@modules/account/session/jwt';
+import { accountAuditActions } from '../../audit';
 import { userRepository } from '@modules/users';
 import type { UserDocument } from '@modules/users';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
@@ -203,5 +209,110 @@ describe('accountService.passwordChange', () => {
         const loginResult = await accountService.login('pwdchange@example.com', 'BrandNew1!');
         expect(loginResult.success).toBe(true);
         expect(refreshed).not.toBeNull();
+    });
+});
+
+/** A user holding one real, stored refresh token — what the refresh cookie would have carried. */
+const issueRefreshToken = async () => {
+    const user = await createUser({ email: 'refresh@example.com', username: 'refresher' });
+    await createRefreshToken(user.id);
+    const stored = await userRepository.findByIdWithCredentials(user.id);
+    return String(stored?.tokens?.[0]?.token);
+};
+
+/**
+ * `refreshAccessToken` — the three outcomes of exchanging a refresh cookie, and the record each
+ * one leaves.
+ *
+ * Driven off a real signed token rather than a stub because the refresh path is stateful by
+ * design: verification consults the user document, so a mocked verifier would pass a test that a
+ * revoked token must fail. The secrets are set here for the same reason `jwt.test.ts` sets them —
+ * unit tests do not load dotenv, and a test that depends on a developer's environment is not one.
+ */
+describe('accountService.refreshAccessToken', () => {
+    const ENV_KEYS = [
+        'NODE_TOKEN_ACCESS',
+        'NODE_TOKEN_REFRESH',
+        'NODE_TOKEN_ACCESS_TIME',
+        'NODE_TOKEN_REFRESH_TIME_SHORT'
+    ] as const;
+    const originalEnvironment: Record<string, string | undefined> = {};
+
+    beforeEach(() => {
+        for (const key of ENV_KEYS) originalEnvironment[key] = process.env[key];
+        process.env.NODE_TOKEN_ACCESS = 'test-access-secret';
+        process.env.NODE_TOKEN_REFRESH = 'test-refresh-secret';
+        process.env.NODE_TOKEN_ACCESS_TIME = '900';
+        process.env.NODE_TOKEN_REFRESH_TIME_SHORT = '3600';
+    });
+
+    afterEach(() => {
+        for (const key of ENV_KEYS) {
+            if (originalEnvironment[key] === undefined) delete process.env[key];
+            else process.env[key] = originalEnvironment[key];
+        }
+        jest.restoreAllMocks();
+    });
+
+    it('returns an access token and records the refresh', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const refreshToken = await issueRefreshToken();
+
+        const accessToken = await account.refreshAccessToken(refreshToken, testCallerContext);
+
+        expect(typeof accessToken).toBe('string');
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_TOKEN_REFRESHED,
+                outcome: 'success'
+            })
+        );
+    });
+
+    it('records a token that does not verify as an invalid_token failure', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+
+        await expect(account.refreshAccessToken('not-a-jwt', testCallerContext)).rejects.toThrow();
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_TOKEN_REFRESHED,
+                outcome: 'failure',
+                metadata: { reason: 'invalid_token' }
+            })
+        );
+    });
+
+    // A signed token the user no longer holds. Revocation lives in the document, not the
+    // signature, so this is the case that proves logout is more than cosmetic.
+    it('records a revoked token as invalid rather than refreshing it', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const refreshToken = await issueRefreshToken();
+        await userRepository.tokenRemoveByValue(refreshToken);
+
+        await expect(account.refreshAccessToken(refreshToken, testCallerContext)).rejects.toThrow();
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_TOKEN_REFRESHED,
+                outcome: 'failure',
+                metadata: { reason: 'invalid_token' }
+            })
+        );
+    });
+
+    it('records a missing cookie as a missing_token failure, distinctly', async () => {
+        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+
+        await expect(account.refreshAccessToken(undefined, testCallerContext)).rejects.toThrow();
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_TOKEN_REFRESHED,
+                actor_user_id: 'anonymous',
+                outcome: 'failure',
+                metadata: { reason: 'missing_token' }
+            })
+        );
     });
 });

@@ -1039,19 +1039,19 @@ export default tseslint.config(
     },
 
     /**
-     * The unit layer does not boot the application.
+     * The unit layer does not boot the application, and does not open a database.
      *
-     * "Unit" here means one thing only: no HTTP. A unit test may open a database — 36 of them call
-     * `setupTestDb()`, and that is a decision rather than a leak, because most of what a repository
-     * or a service does IS what Mongo does and a mocked driver would assert the mock. What it may
-     * not do is mount `src/app.ts`, because that pulls in every module, every middleware and the
-     * whole registry to exercise one function.
-     *
-     * The cost is not tidiness, it is the mutation run. Stryker executes the unit suite once per
-     * mutant, so anything the layer imports at module scope is paid thousands of times over — and
-     * an app boot is the most expensive import in the repository. A single spec reaching for
-     * `api()` because it was convenient moves the nightly by hours, and nothing in the result would
-     * say which file did it.
+     * "Unit" here means two things: no HTTP, and no Mongo, real or in-memory. It was not always the
+     * second — 36 module specs used to call `setupTestDb()` against the run's shared in-memory
+     * mongod, on the reasoning that most of what a repository or a service does IS what Mongo does.
+     * That reasoning was sound for `npm test`; it stopped being sound the moment mutation testing
+     * entered the picture. Stryker executes the unit suite once per mutant, so anything the layer
+     * imports or connects to at module scope is paid thousands of times over, and a `beforeEach`
+     * wipe that is microseconds in a normal run adds up across a mutant count in the thousands. Those
+     * 36 specs now live in each module's `tests/integration/` — see NODE_MUTATION_MONGOD.md for the
+     * per-module breakdown — and `tests/cross-cutting/unit-layer-is-framework-free.test.ts` is the
+     * CI-time sweep that keeps a new spec from drifting back in; the bans below give the same rule
+     * at lint time, for the two entry points that are clean import names.
      *
      * `@app/*` is deliberately NOT banned. `tests/unit/app/process-error-handlers.test.ts` unit
      * tests a file that lives in the app tier, which is the tier being tested rather than the
@@ -1078,6 +1078,21 @@ export default tseslint.config(
                             name: '@tests/http',
                             message:
                                 '`api()` mounts src/app.ts — every module, every middleware — to exercise one function. Move the spec to tests/integration/, or call the unit under test directly.'
+                        },
+                        {
+                            name: '@tests/setup-test-db',
+                            message:
+                                'A unit test that opens a database is an integration test. Move it to tests/integration/, where Stryker does not rerun it once per mutant.'
+                        },
+                        {
+                            name: '@tests/database',
+                            message:
+                                'A unit test that opens a database is an integration test. Move it to tests/integration/, where Stryker does not rerun it once per mutant.'
+                        },
+                        {
+                            name: 'mongodb-memory-server',
+                            message:
+                                'A unit test that boots an in-memory mongod is an integration test. Move it to tests/integration/, where Stryker does not rerun it once per mutant.'
                         }
                     ],
                     patterns: [

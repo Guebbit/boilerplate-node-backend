@@ -16,13 +16,14 @@ file — see `eslint.config.ts`.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 35, 'rankSpacing': 45}}}%%
 flowchart TD
-    U["tests/unit<br/><i>one function</i>"] --> X["tests/cross-cutting<br/><i>a rule across every module</i>"]
-    X --> I["tests/integration<br/><i>the real app over HTTP</i>"]
+    U["tests/unit<br/><i>one function, no database</i>"] --> X["tests/cross-cutting<br/><i>a rule across every module</i>"]
+    X --> I["tests/integration<br/><i>a real database, or the real app over HTTP</i>"]
     I --> C["tests/contract<br/><i>HTTP vs the spec</i>"]
     C --> F["tests/fuzz<br/><i>the spec, hostile</i>"]
     Sup["tests/support<br/><i>harness, no assertions</i>"] -.-> U
     Sup -.-> I
     Mod["co-located module suites<br/><i>one domain</i>"] -.-> U
+    Mod -.-> I
 
     classDef fast fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef slow fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -79,8 +80,6 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `tests/unit/db/host-scripts.test.ts`                    | The `host` script and the two URI resolvers agree over the whole environment matrix — the pin that keeps `migrate-mongo-config.js` honest against the app's own resolution. | [Repository Root](./root.md)                             |
 | `tests/unit/db/run-script.test.ts`                      | The `db/` entry-point wrapper opens, closes and exits non-zero on failure.                                                                                                  | [Data](./data.md)                                        |
-| `tests/unit/db/migration-model-indexes.test.ts`         | The indexes the migrations create match the ones the models declare.                                                                                                        | [Data](./data.md)                                        |
-| `tests/unit/db/migration-demo-data.test.ts`             | A migrated database still holds the dataset the published artefact describes.                                                                                               | [Data](./data.md)                                        |
 | `tests/unit/db/seed-fixtures.test.ts`                   | Every module's seed fixtures are internally consistent — image URLs included.                                                                                               | [Data](./data.md)                                        |
 | `tests/unit/eslint/controller-chain-must-catch.test.ts` | The repo's own lint rule fires on the code it is meant to catch and stays quiet otherwise.                                                                                  | [Scripts & Hooks](./scripts.md)                          |
 | `tests/unit/eslint/no-hardcoded-user-text.test.ts`      | The same for the hardcoded-copy rule.                                                                                                                                       | [Scripts & Hooks](./scripts.md)                          |
@@ -155,19 +154,20 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 
 Boots the application against an in-memory MongoDB and drives it as a client would. Run serially.
 
-| File                                                  | What it guarantees                                                                                                         | Read next                                              |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `tests/integration/app-health.test.ts`                | The system routes and the observability endpoints answer as documented.                                                    | [Observability Endpoints](../api/observability.md)     |
-| `tests/integration/observability-auth.test.ts`        | The two observability endpoints, and exactly which credentials reach them.                                                 | [Security](../tools/security.md)                       |
-| `tests/integration/auth-hardening.test.ts`            | Two properties invisible until someone attacks them — credential endpoints rate-limited on their own budget, and the rest. | [Security](../tools/security.md)                       |
-| `tests/integration/upload-security.test.ts`           | What actually reaches the disk when a hostile file is uploaded.                                                            | [Security](../tools/security.md)                       |
-| `tests/integration/product-multipart-write.test.ts`   | Writing a product through a multipart body — the only way to send one with an image.                                       | [Endpoints](../api/endpoints.md)                       |
-| `tests/integration/locale.test.ts`                    | Per-request language negotiation, end to end.                                                                              | [Request Flow](../theory/request-flow.md)              |
-| `tests/integration/locale-cache-invalidation.test.ts` | An admin edit reaches the next anonymous reader — the cached public dictionary is invalidated.                             | [Redis Cache](../tools/redis-cache.md)                 |
-| `tests/integration/concurrency/auth-races.test.ts`    | The account endpoints under simultaneous callers: concurrent signups for one address, and the rest of the race table.      | [Concurrency Testing](../tools/concurrency-testing.md) |
-| `tests/integration/concurrency/cart-races.test.ts`    | The cart and checkout endpoints under simultaneous writes of the same product.                                             | [Concurrency Testing](../tools/concurrency-testing.md) |
-
-| `tests/integration/concurrency/wishlist-races.test.ts` | The wishlist endpoints under concurrent writes — the same shape as the cart's races. | [Unit Testing](../tools/unit-testing.md) |
+| File                                                   | What it guarantees                                                                                                         | Read next                                              |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `tests/integration/app-health.test.ts`                 | The system routes and the observability endpoints answer as documented.                                                    | [Observability Endpoints](../api/observability.md)     |
+| `tests/integration/observability-auth.test.ts`         | The two observability endpoints, and exactly which credentials reach them.                                                 | [Security](../tools/security.md)                       |
+| `tests/integration/auth-hardening.test.ts`             | Two properties invisible until someone attacks them — credential endpoints rate-limited on their own budget, and the rest. | [Security](../tools/security.md)                       |
+| `tests/integration/upload-security.test.ts`            | What actually reaches the disk when a hostile file is uploaded.                                                            | [Security](../tools/security.md)                       |
+| `tests/integration/product-multipart-write.test.ts`    | Writing a product through a multipart body — the only way to send one with an image.                                       | [Endpoints](../api/endpoints.md)                       |
+| `tests/integration/locale.test.ts`                     | Per-request language negotiation, end to end.                                                                              | [Request Flow](../theory/request-flow.md)              |
+| `tests/integration/locale-cache-invalidation.test.ts`  | An admin edit reaches the next anonymous reader — the cached public dictionary is invalidated.                             | [Redis Cache](../tools/redis-cache.md)                 |
+| `tests/integration/concurrency/auth-races.test.ts`     | The account endpoints under simultaneous callers: concurrent signups for one address, and the rest of the race table.      | [Concurrency Testing](../tools/concurrency-testing.md) |
+| `tests/integration/concurrency/cart-races.test.ts`     | The cart and checkout endpoints under simultaneous writes of the same product.                                             | [Concurrency Testing](../tools/concurrency-testing.md) |
+| `tests/integration/concurrency/wishlist-races.test.ts` | The wishlist endpoints under concurrent writes — the same shape as the cart's races.                                       | [Unit Testing](../tools/unit-testing.md)               |
+| `tests/integration/db/migration-model-indexes.test.ts` | The indexes the migrations create match the ones the models declare — needs a real, migrated database.                     | [Data](./data.md)                                      |
+| `tests/integration/db/migration-demo-data.test.ts`     | A migrated database still holds the dataset the published artefact describes.                                              | [Data](./data.md)                                      |
 
 ## `tests/cluster/` — more than one worker
 
@@ -210,14 +210,15 @@ No assertions live here. These are what the suites are built from.
 
 ## Co-located module tests
 
-A module's own suites live inside it. Same runner, same conventions; `npm run test:unit` and
-`npm run test:contract` each pick up both locations.
+A module's own suites live inside it. Same runner, same conventions; `npm run test:unit`,
+`npm run test:integration` and `npm run test:contract` each pick up both locations.
 
-| Pattern                                  | What it is                                                                                                                                                                     | Read next                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| `src/modules/*/tests/unit/*.test.ts`     | The module's unit suites, one file per subject rather than per source file. A name carrying `property` before the test extension is generated-input rather than example-based. | [Unit Testing](../tools/unit-testing.md) · [Property Testing](../tools/property-testing.md) |
-| `src/modules/*/tests/contract/*.test.ts` | The module's endpoints driven over HTTP and checked against its slice of `openapi.yaml`. One per module that has routes.                                                       | [Contract Testing (Response)](../tools/contract-testing.md)                                 |
-| `src/modules/*/tests/factory.ts`         | Test-only fixture builders too specific to belong in the module's published factory.                                                                                           | [Unit Testing](../tools/unit-testing.md)                                                    |
+| Pattern                                     | What it is                                                                                                                                                                                                                                                                                                     | Read next                                                                                   |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `src/modules/*/tests/unit/*.test.ts`        | The module's unit suites, one file per subject rather than per source file. A name carrying `property` before the test extension is generated-input rather than example-based. No database — see `tests/cross-cutting/unit-layer-is-framework-free.test.ts`.                                                   | [Unit Testing](../tools/unit-testing.md) · [Property Testing](../tools/property-testing.md) |
+| `src/modules/*/tests/integration/*.test.ts` | Specs of the same module that DO need a real database — calling `setupTestDb()` and exercising the repository or service directly, no HTTP. Excluded from `stryker.config.json`'s mutation run: Stryker reruns `tests/unit` once per mutant, and a database connection paid that cost thousands of times over. | [Integration Testing](../tools/integration-testing.md)                                      |
+| `src/modules/*/tests/contract/*.test.ts`    | The module's endpoints driven over HTTP and checked against its slice of `openapi.yaml`. One per module that has routes.                                                                                                                                                                                       | [Contract Testing (Response)](../tools/contract-testing.md)                                 |
+| `src/modules/*/tests/factory.ts`            | Test-only fixture builders too specific to belong in the module's published factory.                                                                                                                                                                                                                           | [Unit Testing](../tools/unit-testing.md)                                                    |
 
 ## Load testing
 

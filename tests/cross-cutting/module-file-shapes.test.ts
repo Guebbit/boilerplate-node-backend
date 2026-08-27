@@ -63,6 +63,7 @@ const MODULE_FILE_SHAPES: readonly RegExp[] = [
     /^providers\/.+\.ts$/,
     /^tests\/factory\.ts$/,
     /^tests\/unit\/.+\.ts$/,
+    /^tests\/integration\/.+\.ts$/,
     /^tests\/contract\/.+\.ts$/
 ];
 

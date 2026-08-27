@@ -8,7 +8,7 @@
  * given.
  */
 
-import { BACKEND, FRONTEND } from './tenants.fixture';
+import { BACKEND, FRONTEND } from '../unit/tenants.fixture';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/factory';
 import { localeMessageRepository, localeRepository } from '@modules/locales/repository';

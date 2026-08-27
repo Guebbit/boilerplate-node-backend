@@ -119,29 +119,40 @@ flowchart TB
 
 ## Why only the unit suite runs
 
-`stryker.config.json` restricts the Jest config Stryker drives to exclude `tests/integration/` and `tests/contract/`:
+`stryker.config.json` restricts the Jest config Stryker drives to exclude `tests/integration/`, `tests/contract/`, and both of those trees' per-module homes:
 
 ```json
 "jest": {
     "config": {
-        "testPathIgnorePatterns": ["/node_modules/", "<rootDir>/tests/integration/", "<rootDir>/tests/contract/"]
+        "testPathIgnorePatterns": [
+            "/node_modules/",
+            "<rootDir>/tests/integration/",
+            "<rootDir>/tests/contract/",
+            "<rootDir>/src/modules/[^/]+/tests/contract/",
+            "<rootDir>/src/modules/[^/]+/tests/integration/"
+        ]
     }
 }
 ```
 
-Both drive the real app over HTTP against an in-memory Mongo — running either once per mutant would take hours.
+All of them drive a real (or real-HTTP) app against an in-memory Mongo — running any once per mutant would take hours.
 
-**The exclusion does not do as much as its name suggests.** 33 files under `src/modules/*/tests/unit/`
-call `setupTestDb()`, which starts a real `mongod` and connects mongoose to it. They are excluded by
-neither pattern, because they are named `unit`. So a mutation run starts and stops a database
-thousands of times, and the cost the two ignore patterns were written to avoid is paid anyway — just
-by a different directory. Find them with:
+**The exclusion used to do less than its name suggested.** Until the split described in
+`NODE_MUTATION_MONGOD.md`, 36 files under `src/modules/*/tests/unit/` called `setupTestDb()`, which
+starts a real `mongod` and connects mongoose to it — and were excluded by neither pattern, because
+they were named `unit`. A mutation run started and stopped a database thousands of times, paying the
+exact cost the ignore patterns exist to avoid, just from a different directory. That gap is closed:
+those 36 files now live in each module's `tests/integration/`, covered by the pattern above, and
+`tests/cross-cutting/unit-layer-is-framework-free.test.ts` is what keeps a new one from drifting
+back in. Confirm the unit layer is clean with:
 
 ```bash
 grep -rl "setupTestDb\|MongoMemoryServer" src/modules/*/tests/unit tests/unit tests/cross-cutting | wc -l
 ```
 
-That is the load-bearing fact behind the failure mode below.
+That grep, and the incident it used to report, is the load-bearing fact behind the failure mode
+below — kept as a worked example because the mechanism it describes (a `beforeAll` cost paid once
+per mutant) is general, not specific to this one fixed case.
 
 **This is also why the controllers are not mutated.** They have no unit tests; they are covered by the contract and integration suites, which Stryker doesn't run. Put them in `mutate` and all 60 files report ~0% — and that number would not mean "the controllers are untested", it would mean "they were measured with a ruler configured not to touch them". Worse, the ratchet would then record those zeros and defend them forever. Measuring controllers honestly requires running contract + integration under Stryker, which is an hours-per-run decision, not a glob.
 

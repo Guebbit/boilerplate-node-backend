@@ -7,7 +7,6 @@ The layer that answers: **is this one piece of logic — a service, a repository
 | Tool                                                                          | Role                                                                                                                                                         |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [Jest](https://jestjs.io/) + [ts-jest](https://kulshekhar.github.io/ts-jest/) | Test runner and TypeScript transform                                                                                                                         |
-| [mongodb-memory-server](https://nodkz.github.io/mongodb-memory-server/)       | A real, in-memory MongoDB — most "unit" tests here talk to real Mongoose models, not a mocked driver                                                         |
 | `jest.mock()`                                                                 | Used selectively — for adapters that shouldn't touch the outside world (filesystem, mailer, cache) or where a dependency's own behaviour is tested elsewhere |
 
 ## Where it sits
@@ -16,7 +15,6 @@ The layer that answers: **is this one piece of logic — a service, a repository
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart TB
     Source["src/modules · kernel\nservices · repositories · models\nmiddlewares · infrastructure/http"] --> Unit["Jest\nsrc/modules/*/tests/unit/** + tests/unit/**"]
-    Unit --> RealMongo[("mongodb-memory-server\nreal Mongoose models")]
     Unit --> ModuleMock["jest.mock()\nadapters that shouldn't run for real\n(filesystem, mailer, cache)"]
     Unit --> Coverage[("v8 coverage")]
     Unit --> Mutation["Stryker\nmutates THIS layer\nsee Mutation Testing"]
@@ -27,41 +25,26 @@ flowchart TB
     classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
     class Source src;
     class Unit test;
-    class RealMongo,ModuleMock data;
+    class ModuleMock data;
     class Coverage,Mutation out;
 ```
 
-Notably **not** here: HTTP. No unit test sends a request through Express routing/middleware — that starts one layer up, in [Contract Testing](./contract-testing.md) and [Integration Testing](./integration-testing.md), both of which drive the real `src/app.ts` via `supertest`.
+Notably **not** here: HTTP, or a database, real or in-memory. No unit test sends a request through
+Express routing/middleware, and none opens Mongo — both start one layer up, in
+[Integration Testing](./integration-testing.md), which is what
+`tests/cross-cutting/unit-layer-is-framework-free.test.ts` and
+`eslint.config.ts`'s `no-restricted-imports` block for `tests/unit/**` enforce structurally rather
+than by review.
 
 ## Patterns
 
-### Repository / model / service tests — real in-memory Mongo, no driver mock
+### Repository / model / service tests belong in Integration Testing, not here
 
-Most of this suite talks to an actual (in-memory) MongoDB rather than a mocked Mongoose model. `tests/support/setup-test-db.ts` wires the lifecycle:
-
-```ts
-export const setupTestDb = () => {
-    beforeAll(connect); // starts mongodb-memory-server, mongoose.connect()
-    afterAll(disconnect); // drops the DB, closes the connection, stops the server
-    beforeEach(clearAll); // empties every collection between tests
-};
-```
-
-```ts
-import { setupTestDb } from '../../helpers/setup-test-db';
-import { makeProduct, createProduct } from '../../helpers/factories/products';
-
-setupTestDb();
-
-describe('productRepository.create', () => {
-    it('inserts a new product and returns the Mongoose document', async () => {
-        const product = await productRepository.create(makeProduct());
-        expect(product._id).toBeDefined();
-    });
-});
-```
-
-The trade-off this buys: a repository/service test here genuinely exercises Mongoose schema validation, defaults and indexes — the things a stubbed driver would silently let through. `tests/support/factories/{users,products,orders}.ts` supply `makeX()` (plain payload) / `createX()` (persisted document) pairs so most tests only override the one or two fields the scenario cares about.
+A repository or service test that needs to prove real Mongoose behaviour — schema validation,
+defaults, indexes — needs a real (in-memory) MongoDB to do it honestly, and Stryker reruns
+`tests/unit` once per mutant: a database connection paid at unit scope is paid thousands of times
+over. That trade is [Integration Testing](./integration-testing.md)'s, via `setupTestDb()`; this
+layer stays plain functions in, values out.
 
 ### Middleware / adapter tests — `jest.mock()` at the module boundary
 

@@ -121,16 +121,35 @@ export const logoutCurrentSession = (
     );
 
 /**
+ * The absence of a refresh cookie, as an error, so that the one `catch` below can tell the two
+ * failures apart without the happy path having to branch on the token twice.
+ */
+class MissingRefreshTokenError extends Error {
+    constructor() {
+        super('Refresh token missing');
+        this.name = 'MissingRefreshTokenError';
+    }
+}
+
+/**
  * Exchange a refresh token for a fresh access token, recording the attempt either way.
  *
- * Does not cover the "no cookie at all" case — `getRefreshToken` answers that one itself, before
- * any token exists to operate on, so there is nothing here for a service call to report on yet.
+ * Takes the cookie as the caller found it, absence included, so all three outcomes — no token, a
+ * token that does not verify, a token that does — are decided and recorded here. The two failures
+ * stay apart in `metadata.reason`: "never sent a cookie" and "sent one that no longer works" are
+ * the same 401 to the caller and very different facts in a trail.
  */
-export const refreshAccessToken = (refreshToken: string, context: CallerContext): Promise<string> =>
-    createAccessToken(refreshToken)
-        // This route IS the session making a request, and the only place that is true: login
-        // issues a session rather than using one. See `recordRefreshTokenUse`.
-        .then((token) => recordRefreshTokenUse(refreshToken).then(() => token))
+export const refreshAccessToken = (
+    refreshToken: string | undefined,
+    context: CallerContext
+): Promise<string> =>
+    (refreshToken
+        ? createAccessToken(refreshToken)
+              // This route IS the session making a request, and the only place that is true: login
+              // issues a session rather than using one. See `recordRefreshTokenUse`.
+              .then((token) => recordRefreshTokenUse(refreshToken).then(() => token))
+        : Promise.reject<string>(new MissingRefreshTokenError())
+    )
         .then((token) => {
             emitAuditEvent(
                 buildAuditEvent(context, {
@@ -147,7 +166,12 @@ export const refreshAccessToken = (refreshToken: string, context: CallerContext)
                     actor_user_id: 'anonymous',
                     actor_role: 'anonymous',
                     outcome: 'failure',
-                    metadata: { reason: 'invalid_token' }
+                    metadata: {
+                        reason:
+                            error instanceof MissingRefreshTokenError
+                                ? 'missing_token'
+                                : 'invalid_token'
+                    }
                 })
             );
             throw error;

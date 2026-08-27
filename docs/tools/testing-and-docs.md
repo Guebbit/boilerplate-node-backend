@@ -7,7 +7,7 @@ This page is the map. Each layer has its own detail page — code, tools, patter
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 60}}}%%
 flowchart TB
-    Unit["Unit\nJest, real in-memory Mongo\nservices · repositories · models"]
+    Unit["Unit\nJest, no database\nservices · repositories · models"]
     Property["Property\nfast-check\nfor EVERY input, not one"]
     Integration["Integration\nsupertest(app)\nrouting · middleware wiring"]
     Concurrency["Concurrency\nN requests at once\nraces the serial suite cannot see"]
@@ -38,7 +38,7 @@ flowchart TB
 
 | Layer                     | Question it answers                                                                                 | Tool(s)                           | Command                              | Detail page                                                 |
 | ------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------ | ----------------------------------------------------------- |
-| Unit                      | Is this unit's logic right?                                                                         | Jest, real in-memory Mongo        | `npm run test:unit`                  | [Unit Testing](./unit-testing.md)                           |
+| Unit                      | Is this unit's logic right?                                                                         | Jest, no database                 | `npm run test:unit`                  | [Unit Testing](./unit-testing.md)                           |
 | Integration               | Are the units actually wired together?                                                              | Jest + supertest                  | `npm run test:integration`           | [Integration Testing](./integration-testing.md)             |
 | Contract — Response Shape | Does the wire response match `openapi.yaml`, exactly?                                               | jest-openapi                      | `npm run test:contract`              | [Contract Testing](./contract-testing.md)                   |
 | Contract — Request Data   | Does the API accept every payload the contract declares legal, and reject what it declares illegal? | A zod-v4 AST walker + seeded PRNG | `npm run test:contract` (same suite) | [Contract-Derived Request Data](./contract-request-data.md) |
@@ -49,8 +49,8 @@ flowchart TB
 
 Each layer answers a question no other layer answers — a layer that duplicates another's question is cost without coverage:
 
-- **Unit** is fast, isolated, and hits a real in-memory Mongo — but never crosses HTTP, so a correctly-implemented service behind a misconfigured route would still look green here.
-- **Integration** drives the real `src/app.ts` over real HTTP, but only checks that the right thing ran (status codes, auth gates) — not that the response body matches what's promised.
+- **Unit** is fast, isolated, and never opens a database or crosses HTTP — a plain function's own logic, in and out. A repository or service test that needs a real Mongoose model to prove something honestly is [Integration](./integration-testing.md)'s job, not this layer's; Stryker reruns Unit once per mutant, and a database connection paid there is paid thousands of times over.
+- **Integration** covers two different needs under one budget: a module's own repository/service tests that need a real (in-memory) Mongo, and driving the real `src/app.ts` over real HTTP to check that the right thing ran (status codes, auth gates) — not that the response body matches what's promised.
 - **Contract — Response Shape** is the only layer that sees over-serialization: `openapi.yaml` declares `additionalProperties: false` on every object schema, so a field appearing on a response without being declared fails _here_, specifically — the class of bug that leaks `password`/`tokens`, exposes `_id`/`__v`, or lets a populated `product` object ride along on a cart line. The generated Zod schemas don't cover this; they validate request bodies, never responses.
 - **Contract — Request Data** is the mirror gap: does the validator actually enforce what the spec promises, and does it accept everything the spec allows? Different mechanism (generation from the schema, not comparison against it), different bug class (validator drift, not over-serialization).
 - **Mutation** doesn't test the app at all — it tests the _tests_, and only for the unit layer.
@@ -153,13 +153,21 @@ as a regression rather than as "tests feel slow lately" — treat them as an ord
 promise. The paired frontend keeps the same table; its numbers are an order of magnitude larger,
 because Cypress drives a real browser and this suite does not.
 
+The suite/test counts below moved on 2026-08-27, when `NODE_MUTATION_MONGOD.md`'s split moved every
+module's `setupTestDb()`-calling unit spec into that module's own `tests/integration/` — down in
+`test:unit`, up in `test:integration` by the same 36 files, plus the two top-level migration specs.
+Timings are not re-measured here — this machine was under concurrent load — so `test:unit` getting
+lighter and `test:integration` getting heavier is the structural fact worth recording; the absolute
+seconds still want a clean re-measurement on the reference machine.
+
 | Command                      | Time     | What it runs                                                               |
 | ---------------------------- | -------- | -------------------------------------------------------------------------- |
-| `npm run test:unit`          | **~23s** | 98 suites, 1425 tests                                                      |
-| `npm run test:cross-cutting` | ~3s      | 12 suites, 102 tests — the sweeps                                          |
-| `npm run test:integration`   | ~14s     | 8 suites, 66 tests, `--runInBand`                                          |
-| `npm run test:contract`      | ~49s     | 14 suites, 222 tests, `--runInBand`                                        |
-| `npm test`                   | **~90s** | all four, in that order                                                    |
+| `npm run test:unit`          | **~23s** | 84 suites, 1235 tests                                                      |
+| `npm run test:cross-cutting` | ~3s      | 34 suites, 286 tests — the sweeps                                          |
+| `npm run test:integration`   | ~14s     | 48 suites, 703 tests, `--runInBand`                                        |
+| `npm run test:contract`      | ~49s     | 15 suites, 334 tests, `--runInBand`                                        |
+| `npm run test:fuzz`          | ~34s     | 1 suite, 93 tests, `--runInBand`                                           |
+| `npm test`                   | **~90s** | all five, in that order                                                    |
 | `npm run test:mutation`      | hours    | 6042 mutants; nightly in CI, see [Mutation Testing](./mutation-testing.md) |
 
 The whole suite under the mutation run's swc transform is **~10s** for the same 1527 tests that take
@@ -177,7 +185,7 @@ isolated from one another. Worth measuring before changing, not assuming.
 | Tool                                                                                                                        | Why it is here                                                                                                                                           |
 | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [Jest](https://jestjs.io/) (+ [ts-jest](https://kulshekhar.github.io/ts-jest/))                                             | Runner for unit, integration and both contract layers                                                                                                    |
-| [mongodb-memory-server](https://nodkz.github.io/mongodb-memory-server/)                                                     | In-memory MongoDB — used by unit tests directly and by both contract layers via `setupTestDb()`                                                          |
+| [mongodb-memory-server](https://nodkz.github.io/mongodb-memory-server/)                                                     | In-memory MongoDB — used by the integration layer and both contract layers via `setupTestDb()`; `tests/unit` never opens one                             |
 | [supertest](https://github.com/ladjs/supertest)                                                                             | Drives `src/app.ts` over real HTTP without binding a port                                                                                                |
 | [jest-openapi](https://github.com/openapi-library/OpenAPIValidators)                                                        | Validates real responses against `openapi.yaml`                                                                                                          |
 | A hand-rolled zod-v4 AST walker (`tests/support/contract-data.ts`)                                                          | Generates request payloads _from_ `openapi.yaml`-derived schemas — see [Contract-Derived Request Data](./contract-request-data.md) for why not a library |

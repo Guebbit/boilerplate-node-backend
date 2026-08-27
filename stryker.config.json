@@ -94,6 +94,21 @@
         "live database; under Stryker they fail in the dry run before a single mutant is tested.",
         "The patterns are REGEXES, not globs — `[^/]+` is the module segment.",
         "",
+        "`src/modules/[^/]+/tests/integration/` is excluded for the reason this whole split exists:",
+        "those are the DB-backed specs that used to live in each module's `tests/unit/`, where Stryker",
+        "reran every one of them once per mutant against a real in-memory mongod. `tests/unit` is now",
+        "genuinely framework-free (see `UnitLayerIsFrameworkFreeTest`'s Node port), so nothing under",
+        "`mutate` is covered from there any more — this pattern is what keeps that cost from creeping",
+        "back the moment a spec is added to a module's `tests/integration/`.",
+        "",
+        "`outbox-names.test.ts` is excluded for the same SANDBOX reason as `contract-bundles.test.ts`",
+        "below, discovered running a mutation dry run: it reads `emails.ts` source text and regex-",
+        "matches `template: '...'` as a plain string literal. Stryker's mutator rewrites every string",
+        "literal to `stryMutAct_9fa48(id) ? '' : (stryCov_9fa48(id), '...')` in the files it mutates,",
+        "which the regex no longer matches — so the dry run itself fails the case that checks a name",
+        "is a literal, before a single mutant runs. Nothing about mail naming is actually broken;",
+        "the sandboxed source just does not look like source any more.",
+        "",
         "`contract-bundles.test.ts` is excluded for a different reason, and it is about the SANDBOX",
         "rather than about the test. That file asserts each committed document is byte-identical to",
         "the sources it is built from. Stryker copies the project to `.stryker-tmp/sandbox-*`",
@@ -192,7 +207,9 @@
                 "<rootDir>/tests/contract/",
                 "<rootDir>/tests/fuzz/",
                 "<rootDir>/src/modules/[^/]+/tests/contract/",
-                "<rootDir>/tests/cross-cutting/contract-bundles.test.ts"
+                "<rootDir>/src/modules/[^/]+/tests/integration/",
+                "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
+                "<rootDir>/tests/cross-cutting/outbox-names.test.ts"
             ]
         }
     },

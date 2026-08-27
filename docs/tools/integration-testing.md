@@ -46,6 +46,16 @@ Deliberately thin: one file, `tests/integration/app-health.test.ts`, covering th
 
 Routes that need a persisted user/product/order are exercised through HTTP too, but by [Contract Testing](./contract-testing.md) and [Contract-Derived Request Data](./contract-request-data.md) instead, both of which already need `setupTestDb()` for their own assertions — there was no reason to duplicate that coverage here under a different name.
 
+## The other half: `src/modules/*/tests/integration/`
+
+Not everything in this tier drives HTTP. A module's own repository or service test that needs to
+prove real Mongoose behaviour — schema validation, defaults, an index — calls `setupTestDb()` and
+talks to the model directly, no `supertest`, no app boot. It sits in this tier rather than in
+[Unit Testing](./unit-testing.md) for exactly the reason `app-health.test.ts` sits here: Stryker
+reruns `tests/unit` once per mutant, and a database connection is the most expensive thing a unit
+spec could pay for on every one of them. `stryker.config.json`'s `testPathIgnorePatterns` excludes
+`src/modules/*/tests/integration/` for that reason.
+
 ## File map
 
 | Path                                   | Contents                                                                         |

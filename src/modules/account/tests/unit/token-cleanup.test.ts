@@ -99,6 +99,8 @@ describe('Auth controllers token cleanup trigger', () => {
     });
 
     it('does not run cleanup in refresh flow when refresh token is missing', async () => {
+        mockRefreshAccessToken.mockRejectedValue(new Error('Refresh token missing'));
+
         const request = {
             params: {},
             cookies: {}
@@ -107,7 +109,9 @@ describe('Auth controllers token cleanup trigger', () => {
 
         await getRefreshToken(asStub<Parameters<typeof getRefreshToken>[0]>(request), response);
 
+        // A sweep of every user document, for a request that cannot succeed. The service is still
+        // called: the missing cookie is a refusal it reports on, not one the controller decides.
         expect(mockRunTokenCleanup).not.toHaveBeenCalled();
-        expect(mockRefreshAccessToken).not.toHaveBeenCalled();
+        expect(mockRefreshAccessToken).toHaveBeenCalledWith(undefined, expect.anything());
     });
 });
