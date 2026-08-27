@@ -164,6 +164,15 @@ today, and that the rule above is written in both trees, at the place where the 
 
 Written down because that argument is not obvious and will otherwise be re-derived.
 
+**A `check:spec-identity` failure right after switching which backend you're pairing with is
+usually not a new defect.** The frontend compares against whichever backend its own `.env` names
+in `BACKEND_PATH` — not whichever one last ran `sync:frontend` — so the fix is to point that at
+this backend (unset, or `../boilerplate-node-backend`, is the default) and then run
+`sync:frontend` from here, in that order. The two backends' bundles are function-identical, and
+this one bundles byte-stably; the PHP twin does not, which is why the frontend's own check
+compares YAML parsed rather than as raw bytes. See the frontend's
+`docs/reference/contracts.md#keeping-the-pair-in-step` for the full mechanism.
+
 ## Two things Umami does not tell you
 
 **A missing `User-Agent` header discards the event, and returns `200`.** Verified against umami
