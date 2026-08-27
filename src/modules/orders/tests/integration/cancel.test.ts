@@ -21,6 +21,25 @@ import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
+import { observePort } from '@tests/ports';
+
+/*
+ * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
+ * getter a CommonJS namespace import exposes, which fails under `jest.config.mutation.js`'s swc
+ * transform and inside Stryker's sandbox. See `tests/support/ports.ts` for the full reasoning.
+ */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
+
+/* Replaced for the same reason as the audit port above. */
+jest.mock('@infrastructure/observability/analytics', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/analytics'),
+    emitAnalyticsEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -186,8 +205,8 @@ describe('cancelById — who gets their money back', () => {
 
 describe('cancelById — audit and analytics', () => {
     it('a customer cancel reports order_cancelled, audited as the customer', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
-        const analyticsSpy = jest.spyOn(analyticsPort, 'emitAnalyticsEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
         const order = await seedOrder(user);
 
@@ -206,7 +225,7 @@ describe('cancelById — audit and analytics', () => {
     });
 
     it('a reservation timing out (no context) is audited as the system, not left silent', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
         const order = await seedOrder(user);
 
@@ -224,7 +243,7 @@ describe('cancelById — audit and analytics', () => {
     });
 
     it('a reservation timing out reports order_reservation_expired, not order_cancelled', async () => {
-        const analyticsSpy = jest.spyOn(analyticsPort, 'emitAnalyticsEvent');
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
         const order = await seedOrder(user);
 

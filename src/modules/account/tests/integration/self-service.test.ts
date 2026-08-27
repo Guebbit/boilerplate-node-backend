@@ -29,6 +29,25 @@ import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
+import { observePort } from '@tests/ports';
+
+/*
+ * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
+ * getter a CommonJS namespace import exposes, which fails under `jest.config.mutation.js`'s swc
+ * transform and inside Stryker's sandbox. See `tests/support/ports.ts` for the full reasoning.
+ */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
+
+/* Replaced for the same reason as the audit port above. */
+jest.mock('@infrastructure/observability/analytics', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/analytics'),
+    emitAnalyticsEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -236,7 +255,7 @@ describe('sessionRemove', () => {
 
 describe('sessionRevoke', () => {
     it('audits a revoke that actually matched a token', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-a');
         const [target] = await readTokens(user.id);
@@ -257,7 +276,7 @@ describe('sessionRevoke', () => {
     });
 
     it('does not audit a revoke that matched nothing — an invented id must not misrepresent one', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
 
         const result = await accountService.sessionRevoke(
@@ -292,7 +311,7 @@ describe('tokenRemoveByValue', () => {
 
 describe('logoutCurrentSession', () => {
     it('revokes the named refresh token and records the logout', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'phone');
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'laptop');
@@ -312,7 +331,7 @@ describe('logoutCurrentSession', () => {
     it('records the logout even with no cookie to revoke', async () => {
         // `getRefreshToken` answers 200 for "already logged out here" — the audit event fires
         // either way, matching that: there is simply nothing to revoke.
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
 
         await accountService.logoutCurrentSession(undefined, testCallerContext);
 
@@ -356,7 +375,7 @@ describe('sendVerificationEmail', () => {
 
 describe('requestEmailVerification', () => {
     it('sends the mail and audits the explicit re-send', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
 
         await accountService.requestEmailVerification(user, testCallerContext);
@@ -374,7 +393,7 @@ describe('requestEmailVerification', () => {
 
 describe('completeEmailVerification', () => {
     it('marks the account verified and audits it', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ verified: false });
 
         const saved = await accountService.completeEmailVerification(user, testCallerContext);
@@ -394,7 +413,7 @@ describe('completeEmailVerification', () => {
 
 describe('getOwnProfile', () => {
     it('reports a view and returns the profile', async () => {
-        const analyticsSpy = jest.spyOn(analyticsPort, 'emitAnalyticsEvent');
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser({ email: 'viewer@example.com' });
 
         const profile = await accountService.getOwnProfile(user.id, testCallerContext);
@@ -408,8 +427,8 @@ describe('getOwnProfile', () => {
 
 describe('removeOwnAccount', () => {
     it('hard-deletes the account and reports it', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
-        const analyticsSpy = jest.spyOn(analyticsPort, 'emitAnalyticsEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
 
         const result = await accountService.removeOwnAccount(user, testCallerContext);
@@ -434,7 +453,7 @@ describe('removeOwnAccount', () => {
 
 describe('passwordResetChange', () => {
     it('changes the password and audits a reset completion, distinct from a logged-in change', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ password: CURRENT_PASSWORD });
 
         asSuccess(
@@ -457,7 +476,7 @@ describe('passwordResetChange', () => {
     });
 
     it('does not audit a rejected pair', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ password: CURRENT_PASSWORD });
 
         const response = asReject(
@@ -476,7 +495,7 @@ describe('passwordResetChange', () => {
 
 describe('requestAccountDeletion', () => {
     it('issues a delete token and audits the request', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
 
         const token = await accountService.requestAccountDeletion(user, testCallerContext);

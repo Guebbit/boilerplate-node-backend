@@ -201,7 +201,79 @@ That grep, and the incident it used to report, is the load-bearing fact behind t
 below — kept as a worked example because the mechanism it describes (a `beforeAll` cost paid once
 per mutant) is general, not specific to this one fixed case.
 
+### The deep run — measuring what integration covers {#the-deep-run}
+
+The paragraph above is still the reason the DEFAULT run excludes those suites. It is no longer the
+whole story, because "an hours-per-run decision" has now been measured rather than estimated, and
+the estimate was doing real damage: 3186 of `src/modules/`'s 5489 mutants — 58% of the module
+scope — were being reported as `NoCoverage` by a run configured not to execute the tests that cover
+them.
+
+`stryker.deep.json` is the second measurement. Same `mutate` scope, same everything, plus
+`tests/integration/`. Run it with `npm run test:mutation:deep`.
+
+Measured on `src/modules/products/repository.ts` — 196 mutants, a file with no unit tests at all
+and a thorough integration suite — on 2026-08-27:
+
+| scope                       | score      | NoCoverage | wall clock |
+| --------------------------- | ---------- | ---------- | ---------- |
+| unit only (`test:mutation`) | **0.00%**  | 161 of 196 | —          |
+| \+ integration (`:deep`)    | **82.14%** | 3 of 196   | 22m 13s    |
+
+That is the same file, the same tests, and the same day. The 0% was never a statement about the
+repository's tests; it was a statement about the ruler. Read it beside
+[Reading a 0%](#reading-a-0--and-the-one-case-where-it-was-excluded-instead), which makes the same
+point from the other direction.
+
+**Why it stays a separate run.** 196 mutants took 22 minutes, against roughly one second each under
+the unit scope. Two things make an integration mutant expensive: the suite talks to a real
+in-memory Mongo, and — for a repository especially — a mutant can make a query HANG, which pays
+`timeoutMS` in full before being recorded. 45 of those 196 did exactly that. Over the whole module
+scope this is a nightly, not a gate.
+
+**Contract and fuzz stay excluded even there.** A contract test boots the entire app through
+supertest, so `enableFindRelatedTests` relates it to nearly every file — every mutant would pay an
+application boot, and a one-line change in one module would drag in the whole contract suite. Fuzz
+suites are non-deterministic by construction: a mutant killed by a random input on one run and not
+the next produces a score that moves on its own, which is the one thing a ratchet cannot tolerate.
+
+**The deep run does not feed `mutation-baseline.json`.** The ratchet compares like with like, and a
+baseline recorded from the wider scope would fail every subsequent default run as a mass
+regression across every integration-covered file. Compare a deep run against the previous deep run.
+
 **This is also why the controllers are not mutated.** They have no unit tests; they are covered by the contract and integration suites, which Stryker doesn't run. Put them in `mutate` and all 60 files report ~0% — and that number would not mean "the controllers are untested", it would mean "they were measured with a ruler configured not to touch them". Worse, the ratchet would then record those zeros and defend them forever. Measuring controllers honestly requires running contract + integration under Stryker, which is an hours-per-run decision, not a glob.
+
+## The worker-pool multiplication {#the-worker-pool-multiplication}
+
+`jest.config.mutation.js` pins `maxWorkers: 1`, and that single line is worth roughly an order of
+magnitude on this machine.
+
+`jest.config.js` sizes its pool for a STANDALONE run: one jest process, `logical CPUs - 2` workers,
+measured against the whole unit suite and documented in that file. `jest.config.mutation.js`
+spreads the base config, so before this it inherited that number — and under Stryker the number is
+multiplied rather than reused. Stryker runs `concurrency` test runners at once, each of which is a
+full jest with a full pool of its own. On a 32-core box that was four runners times thirty workers.
+
+What it looks like when it is wrong: **load average 31.8 on 32 cores, and roughly 55 seconds per
+mutant against a suite that runs 703 tests in 78 seconds single-threaded.** The run is not blocked
+on anything; it is context-switching. Nothing errors, and the progress bar's remaining-time
+estimate stays plausible, which is what makes it survivable for a long time.
+
+There is nothing for a pool to do here in any case. `coverageAnalysis: "perTest"` narrows each
+mutant to the tests that actually reach it — usually a handful, in one or two files — and a jest
+pool cannot parallelise below a file. **The parallelism belongs to Stryker, which spends it on
+mutants.** `STRYKER_CONCURRENCY` in `.env` is the one knob worth turning; `JEST_WORKERS` governs
+`npm test` and should not be reaching this run at all.
+
+It also fixes the memory arithmetic in `jest.config.js`'s own comment: peak RSS is measured per
+worker, and four runners each holding a thirty-worker pool is not a budget anyone sized.
+
+Related, and found the same way: `ignorePatterns` now lists `.tmp/**` and `.stryker-tmp*/**`. Those
+hold the in-memory mongod data directories, which are live files being written by a running jest
+while Stryker copies the project into its sandbox — so copying them is both pointless (every jest
+instance starts its own server) and racy. A WiredTiger file removed mid-copy fails the entire run
+with an `ENOENT` naming a filename nothing in the project mentions. `run-mutation-tests.ts` clears
+`.tmp` before it starts, which hid this until two runs overlapped.
 
 ## What to be wary of — per-file setup costs
 
@@ -915,25 +987,28 @@ and a floor moved twice is worse than a floor moved once.
 
 ## File map
 
-| Path                                 | Contents                                                                       |
-| ------------------------------------ | ------------------------------------------------------------------------------ |
-| `stryker.config.json`                | Scope (`mutate`), the narrowed Jest config, thresholds, concurrency, reporters |
-| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.  |
-| `scripts/mutation-baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                    |
-| `scripts/check-mutation-baseline.ts` | CLI for the two commands below                                                 |
-| `scripts/report-heap-summary.ts`     | Groups a `.heapsnapshot` by kind — what a runaway worker is holding            |
-| `scripts/report-heap-retainers.ts`   | Walks the same snapshot backwards — which code is holding it                   |
-| `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                |
-| `reports/mutation/index.html`        | Human-readable report (generated per run)                                      |
-| `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                      |
+| Path                                 | Contents                                                                                       |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `stryker.config.json`                | Scope (`mutate`), the narrowed Jest config, thresholds, concurrency, reporters                 |
+| `stryker.deep.json`                  | The same scope plus the integration suites — see [The deep run](#the-deep-run)                 |
+| `jest.config.mutation.js`            | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication) |
+| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.                  |
+| `scripts/mutation-baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                                    |
+| `scripts/check-mutation-baseline.ts` | CLI for the two commands below                                                                 |
+| `scripts/report-heap-summary.ts`     | Groups a `.heapsnapshot` by kind — what a runaway worker is holding                            |
+| `scripts/report-heap-retainers.ts`   | Walks the same snapshot backwards — which code is holding it                                   |
+| `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                                |
+| `reports/mutation/index.html`        | Human-readable report (generated per run)                                                      |
+| `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                                      |
 
 ## Commands
 
-| Command                          | Effect                                                                           |
-| -------------------------------- | -------------------------------------------------------------------------------- |
-| `npm run test:mutation`          | Full run — slow, meant for a nightly or before a refactor, never mid-PR          |
-| `npm run test:mutation:check`    | Compare the last run against the per-file baseline. Fails naming what regressed. |
-| `npm run test:mutation:baseline` | Record the last run (improvements only). Use when `mutate` changed, and say why. |
+| Command                          | Effect                                                                                 |
+| -------------------------------- | -------------------------------------------------------------------------------------- |
+| `npm run test:mutation`          | Full run — slow, meant for a nightly or before a refactor, never mid-PR                |
+| `npm run test:mutation:deep`     | The same scope with the integration suites included. Slow; does not feed the baseline. |
+| `npm run test:mutation:check`    | Compare the last run against the per-file baseline. Fails naming what regressed.       |
+| `npm run test:mutation:baseline` | Record the last run (improvements only). Use when `mutate` changed, and say why.       |
 
 ## Related pages
 

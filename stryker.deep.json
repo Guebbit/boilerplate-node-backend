@@ -1,0 +1,96 @@
+{
+    "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+    "_comment": [
+        "DEEP mutation run \u2014 `npm run test:mutation:deep`. Everything `stryker.config.json` runs,",
+        "plus the INTEGRATION suites. Not a replacement for that file: a second, slower measurement",
+        "answering a different question.",
+        "",
+        "\u2500\u2500 WHY IT EXISTS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+        "The default run executes unit and cross-cutting tests only. That is the right scope for a",
+        "gate \u2014 it is fast enough to run per commit \u2014 but it means every file whose tests live in",
+        "`tests/integration/` is measured with a ruler configured not to touch it, and scores 0% for",
+        "a reason that has nothing to do with how well it is tested. As of 2026-08-27 that was 3186",
+        "of `src/modules/`'s 5489 mutants: 58% of the module scope, reported as NoCoverage.",
+        "",
+        "MEASURED, on `src/modules/products/repository.ts` (196 mutants), 2026-08-27:",
+        "",
+        "  | scope                   | score  | NoCoverage | wall clock |",
+        "  | ----------------------- | ------ | ---------- | ---------- |",
+        "  | unit only (the default) |  0.00% | 161        | \u2014          |",
+        "  | + integration (here)    | 82.14% |   3        | 22m 13s    |",
+        "",
+        "The tests were always there and they are good. What the 0% measured was the scope.",
+        "",
+        "\u2500\u2500 WHY IT IS NOT THE DEFAULT \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+        "Wall clock. 196 mutants took 22 minutes here against roughly one second each under the unit",
+        "scope, because an integration mutant runs a suite that talks to a real in-memory Mongo and,",
+        "for a repository, 45 of those 196 mutants made a query HANG \u2014 each one paying `timeoutMS`",
+        "in full before being recorded as killed. Extrapolated over `src/modules/`, this is a",
+        "multi-hour run: a nightly, not a gate.",
+        "",
+        "\u2500\u2500 WHAT IS STILL EXCLUDED, AND WHY \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+        "`tests/contract/` and `tests/fuzz/` stay out even here. A contract test boots the whole app",
+        "through supertest, so `enableFindRelatedTests` relates it to very nearly every file in the",
+        "project \u2014 which would make each mutant pay a full application boot, and would relate a",
+        "one-line change in one module to the entire contract suite. Fuzz suites are non-deterministic",
+        "by construction; a mutant killed by a random input on one run and not the next produces a",
+        "score that moves on its own.",
+        "",
+        "\u2500\u2500 READING THE RESULT \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+        "This run writes to `reports/mutation-deep/` and keeps its own incremental file. It does NOT",
+        "feed `mutation-baseline.json`: the ratchet compares like with like, and a baseline recorded",
+        "from a wider scope would fail every subsequent default run as a mass regression. Compare a",
+        "deep run against the PREVIOUS deep run, by eye or by report."
+    ],
+    "packageManager": "npm",
+    "testRunner": "jest",
+    "jest": {
+        "projectType": "custom",
+        "configFile": "jest.config.mutation.js",
+        "enableFindRelatedTests": true,
+        "config": {
+            "testPathIgnorePatterns": [
+                "/node_modules/",
+                "<rootDir>/tests/contract/",
+                "<rootDir>/tests/fuzz/",
+                "<rootDir>/src/modules/[^/]+/tests/contract/",
+                "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
+                "<rootDir>/tests/cross-cutting/outbox-names.test.ts"
+            ]
+        }
+    },
+    "reporters": ["html", "clear-text", "progress", "json"],
+    "htmlReporter": {
+        "fileName": "reports/mutation-deep/index.html"
+    },
+    "jsonReporter": {
+        "fileName": "reports/mutation-deep/mutation.json"
+    },
+    "coverageAnalysis": "perTest",
+    "incremental": true,
+    "incrementalFile": "reports/stryker-incremental-deep.json",
+    "mutate": [
+        "src/infrastructure/**/*.ts",
+        "src/kernel/**/*.ts",
+        "src/modules/*/**/*.ts",
+        "!src/modules/*/index.ts",
+        "!src/modules/*/tests/**"
+    ],
+    "ignorePatterns": [
+        "coverage/**",
+        "reports/**",
+        "dist/**",
+        "docs/**",
+        ".tmp/**",
+        ".tmp-*/**",
+        ".stryker-tmp*/**"
+    ],
+    "thresholds": {
+        "high": 80,
+        "low": 60,
+        "break": 60
+    },
+    "timeoutMS": 30000,
+    "concurrency": 4,
+    "maxTestRunnerReuse": 5
+}

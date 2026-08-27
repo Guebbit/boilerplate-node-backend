@@ -14,6 +14,11 @@
  *      relationship in the taxonomy, because a change to that model has to be agreed twice. The
  *      allowlist below is short on purpose: adding to it is a deliberate edit with a reviewer
  *      attached, which is the only enforcement a judgement call can have.
+ *   4. **The label itself is a label.** `as` has to be one of the four kinds in the taxonomy and
+ *      `because` has to be a sentence — see the second describe block. Points 1-3 all read `as`
+ *      and `because` while trusting their contents, so an edge labelled `''` satisfied every one
+ *      of them: it was not a shared kernel, it named a real import, and it was declared. The
+ *      taxonomy is only worth having if the four words are the only four words.
  *
  * Imports are read from the source rather than resolved, for the same reason
  * `eslint-plugin-boundaries` does it: the question is what the code SAYS, and a spec that
@@ -110,5 +115,103 @@ describe('the context map describes the imports that exist', () => {
             .filter((edge) => !SHARED_KERNEL_ALLOWLIST.has(edge));
 
         expect(kernels).toEqual([]);
+    });
+});
+
+describe('every edge is labelled, not merely present', () => {
+    /**
+     * The taxonomy, spelled out.
+     *
+     * Duplicating the union from `@kernel/registry` is deliberate and is the point of the test: a
+     * `ContextRelationship` is erased at runtime, so nothing stops a manifest from carrying a
+     * relationship kind that no longer exists, or an empty one. Written here, adding a fifth kind
+     * to the taxonomy is a two-file edit with a reviewer attached — which is what a taxonomy is
+     * for.
+     */
+    const KINDS = new Set<ContextRelationship>([
+        'conformist',
+        'customer-supplier',
+        'published-language',
+        'shared-kernel'
+    ]);
+
+    it('labels every edge with one of the four relationship kinds', () => {
+        const unlabelled = declaredEdges()
+            .filter(({ as }) => !KINDS.has(as))
+            .map(({ from, to, as }) => `${from}→${to} is labelled ${JSON.stringify(as)}`);
+
+        expect(unlabelled).toEqual([]);
+    });
+
+    it('gives every edge a reason, in a sentence', () => {
+        // `because` is required by the type, so what can go wrong is not absence but emptiness —
+        // a field filled in to satisfy the compiler. The threshold is deliberately low: this is
+        // not a style rule about how reasons should read, it is the difference between an edge
+        // that was thought about and one that was waved through.
+        const unexplained = enabledModules.flatMap((appModule: AppModule) =>
+            (appModule.dependsOn ?? [])
+                .filter((edge) => edge.because.trim().length < 20)
+                .map((edge) => `${appModule.name}→${edge.module}: ${JSON.stringify(edge.because)}`)
+        );
+
+        expect(unexplained).toEqual([]);
+    });
+
+    it('names something reachable across the edge, rather than restating the edge', () => {
+        // The failure this catches is a reason that says "depends on users" — true, visible from
+        // the declaration itself, and worth nothing. A reason has to name the thing reached: a
+        // function, a document, an event. Checked as "says more than the module's own name".
+        const circular = enabledModules.flatMap((appModule: AppModule) =>
+            (appModule.dependsOn ?? [])
+                .filter((edge) => {
+                    const words = edge.because
+                        .toLowerCase()
+                        .replaceAll(/[^\sa-z]/g, ' ')
+                        .split(/\s+/)
+                        .filter(Boolean);
+                    return words.length < 5;
+                })
+                .map((edge) => `${appModule.name}→${edge.module}: ${JSON.stringify(edge.because)}`)
+        );
+
+        expect(circular).toEqual([]);
+    });
+
+    it('declares no module as depending on itself', () => {
+        // A self-edge passes every check above — the import "exists", the label is valid — and
+        // means nothing. It is also how a copy-pasted manifest block first shows up.
+        const selfEdges = declaredEdges()
+            .filter(({ from, to }) => from === to)
+            .map(({ from }) => `${from} depends on itself`);
+
+        expect(selfEdges).toEqual([]);
+    });
+
+    it('points every edge at a module that is actually enabled', () => {
+        // A dangling edge is worse than a missing one: the graph reads as if the dependency were
+        // managed, while the module it names is not in the build at all.
+        const known = new Set(enabledModules.map((appModule: AppModule) => appModule.name));
+        const dangling = declaredEdges()
+            .filter(({ to }) => !known.has(to))
+            .map(({ from, to }) => `${from}→${to}, but ${to} is not an enabled module`);
+
+        expect(dangling).toEqual([]);
+    });
+
+    it('declares each sibling at most once per module', () => {
+        // Two edges to the same module are two different answers to "what kind of relationship is
+        // this", and nothing chooses between them.
+        const duplicated = enabledModules.flatMap((appModule: AppModule) => {
+            const seen = new Set<string>();
+            return (appModule.dependsOn ?? [])
+                .filter((edge) => {
+                    const repeat = seen.has(edge.module);
+                    seen.add(edge.module);
+                    return repeat;
+                })
+                .map((edge) => `${appModule.name} declares ${edge.module} more than once`);
+        });
+
+        expect(duplicated).toEqual([]);
     });
 });

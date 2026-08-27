@@ -41,6 +41,24 @@ module.exports = {
     // `preset` is dropped along with it: the ts-jest preset is what installs the transform this
     // file exists to replace, and leaving it would put ts-jest back under a different key.
     preset: undefined,
+    /*
+     * ── ONE WORKER, BECAUSE STRYKER IS ALREADY THE POOL ──────────────────────────────────────────
+     * `jest.config.js` sizes its pool for a STANDALONE run: one jest, `logical CPUs - 2` workers,
+     * measured against the whole unit suite. Inherited here that number is multiplied rather than
+     * reused — Stryker runs `concurrency` test runners at once, each of which is a full jest, so
+     * this machine's 30 became 4 × 30 and the run spent its time context-switching. Measured on a
+     * 32-core box: load average 31.8 with four Stryker workers, ~55s per mutant, against a suite
+     * that runs 703 tests in 78 seconds single-threaded.
+     *
+     * There is nothing for a pool to do here in any case. `coverageAnalysis: "perTest"` narrows
+     * each mutant to the tests that actually reach it — usually a handful in one or two files —
+     * and a pool cannot parallelise below a file. The parallelism belongs to Stryker, which spends
+     * it on mutants; `STRYKER_CONCURRENCY` in `.env` is the one knob, and this keeps it honest.
+     *
+     * It also fixes the memory arithmetic the base config's comment works through: peak RSS is
+     * per worker, and four runners each holding a 30-worker pool is not a budget anyone sized.
+     */
+    maxWorkers: 1,
     transform: {
         '^.+\\.tsx?$': [
             '@swc/jest',

@@ -27,6 +27,18 @@ import { accountAuditActions } from '../../audit';
 import { userRepository } from '@modules/users';
 import type { UserDocument } from '@modules/users';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
+import { observePort } from '@tests/ports';
+
+/*
+ * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
+ * getter a CommonJS namespace import exposes, which fails under `jest.config.mutation.js`'s swc
+ * transform and inside Stryker's sandbox. See `tests/support/ports.ts` for the full reasoning.
+ */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -255,7 +267,7 @@ describe('accountService.refreshAccessToken', () => {
     });
 
     it('returns an access token and records the refresh', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const refreshToken = await issueRefreshToken();
 
         const accessToken = await account.refreshAccessToken(refreshToken, testCallerContext);
@@ -270,7 +282,7 @@ describe('accountService.refreshAccessToken', () => {
     });
 
     it('records a token that does not verify as an invalid_token failure', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
 
         await expect(account.refreshAccessToken('not-a-jwt', testCallerContext)).rejects.toThrow();
 
@@ -286,7 +298,7 @@ describe('accountService.refreshAccessToken', () => {
     // A signed token the user no longer holds. Revocation lives in the document, not the
     // signature, so this is the case that proves logout is more than cosmetic.
     it('records a revoked token as invalid rather than refreshing it', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const refreshToken = await issueRefreshToken();
         await userRepository.tokenRemoveByValue(refreshToken);
 
@@ -302,7 +314,7 @@ describe('accountService.refreshAccessToken', () => {
     });
 
     it('records a missing cookie as a missing_token failure, distinctly', async () => {
-        const auditSpy = jest.spyOn(auditPort, 'emitAuditEvent');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
 
         await expect(account.refreshAccessToken(undefined, testCallerContext)).rejects.toThrow();
 

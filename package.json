@@ -39,6 +39,7 @@
         "test:fuzz": "jest tests/fuzz --runInBand",
         "test:all": "jest",
         "test:mutation": "tsx scripts/run-mutation-tests.ts",
+        "test:mutation:deep": "tsx scripts/run-mutation-tests.ts stryker.deep.json",
         "test:mutation:check": "tsx scripts/check-mutation-baseline.ts",
         "test:mutation:baseline": "tsx scripts/check-mutation-baseline.ts --update",
         "test:prism": "tsx scripts/run-prism-smoke-test.ts",

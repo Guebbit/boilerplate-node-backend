@@ -119,6 +119,13 @@
         "inflate the score with kills no assertion earned. Excluding the file costs no coverage",
         "either way — it exercises committed files and `scripts/`, and neither is in `mutate`.",
         "",
+        "`ignorePatterns` DOES list .tmp/** and .stryker-tmp*/**: those hold the in-memory mongod data",
+        "directories, which are live files being written by a running jest while Stryker copies the",
+        "project into its sandbox. Copying them is both pointless — every jest instance starts its",
+        "own server — and racy: a WiredTiger file removed mid-copy fails the whole run with an",
+        "ENOENT on a filename nothing in the project mentions. `run-mutation-tests.ts` clears .tmp",
+        "before it starts, which hid this until two runs overlapped.",
+        "",
         "`ignorePatterns` must NOT list public/**: the sandbox is the only filesystem the tests see,",
         "and tests/unit/db/seed-fixtures.test.ts asserts every seed fixture's imageUrl resolves to a",
         "committed file under public/images/seed/. Without it Stryker refuses to start at all.",
@@ -237,7 +244,15 @@
         "!src/modules/*/index.ts",
         "!src/modules/*/tests/**"
     ],
-    "ignorePatterns": ["coverage/**", "reports/**", "dist/**", "docs/**"],
+    "ignorePatterns": [
+        "coverage/**",
+        "reports/**",
+        "dist/**",
+        "docs/**",
+        ".tmp/**",
+        ".tmp-*/**",
+        ".stryker-tmp*/**"
+    ],
     "thresholds": {
         "high": 80,
         "low": 60,
