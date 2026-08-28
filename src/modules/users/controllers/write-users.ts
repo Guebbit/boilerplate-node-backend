@@ -40,10 +40,10 @@ export const writeUsers = (
 ) => {
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
     // `booleans` are the fields whose type a multipart body cannot carry.
-    const { id, admin, active } = readInput(request, {
+    const { id, admin, active, sendSetupEmail } = readInput(request, {
         surface: 'write',
         ids: ['id'],
-        booleans: ['admin', 'active']
+        booleans: ['admin', 'active', 'sendSetupEmail']
     });
 
     /**
@@ -57,14 +57,22 @@ export const writeUsers = (
     const deleteUpload = () => imageStore.remove(imageUrlFile);
 
     /**
-     * Validation errors prevent creation end editing
+     * Validation errors prevent creation end editing.
+     *
+     * `false`: password is never required at this schema layer, on either branch. An edit may
+     * leave it untouched (see `userService.update`), and a create may leave it to `sendSetupEmail`
+     * below instead of stating one — that combination is a business rule this schema cannot express
+     * on its own, so it is checked separately, just past the `!id` guard.
      */
-    const errors = userService.validateData({
-        ...request.body,
-        imageUrl,
-        admin,
-        active
-    });
+    const errors = userService.validateData(
+        {
+            ...request.body,
+            imageUrl,
+            admin,
+            active
+        },
+        false
+    );
     if (errors.length > 0)
         return (
             deleteUpload()
@@ -91,6 +99,14 @@ export const writeUsers = (
             return deleteUpload();
         }
 
+        // Neither a password nor a way to get one to the user: `userService.create` would fill
+        // the field with a value nobody is ever told and leave the account permanently unusable.
+        const { password } = request.body as { password?: string };
+        if (!password && !sendSetupEmail) {
+            rejectResponse(response, 422, [t('users.field-password-or-setup-required')]);
+            return deleteUpload();
+        }
+
         return userService
             .create(
                 {
@@ -101,7 +117,8 @@ export const writeUsers = (
                      * validation it is compatible for sure.
                      */
                     ...(request.body as Parameters<typeof userService.create>[0]),
-                    ...validated
+                    ...validated,
+                    sendSetupEmail: sendSetupEmail as boolean | undefined
                 },
                 callerContextOf(request)
             )

@@ -19,6 +19,16 @@ declare module '@kernel/events' {
          * know who else listens.
          */
         'user.deleted': { userId: string };
+
+        /**
+         * An admin created a user with no password and asked to have one queued up instead — see
+         * `userService.create`. The user this names already exists with an unusable, randomly
+         * generated password; this event is the request to send them a way in.
+         *
+         * `account` owns tokens and outbound email, so it is the (only) subscriber, the same way it
+         * is the one that cleans up address books on `user.deleted`.
+         */
+        'user.setup-requested': { userId: string };
     }
 }
 
@@ -27,3 +37,6 @@ declare module '@kernel/events' {
  * rather than two string literals that typo independently.
  */
 export const USER_DELETED = 'user.deleted';
+
+/** See `DomainEventMap['user.setup-requested']` above. */
+export const USER_SETUP_REQUESTED = 'user.setup-requested';

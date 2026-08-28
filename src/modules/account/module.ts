@@ -2,9 +2,10 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
-import { userRepository, USER_DELETED } from '@modules/users';
+import { userRepository, USER_DELETED, USER_SETUP_REQUESTED } from '@modules/users';
 import { verifyAccessToken, verifyRefreshToken } from './session/jwt';
 import { addressesDeleteByUserId } from './services/addresses';
+import { requestAccountSetup } from './services/authentication';
 import { exportSeededAddressBooks, seedAddressBooksCollection } from './demo';
 import { router } from './routes';
 
@@ -75,9 +76,18 @@ export default {
      * The one collection this module owns is the address book — the account lifecycle's own
      * data, unlike the User record it administers through `users`. A destroyed account takes
      * its book with it, by the same event the cart and wishlist listen for.
+     *
+     * `USER_SETUP_REQUESTED` is the other half of the shared-kernel edge, going the same direction:
+     * `users` creates a passwordless account and asks for a way in; this module owns the tokens and
+     * mail that provide one, the same way it owns password reset. A deleted user before the event
+     * fires (or the odd concurrent hard delete) resolves to `undefined` and the request is simply
+     * dropped — nobody is left to email.
      */
     subscribe: () => {
         onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));
+        onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) =>
+            userRepository.findById(userId).then((user) => user && requestAccountSetup(user))
+        );
     },
     seeds: seedAddressBooksCollection,
     seedExport: exportSeededAddressBooks,

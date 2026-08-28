@@ -64,6 +64,15 @@
                 "link-label": "Reset my password",
                 "ignore": "If you did not request this, you can safely ignore this email."
             },
+            "setup-request": {
+                "subject": "Set up your account",
+                "meta-title": "Account setup requested",
+                "greeting": "Hello, {{name}}!",
+                "intro": "An administrator created an account for you. Choose a password to complete your registration.",
+                "cta": "Click this link to set your password.",
+                "link-label": "Set my password",
+                "ignore": "If you weren't expecting this, contact whoever manages this site."
+            },
             "reset-confirm": {
                 "subject": "Your password was changed",
                 "meta-title": "Password reset",

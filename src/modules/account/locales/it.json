@@ -64,6 +64,15 @@
                 "link-label": "Reimposta la password",
                 "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
             },
+            "setup-request": {
+                "subject": "Configura il tuo account",
+                "meta-title": "Configurazione dell'account richiesta",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Un amministratore ha creato un account per te. Scegli una password per completare la registrazione.",
+                "cta": "Clicca su questo link per impostare la tua password.",
+                "link-label": "Imposta la mia password",
+                "ignore": "Se non te lo aspettavi, contatta chi gestisce questo sito."
+            },
             "reset-confirm": {
                 "subject": "La tua password è stata cambiata",
                 "meta-title": "Password reimpostata",

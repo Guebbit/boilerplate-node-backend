@@ -48,7 +48,6 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 | `lint` / `lint:fix`               | ESLint check or autofix                                                                                                              | [Testing & Docs](./testing-and-docs.md)                                                      |
 | `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                                            | [Testing & Docs](./testing-and-docs.md)                                                      |
 | `build`                           | `ts-check` + `lint` composite gate                                                                                                   | [Testing & Docs](./testing-and-docs.md)                                                      |
-| `check:asyncapi-types`            | fail if `src/types/asyncapi.generated.ts` is not what `asyncapi.yaml` generates; writes nothing                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                             |
 | `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI                          | [Testing & Docs](./testing-and-docs.md)                                                      |
 | `check:dependencies`              | fail on a cycle, or on a tier that can REACH something it may not import — the transitive half of the walls, which ESLint cannot see | [Dependency Graph](./dependency-graph.md)                                                    |
 | `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                                             | [Testing & Docs](./testing-and-docs.md)                                                      |
@@ -97,7 +96,6 @@ Change](../api/regenerating.md).
 | `check:spec-identity`    | verify   | fail if the paired frontend holds different bytes of a shared document                                                  | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval                                       | [OpenAPI Workflow](../api/openapi-workflow.md)             |
 | `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                       | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `check:asyncapi-types`   | verify   | the same generation, compared instead of written — the freshness gate                                                   | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
 | `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                           | [OpenAPI Workflow](../api/openapi-workflow.md)             |
 | `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `spectral.modules.yaml`                                  | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `lint:asyncapi`          | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
@@ -119,10 +117,11 @@ collections are generated from `openapi.yaml` and `.gitignore`d, so they are pro
 `npm run contracts:bundle -- bruno insomnia mockoon postman` — and `--check` refuses them, because an
 uncommitted file cannot be stale.
 
-`openapi.yaml`, `api/` (from `gen:api`) and `src/types/asyncapi.generated.ts` (from `gen:asyncapi`,
-`check:asyncapi-types`'s target) are gitignored too, for the same reason: `postinstall` rebuilds all
-three automatically after `npm install`/`npm ci`, so there's nothing committed left to go stale
-between them and the fragments they're built from. `asyncapi.yaml`/`asyncapi.public.yaml` themselves
+`openapi.yaml`, `api/` (from `gen:api`) and `src/types/asyncapi.generated.ts` (from `gen:asyncapi`)
+are gitignored too, for the same reason: `postinstall` rebuilds all three automatically after
+`npm install`/`npm ci`, so there's nothing committed left to go stale between them and the
+fragments they're built from — no freshness check exists for any of them.
+`asyncapi.yaml`/`asyncapi.public.yaml` themselves
 stay committed — see [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed)
 for exactly which is which.
 

@@ -6,6 +6,7 @@
         "field-username-min": "Name is too short",
         "field-password-required": "Password is required",
         "field-password-min": "Password is too short",
+        "field-password-or-setup-required": "Set a password, or enable the setup email so the user can choose their own.",
         "not-found": "The requested user was not found.",
         "hard-deleted": "User was permanently deleted.",
         "soft-deleted": "User was soft deleted (deactivated)."

@@ -27,6 +27,7 @@ import {
     tokenRemoveAll,
     requestAccountDeletion,
     requestPasswordReset,
+    requestAccountSetup,
     sessionRevoke,
     logoutCurrentSession,
     refreshAccessToken
@@ -95,6 +96,7 @@ export const accountService = {
     tokenRemoveAll,
     requestAccountDeletion,
     requestPasswordReset,
+    requestAccountSetup,
     sessionRevoke,
     logoutCurrentSession,
     refreshAccessToken,

@@ -52,7 +52,7 @@ paths:
         post:
             tags: [Users]
             summary: Create user
-            description: Creates a new user account with the supplied email, username, and password. Optional image can be uploaded.
+            description: Creates a new user account with the supplied email and username. A password may be supplied directly, or omitted and left to `sendSetupEmail` — see that field. Optional image can be uploaded.
             operationId: createUser
             security:
                 - bearerAuth: []
@@ -308,14 +308,24 @@ components:
         CreateUserRequest:
             type: object
             additionalProperties: false
-            required: [email, username, password]
+            required: [email, username]
             properties:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
+                # Optional: an admin may set it directly (as if the user had registered it
+                # themselves), or leave it out and use `sendSetupEmail` to have the user pick their
+                # own instead.
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                # Only meaningful when `password` is omitted. Queues the same email as
+                # "forgot your password", worded for "you have no password yet" instead, carrying a
+                # token the user completes their own registration with — see
+                # `POST /account/reset-confirm`. Ignored when `password` is supplied.
+                sendSetupEmail:
+                    type: boolean
+                    default: false
                 admin:
                     type: boolean
                 # Same reasoning as `CreateProductRequest.active`: independent of soft-deletion,
@@ -332,14 +342,19 @@ components:
         CreateUserRequestMultipart:
             type: object
             additionalProperties: false
-            required: [email, username, password]
+            required: [email, username]
             properties:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
+                # Same as `CreateUserRequest.password` — optional, see `sendSetupEmail` below.
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                # Same as `CreateUserRequest.sendSetupEmail`.
+                sendSetupEmail:
+                    type: boolean
+                    default: false
                 admin:
                     type: boolean
                 # Same default, same reasoning as `CreateUserRequest.active` above.

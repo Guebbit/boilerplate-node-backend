@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -17,7 +18,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
-import { USER_DELETED } from './events';
+import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /**
@@ -79,18 +80,38 @@ export const getById = (id?: string) => {
  * accepted from the caller: it is not a field `CreateUserRequest` exposes, and no caller in this
  * codebase has ever needed to override it.
  *
+ * `password` is optional on this contract: an admin may set it directly, exactly as if the user had
+ * registered it themselves, or leave it out. When it is left out, Mongoose still needs *something*
+ * in the field (`required: true`, `select: false` — see `./model`), so a random value nobody is ever
+ * told fills it in; the account is unusable until `sendSetupEmail` (or a later `PUT` with a real
+ * password) gives it one. `sendSetupEmail: true` queues the same mail `account`'s "forgot your
+ * password" flow sends, worded for "you have none yet" — see `USER_SETUP_REQUESTED` and
+ * `account/module.ts`'s subscriber, which is where the token is actually issued.
+ *
  * Typed off `CreateUserRequest` — the contract's own generated shape — rather than a hand-picked
  * `Pick<UserRecord, ...>`. `products/service.ts`'s `update`/`updateById` do the same off `Product`;
  * a hand-copied field list is what silently dropped `active` from this module's `update()` below.
  */
-export const create = (data: CreateUserRequest, context: CallerContext): Promise<UserDocument> =>
-    userRepository.create({ verified: true, ...data }).then((user) => {
+export const create = (data: CreateUserRequest, context: CallerContext): Promise<UserDocument> => {
+    const passwordProvided = Boolean(data.password && data.password.trim().length > 0);
+    // 32 random bytes as hex, same as `tokenAdd` below uses for a reset token: unguessable and
+    // never surfaced anywhere, so "unusable until set" is enforced by nobody knowing it.
+    const password =
+        data.password && data.password.trim().length > 0
+            ? data.password
+            : randomBytes(32).toString('hex');
+
+    return userRepository.create({ verified: true, ...data, password }).then((user) => {
         emitAuditEvent(
             buildAuditEvent(context, {
                 action: usersAuditActions.ADMIN_USER_CREATED,
                 outcome: 'success',
                 target_type: 'user',
-                target_id: String(user._id)
+                target_id: String(user._id),
+                // Recorded here, not by `account`'s domain-event handler: that handler has no
+                // request to build a `CallerContext` from, only a `userId`, so the admin's action
+                // is the only point in the flow with someone to attribute it to.
+                ...(passwordProvided ? {} : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
             })
         );
         emitAnalyticsEvent({
@@ -101,8 +122,12 @@ export const create = (data: CreateUserRequest, context: CallerContext): Promise
             event: usersAnalyticsEvents.USER_CREATED,
             properties: { admin_created: true }
         });
-        return user;
+
+        if (passwordProvided || !data.sendSetupEmail) return user;
+
+        return emitDomainEvent(USER_SETUP_REQUESTED, { userId: String(user._id) }).then(() => user);
     });
+};
 
 /**
  * Update an existing user document.

@@ -14,7 +14,7 @@ import { getCurrentLocale, getDefaultLocale, t } from '@infrastructure/i18n';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { deleteRequestEmail, resetRequestEmail } from '../emails';
+import { deleteRequestEmail, resetRequestEmail, setupRequestEmail } from '../emails';
 import type { CastError } from 'mongoose';
 import { LoginBody } from '@api/schemas.zod';
 import {
@@ -145,6 +145,26 @@ export const requestPasswordReset = (
         );
     });
 };
+
+/**
+ * Issue a password-set token for a user an admin just created with no password, and deliver it.
+ *
+ * The `users` module's `USER_SETUP_REQUESTED` domain event is the only caller — see
+ * `../module.ts`'s subscriber. A domain event carries a `userId`, not a `CallerContext`, so unlike
+ * {@link requestAccountDeletion} and {@link requestPasswordReset} there is no request here to audit
+ * against; the admin's action is recorded once, at the point it happened, on `usersAuditActions.
+ * ADMIN_USER_CREATED` in `users/service.ts`'s `create()`.
+ *
+ * Reuses the password-reset token type and TTL on purpose: `POST /account/reset-confirm` is exactly
+ * the endpoint that should consume this link too, since setting a first password and resetting a
+ * forgotten one are the same write to the same field. Only the mail's copy differs — see
+ * {@link setupRequestEmail}.
+ */
+export const requestAccountSetup = (user: UserDocument): Promise<void> =>
+    tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then((token) => {
+        const mail = setupRequestEmail(user.locale ?? getDefaultLocale(), user.username, token);
+        void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
+    });
 
 /**
  * Revoke one of the caller's own sessions.

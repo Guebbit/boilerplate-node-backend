@@ -26,4 +26,4 @@ export { TokenType, zodUserSchema } from './model';
 export type { UserDocument, Token } from './model';
 
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */
-export { USER_DELETED } from './events';
+export { USER_DELETED, USER_SETUP_REQUESTED } from './events';

@@ -134,3 +134,85 @@ describe('POST /account/signup', () => {
         expect(response).toSatisfyApiSpec();
     });
 });
+
+/**
+ * `password` used to be required on every admin create — see `write-users.ts`'s docblock and
+ * `HANDOFF.md` §2.22. These four cover the shape that replaced it: a password may be supplied
+ * directly, deferred to `sendSetupEmail`, or — the one combination that leaves an account nobody
+ * can ever reach — neither, which is a 422 rather than a silent create.
+ */
+describe('POST /users', () => {
+    it('creates a user with a password supplied directly, and exposes no credentials', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api().post('/users').set('Authorization', bearer).send({
+            email: 'admin-created@example.com',
+            username: 'admincreated',
+            password: 'Password1!'
+        });
+
+        expect(response.status).toBe(201);
+        expect(response).toSatisfyApiSpec();
+        assertNoCredentials(response.body);
+    });
+
+    it('creates a user with no password when sendSetupEmail is true', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api().post('/users').set('Authorization', bearer).send({
+            email: 'setup-email@example.com',
+            username: 'setupemailuser',
+            sendSetupEmail: true
+        });
+
+        expect(response.status).toBe(201);
+        expect(response).toSatisfyApiSpec();
+        assertNoCredentials(response.body);
+    });
+
+    it('matches the error contract for neither a password nor sendSetupEmail', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api().post('/users').set('Authorization', bearer).send({
+            email: 'no-way-in@example.com',
+            username: 'nowayinuser'
+        });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('accepts sendSetupEmail: false the same as omitting it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api().post('/users').set('Authorization', bearer).send({
+            email: 'setup-false@example.com',
+            username: 'setupfalseuser',
+            sendSetupEmail: false
+        });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('PUT /users/{id}', () => {
+    // The bug this guards: the controller called `validateData` with no second argument, so
+    // `requirePassword` defaulted to `true` on the update branch too, and an admin could not edit
+    // a user without also resubmitting that user's password. `email` and `username` are still sent
+    // — `validateData` runs the same schema an admin create does, which requires both regardless of
+    // `requirePassword`, and a form re-submitting its own fields is the realistic shape of an edit.
+    // Password is the one field this case deliberately leaves out.
+    it('updates a user without resubmitting a password', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({
+            username: 'editnocredential',
+            email: 'editnocredential@example.com'
+        });
+
+        const response = await api()
+            .put(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: target.email, username: 'editednocredential' });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        assertNoCredentials(response.body);
+    });
+});

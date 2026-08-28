@@ -87,7 +87,9 @@ export const SHARED_FILES: readonly SharedFile[] = [
     /*
      * `src/types/asyncapi.generated.ts` is deliberately absent: an OUTPUT whose every input is
      * already compared, and the two are not meant to match — this repo's carries the queue
-     * payloads. `npm run check:asyncapi-types` guards it inside each repo instead.
+     * payloads. It is also gitignored and never committed — postinstall and the pre-commit hook
+     * both regenerate it before anything else runs, so there is nothing left to go stale for a
+     * check to catch.
      */
 
     /*

@@ -29,7 +29,6 @@
         "regenerate": "tsx scripts/regenerate-artifacts.ts",
         "gen:api": "rm -rf ./api && orval --config orval.config.ts",
         "gen:asyncapi": "tsx scripts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts",
-        "check:asyncapi-types": "tsx scripts/generate-asyncapi-types.ts --check --out src/types/asyncapi.generated.ts",
         "test": "npm run test:unit && npm run test:cross-cutting && npm run test:integration && npm run test:contract && npm run test:fuzz",
         "test:unit": "jest tests/unit 'src/modules/.*/tests/unit'",
         "test:cross-cutting": "jest tests/cross-cutting",

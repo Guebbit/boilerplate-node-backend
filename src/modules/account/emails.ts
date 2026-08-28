@@ -87,6 +87,31 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
     };
 };
 
+/**
+ * Account setup: an admin created this account with no password, and asked to have the user set
+ * one themselves. Same link, same token type and TTL as {@link resetRequestEmail} — see
+ * `authentication.ts`'s `requestAccountSetup` — only the copy differs: the recipient did not lose a
+ * password, they never had one.
+ */
+export const setupRequestEmail = (locale: string, name: string, token: string): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.setup-request',
+        subject: t('account.email.setup-request.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.setup-request.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.setup-request.greeting', { name }),
+            intro: t('account.email.setup-request.intro'),
+            linkLabel: t('account.email.setup-request.link-label'),
+            linkUrl: accountLink('reset', token),
+            ignore: t('account.email.setup-request.ignore'),
+            footer: t('email.footer')
+        }
+    };
+};
+
 /** Password reset: the confirmation, after the password actually changed. */
 export const resetConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);

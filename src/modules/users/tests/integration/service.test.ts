@@ -3,7 +3,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import * as userService from '@modules/users/service';
-import { userRepository } from '@modules/users';
+import { userRepository, USER_SETUP_REQUESTED } from '@modules/users';
+import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { UserDocument } from '@modules/users';
 
@@ -290,6 +291,80 @@ describe('userService.create', () => {
         );
 
         expect(user.admin).toBe(true);
+    });
+
+    describe('with no password', () => {
+        afterEach(() => {
+            resetDomainEvents();
+        });
+
+        it('fills the field with something the caller was never told, rather than leaving it empty', async () => {
+            // `password` is `required: true` at the Mongoose layer (see `./model`) regardless of
+            // what the contract allows, so a create with no password still has to write SOMETHING.
+            const user = await userService.create(
+                { email: 'no-password@example.com', username: 'nopassworduser' },
+                testCallerContext
+            );
+
+            const stored = await userRepository.findByIdWithCredentials(String(user._id));
+            expect(stored?.password).toBeTruthy();
+            expect(stored?.password).not.toBe('');
+        });
+
+        it('does not emit USER_SETUP_REQUESTED when sendSetupEmail is not set', async () => {
+            const seen: string[] = [];
+            onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
+                seen.push(userId);
+            });
+
+            await userService.create(
+                { email: 'no-setup@example.com', username: 'nosetupuser' },
+                testCallerContext
+            );
+
+            expect(seen).toEqual([]);
+        });
+
+        it('emits USER_SETUP_REQUESTED for this user when sendSetupEmail is true', async () => {
+            const seen: string[] = [];
+            onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
+                seen.push(userId);
+            });
+
+            const user = await userService.create(
+                {
+                    email: 'setup-me@example.com',
+                    username: 'setupmeuser',
+                    sendSetupEmail: true
+                },
+                testCallerContext
+            );
+
+            expect(seen).toEqual([String(user._id)]);
+        });
+    });
+
+    it('never emits USER_SETUP_REQUESTED when a password was supplied, even with sendSetupEmail: true', async () => {
+        const seen: string[] = [];
+        onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
+            seen.push(userId);
+        });
+
+        try {
+            await userService.create(
+                {
+                    email: 'has-password@example.com',
+                    username: 'haspassworduser',
+                    password: PLAIN_PASSWORD,
+                    sendSetupEmail: true
+                },
+                testCallerContext
+            );
+
+            expect(seen).toEqual([]);
+        } finally {
+            resetDomainEvents();
+        }
     });
 });
 
