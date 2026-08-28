@@ -13,6 +13,7 @@
  * | `profile.ts`       | the caller's own fields, and every path that writes a password   |
  * | `addresses.ts`     | the address book — the one collection this module owns           |
  * | `verification.ts`  | issuing an email-verification token and the mail that carries it |
+ * | `tokens.ts`        | the `tokens` array: what makes one live, spending it, listing sessions |
  * | `token-cleanup.ts` | dropping expired tokens; housekeeping two controllers trigger    |
  *
  * `../session/` is the layer below this one: JWT signing, the refresh cookie, and the expiry
@@ -25,6 +26,7 @@ import {
     login,
     tokenRemoveAll,
     requestAccountDeletion,
+    requestPasswordReset,
     sessionRevoke,
     logoutCurrentSession,
     refreshAccessToken
@@ -49,8 +51,10 @@ import {
 import {
     sendVerificationEmail,
     requestEmailVerification,
+    requestEmailVerificationFor,
     completeEmailVerification
 } from './verification';
+import { findLiveToken, spendLiveToken, sessionsList } from './tokens';
 import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
 
 /*
@@ -64,7 +68,7 @@ import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
  * a second list carrying them said the same thing as `accountService` twice — and a name living in
  * two lists can fall out of one of them without a single caller noticing.
  */
-export { tokenAdd, signup, login } from './authentication';
+export { tokenAdd, signup, login, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
 export { passwordChange, passwordChangeWithCurrent, updateProfile } from './profile';
 export { addressForCheckout } from './addresses';
 export { sendVerificationEmail, EMAIL_VERIFY_TOKEN_TYPE } from './verification';
@@ -90,6 +94,7 @@ export const accountService = {
     login,
     tokenRemoveAll,
     requestAccountDeletion,
+    requestPasswordReset,
     sessionRevoke,
     logoutCurrentSession,
     refreshAccessToken,
@@ -108,7 +113,11 @@ export const accountService = {
     addressesDeleteByUserId,
     sendVerificationEmail,
     requestEmailVerification,
+    requestEmailVerificationFor,
     completeEmailVerification,
+    findLiveToken,
+    spendLiveToken,
+    sessionsList,
     runTokenCleanup,
     adminTokenCleanup
 };

@@ -16,7 +16,8 @@ import { StockMovementReason } from '@types';
  * What one transition does to the two counters. Both signed, either possibly zero.
  *
  * Recording the pair on every ledger row is what makes the ledger replayable;
- * `tests/unit/ledger.property.test.ts` asserts that over arbitrary transition sequences.
+ * `src/modules/inventory/tests/integration/ledger.property.test.ts` asserts that over arbitrary
+ * transition sequences.
  */
 export interface CounterDelta {
     onHandDelta: number;

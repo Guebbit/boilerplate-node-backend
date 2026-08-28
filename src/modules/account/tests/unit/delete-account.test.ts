@@ -2,15 +2,13 @@ import { deleteAccountRequest } from '@modules/account/controllers/delete-accoun
 import { deleteAccountConfirm } from '@modules/account/controllers/delete-account-confirm';
 import { userService } from '@modules/users';
 import { accountService } from '@modules/account/services';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { authAccountDeleteTotal } from '@modules/account/metrics';
 
 jest.mock('@modules/users', () => ({
     __esModule: true,
     userService: {
-        findByEmail: jest.fn(),
-        findByAccountDeleteToken: jest.fn()
+        findByEmail: jest.fn()
     }
 }));
 
@@ -24,14 +22,10 @@ jest.mock('@modules/users', () => ({
 jest.mock('@modules/account/services', () => ({
     __esModule: true,
     accountService: {
+        findLiveToken: jest.fn(),
         requestAccountDeletion: jest.fn(),
         removeOwnAccount: jest.fn()
     }
-}));
-
-jest.mock('@infrastructure/adapters/mailer', () => ({
-    __esModule: true,
-    enqueueEmail: jest.fn()
 }));
 
 jest.mock('@infrastructure/http/response', () => ({
@@ -55,8 +49,8 @@ jest.mock('@modules/account/session/cookies', () => ({
 const mockFindByEmail = userService.findByEmail as jest.MockedFunction<
     typeof userService.findByEmail
 >;
-const mockFindByAccountDeleteToken = userService.findByAccountDeleteToken as jest.MockedFunction<
-    typeof userService.findByAccountDeleteToken
+const mockFindLiveToken = accountService.findLiveToken as jest.MockedFunction<
+    typeof accountService.findLiveToken
 >;
 const mockRequestAccountDeletion = accountService.requestAccountDeletion as jest.MockedFunction<
     typeof accountService.requestAccountDeletion
@@ -64,7 +58,6 @@ const mockRequestAccountDeletion = accountService.requestAccountDeletion as jest
 const mockRemoveOwnAccount = accountService.removeOwnAccount as jest.MockedFunction<
     typeof accountService.removeOwnAccount
 >;
-const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 const mockSuccessResponse = successResponse as jest.MockedFunction<typeof successResponse>;
 const mockRejectResponse = rejectResponse as jest.MockedFunction<typeof rejectResponse>;
 const mockIncCounter = authAccountDeleteTotal.inc as jest.MockedFunction<() => void>;
@@ -77,8 +70,7 @@ describe('DELETE /account — deleteAccountRequest', () => {
     it('sends email and returns 200 when user exists', async () => {
         const fakeUser = { email: 'user@example.com', username: 'testuser' };
         mockFindByEmail.mockResolvedValue(fakeUser as never);
-        mockRequestAccountDeletion.mockResolvedValue('abc123');
-        mockEnqueueEmail.mockResolvedValue();
+        mockRequestAccountDeletion.mockResolvedValue();
 
         const req = {
             authContext: {
@@ -94,7 +86,9 @@ describe('DELETE /account — deleteAccountRequest', () => {
 
         expect(mockFindByEmail).toHaveBeenCalledWith('user@example.com');
         expect(mockRequestAccountDeletion).toHaveBeenCalledWith(fakeUser, expect.anything());
-        expect(mockEnqueueEmail).toHaveBeenCalled();
+        // No mail assertion here on purpose: `requestAccountDeletion` mints the token AND sends
+        // the link, so the controller has nothing to publish. That the mail goes out is the
+        // service's own test's claim — see `self-service.test.ts`.
         expect(mockIncCounter).toHaveBeenCalledWith({ status: 'success' });
         expect(mockSuccessResponse).toHaveBeenCalled();
     });
@@ -110,7 +104,6 @@ describe('DELETE /account — deleteAccountRequest', () => {
         await deleteAccountRequest(req as never, res);
 
         expect(mockRequestAccountDeletion).not.toHaveBeenCalled();
-        expect(mockEnqueueEmail).not.toHaveBeenCalled();
         expect(mockIncCounter).toHaveBeenCalledWith({ status: 'failure' });
         expect(mockSuccessResponse).toHaveBeenCalled();
     });
@@ -143,50 +136,34 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
     beforeEach(() => jest.clearAllMocks());
 
     it('deletes account and returns 200 for valid token', async () => {
-        mockFindByAccountDeleteToken.mockResolvedValue(fakeUser as never);
+        mockFindLiveToken.mockResolvedValue(fakeUser as never);
         mockRemoveOwnAccount.mockResolvedValue({
             success: true,
             status: 200,
             message: '',
             data: undefined
         } as never);
-        mockEnqueueEmail.mockResolvedValue();
 
         const req = { body: { token: 'valid-token' } };
         const res = makeResponse();
 
         await deleteAccountConfirm(req as never, res);
 
-        expect(mockFindByAccountDeleteToken).toHaveBeenCalledWith('valid-token');
+        expect(mockFindLiveToken).toHaveBeenCalledWith('delete', 'valid-token');
         expect(mockRemoveOwnAccount).toHaveBeenCalledWith(fakeUser, expect.anything());
-        expect(mockEnqueueEmail).toHaveBeenCalled();
+        // The goodbye mail is `removeOwnAccount`'s: it is the last layer that can still read the
+        // address, since the account is gone once it resolves.
         expect(mockSuccessResponse).toHaveBeenCalled();
     });
 
-    it('returns 422 when token is not found', async () => {
-        mockFindByAccountDeleteToken.mockResolvedValue(undefined);
-
-        const req = { body: { token: 'bad-token' } };
-        const res = makeResponse();
-
-        await deleteAccountConfirm(req as never, res);
-
-        expect(mockRemoveOwnAccount).not.toHaveBeenCalled();
-        expect(mockRejectResponse).toHaveBeenCalledWith(res, 422, expect.any(Array));
-    });
-
-    it('returns 422 when token is expired', async () => {
-        const expiredUser = {
-            ...fakeUser,
-            tokens: [
-                {
-                    token: 'expired-token',
-                    type: 'delete',
-                    expiration: new Date(Date.now() - 1000)
-                }
-            ]
-        };
-        mockFindByAccountDeleteToken.mockResolvedValue(expiredUser as never);
+    /*
+     * Expiry is no longer visible here, and that is the point: `findLiveToken` refuses an expired
+     * entry by answering `undefined`, exactly as it answers for a token that never existed, so
+     * this controller has one refusal path rather than three. What "live" means is asserted where
+     * it is now decided — `self-service.test.ts`, against a real document.
+     */
+    it('returns 422 when the token is not live', async () => {
+        mockFindLiveToken.mockResolvedValue(undefined);
 
         const req = { body: { token: 'expired-token' } };
         const res = makeResponse();
@@ -198,7 +175,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
     });
 
     it('returns 500 when service throws', async () => {
-        mockFindByAccountDeleteToken.mockRejectedValue(new Error('db error'));
+        mockFindLiveToken.mockRejectedValue(new Error('db error'));
 
         const req = { body: { token: 'any-token' } };
         const res = makeResponse();

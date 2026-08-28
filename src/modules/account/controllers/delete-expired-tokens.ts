@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';
 import { authTokenCleanupTotal } from '../metrics';
-import { catchAs } from '@infrastructure/http/controller';
+import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -16,10 +16,17 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
      */
     return accountService
         .adminTokenCleanup(callerContextOf(request))
-        .then(({ status, success }) => {
-            if (!success) return rejectResponse(response, status);
+        .then((result) => {
+            if (refused(response, result)) return;
             authTokenCleanupTotal.inc();
-            return successResponse(response, undefined, status);
+            /*
+             * The count stays off the wire. `adminTokenCleanup` reports how many documents it
+             * pruned — useful to the audit record and to a log line — but this operation answers
+             * with the shared `Success` response, whose `MessageResponse` schema is
+             * `additionalProperties: false` and declares no `data`. Sending it would put a key in
+             * the body that the contract forbids.
+             */
+            successResponse(response, undefined, result.status, result.message);
         })
         .catch(catchAs(response, 'deleteExpiredTokens'));
 };

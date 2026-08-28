@@ -33,7 +33,9 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
 import { userRepository } from '@modules/users';
-import { userModel, TokenType } from '@modules/users';
+import { TokenType } from '@modules/users';
+// Not on the barrel — see `users/index.ts`. A spec may reach the model; runtime code may not.
+import { userModel } from '@modules/users/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
 setupTestDb();

@@ -113,9 +113,27 @@ export const runCourierAdvance = async (context: CallerContext): Promise<number>
         );
         if (!order) continue;
 
-        shipment.status = 'delivered';
-        shipment.deliveredAt = new Date();
-        await shipmentRepository.save(shipment);
+        /*
+         * The parcel record catches up with the order — conditionally, for the same reason the
+         * order move above is conditional. `findAllShipped` read this document some time ago and
+         * a second courier tick may have been reading it at the same moment; a
+         * read-modify-write would let both stamp `deliveredAt`, and the timestamp would then say
+         * when the last tick finished rather than when the parcel arrived. The `shipped` guard
+         * rides in the filter, so exactly one tick stamps it.
+         *
+         * The answer is not checked, and the count stays on the ORDER: the conditional
+         * `shipped → delivered` above is what decided this parcel arrived, and a `null` here can
+         * only mean another tick already stamped the same delivery. Reporting that as "not
+         * advanced" would undercount a job that did exactly what it was asked to.
+         */
+        await shipmentRepository.updateStatusIfIn(
+            String(shipment.orderId),
+            ['shipped'],
+            'delivered',
+            {
+                deliveredAt: new Date()
+            }
+        );
         advanced += 1;
 
         await emitDomainEvent(ORDER_STATUS_CHANGED, {

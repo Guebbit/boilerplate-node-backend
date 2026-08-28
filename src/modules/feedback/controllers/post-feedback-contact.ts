@@ -2,11 +2,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateFeedbackRequestBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { getDefaultLocale } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import type { CreateFeedbackRequest } from '@types';
-import { contactRequestEmail } from '../emails';
 import { feedbackRequestService } from '../service';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
@@ -33,42 +29,13 @@ export const postFeedbackContact = (
     const body = parseBody(createFeedbackSchema, request.body, response);
     if (!body) return;
 
+    /*
+     * The support notification is `feedbackRequestService.create`'s: who gets told, and in which
+     * language, are facts about the ticket rather than about the request that filed it.
+     */
     return feedbackRequestService
         .create(body)
         .then((createdFeedbackRequest) => {
-            // Notification target precedence: dedicated contact mailbox, then generic SMTP sender; skip email if neither is configured.
-            const notifyEmail =
-                process.env.NODE_CONTACT_NOTIFY_EMAIL ?? process.env.NODE_SMTP_SENDER ?? '';
-
-            if (notifyEmail) {
-                /*
-                 * The one email that must NOT follow the request's language.
-                 *
-                 * It goes to the support mailbox, not to the person who filled in the form, so it
-                 * is built in `NODE_DEFAULT_LOCALE` — the operator's language, passed explicitly
-                 * rather than inherited from whoever happened to submit the form. The customer's
-                 * own words (`subject`, `message`) pass through untouched, as they must.
-                 */
-                const operatorMail = contactRequestEmail(getDefaultLocale(), {
-                    name: createdFeedbackRequest.name,
-                    email: createdFeedbackRequest.email,
-                    subject: createdFeedbackRequest.subject,
-                    message: createdFeedbackRequest.message,
-                    createdAt: createdFeedbackRequest.createdAt?.toISOString()
-                });
-
-                void enqueueEmail(
-                    { to: notifyEmail, subject: operatorMail.subject },
-                    operatorMail.template,
-                    operatorMail.data
-                ).catch((error: Error) =>
-                    logger.error({
-                        message: 'feedback contact notification email failed',
-                        error: error.message
-                    })
-                );
-            }
-
             successResponse(response, createdFeedbackRequest, 201);
         })
         .catch(catchAs(response, 'postFeedbackContact'));

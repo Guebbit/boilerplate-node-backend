@@ -2,7 +2,10 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser } from '@modules/users/tests/factory';
 import { userRepository } from '@modules/users';
-import { userModel as Users, TokenType, type UserDocument } from '@modules/users';
+import { TokenType, type UserDocument } from '@modules/users';
+// The model directly: it is no longer on the barrel, because no sibling MODULE needs it. A spec
+// reaching its own module's internals is what `published-language.test.ts` says it should do.
+import { userModel as Users } from '@modules/users/model';
 
 setupTestDb();
 
@@ -263,26 +266,84 @@ describe('userRepository', () => {
                 ]
             });
 
-            const result = await Users.tokenRemoveExpired();
+            const removed = await userRepository.tokenRemoveExpired();
             const refreshed = await userRepository.findByIdWithCredentials(user._id.toString());
 
-            expect(result.success).toBe(true);
-            expect(result.status).toBe(200);
+            // A count, not a status code: what a failed sweep means to a client is the service's
+            // decision, and this layer no longer has an opinion about it.
+            expect(removed).toBe(1);
             expect(refreshed).not.toBeNull();
             expect(refreshed!.tokens).toHaveLength(1);
             expect(refreshed!.tokens[0].token).toBe('valid-token');
         });
 
-        it('tokenRemoveExpired returns failure metadata when updateMany throws', async () => {
-            const updateManySpy = jest
-                .spyOn(Users, 'updateMany')
-                .mockRejectedValueOnce(new Error('db failure'));
+        it('tokenRemoveExpired rejects when the write fails, rather than inventing a status', async () => {
+            /*
+             * The double has to be a QUERY, not a promise: the repository calls
+             * `updateMany(...).exec()`, so a `mockRejectedValue` here would fail with
+             * "exec is not a function" — a different failure than the one under test, and one
+             * whose rejection then leaks into the next case.
+             */
+            const updateManySpy = jest.spyOn(Users, 'updateMany').mockReturnValueOnce({
+                exec: () => Promise.reject(new Error('db failure'))
+            } as never);
 
-            const result = await Users.tokenRemoveExpired();
-
-            expect(result.success).toBe(false);
-            expect(result.status).toBe(500);
+            /*
+             * It used to resolve `{ status: 500, success: false }` — a Mongoose static choosing an
+             * HTTP status code. Rejecting is what lets `adminTokenCleanup` decide that, and what
+             * stops a caller mistaking a failed sweep for an empty one.
+             */
+            await expect(userRepository.tokenRemoveExpired()).rejects.toThrow('db failure');
             updateManySpy.mockRestore();
+        });
+
+        /*
+         * The two lookups the session layer runs, asserted here because that is where they now
+         * live. `account/session/jwt.ts` used to issue these queries itself — a `findOne` and a
+         * positional `updateOne` against this collection, from a file that is not a repository —
+         * and its unit spec asserted their SHAPE against a mock's call log. The shape is a
+         * persistence fact, so it is proven here instead, against a real document.
+         */
+        it('findByTokenValue finds the holder whatever kind the token is', async () => {
+            const user = await createUser({
+                tokens: [
+                    { type: TokenType.REFRESH, token: 'session-token' },
+                    { type: TokenType.PASSWORD_RESET, token: 'reset-token' }
+                ]
+            });
+
+            // Untyped by design: the refresh flow's question is "does this credential still exist
+            // on a document", and the JWT itself carries no type to narrow by.
+            await expect(userRepository.findByTokenValue('session-token')).resolves.toMatchObject({
+                _id: user._id
+            });
+            await expect(userRepository.findByTokenValue('reset-token')).resolves.toMatchObject({
+                _id: user._id
+            });
+            await expect(userRepository.findByTokenValue('never-issued')).resolves.toBeNull();
+        });
+
+        it('tokenTouch stamps the token that matched, not the first in the array', async () => {
+            const user = await createUser({
+                tokens: [
+                    { type: TokenType.REFRESH, token: 'first-session' },
+                    { type: TokenType.REFRESH, token: 'second-session' }
+                ]
+            });
+
+            await userRepository.tokenTouch('second-session');
+            const refreshed = await userRepository.findByIdWithCredentials(user._id.toString());
+            const byValue = (value: string) =>
+                refreshed!.tokens.find(({ token }) => token === value);
+
+            /*
+             * This is what the positional `$` buys, and the reason it cannot be a
+             * read-modify-write: without it the stamp lands on `tokens.0` and every session in
+             * `GET /account/sessions` reports the last-used time of whichever one happens to be
+             * stored first.
+             */
+            expect(byValue('second-session')!.lastUsedAt).toBeInstanceOf(Date);
+            expect(byValue('first-session')!.lastUsedAt).toBeUndefined();
         });
     });
 });

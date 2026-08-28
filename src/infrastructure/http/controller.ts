@@ -20,7 +20,7 @@
 import type { Response } from 'express';
 import type { ZodError, ZodType } from 'zod';
 import type { CastError } from 'mongoose';
-import { rejectResponse, type ResponseErrorItem } from './response';
+import { rejectResponse, validationErrors, type ResponseErrorItem } from './response';
 import { rejectDatabaseError } from './errors';
 
 /**
@@ -39,28 +39,39 @@ interface ServiceResult<TData> {
 }
 
 /**
- * Turn a Zod failure into the contract's error list, keeping the field that failed.
+ * Send the refusal if the service refused, and say whether it did.
  *
- * `ResponseErrorItem.details` exists for *"the offending field, constraint, limit"* and validation
- * never filled it: every site mapped `issues` to bare messages and dropped `issue.path`. So a
- * client could not tell WHICH field a 422 was about without string-matching the copy, on the ~34
- * endpoints that validate.
+ * `if (refused(response, result)) return;` — four lines of identical branch in 39 controllers,
+ * written once. It covers the REFUSAL only, deliberately: the success side is where controllers
+ * genuinely differ (a raw payload, a transformed one, a 201, an audit event first), and a helper
+ * that owned the send too would need a callback to hand most of that back.
  *
- * `path` is joined with dots so a nested failure reads `shippingAddress.zip`, and an issue with no
- * path at all — a whole-body refinement — carries no `details` rather than an empty one.
- *
- * @param error - the `ZodError` from a failed `safeParse`
- * @returns one error item per issue, each naming its field
+ * @param response - the express response
+ * @param result - whatever the service returned
+ * @returns `true` when a rejection has been sent and the caller must stop
  */
-export const validationErrors = (error: ZodError): ResponseErrorItem[] =>
-    error.issues.map((issue) => {
-        const field = issue.path.join('.');
-        return {
-            code: 'VALIDATION_ERROR',
-            message: issue.message,
-            ...(field ? { details: { field } } : {})
-        };
-    });
+export const refused = <TData>(response: Response, result: ServiceResult<TData>): boolean => {
+    if (result.success) return false;
+
+    rejectResponse(response, result.status, result.errors ?? []);
+    return true;
+};
+
+/**
+ * The `.catch` every controller ends with, as a callback.
+ *
+ * `catchAs(response, 'getProducts')` reads as the name of the operation whose failure is being
+ * logged, which is the argument `rejectDatabaseError` wanted anyway. The literal `.catch(` stays
+ * at the call site, so `controller-chain-must-catch` still sees it.
+ *
+ * @param response - the express response
+ * @param context - developer-facing operation name, recorded in the log line
+ */
+export const catchAs =
+    (response: Response, context: string) =>
+    (error: CastError | Error): void => {
+        rejectDatabaseError(response, context, error);
+    };
 
 /**
  * Answer 422 for a Zod failure.
@@ -99,38 +110,3 @@ export const parseBody = <TSchema extends ZodType>(
     rejectValidation(response, parseResult.error);
     return undefined;
 };
-
-/**
- * Send the refusal if the service refused, and say whether it did.
- *
- * `if (refused(response, result)) return;` — four lines of identical branch in 39 controllers,
- * written once. It covers the REFUSAL only, deliberately: the success side is where controllers
- * genuinely differ (a raw payload, a transformed one, a 201, an audit event first), and a helper
- * that owned the send too would need a callback to hand most of that back.
- *
- * @param response - the express response
- * @param result - whatever the service returned
- * @returns `true` when a rejection has been sent and the caller must stop
- */
-export const refused = <TData>(response: Response, result: ServiceResult<TData>): boolean => {
-    if (result.success) return false;
-
-    rejectResponse(response, result.status, result.errors ?? []);
-    return true;
-};
-
-/**
- * The `.catch` every controller ends with, as a callback.
- *
- * `catchAs(response, 'getProducts')` reads as the name of the operation whose failure is being
- * logged, which is the argument `rejectDatabaseError` wanted anyway. The literal `.catch(` stays
- * at the call site, so `controller-chain-must-catch` still sees it.
- *
- * @param response - the express response
- * @param context - developer-facing operation name, recorded in the log line
- */
-export const catchAs =
-    (response: Response, context: string) =>
-    (error: CastError | Error): void => {
-        rejectDatabaseError(response, context, error);
-    };

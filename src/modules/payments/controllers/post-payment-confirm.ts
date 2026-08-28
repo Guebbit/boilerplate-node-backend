@@ -4,7 +4,7 @@ import { ConfirmPaymentBody } from '@api/schemas.zod';
 import { paymentConfirmTotal } from '../metrics';
 import { paymentService } from '../service';
 import { callerContextOf } from '@infrastructure/http/request';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /payments/:id/confirm
@@ -15,17 +15,14 @@ import { catchAs, refused, rejectValidation } from '@infrastructure/http/control
  * row answers it.
  */
 export const postPaymentConfirm = (request: Request<{ id?: string }>, response: Response) => {
-    const parseResult = ConfirmPaymentBody.safeParse(request.body ?? {});
-    if (!parseResult.success) {
-        rejectValidation(response, parseResult.error);
-        return Promise.resolve();
-    }
+    const body = parseBody(ConfirmPaymentBody, request.body, response);
+    if (!body) return;
 
     const paymentId = String(request.params.id);
     return paymentService
         .confirmPayment(
             paymentId,
-            { cardNumber: parseResult.data.cardNumber },
+            { cardNumber: body.cardNumber },
             request.authContext,
             callerContextOf(request)
         )

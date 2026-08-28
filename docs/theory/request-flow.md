@@ -115,14 +115,28 @@ flowchart LR
 
 ## What each layer does
 
-| Layer                                 | Responsibility                                                                                                                                                                                       |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Middleware chain                      | Helmet sets security headers · CORS checks the origin · rate limiter blocks abuse · JWT auth verifies the token (or skips for public routes)                                                         |
-| Redis cache                           | GET requests probe Redis first. A hit returns the stored response immediately — no controller, no database reached. On a write the controller invalidates related tags so stale entries are evicted. |
-| Controller                            | Reads HTTP input, **validates it against the contract's Zod schema**, calls the service, formats the response envelope. Also where the module emits its audit action.                                |
-| Service                               | Applies business rules over data that is already the right shape. Publishes async jobs to RabbitMQ when needed.                                                                                      |
-| Repository → Mongoose model → MongoDB | Runs the actual database query. Repositories own query shape; models own schema. Controllers never touch either directly.                                                                            |
-| RabbitMQ                              | Receives heavy async jobs (email, PDF). The HTTP handler responds immediately; a separate worker processes the job at its own pace.                                                                  |
+| Layer                                 | Responsibility                                                                                                                                                                                                     |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Middleware chain                      | Helmet sets security headers · CORS checks the origin · rate limiter blocks abuse · JWT auth verifies the token (or skips for public routes)                                                                       |
+| Redis cache                           | GET requests probe Redis first. A hit returns the stored response immediately — no controller, no database reached. On a write the controller invalidates related tags so stale entries are evicted.               |
+| Controller                            | Reads HTTP input, **validates it against the contract's Zod schema**, calls the service, formats the response envelope.                                                                                            |
+| Service                               | Applies business rules over data that is already the right shape, and **emits the module's audit action** — the write and the record of it are decided in one place. Publishes async jobs to RabbitMQ when needed. |
+| Repository → Mongoose model → MongoDB | Runs the actual database query. Repositories own query shape; models own schema. Controllers never touch either directly.                                                                                          |
+| RabbitMQ                              | Receives heavy async jobs (email, PDF). The HTTP handler responds immediately; a separate worker processes the job at its own pace.                                                                                |
+
+The audit row moved. It used to say the controller was where a module emitted its audit action, and
+the tree says otherwise: a module that records an action does it from `service.ts` or
+`services/*.ts`, beside the write itself, and exactly **two controllers** in the whole tree emit —
+both in `account`, both arguing in place why they have to.
+`post-login` keeps the failure and success emits together at the handler because the success one may
+only fire once the refresh token, the cookies and the access token all exist, which is a step later
+than `login()` proving the credentials matched. `post-reset-request` emits **unconditionally**,
+whether or not the address belongs to an account, because an emit reachable only after a user is
+found would make the audit trail leak the existence the identical response deliberately hides — the
+same user-enumeration guarantee, one layer down.
+
+Both exceptions are about a fact the service cannot see: when the emit must fire, and whether it
+fires at all. Anything decided by the write itself belongs with the write.
 
 ## Cross-cutting strategies
 

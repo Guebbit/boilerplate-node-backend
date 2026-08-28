@@ -25,13 +25,6 @@ import { userSchema, type Token } from '@modules/users/model';
 import { TokenType } from '@modules/users';
 import { asStub } from '@tests/stub';
 
-jest.mock('@infrastructure/adapters/logger', () => ({
-    __esModule: true,
-    logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() }
-}));
-
-import { logger } from '@infrastructure/adapters/logger';
-
 const USER_ID = '507f1f77bcf86cd799439011';
 
 /** The instance methods, reached off the schema and bound to a document double. */
@@ -44,11 +37,6 @@ const methods = asStub<{
     ) => Promise<string>;
     tokenRemoveAll: (this: unknown, type: Token['type']) => Promise<void>;
 }>(userSchema.methods);
-
-/** The statics, same idea. */
-const statics = asStub<{
-    tokenRemoveExpired: (this: unknown) => Promise<{ status: number; success: boolean }>;
-}>(userSchema.statics);
 
 /**
  * A document double.
@@ -68,9 +56,6 @@ const documentDouble = (tokens?: Token[]) => {
 };
 
 beforeEach(() => jest.clearAllMocks());
-
-/** A model double carrying only `updateMany`, which is all the static touches. */
-const modelDouble = (updateMany: jest.Mock) => ({ updateMany });
 
 describe('tokenAdd', () => {
     it('pushes the token onto the user, in the database', async () => {
@@ -218,77 +203,17 @@ describe('tokenRemoveAll', () => {
     });
 });
 
-describe('tokenRemoveExpired', () => {
-    it('pulls expired tokens from every user that has one', async () => {
-        const updateMany = jest.fn().mockResolvedValue({ modifiedCount: 3 });
-
-        await statics.tokenRemoveExpired.call(modelDouble(updateMany));
-
-        const [filter, update] = updateMany.mock.calls[0] as [
-            Record<string, { $lt: Date }>,
-            { $pull: { tokens: { expiration: { $lt: Date } } } }
-        ];
-        // The filter narrows which DOCUMENTS are touched; the `$pull` narrows which ENTRIES go.
-        // Both are needed: the filter alone would rewrite every user, and the pull alone would
-        // scan the whole collection.
-        expect(filter['tokens.expiration'].$lt).toBeInstanceOf(Date);
-        expect(update.$pull.tokens.expiration.$lt).toBeInstanceOf(Date);
-    });
-
-    it('compares both halves against the same instant', async () => {
-        // One `now`, used twice. Two separate `new Date()` calls would leave a window in which a
-        // token is selected by the filter and then not matched by the pull, so the document is
-        // rewritten to no effect on every sweep.
-        const updateMany = jest.fn().mockResolvedValue({});
-
-        await statics.tokenRemoveExpired.call(modelDouble(updateMany));
-
-        const [filter, update] = updateMany.mock.calls[0];
-        expect((filter['tokens.expiration'].$lt as Date).getTime()).toBe(
-            (update.$pull.tokens.expiration.$lt as Date).getTime()
-        );
-    });
-
-    it('removes only tokens already past their expiry', async () => {
-        // `$lt`, not `$lte` or `$gt`. `$gt` would delete every LIVE token in the system on the
-        // next scheduled run — the single worst mutation this file admits.
-        const updateMany = jest.fn().mockResolvedValue({});
-        const before = Date.now();
-
-        await statics.tokenRemoveExpired.call(modelDouble(updateMany));
-
-        const cutoff = updateMany.mock.calls[0][0]['tokens.expiration'].$lt as Date;
-        expect(cutoff.getTime()).toBeGreaterThanOrEqual(before);
-        expect(cutoff.getTime()).toBeLessThanOrEqual(Date.now());
-    });
-
-    it('reports success as a status pair rather than a bare resolve', async () => {
-        const updateMany = jest.fn().mockResolvedValue({ modifiedCount: 3 });
-
-        await expect(statics.tokenRemoveExpired.call(modelDouble(updateMany))).resolves.toEqual({
-            status: 200,
-            success: true
-        });
-    });
-
-    it('reports a failure instead of rejecting, so the job survives it', async () => {
-        // This is the scheduled cleanup's only call. A rejection here takes the job down; the
-        // pair is how the failure gets reported and retried on the next tick instead.
-        const updateMany = jest.fn().mockRejectedValue(new Error('connection lost'));
-
-        await expect(statics.tokenRemoveExpired.call(modelDouble(updateMany))).resolves.toEqual({
-            status: 500,
-            success: false
-        });
-    });
-
-    it('logs the failure, so a silent no-op is not the only trace', async () => {
-        const updateMany = jest.fn().mockRejectedValue(new Error('connection lost'));
-
-        await statics.tokenRemoveExpired.call(modelDouble(updateMany));
-
-        expect(logger.error).toHaveBeenCalledWith(
-            expect.objectContaining({ message: 'tokenRemoveExpired failed' })
-        );
-    });
-});
+/*
+ * `tokenRemoveExpired` used to be tested here, as a schema STATIC. It is now
+ * `userRepository.tokenRemoveExpired`, because it resolved `{ status: 200 | 500, success }` — an
+ * HTTP status code minted below the repository, which a controller replayed into the response.
+ * Its tests moved with it:
+ *
+ *   - `users/tests/integration/repository.test.ts` proves the sweep against a real collection and
+ *     that it now REJECTS rather than inventing a status;
+ *   - `account/tests/unit/token-cleanup-job.test.ts` proves what a failed sweep means to a caller,
+ *     which is the service's decision to make.
+ *
+ * The two document methods above stay here: they are genuinely the model's, because both are
+ * `$push`/`$pull` against `this` and keep the loaded array in step with the write.
+ */

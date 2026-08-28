@@ -1,58 +1,28 @@
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { userRepository, TokenType } from '@modules/users';
-import type { Token } from '@modules/users';
-import type { Session } from '@types';
-import { catchAs } from '@infrastructure/http/controller';
+import { successResponse } from '@infrastructure/http/response';
+import { accountService } from '../services';
+import { catchAs, refused } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
-
-/**
- * Map one stored refresh token to the wire's `Session`.
- *
- * The token VALUE never leaves this function — a live refresh token is as good as a password —
- * so the subdocument id is the handle, and `current` is derived by comparing against the
- * caller's own refresh cookie. A caller authenticating by bearer token alone has no cookie, and
- * an access token does not identify a session, so every entry is honestly `current: false`.
- */
-const toSession = (token: Token, cookieToken?: string): Session => ({
-    id: String(token._id),
-    ...(token.expiration ? { expiration: token.expiration.toISOString() } : {}),
-    // Absent until this token has been exchanged at least once — an unused session reads as
-    // unused rather than as one that happens to share the moment it was issued.
-    ...(token.lastUsedAt ? { lastUsedAt: token.lastUsedAt.toISOString() } : {}),
-    current: cookieToken !== undefined && token.token === cookieToken
-});
 
 /**
  * GET /account/sessions
  * List the authenticated user's live refresh tokens as sessions.
+ *
+ * The refresh cookie is read here and passed down because it is the one input only the controller
+ * can see: `current` means "the session this very request authenticated with", which is a fact
+ * about the request rather than about the account. Which token types count as a session, and the
+ * rule that a token value never reaches the wire, belong to `services/tokens.ts`.
  */
 export const getSessions = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = authContextOf(request);
     const cookieToken = (request.cookies as Record<string, string | undefined>).jwt;
 
-    return (
-        userRepository
-            // `tokens` is select:false — listing them is this endpoint's whole point.
-            .findByIdWithCredentials(id)
-            .then((user) => {
-                if (!user) {
-                    rejectResponse(response, 404);
-                    return;
-                }
-
-                /*
-                 * Refresh tokens only. The other kinds a document holds — a pending reset, a
-                 * delete confirmation, a verification link — are one-time secrets in flight,
-                 * not sessions, and listing them would leak that such an operation is pending.
-                 */
-                const sessions = user.tokens
-                    .filter((token) => token.type === (TokenType.REFRESH as string))
-                    .map((token) => toSession(token, cookieToken));
-
-                successResponse(response, { sessions });
-            })
-            .catch(catchAs(response, 'getSessions'))
-    );
+    return accountService
+        .sessionsList(id, cookieToken)
+        .then((result) => {
+            if (refused(response, result)) return;
+            successResponse(response, result.data);
+        })
+        .catch(catchAs(response, 'getSessions'));
 };

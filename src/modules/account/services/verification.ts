@@ -12,11 +12,13 @@
  * one that works" is the only behaviour that never confuses them.
  */
 
-import { getDefaultLocale } from '@infrastructure/i18n';
+import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userRepository, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
 import { verifyRequestEmail } from '../emails';
+import { generateSuccess, generateReject } from '@infrastructure/http/response';
+import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
@@ -37,10 +39,11 @@ export const EMAIL_VERIFY_TOKEN_TTL_MS = 86_400_000;
  * Issue a fresh verification token for `user` and enqueue the email carrying it.
  *
  * @param user - the account to verify; must carry its credential fields (`tokens`)
- * @param requestLocale - fallback language when the account has no stored preference
+ * @param context - the caller's context; its `locale` is the fallback language when the account
+ *   has no stored preference of its own
  * @returns resolves when the job is queued — the send itself happens in the email worker
  */
-export const sendVerificationEmail = (user: UserDocument, requestLocale?: string): Promise<void> =>
+export const sendVerificationEmail = (user: UserDocument, context: CallerContext): Promise<void> =>
     user
         .tokenRemoveAll(EMAIL_VERIFY_TOKEN_TYPE)
         .then(() => tokenAdd(user, EMAIL_VERIFY_TOKEN_TYPE, EMAIL_VERIFY_TOKEN_TTL_MS))
@@ -51,7 +54,7 @@ export const sendVerificationEmail = (user: UserDocument, requestLocale?: string
              * locale at all.
              */
             const mail = verifyRequestEmail(
-                user.locale ?? requestLocale ?? getDefaultLocale(),
+                user.locale ?? context.locale ?? getDefaultLocale(),
                 user.username,
                 token
             );
@@ -72,10 +75,9 @@ export const sendVerificationEmail = (user: UserDocument, requestLocale?: string
  */
 export const requestEmailVerification = (
     user: UserDocument,
-    context: CallerContext,
-    requestLocale?: string
+    context: CallerContext
 ): Promise<void> =>
-    sendVerificationEmail(user, requestLocale).then(() => {
+    sendVerificationEmail(user, context).then(() => {
         emitAuditEvent(
             buildAuditEvent(context, {
                 action: accountAuditActions.AUTH_EMAIL_VERIFY_REQUESTED,
@@ -85,11 +87,40 @@ export const requestEmailVerification = (
     });
 
 /**
+ * `POST /account/verify-request` end to end: load the caller's own account, refuse the two states
+ * that cannot be verified, and send.
+ *
+ * The two refusals are the reason this exists rather than the controller loading the document and
+ * checking them. `requestEmailVerification` takes an already-loaded user, so it could not enforce
+ * its own precondition — an already-verified account reached it and got a fresh link that proves
+ * nothing. Owning the load here is what lets the precondition sit next to the operation it
+ * guards, where a second caller inherits it.
+ *
+ * Unlike the reset request there is no enumeration surface to blur: the caller is authenticated
+ * and asking about their own account, so an already-verified account gets an honest 409 rather
+ * than a soothing 200 that would re-send nothing.
+ */
+export const requestEmailVerificationFor = (
+    userId: string,
+    context: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    // Credentials included: issuing the token pushes onto this document's `tokens`.
+    userRepository.findByIdWithCredentials(userId).then((user) => {
+        if (!user) return generateReject(404, [t('users.not-found')]);
+        if (user.verified) return generateReject(409, [t('account.verify.already-verified')]);
+
+        return requestEmailVerification(user, context).then(() =>
+            generateSuccess(undefined, 200, t('account.verify.email-sent'))
+        );
+    });
+
+/**
  * Spend a verification token and mark the account verified.
  *
- * `postVerifyConfirm` has already found the user and checked the token itself — the race between
- * two simultaneous clicks is settled by `userService.consumeToken`'s atomic `$pull`, one layer up
- * — so this is deliberately just the write and its emit, not a second copy of that check.
+ * `postVerifyConfirm` has already found the token with `findLiveToken` and spent it with
+ * `spendLiveToken` — the race between two simultaneous clicks is settled by the atomic `$pull`
+ * inside the latter — so this is deliberately just the write and its emit, not a second copy of
+ * that check. See `./tokens` for why finding and spending are two calls.
  */
 export const completeEmailVerification = (
     user: UserDocument,

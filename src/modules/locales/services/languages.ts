@@ -1,11 +1,16 @@
 /**
  * The language rows — registering one, editing it, and removing it with everything under it.
  *
- * Also the home of the two rejections the other files share: a language nobody has registered and
- * a tenant this deployment does not know.
+ * Also the home of the rules the other files share: a language nobody has registered, and BOTH
+ * halves of what an unknown tenant means — refused on a write, dropped on a read.
  */
 
-import { LocaleDirection, type CreateLocaleRequest, type UpdateLocaleRequest } from '@types';
+import {
+    LocaleDirection,
+    type CreateLocaleRequest,
+    type LocaleTenant,
+    type UpdateLocaleRequest
+} from '@types';
 import { t } from '@infrastructure/i18n';
 import {
     generateReject,
@@ -29,6 +34,29 @@ export const rejectUnknownTenant = (tenant: string): ResponseReject | undefined 
     isKnownTenant(tenant)
         ? undefined
         : generateReject(422, [t('locales.error-tenant-unknown', { tenant })]);
+
+/**
+ * The same question asked by a READ: a tenant filter, with an unrecognised id dropped rather than
+ * refused.
+ *
+ * Writes are strict and reads are lenient, and the two live beside each other because the
+ * asymmetry is a decision rather than an accident — split across two layers it read as one of them
+ * having been forgotten:
+ *
+ * - A WRITE NAMES the keyspace its row lands in. A tenant nobody serves would store copy no client
+ *   can ever ask for, invisible until someone goes looking for a translation that was saved and
+ *   never shown, so {@link rejectUnknownTenant} refuses it at 422 before anything is written.
+ * - A READ only NARROWS a listing, and a filter matching nothing shows a translator an empty
+ *   screen that blames the data. Dropping it shows every tenant, which is what the parameter
+ *   defaults to anyway — the same answer `text=` and every other optional filter gives. A 422
+ *   here would also make a stale admin screen, still holding a tenant since removed from the
+ *   environment, unable to list anything at all.
+ *
+ * @param tenant - whatever arrived on the query string, unvalidated
+ * @returns the tenant to filter by, or `undefined` for "every tenant"
+ */
+export const readableTenant = (tenant?: string): LocaleTenant | undefined =>
+    tenant && isKnownTenant(tenant) ? tenant : undefined;
 
 /**
  * Register a language in the dynamic tier.

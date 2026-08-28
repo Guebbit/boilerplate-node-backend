@@ -9,14 +9,15 @@ import {
     LocaleDirection,
     LocaleSource,
     type LocaleCapabilities,
-    type LocaleCapability
+    type LocaleCapability,
+    type LocaleTenantDescriptor
 } from '@types';
 import { getDefaultLocale, getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { createVisibilityScope } from '@kernel/authorization';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
 import { localeMessageRepository, localeRepository } from '../repository';
-import { backendTenant, frontendTenant } from '../tenants';
+import { backendTenant, frontendTenant, listTenants as configuredTenants } from '../tenants';
 
 /**
  * Base languages written right to left.
@@ -194,3 +195,19 @@ export const listCapabilities = async (
         fallback: getFallbackLocale()
     };
 };
+
+/**
+ * Every tenant this deployment holds words for — the keyspaces an entry can belong to.
+ *
+ * A passthrough over `../tenants`, and deliberately one. `GET /locales/tenants` is a locale read
+ * like the four beside it, and what the namespace buys is that its controller does not know WHERE
+ * the answer comes from: today the list is read off the environment, and a deployment that ever
+ * moved it into a collection would otherwise be a change in a controller. One line here keeps that
+ * a service question — and keeps `localeService` the whole surface `services/index.ts` claims it
+ * is, rather than a surface with one endpoint reaching around it.
+ *
+ * It belongs on THIS file rather than beside the writes: "which languages, and which tenants, this
+ * deployment offers" is one question asked twice, and `listCapabilities` above already answers the
+ * other half — the tenants named in every capability row are these same ids.
+ */
+export const listTenants = (): LocaleTenantDescriptor[] => configuredTenants();

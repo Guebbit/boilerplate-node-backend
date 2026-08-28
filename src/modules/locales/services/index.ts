@@ -6,7 +6,7 @@
  * | file              | what is in it                                                        |
  * | ----------------- | -------------------------------------------------------------------- |
  * | `keys.ts`         | the rules a translation key must pass to be stored and rendered (internal) |
- * | `capabilities.ts` | which languages this deployment offers, static tier and dynamic merged |
+ * | `capabilities.ts` | which languages and tenants this deployment offers, both tiers merged |
  * | `languages.ts`    | registering, editing and removing a language                          |
  * | `entries.ts`      | one language's rows: the editing page, the writes and the bulk import |
  * | `messages.ts`     | the two reads that hand out stored copy                               |
@@ -21,7 +21,7 @@
 
 /*
  * No loose re-exports beside the namespace: `localeService` is the only name anything imports from
- * here — seven controllers, `module.ts` and three suites — and a second list naming all twenty-three
+ * here — seven controllers, `module.ts` and three suites — and a second list naming all twenty-four
  * functions said that twice, which is one list too many to keep in step with the folder.
  */
 
@@ -40,7 +40,8 @@ import {
     mergeCapabilities,
     readDynamicTier,
     callerScope,
-    listCapabilities
+    listCapabilities,
+    listTenants
 } from './capabilities';
 import { createLanguage, updateLanguage, deleteLanguage } from './languages';
 import { searchEntries, createEntry, updateEntry, deleteEntry, importEntries } from './entries';
@@ -55,6 +56,7 @@ export const localeService = {
     readDynamicTier,
     callerScope,
     listCapabilities,
+    listTenants,
     buildMessageTree,
     findUnsafeKeySegment,
     findKeyCollision,

@@ -1,5 +1,4 @@
 import type { Request, Response } from 'express';
-import { isKnownTenant } from '../tenants';
 import { readInput } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
@@ -31,21 +30,20 @@ export const getLocaleEntries = (
         string | undefined
     >;
 
-    /*
-     * An unrecognised `tenant` is dropped rather than refused, which is the same answer `text=` and
-     * every other optional filter gives: a listing narrowed by a value nothing matches would show
-     * an empty screen and blame the data. Dropping it shows every tenant, which is what the
-     * parameter defaults to anyway.
-     */
-    const tenantFilter = tenant && isKnownTenant(tenant) ? tenant : undefined;
-
     // The shared schema is what makes `?pageSize=500` answer 422 here as it does everywhere else,
     // rather than being silently clamped.
     const parseResult = paginationSchema.safeParse({ page, pageSize });
     if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
+    /*
+     * `tenant` is handed over as the caller typed it. What an unrecognised one means is the
+     * service's answer, not this file's — dropped on a read, refused on a write — and the two
+     * halves of that policy are stated together in `services/languages.ts`. A check here would
+     * have covered only this route, and left the reader of the write half with no sign that a
+     * lenient sibling exists.
+     */
     return localeService
-        .searchEntries(request.params.locale, { ...parseResult.data, text, tenant: tenantFilter })
+        .searchEntries(request.params.locale, { ...parseResult.data, text, tenant })
         .then((result) =>
             result.success
                 ? successResponse(response, result.data)

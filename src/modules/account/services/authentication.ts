@@ -10,20 +10,22 @@
  */
 
 import { z } from 'zod';
-import { getCurrentLocale, t } from '@infrastructure/i18n';
+import { getCurrentLocale, getDefaultLocale, t } from '@infrastructure/i18n';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { deleteRequestEmail, resetRequestEmail } from '../emails';
 import type { CastError } from 'mongoose';
 import { LoginBody } from '@api/schemas.zod';
 import {
     generateSuccess,
     generateReject,
     type ResponseSuccess,
-    type ResponseReject
+    type ResponseReject,
+    validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema, userRepository, type TokenType, type UserDocument } from '@modules/users';
-import { validationErrors } from '@infrastructure/http/controller';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -51,18 +53,20 @@ export const tokenAdd = (
 };
 
 /**
- * Issue a delete-confirmation token and record that the caller asked for one.
+ * Issue a delete-confirmation token, deliver it, and record that the caller asked for one.
  *
  * A wrapper around `tokenAdd(user, 'delete', ...)` rather than an emit inside `tokenAdd` itself:
  * that function's third caller, `sendVerificationEmail`, must stay silent — pushing a
  * verification token is a side effect of signup and profile updates, not a request anyone made.
  * `tokenAdd` cannot tell those apart from its own arguments without a flag, so the callers that
  * DO want an audit record wrap it instead.
+ *
+ * Issuing and sending are one function, and the return type is why: the token value never leaves
+ * this file. It used to be returned so a controller could compose the mail, which put a live
+ * credential in a layer that has no reason to hold one — and made "a delete token exists" and "the
+ * link reached its owner" two steps a caller could get half-right.
  */
-export const requestAccountDeletion = (
-    user: UserDocument,
-    context: CallerContext
-): Promise<string> =>
+export const requestAccountDeletion = (user: UserDocument, context: CallerContext): Promise<void> =>
     tokenAdd(user, 'delete', 3_600_000).then((token) => {
         emitAuditEvent(
             buildAuditEvent(context, {
@@ -71,8 +75,76 @@ export const requestAccountDeletion = (
                 outcome: 'success'
             })
         );
-        return token;
+
+        /*
+         * The recipient's OWN language, the request's only as fallback. What reaches the queue is
+         * finished text, so the worker that sends it has no locale to work from and needs none.
+         */
+        const mail = deleteRequestEmail(
+            user.locale ?? context.locale ?? getDefaultLocale(),
+            user.username,
+            token
+        );
+        void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
     });
+
+/**
+ * The `tokens.type` a password-reset link carries, and how long it works.
+ *
+ * Named here rather than spelled at each call site because they are policy, not detail: "a reset
+ * link lasts an hour" is a decision about how long a stolen mailbox stays useful, and it used to
+ * live as a bare `3_600_000` in a controller where nothing connected it to the type it belonged
+ * to. `./verification` states its own pair the same way.
+ */
+export const PASSWORD_RESET_TOKEN_TYPE = 'password';
+export const PASSWORD_RESET_TOKEN_TTL_MS = 3_600_000;
+
+/**
+ * Issue a password-reset token and deliver it — or do nothing, silently, for an address that has
+ * no account.
+ *
+ * The silence is the feature. `POST /account/reset-request` answers 200 either way so that the
+ * response cannot be used to find out which addresses are registered, and this function is shaped
+ * to make that easy to keep: it reports what happened as a boolean for the caller's METRIC, and
+ * never as a refusal that could reach a client. Its caller emits the audit record
+ * unconditionally, which is why no emit happens here — see `controllers/post-reset-request.ts`.
+ *
+ * Like {@link requestAccountDeletion}, the token value never leaves.
+ *
+ * @returns `true` when a mail was queued, `false` when the address has no account
+ */
+export const requestPasswordReset = (
+    email: string | undefined,
+    context: CallerContext
+): Promise<boolean> => {
+    if (!email) return Promise.resolve(false);
+
+    // Credentials included: issuing the token pushes onto this document's `tokens`.
+    return userRepository.findOneWithCredentials({ email }).then((user) => {
+        if (!user) return false;
+
+        return tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then(
+            (token) => {
+                /*
+                 * The account's own language, so the email matches the rest of what this user
+                 * receives from us rather than the browser that happened to submit the form. The
+                 * copy is finished before the job is published, so the worker needs no locale.
+                 */
+                const mail = resetRequestEmail(
+                    user.locale ?? context.locale ?? getDefaultLocale(),
+                    user.username,
+                    token
+                );
+                void enqueueEmail(
+                    { to: user.email, subject: mail.subject },
+                    mail.template,
+                    mail.data
+                );
+                return true;
+            }
+        );
+    });
+};
 
 /**
  * Revoke one of the caller's own sessions.

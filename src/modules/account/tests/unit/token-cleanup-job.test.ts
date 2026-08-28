@@ -16,7 +16,7 @@
  * So every case below asserts on the log, and the two branches are asserted to be mutually
  * exclusive — which is what makes a forced `true`/`false` fail.
  */
-import { userModel as Users } from '@modules/users';
+import { userRepository } from '@modules/users';
 import { runTokenCleanup, accountService } from '@modules/account/services';
 import { logger } from '@infrastructure/adapters/logger';
 import { testCallerContext } from '@tests/caller-context';
@@ -24,16 +24,20 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../../audit';
 
 /*
- * Only `userModel` is replaced. The rest has to stay REAL because this file reaches the job through
- * `@modules/account/services`, and that barrel evaluates every service beside it — `profile.ts`
- * builds its zod schema from `zodUserSchema` at module scope, so a mock that omits it throws before
- * a single test runs. Spreading the actual module keeps the barrel loadable and still lets the one
- * call this job makes be observed.
+ * Only `userRepository` is replaced. The rest has to stay REAL because this file reaches the job
+ * through `@modules/account/services`, and that barrel evaluates every service beside it —
+ * `profile.ts` builds its zod schema from `zodUserSchema` at module scope, so a mock that omits it
+ * throws before a single test runs. Spreading the actual module keeps the barrel loadable and
+ * still lets the one call this job makes be observed.
+ *
+ * The sweep used to be a `static` on `userModel` that resolved `{ status, success }`; it is now a
+ * repository method that resolves a COUNT or rejects, which is why the branches below are
+ * resolve-vs-reject rather than two shapes of the same resolution.
  */
 jest.mock('@modules/users', () => ({
     ...jest.requireActual('@modules/users'),
     __esModule: true,
-    userModel: {
+    userRepository: {
         tokenRemoveExpired: jest.fn()
     }
 }));
@@ -60,8 +64,8 @@ jest.mock('@infrastructure/observability/audit', () => ({
     emitAuditEvent: jest.fn()
 }));
 
-const mockTokenRemoveExpired = Users.tokenRemoveExpired as jest.MockedFunction<
-    typeof Users.tokenRemoveExpired
+const mockTokenRemoveExpired = userRepository.tokenRemoveExpired as jest.MockedFunction<
+    typeof userRepository.tokenRemoveExpired
 >;
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 
@@ -80,8 +84,8 @@ beforeEach(() => {
 });
 
 describe('runTokenCleanup — the work', () => {
-    it('asks the model to remove expired tokens exactly once', async () => {
-        mockTokenRemoveExpired.mockResolvedValueOnce({ status: 200, success: true });
+    it('asks the repository to remove expired tokens exactly once', async () => {
+        mockTokenRemoveExpired.mockResolvedValueOnce(3);
 
         await runTokenCleanup();
 
@@ -91,7 +95,7 @@ describe('runTokenCleanup — the work', () => {
     it('announces that it started, before knowing the outcome', async () => {
         // The start line is what tells an operator the schedule fired at all. Without it, a job
         // that never ran and a job that ran and did nothing look identical in the log.
-        mockTokenRemoveExpired.mockResolvedValueOnce({ status: 200, success: true });
+        mockTokenRemoveExpired.mockResolvedValueOnce(3);
 
         await runTokenCleanup();
 
@@ -101,7 +105,7 @@ describe('runTokenCleanup — the work', () => {
 
 describe('runTokenCleanup — the success branch', () => {
     beforeEach(() => {
-        mockTokenRemoveExpired.mockResolvedValueOnce({ status: 200, success: true });
+        mockTokenRemoveExpired.mockResolvedValueOnce(3);
     });
 
     it('logs completion at info level', async () => {
@@ -121,7 +125,7 @@ describe('runTokenCleanup — the success branch', () => {
 
 describe('runTokenCleanup — the failure branch', () => {
     beforeEach(() => {
-        mockTokenRemoveExpired.mockResolvedValueOnce({ status: 500, success: false });
+        mockTokenRemoveExpired.mockRejectedValueOnce(new Error('db failure'));
     });
 
     it('logs the failure at ERROR level, not info', async () => {
@@ -132,12 +136,18 @@ describe('runTokenCleanup — the failure branch', () => {
         expect(mockedLogger.error).toHaveBeenCalledTimes(1);
     });
 
-    it('includes the status in the failure message, so the log says WHY', async () => {
-        // The template literal is the only place the status reaches a human. Emptied out, the
-        // operator learns that cleanup failed and nothing else.
+    it('carries the cause into the failure message, so the log says WHY', async () => {
+        // The error is the only place the reason reaches a human. Dropped, the operator learns
+        // that cleanup failed and nothing else — and this job runs unwatched.
         await runTokenCleanup();
 
-        expect(errorMessages()[0]).toContain('500');
+        expect(errorMessages()[0]).toContain('db failure');
+    });
+
+    it('does not let the sweep fail whatever triggered it', async () => {
+        // Login and refresh run this as a pre-flight step. A rejection escaping here would turn a
+        // valid sign-in into a 500 because housekeeping had a bad moment.
+        await expect(runTokenCleanup()).resolves.toBeUndefined();
     });
 
     it('does not also claim completion', async () => {
@@ -152,11 +162,9 @@ describe('runTokenCleanup — the failure branch', () => {
 describe('runTokenCleanup — the two branches are mutually exclusive', () => {
     // Stated as a table over both outcomes rather than as two more cases: the property is that
     // exactly one of the two log paths is taken, whichever way the model answers.
-    it.each([
-        [true, 200],
-        [false, 500]
-    ])('success=%s takes exactly one of the two paths', async (success, status) => {
-        mockTokenRemoveExpired.mockResolvedValueOnce({ status, success });
+    it.each([[true], [false]])('succeeded=%s takes exactly one of the two paths', async (ok) => {
+        if (ok) mockTokenRemoveExpired.mockResolvedValueOnce(3);
+        else mockTokenRemoveExpired.mockRejectedValueOnce(new Error('db failure'));
 
         await runTokenCleanup();
 
@@ -173,11 +181,11 @@ describe('adminTokenCleanup — the admin-triggered, audited counterpart', () =>
     >;
 
     it('audits a successful cleanup', async () => {
-        mockTokenRemoveExpired.mockResolvedValueOnce({ status: 200, success: true });
+        mockTokenRemoveExpired.mockResolvedValueOnce(2);
 
         const result = await accountService.adminTokenCleanup(testCallerContext);
 
-        expect(result).toEqual({ status: 200, success: true });
+        expect(result).toEqual(expect.objectContaining({ success: true, data: { removed: 2 } }));
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP,
@@ -187,11 +195,13 @@ describe('adminTokenCleanup — the admin-triggered, audited counterpart', () =>
     });
 
     it('does not audit a failed cleanup — nothing to report happened', async () => {
-        mockTokenRemoveExpired.mockResolvedValueOnce({ status: 500, success: false });
+        mockTokenRemoveExpired.mockRejectedValueOnce(new Error('db failure'));
 
         const result = await accountService.adminTokenCleanup(testCallerContext);
 
-        expect(result).toEqual({ status: 500, success: false });
+        // The 500 is chosen HERE, by the service, rather than replayed from a number a Mongoose
+        // static invented — see `services/token-cleanup.ts`.
+        expect(result).toEqual(expect.objectContaining({ success: false, status: 500 }));
         expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
     });
 });

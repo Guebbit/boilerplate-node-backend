@@ -7,6 +7,7 @@
  */
 
 import type { Response } from 'express';
+import type { ZodError } from 'zod';
 
 /** Fields shared by both outcomes — the discriminant plus human/machine status. */
 export interface ResponseNeutral {
@@ -202,3 +203,33 @@ export const rejectResponse = (
     status = 400,
     errors: (string | ResponseErrorItem)[] = []
 ) => response.status(status).json(generateReject(status, errors)) as Response<ResponseReject>;
+
+/**
+ * Turn a Zod failure into the contract's error list, keeping the field that failed.
+ *
+ * It lives beside `ResponseErrorItem` — the shape it builds — rather than in `./controller`, where
+ * it used to sit. That file is named for a layer, and four SERVICES import this function to
+ * validate with translated messages before they answer; a service reaching into a module called
+ * `controller` reads as a layering mistake every time someone opens it, and it is not one. Nothing
+ * here knows about a `Response`.
+ *
+ * `ResponseErrorItem.details` exists for *"the offending field, constraint, limit"* and validation
+ * never filled it: every site mapped `issues` to bare messages and dropped `issue.path`. So a
+ * client could not tell WHICH field a 422 was about without string-matching the copy, on the ~34
+ * endpoints that validate.
+ *
+ * `path` is joined with dots so a nested failure reads `shippingAddress.zip`, and an issue with no
+ * path at all — a whole-body refinement — carries no `details` rather than an empty one.
+ *
+ * @param error - the `ZodError` from a failed `safeParse`
+ * @returns one error item per issue, each naming its field
+ */
+export const validationErrors = (error: ZodError): ResponseErrorItem[] =>
+    error.issues.map((issue) => {
+        const field = issue.path.join('.');
+        return {
+            code: 'VALIDATION_ERROR',
+            message: issue.message,
+            ...(field ? { details: { field } } : {})
+        };
+    });

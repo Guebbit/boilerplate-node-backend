@@ -11,7 +11,7 @@ import { authContextOf } from '@infrastructure/http/request';
  * removes one entry, never the book.
  *
  * Removing the default promotes the oldest remaining entry, so a book is never left with entries
- * and no default — the service owns that, and the answer here is the whole book so the caller sees
+ * and no default — `repository.ts` owns that, and the answer here is the whole book so the caller sees
  * where the flag landed without a second request.
  */
 export const deleteAddress = (request: Request<{ addressId: string }>, response: Response) => {

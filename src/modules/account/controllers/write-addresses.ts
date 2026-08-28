@@ -23,7 +23,9 @@ import { authContextOf } from '@infrastructure/http/request';
  * POST /account/addresses — add an entry.
  *
  * The first entry becomes the default whether or not it asked; a later one claims the slot only by
- * saying so, and demotes the holder in the same write. Both invariants live in the service.
+ * saying so, and demotes the holder in the same write. Both invariants live in `repository.ts`,
+ * which owns them because holding the slot and moving it are one read-modify-write — see the
+ * docblock there, and `services/addresses.ts`, which says the same.
  */
 export const postAddress = (
     request: Request<unknown, unknown, AddressInput>,

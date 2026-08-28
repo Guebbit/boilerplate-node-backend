@@ -11,8 +11,10 @@
  */
 
 import { z } from 'zod';
-import { t } from '@infrastructure/i18n';
+import { getDefaultLocale, t } from '@infrastructure/i18n';
 import bcrypt from 'bcrypt';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { resetConfirmEmail, deleteConfirmEmail } from '../emails';
 import type { CastError } from 'mongoose';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import {
@@ -20,11 +22,11 @@ import {
     generateReject,
     type ResponseSuccess,
     type ResponseReject,
-    type ResponseErrorItem
+    type ResponseErrorItem,
+    validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema, userRepository, userService, type UserDocument } from '@modules/users';
-import { validationErrors } from '@infrastructure/http/controller';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -106,11 +108,16 @@ export const getOwnProfile = (userId: string, context: CallerContext) => {
 };
 
 /**
- * Change the password from a reset link, and record that it happened.
+ * Change the password from a reset link, record that it happened, and tell the account holder.
  *
  * A wrapper around {@link passwordChange} rather than an emit inside it: that function is also
  * `passwordChangeWithCurrent`'s last step, which reports its own `AUTH_PASSWORD_CHANGED` action —
  * an emit inside `passwordChange` itself would double up on that flow and misname this one's.
+ *
+ * The mail is published here rather than by the controller because "a password was reset" is a
+ * fact about the account, not about the HTTP request that carried it: a second caller of this
+ * function gets the notification without having to remember it. `context.locale` is what makes
+ * that possible — see `CallerContext`.
  */
 export const passwordResetChange = (
     user: UserDocument,
@@ -119,7 +126,7 @@ export const passwordResetChange = (
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     passwordChange(user, password, passwordConfirm).then((result) => {
-        if (result.success)
+        if (result.success) {
             emitAuditEvent(
                 buildAuditEvent(context, {
                     action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
@@ -128,6 +135,22 @@ export const passwordResetChange = (
                     outcome: 'success'
                 })
             );
+
+            /*
+             * The recipient's OWN language first. These links are clicked from an email client,
+             * possibly on a shared or borrowed device, so the request's `Accept-Language` says
+             * very little about who the message is for — it is the fallback, not the answer. The
+             * copy is finished before the job is published, so the worker needs no locale at all.
+             *
+             * Fire-and-forget: the password has already changed, and a queue that is briefly
+             * unavailable must not turn a successful reset into an error.
+             */
+            const mail = resetConfirmEmail(
+                user.locale ?? context.locale ?? getDefaultLocale(),
+                user.username
+            );
+            void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
+        }
         return result;
     });
 
@@ -144,25 +167,41 @@ export const passwordResetChange = (
 export const removeOwnAccount = (
     user: UserDocument,
     context: CallerContext
-): ReturnType<typeof userService.remove> =>
-    userService.remove(user, true).then((result) => {
+): ReturnType<typeof userService.remove> => {
+    /*
+     * Read before the write. This is a hard delete, so after `remove` resolves there is no
+     * document left to take an address, a name or a language from — the goodbye mail has to be
+     * addressed from a copy taken while the account still existed.
+     */
+    const { email, username, locale, _id, admin } = user;
+
+    return userService.remove(user, true).then((result) => {
         if (result.success) {
             emitAuditEvent(
                 buildAuditEvent(context, {
                     action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
-                    actor_user_id: String(user._id),
-                    actor_role: user.admin ? 'admin' : 'user',
+                    actor_user_id: String(_id),
+                    actor_role: admin ? 'admin' : 'user',
                     outcome: 'success'
                 })
             );
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(context),
-                distinctId: String(user._id),
+                distinctId: String(_id),
                 event: accountAnalyticsEvents.ACCOUNT_DELETED
             });
+
+            // The recipient's own language first, the request's as fallback — see
+            // {@link passwordResetChange} for why the request is only ever the fallback.
+            const mail = deleteConfirmEmail(
+                locale ?? context.locale ?? getDefaultLocale(),
+                username
+            );
+            void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
         }
         return result;
     });
+};
 
 /**
  * What `PUT /account` accepts, validated with this codebase's messages.

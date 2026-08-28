@@ -5,7 +5,8 @@ import {
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess,
-    type ResponseErrorItem
+    type ResponseErrorItem,
+    validationErrors
 } from '@infrastructure/http/response';
 import type { FacetCount } from '@types';
 import { imageStore } from '@infrastructure/adapters/image-store';
@@ -20,7 +21,6 @@ import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import { validationErrors } from '@infrastructure/http/controller';
 import { createVisibilityScope } from '@kernel/authorization';
 
 /**

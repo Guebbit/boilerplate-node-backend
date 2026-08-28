@@ -120,7 +120,12 @@ One of those files is usually internal — here `view.ts`, whose helpers the oth
 caller asks for by name. Export its **types** from the barrel, not its helpers.
 
 `account` took the same step: `services/` holds `authentication.ts`, `profile.ts`, `addresses.ts`,
-`verification.ts` and `token-cleanup.ts` behind one `index.ts` exporting `accountService`.
+`verification.ts`, `tokens.ts` and `token-cleanup.ts` behind one `index.ts` exporting
+`accountService`. `tokens.ts` is the one worth reading for the reason a split like this pays off:
+what makes a one-time token live — right type, not expired — used to be re-derived in three
+controllers, and a fourth flow that forgot the expiry comparison would have shipped a link that
+worked forever. It is one function now, and `local/no-persistence-imports` is what stops a
+controller reaching the `tokens` array to re-derive it again.
 
 `locales` is the third, and it carries the constraint worth knowing before a split like it: the
 module is `subdomain: 'generic'`, so `subdomain-discipline.test.ts` forbids a `domain/` here and
@@ -135,21 +140,26 @@ internal file, in `view.ts`'s role.
 | `entries.ts`      | one language's rows: the editing page, the writes and the bulk import |
 | `messages.ts`     | the two reads that hand out stored copy                               |
 
-**Three modules are over the threshold and have not been split:**
+**Four modules are over the threshold and have not been split:**
 
-| File                   | Lines | Why it is over                                                     |
-| ---------------------- | ----- | ------------------------------------------------------------------ |
-| `orders/service.ts`    | 483   | the lifecycle writes, the cancel sequence and the read scopes      |
-| `inventory/service.ts` | 466   | reserve, commit, release, the sweep, and the operator's own writes |
-| `payments/service.ts`  | 352   | intent, confirm, refund, and the ownership scope around them       |
+| File                   | Lines | Why it is over                                                        |
+| ---------------------- | ----- | --------------------------------------------------------------------- |
+| `orders/service.ts`    | 587   | the lifecycle writes, the cancel sequence and the read scopes         |
+| `inventory/service.ts` | 510   | reserve, commit, release, the sweep, and the operator's own writes    |
+| `payments/service.ts`  | 395   | intent, confirm, refund, and the ownership scope around them          |
+| `products/service.ts`  | 326   | the CRUD writes, the visibility scope, and the catalogue's own facets |
 
 That is recorded rather than quietly fixed, because the number's job is to make the split feel
 sanctioned instead of furtive — and a threshold silently re-fitted to whatever the largest file
 happens to measure is not a threshold. Read 300 as the line past which a split needs no
 justification, not as a limit something enforces: nothing in the suite checks it.
 
-These counts are hand-recorded and nothing in the suite checks them, so read them as a snapshot
-rather than a fact — a published number with no guard behind it drifts from the file it describes.
+These counts used to be hand-recorded, and they drifted — every one of them, by between 35 and 86
+lines, while `products/service.ts` crossed the threshold without being added at all.
+`tests/cross-cutting/docs-match-the-tree.test.ts` now reads this table off the page and compares
+each number against `wc -l`, so the drift is a failing case rather than something a reader
+discovers by opening the file. A published number with no guard behind it drifts from the file it
+describes; this one has a guard.
 
 ### And `domain/`, if the module has rules
 

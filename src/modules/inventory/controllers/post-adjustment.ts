@@ -4,7 +4,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { AdjustStockBody } from '@api/schemas.zod';
 import { inventoryService } from '../service';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /inventory/adjustments
@@ -13,13 +13,10 @@ import { catchAs, refused, rejectValidation } from '@infrastructure/http/control
  * delta and the reason they typed.
  */
 export const postAdjustment = (request: Request, response: Response) => {
-    const parseResult = AdjustStockBody.safeParse(request.body ?? {});
-    if (!parseResult.success) {
-        rejectValidation(response, parseResult.error);
-        return Promise.resolve();
-    }
+    const body = parseBody(AdjustStockBody, request.body, response);
+    if (!body) return;
 
-    const { productId, delta, note } = parseResult.data;
+    const { productId, delta, note } = body;
     /*
      * Zero is rejected here rather than in the contract, because `minimum`/`maximum` cannot
      * express "any integer except 0" and an `enum` of every other integer is absurd. A no-op

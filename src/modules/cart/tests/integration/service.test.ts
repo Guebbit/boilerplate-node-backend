@@ -46,7 +46,7 @@ import {
     orderConfirm,
     productRemoveFromCartsById
 } from '@modules/cart/services';
-import { cartRepository } from '@modules/cart';
+import { cartRepository } from '@modules/cart/repository';
 import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';

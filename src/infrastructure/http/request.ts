@@ -315,12 +315,13 @@ export const authContextOf = (request: { authContext?: AuthContext }): AuthConte
     request.authContext!;
 
 /**
- * Everything a service-tier emit (analytics or audit) needs about who made the request and where
- * it came from — built once in the controller and passed down as a parameter, because the service
- * tier is defined by never seeing a `Request`. See `docs/tools/analytics.md#caller-context` for why
- * this is threaded rather than read off an `AsyncLocalStorage`: a missing `CallerContext` is a
- * compile error at the call site, where an ALS-backed accessor would return the wrong request (or
- * none) silently, across an async boundary, at the exact moment nobody is looking.
+ * Everything a service needs to know about the request that reached it — who made it, where it
+ * came from, and what language it was made in — built once in the controller and passed down as a
+ * parameter, because the service tier is defined by never seeing a `Request`. See
+ * `docs/tools/analytics.md#caller-context` for why this is threaded rather than read off an
+ * `AsyncLocalStorage`: a missing `CallerContext` is a compile error at the call site, where an
+ * ALS-backed accessor would return the wrong request (or none) silently, across an async boundary,
+ * at the exact moment nobody is looking.
  */
 export interface CallerContext {
     /** The authenticated caller, or `{}` for anonymous — same shape authorization rules use. */
@@ -329,6 +330,23 @@ export interface CallerContext {
     userAgent?: string;
     host?: string;
     requestId?: string;
+    /**
+     * The language this request was made in, negotiated from `Accept-Language` by the locale
+     * middleware — the FALLBACK for copy addressed to someone whose own preference is unknown.
+     *
+     * It is on this interface rather than threaded as a second parameter because of what its
+     * absence used to cost. A service composing an email needs
+     * `recipient.locale ?? requestLocale ?? default`, and with no channel for the middle term the
+     * whole email — compose and enqueue — moved up into the controller to reach `request.locale`.
+     * Five controllers ended up publishing queue jobs that way, and `orders` ended up sending one
+     * confirmation mail from a controller and the identical one from `cart`'s service. The field
+     * is small; what it buys is that "services publish jobs" needs no exceptions.
+     *
+     * Optional, and deliberately last in precedence: a stored preference is the better answer
+     * wherever one exists, because it is the language the recipient chose rather than the language
+     * of whichever browser happened to submit the form.
+     */
+    locale?: string;
 }
 
 /**
@@ -345,6 +363,7 @@ export const callerContextOf = (request: {
     ip?: string;
     headers?: { 'user-agent'?: string | string[]; host?: string };
     requestId?: string;
+    locale?: string;
 }): CallerContext => {
     const rawUserAgent = request.headers?.['user-agent'];
     return {
@@ -354,7 +373,11 @@ export const callerContextOf = (request: {
         // '[object Object]'-style noise.
         userAgent: Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent,
         host: request.headers?.host,
-        requestId: request.requestId
+        requestId: request.requestId,
+        // Absent until the locale middleware has run. Left absent rather than defaulted here: the
+        // default belongs at the point of use, where `getDefaultLocale()` is the last term of a
+        // precedence chain whose first term is the recipient's own stored preference.
+        locale: request.locale
     };
 };
 

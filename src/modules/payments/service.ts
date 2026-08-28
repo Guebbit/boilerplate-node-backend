@@ -44,6 +44,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { paymentsAnalyticsEvents } from './analytics';
 import { paymentsAuditActions } from './audit';
+import { defaultCurrency } from './config';
 import { resolvePaymentProvider, cardLastFour, type CardDetails } from './providers';
 import { paymentRepository } from './repository';
 import type { PaymentDocument } from './model';
@@ -51,17 +52,21 @@ import type { PaymentDocument } from './model';
 /**
  * The payment statuses the confirm endpoint accepts. `declined` is here because a decline is
  * retryable with another card, which is the one place this lifecycle goes backwards.
+ *
+ * An ARRAY rather than a `Set`, because this module reads the rule two ways and both readers are
+ * below it: as a membership test (the confirm's precondition, and `withActions`' `pay`), and as
+ * the `$in` of the conditional writes that re-assert the same precondition while mongod holds the
+ * document. A `Set` serves only the first and has to be spread back into an array for the second,
+ * which is how this rule came to be written out four times in one file — and four spellings is
+ * four places to forget that a decline is retryable the next time this lifecycle changes.
  */
-const CONFIRMABLE_PAYMENT_STATUSES: ReadonlySet<PaymentStatus> = new Set([
+const CONFIRMABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
     'requires_confirmation',
     'declined'
-]);
+];
 
 /** The only status money can come back from: it has to have arrived first. */
 const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
-
-/** The demo's money is one currency, set per deployment. Carried onto every payment document. */
-const defaultCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
 
 /**
  * Who is paying, resolved against `users` rather than copied off the order.
@@ -170,7 +175,7 @@ export const confirmPayment = (
         .findByIdScoped(paymentId, callerScope(authContext))
         .then(async (payment) => {
             if (!payment) return generateReject(404, [t('payments.not-found')]);
-            if (payment.status !== 'requires_confirmation' && payment.status !== 'declined')
+            if (!CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status))
                 return generateReject(409, [
                     { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
                 ]);
@@ -181,9 +186,12 @@ export const confirmPayment = (
 
             const outcome = await provider.charge(charge, card);
             if (outcome === 'declined') {
+                // The precondition above, re-asserted in the filter: the read that passed it is
+                // already stale by the time the provider answers, and a racing tab must not be
+                // able to land a decline on a payment that has since succeeded.
                 await paymentRepository.updateStatusIfIn(
                     String(payment.orderId),
-                    ['requires_confirmation', 'declined'],
+                    CONFIRMABLE_PAYMENT_STATUSES,
                     'declined',
                     { cardLast4 }
                 );
@@ -210,7 +218,7 @@ export const confirmPayment = (
 
             const confirmed = await paymentRepository.updateStatusIfIn(
                 String(payment.orderId),
-                ['requires_confirmation', 'declined'],
+                CONFIRMABLE_PAYMENT_STATUSES,
                 'succeeded',
                 { cardLast4 }
             );
@@ -300,7 +308,7 @@ const withActions = (
         // Confirmable, and the order can still get to `paid`. Both halves, because a retryable
         // decline on an order that has since been cancelled is not a payment anyone may complete.
         pay:
-            CONFIRMABLE_PAYMENT_STATUSES.has(payment.status) &&
+            CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
             Boolean(order) &&
             canTransition(order!.status, OrderStatus.paid, 'system'),
         // Only an operator returns money, and only money that actually arrived.

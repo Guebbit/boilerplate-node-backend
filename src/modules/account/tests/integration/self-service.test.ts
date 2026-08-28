@@ -348,11 +348,11 @@ describe('sendVerificationEmail', () => {
     it('issues exactly one verify token, replacing any earlier one', async () => {
         const user = await createUser();
 
-        await sendVerificationEmail(user);
+        await sendVerificationEmail(user, testCallerContext);
         const firstTokens = await readTokens(user.id);
         const first = firstTokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE);
 
-        await sendVerificationEmail(user);
+        await sendVerificationEmail(user, testCallerContext);
         const secondTokens = await readTokens(user.id);
         const verifyTokens = secondTokens.filter(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE);
 
@@ -366,7 +366,7 @@ describe('sendVerificationEmail', () => {
         const user = await createUser();
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'live-session');
 
-        await sendVerificationEmail(user);
+        await sendVerificationEmail(user, testCallerContext);
 
         const tokens = await readTokens(user.id);
         expect(tokens.find(({ token }) => token === 'live-session')).toBeDefined();
@@ -498,13 +498,15 @@ describe('requestAccountDeletion', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
 
-        const token = await accountService.requestAccountDeletion(user, testCallerContext);
+        await accountService.requestAccountDeletion(user, testCallerContext);
 
-        expect(typeof token).toBe('string');
+        /*
+         * The token value is deliberately NOT returned any more — it goes straight into the mail
+         * this function publishes, so a caller cannot hold a live delete credential. What is
+         * observable is that exactly one was stored.
+         */
         const tokens = await readTokens(user.id);
-        expect(
-            tokens.some(({ type, token: stored }) => type === 'delete' && stored === token)
-        ).toBe(true);
+        expect(tokens.filter(({ type }) => type === 'delete')).toHaveLength(1);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
@@ -512,5 +514,93 @@ describe('requestAccountDeletion', () => {
                 outcome: 'success'
             })
         );
+    });
+});
+
+/**
+ * What makes a one-time token LIVE, asserted where the rule now lives.
+ *
+ * Three controllers used to carry a copy of this check and answer 422 from it; those copies are
+ * gone, so this is the only place the rule is stated and the only place it can be proven. The
+ * cases below are exactly the four a caller must not be able to tell apart — see the note on
+ * refusals in `services/tokens.ts`.
+ */
+describe('findLiveToken', () => {
+    it('finds the holder of a live token of the right type', async () => {
+        const user = await createUser();
+        await user.tokenAdd('password', 3_600_000, 'live-reset');
+
+        const found = await accountService.findLiveToken('password', 'live-reset');
+
+        expect(found?.id).toBe(user.id);
+    });
+
+    it('refuses a token of another type, so one link cannot be spent as another', async () => {
+        const user = await createUser();
+        await user.tokenAdd('delete', 3_600_000, 'delete-token');
+
+        await expect(
+            accountService.findLiveToken('password', 'delete-token')
+        ).resolves.toBeUndefined();
+    });
+
+    it('refuses an expired token', async () => {
+        /*
+         * Seeded with a past `expiration` rather than issued through `tokenAdd`, because
+         * `tokenAdd` CANNOT produce this state: a non-positive TTL stores `expiration: undefined`
+         * — "no deadline" — which is the case below, not this one. The state under test is the
+         * one a link reaches by sitting in an inbox overnight, and only the stored document can
+         * express it.
+         */
+        await createUser({
+            tokens: [
+                { type: 'password', token: 'stale-reset', expiration: new Date(Date.now() - 1000) }
+            ]
+        });
+
+        await expect(
+            accountService.findLiveToken('password', 'stale-reset')
+        ).resolves.toBeUndefined();
+    });
+
+    it('keeps a token with no expiration, which never expires', async () => {
+        const user = await createUser();
+        // `tokenAdd` stores no expiration for a non-positive TTL, so this is the state that
+        // reaches the check — treating absent as "already past" would revoke exactly these.
+        await user.tokenAdd('password', 0, 'eternal');
+
+        const found = await accountService.findLiveToken('password', 'eternal');
+
+        expect(found?.id).toBe(user.id);
+    });
+
+    it('refuses a token that never existed', async () => {
+        await createUser();
+
+        await expect(accountService.findLiveToken('password', 'invented')).resolves.toBeUndefined();
+    });
+});
+
+/**
+ * Spending is what settles a race, and it is deliberately a second call — see `services/tokens.ts`
+ * for why `post-reset-confirm` needs to validate a password between the two.
+ */
+describe('spendLiveToken', () => {
+    it('reports true once and false thereafter, so two clicks cannot both win', async () => {
+        const user = await createUser();
+        await user.tokenAdd('password', 3_600_000, 'one-shot');
+        const found = await accountService.findLiveToken('password', 'one-shot');
+
+        await expect(accountService.spendLiveToken(found!, 'one-shot')).resolves.toBe(true);
+        await expect(accountService.spendLiveToken(found!, 'one-shot')).resolves.toBe(false);
+    });
+
+    it('leaves a spent token unfindable', async () => {
+        const user = await createUser();
+        await user.tokenAdd('password', 3_600_000, 'burn-me');
+        const found = await accountService.findLiveToken('password', 'burn-me');
+        await accountService.spendLiveToken(found!, 'burn-me');
+
+        await expect(accountService.findLiveToken('password', 'burn-me')).resolves.toBeUndefined();
     });
 });

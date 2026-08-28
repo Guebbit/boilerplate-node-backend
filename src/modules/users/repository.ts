@@ -34,6 +34,9 @@ export const userRepository: BaseRepository<UserDocument> & {
     findByToken: (token: string, type: Token['type']) => Promise<UserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
+    tokenRemoveExpired: () => Promise<number>;
+    findByTokenValue: (token: string) => Promise<UserDocument | null>;
+    tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
 } = {
     ...createBaseRepository<UserDocument>(userModel, {
@@ -140,6 +143,58 @@ export const userRepository: BaseRepository<UserDocument> & {
             .updateOne(
                 { 'tokens.token': token },
                 { $pull: { tokens: { token } } },
+                { timestamps: false }
+            )
+            .exec(),
+
+    /**
+     * Drop every expired token from every document in the collection — the housekeeping sweep.
+     *
+     * This was a `static` on the schema, and it returned `{ status: 200 | 500, success }` — an
+     * HTTP status code minted one layer BELOW the repository, which a controller then replayed
+     * into the response. A model cannot know what a failed sweep means to a client, and nothing
+     * else in this file pretends to: the count is the honest answer, and deciding what it means
+     * is the service's.
+     *
+     * `timestamps: false` — expiring a token is not a change to the account.
+     */
+    tokenRemoveExpired: () => {
+        const now = new Date();
+        return userModel
+            .updateMany(
+                { 'tokens.expiration': { $lt: now } },
+                { $pull: { tokens: { expiration: { $lt: now } } } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount);
+    },
+
+    /**
+     * The holder of this token value, whatever kind it is.
+     *
+     * Deliberately untyped by token kind, unlike `findByToken`: this is the REVOCATION lookup the
+     * refresh flow runs, and its question is "does this credential still exist on a document" —
+     * a signed token whose row has been pulled by a logout is exactly what it must not find.
+     * Narrowing it to one type would make the answer depend on a second field the JWT itself does
+     * not carry.
+     */
+    findByTokenValue: (token: string) => userModel.findOne({ 'tokens.token': token }).exec(),
+
+    /**
+     * Stamp a token as used, so `GET /account/sessions` can show which device is idle.
+     *
+     * A POSITIONAL update rather than a read-modify-write: `tokens.$` addresses the matched entry
+     * and mongod evaluates it at write time, so two devices refreshing at once cannot overwrite
+     * each other's array — the same rule every other token write here follows.
+     *
+     * `timestamps: false` — using a session is not a change to the account.
+     */
+    tokenTouch: (token: string) =>
+        userModel
+            .updateOne(
+                { 'tokens.token': token },
+                { $set: { 'tokens.$.lastUsedAt': new Date() } },
                 { timestamps: false }
             )
             .exec(),

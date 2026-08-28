@@ -12,7 +12,10 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { t } from '@infrastructure/i18n';
+import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { logger } from '@infrastructure/adapters/logger';
+import { contactRequestEmail } from './emails';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -48,14 +51,68 @@ const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
 const toFeedbackStatus = (status?: string): FeedbackRequestStatus | undefined =>
     status ? STATUS_MAP[status] : undefined;
 
+/**
+ * Where the operator's notification goes: the dedicated contact mailbox, then the generic SMTP
+ * sender, then nowhere.
+ *
+ * Read per call rather than captured at import, so a deployment can change it without a restart —
+ * the pattern `inventory/config.ts` sets for this repo.
+ */
+const notifyMailbox = (): string =>
+    process.env.NODE_CONTACT_NOTIFY_EMAIL ?? process.env.NODE_SMTP_SENDER ?? '';
+
+/**
+ * Record a contact request and tell the support mailbox about it.
+ *
+ * Both halves are here because "a customer asked us something" is one event, not a write plus a
+ * thing the HTTP layer remembers to do afterwards: the notification used to live in
+ * `post-feedback-contact.ts`, which meant a second caller of `create` filed a ticket nobody was
+ * told about, and made this module the one that published its queue job from a controller while
+ * its sibling `delivery` published from the service.
+ */
 export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> =>
-    feedbackRequestRepository.create({
-        name: payload.name?.trim() || undefined,
-        email: payload.email.trim().toLowerCase(),
-        subject: payload.subject.trim(),
-        message: payload.message.trim(),
-        status: FeedbackRequestStatus.new
-    });
+    feedbackRequestRepository
+        .create({
+            name: payload.name?.trim() || undefined,
+            email: payload.email.trim().toLowerCase(),
+            subject: payload.subject.trim(),
+            message: payload.message.trim(),
+            status: FeedbackRequestStatus.new
+        })
+        .then((created) => {
+            const notifyEmail = notifyMailbox();
+            if (!notifyEmail) return created;
+
+            /*
+             * The one email that must NOT follow the request's language.
+             *
+             * It goes to the support mailbox, not to the person who filled in the form, so it is
+             * built in `NODE_DEFAULT_LOCALE` — the operator's language, passed explicitly rather
+             * than inherited from whoever happened to submit the form. This is why it takes no
+             * `CallerContext`: there is deliberately nothing about the caller in it. The
+             * customer's own words (`subject`, `message`) pass through untouched, as they must.
+             */
+            const operatorMail = contactRequestEmail(getDefaultLocale(), {
+                name: created.name,
+                email: created.email,
+                subject: created.subject,
+                message: created.message,
+                createdAt: created.createdAt?.toISOString()
+            });
+
+            void enqueueEmail(
+                { to: notifyEmail, subject: operatorMail.subject },
+                operatorMail.template,
+                operatorMail.data
+            ).catch((error: Error) =>
+                logger.error({
+                    message: 'feedback contact notification email failed',
+                    error: error.message
+                })
+            );
+
+            return created;
+        });
 
 export const search = (
     // `page`/`pageSize` are widened to accept strings: they arrive from a query string, and

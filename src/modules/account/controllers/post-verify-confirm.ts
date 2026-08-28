@@ -1,7 +1,6 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { ConfirmEmailVerificationBody } from '@api/schemas.zod';
-import { userService } from '@modules/users';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailVerifyTotal } from '../metrics';
@@ -15,10 +14,10 @@ import { callerContextOf } from '@infrastructure/http/request';
  *
  * Public deliberately, like `reset-confirm` and `delete-confirm`: the link arrives by email and
  * the visitor following it is not necessarily logged in — the token in the body is the
- * credential. The same three-step shape as `postResetConfirm`, for the same race: find, check
- * expiry, then let the atomic consume decide which of two simultaneous clicks was first. The
- * loser gets the same "token not found" an invented token gets, because from its point of view
- * that is what happened.
+ * credential. Find then spend, for the race: the find is a read that two simultaneous clicks both
+ * pass, and only the atomic spend can say which of them was first. The loser gets the same "token
+ * not found" an invented token gets, because from its point of view that is what happened — see
+ * `services/tokens.ts`, which owns both halves.
  */
 export const postVerifyConfirm = (
     request: Request<unknown, unknown, VerifyEmailConfirmRequest>,
@@ -32,28 +31,23 @@ export const postVerifyConfirm = (
 
     const { token } = parseResult.data;
 
-    return userService
-        .findByEmailVerifyToken(token)
+    /** Every refusal answers identically — see the note in `services/tokens.ts`. */
+    const refuse = () => {
+        authEmailVerifyTotal.inc({ status: 'failure' });
+        rejectResponse(response, 422, [t('account.verify.token-not-found')]);
+    };
+
+    return accountService
+        .findLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token)
         .then((user) => {
             if (!user) {
-                authEmailVerifyTotal.inc({ status: 'failure' });
-                rejectResponse(response, 422, [t('account.verify.token-not-found')]);
+                refuse();
                 return;
             }
 
-            const tokenEntry = user.tokens.find(
-                (tk) => tk.token === token && tk.type === EMAIL_VERIFY_TOKEN_TYPE
-            );
-            if (!tokenEntry || (tokenEntry.expiration && tokenEntry.expiration < new Date())) {
-                authEmailVerifyTotal.inc({ status: 'failure' });
-                rejectResponse(response, 422, [t('account.verify.token-not-found')]);
-                return;
-            }
-
-            return userService.consumeToken(user, token).then((spentByThisRequest) => {
+            return accountService.spendLiveToken(user, token).then((spentByThisRequest) => {
                 if (!spentByThisRequest) {
-                    authEmailVerifyTotal.inc({ status: 'failure' });
-                    rejectResponse(response, 422, [t('account.verify.token-not-found')]);
+                    refuse();
                     return;
                 }
 

@@ -1,55 +1,31 @@
 import type { Request, Response } from 'express';
-import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { t } from '@infrastructure/i18n';
 import { RequestPasswordResetBody } from '@api/schemas.zod';
-import { userService } from '@modules/users';
 import { accountService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import type { PasswordResetRequest } from '@types';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import { resetRequestEmail } from '../emails';
 import { authPasswordResetTotal } from '../metrics';
 import { parseBody } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /*
- * The audit emit below stays at the controller, not moved into `tokenAdd`/a wrapper: it fires
+ * The audit emit below stays at the controller, not moved into the service: it fires
  * UNCONDITIONALLY, whether or not the email belongs to a real account, which is what keeps the
  * response identical either way and prevents user enumeration. A service function reachable only
- * once a user is found (the shape every other wrapper in this batch takes) cannot reproduce that
- * — moving it would make the audit trail leak account existence that the response deliberately
- * does not.
+ * once a user is found cannot reproduce that — moving it would make the audit trail leak account
+ * existence that the response deliberately does not.
+ *
+ * The mail itself moved the other way: `accountService.requestPasswordReset` mints the token and
+ * publishes the job, and reports back only a boolean, which is all this handler needs to label a
+ * metric. The token value never reaches this file.
  */
 
 /**
  * POST /account/reset-request
  * Indistinguishable response for valid and invalid emails — prevents user enumeration.
- */
-
-/**
- * Resolve reset token data only when both email and user exist.
- * Returns undefined silently to keep the public response identical.
- * @param email - address from request body
- * @returns token payload or undefined
- */
-const lookupResetData = (email?: string) => {
-    if (!email) return Promise.resolve();
-    return userService.findByEmail(email).then((user) => {
-        if (!user) return;
-        return accountService.tokenAdd(user, 'password', 3_600_000).then((token) => ({
-            username: user.username,
-            // The account's own language, so the email matches the rest of what this user
-            // receives from us rather than the browser that happened to submit the form.
-            locale: user.locale,
-            token
-        }));
-    });
-};
-
-/**
- * Request handler — always resolves with 200 regardless of email validity.
- * Fires password-reset email only when a valid user + token pair was found.
+ *
  * @param request - Express request with PasswordResetRequest body
  * @param response - Express response
  */
@@ -57,38 +33,22 @@ export const postResetRequest = (
     request: Request<unknown, unknown, PasswordResetRequest>,
     response: Response
 ) => {
-    // Shape validation only — existence of the account is never revealed (see below).
+    // Shape validation only — existence of the account is never revealed (see above).
     const body = parseBody(RequestPasswordResetBody, request.body, response);
     if (!body) return;
 
-    const { email } = body;
+    const context = callerContextOf(request);
 
     return (
-        lookupResetData(email)
+        accountService
+            .requestPasswordReset(body.email, context)
             // Fail closed and keep the public response identical to protect account privacy.
-            .catch(() => {
-                /* error discarded intentionally — response stays 200 to prevent user enumeration */
-            })
-            .then((data) => {
-                authPasswordResetTotal.inc({ status: data?.token ? 'success' : 'failure' });
-
-                if (data?.token) {
-                    // The recipient's own language, stated as an argument: the copy is finished
-                    // before the job is published, so the worker needs no locale at all.
-                    const mail = resetRequestEmail(
-                        data.locale ?? request.locale ?? getDefaultLocale(),
-                        data.username,
-                        data.token
-                    );
-                    void enqueueEmail(
-                        { to: email, subject: mail.subject },
-                        mail.template,
-                        mail.data
-                    );
-                }
+            .catch(() => false)
+            .then((sent) => {
+                authPasswordResetTotal.inc({ status: sent ? 'success' : 'failure' });
 
                 emitAuditEvent(
-                    buildAuditEvent(callerContextOf(request), {
+                    buildAuditEvent(context, {
                         action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
                         actor_user_id: 'anonymous',
                         actor_role: 'anonymous',

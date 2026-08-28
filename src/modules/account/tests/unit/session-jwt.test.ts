@@ -25,13 +25,22 @@
 import { sign, decode } from 'jsonwebtoken';
 import { asStub } from '@tests/stub';
 
+/*
+ * The REPOSITORY, not the model. `session/jwt.ts` used to run `Users.findOne`,
+ * `Users.findById().select('+tokens')` and a positional `Users.updateOne` itself — three raw
+ * queries against another module's collection, from a file that is not a repository. They are now
+ * `userRepository.findByTokenValue`, `.findByIdWithCredentials` and `.tokenTouch`, so this suite
+ * doubles those instead. What the QUERIES look like — the `+tokens` projection, the positional
+ * `tokens.$` — moved with them and is asserted in `users/tests/integration/repository.test.ts`,
+ * against a real store rather than against a mock's call log.
+ */
 jest.mock('@modules/users', () => ({
     ...jest.requireActual('@modules/users'),
     __esModule: true,
-    userModel: {
-        findOne: jest.fn(),
-        findById: jest.fn(),
-        updateOne: jest.fn()
+    userRepository: {
+        findByTokenValue: jest.fn(),
+        findByIdWithCredentials: jest.fn(),
+        tokenTouch: jest.fn()
     }
 }));
 
@@ -42,15 +51,15 @@ import {
     createAccessToken,
     recordRefreshTokenUse
 } from '@modules/account/session/jwt';
-import { userModel as Users, TokenType } from '@modules/users';
+import { userRepository, TokenType } from '@modules/users';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
 const mockedUsers = asStub<{
-    findOne: jest.Mock;
-    findById: jest.Mock;
-    updateOne: jest.Mock;
-}>(Users);
+    findByTokenValue: jest.Mock;
+    findByIdWithCredentials: jest.Mock;
+    tokenTouch: jest.Mock;
+}>(userRepository);
 
 /** A user document double, carrying only the one method `createRefreshToken` calls. */
 const userDouble = () => {
@@ -58,11 +67,12 @@ const userDouble = () => {
     return { tokenAdd, select: undefined };
 };
 
-/** `Users.findById(id).select('+tokens')` — a two-step chain this file always walks. */
+/**
+ * `userRepository.findByIdWithCredentials(id)` — one call now, where it used to be a
+ * `findById(...).select('+tokens')` chain this file had to walk itself.
+ */
 const findByIdReturning = (user: unknown) => {
-    const chain = { select: jest.fn().mockResolvedValue(user) };
-    mockedUsers.findById.mockReturnValue(chain);
-    return chain;
+    mockedUsers.findByIdWithCredentials.mockResolvedValue(user);
 };
 
 beforeEach(() => {
@@ -110,19 +120,19 @@ describe('verifyAccessToken', () => {
 describe('verifyRefreshToken', () => {
     it('resolves when the signature verifies AND the token is still stored', async () => {
         const token = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
-        mockedUsers.findOne.mockResolvedValue({ _id: USER_ID });
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
         // Looked up BY THE TOKEN, not by the id in its payload: the stored list is the authority
         // on which sessions are live, and a payload cannot be asked whether it was revoked.
-        expect(mockedUsers.findOne).toHaveBeenCalledWith({ 'tokens.token': token });
+        expect(mockedUsers.findByTokenValue).toHaveBeenCalledWith(token);
     });
 
     it('rejects a validly signed token that is no longer stored', async () => {
         // Revocation. Without this branch, logout and session revocation are cosmetic: the JWT
         // still verifies until it expires, whatever the database says.
         const token = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
-        mockedUsers.findOne.mockResolvedValue(null);
+        mockedUsers.findByTokenValue.mockResolvedValue(null);
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('Forbidden');
     });
@@ -137,14 +147,14 @@ describe('verifyRefreshToken', () => {
         // A forged token must cost nothing: checking the signature first is what stops an
         // unauthenticated flood from becoming a database query per request.
         await expect(verifyRefreshToken('not-a-jwt')).rejects.toThrow();
-        expect(mockedUsers.findOne).not.toHaveBeenCalled();
+        expect(mockedUsers.findByTokenValue).not.toHaveBeenCalled();
     });
 
     it('rejects rather than resolving when the lookup itself fails', async () => {
         // A database error must not be read as "no such token" OR as success. It rejects, and the
         // caller answers 500 rather than silently logging someone out or letting them in.
         const token = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
-        mockedUsers.findOne.mockRejectedValue(new Error('connection lost'));
+        mockedUsers.findByTokenValue.mockRejectedValue(new Error('connection lost'));
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('connection lost');
     });
@@ -163,13 +173,14 @@ describe('createRefreshToken', () => {
     });
 
     it('reads the token list explicitly, which the default projection excludes', async () => {
-        // `.select('+tokens')`. Without it `tokenAdd` appends to a field that was never loaded.
-        const chain = findByIdReturning(userDouble());
+        // The `+tokens` projection is what makes `tokenAdd` append to a loaded field rather than
+        // an undefined one; asking for it is what `findByIdWithCredentials` MEANS, and that the
+        // repository actually applies it is asserted in its own integration spec.
+        findByIdReturning(userDouble());
 
         await createRefreshToken(USER_ID);
 
-        expect(mockedUsers.findById).toHaveBeenCalledWith(USER_ID);
-        expect(chain.select).toHaveBeenCalledWith('+tokens');
+        expect(mockedUsers.findByIdWithCredentials).toHaveBeenCalledWith(USER_ID);
     });
 
     it('signs the id with the refresh secret, not the access one', async () => {
@@ -180,7 +191,7 @@ describe('createRefreshToken', () => {
         const token = user.tokenAdd.mock.calls[0][2] as string;
 
         // Verifies against the refresh secret...
-        mockedUsers.findOne.mockResolvedValue({ _id: USER_ID });
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
         // ...and is not accepted as a bearer token.
         await expect(verifyAccessToken(token)).rejects.toThrow();
@@ -239,7 +250,7 @@ describe('createRefreshToken', () => {
 describe('createAccessToken', () => {
     it('mints an access token from a refresh token that is still stored', async () => {
         const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
-        mockedUsers.findOne.mockResolvedValue({ _id: USER_ID });
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
         const access = await createAccessToken(refresh);
 
@@ -250,14 +261,14 @@ describe('createAccessToken', () => {
         // The property that makes logout mean anything: a revoked session must not be able to
         // keep issuing fresh access tokens for the remainder of the refresh token's lifetime.
         const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
-        mockedUsers.findOne.mockResolvedValue(null);
+        mockedUsers.findByTokenValue.mockResolvedValue(null);
 
         await expect(createAccessToken(refresh)).rejects.toThrow('Forbidden');
     });
 
     it('signs the access token with the access secret and pins HS256', async () => {
         const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
-        mockedUsers.findOne.mockResolvedValue({ _id: USER_ID });
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
         const access = await createAccessToken(refresh);
 
@@ -269,7 +280,7 @@ describe('createAccessToken', () => {
         // The whole point of the pair: the credential sent on every request is the short-lived
         // one. Signing it with the refresh window would make revocation irrelevant for a month.
         const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
-        mockedUsers.findOne.mockResolvedValue({ _id: USER_ID });
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
         const { iat, exp } = decode(await createAccessToken(refresh)) as {
             iat: number;
@@ -281,26 +292,26 @@ describe('createAccessToken', () => {
 });
 
 describe('recordRefreshTokenUse', () => {
-    it('stamps the matching token"s last use', async () => {
-        mockedUsers.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    it('stamps the token it was given, and only that one', async () => {
+        mockedUsers.tokenTouch.mockResolvedValue({ modifiedCount: 1 });
 
         await recordRefreshTokenUse('a-token');
 
-        const [filter, update] = mockedUsers.updateOne.mock.calls[0] as [
-            Record<string, unknown>,
-            Record<string, Record<string, unknown>>
-        ];
-        expect(filter).toEqual({ 'tokens.token': 'a-token' });
-        // The positional `$` — it must stamp the token that matched, not the first in the array,
-        // or every session shows the last-used time of whichever one is stored first.
-        expect(Object.keys(update.$set)).toEqual(['tokens.$.lastUsedAt']);
-        expect(update.$set['tokens.$.lastUsedAt']).toBeInstanceOf(Date);
+        /*
+         * The positional `$` that makes this stamp the token that MATCHED — rather than the first
+         * in the array, which would show every session the last-used time of whichever one is
+         * stored first — is `userRepository.tokenTouch`'s, and
+         * `users/tests/integration/repository.test.ts` proves it against a real document. What
+         * this file owns is that the right value is handed over, exactly once.
+         */
+        expect(mockedUsers.tokenTouch).toHaveBeenCalledTimes(1);
+        expect(mockedUsers.tokenTouch).toHaveBeenCalledWith('a-token');
     });
 
     it('resolves to undefined rather than the driver"s write result', async () => {
         // Callers await it for ordering only; leaking the raw result invites someone to branch on
         // `modifiedCount`, which is legitimately 0 for a token used twice in the same millisecond.
-        mockedUsers.updateOne.mockResolvedValue({ modifiedCount: 1 });
+        mockedUsers.tokenTouch.mockResolvedValue({ modifiedCount: 1 });
 
         await expect(recordRefreshTokenUse('a-token')).resolves.toBeUndefined();
     });
@@ -309,7 +320,7 @@ describe('recordRefreshTokenUse', () => {
         // Best-effort by design: this records WHEN a session was last used. If it throws, an
         // otherwise valid token refresh turns into a 500 and the user is signed out for a
         // statistic.
-        mockedUsers.updateOne.mockRejectedValue(new Error('connection lost'));
+        mockedUsers.tokenTouch.mockRejectedValue(new Error('connection lost'));
 
         await expect(recordRefreshTokenUse('a-token')).resolves.toBeUndefined();
     });

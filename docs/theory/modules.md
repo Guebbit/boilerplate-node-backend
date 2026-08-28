@@ -266,7 +266,7 @@ flowchart TD
 | `module.ts`                                                      | **yes**                               | the manifest — the only file `src/modules.ts` imports                               |
 | `index.ts`                                                       | only if a sibling imports this module | the public barrel; a module nothing imports has none                                |
 | `routes.ts` + `controllers/`                                     | only if the domain serves HTTP        | `audit-logs` has neither                                                            |
-| `service.ts` · `repository.ts` · `model.ts`                      | only if it owns data                  | `locales` and `observability` own none — they serve URLs over other domains         |
+| `service.ts` · `repository.ts` · `model.ts`                      | only if it owns data                  | `observability` owns none — it serves URLs over other domains' data                 |
 | `services/`                                                      | when `service.ts` outgrows one file   | see [Layers](./layers.md#when-service-ts-becomes-services)                          |
 | `domain/`                                                        | only if the module has rules to prove | see [Domain Layer](./domain-layer.md)                                               |
 | `openapi.yaml`                                                   | if it serves HTTP                     | its standalone slice of the REST contract                                           |

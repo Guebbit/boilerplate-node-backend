@@ -16,7 +16,6 @@ import type {
     UpdateUserByIdRequestMultipart,
     User
 } from '@types';
-import type { UserRecord } from '../model';
 
 /**
  * POST /users — create a new user (admin).
@@ -95,8 +94,13 @@ export const writeUsers = (
         return userService
             .create(
                 {
-                    // After validation it will be compatible for sure
-                    ...(request.body as UserRecord),
+                    /*
+                     * Named off the SERVICE's own parameter rather than off `../model`: what this
+                     * body has to satisfy is what `create` accepts, and a controller that names
+                     * the stored shape starts changing every time the schema does. After
+                     * validation it is compatible for sure.
+                     */
+                    ...(request.body as Parameters<typeof userService.create>[0]),
                     ...validated
                 },
                 callerContextOf(request)

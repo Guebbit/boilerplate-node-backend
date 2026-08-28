@@ -32,9 +32,18 @@ import {
     findUnsafeKeySegment,
     rejectUnusableKey
 } from './keys';
-import { languageNotFound, rejectUnknownTenant } from './languages';
+import { languageNotFound, readableTenant, rejectUnknownTenant } from './languages';
 
-/** One page of a language's rows, for the editing screen. */
+/**
+ * One page of a language's rows, for the editing screen.
+ *
+ * `tenant` arrives as the caller typed it and is passed through {@link readableTenant}, which
+ * drops an id this deployment does not know instead of refusing the request. That leniency is the
+ * read half of the same decision `rejectUnknownTenant` makes strictly for every write in this
+ * file, and it lives beside its sibling rather than in the controller for the reason the pair's
+ * docblock gives: two halves of one policy, split across two layers, read as one of them having
+ * been forgotten.
+ */
 export const searchEntries = async (
     tag: string,
     filters: {
@@ -55,7 +64,11 @@ export const searchEntries = async (
      * already the total order that keeps a row off two pages.
      */
     return generateSuccess(
-        await localeMessageRepository.search(filters, { locale: language.tag }, { key: 1 })
+        await localeMessageRepository.search(
+            { ...filters, tenant: readableTenant(filters.tenant) },
+            { locale: language.tag },
+            { key: 1 }
+        )
     );
 };
 

@@ -441,6 +441,103 @@ export default tseslint.config(
     },
 
     /**
+     * ── THE REPOSITORY IS THE ONLY DOOR ───────────────────────────────────────────────────────
+     *
+     * A collection is reached through `repository.ts` and nowhere else. That file owns the query
+     * shapes, the lean/hydrated decision and the mapping from a document to plain data, and it
+     * owns them so that a schema change has ONE place to land. Every other holder of `orderModel`
+     * is a second door: the rename in `model.ts` becomes a hunt through callers, and an
+     * `updateOne` runs from a service with none of the repository's guards around it.
+     *
+     * This block is the general rule and applies to a module's whole tree, minus the three files
+     * that are the exception by definition — `model.ts` declares the schema, `repository.ts` is
+     * the door, `demo.ts` is a seeder whose entire job is bulk-writing fixtures past the domain
+     * rules (already documented as an exception elsewhere) — and minus `tests/**`, where reaching
+     * the model directly is how a schema contract gets asserted at all.
+     *
+     * Only `Model` bindings, deliberately. A service holding `productRepository` is the intended
+     * design, not a violation; the wall this block defends is the one between a module and the
+     * raw mongoose handle. Controllers get the stricter reading in the block below.
+     */
+    {
+        files: ['src/modules/**/*.ts'],
+        ignores: [
+            'src/modules/*/model.ts',
+            'src/modules/*/repository.ts',
+            'src/modules/*/demo.ts',
+            'src/modules/**/tests/**'
+        ],
+        rules: {
+            'local/no-persistence-imports': ['error', { bindings: ['Model'], paths: false }]
+        }
+    },
+
+    /**
+     * Controllers, where the same rule is absolute.
+     *
+     * A controller reads the request, calls one service, and turns a verdict into a status code.
+     * It has no business holding a repository either: the moment it does, the transaction
+     * boundary and the domain rules that the service was carrying are bypassed by the HTTP layer
+     * itself, and the same operation now behaves differently depending on whether it was reached
+     * through the controller or through the service a job calls. So here BOTH suffixes are
+     * refused, and so is any import whose path is the persistence file — including `import type
+     * { OrderDocument } from '../model'`, which puts the storage layout into a signature that is
+     * supposed to be about HTTP.
+     *
+     * Stated AFTER the general block on purpose. A rule's options do not merge across configs any
+     * more than `no-restricted-syntax`'s list does — for a file matching both blocks the LAST
+     * match wins outright — so this one has to come second or controllers would silently inherit
+     * the lax `{ bindings: ['Model'], paths: false }` above and stop reporting `userRepository`.
+     */
+    {
+        files: ['src/modules/*/controllers/**/*.ts'],
+        rules: {
+            'local/no-persistence-imports': [
+                'error',
+                { bindings: ['Repository', 'Model'], paths: true }
+            ]
+        }
+    },
+
+    /**
+     * `@infrastructure/http/controller` is for controllers, and the name is the whole argument.
+     *
+     * That file's own docblock opens "The four steps every CONTROLLER repeats". Four services
+     * nevertheless imported `validationErrors` from it — a pure `ZodError → ResponseErrorItem[]`
+     * mapping with nothing HTTP about it, which they need because they validate with translated
+     * messages before answering. Neither side was wrong: the helper was simply filed under a
+     * layer rather than beside the shape it builds, and the import line read as a service reaching
+     * into the controller layer every time somebody opened it.
+     *
+     * The helper moved to `./response`, next to the `ResponseErrorItem` it returns, and this wall
+     * is what stops the next one landing back here. Everything left in `controller.ts` takes an
+     * express `Response`, so a non-controller importing it is now a real finding rather than an
+     * ambiguous one.
+     *
+     * Scoped by `ignores` rather than by listing every non-controller folder: a new file anywhere
+     * under `src/modules` is covered the day it is written, which is the property a glob-listed
+     * wall never has.
+     */
+    {
+        files: ['src/modules/**/*.ts'],
+        ignores: ['src/modules/*/controllers/**/*.ts', 'src/modules/**/tests/**'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: '@infrastructure/http/controller',
+                            message:
+                                'Everything here takes an express Response, so only a controller can use it. A service that needs to turn a ZodError into the contract’s error list wants `validationErrors` from `@infrastructure/http/response`, which is where that shape is defined.'
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+
+    /**
      * ── THE TIER WALLS ────────────────────────────────────────────────────────────────────────
      *
      * Which tier may depend on which, stated once as a graph instead of six times as file globs.

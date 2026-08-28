@@ -1,13 +1,11 @@
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { t } from '@infrastructure/i18n';
 import { CreateOrderBody, UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { orderConfirmEmail } from '../emails';
 import { orderCreatedTotal } from '../metrics';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
@@ -57,21 +55,8 @@ export const writeOrders = (
             .then((result) => {
                 if (refused(response, result)) return;
 
-                // The request's own language: an admin-created order has no recipient record to take
-                // one from. Admin-created orders only have an email, so it stands in for the name.
-                if (result.data) {
-                    const mail = orderConfirmEmail(
-                        request.locale ?? getDefaultLocale(),
-                        email,
-                        result.data
-                    );
-                    void enqueueEmail(
-                        { to: email, subject: mail.subject },
-                        mail.template,
-                        mail.data
-                    );
-                }
-
+                // The confirmation mail is `orderService.create`'s — it is a fact about the order,
+                // not about the request that asked for one. See `CallerContext.locale`.
                 orderCreatedTotal.inc();
                 successResponse(
                     response,

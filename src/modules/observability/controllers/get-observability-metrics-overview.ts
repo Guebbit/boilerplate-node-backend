@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
+import { catchAs } from '@infrastructure/http/controller';
 import {
     getHttpRequestCounters,
     httpInflightRequests,
@@ -91,6 +92,18 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                         lowStockProducts: lowStockValues.reduce((s, v) => s + v.value, 0),
                         reservedUnits: reservedValues.reduce((s, v) => s + v.value, 0)
                     },
+                    /*
+                     * PLACEHOLDERS, not measurements — the two literals in this payload that no
+                     * counter stands behind.
+                     *
+                     * `openapi.yaml` declares the `database` block, so the shape has to be here;
+                     * nothing instruments the driver yet, so there is no `db_queries_total` on the
+                     * registry for `readCounter` to find. Zero is the honest answer either way —
+                     * it is what every row above reports for a metric this build does not
+                     * register — but a hardcoded zero and a measured zero read identically, and
+                     * only one of them is a fact about the database. The day the driver is
+                     * instrumented these two lines become `readCounter` calls like the rest.
+                     */
                     database: {
                         queriesTotal: 0,
                         errorsTotal: 0
@@ -105,6 +118,4 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                 successResponse(response, data);
             }
         )
-        .catch(() => {
-            rejectResponse(response, 500);
-        });
+        .catch(catchAs(response, 'getObservabilityMetricsOverview'));

@@ -5,7 +5,6 @@ import { createUser } from '@modules/users/tests/factory';
 import { createProduct } from '@modules/products/tests/factory';
 import * as productService from '@modules/products/service';
 import { productRepository } from '@modules/products';
-import { cartRepository } from '@modules/cart';
 import type { ResponseReject } from '@infrastructure/http/response';
 import type { ProductDocument } from '@modules/products';
 import type { Caller } from '@types';
@@ -529,9 +528,14 @@ describe('productService.removeById', () => {
         expect(result.success).toBe(true);
         // Product must be gone from DB
         expect(await productRepository.findById(pid)).toBeNull();
-        // The cart must no longer contain the product
-        const cart = await cartRepository.findByUserId(userId);
-        expect(cart!.items.some((item) => item.productId.toString() === pid)).toBe(false);
+        /*
+         * The cart must no longer contain the product — asked through the service, which is the
+         * only surface `cart` publishes. `readCartLines` keeps `productId` on a line whose product
+         * has been deleted (it captures the id before `populate` nulls the reference), so a line
+         * the cleanup missed would still be visible here rather than vanishing into the join.
+         */
+        const lines = await cartService.cartGet(userId);
+        expect(lines.some((line) => line.productId === pid)).toBe(false);
     });
 
     /* Hard delete is the only path that destroys bytes; the row is gone, so nothing else can. */

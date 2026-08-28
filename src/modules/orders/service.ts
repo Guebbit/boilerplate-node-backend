@@ -1,4 +1,6 @@
-import { t } from '@infrastructure/i18n';
+import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { orderConfirmEmail } from './emails';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, Caller, UpdateOrderByIdRequest } from '@types';
 import type { OrderDocument, OrderDocumentItem } from './model';
@@ -191,6 +193,22 @@ export const create = (
                 }
 
                 recordCreated(order, context);
+
+                /*
+                 * The confirmation mail for THIS path only — `recordCreated` is shared with
+                 * `@modules/cart`'s checkout, which sends its own, so putting it there would mail
+                 * every storefront order twice.
+                 *
+                 * `context.locale` is the whole language chain here, unlike every other mail in
+                 * this codebase, and the reason is that an admin-created order has no recipient
+                 * record: only an address was supplied, so there is no stored preference to
+                 * prefer over the request's. That is also why this used to sit in the controller
+                 * — the request was the only source of a language, and until `CallerContext`
+                 * carried one there was no way to reach it from here.
+                 */
+                const mail = orderConfirmEmail(context.locale ?? getDefaultLocale(), email, order);
+                void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
+
                 return generateSuccess(order, 201, t('orders.creation-success'));
             });
     });

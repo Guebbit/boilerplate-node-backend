@@ -2,7 +2,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { CreatePaymentIntentBody } from '@api/schemas.zod';
 import { paymentService } from '../service';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /payments/intent
@@ -13,14 +13,11 @@ import { catchAs, refused, rejectValidation } from '@infrastructure/http/control
  * the events fire on the confirm, where money actually moves.
  */
 export const postPaymentIntent = (request: Request, response: Response) => {
-    const parseResult = CreatePaymentIntentBody.safeParse(request.body ?? {});
-    if (!parseResult.success) {
-        rejectValidation(response, parseResult.error);
-        return Promise.resolve();
-    }
+    const body = parseBody(CreatePaymentIntentBody, request.body, response);
+    if (!body) return;
 
     return paymentService
-        .createIntent(parseResult.data.orderId, request.authContext)
+        .createIntent(body.orderId, request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, result.data, 201);

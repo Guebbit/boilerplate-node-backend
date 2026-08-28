@@ -2,7 +2,6 @@ import path from 'node:path';
 import type { Request, Response } from 'express';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { orderService } from '../service';
-import type { OrderDocument } from '../model';
 import { invoiceDocument } from '../emails';
 import { rejectResponse } from '@infrastructure/http/response';
 import ejs from 'ejs';
@@ -39,11 +38,12 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
              * gets a hydrated document, an owner gets a transformed plain object whose `_id` the
              * serializer deleted. `id` is the half that resolves on both — reading `_id` here put
              * the literal string `undefined` in the filename and in the document's own title for
-             * every non-admin. The cast is what `OrderDocument` cannot say: it omits `id`, the
-             * house convention for a type that describes the STORED shape, and the wire `id`
-             * arrives from the virtual on one branch and the transform on the other.
+             * every non-admin. The cast widens `order`'s own type rather than naming the stored
+             * one: the STORED shape omits `id` by house convention, and the wire `id` arrives from
+             * the virtual on one branch and the transform on the other — so what is being added
+             * here is knowledge about the wire, which is this layer's business.
              */
-            const orderId = String((order as OrderDocument & { id?: string }).id ?? order._id);
+            const orderId = String((order as typeof order & { id?: string }).id ?? order._id);
 
             /**
              * Create PDF file using the invoice EJS template

@@ -4,7 +4,8 @@ import {
     generateReject,
     type ResponseSuccess,
     type ResponseReject,
-    type ResponseErrorItem
+    type ResponseErrorItem,
+    validationErrors
 } from '@infrastructure/http/response';
 import { zodUserSchema } from './model';
 import type { UserDocument } from './model';
@@ -18,7 +19,6 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import { validationErrors } from '@infrastructure/http/controller';
 
 /**
  * User Admin Service

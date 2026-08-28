@@ -2,7 +2,6 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
-import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
 import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
 import { type User } from '@types';
@@ -109,9 +108,7 @@ export interface UserMethods {
  * User Document model type.
  * Business logic is now handled by the service and repository layers.
  */
-export type UserModel = Model<UserDocument, unknown, UserMethods> & {
-    tokenRemoveExpired(): Promise<{ status: number; success: boolean }>;
-};
+export type UserModel = Model<UserDocument, unknown, UserMethods> & {};
 
 /**
  * Zod Schema for user data validation.
@@ -382,29 +379,6 @@ userSchema.methods.tokenRemoveAll = function (type: Token['type']) {
             if (this.tokens) this.tokens = this.tokens.filter((t: Token) => t.type !== type);
         });
 };
-
-/**
- * Remove all expired tokens from every user document in the collection.
- * Returns a simple status/success envelope consumed by the controller layer.
- */
-userSchema.static('tokenRemoveExpired', function (): Promise<{
-    status: number;
-    success: boolean;
-}> {
-    const now = new Date();
-    return this.updateMany(
-        { 'tokens.expiration': { $lt: now } },
-        { $pull: { tokens: { expiration: { $lt: now } } } }
-    )
-        .then(() => ({ status: 200, success: true }))
-        .catch((error: unknown) => {
-            logger.error({
-                message: 'tokenRemoveExpired failed',
-                error
-            });
-            return { status: 500, success: false };
-        });
-});
 
 /**
  * Normalizes a serialized user into the OpenAPI `User` contract: `id` from

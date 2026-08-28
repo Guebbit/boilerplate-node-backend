@@ -3,7 +3,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { ReceiveStockBody } from '@api/schemas.zod';
 import { inventoryService } from '../service';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /inventory/receipts
@@ -11,13 +11,10 @@ import { catchAs, refused, rejectValidation } from '@infrastructure/http/control
  * shop, and the row says which admin added how many.
  */
 export const postReceipt = (request: Request, response: Response) => {
-    const parseResult = ReceiveStockBody.safeParse(request.body ?? {});
-    if (!parseResult.success) {
-        rejectValidation(response, parseResult.error);
-        return Promise.resolve();
-    }
+    const body = parseBody(ReceiveStockBody, request.body, response);
+    if (!body) return;
 
-    const { productId, quantity, note } = parseResult.data;
+    const { productId, quantity, note } = body;
     return inventoryService
         .receive(productId, quantity, note, callerContextOf(request))
         .then((result) => {

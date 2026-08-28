@@ -237,7 +237,7 @@ describe('account deletion racing a cart write', () => {
         // Whatever the interleaving, a cart may only exist while its owner does.
         const carts = await cartModel.find({ userId: user._id });
         if (carts.length > 0) {
-            const { userModel } = await import('@modules/users');
+            const { userModel } = await import('@modules/users/model');
             expect(await userModel.countDocuments({ _id: user._id })).toBe(1);
         }
     });

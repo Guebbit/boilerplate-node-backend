@@ -55,7 +55,7 @@ export const putAccount = (
              * account email; the response does not wait on the queue.
              */
             if (email !== undefined && email !== currentEmail && result.data)
-                void sendVerificationEmail(result.data, request.locale);
+                void sendVerificationEmail(result.data, callerContextOf(request));
 
             successResponse(response, result.data, 200, t('account.update.success'));
         })

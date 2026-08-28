@@ -56,7 +56,7 @@ export const postSignup = (
              * informational), so this is fire-and-forget like every other account email and the
              * 201 does not wait on the queue.
              */
-            if (result.data) void sendVerificationEmail(result.data, request.locale);
+            if (result.data) void sendVerificationEmail(result.data, callerContextOf(request));
             // create() returns the in-memory document; the schema's toJSON transform
             // strips the hashed password before it ever reaches res.json
             successResponse(response, result.data, 201);

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sign, verify } from 'jsonwebtoken';
-import { userModel as Users, TokenType } from '@modules/users';
+import { userRepository, TokenType } from '@modules/users';
 import type { CastError } from 'mongoose';
 import {
     getAccessTokenSecret,
@@ -54,9 +54,8 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
                 reject(error);
                 return;
             }
-            Users.findOne({
-                'tokens.token': token
-            })
+            userRepository
+                .findByTokenValue(token)
                 .then((user) => {
                     if (!user) {
                         reject(new Error('Forbidden'));
@@ -75,8 +74,9 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
  * @returns updated user document
  */
 export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime) =>
-    Users.findById(id)
-        .select('+tokens')
+    userRepository
+        // Credentials included: minting a session pushes onto this document's `tokens`.
+        .findByIdWithCredentials(id)
         .then((user) => {
             if (!user) throw new Error('User not found');
             /*
@@ -109,9 +109,8 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
  * moment it was issued, and a field that always says "just now" distinguishes nothing. Issuing a
  * session is not the session using one.
  *
- * A POSITIONAL update rather than a read-modify-write: `tokens.$` addresses the matched entry and
- * mongod evaluates it at write time, so two devices refreshing at once cannot overwrite each
- * other's array — the same rule the rest of this document's token handling follows.
+ * The write itself is `userRepository.tokenTouch`, which explains why it has to be a positional
+ * update rather than a read-modify-write.
  *
  * Resolves even when it fails. This is bookkeeping: a refresh that was valid must not answer 401
  * because a stamp could not be written, which is the same reasoning `getRefreshToken` already
@@ -120,10 +119,8 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
  * @param refreshToken - the refresh JWT that was just exchanged
  */
 export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
-    Users.updateOne(
-        { 'tokens.token': refreshToken },
-        { $set: { 'tokens.$.lastUsedAt': new Date() } }
-    )
+    userRepository
+        .tokenTouch(refreshToken)
         .then(() => undefined)
         .catch(() => undefined);
 
