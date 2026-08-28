@@ -196,6 +196,15 @@ const resolveMessagePayloadType = (
     messageName: string,
     messages: Record<string, AsyncApiMessage>
 ): string => {
+    /*
+     * Asked as "is it declared", not as a nullish check on the value. `Record<string,
+     * AsyncApiMessage>` promises a value for every key, so an index access — and any `?.` on what
+     * comes back — reads as always-present to TypeScript, and `no-unnecessary-condition` fails the
+     * build over the guard. The promise is false here: the caller passes whatever name a channel's
+     * `$ref` ended in, and a document is free to leave that undeclared in `components.messages`.
+     * This is what keeps the 'unknown' the signature documents from being a TypeError instead.
+     */
+    if (!Object.hasOwn(messages, messageName)) return 'unknown';
     const { payload } = messages[messageName];
     if (!payload) return 'unknown';
     return payload.$ref ? refToTypeName(payload.$ref) : schemaToType(payload);

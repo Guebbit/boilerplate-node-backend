@@ -21,8 +21,11 @@ import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './paired-frontend-pa
 
 const dryRun = process.argv.includes('--dry');
 const forcedRun = process.argv.includes('--forced');
-/* Ignored under `--dry`, which promises to write nothing — over there least of all. */
-const regenerate = process.argv.includes('--regen') && !dryRun;
+/*
+ * Always on, except under `--dry`, which promises to write nothing — over there least of all.
+ * See the regeneration step below for why this is not a flag and not conditional on a copy.
+ */
+const regenerate = !dryRun;
 
 const fail = (message: string): never => {
     console.error(message);
@@ -118,10 +121,19 @@ console.info(
  * their own repo — so the frontend is not in sync until it has regenerated. Left undone, it ships a
  * client for the previous contract, which type-checks over there and announces nothing.
  *
- * `--regen` does it; without the flag the commands are named, because leaving it to memory is how
- * the gap opens in the first place.
+ * UNCONDITIONAL, and deliberately not gated on `moved.length`. A copy is not the only thing that
+ * leaves that client stale: switching which backend this pair points at lands a frontend whose
+ * `openapi.yaml` already matches the new one byte-for-byte — nothing to copy — while its
+ * `contracts/rest/*` is still the client generated from the PREVIOUS backend's contract. Gated on
+ * a copy, this step skipped and the run reported success over a client for another API. Running it
+ * when nothing moved costs one no-op regeneration; skipping it when something has silently drifted
+ * costs a suite that tests the wrong contract.
+ *
+ * Not a flag either, for the same reason it was gated wrong: an opt-in that the one script meant to
+ * leave the two repos consistent has to be reminded to use is a gap waiting for the run that
+ * forgets it.
  */
-if (moved.length > 0 && regenerate) {
+if (regenerate) {
     console.info(`\n[sync] Regenerating in ${frontendRoot} — npm run regenerate`);
     try {
         /*
@@ -140,13 +152,10 @@ if (moved.length > 0 && regenerate) {
                 `    npm run check:spec-identity`
         );
     }
-} else if (moved.length > 0 && !dryRun)
+} else
     console.info(
-        `\n[sync] Now regenerate over there, or the frontend ships a client for the old contract:\n` +
-            `    cd ${frontendRoot}\n` +
-            `    npm run regenerate       # orval + asyncapi types, from the files just copied\n` +
-            `    npm run check:spec-identity\n` +
-            `  Or re-run this with --regen to have it done for you.`
+        `\n[sync] --dry: skipped \`npm run regenerate\` in ${frontendRoot}.\n` +
+            `  A real run always does it, whether or not anything was copied.`
     );
 
 /*
@@ -164,9 +173,7 @@ if (!dryRun)
         if (readFileSync(from).equals(readFileSync(to))) continue;
         fail(
             `[sync] ${shared.frontend} still differs after copying.\n` +
-                (regenerate
-                    ? `  Nothing but the regeneration ran in between — check that repo's` +
-                      ` .prettierignore still excludes it.`
-                    : `  Nothing else should write it.`)
+                `  Nothing but the regeneration ran in between — check that repo's` +
+                ` .prettierignore still excludes it.`
         );
     }
