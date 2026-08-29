@@ -189,6 +189,16 @@ module.exports = {
      * that is what the UNIT layer alone reaches. `functions: 0` is the honest reading where the
      * unit suite calls none of a file's exports; it is not an invitation to delete tests.
      *
+     * BE HONEST ABOUT WHAT `functions: 0` BUYS, WHICH IS NOTHING. Ten of twelve `repository.ts`,
+     * eight of nine `service.ts` and twelve of seventeen `services/*.ts` files report 0% functions
+     * on this run. That is not an outlier to carve out — carving out ten of twelve leaves a rule
+     * with two members — it is the key telling you it does not apply to this suite. Those three
+     * keys still floor `statements`, `branches` and `lines`, and their `functions` entry is a
+     * formality. Where exactly one file was the outlier the carve-out WAS made, so the rest keep a
+     * real floor: see `persistence/!(crud-service).ts` below.
+     *
+     * Which makes option 1 the real answer rather than a nicety.
+     *
      * TWO WAYS OUT, if these numbers are unsatisfying — both are decisions rather than chores:
      *   1. Add a second coverage run that includes the integration and contract suites, and put
      *      the real floors there. That is the run the numbers above are asking for.
@@ -265,11 +275,24 @@ module.exports = {
             functions: 70,
             lines: 70
         },
-        'src/infrastructure/persistence/**/*.ts': {
+        'src/infrastructure/persistence/!(crud-service).ts': {
             statements: 70,
             branches: 70,
-            functions: 0,
+            functions: 33,
             lines: 70
+        },
+
+        /*
+         * Carved out rather than flattening the key above. `withDocument` and `toggleSoftDelete`
+         * are called from the orders, products and users services, which the unit run does not
+         * execute — so both read 0% here while the six files beside them sit between 33% and 100%.
+         * One file at zero is not a reason for six to lose their floor.
+         */
+        'src/infrastructure/persistence/crud-service.ts': {
+            statements: 76,
+            branches: 100,
+            functions: 0,
+            lines: 76
         },
         /*
          * `otel-sdk.ts` is absent for the same reason the old top-level `bootstrap`/`tracer`

@@ -261,8 +261,8 @@ specifically: each needs a production caller _and_ a hand-written reason, the re
 sentence, and a further case removes reasons whose repository has stopped being published.
 
 **Why it's ceremony:** an unused export is not a bug in any sense the running system can detect —
-it is dead weight, which is the thing tree-shaking, `ts-prune` and `knip` exist to report, off the
-shelf, over the whole tree instead of over thirteen `index.ts` files. `published-repositories` is
+it is dead weight, which a dead-code tool reports off the shelf over the whole tree instead of over
+thirteen `index.ts` files. `published-repositories` is
 where it tips over: the argument in its docblock (a published repository hands a sibling write
 access to a collection it does not own, bypassing every rule the service carries) is _correct and
 important_, and the enforcement it gets is a prose field held to `/[.!?]$/`. The rule that has teeth
@@ -271,8 +271,7 @@ is already there and is structural — a module with no `index.ts` cannot be imp
 `orderRepository` is exactly the judgement call the file admits it cannot make, so it asks for a
 sentence instead and checks the sentence's punctuation.
 
-**Simpler version:** run `knip` in `complete` for the unused-export half. For the repository half,
-keep the _decision_ — the barrels are already correct — and delete the 245 lines that re-litigate
+**Simpler version:** delete both. For the repository half, keep the _decision_ — the barrels are already correct — and delete the 245 lines that re-litigate
 it on every test run.
 
 ---
@@ -517,7 +516,7 @@ running system, so deleting it costs no safety, only convention. Approximate lin
 
 About 1,450 lines of test, roughly a quarter of `tests/cross-cutting/`, none of which can report a
 defect a user or an operator would ever see. Two of them — `published-language` and
-`generated-type-shadowing` — are asking a question an off-the-shelf tool (`knip`) answers over the
+`generated-type-shadowing` — are asking a dead-code question over thirteen files that belongs to the
 whole tree; one — `tier-walls` — is the third enforcement of a rule that runs twice before it in
 the same `&&` chain; one — `docs-match-the-tree` — turns the suite red when a correct refactor
 adds a line to a service.

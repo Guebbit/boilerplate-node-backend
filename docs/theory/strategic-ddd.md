@@ -189,7 +189,7 @@ the case by refusing:
 Both of these used to be tests — one failing any export no sibling imported, one demanding a written
 justification per published repository and asserting the justification was a sentence. The
 decisions they encoded are still the decisions; what they cost was 369 lines re-litigating them on
-every run, and an unused export is a thing `knip` reports over the whole tree for free. See
+every run, and an unused export is dead weight rather than a defect. See
 `OVERENGINEERED.md` §8.
 
 The narrowest surface in the repo is `delivery`: two pure functions. The widest is `users`, and it

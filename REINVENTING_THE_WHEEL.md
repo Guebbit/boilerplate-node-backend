@@ -132,11 +132,15 @@ modes (a paren inside a template literal, a comment containing `.catch(`) simply
 
 ## Identified, not taken — and why
 
-**`knip` for unused exports.** Not installed. It is the right tool for what
-`published-language.test.ts` (124 lines) and `published-repositories.test.ts` (245) were doing, and
-it works over the whole tree rather than thirteen `index.ts` files. Those tests were deleted rather
-than replaced, because an unused export is dead weight rather than a defect — adding a dependency to
-report it is a decision worth making on its own merits, not as a consolation for a deletion.
+**Dead-code tooling for unused exports (`knip`, `ts-prune`).** This is what
+`published-language.test.ts` (124 lines) and `published-repositories.test.ts` (245) were reaching
+for, and a real tool would do it over the whole tree rather than thirteen `index.ts` files. Trialled
+and **rejected**: an unconfigured run reports 44 unused exports, 87 unused exported types, 25 unused
+files, 11 unused devDependencies and 12 unlisted dependencies — and most of the "unused files" are
+the migrations and the probes, which are loaded dynamically or by path string. That is roughly 130
+findings needing a config file and a triage pass before any of it is trustworthy, to police
+something that is dead weight rather than a defect. The two tests were deleted outright; adding a
+dependency is not owed as compensation for a deletion.
 
 **dependency-cruiser's `orphan` rule.** Tested; **unreliable in this repo specifically**, for a
 reason rooted in a deliberate config choice. `tsPreCompilationDeps` is off — correctly, because with
@@ -210,8 +214,9 @@ Before writing a check that reads the source tree, in this order:
    which?** → `.dependency-cruiser.cjs`. This is the boundary: if the honest form of the rule is
    "may this REACH that", ESLint structurally cannot answer it and a text sweep will miss the
    indirect case, as §1 above demonstrates.
-4. **Is a standard tool for it already installed, or one line away?** `knip`, the VitePress link
-   check, `depcruise --output-type mermaid`.
+4. **Is a standard tool for it already installed, or one line away?** The VitePress link check and
+   `depcruise --output-type mermaid` both were. Weigh what a NEW dependency costs in findings you
+   then have to triage — see the dead-code entry above for one that did not clear that bar.
 5. **Only then, a test** — and only if the failure it catches is silent. `OVERENGINEERED.md` is the
    standard it has to clear.
 
