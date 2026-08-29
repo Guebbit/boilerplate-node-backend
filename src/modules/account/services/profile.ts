@@ -207,8 +207,9 @@ export const removeOwnAccount = (
  * What `PUT /account` accepts, validated with this codebase's messages.
  *
  * `email` and `username` come from `zodUserSchema`, whose overrides carry the i18n thunks;
- * `locale` and `imageUrl` come straight from the generated `UpdateAccountBody`, because the
- * contract's own constraints (the BCP 47 pattern) are the whole rule and need no custom copy.
+ * `locale`, `imageUrl`, `phone` and `website` come straight from the generated
+ * `UpdateAccountBody`, because the contract's own constraints (the BCP 47 pattern, for `locale`)
+ * are the whole rule and need no custom copy — `phone`/`website` carry none at all.
  * `.partial()` last: every field of a self-service update is optional, and an absent field means
  * "leave it alone".
  */
@@ -216,7 +217,9 @@ const zodProfileSchema = zodUserSchema
     .pick({ email: true, username: true })
     .extend({
         locale: UpdateAccountBody.shape.locale,
-        imageUrl: UpdateAccountBody.shape.imageUrl
+        imageUrl: UpdateAccountBody.shape.imageUrl,
+        phone: UpdateAccountBody.shape.phone,
+        website: UpdateAccountBody.shape.website
     })
     .partial();
 

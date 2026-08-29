@@ -189,6 +189,14 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: String,
             default: process.env.NODE_DEFAULT_LOCALE ?? 'en'
         },
+        // Self-service profile fields, no format enforced: a phone number's valid shapes vary too
+        // widely by country to regex safely, and a website is free text the same way `imageUrl` is.
+        phone: {
+            type: String
+        },
+        website: {
+            type: String
+        },
         admin: {
             type: Boolean,
             default: false

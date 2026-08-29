@@ -12,7 +12,8 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * PUT /account
- * The authenticated user updates their OWN profile — email, username, locale, image.
+ * The authenticated user updates their OWN profile — email, username, locale, image, phone,
+ * website.
  *
  * This endpoint is why a normal user can edit their profile at all: the `/users` writes sit
  * behind `isAdmin`, and self-service going through them answered every non-admin a 403.
@@ -38,10 +39,14 @@ export const putAccount = (
      * `post-signup` gives: `accountService.updateProfile` validates these fields with translated
      * messages, and the generated schema would answer first in English.
      */
-    const { email, username, locale } = request.body as UpdateAccountRequest;
+    const { email, username, locale, phone, website } = request.body as UpdateAccountRequest;
 
     return accountService
-        .updateProfile(id, { email, username, locale, imageUrl }, callerContextOf(request))
+        .updateProfile(
+            id,
+            { email, username, locale, imageUrl, phone, website },
+            callerContextOf(request)
+        )
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {

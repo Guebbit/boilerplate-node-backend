@@ -390,6 +390,10 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                phone:
+                    type: string
+                website:
+                    type: string
 
         UpdateUserRequestMultipart:
             type: object
@@ -415,6 +419,10 @@ components:
                     description: Optional user profile image
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                phone:
+                    type: string
+                website:
+                    type: string
 
         UpdateUserByIdRequest:
             type: object
@@ -434,6 +442,10 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                phone:
+                    type: string
+                website:
+                    type: string
 
         UpdateUserByIdRequestMultipart:
             type: object
@@ -456,6 +468,10 @@ components:
                     description: Optional user profile image
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                phone:
+                    type: string
+                website:
+                    type: string
 
         DeleteUserRequest:
             type: object

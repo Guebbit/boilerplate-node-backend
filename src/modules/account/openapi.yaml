@@ -582,6 +582,10 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                phone:
+                    type: string
+                website:
+                    type: string
 
         UpdateAccountRequestMultipart:
             type: object
@@ -599,6 +603,10 @@ components:
                     type: string
                     format: binary
                     description: Optional user profile image
+                phone:
+                    type: string
+                website:
+                    type: string
 
         ChangePasswordRequest:
             type: object

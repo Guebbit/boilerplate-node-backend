@@ -152,6 +152,8 @@ export const update = (
     if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
     // The preference that outlives the request — see the `locale` field on the user schema.
     if (data.locale !== undefined) user.locale = data.locale;
+    if (data.phone !== undefined) user.phone = data.phone;
+    if (data.website !== undefined) user.website = data.website;
     if (data.password && data.password.trim().length > 0) user.password = data.password;
 
     return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));

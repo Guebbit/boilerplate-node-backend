@@ -31,7 +31,6 @@ interface AsyncApiOperation {
 }
 
 interface AsyncApiChannel {
-    publish?: AsyncApiOperation;
     subscribe?: AsyncApiOperation;
 }
 
@@ -134,25 +133,25 @@ const resolveMessagePayloadType = (
 };
 
 /*
- * Builds channel-to-message-type entries from channel prefixes and operation kind.
+ * Builds channel-to-message-type entries from channel prefixes. Only `subscribe` — the one
+ * operation any caller has ever asked for; the queue channels' message types are generated a
+ * different way entirely, by walking `components.messages` directly.
  *
  * @param channels AsyncAPI channels map.
  * @param messages AsyncAPI message definitions, resolved to their PAYLOAD type — never the
  *   message's own (possibly deduped-away) alias name.
  * @param prefix Channel prefix selector.
- * @param operation Operation direction (`publish` or `subscribe`).
  * @returns Ordered entries containing channel names and referenced message type names.
  */
 const collectChannelMessageEntries = (
     channels: Record<string, AsyncApiChannel>,
     messages: Record<string, AsyncApiMessage>,
-    prefix: string,
-    operation: 'publish' | 'subscribe'
+    prefix: string
 ): { channelName: string; messageType: string }[] =>
     Object.entries(channels)
         .filter(([channelName]) => channelName.startsWith(prefix))
         .map(([channelName, channel]) => {
-            const ref = channel[operation]?.message?.$ref;
+            const ref = channel.subscribe?.message?.$ref;
             const messageName = ref ? (ref.split('/').pop() ?? '') : '';
             return {
                 channelName,
@@ -272,7 +271,7 @@ const document = parse(specText) as AsyncApiDocument;
 const channels = document.channels ?? {};
 const messages = document.components?.messages ?? {};
 
-const sseEntries = collectChannelMessageEntries(channels, messages, 'observability.', 'subscribe');
+const sseEntries = collectChannelMessageEntries(channels, messages, 'observability.');
 
 const channelNamespaceBlocks = [...groupChannelsByNamespace(Object.keys(channels))].map(
     ([namespace, channelNames]) => renderChannelNamespace(namespace, channelNames)

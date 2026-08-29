@@ -398,6 +398,10 @@ components:
                     $ref: '#/components/schemas/ImageUrl'
                 locale:
                     $ref: '#/components/schemas/Locale'
+                phone:
+                    type: string
+                website:
+                    type: string
                 createdAt:
                     type: string
                     format: date-time
