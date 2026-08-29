@@ -16,54 +16,22 @@ import { cartDeleteByUserId, productRemoveFromCartsById } from './services';
  * product must leave every cart, a destroyed account must take its cart with it — and both of those
  * arrive as domain events, so the import graph stays acyclic even though the domains are mutually
  * aware. Orders never reaches back, so that edge is a plain import.
+ *
+ * Checkout is where every rule in the shop has to agree at once — price, stock, address, shipping,
+ * and the order that comes out the other side. The breadth of what it imports is not a smell to be
+ * refactored away; it is what a checkout is. See `docs/theory/modules.md` on why this module is a
+ * customer of four contexts rather than an orchestration layer above them.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      account, delivery, inventory, orders, products, users
+ * Reached by:   wishlist (the move-to-cart exit)
+ * Not imports:  `20260808160000-cart-collection.js` creates this module's collection and reads
+ *               `users` to do it.
  */
 export default {
     name: 'cart',
-    /*
-     * Checkout is where every rule in the shop has to agree at once — price, stock, address,
-     * shipping, and the order that comes out the other side. The five edges below are not a smell to
-     * be refactored away; they are what a checkout is. See `docs/theory/modules.md` on why this
-     * module is a customer of four contexts rather than an orchestration layer above them.
-     */
-    subdomain: 'core',
     basePath: '/cart',
     routes: router,
-    dependsOn: [
-        {
-            module: 'account',
-            as: 'customer-supplier',
-            because:
-                'Checkout asks the address book for the one address it should ship to (`addressForCheckout`).'
-        },
-        {
-            module: 'delivery',
-            as: 'published-language',
-            because:
-                'Prices a shipping method through `findShippingMethod`/`priceShipping` — pure functions over plain data, no shipment record in sight.'
-        },
-        {
-            module: 'orders',
-            as: 'customer-supplier',
-            because: 'A checkout is the one place an order is created outside the admin routes.'
-        },
-        {
-            module: 'inventory',
-            as: 'customer-supplier',
-            because:
-                'A checkout asks for the basket to be held (`reserveForOrder`) and gives the hold back when it loses the cart race. It never touches a counter itself — what a hold costs is inventory’s to know.'
-        },
-        {
-            module: 'products',
-            as: 'conformist',
-            because:
-                'Reads catalogue documents as they are to price lines and to pre-flight availability.'
-        },
-        {
-            module: 'users',
-            as: 'conformist',
-            because: 'Reads the account record a checkout is priced against.'
-        }
-    ],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId }) => productRemoveFromCartsById(productId));
         onDomainEvent(USER_DELETED, ({ userId }) => cartDeleteByUserId(userId));

@@ -2,8 +2,8 @@
  * The key rules — everything that decides whether a translation key can be stored and rendered.
  *
  * Internal to `services/`; `entries.ts` and `messages.ts` share these and none of them owns it.
- * Pure and database-free by construction: `locales` is `subdomain: 'generic'`, so
- * `subdomain-discipline.test.ts` forbids a `domain/` here and this file is the sanctioned home.
+ * Pure and database-free by construction. An i18n admin is a solved problem with no rules worth a
+ * `domain/` folder, so this file is where the pure ones live instead.
  */
 
 import { t } from '@infrastructure/i18n';

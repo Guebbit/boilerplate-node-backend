@@ -24,37 +24,19 @@ import { refundForOrder } from './service';
  * on a payment document worth querying later, when "everything this account has paid" becomes a
  * screen. The history itself does not exist yet — `service.ts` explains what the resolution buys
  * and why an unresolvable payer is logged rather than refused.
+ *
+ * Taking money is not this shop's differentiator, and `./providers` exists precisely so the generic
+ * part can be bought. What stays here is the small piece a provider will never own: which order a
+ * payment belongs to, and what cancelling one owes back.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      inventory, orders, users
+ * Reached by:   nothing — delete it and orders stop being paid for, nothing stops compiling
  */
 export default {
     name: 'payments',
-    /*
-     * Taking money is not this shop's differentiator, and the provider port exists precisely so the
-     * generic part can be bought. What stays here is the small supporting piece a provider will
-     * never own: which order a payment belongs to, and what cancelling one owes back.
-     */
-    subdomain: 'supporting',
     basePath: '/payments',
     routes: router,
-    dependsOn: [
-        {
-            module: 'orders',
-            as: 'customer-supplier',
-            because:
-                'A payment is about an order: the intent freezes its total, the confirm moves its status, and `order.cancelled` is what asks for the refund.'
-        },
-        {
-            module: 'inventory',
-            as: 'customer-supplier',
-            because:
-                'A confirmed payment is what turns an order’s held units into a sale, so this module asks for the commit at the moment the order moves to `paid`.'
-        },
-        {
-            module: 'users',
-            as: 'conformist',
-            because:
-                'Resolves the payer against the account record rather than copying the id off the order, so a payment history is a query on an id that pointed at a real account when the money moved.'
-        }
-    ],
     subscribe: () => {
         onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
             refund ? refundForOrder(orderId) : undefined

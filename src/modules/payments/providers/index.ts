@@ -42,7 +42,7 @@ export interface PaymentProvider {
     refund(charge: { amount: number; currency: string }): Promise<void>;
 }
 
-/** Every implementation this build knows. A typo'd env value must fail loudly, not fall back. */
+/** Every implementation this build knows. A real deployment adds `stripe.ts` and one line here. */
 const PROVIDERS: Record<string, PaymentProvider> = {
     fake: fakePaymentProvider
 };
@@ -52,18 +52,12 @@ let provider: PaymentProvider | undefined;
 /**
  * The configured provider, memoised on first use.
  *
+ * A typo'd `NODE_PAYMENT_PROVIDER` resolves to `undefined` and the first `.charge()` throws on it —
+ * loud, at the first payment, without a bespoke message saying the same thing.
+ *
  * @returns the implementation `NODE_PAYMENT_PROVIDER` names (default `fake`)
- * @throws when the env names a provider this build does not carry — a deployment
- *   misconfiguration that must surface at the first payment, not as silent fake charges
  */
 export const resolvePaymentProvider = (): PaymentProvider => {
-    if (provider) return provider;
-    const name = process.env.NODE_PAYMENT_PROVIDER ?? 'fake';
-    const resolved = PROVIDERS[name] as (typeof PROVIDERS)[string] | undefined;
-    if (!resolved)
-        throw new Error(
-            `Unknown payment provider "${name}" — known: ${Object.keys(PROVIDERS).join(', ')}`
-        );
-    provider = resolved;
+    provider ??= PROVIDERS[process.env.NODE_PAYMENT_PROVIDER ?? 'fake'];
     return provider;
 };

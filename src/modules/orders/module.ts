@@ -22,31 +22,21 @@ import './events';
  *
  * The cart depends on this module in turn: a checkout is the one place an order is created outside
  * the admin routes. That arrow points cart → orders and does not come back.
+ *
+ * The module with the real invariants: what an order totals, which status transitions are legal, and
+ * what cancelling restores. Three other modules are downstream of its status changes. If any one
+ * module here ever grows an aggregate, it is this one — see `TACTICAL_DDD_PLAN.md` §5.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      inventory, products
+ * Reached by:   cart, delivery, payments
+ * Not imports:  an order EMBEDS `productSchema` rather than referencing it, so a change to the
+ *               catalogue's shape is a change to this collection's stored history.
  */
 export default {
     name: 'orders',
-    /*
-     * The module with the real invariants: what an order totals, which status transitions are legal,
-     * what cancelling restores. Three other modules are downstream of its status changes. If any one
-     * module here ever grows an aggregate, it is this one — see `TACTICAL_DDD_PLAN.md` §5.
-     */
-    subdomain: 'core',
     basePath: '/orders',
     routes: router,
-    dependsOn: [
-        {
-            module: 'inventory',
-            as: 'customer-supplier',
-            because:
-                'Creating an order holds its units and cancelling one gives them back; this module asks for both by name and never touches a counter itself.'
-        },
-        {
-            module: 'products',
-            as: 'conformist',
-            because:
-                'An order item embeds `productSchema` itself, so the catalogue’s shape is this module’s shape too.'
-        }
-    ],
     /*
      * A hold that timed out takes its order with it. The units are already released by the time
      * this fires; what `inventory` cannot do is cancel an order without importing this module.

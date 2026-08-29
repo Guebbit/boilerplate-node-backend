@@ -36,4 +36,4 @@ the cart's `customer-supplier` arrow.
 - [`users`](./users.md) — the collection this module shares
 - [Security](../tools/security.md) — hashing, cookies, and the headers around them
 - [Request Flow](../theory/request-flow.md) — where the guard sits in a request
-- [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-typed-edges) — what `shared-kernel` costs
+- [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — what `shared-kernel` costs

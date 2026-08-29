@@ -19,25 +19,23 @@ import './metrics';
  * Each is exactly-once: the hold's status is claimed conditionally, so a cancel racing the sweep
  * or a webhook delivered twice resolves to one winner. Deleting this module leaves a shop that
  * cannot sell, which is the honest consequence of owning something.
+ *
+ * Getting this wrong oversells customers, so it is worth its own rules in `domain/`. Nobody chooses
+ * a shop for its inventory system, though, and a business that outgrows this buys a replacement —
+ * so rules yes, aggregate no.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      products
+ * Reached by:   cart, orders, payments — all three ask for a transition by name and get a boolean
+ * Not imports:  the counters are COLUMNS ON THE PRODUCT DOCUMENT. `products` declares them and this
+ *               module is the only writer, and `20260817120000-inventory-counters.js` — a migration
+ *               owned by this domain — is what put them on that collection. Nothing in the import
+ *               graph shows that, which is why it is written here.
  */
 export default {
     name: 'inventory',
-    /*
-     * Supporting, and only just: getting it wrong oversells customers, but nobody chooses a shop
-     * for its inventory system and every business that outgrows this buys a replacement. Worth
-     * its own rules in `domain/`; not worth an aggregate.
-     */
-    subdomain: 'supporting',
     basePath: '/inventory',
     routes: router,
-    dependsOn: [
-        {
-            module: 'products',
-            as: 'conformist',
-            because:
-                'Reads catalogue documents as they are and drives their two counters through the repository’s conditional primitives. The columns are the catalogue’s to declare; what they may become is this module’s to decide.'
-        }
-    ],
     /*
      * No `seeds`: a hold only exists once someone has checked out, so a seeded one would be a
      * state the application cannot reach by seeding — see the note in `orders/demo.ts`. No

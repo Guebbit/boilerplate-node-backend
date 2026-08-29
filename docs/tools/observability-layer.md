@@ -28,8 +28,7 @@ Five signals, one transport, one module.
 2. **The dashboard reads counters by NAME, never by import.**
    `get-observability-metrics-overview.ts` calls `metricsRegistry.getSingleMetric('auth_login_total')`
    and reports zero when the metric is absent. That is the single most important line in the module:
-   it is why the one component whose job is to report on every domain has a `dependsOn` on **none**
-   of them.
+   it is why the one component whose job is to report on every domain imports **none** of them.
 
 3. **Audit fails open, deliberately, in two layers.** The log line is the compliance record and goes
    out first; the queryable Mongo row is a convenience the sink adds, fire-and-forget, swallowing its

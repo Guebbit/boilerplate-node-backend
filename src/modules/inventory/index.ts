@@ -27,9 +27,8 @@ export { inventoryService } from './service';
 export { availabilityOf } from './domain';
 
 /*
- * `StockMovementReason` and `StockLine` are deliberately NOT re-exported, and
- * `tests/cross-cutting/published-language.test.ts` is what keeps them out: a barrel line is a
- * promise that a shape will not move, worth making for a real caller and never on speculation.
+ * `StockMovementReason` and `StockLine` are deliberately NOT re-exported: a barrel line is a promise
+ * that a shape will not move, worth making for a real caller and never on speculation.
  * `releaseForOrder` defaults its reason, so no caller names one; `StockLine` describes a shape
  * that only crosses the wire, where the generated contract types are what a client reads.
  * `InventoryLevel` is one of those generated types — `service.ts` imports it from `@types` — so

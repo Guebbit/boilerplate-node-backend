@@ -13,15 +13,19 @@ import './events';
  *
  * Authentication is not here. `account` owns signup, login, password reset and the token lifecycle,
  * and reaches this module's barrel for the record it authenticates.
+ *
+ * A user record with an email, a password hash and an admin flag is the same problem in every
+ * application that has ever had one. Nothing about it differentiates this shop, and no aggregate
+ * belongs here however central the record feels.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      nothing
+ * Reached by:   account, cart, delivery, payments, wishlist
+ * Not imports:  `account` writes this same document — the shared kernel. Six migrations touch this
+ *               collection, more than any other.
  */
 export default {
     name: 'users',
-    /*
-     * A user record with an email, a password hash and an admin flag is the same problem in every
-     * application that has ever had one. Nothing about it differentiates this shop, which is what
-     * `generic` means — and why no aggregate belongs here however central the record feels.
-     */
-    subdomain: 'generic',
     basePath: '/users',
     routes: router,
     seeds: seedUsersCollection,

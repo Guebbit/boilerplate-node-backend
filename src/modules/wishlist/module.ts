@@ -16,35 +16,18 @@ import { wishlistDeleteByUserId, productRemoveFromWishlistsById } from './servic
  * the same way they reach the cart: a deleted product must leave every wishlist and a destroyed
  * account must take its wishlist with it, both arriving as domain events so the import graph
  * stays acyclic.
+ *
+ * A saved list with one exit into the cart. It holds no rules worth modelling — deleting it costs the
+ * shop a convenience, not a capability.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      cart, products, users
+ * Reached by:   nothing
  */
 export default {
     name: 'wishlist',
-    /*
-     * A saved list with one exit into the cart. It holds no rules worth modelling — deleting it
-     * costs the shop a convenience, not a capability — which is the definition of supporting.
-     */
-    subdomain: 'supporting',
     basePath: '/wishlist',
     routes: router,
-    dependsOn: [
-        {
-            module: 'cart',
-            as: 'customer-supplier',
-            because:
-                'Move-to-cart asks the cart to add a line; this module never writes a cart document itself.'
-        },
-        {
-            module: 'products',
-            as: 'conformist',
-            because:
-                'Reads catalogue documents as they are — a saved line is meaningless without the product it points at.'
-        },
-        {
-            module: 'users',
-            as: 'conformist',
-            because: 'Reads the account the list belongs to, and listens for its destruction.'
-        }
-    ],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId }) =>
             productRemoveFromWishlistsById(productId)

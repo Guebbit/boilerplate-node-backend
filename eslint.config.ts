@@ -814,8 +814,8 @@ export default tseslint.config(
                          *
                          * The other half of that — a barrel re-exporting its own `demo.ts` — is
                          * NOT expressible here: it is an edge inside one element, and this plugin
-                         * only weighs edges between them. It is asserted in
-                         * `tests/cross-cutting/module-shape.test.ts` instead.
+                         * only weighs edges between them. Nothing asserts it — a barrel
+                         * re-exporting its own demo fixtures is a review question.
                          */
                         {
                             from: { element: { type: ['module', 'domain'] } },
@@ -1146,9 +1146,11 @@ export default tseslint.config(
      * imports or connects to at module scope is paid thousands of times over, and a `beforeEach`
      * wipe that is microseconds in a normal run adds up across a mutant count in the thousands. Those
      * 36 specs now live in each module's `tests/integration/` — see NODE_MUTATION_MONGOD.md for the
-     * per-module breakdown — and `tests/cross-cutting/unit-layer-is-framework-free.test.ts` is the
-     * CI-time sweep that keeps a new spec from drifting back in; the bans below give the same rule
-     * at lint time, for the two entry points that are clean import names.
+     * per-module breakdown — and `unit-layer-stays-database-free` in `.dependency-cruiser.cjs` is
+     * what keeps a new spec from drifting back in. That rule is stated as REACHABILITY, so it also
+     * catches the way it actually arrives: a spec importing a helper that already had the database.
+     * The bans below give the direct form at lint time, in the editor, for the two entry points
+     * that are clean import names.
      *
      * `@app/*` is deliberately NOT banned. `tests/unit/app/process-error-handlers.test.ts` unit
      * tests a file that lives in the app tier, which is the tier being tested rather than the

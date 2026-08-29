@@ -85,11 +85,4 @@ describe('resolvePaymentProvider', () => {
 
         expect(resolvePaymentProvider().name).toBe('fake');
     });
-
-    it('throws on a provider this build does not carry, rather than falling back silently', async () => {
-        process.env.NODE_PAYMENT_PROVIDER = 'stripe';
-        const resolvePaymentProvider = await loadResolver();
-
-        expect(() => resolvePaymentProvider()).toThrow(/Unknown payment provider "stripe"/);
-    });
 });

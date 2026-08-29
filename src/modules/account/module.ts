@@ -24,6 +24,16 @@ import { router } from './routes';
  *
  * The arrow points one way. Nothing in `users` reaches back into authentication, so there is no
  * cycle here and no domain event is needed.
+ *
+ * Signup, login, refresh, reset. There is no version of this that is a competitive advantage, and
+ * every deployment that outgrows it replaces it with an identity provider rather than modelling it
+ * harder — so keep it replaceable, and resist the urge to model it further.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      users
+ * Reached by:   cart
+ * Not imports:  shares the User document with `users` — the one shared kernel in the repo. Both
+ *               read and write it, so a schema change there has to be agreed twice.
  */
 /*
  * This module answers the kernel's "who is making this request".
@@ -56,22 +66,8 @@ registerAuthResolver({
 
 export default {
     name: 'account',
-    /*
-     * Signup, login, refresh, reset. There is no version of this that is a competitive advantage,
-     * and every deployment that outgrows it replaces it with an identity provider rather than
-     * modelling it harder.
-     */
-    subdomain: 'generic',
     basePath: '/account',
     routes: router,
-    dependsOn: [
-        {
-            module: 'users',
-            as: 'shared-kernel',
-            because:
-                'Both modules read and write the same User record: `users` administers it, this module authenticates it. The only shared kernel in the repo, and the reason the users barrel exports its model and repository at all.'
-        }
-    ],
     /*
      * The one collection this module owns is the address book — the account lifecycle's own
      * data, unlike the User record it administers through `users`. A destroyed account takes

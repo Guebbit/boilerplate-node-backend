@@ -8,14 +8,16 @@ import { router } from './routes';
  * A leaf in both directions. It records an email address rather than referencing a user, because
  * the form is open to people who have no account — which is also why deleting an account leaves
  * their feedback standing, and why this module needs nothing from `users`.
+ *
+ * Every application grows a contact form with a triage state, none of them differ, and this one is a
+ * leaf in both directions — so the cheapest thing that works is also the correct one.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      nothing
+ * Reached by:   nothing — delete it and only this module goes
  */
 export default {
     name: 'feedback',
-    /*
-     * A contact form with a triage state. Every application grows one, none of them differ, and
-     * this one is a leaf in both directions — the cheapest possible thing that works is correct.
-     */
-    subdomain: 'generic',
     basePath: '/feedback',
     routes: router,
     locales: path.join(__dirname, 'locales')

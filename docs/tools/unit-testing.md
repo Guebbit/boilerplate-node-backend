@@ -32,9 +32,10 @@ flowchart TB
 Notably **not** here: HTTP, or a database, real or in-memory. No unit test sends a request through
 Express routing/middleware, and none opens Mongo — both start one layer up, in
 [Integration Testing](./integration-testing.md), which is what
-`tests/cross-cutting/unit-layer-is-framework-free.test.ts` and
-`eslint.config.ts`'s `no-restricted-imports` block for `tests/unit/**` enforce structurally rather
-than by review.
+`.dependency-cruiser.cjs`'s `unit-layer-stays-database-free` rule and `eslint.config.ts`'s
+`no-restricted-imports` block for `tests/unit/**` enforce structurally rather than by review. The
+dependency-cruiser rule is the transitive one — it catches a spec that reaches a database through a
+helper, which a per-file lint rule and a text sweep both miss.
 
 ## Patterns
 

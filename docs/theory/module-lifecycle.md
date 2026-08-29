@@ -125,43 +125,27 @@ import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { seedWishlistCollection } from './demo';
 
+/**
+ * Saved products, one list per user.
+ *
+ * Reads catalogue documents as they are — a saved line is meaningless without the product it points
+ * at — and reads the account the list belongs to, listening for its destruction. Both are
+ * `conformist` reads: the shapes are theirs, and this module has no say in them.
+ */
 export default {
     name: 'wishlist',
-    subdomain: 'supporting',
     basePath: '/wishlist',
     routes: router,
-    dependsOn: [
-        {
-            module: 'products',
-            as: 'conformist',
-            because:
-                'Reads catalogue documents as they are — a saved line is meaningless without the product it points at.'
-        },
-        {
-            module: 'users',
-            as: 'conformist',
-            because: 'Reads the account the list belongs to, and listens for its destruction.'
-        }
-    ],
     locales: path.join(__dirname, 'locales'),
     seeds: seedWishlistCollection
 } satisfies AppModule;
 ```
 
-`dependsOn` names **siblings, not files**. Declare it and the registry fails the boot — by name — if
-that sibling is not enabled. Leave it out and the failure is a 500 on the first request that crosses
-the gap.
-
-Three fields on that manifest are strategic rather than operational, and all three are required:
-
-| Field            | What it says                                                       | What refuses it                                                                     |
-| ---------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| `subdomain`      | `core`, `supporting` or `generic` — how much modelling is worth it | a `generic` module carrying a `domain/` folder fails `subdomain-discipline.test.ts` |
-| `as` / `because` | what kind of relationship each edge is, and why                    | an edge nothing imports, or an import no edge declares, fails `context-map.test.ts` |
-
-The temptation is to fill these in later. Do not: the questions are easiest to answer while you
-still remember why you drew the boundary, and hardest once the module is six months old. See
-[Strategic DDD](./strategic-ddd.md).
+Every field here is read by something at boot — that is the bar for adding one. What the module
+reaches for is its `import` statements, and how it reaches is the docblock above the manifest, in
+prose, where a reader meets both at once. Write that docblock while you still remember why you drew
+the boundary: the question is easiest to answer now and hardest once the module is six months old.
+See [Strategic DDD](./strategic-ddd.md) for the four kinds of relationship worth naming in it.
 
 ::: tip A domain with no URL is a first-class module
 Omit `basePath` and `routes` entirely and you get a headless module — `audit-logs` is one. The
@@ -234,16 +218,15 @@ restate what the code already says — the routes are in `src/modules/<name>/rou
 someone edits the source and not the prose. A module page owns the DECISION; the mechanism belongs
 to a page under [Tools](../tools/) or [Theory](../theory/).
 
-Then three registrations, each with a test behind it:
+Then two registrations:
 
-- the entry in `FRONTEND_PAIRING`, in `tests/cross-cutting/frontend-pairing.test.ts`
+- the entry in `FRONTEND_PAIRING`, in `tests/cross-cutting/frontend-pairing.test.ts` — which `npm
+run test` fails on if it is missing
 - the page in the `/modules/` sidebar, in `docs/.vitepress/config.mts`
-- if the domain carries a file shape no other module has, its pattern in
-  `tests/cross-cutting/module-file-shapes.test.ts`, and its row in
-  [`docs/reference/src-modules.md`](../reference/src-modules.md)
 
-`npm run test` fails on a module with no page, on a missing pairing entry, and on a file shape
-nothing names.
+If the domain carries a file shape no other module has, give it a row in
+[`docs/reference/src-modules.md`](../reference/src-modules.md) so the vocabulary stays written
+down.
 
 ### 6 · The paired repo
 
@@ -300,8 +283,8 @@ rm -rf src/modules/<name>
 # and, if it declared probes, from scripts/contracts/client-collections-bundle.ts
 ```
 
-Deleting a module named in another module's `dependsOn` stops the boot with the offending pair
-named. That is the registry working — either delete the dependant too, or drop the edge.
+Deleting a module another one imports stops `tsc` on the importing file, naming the line. Either
+delete the dependant too, or drop the import.
 
 ### 4 · The page
 
@@ -433,10 +416,9 @@ Re-run 2026-08-16, at thirteen modules: **62 type errors across 26 files, 47 of 
 Read them in three piles, because only one is a problem — and it is empty.
 
 **Legitimate — ten production files across four modules.** `delivery`, `inventory`, `payments` and
-`wishlist` stop compiling because they genuinely depend on what was deleted, and each one
-**declares** that in `dependsOn`. This is the DAG working: deleting a supplier breaks its customers,
-the registry would refuse the boot with the offending pair named, and the answer is to delete the
-dependents too or pick a different set. An earlier run of this check reported "zero files in `src/`"
+`wishlist` stop compiling because they genuinely import what was deleted. That is a real coupling
+failing loudly at the file and line that holds it, and the answer is to delete the dependents too or
+pick a different set. An earlier run of this check reported "zero files in `src/`"
 — that was true when those four modules did not exist, not a property that was lost. **`db/**` is
 still at zero\*\*, and that is the number this exercise is actually defending.
 

@@ -80,8 +80,8 @@ export { runTokenCleanup } from './token-cleanup';
  *
  * Named for the module, not for a slice of it. A name like `authService` describes one of the
  * things this folder does, and every other thing it does then has nowhere to belong. Every module
- * exports exactly one `<something>Service`, and `tests/cross-cutting/service-namespaces.test.ts`
- * fails the build if one does not.
+ * exports exactly one `<something>Service`; it is a convention the next module copies from the
+ * last, not a rule anything enforces.
  *
  * It carries EVERY function this folder exports, including the two side-effecting jobs
  * (`sendVerificationEmail`, `runTokenCleanup`). "A job is not an operation on the account" is a

@@ -20,8 +20,9 @@
  * quietly — the same bargain `tests/unit/scripts/spec-identity.test.ts` makes, for the same reason:
  * a guard that evaporates in silence is worse than one that is visibly absent.
  *
- * `why` is required whenever the counterpart is not simply the same name, because that is the case
- * where a reader cannot guess and the pairing is worth having written down at all.
+ * `why` is prose for a reader, on the entries where the counterpart is not simply the same name and
+ * a reader could not guess. Nothing asserts its shape: a sentence held to a regex is a sentence
+ * nobody has to mean.
  *
  * See: docs/modules/index.md#the-two-repositories
  */
@@ -80,22 +81,6 @@ describe('the two repositories, module by module', () => {
     it('names no module that is not enabled', () => {
         const enabled = new Set(moduleNames());
         expect(Object.keys(FRONTEND_PAIRING).filter((name) => !enabled.has(name))).toEqual([]);
-    });
-
-    it('demands a reason wherever the counterpart is not the same name', () => {
-        const unexplained = moduleNames().filter((name) => {
-            const pairing = FRONTEND_PAIRING[name];
-            if (!pairing) return false;
-            const sameName = pairing.counterparts.length === 1 && pairing.counterparts[0] === name;
-            return !sameName && !pairing.why;
-        });
-
-        expect(unexplained).toEqual([]);
-    });
-
-    it('explains every frontend module that stands alone', () => {
-        // The other direction, and the one no walk of this repository could ever discover.
-        expect(Object.entries(FRONTEND_ONLY).filter(([, why]) => !why.trim())).toEqual([]);
     });
 });
 

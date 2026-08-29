@@ -112,7 +112,7 @@ export interface AnalyticsProvider {
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 
-/** Every implementation this build knows. A typo'd env value must fail loudly, not fall back. */
+/** Every implementation this build knows. `none` is the spelling for "analytics off". */
 const PROVIDERS: Record<string, AnalyticsProvider> = {
     umami: umamiAnalyticsProvider,
     posthog: posthogAnalyticsProvider,
@@ -128,19 +128,14 @@ let provider: AnalyticsProvider | undefined;
  * because an env var read during module evaluation is fixed before `.env` has necessarily
  * been loaded.
  *
+ * A typo'd `NODE_ANALYTICS_PROVIDER` resolves to `undefined` and the next call on it throws —
+ * loud, at the same moment, without a bespoke message saying the same thing. Turning analytics off
+ * has its own spelling (`none`), so the undefined branch is only ever reached by a typo.
+ *
  * @returns the implementation `NODE_ANALYTICS_PROVIDER` names (default `umami`)
- * @throws when the env names a provider this build does not carry — a deployment
- *   misconfiguration that must surface at boot, not as analytics that silently record nothing
  */
 export const resolveAnalyticsProvider = (): AnalyticsProvider => {
-    if (provider) return provider;
-    const name = process.env.NODE_ANALYTICS_PROVIDER ?? 'umami';
-    const resolved = PROVIDERS[name] as (typeof PROVIDERS)[string] | undefined;
-    if (!resolved)
-        throw new Error(
-            `Unknown analytics provider "${name}" — known: ${Object.keys(PROVIDERS).join(', ')}`
-        );
-    provider = resolved;
+    provider ??= PROVIDERS[process.env.NODE_ANALYTICS_PROVIDER ?? 'umami'];
     return provider;
 };
 

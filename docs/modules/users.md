@@ -31,6 +31,6 @@ for the same reason products uses an event: it keeps this module a leaf.
 
 - [Modules overview](./index.md) — the whole context map
 - [`account`](./account.md) — the other service over this collection
-- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel-held-to-a-size) — why a wide barrel is a map edge, not a private detail
+- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
 - [Security](../tools/security.md) — password hashing and the token shapes
 - [Events & Logging](../tools/events-and-logging.md) — `user.deleted` and its three listeners

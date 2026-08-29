@@ -744,8 +744,9 @@ describe('productRemoveFromCartsById', () => {
 
 /**
  * Registers the modules for real rather than reaching into the users service directly. The list is
- * the cart's dependency closure, not just the two domains at play: the registry refuses to install
- * a module whose `dependsOn` names something absent.
+ * the cart's dependency closure, not just the two domains at play: a
+ * module's `subscribe` hook reaches its siblings for real, so a partial list boots a registry whose
+ * handlers resolve against modules that are not there.
  *
  * The users module no longer calls the cart — it emits `user.deleted` and this module subscribes.
  * That subscription only exists once the registry has run, so a test that skipped it would assert

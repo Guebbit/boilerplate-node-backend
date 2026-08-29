@@ -4,7 +4,7 @@ import { makeUser, createUser } from '@modules/users/tests/factory';
 import { userRepository } from '@modules/users';
 import { TokenType, type UserDocument } from '@modules/users';
 // The model directly: it is no longer on the barrel, because no sibling MODULE needs it. A spec
-// reaching its own module's internals is what `published-language.test.ts` says it should do.
+// reaching its own module's internals is correct — `eslint-plugin-boundaries` allows exactly that.
 import { userModel as Users } from '@modules/users/model';
 
 setupTestDb();

@@ -33,4 +33,4 @@ to be reachable in tests and in the demo profile without an integration. `unique
 - [`cart`](./cart.md) — the checkout that prices a method
 - [Domain Layer](../theory/domain-layer.md) — why the rates are pure functions
 - [Email & PDF Rendering](../tools/email-and-rendering.md) — the shipped notification
-- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel-held-to-a-size) — what `published-language` buys
+- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel) — what `published-language` buys

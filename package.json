@@ -24,7 +24,7 @@
         "contracts:bundle": "tsx scripts/build-contract-bundles.ts",
         "check:contracts-bundle": "tsx scripts/build-contract-bundles.ts --check",
         "check:spec-identity": "tsx scripts/check-spec-identity.ts",
-        "check:dependencies": "depcruise src --output-type err",
+        "check:dependencies": "depcruise src tests --output-type err",
         "sync:frontend": "tsx scripts/sync-shared-files-to-frontend.ts",
         "regenerate": "tsx scripts/regenerate-artifacts.ts",
         "gen:api": "rm -rf ./api && orval --config orval.config.ts",

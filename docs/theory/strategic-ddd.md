@@ -1,8 +1,8 @@
 # Strategic DDD
 
 **The part of Domain-Driven Design that pays for itself in a starter kit** — bounded contexts,
-context mapping, ubiquitous language and subdomain distillation. All four are in the code, declared
-per module and asserted by tests.
+context mapping, ubiquitous language and subdomain distillation. All four are in the code — as
+folders, imports, identifiers and barrels, which is where they can be seen rather than asserted.
 
 The other half — entities, aggregates, domain repositories — is **not** here, on purpose.
 `TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices adopting it — the cost, the order
@@ -25,32 +25,37 @@ is generic, do not over-model it". Those sentences are true when written and unv
 after. Six months later the document says one thing, the imports say another, and the document is
 the one that loses — quietly, because nothing fails.
 
-Two of these claims are **fields on the manifest** with a **test behind them**. The third — the
-language — is the code's own identifiers, with [Glossary](./glossary.md) carrying the meanings:
+The answer this repo settled on is to keep each claim **where the thing it describes is written**,
+so a reader meets both at once, and to let the boundary itself be structural rather than described:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 45}}}%%
 flowchart LR
-    subgraph M["module.ts — what the module claims"]
+    subgraph C["where the claim lives"]
         direction TB
-        S["subdomain"]
-        D["dependsOn[] · as + because"]
+        F["one folder per context"]
+        DB["module.ts docblock — how it reaches each sibling"]
+        ID["the code's own identifiers"]
     end
-    subgraph T["tests/cross-cutting — what is true"]
+    subgraph E["what makes it hold"]
         direction TB
-        SD["subdomain-discipline"]
-        CM["context-map"]
-        PL["published-language"]
+        B["index.ts — no barrel, no import"]
+        EL["eslint-plugin-boundaries · check:dependencies"]
+        G["glossary.md"]
     end
-    S --> SD
-    D --> CM
-    D --> PL
+    F --> B
+    DB --> EL
+    ID --> G
 
     classDef claim fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef check fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class S,D claim;
-    class SD,CM,PL check;
+    class F,DB,ID claim;
+    class B,EL,G check;
 ```
+
+An earlier version of this page described two manifest fields and three tests instead. They are
+gone: see §2 and §4 below for what each was and why prose next to the imports turned out to be the
+better home for it.
 
 ---
 
@@ -62,22 +67,10 @@ the domain, and anything that breaks is real coupling worth seeing.
 This is the oldest rule in the repo and the one everything else hangs off. It is covered in
 [Modules](./modules.md); the rest of this page assumes it.
 
-## 2. Context map — typed edges
+## 2. Context map — how a module reaches its siblings
 
-`dependsOn` is not a dependency list. It is a labelled graph:
-
-```ts
-dependsOn: [
-    {
-        module: 'delivery',
-        as: 'published-language',
-        because:
-            'Prices a shipping method through `findShippingMethod`/`priceShipping` — pure functions over plain data, no shipment record in sight.'
-    }
-];
-```
-
-Four kinds, because four is what this codebase actually has:
+A module's imports are its dependency list. What they do not say is what KIND of reach each one is,
+and the kinds differ enormously in what they cost when the upstream moves:
 
 | Kind                 | What it means                                                       | Cost when the upstream changes                   | Example             |
 | -------------------- | ------------------------------------------------------------------- | ------------------------------------------------ | ------------------- |
@@ -87,27 +80,35 @@ Four kinds, because four is what this codebase actually has:
 | `shared-kernel`      | both read and write the same model                                  | **highest** — every change agreed twice          | `account → users`   |
 
 Anticorruption layer is deliberately absent from the list. It is the right pattern for a model you
-do not control, and everything nameable in `dependsOn` is a sibling in this repo. `payments` does
-wrap an outside provider that way — behind `./providers`, which is not a registry edge.
+do not control, and every module here is a sibling in this repo. `payments` does wrap an outside
+provider that way — behind `./providers`.
 
-### What the map is held to
+### Where the map lives
 
-`tests/cross-cutting/context-map.test.ts` asserts four things:
+In the docblock at the top of each module's `module.ts`, in prose, next to the imports it describes.
 
-- **no declared edge that nothing imports.** A dependency that has already been undone still reads
-  as coupling. `payments → users` was exactly that, and this is what found it.
-- **no import that no edge declares.** ESLint stops a module reaching a sibling's _internals_;
-  nothing until now stopped it reaching a sibling it never admitted to needing.
-- **every edge has a reason a human wrote.** An edge whose `because` cannot be stated in a sentence
-  is usually two edges, or a boundary in the wrong place.
-- **`shared-kernel` stays rare.** One allowlisted entry. Adding a second is a deliberate edit with a
-  reviewer attached, which is the only enforcement a judgement call can have.
+This used to be a `dependsOn` field on the manifest — a typed array of `{ module, as, because }`
+edges — with a 217-line cross-cutting test holding each edge to the four kinds above, checking the
+`because` was a sentence, and reconciling declared edges against real `import` statements. It is
+gone, and it is worth saying why, because the reasoning applies to any labelled-graph field
+someone is tempted to add back:
+
+- **Nothing read it at runtime.** Not the registry, not the router, not the event bus. It was
+  documentation with a type annotation.
+- **It was self-reported.** Because it was not derived from real imports, it could not prove two
+  modules do not cycle — only that a developer's annotations agreed with each other.
+- **The enforcement that matters is structural and still there.** `eslint-plugin-boundaries` refuses
+  an import that reaches past a sibling's `index.ts`, and `check:dependencies` re-checks the graph
+  transitively. A module with no barrel cannot be imported by a sibling at all. Those are the rules
+  with teeth; `dependsOn` was a description sitting beside them.
+
+See `OVERENGINEERED.md` §1 and §5 for the full argument and what came out with it.
 
 ### Reading the map
 
-`cart` depends on five modules, and that is not a smell to refactor away — a checkout is the one
-place where price, stock, address, shipping and the resulting order all have to agree at once. The
-edges say _how_ it depends: two `conformist` reads, two `customer-supplier` calls, one
+`cart` reaches five modules, and that is not a smell to refactor away — a checkout is the one place
+where price, stock, address, shipping and the resulting order all have to agree at once. Its
+docblock says _how_ it depends on each: two `conformist` reads, two `customer-supplier` calls, one
 `published-language`. The last of those is the cheapest relationship in the table and the one to
 copy: `delivery` publishes two pure functions and no storage at all.
 
@@ -135,7 +136,7 @@ prose moved to the glossary page; the constraints belong on the symbols.
 ## 4. Subdomain distillation — where to spend effort
 
 DDD's own advice is the part most often skipped: tactical patterns belong in the **core** domain, and
-everything else should use the simplest thing that works. Each module says which it is.
+everything else should use the simplest thing that works.
 
 | Subdomain    | Meaning                                                         | Here                                                                     |
 | ------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -143,13 +144,11 @@ everything else should use the simplest thing that works. Each module says which
 | `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`                          |
 | `generic`    | a solved problem, interchangeable with something bought         | `users`, `account`, `audit-logs`, `locales`, `observability`, `feedback` |
 
-The enforced rule is one-directional: **a `generic` module may not carry a `domain/` folder.** A
+The rule of thumb that follows: **a `generic` module should not carry a `domain/` folder.** A
 pure-rules layer inside authentication or i18n is effort spent on the part of the system that should
-stay replaceable.
-
-There is deliberately **no** rule that `core` must have one. `products` is core and has none, because
-its rules are currently thin enough to live in the service. That is a fair thing to notice and not a
-violation — a test that forced the folder would only produce empty ones.
+stay replaceable. There is deliberately no converse rule — `products` is core and has no `domain/`,
+because its rules are currently thin enough to live in the service, and a rule that forced the
+folder would only produce empty ones.
 
 ::: warning These values are an example, not a finding
 A boilerplate has no core domain. It cannot know what the next project's will be, and what it ships
@@ -158,30 +157,44 @@ mechanism is the deliverable; the first thing a real project should do is re-dec
 that table.
 :::
 
-## 5. Published language — the barrel, held to a size
+This table is the whole of the classification. Each module used to also carry a `subdomain` field on
+its manifest, with a test refusing a `domain/` folder inside a `generic` one — and that test's own
+docblock conceded both halves of the problem: whether a classification stays HONEST was never
+checked (nothing stops every module drifting to `core`), and in a boilerplate the values are a
+worked example rather than a finding. A label nobody can be held to does not need a field, and a
+judgement call the reader has to make anyway reads better as a table than as a type error.
 
-`index.ts` is the one surface a sibling may import, and ESLint already stops anyone reaching past it.
-What ESLint cannot say is whether the surface is the right **size** — and that is the half that rots.
-An export costs nothing to add, nothing to keep, and quietly promises every other module that a shape
-will not move.
+## 5. Published language — the barrel
 
-The rule: **a module publishes exactly what a sibling imports. No sibling, no barrel.**
+`index.ts` is the one surface a sibling may import, and ESLint stops anyone reaching past it. That
+boundary is structural: a module with no `index.ts` cannot be imported by a sibling at all, rather
+than being asked politely not to. `feedback`, `observability` and `locales` are all in that
+position, and none of them is reachable from another module.
 
-Two things deliberately do not count as a consumer:
+The convention for what goes in one: **a module publishes what a sibling imports, and not more.** An
+export costs nothing to add, nothing to keep, and quietly promises every other module that a shape
+will not move. Applying that once removed 36 exports and one whole barrel.
 
-- **the module's own specs.** A spec importing its own barrel is the module talking to itself; it
-  should reach `../model` like the rest of the module. Otherwise a module could keep an export alive
-  by testing it.
-- **`index.ts` re-exporting for its own convenience.**
+A repository export deserves more thought than a type export, and the asymmetry is worth stating
+even though nothing enforces it. `OrderDocument` leaving the barrel promises a shape will not move.
+`productRepository` leaving the barrel is a handle on a collection: whoever holds it can create,
+update and delete rows of a module it does not own, with that module's service — and every rule,
+event, counter and audit line the service carries — bypassed. `modules/inventory/index.ts` states
+the case by refusing:
 
-Applying that rule removed 36 exports and one whole barrel. `feedback` now has no `index.ts` — the
-same position `observability` and `locales` were already in, and the inconsistency
-an earlier audit recorded. With no barrel, the lint boundary makes it structural: a sibling cannot
-import the module at all, rather than being asked politely not to.
+> The repositories, both models and every counter primitive are deliberately absent. This module
+> exists so that nothing outside it can move a stock number, and publishing a repository would hand
+> back the ability it was created to take away.
 
-The narrowest surface in the repo is `delivery`: two pure functions. The widest is `users`, and it is
-wide for a reason that is now visible on the map rather than only in that file's docblock — it is the
-`shared-kernel` end of the one shared-kernel edge.
+Both of these used to be tests — one failing any export no sibling imported, one demanding a written
+justification per published repository and asserting the justification was a sentence. The
+decisions they encoded are still the decisions; what they cost was 369 lines re-litigating them on
+every run, and an unused export is a thing `knip` reports over the whole tree for free. See
+`OVERENGINEERED.md` §8.
+
+The narrowest surface in the repo is `delivery`: two pure functions. The widest is `users`, and it
+is wide because it is the `users` end of the one shared-kernel relationship in the repo — `account`
+authenticates the record `users` administers.
 
 ---
 

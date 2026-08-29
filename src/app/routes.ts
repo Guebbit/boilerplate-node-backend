@@ -28,11 +28,12 @@ export const installRoutes = (app: Express): void => {
      * Registered modules, each at the base path its own manifest declares.
      *
      * A module without a router is skipped rather than treated as an error: `audit-logs` owns a
-     * collection and no URL, and the manifest types that as a whole alternative, so there is no
-     * half-declared case to catch here.
+     * collection and no URL. `basePath` and `routes` are meaningless apart, so both are required
+     * here — a manifest carrying one without the other serves nothing, which is what a router with
+     * no mount point was always going to do.
      */
-    for (const appModule of enabledModules)
-        if (appModule.routes) app.use(appModule.basePath, appModule.routes);
+    for (const { basePath, routes } of enabledModules)
+        if (basePath && routes) app.use(basePath, routes);
 
     /**
      * REST API routes — domain-driven routing.

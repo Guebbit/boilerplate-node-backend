@@ -18,23 +18,22 @@ import { router } from './routes';
  * nothing to promise: it owns URLs, not data, and nothing in the app reaches into it. With no
  * barrel the boundary lint makes that structural — a sibling cannot import this module at all,
  * rather than being asked politely not to.
+ *
+ * Health, metrics and a dashboard over them: interchangeable with any off-the-shelf equivalent, and
+ * measured against the process rather than the business. There is no domain here to model.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      audit-logs
+ * Reached by:   nothing
+ * Not imports:  reads every domain's counters BY STRING off the shared registry
+ *               (`metricsRegistry.getSingleMetric('auth_login_total')`), never by import. That is
+ *               deliberate — it is what lets this module report on domains it may not name — and it
+ *               is why `metric-names.test.ts` exists. Renaming a counter compiles fine and breaks
+ *               this silently.
  */
 export default {
     name: 'observability',
-    /*
-     * Health, metrics and a dashboard over them. Interchangeable with any off-the-shelf equivalent,
-     * and measured against the process rather than the business — there is no domain here to model.
-     */
-    subdomain: 'generic',
     basePath: '/observability',
     routes: router,
-    dependsOn: [
-        {
-            module: 'audit-logs',
-            as: 'conformist',
-            because:
-                'Renders audit entries exactly as that module stores them; `GET /observability/audit` adds a URL, not a model.'
-        }
-    ],
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

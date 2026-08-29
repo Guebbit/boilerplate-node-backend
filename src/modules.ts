@@ -5,8 +5,9 @@
  * plus deleting its line — and if anything else breaks, that break is real coupling worth seeing
  * rather than a chore worth automating away.
  *
- * Order is not significant: routers mount under distinct base paths and dependencies are resolved
- * from `dependsOn`, not from position. Keep it alphabetical so diffs stay boring.
+ * Order is not significant: routers mount under distinct base paths, imports are resolved by the
+ * module system, and `subscribe` hooks all run before the first route does. Keep it alphabetical so
+ * diffs stay boring.
  *
  * A module that also ships its own `openapi.yaml` or `analytics.ts` needs one more line, in
  * `MODULE_SECTIONS` (`scripts/contracts/openapi-bundle.ts`) or `SECTIONS`

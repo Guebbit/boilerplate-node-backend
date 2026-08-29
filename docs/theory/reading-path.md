@@ -63,20 +63,21 @@ no auto-registration, no magic.
 ### 3 · `src/kernel/registry.ts` — what a module _is_
 
 The thesis of the repository. A module is a **typed object**, not a folder convention: it declares
-its name, dependencies, routes, locales, seeds and event subscriptions, and the registry validates
-the dependency graph at boot.
+its name, routes, locales, seeds and event subscriptions, and the registry calls what it declares.
 
-**Take away:** `AppModule` is a union — `RoutedModule` (has `basePath` + `routes`) or
-`HeadlessModule` (has neither, e.g. `audit-logs`). Declaring one without the other is a type error
-at the manifest, not a route that silently never mounts.
+**Take away:** every field on `AppModule` is read by something at boot — `basePath` and `routes` by
+`app/routes.ts`, `locales` by i18next, `subscribe` by `registerModules`, `seeds` by the seeding
+script. A field nothing reads is a comment with extra syntax, which is why several used to be here
+and are not.
 
 ### 4 · `src/modules/products/module.ts` — one module, declared
 
 20 lines. **`products` is the reference module** — when you add a domain, copy this one. It depends
 on nothing, so it shows the shape without the complications.
 
-**Take away:** compare it with `src/modules/orders/module.ts`, which declares `dependsOn` and
-`subscribe`. That is the whole difference between a leaf domain and a connected one.
+**Take away:** compare it with `src/modules/orders/module.ts`, which declares `subscribe` and whose
+docblock explains what it reaches for. That is the whole difference between a leaf domain and a
+connected one.
 
 ### 5 · `src/modules/products/routes.ts` — the URL surface
 
@@ -153,8 +154,8 @@ all of it is easier to read once you have one.
 Everything above is easier if these are in your head first:
 
 1. **A module is a value.** One typed object per domain, listed in `src/modules.ts`.
-2. **Layers only point downward.** `kernel` and `infrastructure` know no domain; modules know each
-   other only through declared `dependsOn` or domain events.
+2. **Layers only point downward.** `kernel` and `infrastructure` know no domain; modules reach each
+   other only through a sibling's barrel, or through domain events.
 3. **The contract is an output.** `openapi.yaml` is assembled from per-module fragments, and
    generates the client and Zod schemas both repos import. Never edit `openapi.yaml` or `api/`.
 4. **Controllers respond, services decide, repositories query.** No layer does two of those.

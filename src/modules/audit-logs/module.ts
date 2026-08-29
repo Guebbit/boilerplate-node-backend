@@ -19,14 +19,20 @@ import { auditLogService } from './service';
  * touches Mongo when an entry actually fires, which cannot happen before the app serves a request.
  * Doing it here rather than in `app.ts` is what keeps the assembly file from naming a domain: with
  * this module deleted, the audit trail stops being stored and everything else still builds.
+ *
+ * "Who did what, kept for N days" is the same requirement in every application that has ever had
+ * one, and none of them differ about it. That is why the call sites talk to an infrastructure sink
+ * instead of to this module, and why replacing the whole thing with something bought would cost
+ * nothing above.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      nothing
+ * Reached by:   observability (for `GET /observability/audit`)
+ * Not imports:  retention is a TTL index on the collection, not code — see `./model`. Change the
+ *               window and nothing in TypeScript moves.
  */
 registerAuditSink(auditLogService.record);
 
 export default {
-    name: 'audit-logs',
-    /*
-     * "Who did what, kept for N days" is the same requirement everywhere it appears. Generic, and
-     * the reason the ~53 call sites talk to an infrastructure sink rather than to this module.
-     */
-    subdomain: 'generic'
+    name: 'audit-logs'
 } satisfies AppModule;

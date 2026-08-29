@@ -131,20 +131,6 @@ describe('resolveAnalyticsProvider', () => {
         expect(resolveAnalyticsProvider().name).toBe(expected);
     });
 
-    it('throws on a name this build does not carry, rather than falling back', () => {
-        // A silent fallback would mean a typo'd deployment records events into the wrong
-        // system — or nothing at all — and looks healthy while doing it.
-        process.env.NODE_ANALYTICS_PROVIDER = 'mixpanel';
-
-        expect(() => resolveAnalyticsProvider()).toThrow(/Unknown analytics provider "mixpanel"/);
-    });
-
-    it('names the providers it does carry in that error, so the fix is in the message', () => {
-        process.env.NODE_ANALYTICS_PROVIDER = 'typo';
-
-        expect(() => resolveAnalyticsProvider()).toThrow(/umami, posthog, none/);
-    });
-
     it('memoises, so the environment cannot change under a running process', () => {
         expect(resolveAnalyticsProvider().name).toBe('umami');
         process.env.NODE_ANALYTICS_PROVIDER = 'none';

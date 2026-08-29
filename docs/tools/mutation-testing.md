@@ -190,11 +190,13 @@ starts a real `mongod` and connects mongoose to it — and were excluded by neit
 they were named `unit`. A mutation run started and stopped a database thousands of times, paying the
 exact cost the ignore patterns exist to avoid, just from a different directory. That gap is closed:
 those 36 files now live in each module's `tests/integration/`, covered by the pattern above, and
-`tests/cross-cutting/unit-layer-is-framework-free.test.ts` is what keeps a new one from drifting
-back in. Confirm the unit layer is clean with:
+`unit-layer-stays-database-free` in `.dependency-cruiser.cjs` is what keeps a new one from drifting
+back in. It replaced a text sweep that looked for three strings in each spec, and it is stronger for
+the reason the config's header gives: it asks whether a spec can REACH a database, so a helper that
+pulls one in is caught too. Confirm the unit layer is clean with:
 
 ```bash
-grep -rl "setupTestDb\|MongoMemoryServer" src/modules/*/tests/unit tests/unit tests/cross-cutting | wc -l
+npm run check:dependencies
 ```
 
 That grep, and the incident it used to report, is the load-bearing fact behind the failure mode

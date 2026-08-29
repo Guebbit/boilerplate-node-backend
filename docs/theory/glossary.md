@@ -13,7 +13,7 @@ ubiquitous language, and they are what a change has to move. This page carries t
 identifier cannot: what the term means, and the constraint behind it.
 :::
 
-See [Strategic DDD](./strategic-ddd.md#_3-ubiquitous-language-per-context-not-per-app) for why the
+See [Strategic DDD](./strategic-ddd.md#_3-ubiquitous-language-—-per-context-not-per-app) for why the
 language is kept per context rather than shared.
 
 ---

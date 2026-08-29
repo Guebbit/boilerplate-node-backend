@@ -13,10 +13,7 @@ import { startCache } from '@infrastructure/adapters/cache';
 import { startQueue } from '@infrastructure/adapters/queue';
 import { registerWorkers } from '@app/workers';
 import { logger } from '@infrastructure/adapters/logger';
-import {
-    environmentNumber,
-    validateRequiredEnvironment
-} from '@infrastructure/runtime/environment';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 import { shutdownInfra, registerSignalHandlers } from '@infrastructure/runtime/server-lifecycle';
 import {
@@ -54,14 +51,13 @@ let shutdownPromise: Promise<void> | undefined;
 const getPort = () => environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
 
 /*
- * Boot sequence: validate env → connect infra → mount i18n → listen
+ * Boot sequence: connect infra → mount i18n → listen
  */
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
 
     return (
         Promise.resolve()
-            .then(() => validateRequiredEnvironment())
             .then(() => start())
             .then(() => startCache())
             .then(() => startQueue())

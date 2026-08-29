@@ -494,7 +494,7 @@ describe('productService.removeById', () => {
     /**
      * Registers the modules for real rather than reaching into the cart directly. The list is the
      * cart's dependency closure, not just the two domains at play: the registry refuses to install
-     * a module whose `dependsOn` names something absent.
+     * a module whose subscribers reach a sibling that is not there.
      *
      * The catalogue no longer calls the cart — it emits `product.deleted` and the cart module
      * subscribes. That subscription only exists once the registry has run, so a test that skipped

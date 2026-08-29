@@ -91,7 +91,7 @@ flowchart LR
 ```
 
 **Named.** The file is one of a kind — `migrate-mongo-config.js`, `src/app.ts`,
-`tests/cross-cutting/context-map.test.ts`. It gets its own row.
+`tests/cross-cutting/mail-copy.test.ts`. It gets its own row.
 
 **Pattern.** The file is one instance of a shape that repeats. The shape gets the row and the
 explanation; an inventory table says which modules have it. This is where the leverage is:

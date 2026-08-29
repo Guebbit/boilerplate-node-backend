@@ -331,29 +331,22 @@ at all, and the templates interpolate rather than translate.
 ```ts
 export default {
     name: 'orders',
-    subdomain: 'core',
     basePath: '/orders',
     routes: router,
-    dependsOn: [
-        {
-            module: 'products',
-            as: 'conformist',
-            because:
-                'An order item embeds `productSchema` itself, so the catalogue’s shape is this module’s shape too.'
-        }
-    ],
     locales: path.join(__dirname, 'locales'),
     seeds: seedOrdersCollection
 } satisfies AppModule;
 ```
 
-`subdomain` and the `as`/`because` on each edge are the module's **strategic**
-declarations — what it is to the business, the words it uses, and what kind of relationship each
-arrow is. Nothing reads them at runtime; `tests/cross-cutting/` reads all three. They are covered in
-[Strategic DDD](./strategic-ddd.md).
+Every field is read by something at boot: the router is mounted at `basePath`, `locales` is handed
+to i18next, `subscribe` attaches the module's event handlers, `seeds` is called by the seeding
+script. That is the bar for a field being here at all — the manifest used to also carry `subdomain`
+and a labelled `dependsOn` graph, which nothing read and three tests checked; see
+[Strategic DDD](./strategic-ddd.md) §2 and §4 for where that description lives now.
 
-It is a union of two alternatives, so a domain that owns data but no URL is a first-class entry
-rather than a special case:
+`basePath` and `routes` are both optional, so a domain that owns data but no URL is an ordinary
+entry rather than a special case — `audit-logs` declares neither and `app/routes.ts` mounts only
+the modules that declare both:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
@@ -413,8 +406,8 @@ flowchart TD
     class products,users,feedback,locales,audit-logs leaf;
 ```
 
-Every arrow is a `dependsOn` — declared, and validated as a **DAG at boot**. Four modules declare
-nothing and are depended on instead (`products`, `users`, `audit-logs`) or by nobody at all
+Every arrow is an import across a module boundary, through the target's barrel. Four modules reach
+for nothing and are reached for instead (`products`, `users`, `audit-logs`) or by nobody at all
 (`feedback`, `locales`). `cart` is the busiest node with six edges, which is not a smell to
 refactor away: a checkout is the one operation that genuinely needs the catalogue, the customer, the
 order it becomes, the units held against it, the address it ships to and the price of getting it
@@ -534,7 +527,7 @@ Deleting `products`, `cart` and `orders` together, **re-measured 2026-08-16 at t
 | Tier                  | Files that break | What they are                                                           |
 | --------------------- | ---------------- | ----------------------------------------------------------------------- |
 | `db/**`               | **0**            | —                                                                       |
-| `src/**` (production) | 10               | four modules that **declare** the edge in `dependsOn` — the DAG working |
+| `src/**` (production) | 10               | four modules that genuinely import it — a real coupling, failing loudly |
 | co-located specs      | 10               | five modules' own tests, reaching for a deleted domain's factories      |
 | `tests/**`            | 4                | central specs using a domain as sample data, or asserting one           |
 | `scripts/**`          | 2                | the section lists, announcing the entry you have not deleted yet        |
@@ -542,17 +535,18 @@ Deleting `products`, `cart` and `orders` together, **re-measured 2026-08-16 at t
 **The `db/**`zero is the verdict**, and it is a narrower claim than the one this table used to
 make. An earlier run reported zero in`src/\*\*`too; that was true when`delivery`, `inventory`,
 `payments`and`wishlist` did not exist, and it was never the property being defended. Those four
-break because they genuinely depend on what was deleted and said so in their manifest — the registry
-would refuse the boot naming the offending pair, which is the failure mode the DAG exists to
-produce. What must stay at zero is the tier that names domains without declaring them, and it has.
+break because they genuinely import what was deleted — a compile error naming the file and the
+line, which is the failure a real coupling should produce. What must stay at zero is the tier that
+names domains it has no business naming, and it has.
 
 The rest is residue in test and script code — the two `scripts/**` breaks are the hard errors the
 removal procedure tells you to fix in step 3, and some of the test breaks are **correct** and must
 not be "fixed". Which is which, and how to re-run it, is
 [Re-running the deletability check](./module-lifecycle.md#re-running-the-deletability-check).
 
-If a module you delete was named in another module's `dependsOn`, the registry stops the boot with
-the offending pair named rather than 500-ing on the first request that crosses the gap.
+If a module you delete is imported by another, `tsc` fails on the importing file rather than the app
+500-ing on the first request that crosses the gap — which is why the barrel is the only surface a
+sibling may reach.
 
 ::: tip Run a deletability test after any significant change
 Delete two or three domains on a throwaway copy and see what breaks. Nothing in the suite checks
@@ -577,9 +571,8 @@ Some of these rules are relational — what a file may import depends on which m
 | Every language declares the same keys across every module                             | `locale-parity.test.ts`              |
 | `infrastructure`'s shared scalars still match every operation in `openapi.yaml`       | `contract-scalars.test.ts`           |
 | Every controller handles its own rejections                                           | ESLint `controller-chain-must-catch` |
-| **A function added to a service but forgotten in its namespace**                      | `service-namespaces.test.ts`         |
-| Every declared `dependsOn` edge is imported, and every import is declared             | `context-map.test.ts`                |
-| A `generic` module carrying a `domain/` folder                                        | `subdomain-discipline.test.ts`       |
+| A module's `subscribe` hook registering nothing, or one event twice                   | `module-subscriptions.test.ts`       |
+| A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`  |
 | Every committed bundle still equals a fresh run of the bundler                        | `contract-bundles.test.ts`           |
 | Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`            |
 
@@ -587,20 +580,14 @@ Each of these was verified by deliberately breaking it and watching it fail. A g
 fire is a comment. All but the last live in `tests/cross-cutting/`; `request-sources.test.ts` sits
 in `tests/contract/`, because it needs the loaded spec the contract harness already registers.
 
-**`service-namespaces.test.ts` is the newest and the least obvious**, because the thing it catches
-never fails on its own. Every module is reached through exactly one `*Service` namespace — the
-convention was 9 modules to 3 before the test existed, with `delivery`, `inventory` and `payments`
-exporting loose functions instead. Both styles work, which is precisely why the split survived: what
-it cost was a spec copied from a module that does `jest.spyOn(service, 'fn')` not running against a
-module with no object to spy on. The second property is the one a convention alone cannot hold —
-**the namespace must hold every function the service exports** — because adding one and forgetting
-to list it is silent. The loose export keeps working, callers that already import by name never
-notice, and the namespace quietly stops being the whole surface it claims to be.
-
-What the test deliberately does **not** assert is that the object is named after its module.
-`feedback` exports `feedbackRequestService` and `audit-logs` exports `auditLogService`, both named
-for the record they serve rather than for the folder. A rule that failed those two would be a rule
-about spelling rather than about structure — so neither is a violation.
+**`module-subscriptions.test.ts` is the least obvious of these**, because the thing it catches never
+fails on its own. `subscribe` is the one part of a manifest that is pure behaviour: `routes`,
+`locales` and `seeds` are values a test can read, but a subscription only exists as the side effect
+of calling a function at boot. Nothing else in the suite calls these hooks — `app.ts` does, once —
+so an emptied `subscribe` body is invisible. The module still registers, still serves its routes,
+still passes every other check, and simply stops reacting to the rest of the system: deleting a
+product would stop emptying it out of carts and wishlists, a reservation timing out would stop
+cancelling its order.
 
 ## Related pages
 

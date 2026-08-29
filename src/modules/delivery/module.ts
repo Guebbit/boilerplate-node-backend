@@ -14,31 +14,18 @@ import { shipOrder } from './service';
  * cart → delivery, the same direction as cart → orders, and deleting this module takes the
  * shipping selector, the parcel records and the costs with it: orders simply stop carrying a
  * `shippingCost`, which is the state the shop was in before.
+ *
+ * Shipping is specific to how this shop operates — its methods, its rates, its courier — but it is
+ * not what anyone buys here. Worth its own rules in `domain/`; not worth an aggregate.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      orders, users
+ * Reached by:   cart (prices a method at checkout through `./domain`)
  */
 export default {
     name: 'delivery',
-    /*
-     * Shipping is specific to how this shop operates — its methods, its rates, its courier — but it
-     * is not what anyone buys here. Supporting: worth its own rules in `domain/`, not worth an
-     * aggregate.
-     */
-    subdomain: 'supporting',
     basePath: '/delivery',
     routes: router,
-    dependsOn: [
-        {
-            module: 'orders',
-            as: 'customer-supplier',
-            because:
-                'A shipment is about an order: this module reads the order it ships and moves its status.'
-        },
-        {
-            module: 'users',
-            as: 'conformist',
-            because:
-                'Reads the recipient record to address the shipped email in their own language.'
-        }
-    ],
     subscribe: () => {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) => {
             if (to === 'shipped') return shipOrder(orderId);

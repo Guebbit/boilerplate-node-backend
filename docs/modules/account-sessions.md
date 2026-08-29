@@ -102,4 +102,4 @@ the concrete reason the `account → users` edge is `shared-kernel`: this module
 - [`users`](./users.md) — where the refresh tokens are stored
 - [Security](../tools/security.md) — hashing, headers, and rate limits
 - [Request Flow](../theory/request-flow.md) — where the guard sits
-- [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-typed-edges) — what `shared-kernel` costs
+- [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — what `shared-kernel` costs

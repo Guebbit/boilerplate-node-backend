@@ -12,12 +12,12 @@
  * `userModel` is no longer among them, and its absence is the point. `account/session/jwt.ts` and
  * `account/services/token-cleanup.ts` used to take it and run their own `findOne`, `updateOne` and
  * `updateMany` against this collection — a second door to the same rows, from files that are not
- * repositories. They ask `userRepository` now, so the model has no caller outside this module and
- * `published-language.test.ts` is what stops it being re-published on speculation.
+ * repositories. They ask `userRepository` now, so the model has no caller outside this module — keep
+ * it that way rather than re-publishing it on speculation.
  *
- * It is also the repo's one `shared-kernel` edge, declared as such in `account/module.ts`. The width
- * here and the label there are the same fact written twice, which is the point: a wide barrel should
- * be visible on the context map rather than only to whoever opens this file.
+ * This is also the repo's one `shared-kernel` relationship: `account` reads and writes the same User
+ * record from the other side, which is why that module's docblock says so and why this barrel is the
+ * widest here. `module-coupling-account` in `.dependency-cruiser.cjs` is what holds the pair.
  */
 
 export { userService } from './service';

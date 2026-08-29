@@ -56,6 +56,14 @@ import { seedLocalesCollection, exportSeededLocales } from './demo';
  * comes from `@infrastructure/i18n`, which sits below modules and must stay there — a module that
  * `infrastructure` had to reach for its own translations would invert the one layering rule this
  * codebase enforces in two places.
+ *
+ * A translations admin is something every application grows and none of them differ about. The
+ * interesting modelling is the tier split below — a decision about where data lives, not a domain to
+ * build entities for.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      nothing
+ * Reached by:   nothing, and nothing should — see 'No `index.ts`' below
  */
 /*
  * The backend tenant's share of this module's collection, handed to `@infrastructure/i18n` so an
@@ -71,12 +79,6 @@ registerLocaleOverrideProvider(() => localeService.readApiOverrides());
 
 export default {
     name: 'locales',
-    /*
-     * A translations admin is something every application grows and none of them differ about. The
-     * interesting modelling here is the tier split, which is a decision about where data lives
-     * rather than a domain to build entities for.
-     */
-    subdomain: 'generic',
     basePath: '/locales',
     routes: router,
     /*
