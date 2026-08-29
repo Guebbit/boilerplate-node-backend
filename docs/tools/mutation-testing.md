@@ -175,14 +175,20 @@ flowchart TB
             "/node_modules/",
             "<rootDir>/tests/integration/",
             "<rootDir>/tests/contract/",
+            "<rootDir>/tests/fuzz/",
             "<rootDir>/src/modules/[^/]+/tests/contract/",
-            "<rootDir>/src/modules/[^/]+/tests/integration/"
+            "<rootDir>/src/modules/[^/]+/tests/integration/",
+            "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
+            "<rootDir>/tests/cross-cutting/outbox-names.test.ts"
         ]
     }
 }
 ```
 
-All of them drive a real (or real-HTTP) app against an in-memory Mongo — running any once per mutant would take hours.
+All of them drive a real (or real-HTTP) app against an in-memory Mongo — running any once per mutant would take hours. `tests/fuzz/` is excluded for the same non-determinism reason it stays out of the deep run too: see [Contract and fuzz stay excluded even there](#the-deep-run). The two `tests/cross-cutting/` entries are excluded for an unrelated, sandbox-specific reason — not cost, correctness:
+
+- **`outbox-names.test.ts`** reads `emails.ts`' source text and regex-matches `template: '...'` as a plain string literal. Stryker's mutator rewrites every string literal in the files it mutates to `stryMutAct_9fa48(id) ? '' : (stryCov_9fa48(id), '...')`, which the regex no longer matches — so the dry run fails a check about mail naming before a single mutant runs, even though nothing about mail naming is actually broken. The sandboxed source just doesn't look like source any more.
+- **`contract-bundles.test.ts`** asserts each committed contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: `ts-jest` runs with diagnostics on, so a type-breaking mutant would fail to _compile_, count as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
 
 **The exclusion used to do less than its name suggested.** Until the split described in
 `NODE_MUTATION_MONGOD.md`, 36 files under `src/modules/*/tests/unit/` called `setupTestDb()`, which
@@ -276,6 +282,12 @@ while Stryker copies the project into its sandbox — so copying them is both po
 instance starts its own server) and racy. A WiredTiger file removed mid-copy fails the entire run
 with an `ENOENT` naming a filename nothing in the project mentions. `run-mutation-tests.ts` clears
 `.tmp` before it starts, which hid this until two runs overlapped.
+
+`ignorePatterns` must **not** list `public/**`, even though `coverage/`, `reports/`, `dist/` and
+`docs/` are all excluded there — the sandbox is the only filesystem the tests see, and
+`tests/unit/db/seed-fixtures.test.ts` asserts every seed fixture's `imageUrl` resolves to a
+committed file under `public/images/seed/`. Leave it out of `ignorePatterns` and Stryker refuses to
+start at all.
 
 ## What to be wary of — per-file setup costs
 
@@ -689,6 +701,26 @@ example in its comments.
 `--max-old-space-size` bounds V8's old space only; `ArrayBuffer` backing stores live outside it, so a
 worker capped at 1400 MB was measured at 6.6 GB RSS. Against external memory the cap does not decide
 how much a worker accumulates, only how early V8 panics about the part it can see.
+
+## Concurrency and maxTestRunnerReuse — the current numbers
+
+Both are measurements with an expiry date, not constants — re-measure them when the numbers below stop matching the machine or the project.
+
+**`concurrency: 4`.** The ceiling is memory, not cores: each worker is a separate process carrying a full test runner and its own in-memory `mongod`, and the machine is in use while a run happens. It was 8, and 8 stopped fitting: measured 2026-08-14, a run at 8 held four workers at ~4 GB RSS each, logged 12 `ran out of memory` worker restarts in the first five minutes, and then made no progress at all — 1927 of 6040 mutants after five minutes, and the same 1927 three samples later. A run that thrashes does not merely take longer, it stops finishing.
+
+What moved was the project, not the machine: the module count went from nine to thirteen and the mutant count from 3241 to 6040 between those two measurements, so the same 8 workers each carried a much larger program. `maxTestRunnerReuse` (below) has since removed the _unbounded_ growth that made 8 fail, so that specific failure no longer applies — but what bounds a worker now is the working set of one pass, ~2.9 GB, which does not shrink with more recycling. Divide usable RAM by ~3 GB: 8 in principle, 6 in practice on 32 cores / 30.5 GB, because 8 left only 1.6 GB free on a machine doing other things.
+
+4 is kept as the shared default because this value is committed and the safe number is a property of the machine, not the project — a contributor's laptop is not a 30 GB desktop. Raise it per machine via `STRYKER_CONCURRENCY` in `.env` (see [the worker-pool multiplication](#the-worker-pool-multiplication)). CI overrides it independently — `mutation.yml` passes `--concurrency 3`, because a standard GitHub runner is 4 vCPU / 16 GB, not 32/30.
+
+**`maxTestRunnerReuse: 5`.** [The bson case study](#case-study-the-buffers-were-not-io-at-all) explains _why_ a runner has to be recycled; this is the number and how it was picked. A worker's RSS grows by ~470 MB per mutant and does not plateau — measured 2026-08-14, one file, one worker, heap cap unset: 1634 MB at the end of the dry run, 5850 MB nine mutants later, linear the whole way. Left alone it exhausts the machine rather than converging.
+
+5 keeps a worker's peak near 2.8 GB, which is what makes four concurrent workers fit in the arithmetic above. It is not obviously better than a lower number: reuse 5 and reuse 3 finished the same sample in 4m32s and 4m28s, at 23.1 GB and 23.2 GB peak — recycling more often bounds how high one worker climbs, it does not shrink the total. Raise it if a run has memory to spare (each restart costs a process spawn — over a thousand of them at this scope); lower it if workers still die. Re-measure with:
+
+```bash
+npx stryker run --mutate <one file> --concurrency 1
+```
+
+watching RSS against the mutant counter.
 
 ## Why it never gates a PR
 
