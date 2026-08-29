@@ -2,6 +2,22 @@
 
 Every other layer on this site answers "does the code do the right thing?" This one answers a different question: **do the _tests_ actually notice when it doesn't?** Line coverage can be satisfied by executing a line without asserting anything about its result; mutation testing can't — it edits the source thousands of times (`>` to `>=`, `&&` to `||`, a function body emptied out) and reports every edit the suite failed to catch. A **surviving mutant** is a bug the tests are structurally blind to.
 
+::: danger The service layer is mutated but not measured
+This run excludes `tests/integration/`, `tests/contract/` and their co-located equivalents while
+`mutate` still covers `src/modules/*/**/*.ts`. It therefore mutates code whose killing tests it
+never runs, and **153 of 254 files in `mutation-baseline.json` score 0% for that reason alone** —
+they are unmeasured, not untested.
+
+The exclusion is the fix for the `bson` leak documented below, not an oversight. Measured on
+`delivery/service.ts`, 2026-08-29: including the integration suites raises the score from 0% to
+64.8% and costs 23 process OOMs in 812 seconds; adding `ignoreStatic` makes it 46. Raising
+`--max-old-space-size` cannot help — the 17 MiB buffers are `ArrayBuffer` backing stores, which live
+outside the heap V8 bounds.
+
+See [Coverage & Confidence](./coverage-and-confidence.md) for what to trust, and what a 0% score
+does and does not mean.
+:::
+
 ## Start here — the short version
 
 **Line coverage asks "did this code run?" Mutation testing asks "if I break this code, does anything notice?"** Those are different questions, and a file can score 100% on the first and 0% on the second — the tests execute every line and check nothing about what it does.
@@ -897,6 +913,63 @@ The three outcomes are different findings, and the columns keep them apart:
 Two shapes of unreached code show up differently, and it is worth knowing which you are looking at. Code that runs at **import time** — a route table literal, a schema built at module scope — executes as soon as any test imports the module, so its mutants are _covered_ and come back as **survivors**: `users/routes.ts` reports 36 of them. A **function body** only executes when called, so an uncalled one comes back as **no coverage**. Zero survivors alongside a high no-coverage count is the signature of a file nothing invokes.
 
 Controllers illustrate why a blanket exclusion is the wrong instrument. They were once excluded wholesale on the assumption that only contract and integration tests reach them — but several are unit-tested directly as plain functions with fake `req`/`res` objects (`post-login`, `get-refresh-token`, `delete-account-request`, `delete-account-confirm`, `get-observability-metrics-overview`). The exclusion was therefore hiding real, working coverage as well as honest gaps.
+
+## The three runs {#the-three-runs}
+
+Same mutator, three scopes, three schedules. They differ only in which tests they run and which
+files they mutate — and, critically, each compares against its own baseline, because a score is
+only meaningful next to one measured the same way.
+
+| Run      | Config                | Tests it runs           | Mutates                           | When               | Baseline                      |
+| -------- | --------------------- | ----------------------- | --------------------------------- | ------------------ | ----------------------------- |
+| **unit** | `stryker.config.json` | unit + cross-cutting    | everything in `mutate`            | nightly, `--force` | `mutation-baseline.json`      |
+| **deep** | `stryker.deep.json`   | \+ `tests/integration/` | same, sharded by module in CI     | nightly, `--force` | `mutation-baseline-deep.json` |
+| **diff** | `stryker.deep.json`   | \+ `tests/integration/` | only the files the branch changed | every pull request | `mutation-baseline-deep.json` |
+
+### Why the nightlies always run in full
+
+`mutation.yml` passes `--force`, which discards the incremental file and re-tests every mutant. That
+is the nightly's job. The incremental file is a CACHE, and a refactor that moves code between files
+leaves it describing a codebase that no longer exists — so it is right for a developer's inner loop
+and wrong for the run of record. `npm run test:mutation` locally, without `--force`, is the fast
+version; CI never trusts it.
+
+### The diff run, and why it can fail when the nightly cannot
+
+The nightly is `continue-on-error` and reports. The diff run is the one that can block, and it does
+so on a narrower question: **did a file you touched score below what it already scored?**
+
+It mutates WHOLE changed files rather than changed lines. Stryker supports line ranges
+(`--mutate 'file.ts:10-40'`, which is how Google's published practice scopes a diff), and whole
+files are chosen deliberately: whole-file scores are what the baseline records, so they compare
+directly, whereas a line-range score is comparable to nothing. The consequence is intended — touch a
+file and you own not making its debt worse.
+
+Two things follow from ratcheting rather than thresholding, and both matter:
+
+- **Pre-existing weakness cannot fail you.** The baseline already records it. You simply cannot
+  lower it further.
+- **Equivalent mutants cannot fail you.** A mutant no test could ever kill — `.catch(() => null)`
+  becoming `() => undefined`, say — was already surviving when the baseline was taken, so it is
+  priced in and moves nothing. This is why the diff run needs none of the mutant-suppression
+  heuristics that a threshold-based diff gate would.
+
+Stryker's own `thresholds.break` is deliberately not the verdict here. It is a percentage over
+whatever the diff happens to contain: one survivor is 50% of two mutants and 10% of ten, and the
+size of a diff is not a fact about the code.
+
+The run never records. `--update` is not forwarded, because a partial report written as the baseline
+would erase every file it did not measure — `check-mutation-baseline.ts` refuses that explicitly.
+The nightly owns the baseline.
+
+```bash
+npm run test:mutation:diff                  # against origin/main
+npm run test:mutation:diff -- --base=HEAD~3
+```
+
+**Cost.** Whole-file scope makes this minutes, not seconds: a four-file diff measured 402 mutants,
+and `products/repository.ts` alone is 196. Budget tens of minutes on a PR that touches a large
+service — which is why the job is `continue-on-error` until a team decides otherwise.
 
 ## The per-file ratchet
 

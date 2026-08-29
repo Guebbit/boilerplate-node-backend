@@ -175,6 +175,13 @@ module.exports = {
      * satisfy it would be unit tests duplicating the contract suite less well. If controllers
      * ever need a floor it belongs on a coverage run that includes those suites.
      *
+     * ── These floors are a PROXY. Mutation testing is the instrument ─────────────────────────
+     * A line can be executed by a test that asserts nothing about it, and coverage calls that
+     * 100%. `npm run test:mutation` asks whether a test would NOTICE the line changing, which is
+     * the question that matters; an uncovered line cannot kill a mutant, so the mutation score
+     * subsumes everything below. Coverage is kept because it runs in seconds where a mutation run
+     * does not. See docs/tools/coverage-and-confidence.md.
+     *
      * ── The floors below were re-fitted on 2026-08-29, and several are LOW ────────────────────
      * Read them as a ratchet — "do not get worse" — not as a target. They are low for the reason
      * the controller paragraph above already gives, spread wider than it was written for: this run

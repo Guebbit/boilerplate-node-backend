@@ -23,9 +23,38 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-/** Where `stryker.config.json`'s `jsonReporter` writes, and where the baseline is committed. */
-const MUTATION_REPORT_PATH = 'reports/mutation/mutation.json';
-export const MUTATION_BASELINE_PATH = 'mutation-baseline.json';
+/**
+ * One measured scope: where its Stryker report lands, and where its committed ratchet lives.
+ *
+ * Two scopes exist because two rulers exist, and a score is only comparable to one taken the same
+ * way. `unit` is `stryker.config.json` — the unit suites, fast, the nightly's default. `deep` is
+ * `stryker.deep.json`, which also runs `tests/integration/` and so is the only ruler that can see
+ * the service and repository layers at all. Comparing one against the other's baseline reads every
+ * integration-covered file as a mass improvement and then defends the wrong number forever.
+ */
+export interface MutationProfile {
+    /** Where that config's `jsonReporter` writes. */
+    report: string;
+    /** Where its per-file ratchet is committed. */
+    baseline: string;
+}
+
+export const MUTATION_PROFILES = {
+    unit: {
+        report: 'reports/mutation/mutation.json',
+        baseline: 'mutation-baseline.json'
+    },
+    deep: {
+        report: 'reports/mutation-deep/mutation.json',
+        baseline: 'mutation-baseline-deep.json'
+    }
+} as const satisfies Record<string, MutationProfile>;
+
+export type MutationProfileName = keyof typeof MUTATION_PROFILES;
+
+/** The scope named on the command line, defaulting to the fast one. */
+export const profileFromArguments = (argv: readonly string[]): MutationProfileName =>
+    argv.includes('--deep') ? 'deep' : 'unit';
 
 /**
  * How far a file may fall below its baseline before it counts as a regression.
@@ -86,8 +115,11 @@ export const scoresFromReport = (report: MutationReport): Record<string, number>
     return scores;
 };
 
-export const readReport = (root = process.cwd()): Record<string, number> => {
-    const reportPath = path.join(root, MUTATION_REPORT_PATH);
+export const readReport = (
+    profile: MutationProfile,
+    root = process.cwd()
+): Record<string, number> => {
+    const reportPath = path.join(root, profile.report);
     if (!existsSync(reportPath))
         throw new Error(
             `No mutation report at ${reportPath}. Run \`npm run test:mutation\` first — ` +
@@ -97,17 +129,21 @@ export const readReport = (root = process.cwd()): Record<string, number> => {
     return scoresFromReport(JSON.parse(readFileSync(reportPath, 'utf8')) as MutationReport);
 };
 
-export const readBaseline = (root = process.cwd()): MutationBaseline | undefined => {
-    const baselinePath = path.join(root, MUTATION_BASELINE_PATH);
+export const readBaseline = (
+    profile: MutationProfile,
+    root = process.cwd()
+): MutationBaseline | undefined => {
+    const baselinePath = path.join(root, profile.baseline);
     if (!existsSync(baselinePath)) return undefined;
     return JSON.parse(readFileSync(baselinePath, 'utf8')) as MutationBaseline;
 };
 
-export const writeBaseline = (baseline: MutationBaseline, root = process.cwd()): void => {
-    writeFileSync(
-        path.join(root, MUTATION_BASELINE_PATH),
-        `${JSON.stringify(baseline, undefined, 4)}\n`
-    );
+export const writeBaseline = (
+    baseline: MutationBaseline,
+    profile: MutationProfile,
+    root = process.cwd()
+): void => {
+    writeFileSync(path.join(root, profile.baseline), `${JSON.stringify(baseline, undefined, 4)}\n`);
 };
 
 /**

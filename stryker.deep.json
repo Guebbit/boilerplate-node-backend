@@ -50,5 +50,5 @@
     },
     "timeoutMS": 30000,
     "concurrency": 4,
-    "maxTestRunnerReuse": 5
+    "maxTestRunnerReuse": 1
 }

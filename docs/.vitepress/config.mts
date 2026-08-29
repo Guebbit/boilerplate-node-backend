@@ -189,6 +189,10 @@ export default withMermaid(
                                 link: '/tools/contract-request-data'
                             },
                             { text: 'Mutation Testing', link: '/tools/mutation-testing' },
+                            {
+                                text: 'Coverage & Confidence',
+                                link: '/tools/coverage-and-confidence'
+                            },
                             { text: 'Load Testing', link: '/tools/load-testing' },
                             { text: 'Dependency Graph', link: '/tools/dependency-graph' },
                             { text: 'Cluster Testing', link: '/tools/cluster-testing' }

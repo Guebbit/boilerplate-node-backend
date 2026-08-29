@@ -1,6 +1,10 @@
 /*
  * Jest configuration used ONLY by Stryker (`npm run test:mutation`).
  *
+ * This run is the PRIMARY judgement of test quality in this repository — the coverage floors in
+ * `jest.config.js` are a fast proxy for it, not a second opinion. See
+ * docs/tools/coverage-and-confidence.md.
+ *
  * Identical to `jest.config.js` except for the transform, which is swc instead of ts-jest.
  * The frontend keeps the mirror of this file at `vitest.config.mutation.ts`, for the same reason:
  * the mutation run is the same run, with the parts that make no sense per-mutant removed.

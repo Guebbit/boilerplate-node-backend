@@ -93,11 +93,25 @@ This second point is also why `@faker-js/faker` (ESM-only from v10) can't be imp
 
 ## Commands
 
-| Command                      | Effect                       |
-| ---------------------------- | ---------------------------- |
-| `npm run test:unit`          | Full unit suite              |
-| `npm run test:unit:coverage` | Same, with coverage          |
-| `npx jest <path>`            | One file, for fast iteration |
+| Command                      | Effect                                    |
+| ---------------------------- | ----------------------------------------- |
+| `npm run test:unit`          | Full unit suite                           |
+| `npm run test:unit:coverage` | Same, with the unit-layer coverage floors |
+| `npx jest <path>`            | One file, for fast iteration              |
+
+::: warning Coverage here is a proxy, not the verdict
+Every test must pass — one failure is a red build, with no threshold on that. Coverage is a separate
+and weaker number: it reports which lines a suite EXECUTED, and a line can be executed by a test
+that asserts nothing about it.
+
+**[Mutation testing](./mutation-testing.md) is the instrument that judges this suite's quality** —
+it changes the code and checks a test goes red. An uncovered line cannot kill a mutant, so mutation
+score subsumes coverage; coverage is kept because it runs in seconds.
+
+A service reporting 37% on this run is not 63% broken and not 63% untested — it is covered by the
+integration suite, which this run does not execute. See
+[Tests → Three numbers](../reference/tests.md#three-numbers-and-they-are-not-the-same-question).
+:::
 
 ## Related pages
 

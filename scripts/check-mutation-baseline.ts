@@ -20,20 +20,29 @@ import {
     readBaseline,
     readReport,
     writeBaseline,
-    MUTATION_BASELINE_PATH
+    MUTATION_PROFILES,
+    profileFromArguments
 } from './mutation-baseline';
 
 const update = process.argv.includes('--update');
 
+/*
+ * `--deep` selects the scope that also ran `tests/integration/`. It has its own report and its own
+ * committed baseline, because a score is only comparable to one measured the same way.
+ */
+const profileName = profileFromArguments(process.argv);
+const profile = MUTATION_PROFILES[profileName];
+const MUTATION_BASELINE_PATH = profile.baseline;
+
 let current: Record<string, number>;
 try {
-    current = readReport();
+    current = readReport(profile);
 } catch (error) {
     console.error(`\n[mutation-baseline] ${(error as Error).message}\n`);
     process.exit(2);
 }
 
-const baseline = readBaseline();
+const baseline = readBaseline(profile);
 const comparisons = compareToBaseline(current, baseline);
 
 if (!baseline) {
@@ -42,7 +51,7 @@ if (!baseline) {
             Object.keys(current).length
         } files as the first baseline.`
     );
-    writeBaseline(nextBaseline(current));
+    writeBaseline(nextBaseline(current), profile);
     process.exit(0);
 }
 
@@ -99,12 +108,12 @@ if (regressions) {
     console.error(`\n[mutation-baseline] ${regressions}\n`);
     // `--update` still rewrites the file, but `nextBaseline` keeps the higher of the two scores,
     // so a regressed file keeps its old baseline and stays failing until it is fixed.
-    if (update) writeBaseline(nextBaseline(current, baseline));
+    if (update) writeBaseline(nextBaseline(current, baseline), profile);
     process.exit(1);
 }
 
 if (update) {
-    writeBaseline(nextBaseline(current, baseline));
+    writeBaseline(nextBaseline(current, baseline), profile);
     console.log(`[mutation-baseline] ${MUTATION_BASELINE_PATH} updated.`);
 }
 

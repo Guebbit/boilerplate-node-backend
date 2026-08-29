@@ -33,6 +33,94 @@ flowchart TD
     class Sup help;
 ```
 
+## Three numbers, and they are not the same question
+
+This trips people up, so it is stated before anything else on this page.
+
+**Tests passing is 100%, always.** Every one of the ~3,100 tests here must pass. One failing test
+is a red build — no threshold, no percentage, no "most of them". A test that fails is fixed or it
+is deleted; nothing in this repo tolerates a known-failing test. Everything below is about a
+different question, and none of it softens this one.
+
+The other two numbers are measurements of the SUITE rather than of the code, and they are ranked:
+
+|                    | The question it answers                      | Verdict on a low number                      |
+| ------------------ | -------------------------------------------- | -------------------------------------------- |
+| **Pass rate**      | did every assertion hold                     | something is **broken** — fix it now         |
+| **Mutation score** | would a test **notice** if this line changed | the suite is **weak here** — the real signal |
+| **Coverage**       | did this line **execute** during that suite  | that suite did not **reach** this code       |
+
+### Mutation testing is the instrument; coverage is the proxy
+
+Coverage is the weaker of the two and it is worth being blunt about why. It asks only whether a
+line ran. A line can be executed by a test that asserts nothing whatever about it, and coverage
+will call that 100%.
+
+Mutation testing asks the question you actually care about: **Stryker edits the code — flips a
+comparison, drops a call, changes a constant — and checks that some test goes red.** A test that
+does not notice the change did not really test the line, and the mutant "survives".
+
+That relationship is one-directional, which is what makes the ranking real: an uncovered line
+cannot possibly kill a mutant, so **every coverage gap shows up as surviving mutants, while the
+converse is false**. Mutation score subsumes coverage. Where the two disagree, the mutation score
+is the one telling the truth.
+
+So the honest framing of this repository's tooling:
+
+- **`npm run test:mutation` is the primary judgement of test quality.** Its per-file scores in
+  `mutation-baseline.json` are what "is this actually tested" means here.
+- **`npm run test:unit:coverage` is a fast proxy, and nothing more.** It runs in seconds where a
+  mutation run takes far longer, so it is the smoke alarm rather than the inspection. Its floors are
+  a ratchet — "do not get worse" — never a target. See `jest.config.js`, which says so at length.
+
+### Why the unit coverage numbers look so low
+
+`test:unit:coverage` runs `tests/unit`, `tests/cross-cutting` and each module's own `tests/unit` —
+and deliberately not the integration or contract suites. Thirty-six module specs were moved to
+`tests/integration/` because Stryker re-executes the unit suite once per mutant, so a spec that
+starts a database pays that startup thousands of times over (`NODE_MUTATION_MONGOD.md`).
+
+Moving them was right. What was missed is that the code they cover stopped being _counted_ by the
+unit coverage job while the floors stayed put, so that job failed on 89 thresholds until
+2026-08-29 — and a gate that is red for months is a gate nobody reads. The floors were re-fitted
+then, downward, and `jest.config.js` records what that does and does not buy.
+
+`orders/service.ts` reporting **37% statements on the unit run** therefore means: not 63% failing,
+not 63% untested — 63% covered by a suite this particular run does not execute.
+
+::: warning The same blind spot applies to Stryker today
+`stryker.config.json` mutates `src/modules/*/**/*.ts`, services and repositories included, while its
+`testPathIgnorePatterns` excludes `tests/integration/`, `tests/contract/` and the co-located
+equivalents. So it mutates code whose killing tests it never runs, and those mutants survive by
+construction rather than by weakness. That is why 153 of 254 files in `mutation-baseline.json` score
+0%, and why files such as `audit-logs/repository.ts` read 100% coverage and 0% mutation score at the
+same time — a combination only possible when no eligible spec was run against them.
+
+Read the mutation baseline as a ratchet against its own recorded history, not as an absolute grade,
+until that suite selection is revisited. `mutation.yml` is nightly and `continue-on-error`, so it
+gates nothing today either.
+:::
+
+### A combined coverage run was tried, and abandoned
+
+Running every suite under one instrumented process to get a single honest coverage number does not
+work here, and the record is kept so nobody spends the afternoon again: with the fuzz suite it dies
+on a V8 fatal assertion, and without it on `FATAL ERROR: JavaScript heap out of memory` at ~4 GB
+after roughly eight minutes. Making it work needs an enlarged heap or per-suite runs with merged
+reports — real machinery, for the weaker of the two instruments, duplicating a question mutation
+testing already answers better.
+
+| Command                      | Runs                     | Answers                                      |
+| ---------------------------- | ------------------------ | -------------------------------------------- |
+| `npm run test`               | every suite, no coverage | does everything pass — **the one that must** |
+| `npm run test:mutation`      | unit suite, mutated      | **would the tests notice a change**          |
+| `npm run test:unit:coverage` | unit + cross-cutting     | did the unit layer lose reach (fast proxy)   |
+
+See [Mutation Testing](../tools/mutation-testing.md) for the run itself, its baseline ratchet and
+what the `high`/`low`/`break` thresholds mean.
+
+---
+
 ## `tests/cross-cutting/` — rules that hold across every module
 
 The house speciality: one file per architectural rule, asserted over all thirteen modules at once.
