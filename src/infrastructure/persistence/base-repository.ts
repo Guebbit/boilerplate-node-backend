@@ -10,6 +10,7 @@ import {
     type PaginatedMeta,
     type PaginationInput
 } from './search';
+import { trackDatabaseQuery } from './metrics';
 
 /**
  * The ceiling `findAll` applies when a caller names no limit. A backstop against an unbounded
@@ -330,15 +331,17 @@ export function createBaseRepository<TDocument extends Document>(
     };
 
     return {
-        findById,
-        findOne,
-        findByIdRaw,
-        findAll,
-        count,
-        create,
-        save,
-        deleteOne,
-        search,
+        // Wrapped so every query this factory makes counts toward `db_queries_total` /
+        // `db_errors_total` — see `./metrics`. `normalize` and `buildWhere` never touch Mongoose.
+        findById: trackDatabaseQuery(findById),
+        findOne: trackDatabaseQuery(findOne),
+        findByIdRaw: trackDatabaseQuery(findByIdRaw),
+        findAll: trackDatabaseQuery(findAll),
+        count: trackDatabaseQuery(count),
+        create: trackDatabaseQuery(create),
+        save: trackDatabaseQuery(save),
+        deleteOne: trackDatabaseQuery(deleteOne),
+        search: trackDatabaseQuery(search),
         normalize,
         // Bound to this collection's spec, so callers pass filters only.
         buildWhere: (filters: SearchFilters) => buildWhere(filters, searchable)

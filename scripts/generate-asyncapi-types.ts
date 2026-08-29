@@ -100,6 +100,11 @@ const toPascalCase = (value: string): string =>
 /*
  * Formats a model/message identifier as a PascalCase type name.
  *
+ * Currently a pure pass-through to `toPascalCase` — every call site could use that directly.
+ * Kept as its own name because a model/message identifier and an arbitrary source string are
+ * different concepts that happen to format the same way today; if that ever stops being true,
+ * this is where the difference belongs.
+ *
  * @param value Raw model or message name.
  * @returns PascalCase type name.
  */
@@ -112,75 +117,6 @@ const toModelName = (value: string): string => toPascalCase(value);
  * @returns TypeScript type name for the referenced model.
  */
 const refToTypeName = (reference: string): string => toModelName(reference.split('/').pop() ?? '');
-
-/*
- * Converts an object key into a valid TypeScript property declaration key.
- *
- * @param property Object key from JSON Schema.
- * @returns Plain identifier or quoted literal key.
- */
-const formatPropertyKey = (property: string): string =>
-    /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(property) ? property : `'${property}'`;
-
-/*
- * Converts an AsyncAPI payload JSON Schema into a TypeScript type string.
- *
- * @param schema JSON Schema fragment.
- * @param depth Current recursive indentation depth.
- * @returns TypeScript type representation.
- */
-const schemaToType = (schema: JsonSchema | undefined, depth = 0): string => {
-    const indentation = '    '.repeat(depth);
-    const childIndentation = '    '.repeat(depth + 1);
-
-    if (!schema) return 'unknown';
-    if (schema.$ref) return refToTypeName(schema.$ref);
-
-    if (Array.isArray(schema.oneOf))
-        return schema.oneOf.map((option) => schemaToType(option, depth)).join(' | ');
-
-    if (Array.isArray(schema.anyOf))
-        return schema.anyOf.map((option) => schemaToType(option, depth)).join(' | ');
-
-    if (Array.isArray(schema.allOf))
-        return schema.allOf.map((option) => schemaToType(option, depth)).join(' & ');
-
-    if (Array.isArray(schema.enum) && schema.enum.length > 0)
-        return schema.enum.map((value) => JSON.stringify(value)).join(' | ');
-
-    if (schema.type === 'array') return `(${schemaToType(schema.items, depth)})[]`;
-
-    if (schema.type === 'object' || schema.properties || schema.additionalProperties) {
-        const requiredSet = schema.required ? new Set(schema.required) : undefined;
-        const properties = Object.entries(schema.properties ?? {}).map(([key, propertySchema]) => {
-            const safeKey = formatPropertyKey(key);
-            const optional = requiredSet?.has(key) ? '' : '?';
-            return `${childIndentation}${safeKey}${optional}: ${schemaToType(propertySchema, depth + 1)};`;
-        });
-
-        if (
-            typeof schema.additionalProperties === 'object' &&
-            !Array.isArray(schema.additionalProperties)
-        )
-            properties.push(
-                `${childIndentation}[key: string]: ${schemaToType(schema.additionalProperties, depth + 1)};`
-            );
-
-        if (
-            (schema.additionalProperties === true || schema.additionalProperties === undefined) &&
-            properties.length === 0
-        )
-            return 'Record<string, unknown>';
-
-        return `{\n${properties.join('\n')}\n${indentation}}`;
-    }
-
-    if (schema.type === 'integer' || schema.type === 'number') return 'number';
-    if (schema.type === 'boolean') return 'boolean';
-    if (schema.type === 'string') return 'string';
-
-    return 'unknown';
-};
 
 /*
  * The real payload type a message carries — never the message's own alias name, which
@@ -206,8 +142,8 @@ const resolveMessagePayloadType = (
      */
     if (!Object.hasOwn(messages, messageName)) return 'unknown';
     const { payload } = messages[messageName];
-    if (!payload) return 'unknown';
-    return payload.$ref ? refToTypeName(payload.$ref) : schemaToType(payload);
+    if (!payload?.$ref) return 'unknown';
+    return refToTypeName(payload.$ref);
 };
 
 /*

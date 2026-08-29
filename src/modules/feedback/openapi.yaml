@@ -122,8 +122,6 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    # ----- Products -----
-
 components:
     schemas:
         # ---------- feedback — the schemas only this module's paths reference. ----------

@@ -3,10 +3,10 @@
  * augmentation rather than in a shared enum.
  *
  * `admin.` on the refund because it is genuinely admin-only, unlike confirm/fail which any
- * checkout can produce. The refund itself, which no request triggers, compensates a customer's
- * cancel — but having no request to build an event from, the refund logs instead of auditing (the
- * same trade the token-cleanup job documents). It is listed here anyway so the vocabulary names
- * every way money moves.
+ * checkout can produce. `refundByOrder` (the operator's standalone refund) is a real admin
+ * request and audits `ADMIN_PAYMENT_REFUNDED`. `refundForOrder` (the cancel listener's
+ * compensation) has no request to build an event from and logs instead, the same trade the
+ * token-cleanup job documents.
  */
 
 export const paymentsAuditActions = {

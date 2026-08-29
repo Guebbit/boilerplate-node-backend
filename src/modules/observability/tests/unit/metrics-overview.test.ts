@@ -43,6 +43,7 @@ jest.mock('@infrastructure/http/response', () => ({
 interface Overview {
     auth: { loginSuccess: number; loginFailure: number; signupSuccess: number };
     business: { checkoutSuccess: number; ordersCreated: number };
+    database: { queriesTotal: number; errorsTotal: number };
 }
 
 /**
@@ -99,6 +100,17 @@ describe('observability metrics overview', () => {
 
         const after = await runOverview();
         expect(after.business.ordersCreated).toBe(before.business.ordersCreated + 5);
+    });
+
+    it('reports database query and error totals from the persistence layer counters', async () => {
+        const before = await runOverview();
+
+        counter('db_queries_total').inc(7);
+        counter('db_errors_total').inc(2);
+
+        const after = await runOverview();
+        expect(after.database.queriesTotal).toBe(before.database.queriesTotal + 7);
+        expect(after.database.errorsTotal).toBe(before.database.errorsTotal + 2);
     });
 
     it('reports zero for a counter no enabled module registered', async () => {

@@ -43,6 +43,10 @@ import { MemoryStore, type Options, type Store } from 'express-rate-limit';
 import { RedisStore, type RedisReply } from 'rate-limit-redis';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
+import {
+    manageConnection,
+    type ManagedConnection
+} from '@infrastructure/runtime/managed-connection';
 
 /**
  * Key namespace for every limiter counter. Separate from the cache's prefix so
@@ -73,34 +77,6 @@ const redisUrl = (): string | undefined => {
     return `redis://${host}:${process.env.NODE_REDIS_PORT}`;
 };
 
-/**
- * The one client every limiter shares, built on first use and dropped on failure.
- *
- * `undefined` means "not built yet", never "unavailable": the next command builds a fresh one, so
- * recovery is driven by traffic rather than by a retry loop nobody is waiting on. Same shape as the
- * cache adapter, and the same reason — see `infrastructure/runtime/managed-connection.ts`.
- */
-let client: RedisClientType | undefined;
-
-/**
- * The in-flight `connect()` for {@link client}, shared by every command that arrives before it
- * settles.
- *
- * One connection needs one `connect()`. Without this, each command tested `isReady` for itself and
- * called `connect()` when it was false — and `isReady` stays false for the whole handshake, so two
- * commands issued together both tried to open the same socket. node-redis answers the second with
- * `Socket already opened`, whose failure path below discards the client the FIRST one was still
- * using, and that one then fails with `The client is closed`.
- *
- * It was not a rare interleaving: `RedisStore.init()` loads two Lua scripts back to back, so the
- * pair raced on the first request every time, every worker fell back to passing requests through
- * unbudgeted, and the log said Redis was unreachable while Redis was answering fine.
- */
-let connecting: Promise<void> | undefined;
-
-/** Whether the last command failed, so an outage is logged once rather than once per request. */
-let degraded = false;
-
 const build = (url: string): RedisClientType => {
     const redisClient: RedisClientType = createClient({
         url,
@@ -124,6 +100,70 @@ const build = (url: string): RedisClientType => {
 };
 
 /**
+ * The one client every limiter shares — lifecycle (memoised handle, deduped connect, warn-once)
+ * delegated to {@link manageConnection}, same as the cache and queue adapters. Unlike them, this
+ * fails CLOSED: `getOrThrow` rejects instead of resolving `undefined`, and the outage logs at
+ * `error` rather than `warn` — see the header for why.
+ */
+let redisConnection: ManagedConnection<RedisClientType> | undefined;
+
+const connectionFor = (url: string): ManagedConnection<RedisClientType> => {
+    if (redisConnection) return redisConnection;
+
+    // The client object itself, kept apart from `manageConnection`'s own memoised handle: a
+    // client whose handshake has not finished is still the SAME socket worth reconnecting, not
+    // one to throw away. node-redis rejects a second `connect()` on a second object racing the
+    // first with `Socket already opened`, so a fresh client per attempt is not an option here the
+    // way it is for the cache adapter. Cleared alongside
+    // `forget()`/`close()` below, so a forgotten or closed client is rebuilt from scratch.
+    let redisClient: RedisClientType | undefined;
+
+    const connection = manageConnection<RedisClientType>({
+        unavailableMessage:
+            'Rate-limit Redis unreachable — requests are passing unbudgeted until it returns.',
+        unavailableLevel: 'error',
+        // Enablement is already decided by `rateLimitStore` before a Redis-backed store is ever
+        // built — this connection only exists when Redis is configured.
+        isEnabled: () => true,
+        connect: () => {
+            redisClient ??= build(url);
+            const client = redisClient;
+
+            return client.connect().then(
+                () => client,
+                (error: unknown) => {
+                    redisClient = undefined;
+                    client.destroy();
+                    throw error;
+                }
+            );
+        },
+        isReady: (client) => client.isReady,
+        close: (client) => {
+            redisClient = undefined;
+            return client
+                ? client.quit().then(
+                      () => undefined,
+                      () => client.destroy()
+                  )
+                : Promise.resolve();
+        },
+        onRecovered: () =>
+            logger.info({ message: 'Rate-limit Redis is back — counters are shared again.' })
+    });
+
+    redisConnection = {
+        ...connection,
+        forget: () => {
+            redisClient = undefined;
+            connection.forget();
+        }
+    };
+
+    return redisConnection;
+};
+
+/**
  * Send one command, opening the connection if this is the first that needs it.
  *
  * Rejects when Redis cannot be reached, which `passOnStoreError` turns into "let the request
@@ -131,52 +171,21 @@ const build = (url: string): RedisClientType => {
  * command starts from a clean socket instead of retrying a dead one.
  */
 const send = (url: string, command: string[]): Promise<RedisReply> => {
-    client ??= build(url);
-    const redisClient = client;
+    const connection = connectionFor(url);
 
-    if (!redisClient.isReady) connecting ??= redisClient.connect().then(() => undefined);
-
-    return (
-        (redisClient.isReady ? Promise.resolve() : (connecting ?? Promise.resolve()))
-            /*
-             * The reply type is stated rather than inferred: node-redis answers a wide `ReplyUnion`
-             * for an arbitrary command, while only `INCR`, `DECR`, `PTTL` and `DEL` are ever sent from
-             * here and all four answer an integer. `sendCommand`'s type parameter is where node-redis
-             * asks the caller to say which command it issued.
-             */
-            .then(() => redisClient.sendCommand<RedisReply>(command))
-            .then((reply) => {
-                if (degraded) {
-                    degraded = false;
-                    logger.info({
-                        message: 'Rate-limit Redis is back — counters are shared again.'
-                    });
-                }
-
-                return reply;
-            })
-            .catch((error: unknown) => {
-                client = undefined;
-                connecting = undefined;
-                redisClient.destroy();
-
-                if (!degraded) {
-                    degraded = true;
-                    /*
-                     * `error`, not `warn`: for as long as this lasts the budgets are not being
-                     * enforced, and a security control that is off belongs at the level someone is
-                     * paged for. Logged once per outage, not once per request, or the log becomes the
-                     * outage.
-                     */
-                    logger.error({
-                        message:
-                            'Rate-limit Redis unreachable — requests are passing unbudgeted until it returns.',
-                        error: error instanceof Error ? error.message : String(error)
-                    });
-                }
-
-                throw error;
-            })
+    return connection.getOrThrow().then((redisClient) =>
+        /*
+         * The reply type is stated rather than inferred: node-redis answers a wide `ReplyUnion`
+         * for an arbitrary command, while only `INCR`, `DECR`, `PTTL` and `DEL` are ever sent from
+         * here and all four answer an integer. `sendCommand`'s type parameter is where node-redis
+         * asks the caller to say which command it issued.
+         */
+        redisClient.sendCommand<RedisReply>(command).catch((error: unknown) => {
+            redisClient.destroy();
+            connection.forget();
+            connection.reportUnavailable(error);
+            throw error;
+        })
     );
 };
 
@@ -268,16 +277,5 @@ export const rateLimitStore = (namespace: string): Store => {
 };
 
 /** Release the limiter's connection on shutdown, so a restart begins from a clean socket. */
-export const stopRateLimitStore = (): Promise<void> => {
-    if (!client) return Promise.resolve();
-
-    const redisClient = client;
-    client = undefined;
-    connecting = undefined;
-    degraded = false;
-
-    return redisClient.quit().then(
-        () => undefined,
-        () => redisClient.destroy()
-    );
-};
+export const stopRateLimitStore = (): Promise<void> =>
+    redisConnection ? redisConnection.stop() : Promise.resolve();

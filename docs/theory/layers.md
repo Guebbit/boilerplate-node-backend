@@ -146,7 +146,7 @@ internal file, in `view.ts`'s role.
 | ---------------------- | ----- | --------------------------------------------------------------------- |
 | `orders/service.ts`    | 587   | the lifecycle writes, the cancel sequence and the read scopes         |
 | `inventory/service.ts` | 510   | reserve, commit, release, the sweep, and the operator's own writes    |
-| `payments/service.ts`  | 395   | intent, confirm, refund, and the ownership scope around them          |
+| `payments/service.ts`  | 408   | intent, confirm, refund, and the ownership scope around them          |
 | `products/service.ts`  | 326   | the CRUD writes, the visibility scope, and the catalogue's own facets |
 
 That is recorded rather than quietly fixed, because the number's job is to make the split feel

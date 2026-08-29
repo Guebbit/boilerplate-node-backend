@@ -43,14 +43,13 @@ if (unknown.length > 0) {
 }
 
 const relative = (file: string): string => path.relative(REPO_ROOT, file);
-const isStale = (bundle: ContractBundle): boolean =>
-    assembleBundle(bundle) !== readCommittedBundle(bundle);
 
-/** Assemble the given bundles, writing only the ones that actually drifted. */
+/** Assemble the given bundles once each, writing only the ones that actually drifted. */
 const bundle = (bundles: readonly ContractBundle[]): ContractBundle[] => {
-    const stale = bundles.filter((item) => isStale(item));
-    if (!checkOnly) for (const item of stale) writeFileSync(item.output, assembleBundle(item));
-    return stale;
+    const assembled = bundles.map((item) => ({ item, content: assembleBundle(item) }));
+    const stale = assembled.filter(({ item, content }) => content !== readCommittedBundle(item));
+    if (!checkOnly) for (const { item, content } of stale) writeFileSync(item.output, content);
+    return stale.map(({ item }) => item);
 };
 
 const fail = (message: string): never => {

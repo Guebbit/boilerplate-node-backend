@@ -7,6 +7,12 @@
  *
  * Order is not significant: routers mount under distinct base paths and dependencies are resolved
  * from `dependsOn`, not from position. Keep it alphabetical so diffs stay boring.
+ *
+ * A module that also ships its own `openapi.yaml` or `analytics.ts` needs one more line, in
+ * `MODULE_SECTIONS` (`scripts/contracts/openapi-bundle.ts`) or `SECTIONS`
+ * (`scripts/contracts/analytics-events-bundle.ts`) respectively — those files check themselves
+ * against this list and the filesystem on every import, so forgetting either now throws instead of
+ * shipping the module with a silently missing contract or catalogue entry.
  */
 
 import type { AppModule } from '@kernel/registry';

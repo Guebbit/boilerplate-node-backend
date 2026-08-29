@@ -1,5 +1,5 @@
 /**
- * The account emails — the three that carry a link, and the three that confirm something happened.
+ * The account emails — the four that carry a link, and the two that confirm something happened.
  *
  * These builders look like data and fail like code. Every one of the six is the ONLY way a user
  * reaches the flow it belongs to, so each field is a single point of failure with no fallback and
@@ -17,9 +17,9 @@
  * given rather than merely being non-empty.
  */
 import {
-    registrationConfirmEmail,
     verifyRequestEmail,
     resetRequestEmail,
+    setupRequestEmail,
     resetConfirmEmail,
     deleteRequestEmail,
     deleteConfirmEmail
@@ -28,16 +28,23 @@ import {
 const NAME = 'Ada Lovelace';
 const TOKEN = 'a1b2c3d4e5f6';
 
-/** The three that exist to deliver a link, paired with the path segment each must produce. */
+/**
+ * The four that exist to deliver a link, paired with the path segment each must produce.
+ *
+ * `setupRequestEmail` shares `resetRequestEmail`'s route deliberately — both spend a `password`-type
+ * token at the same `POST /account/reset-confirm`, see `authentication.ts`'s `requestAccountSetup`
+ * — so it is excluded from the "each token to its own route" case below rather than making that
+ * case wrong.
+ */
 const LINK_EMAILS = [
     ['verifyRequestEmail', verifyRequestEmail, 'account.verify-request', 'verify'],
     ['resetRequestEmail', resetRequestEmail, 'account.reset-request', 'reset'],
+    ['setupRequestEmail', setupRequestEmail, 'account.setup-request', 'reset'],
     ['deleteRequestEmail', deleteRequestEmail, 'account.delete-request', 'delete']
 ] as const;
 
-/** The three that report a completed action and carry no link. */
+/** The two that report a completed action and carry no link. */
 const CONFIRM_EMAILS = [
-    ['registrationConfirmEmail', registrationConfirmEmail, 'account.registration-confirm'],
     ['resetConfirmEmail', resetConfirmEmail, 'account.reset-confirm'],
     ['deleteConfirmEmail', deleteConfirmEmail, 'account.delete-confirm']
 ] as const;
@@ -144,10 +151,10 @@ describe('account emails — the copy', () => {
         // The `{ name }` argument. Without it the greeting still resolves to real copy and still
         // passes every "is it non-empty" check — it just greets nobody, or renders `{{name}}`.
         const greeting = verifyRequestEmail('en', NAME, TOKEN).data.greeting as string;
-        const title = registrationConfirmEmail('en', NAME).data.title as string;
+        const confirmGreeting = resetConfirmEmail('en', NAME).data.greeting as string;
 
         expect(greeting).toContain(NAME);
-        expect(title).toContain(NAME);
+        expect(confirmGreeting).toContain(NAME);
         expect(greeting).not.toContain('{{');
     });
 

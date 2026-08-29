@@ -124,20 +124,19 @@ it('points every name at a template that exists', () => {
 it('publishes the set the pair agreed on', () => {
     /*
      * Stated rather than derived, because the point is agreement with a repository this test cannot
-     * read. The twin publishes the same eight, one per mailable, verified against
-     * `tests/CrossCutting/OutboxNamesTest.php` in boilerplate-php-laravel-backend.
+     * read.
      *
-     * `account.registration-confirm` is the known divergence: this backend sends it and the twin has
-     * no mailable for it. It is listed here because the twin is the side that is missing a mail —
-     * recorded in HANDOFF.md rather than fixed from here, since nothing in this repository can add
-     * it. Delete this line only together with the mail itself.
+     * `account.setup-request` is new here as of 2026-08-28 and is **not yet** in
+     * `tests/CrossCutting/OutboxNamesTest.php` in boilerplate-php-laravel-backend — the admin
+     * "create a user, let them set their own password" flow only exists on this backend so far. See
+     * `HANDOFF.md` §2.22 for what porting it needs. The other eight are the agreed, mirrored set.
      */
     const agreed = [
         'account.delete-confirm',
         'account.delete-request',
-        'account.registration-confirm',
         'account.reset-confirm',
         'account.reset-request',
+        'account.setup-request',
         'account.verify-request',
         'delivery.shipment-shipped',
         'feedback.contact',

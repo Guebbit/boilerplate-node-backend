@@ -8,9 +8,9 @@
  *   `name` collapses to `undefined` rather than `''`, which is what keeps the field genuinely
  *   optional instead of "present but blank".
  *
- *   **The status vocabulary.** `STATUS_MAP` is lowercase-only and matches `openapi.yaml`'s
- *   `enum: [new, in_progress, resolved, spam]` — no uppercase aliases, since the contract does not
- *   allow them. An unknown status must map to `undefined`, and on the search path that has a
+ *   **The status vocabulary.** `toFeedbackStatus` checks membership in the generated
+ *   `FeedbackRequestStatus` values — lowercase-only, no uppercase aliases, since the contract does
+ *   not allow them. An unknown status must map to `undefined`, and on the search path that has a
  *   consequence the tests below make explicit rather than assume.
  *
  *   **`respondedAt` is stamped once.** Re-resolving an already-resolved item must not move the
@@ -156,8 +156,8 @@ describe('search', () => {
     });
 
     it('does not honour the uppercase status aliases the contract removed', async () => {
-        // `STATUS_MAP` is lowercase-only, matching openapi.yaml's enum. 'NEW' is therefore not a
-        // status at all — it must not quietly behave like `new`.
+        // The generated status values are lowercase-only, matching openapi.yaml's enum. 'NEW' is
+        // therefore not a status at all — it must not quietly behave like `new`.
         await seed();
 
         const { items } = await search({ status: 'NEW' });

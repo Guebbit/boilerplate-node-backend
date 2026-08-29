@@ -145,33 +145,28 @@ describe('the PDF worker renders the copy it was given', () => {
 });
 
 /**
- * `upload` wraps every multer method so the request's locale survives the stream being consumed
- * (see `infrastructure/adapters/storage.ts`). The integration suite proves it for the one method the routes
- * actually mount; this proves the wrapper is applied uniformly, so a route that later reaches for
- * `upload.fields()` does not quietly lose the language.
+ * `upload.single` wraps multer so the request's locale survives the stream being consumed (see
+ * `infrastructure/adapters/storage.ts`). Asserted at the unit level too, distinct from the
+ * integration suite's coverage of the mounted route.
  */
-describe('every upload method restores the locale', () => {
-    const methods = ['single', 'array', 'fields', 'none', 'any'] as const;
-
+describe('upload.single restores the locale', () => {
     /**
-     * Each method returns the whole pipeline — the locale-restoring multer wrapper, then the
-     * content check, then the commit to the image store. Asserted rather than assumed, because a
-     * route mounting only the first would type-check and silently accept a file whose bytes are
-     * not an image, and one mounting only the first two would leave every upload staged in a temp
-     * directory with nothing ever pointing at it.
+     * Returns the whole pipeline — the locale-restoring multer wrapper, then the content check,
+     * then the commit to the image store. Asserted rather than assumed, because mounting only the
+     * first would type-check and silently accept a file whose bytes are not an image, and mounting
+     * only the first two would leave every upload staged in a temp directory with nothing ever
+     * pointing at it.
      */
-    it.each(methods)('upload.%s returns the full guard chain', async (method) => {
+    it('returns the full guard chain', async () => {
         const { upload } = await import('@infrastructure/adapters/storage');
-        const handlers =
-            method === 'fields' ? upload.fields([]) : (upload[method] as () => unknown[])();
+        const handlers = upload.single('imageUpload');
 
         expect(handlers).toHaveLength(3);
     });
 
-    it.each(methods)('upload.%s re-enters the request locale', async (method) => {
+    it('re-enters the request locale', async () => {
         const { upload } = await import('@infrastructure/adapters/storage');
-        const [localeAware] =
-            method === 'fields' ? upload.fields([]) : (upload[method] as () => unknown[])();
+        const [localeAware] = upload.single('imageUpload');
 
         const observed = await runMiddleware(
             localeAware,
@@ -186,7 +181,7 @@ describe('every upload method restores the locale', () => {
 
     it('leaves the chain alone when no locale was negotiated', async () => {
         const { upload } = await import('@infrastructure/adapters/storage');
-        const [localeAware] = upload.none();
+        const [localeAware] = upload.single('imageUpload');
 
         const observed = await runMiddleware(localeAware, asStub<Request>({ headers: {} }));
 

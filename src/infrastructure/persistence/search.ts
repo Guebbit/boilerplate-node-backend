@@ -85,10 +85,6 @@ export const buildPaginatedMeta = (
 });
 
 /**
- * Add a text-search $or clause to a Mongoose filter.
- * Searches across multiple fields with case-insensitive regex.
- */
-/**
  * Escapes every regex metacharacter, so a user's search text is matched literally.
  *
  * Unescaped `$regex` input is a remote denial of service: MongoDB evaluates the pattern
@@ -130,6 +126,10 @@ export const toSearchPattern = (value: unknown): string | undefined => {
     return cleaned === '' ? undefined : escapeRegex(cleaned);
 };
 
+/**
+ * Add a text-search $or clause to a Mongoose filter.
+ * Searches across multiple fields with case-insensitive regex.
+ */
 export const addTextFilter = (
     where: Record<string, unknown>,
     text: string | undefined | null,

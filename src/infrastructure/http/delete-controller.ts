@@ -71,7 +71,7 @@ export const createDeleteController = ({
 
     const handler = {
         [operation](request: Request, response: Response) {
-            const id = extractAndValidateId(request, response, operation, 'delete');
+            const id = extractAndValidateId(request, response, 'delete');
             if (!id) return Promise.resolve();
 
             // `hardDelete` arrives three ways — path segment (via `routeFlag`), query, or body.

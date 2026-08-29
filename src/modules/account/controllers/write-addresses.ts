@@ -16,7 +16,7 @@ import { AddAddressBody, UpdateAddressBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import type { AddressInput, UpdateAddressRequest } from '@types';
 import { accountService } from '../services';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
 
 /**
@@ -34,11 +34,11 @@ export const postAddress = (
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = authContextOf(request);
 
-    const parseResult = AddAddressBody.safeParse(request.body);
-    if (!parseResult.success) return rejectValidation(response, parseResult.error);
+    const body = parseBody(AddAddressBody, request.body, response);
+    if (!body) return;
 
     return accountService
-        .addressAdd(id, parseResult.data)
+        .addressAdd(id, body)
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, result.data, 200, result.message);
@@ -60,11 +60,11 @@ export const putAddress = (
     const { id } = authContextOf(request);
     const { addressId } = request.params;
 
-    const parseResult = UpdateAddressBody.safeParse(request.body);
-    if (!parseResult.success) return rejectValidation(response, parseResult.error);
+    const body = parseBody(UpdateAddressBody, request.body, response);
+    if (!body) return;
 
     return accountService
-        .addressUpdate(id, addressId, parseResult.data)
+        .addressUpdate(id, addressId, body)
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, result.data, 200, result.message);

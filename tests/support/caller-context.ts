@@ -7,8 +7,3 @@
 import type { CallerContext } from '@infrastructure/http/request';
 
 export const testCallerContext: CallerContext = { caller: {} };
-
-/** A `CallerContext` for a specific authenticated caller. */
-export const testCallerContextFor = (id: string, admin = false): CallerContext => ({
-    caller: { id, admin }
-});

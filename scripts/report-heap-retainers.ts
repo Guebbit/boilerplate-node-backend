@@ -174,12 +174,9 @@ const main = async () => {
         }
     }
 
-    // Only the string indices actually printed get resolved, in one later pass.
-    const wantedStrings = new Set<number>();
     const nodeLabel = (node: number) => {
         const type = meta.nodeTypes[nodes[node * nodeStride + nTypeAt]] ?? '?';
         const nameIndex = nodes[node * nodeStride + nNameAt];
-        wantedStrings.add(nameIndex);
         return { type, nameIndex };
     };
 

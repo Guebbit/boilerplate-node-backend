@@ -8,7 +8,7 @@ import itAccount from '@modules/account/locales/it.json';
  *
  * A request negotiates its locale and runs inside an ALS store, so everything on that async chain
  * resolves against it. `enqueueEmail` breaks the chain on purpose: the job goes onto a queue and
- * `workers/email.worker.ts` drains it later, possibly in another process, with no store at all.
+ * `adapters/email.worker.ts` drains it later, possibly in another process, with no store at all.
  *
  * The answer is not to rebuild the store on the far side — it is to leave nothing to resolve. The
  * producer translates while the request is alive, so the payload carries finished copy and the
@@ -32,14 +32,14 @@ jest.mock('@infrastructure/adapters/queue', () => ({
     publishToQueue: (job: unknown) => publishToQueueMock(job)
 }));
 
-import { registrationConfirmEmail } from '@modules/account/emails';
+import { resetConfirmEmail } from '@modules/account/emails';
 
 const REQUEST: EmailRequest = { to: 'ada@example.com', subject: 'ignored' };
 
 /** The English and Italian spellings of the one line asserted throughout. */
 const BODY = {
-    en: enAccount.account.email['registration-confirm'].body,
-    it: itAccount.account.email['registration-confirm'].body
+    en: enAccount.account.email['reset-confirm'].body,
+    it: itAccount.account.email['reset-confirm'].body
 };
 
 /**
@@ -47,7 +47,7 @@ const BODY = {
  * Nothing is added on the way to the queue and no locale travels with it.
  */
 const jobFor = (locale: string) => {
-    const content = registrationConfirmEmail(locale, 'Ada');
+    const content = resetConfirmEmail(locale, 'Ada');
     return { request: REQUEST, templateName: content.template, data: content.data };
 };
 
@@ -64,7 +64,7 @@ describe('the producer resolves the copy before publishing', () => {
     it('puts finished text on the queue, in the language it was asked for', async () => {
         const { enqueueEmail } = await import('@infrastructure/adapters/mailer');
 
-        const content = registrationConfirmEmail('it', 'Ada');
+        const content = resetConfirmEmail('it', 'Ada');
         await enqueueEmail(
             { ...REQUEST, subject: content.subject },
             content.template,
@@ -77,15 +77,13 @@ describe('the producer resolves the copy before publishing', () => {
         };
         // The copy itself, not a key and not a locale to look one up with.
         expect(payload.data.body).toBe(BODY.it);
-        expect(payload.request.subject).toBe(
-            itAccount.account.email['registration-confirm'].subject
-        );
+        expect(payload.request.subject).toBe(itAccount.account.email['reset-confirm'].subject);
     });
 
     it('carries no locale at all — every string is already decided', async () => {
         const { enqueueEmail } = await import('@infrastructure/adapters/mailer');
 
-        const content = registrationConfirmEmail('it', 'Ada');
+        const content = resetConfirmEmail('it', 'Ada');
         await enqueueEmail(REQUEST, content.template, content.data);
 
         const { payload } = publishToQueueMock.mock.calls[0][0] as {
@@ -102,7 +100,7 @@ describe('the producer resolves the copy before publishing', () => {
         const { enqueueEmail } = await import('@infrastructure/adapters/mailer');
 
         await runWithLocale('en', () => {
-            const content = registrationConfirmEmail('it', 'Ada');
+            const content = resetConfirmEmail('it', 'Ada');
             return enqueueEmail(REQUEST, content.template, content.data);
         });
 
@@ -155,9 +153,9 @@ describe('the email worker renders the copy it was given', () => {
     it('discards a job with no recipient rather than rendering one', async () => {
         const { handleEmailJob } = await import('@infrastructure/adapters/email.worker');
 
-        await expect(
-            handleEmailJob({ templateName: 'account.registration-confirm' })
-        ).resolves.toBe(false);
+        await expect(handleEmailJob({ templateName: 'account.reset-confirm' })).resolves.toBe(
+            false
+        );
 
         expect(sendMailMock).not.toHaveBeenCalled();
     });

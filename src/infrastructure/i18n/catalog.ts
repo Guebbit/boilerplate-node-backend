@@ -47,13 +47,12 @@ export const listSupportedLocales = (): string[] => {
         .filter(Boolean);
 
     // The env var wins when set; otherwise the directory listing IS the declaration.
-    supportedLocalesCache =
-        declared?.length && declared.length > 0
-            ? declared
-            : readdirSync(LOCALES_DIRECTORY)
-                  .filter((fileName) => fileName.endsWith('.json'))
-                  .map((fileName) => path.basename(fileName, '.json'))
-                  .toSorted();
+    supportedLocalesCache = declared?.length
+        ? declared
+        : readdirSync(LOCALES_DIRECTORY)
+              .filter((fileName) => fileName.endsWith('.json'))
+              .map((fileName) => path.basename(fileName, '.json'))
+              .toSorted();
 
     return supportedLocalesCache;
 };

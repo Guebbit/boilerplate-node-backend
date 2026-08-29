@@ -1,13 +1,8 @@
 /**
  * Requests the contract cannot describe, for the orders module.
  *
- * Emitted into every client collection after this module's contract-derived requests. A contract
- * declares valid calls and their declared answers, so the requests that prove the API REJECTS
- * things have no home in it.
- *
- * Seed facts are referred to as `{{seedToken}}` — never pasted — so a probe cannot drift from the
- * dataset it is probing. The tokens are declared in `scripts/contracts/client-collections-bundle.ts`, and
- * one this module invents fails the generator with the list of known ones.
+ * `scripts/contracts/client-collections-bundle.ts` owns the rest: what a probe is for, where these
+ * are emitted, and which `{{seedToken}}` values a probe may refer to.
  */
 
 import type { Probe } from '@guebbit/openapi-runnable-collections';

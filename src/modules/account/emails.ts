@@ -3,7 +3,7 @@
  *
  * Templates do not translate. They interpolate — `<%= greeting %>`, never `<%= t('…') %>` — and
  * these builders are what produces the values. The reason is the queue: an email is rendered by
- * `workers/email.worker.ts`, possibly in another process, hours after the request that asked for
+ * `adapters/email.worker.ts`, possibly in another process, hours after the request that asked for
  * it ended. Anything left unresolved at that point has no request, no `Accept-Language` and no
  * locale store to resolve against.
  *
@@ -29,23 +29,6 @@ import { translator } from '@infrastructure/i18n';
  */
 const accountLink = (route: string, token: string): string =>
     `${process.env.NODE_URL ?? ''}account/${route}/${token}`;
-
-/** Welcome email, sent once the account exists. */
-export const registrationConfirmEmail = (locale: string, name: string): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'account.registration-confirm',
-        subject: t('account.email.registration-confirm.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.registration-confirm.meta-title'),
-            pageMetaLinks: [],
-            title: t('account.email.registration-confirm.title', { name }),
-            body: t('account.email.registration-confirm.body'),
-            footer: t('email.footer')
-        }
-    };
-};
 
 /** Email verification: the email carrying the one-time confirmation link. */
 export const verifyRequestEmail = (locale: string, name: string, token: string): EmailContent => {

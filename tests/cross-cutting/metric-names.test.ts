@@ -52,11 +52,25 @@ const OVERVIEW_CONTROLLER = path.join(
 const withoutComments = (source: string): string =>
     source.replaceAll(/\/\*[\S\s]*?\*\//g, '').replaceAll(/^[^\S\n]*\/\/.*$/gm, '');
 
-/** Every `src/modules/<name>/metrics.ts`, discovered rather than listed. */
-const metricFiles = (): { module: string; file: string }[] =>
-    readdirSync(MODULES_ROOT)
+/**
+ * `db_queries_total`/`db_errors_total` are infrastructure-owned, not domain-owned — every
+ * repository counts toward them, so no single module can claim them — but the overview endpoint
+ * still reads them by name like every other row, so the sweep below has to find them too.
+ */
+const INFRASTRUCTURE_METRIC_FILES = [
+    path.join(__dirname, '../../src/infrastructure/persistence/metrics.ts')
+];
+
+/** Every `src/modules/<name>/metrics.ts`, discovered rather than listed, plus the above. */
+const metricFiles = (): { module: string; file: string }[] => [
+    ...readdirSync(MODULES_ROOT)
         .map((module) => ({ module, file: path.join(MODULES_ROOT, module, 'metrics.ts') }))
-        .filter(({ file }) => existsSync(file));
+        .filter(({ file }) => existsSync(file)),
+    ...INFRASTRUCTURE_METRIC_FILES.filter((file) => existsSync(file)).map((file) => ({
+        module: 'infrastructure/persistence',
+        file
+    }))
+];
 
 interface Declaration {
     module: string;

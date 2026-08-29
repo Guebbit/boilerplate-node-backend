@@ -12,9 +12,9 @@ import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { emailTemplatesDirectory } from '@infrastructure/adapters/mailer';
 import { listSupportedLocales } from '@infrastructure/i18n';
 import {
-    registrationConfirmEmail,
     verifyRequestEmail,
     resetRequestEmail,
+    setupRequestEmail,
     resetConfirmEmail,
     deleteRequestEmail,
     deleteConfirmEmail
@@ -34,7 +34,6 @@ describe('email templates', () => {
     });
 
     it.each([
-        'account.registration-confirm.ejs',
         'orders.order-confirm.ejs',
         'account.delete-confirm.ejs',
         'account.delete-request.ejs',
@@ -68,9 +67,9 @@ describe('email templates', () => {
  * nothing but their output, which is exactly the production sequence.
  */
 const contentFor = (locale: string): Record<string, EmailContent> => ({
-    'account.registration-confirm.ejs': registrationConfirmEmail(locale, 'Ada'),
     'account.verify-request.ejs': verifyRequestEmail(locale, 'Ada', 'a-token'),
     'account.reset-request.ejs': resetRequestEmail(locale, 'Ada', 'a-token'),
+    'account.setup-request.ejs': setupRequestEmail(locale, 'Ada', 'a-token'),
     'account.reset-confirm.ejs': resetConfirmEmail(locale, 'Ada'),
     'account.delete-request.ejs': deleteRequestEmail(locale, 'Ada', 'a-token'),
     'account.delete-confirm.ejs': deleteConfirmEmail(locale, 'Ada'),
@@ -137,8 +136,8 @@ describe('email templates render in every supported locale', () => {
 
     it('produces different copy per locale, so the dictionaries are actually consulted', async () => {
         const [english, italian] = await Promise.all([
-            render('account.registration-confirm.ejs', 'en'),
-            render('account.registration-confirm.ejs', 'it')
+            render('account.reset-confirm.ejs', 'en'),
+            render('account.reset-confirm.ejs', 'it')
         ]);
 
         expect(english).not.toBe(italian);

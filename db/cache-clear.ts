@@ -2,7 +2,7 @@
  * Drop every cached response belonging to this app.
  *
  * The API invalidates its own cache on every write it handles (see `invalidateCache` in
- * `src/middlewares/cache.ts`). Writes that skip the API do not — `db:seed`, `migrate-mongo`,
+ * `src/infrastructure/http/middlewares/cache.ts`). Writes that skip the API do not — `db:seed`, `migrate-mongo`,
  * a `mongosh` session — so the old answers keep being served until they expire.
  *
  * `db:seed` calls this automatically. Run it by hand after any manual database surgery.

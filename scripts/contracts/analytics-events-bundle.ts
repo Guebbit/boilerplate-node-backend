@@ -17,9 +17,10 @@
  * See: docs/api/contract-fragmentation.md#analytics-events-frontend-ts-—-a-name-lives-with-the-code-that-emits-it
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
+import { enabledModules } from '../../src/modules';
 
 import { accountAnalyticsEvents } from '../../src/modules/account/analytics';
 import { usersAnalyticsEvents } from '../../src/modules/users/analytics';
@@ -102,6 +103,45 @@ const SECTIONS = [
     events: Record<string, string>;
     scope: AnalyticsScope;
 }[];
+
+/**
+ * Fail loudly the moment `SECTIONS` drifts from reality, instead of a module's events silently
+ * missing from the published catalogue.
+ *
+ * "Reality" is `enabledModules` — the actual registry, `src/modules.ts` — filtered to whichever of
+ * those folders has its own `analytics.ts` on disk: the same fact a human currently has to notice
+ * and copy into `SECTIONS` by hand. `frontend` is exempt — it names no backend module, so it can
+ * never be "in `enabledModules`" to begin with. The order, constant name and events value stay
+ * hand-curated on purpose (see the comment above `SECTIONS`); this only guards MEMBERSHIP.
+ */
+const hasOwnAnalyticsFile = (name: string) =>
+    existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'analytics.ts'));
+
+const assertSectionsAreCurrent = (): void => {
+    const shouldBeListed = new Set(
+        enabledModules.map(({ name }) => name).filter((name) => hasOwnAnalyticsFile(name))
+    );
+    const listed = new Set<string>(
+        SECTIONS.filter(({ scope }) => scope === 'backend').map(({ module }) => module)
+    );
+
+    const missing = [...shouldBeListed].filter((name) => !listed.has(name));
+    const stale = [...listed].filter((name) => !shouldBeListed.has(name));
+
+    if (missing.length === 0 && stale.length === 0) return;
+
+    throw new Error(
+        `[analytics-events] SECTIONS is out of sync with src/modules.ts.\n` +
+            (missing.length > 0
+                ? `  Has an analytics.ts but is missing from SECTIONS: ${missing.join(', ')}\n`
+                : '') +
+            (stale.length > 0
+                ? `  Listed in SECTIONS but has no analytics.ts (or isn't in enabledModules): ${stale.join(', ')}\n`
+                : '')
+    );
+};
+
+assertSectionsAreCurrent();
 
 /**
  * Every section, both scopes — what the cross-cutting test checks the one namespace against.

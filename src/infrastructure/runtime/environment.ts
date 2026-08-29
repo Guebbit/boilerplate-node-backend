@@ -91,7 +91,7 @@ export const validateRequiredEnvironment = () => {
     if (missing.length > 0)
         throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
 
-    // The database can be configured two ways (see `bootstrap/database.ts` → `getDatabaseUri`):
+    // The database can be configured two ways (see `runtime/database.ts` → `getDatabaseUri`):
     // a full connection URI, or host/port/name fragments. Either is fine, but not neither.
     const hasMongoUri = Boolean(process.env.NODE_DB_URI?.trim());
     const hasMongoPort = Boolean(process.env.NODE_MONGODB_PORT?.trim());

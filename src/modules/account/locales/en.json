@@ -40,12 +40,6 @@
             "success": "Email address verified."
         },
         "email": {
-            "registration-confirm": {
-                "subject": "Welcome — your account is ready",
-                "meta-title": "Registration successful",
-                "title": "Welcome aboard {{name}}!",
-                "body": "Your registration was successful."
-            },
             "verify-request": {
                 "subject": "Confirm your email address",
                 "meta-title": "Email verification",

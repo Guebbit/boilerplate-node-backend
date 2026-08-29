@@ -23,6 +23,7 @@ jest.mock('@modules/account/services', () => ({
     __esModule: true,
     accountService: {
         findLiveToken: jest.fn(),
+        spendLiveToken: jest.fn(),
         requestAccountDeletion: jest.fn(),
         removeOwnAccount: jest.fn()
     }
@@ -51,6 +52,9 @@ const mockFindByEmail = userService.findByEmail as jest.MockedFunction<
 >;
 const mockFindLiveToken = accountService.findLiveToken as jest.MockedFunction<
     typeof accountService.findLiveToken
+>;
+const mockSpendLiveToken = accountService.spendLiveToken as jest.MockedFunction<
+    typeof accountService.spendLiveToken
 >;
 const mockRequestAccountDeletion = accountService.requestAccountDeletion as jest.MockedFunction<
     typeof accountService.requestAccountDeletion
@@ -137,6 +141,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
 
     it('deletes account and returns 200 for valid token', async () => {
         mockFindLiveToken.mockResolvedValue(fakeUser as never);
+        mockSpendLiveToken.mockResolvedValue(true);
         mockRemoveOwnAccount.mockResolvedValue({
             success: true,
             status: 200,
@@ -150,10 +155,26 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         await deleteAccountConfirm(req as never, res);
 
         expect(mockFindLiveToken).toHaveBeenCalledWith('delete', 'valid-token');
+        expect(mockSpendLiveToken).toHaveBeenCalledWith(fakeUser, 'valid-token');
         expect(mockRemoveOwnAccount).toHaveBeenCalledWith(fakeUser, expect.anything());
         // The goodbye mail is `removeOwnAccount`'s: it is the last layer that can still read the
         // address, since the account is gone once it resolves.
         expect(mockSuccessResponse).toHaveBeenCalled();
+    });
+
+    // The loser of two simultaneous confirms: `findLiveToken` still finds the entry (a read), but
+    // `spendLiveToken`'s atomic `$pull` reports it was already taken — same refusal as a dead link.
+    it('returns 422 when the token was already spent by a concurrent request', async () => {
+        mockFindLiveToken.mockResolvedValue(fakeUser as never);
+        mockSpendLiveToken.mockResolvedValue(false);
+
+        const req = { body: { token: 'valid-token' } };
+        const res = makeResponse();
+
+        await deleteAccountConfirm(req as never, res);
+
+        expect(mockRemoveOwnAccount).not.toHaveBeenCalled();
+        expect(mockRejectResponse).toHaveBeenCalledWith(res, 422, expect.any(Array));
     });
 
     /*

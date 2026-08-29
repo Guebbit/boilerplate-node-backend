@@ -324,9 +324,11 @@ const withActions = (
  * module may move money, so both paths come through here.
  *
  * @param orderId - the order whose payment is being returned
+ * @param context - present only for the admin request (`refundByOrder`); the cancel listener
+ *  (`refundForOrder`) has none, and audits nothing, same as the token-cleanup job.
  * @returns the refunded payment, or `null` when there was nothing to return
  */
-const performRefund = (orderId: string): Promise<PaymentDocument | null> =>
+const performRefund = (orderId: string, context?: CallerContext): Promise<PaymentDocument | null> =>
     paymentRepository
         .updateStatusIfIn(orderId, [REFUNDABLE_PAYMENT_STATUS], 'refunded')
         .then((payment) => {
@@ -337,6 +339,15 @@ const performRefund = (orderId: string): Promise<PaymentDocument | null> =>
                     logger.info(
                         `Payment for order ${orderId} refunded (${payment.amount} ${payment.currency})`
                     );
+                    if (context)
+                        emitAuditEvent(
+                            buildAuditEvent(context, {
+                                action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
+                                outcome: 'success',
+                                target_type: 'order',
+                                target_id: orderId
+                            })
+                        );
                     return payment;
                 });
         });
@@ -349,13 +360,15 @@ const performRefund = (orderId: string): Promise<PaymentDocument | null> =>
  *
  * @param orderId - the order whose payment is being returned
  * @param authContext - the caller, for the read that distinguishes 404 from 409
+ * @param context - the caller context to audit the refund against
  * @returns the refunded payment, or a refusal naming which case it was
  */
 export const refundByOrder = (
     orderId: string,
-    authContext?: Caller
+    authContext: Caller | undefined,
+    context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    performRefund(orderId).then((refunded) => {
+    performRefund(orderId, context).then((refunded) => {
         if (refunded) return generateSuccess(refunded, 200, t('payments.refund-success'));
 
         // Nothing moved. Which refusal it was is a second read, exactly as the order cancel does:

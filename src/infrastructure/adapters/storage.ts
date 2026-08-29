@@ -9,7 +9,7 @@ import type { Request, RequestHandler } from 'express';
 // multer is the `multipart/form-data` body parser for Express. It populates `request.file` /
 // `request.files` and, with diskStorage, writes the bytes to disk before the handler runs.
 // `FileFilterCallback` is the signature of the accept/reject callback used below.
-import multer, { type Field, type FileFilterCallback, type Multer } from 'multer';
+import multer, { type FileFilterCallback, type Multer } from 'multer';
 // `randomBytes` = cryptographically secure RNG. Deliberately not `Math.random()`: predictable
 // filenames would let someone guess the URL of another user's upload.
 import { randomBytes } from 'node:crypto';
@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createLocaleContext, runWithLocaleContext, t } from '@infrastructure/i18n';
 import {
+    ACCEPTED_UPLOAD_MIMETYPES,
     extensionForImage,
     identifyImageFile,
     normaliseDeclaredImageMime
@@ -47,13 +48,6 @@ export const uploadStagingPath = () =>
     process.env.NODE_UPLOAD_STAGING_PATH ?? path.join(tmpdir(), 'node-api-uploads');
 
 /**
- * Manage file storage
- *
- * `multer.diskStorage` builds a storage engine from two callbacks — `destination` (which
- * directory) and `filename` (what to call it). The alternative, `multer.memoryStorage()`, keeps
- * uploads in a Buffer, which is faster but lets a large upload exhaust process memory.
- */
-/**
  * Write file into the staging directory
  *
  * Routing by `fieldname` (the form field the file arrived in) rejects anything unrecognised rather
@@ -72,8 +66,6 @@ export const resolveUploadDestination = (
     file: Express.Multer.File,
     callback: (error: Error | null, destination: string) => void
 ): void => {
-    // if (file.fieldname === "pdfUpload")
-    //     callback(null, 'src/uploads/');
     // Unknown field → reject. Whitelist rather than blacklist: an unexpected field name is
     // more likely an attack or a client bug than a legitimate upload.
     if (file.fieldname !== 'imageUpload') {
@@ -118,19 +110,17 @@ export const resolveUploadFilename = (
     callback(null, randomBytes(16).toString('hex') + '.' + extension);
 };
 
+/**
+ * Manage file storage
+ *
+ * `multer.diskStorage` builds a storage engine from two callbacks — `destination` (which
+ * directory) and `filename` (what to call it). The alternative, `multer.memoryStorage()`, keeps
+ * uploads in a Buffer, which is faster but lets a large upload exhaust process memory.
+ */
 export const fileStorage = multer.diskStorage({
     destination: resolveUploadDestination,
     filename: resolveUploadFilename
 });
-
-/**
- * Declared types this API is willing to consider.
- *
- * `image/jpg` is not a real IANA type, but enough clients send it that rejecting it would be
- * rejecting valid JPEGs over a spelling mistake. The bytes decide the truth either way — see
- * {@link validateUploadedImages}.
- */
-const ACCEPTED_UPLOAD_MIMETYPES = new Set(['image/png', 'image/jpg', 'image/jpeg', 'image/webp']);
 
 /**
  * First gate: the type the client CLAIMS.
@@ -156,16 +146,6 @@ export const fileFilter = (
     // Images only. Note 'image/jpg' is not a real IANA type, but some clients send it anyway.
     ACCEPTED_UPLOAD_MIMETYPES.has(file.mimetype) ? callback(null, true) : callback(null, false);
 
-/**
- * Multer middleware
- *
- * The configured instance routes mount as `upload.single('imageUpload')`,
- * `upload.array(...)` or `upload.fields(...)`.
- *
- * No `limits` are configured, so multer applies its own defaults (unlimited file size, 1 MB
- * per non-file field). Adding `limits: { fileSize }` is the standard hardening step if these
- * routes are ever exposed to untrusted clients.
- */
 /**
  * Ceiling on a single upload, in bytes. 5 MB by default, overridable per deployment.
  *
@@ -373,12 +353,12 @@ export const storeUploadedImages: RequestHandler = (request, _response, next) =>
 /**
  * Multer middleware.
  *
- * The configured instance routes mount as `upload.single('imageUpload')`, `upload.array(...)` or
- * `upload.fields(...)`. Each is wrapped in the full pipeline: the locale is restored across the
- * body parse (see {@link withLocaleRestored}), the bytes are checked against the format they claim
- * to be (see {@link validateUploadedImages}), and only then is the file committed to storage (see
- * {@link storeUploadedImages}). Composing them here rather than at the route mounts is deliberate —
- * a route that forgets one looks perfectly correct, and the one it forgets is a security check.
+ * The configured instance routes mount as `upload.single('imageUpload')`. Wrapped in the full
+ * pipeline: the locale is restored across the body parse (see {@link withLocaleRestored}), the
+ * bytes are checked against the format they claim to be (see {@link validateUploadedImages}), and
+ * only then is the file committed to storage (see {@link storeUploadedImages}). Composing them
+ * here rather than at the route mounts is deliberate — a route that forgets one looks perfectly
+ * correct, and the one it forgets is a security check.
  */
 const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
     withLocaleRestored(middleware),
@@ -387,10 +367,5 @@ const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
 ];
 
 export const upload = {
-    single: (fieldName: string) => wrapUpload(rawUpload().single(fieldName)),
-    array: (fieldName: string, maxCount?: number) =>
-        wrapUpload(rawUpload().array(fieldName, maxCount)),
-    fields: (fields: Field[]) => wrapUpload(rawUpload().fields(fields)),
-    none: () => wrapUpload(rawUpload().none()),
-    any: () => wrapUpload(rawUpload().any())
+    single: (fieldName: string) => wrapUpload(rawUpload().single(fieldName))
 };

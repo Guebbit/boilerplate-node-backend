@@ -26,12 +26,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { localeAuditActions } from '../audit';
 import type { LocaleMessageDocument } from '../model';
 import { localeMessageRepository, localeRepository } from '../repository';
-import {
-    findBatchCollision,
-    findDuplicateKey,
-    findUnsafeKeySegment,
-    rejectUnusableKey
-} from './keys';
+import { findBatchCollision, findDuplicateKey, rejectUnusableKey } from './keys';
 import { languageNotFound, readableTenant, rejectUnknownTenant } from './languages';
 
 /**
@@ -220,10 +215,6 @@ export const importEntries = async (
     const duplicate = findDuplicateKey(keys);
     if (duplicate !== undefined)
         return generateReject(409, [t('locales.error-key-exists', { key: duplicate })]);
-
-    const unsafe = keys.find((key) => findUnsafeKeySegment(key) !== undefined);
-    if (unsafe !== undefined)
-        return generateReject(422, [t('locales.error-key-invalid', { key: unsafe })]);
 
     const batchCollision = findBatchCollision(keys);
     if (batchCollision)

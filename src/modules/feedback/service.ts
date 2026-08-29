@@ -21,19 +21,7 @@ import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from './audit';
 
-/**
- * OCP-compliant status mapping: adding a new status only requires adding one entry here.
- *
- * Lowercase only, matching `openapi.yaml`'s `enum: [new, in_progress, resolved, spam]`. Uppercase
- * aliases would accept values the contract does not allow — dead on `PUT /feedback/:id`, where
- * the generated Zod schema 422s them first, and actively wrong on the unguarded search path.
- */
-const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
-    new: FeedbackRequestStatus.new,
-    in_progress: FeedbackRequestStatus.in_progress,
-    resolved: FeedbackRequestStatus.resolved,
-    spam: FeedbackRequestStatus.spam
-};
+const FEEDBACK_STATUS_VALUES = Object.values(FeedbackRequestStatus) as string[];
 
 /**
  * DISPOSITION — a value outside the closed set.
@@ -49,7 +37,9 @@ const STATUS_MAP: Record<string, FeedbackRequestStatus> = {
  * safe narrowing of an invalid value to write — only a rejection.
  */
 const toFeedbackStatus = (status?: string): FeedbackRequestStatus | undefined =>
-    status ? STATUS_MAP[status] : undefined;
+    status && FEEDBACK_STATUS_VALUES.includes(status)
+        ? (status as FeedbackRequestStatus)
+        : undefined;
 
 /**
  * Where the operator's notification goes: the dedicated contact mailbox, then the generic SMTP

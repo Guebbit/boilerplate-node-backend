@@ -4,4 +4,3 @@
  */
 
 export { evaluateCheckout } from './rules';
-export type { CartLineCandidate, CheckoutVerdict, CheckoutShortfall } from './rules';

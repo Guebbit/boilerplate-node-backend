@@ -387,7 +387,7 @@ describe('refundByOrder', () => {
         // The whole point of the standalone action: a goodwill refund is not a cancellation.
         const { order } = await paidOrder();
 
-        const result = await refundByOrder(String(order._id), { admin: true });
+        const result = await refundByOrder(String(order._id), { admin: true }, testCallerContext);
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -398,9 +398,9 @@ describe('refundByOrder', () => {
 
     it('refuses the second attempt with 409 rather than paying twice', async () => {
         const { order } = await paidOrder();
-        await refundByOrder(String(order._id), { admin: true });
+        await refundByOrder(String(order._id), { admin: true }, testCallerContext);
 
-        const result = await refundByOrder(String(order._id), { admin: true });
+        const result = await refundByOrder(String(order._id), { admin: true }, testCallerContext);
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(409);
@@ -411,7 +411,7 @@ describe('refundByOrder', () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
 
-        const result = await refundByOrder(String(order._id), { admin: true });
+        const result = await refundByOrder(String(order._id), { admin: true }, testCallerContext);
 
         expect(asReject(result).status).toBe(409);
     });
@@ -419,7 +419,7 @@ describe('refundByOrder', () => {
     it('answers 404 when the order never had a payment', async () => {
         const { order } = await orderFor();
 
-        const result = await refundByOrder(String(order._id), { admin: true });
+        const result = await refundByOrder(String(order._id), { admin: true }, testCallerContext);
 
         expect(asReject(result).status).toBe(404);
     });
@@ -437,7 +437,7 @@ describe('getForOrder — what the caller may do', () => {
         );
 
         const before = await getForOrder(String(order._id), { admin: true });
-        await refundByOrder(String(order._id), { admin: true });
+        await refundByOrder(String(order._id), { admin: true }, testCallerContext);
         const after = await getForOrder(String(order._id), { admin: true });
 
         expect((before as { data?: Record<string, unknown> }).data?.actions).toMatchObject({

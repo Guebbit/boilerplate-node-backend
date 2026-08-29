@@ -5,9 +5,6 @@ import { logger } from '@infrastructure/adapters/logger';
 /* Queue name for email jobs — owned by the adapter, re-exported for the worker registry. */
 export { EMAIL_QUEUE } from '@infrastructure/adapters/queue';
 
-/* Payload shape for email jobs — declared with the producer, re-exported for this queue's callers. */
-export type { EmailJob } from '@infrastructure/adapters/mailer';
-
 /**
  * Process a single email job from the queue.
  *

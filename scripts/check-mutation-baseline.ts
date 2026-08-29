@@ -36,14 +36,6 @@ try {
 const baseline = readBaseline();
 const comparisons = compareToBaseline(current, baseline);
 
-const counts = {
-    held: comparisons.filter(({ verdict }) => verdict === 'held').length,
-    improved: comparisons.filter(({ verdict }) => verdict === 'improved').length,
-    regressed: comparisons.filter(({ verdict }) => verdict === 'regressed').length,
-    added: comparisons.filter(({ verdict }) => verdict === 'new').length,
-    removed: comparisons.filter(({ verdict }) => verdict === 'removed').length
-};
-
 if (!baseline) {
     console.log(
         `[mutation-baseline] No ${MUTATION_BASELINE_PATH} yet — recording ${
@@ -77,6 +69,13 @@ if (update && missing.length > 0) {
     process.exit(1);
 }
 
+const counts = {
+    held: comparisons.filter(({ verdict }) => verdict === 'held').length,
+    improved: comparisons.filter(({ verdict }) => verdict === 'improved').length,
+    added: comparisons.filter(({ verdict }) => verdict === 'new').length,
+    removed: comparisons.filter(({ verdict }) => verdict === 'removed').length
+};
+
 /*
  * New and improved files are printed even on a passing run. The ratchet is only trustworthy if
  * people can see it moving: a silent pass looks identical to a check that is not running.
@@ -98,8 +97,8 @@ const regressions = formatRegressions(comparisons);
 
 if (regressions) {
     console.error(`\n[mutation-baseline] ${regressions}\n`);
-    // The baseline is NOT rewritten on a regression, even with --update: see `nextBaseline`.
-    // A failing file must stay failing until it is fixed.
+    // `--update` still rewrites the file, but `nextBaseline` keeps the higher of the two scores,
+    // so a regressed file keeps its old baseline and stays failing until it is fixed.
     if (update) writeBaseline(nextBaseline(current, baseline));
     process.exit(1);
 }
@@ -109,6 +108,7 @@ if (update) {
     console.log(`[mutation-baseline] ${MUTATION_BASELINE_PATH} updated.`);
 }
 
+// Reached only past the `regressions` exit above, so the regressed count is zero by construction.
 console.log(
     `[mutation-baseline] ${counts.held} held, ${counts.improved} improved, ` +
         `${counts.added} new, ${counts.removed} removed, 0 regressed.`

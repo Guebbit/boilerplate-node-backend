@@ -35,3 +35,7 @@ src/infrastructure/observability/analytics-events.frontend.ts  linguist-generate
 
 # ── The orval client, generated from openapi.yaml ────────────────────────────────────────────
 api/**                                                         linguist-generated=true
+
+# 2repo:start — regenerate with: 2repo <repo-path>
+.2repo/** linguist-generated=true
+# 2repo:end

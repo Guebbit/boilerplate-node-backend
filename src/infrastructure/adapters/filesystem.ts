@@ -9,15 +9,6 @@ import { deleteFile as toolkitDeleteFile } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 
 /**
- * Delete target file in the filesystem, logging unexpected failures
- *
- * Used to clean up multer uploads when the request that created them later fails validation
- * or a database write — otherwise orphaned files accumulate in the public directory.
- * Deliberately non-throwing: a failed cleanup must not turn into a failed HTTP response.
- *
- * @param filePath - absolute path as produced by multer (`request.file.path`)
- */
-/**
  * Move a file, across filesystems if necessary.
  *
  * `rename` is atomic and free, and it is also the one call that CANNOT cross a device boundary —
@@ -48,6 +39,15 @@ export const moveFile = async (source: string, destination: string) => {
     }
 };
 
+/**
+ * Delete target file in the filesystem, logging unexpected failures
+ *
+ * Used to clean up multer uploads when the request that created them later fails validation
+ * or a database write — otherwise orphaned files accumulate in the public directory.
+ * Deliberately non-throwing: a failed cleanup must not turn into a failed HTTP response.
+ *
+ * @param filePath - absolute path as produced by multer (`request.file.path`)
+ */
 export const deleteFile = (filePath: string) =>
     // Second argument is the error callback the toolkit invokes instead of rejecting.
     toolkitDeleteFile(filePath, (error) =>

@@ -40,12 +40,6 @@
             "success": "Indirizzo email verificato."
         },
         "email": {
-            "registration-confirm": {
-                "subject": "Benvenuto — il tuo account è pronto",
-                "meta-title": "Registrazione completata",
-                "title": "Benvenuto a bordo {{name}}!",
-                "body": "La registrazione è andata a buon fine."
-            },
             "verify-request": {
                 "subject": "Conferma il tuo indirizzo email",
                 "meta-title": "Verifica email",

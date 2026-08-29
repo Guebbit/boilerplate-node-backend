@@ -50,7 +50,6 @@ const SLOWEST = 8;
 /** One test file, in the shape both runners emit. */
 interface SuiteResult {
     name: string;
-    status?: string;
     startTime?: number;
     endTime?: number;
     assertionResults: {

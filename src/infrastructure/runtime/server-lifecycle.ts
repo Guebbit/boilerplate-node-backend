@@ -58,7 +58,8 @@ export const closeServer = (server: Server) =>
  *
  * Order matters and is the reverse of startup:
  *  1. stop accepting traffic (so nothing new needs the resources we are about to close)
- *  2. Redis subscriber, then the Redis client (subscriber depends on the same server)
+ *  2. the locale-override refresh timer, then the two Redis clients — the cache and the
+ *     rate-limit store — which nothing still serving traffic needs
  *  3. RabbitMQ, then MongoDB — the stores in-flight requests were still using
  *  4. analytics flush, then tracing flush — these buffer in memory, so they go *last*
  *     and therefore capture the teardown of everything above them.

@@ -123,7 +123,7 @@ export const startTracing = (): void => {
  *
  * `BatchSpanProcessor` holds spans in memory between flushes, so skipping this on exit
  * loses the last few seconds of telemetry — exactly the spans covering a crash.
- * Called last in the shutdown chain (see `bootstrap/server-lifecycle.ts`) so infra
+ * Called last in the shutdown chain (see `runtime/server-lifecycle.ts`) so infra
  * teardown is itself still traced.
  */
 export const shutdownTracing = (): Promise<void> => {

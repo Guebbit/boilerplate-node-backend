@@ -23,8 +23,6 @@ export interface TokenData {
     id: string;
 }
 
-export { RefreshTokenExpiryTime, getExpiryTime, getExpiryTimeMilliseconds } from './config';
-
 /*
  * Verify an access token (stateless JWT check only).
  * @param token - signed JWT string

@@ -213,7 +213,7 @@ const SHARED_DECLARATION_FILES: Record<string, string> = {
  *
  * `extractAndValidateId` is folded in because it is `readInput` with the same surface parameter
  * that happens to also respond — a controller calling it reads those sources just as surely as if
- * it had written them out. Its surface is the optional fourth argument, defaulting to `'write'`.
+ * it had written them out. Its surface is the optional third argument, defaulting to `'write'`.
  */
 const readDeclaredSources = (controllerFile: string, seen = new Set<string>()): Set<Source> => {
     // A shared factory is followed once; the guard is for a cycle, not for performance.
@@ -230,8 +230,8 @@ const readDeclaredSources = (controllerFile: string, seen = new Set<string>()): 
     for (const [, surface] of source.matchAll(/surface:\s*'(\w+)'/g)) add(surface);
 
     for (const [, argumentList] of source.matchAll(/extractAndValidateId\(([^)]*)\)/g)) {
-        // The surface is the last argument when it is given at all. A trailing string that is not
-        // a surface name is the three-argument form, whose default the signature spells `'write'`.
+        // The surface is the last argument when it is given at all. A call without a trailing
+        // surface name is the two-argument form, whose default the signature spells `'write'`.
         const trailing = /'(\w+)'\s*$/.exec(argumentList.trim())?.[1];
         add(trailing !== undefined && trailing in SURFACE_SOURCES ? trailing : 'write');
     }

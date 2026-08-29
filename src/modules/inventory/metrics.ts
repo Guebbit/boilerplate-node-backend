@@ -2,6 +2,9 @@
  * Domain gauges this module owns. See `modules/account/metrics.ts` for why they live in the
  * module rather than in `infrastructure`, and how the overview endpoint reads them without
  * importing here.
+ *
+ * Both are bound to unused underscore-prefixed variables, the same way `metrics-http.ts` does it:
+ * registering themselves is the constructor's whole job, and nothing reads the handles.
  */
 
 import { Gauge } from 'prom-client';
@@ -20,7 +23,7 @@ import { lowStockThreshold } from './config';
  * reading `onHand` would report forty while the storefront showed a sold-out badge.
  * `countLowAvailability` does the subtraction inside mongod.
  */
-export const productsLowStockTotal = new Gauge({
+const _productsLowStockTotal = new Gauge({
     name: 'products_low_stock_total',
     help: 'Products whose available units are at or under the low-stock threshold.',
     registers: [metricsRegistry],
@@ -38,7 +41,7 @@ export const productsLowStockTotal = new Gauge({
  * confirming. Neither is visible in a stock count alone, which is exactly why the previous
  * single-counter model could not have had this metric at all.
  */
-export const inventoryReservedUnitsTotal = new Gauge({
+const _inventoryReservedUnitsTotal = new Gauge({
     name: 'inventory_reserved_units_total',
     help: 'Units held by open reservations across the catalogue.',
     registers: [metricsRegistry],

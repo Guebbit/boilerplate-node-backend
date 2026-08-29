@@ -24,7 +24,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 /** Where `stryker.config.json`'s `jsonReporter` writes, and where the baseline is committed. */
-export const MUTATION_REPORT_PATH = 'reports/mutation/mutation.json';
+const MUTATION_REPORT_PATH = 'reports/mutation/mutation.json';
 export const MUTATION_BASELINE_PATH = 'mutation-baseline.json';
 
 /**

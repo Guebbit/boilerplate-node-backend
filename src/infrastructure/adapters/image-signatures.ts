@@ -15,48 +15,74 @@ import { open } from 'node:fs/promises';
  */
 
 /**
- * One accepted format: the exact bytes it must begin with, and the MIME type it really is.
+ * One accepted format, in full: the MIME type it really is, any other spelling a client may
+ * declare for it, the exact bytes it must begin with, and the extension it is stored under.
+ *
+ * The single source of truth for "what image formats does this API accept" — everything else in
+ * this file (and `ACCEPTED_UPLOAD_MIMETYPES` in `storage.ts`) derives from this list, so adding a
+ * format is one entry here rather than an edit in three places.
  *
  * `offset` exists because some formats do not start at byte 0 — WebP's marker sits at 8, after
  * the RIFF header — so it is modelled from the start rather than bolted on later.
  */
-interface ImageSignature {
+interface ImageFormat {
     mime: string;
+    /** Other `Content-Type` spellings clients send for this format (e.g. the non-IANA `image/jpg`). */
+    aliases?: readonly string[];
     offset: number;
     bytes: readonly number[];
+    extension: string;
 }
 
 /**
  * Raster formats only. No SVG: it is XML that browsers execute, so accepting it means accepting
  * script upload, and no amount of sniffing makes that safe.
  */
-const IMAGE_SIGNATURES: readonly ImageSignature[] = [
+const SUPPORTED_IMAGE_FORMATS: readonly ImageFormat[] = [
     // \x89PNG\r\n\x1a\n — the trailing bytes exist to catch transfers that mangled line endings,
     // which is exactly why matching all eight is worth more than matching the first four.
     {
         mime: 'image/png',
         offset: 0,
-        bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+        bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        extension: 'png'
     },
     // SOI marker plus the first byte of the next marker. JPEG has no longer fixed prefix: what
     // follows varies by encoder (JFIF, Exif, raw), so three bytes is the honest maximum.
+    // 'image/jpg' is not a real IANA type, but enough clients send it that rejecting it would be
+    // rejecting valid JPEGs over a spelling mistake.
     {
         mime: 'image/jpeg',
+        aliases: ['image/jpg'],
         offset: 0,
-        bytes: [0xff, 0xd8, 0xff]
+        bytes: [0xff, 0xd8, 0xff],
+        extension: 'jpg'
     },
     // 'WEBP', at offset 8, inside a RIFF container. The RIFF magic alone would also match WAV
     // and AVI, so the check has to reach past it.
     {
         mime: 'image/webp',
         offset: 8,
-        bytes: [0x57, 0x45, 0x42, 0x50]
+        bytes: [0x57, 0x45, 0x42, 0x50],
+        extension: 'webp'
     }
 ];
 
+/** Every spelling a client may declare, across all supported formats — including aliases. */
+export const ACCEPTED_UPLOAD_MIMETYPES = new Set(
+    SUPPORTED_IMAGE_FORMATS.flatMap((format) => [format.mime, ...(format.aliases ?? [])])
+);
+
+/** Alias spelling → canonical MIME type, built once from the format table. */
+const CANONICAL_MIME_BY_ALIAS = new Map(
+    SUPPORTED_IMAGE_FORMATS.flatMap((format) =>
+        (format.aliases ?? []).map((alias) => [alias, format.mime] as const)
+    )
+);
+
 /** Enough bytes for the longest signature plus its offset. */
 const HEADER_LENGTH = Math.max(
-    ...IMAGE_SIGNATURES.map((signature) => signature.offset + signature.bytes.length)
+    ...SUPPORTED_IMAGE_FORMATS.map((format) => format.offset + format.bytes.length)
 );
 
 /**
@@ -66,10 +92,10 @@ const HEADER_LENGTH = Math.max(
  * @returns The identified MIME type, or `undefined` when the bytes match no accepted format.
  */
 export const identifyImage = (header: Buffer): string | undefined =>
-    IMAGE_SIGNATURES.find(
-        (signature) =>
-            header.length >= signature.offset + signature.bytes.length &&
-            signature.bytes.every((byte, index) => header[signature.offset + index] === byte)
+    SUPPORTED_IMAGE_FORMATS.find(
+        (format) =>
+            header.length >= format.offset + format.bytes.length &&
+            format.bytes.every((byte, index) => header[format.offset + index] === byte)
     )?.mime;
 
 /**
@@ -108,26 +134,22 @@ export const identifyImageFile = async (filePath: string): Promise<string | unde
  * may legally carry arbitrary bytes in its metadata chunks, so "valid PNG bytes under an .html
  * name" is stored XSS that passes every content check.
  *
- * A closed map is the fix: the value can only ever be one of these four strings.
+ * Derived from {@link SUPPORTED_IMAGE_FORMATS}: the value can only ever be one of the extensions
+ * declared there.
  *
  * @param mime - A MIME type returned by {@link identifyImage}.
  * @returns The extension to store it under, or `undefined` for anything unrecognised.
  */
 export const extensionForImage = (mime: string | undefined): string | undefined =>
-    ({
-        'image/png': 'png',
-        'image/jpeg': 'jpg',
-        'image/webp': 'webp'
-    })[mime ?? ''];
+    SUPPORTED_IMAGE_FORMATS.find((format) => format.mime === mime)?.extension;
 
 /**
  * The MIME type a declared `Content-Type` corresponds to, normalised.
  *
- * `image/jpg` is not a real IANA type but is sent often enough that rejecting it would reject
- * valid JPEGs over a spelling mistake; it is folded into `image/jpeg` here so the declared and
- * sniffed types can be compared as equals.
+ * A declared alias (e.g. the non-IANA `image/jpg`) is folded into its canonical MIME type, per
+ * {@link SUPPORTED_IMAGE_FORMATS}, so the declared and sniffed types can be compared as equals.
  *
  * @param declared - The `Content-Type` from the multipart part.
  */
 export const normaliseDeclaredImageMime = (declared: string | undefined): string | undefined =>
-    declared === 'image/jpg' ? 'image/jpeg' : declared;
+    declared === undefined ? undefined : (CANONICAL_MIME_BY_ALIAS.get(declared) ?? declared);

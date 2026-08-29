@@ -111,7 +111,9 @@ export const create = (data: CreateUserRequest, context: CallerContext): Promise
                 // Recorded here, not by `account`'s domain-event handler: that handler has no
                 // request to build a `CallerContext` from, only a `userId`, so the admin's action
                 // is the only point in the flow with someone to attribute it to.
-                ...(passwordProvided ? {} : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
+                ...(passwordProvided
+                    ? {}
+                    : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
             })
         );
         emitAnalyticsEvent({

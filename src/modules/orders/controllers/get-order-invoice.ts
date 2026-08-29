@@ -53,7 +53,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                     path.resolve('shared', 'views', 'templates-files', 'orders.invoice.ejs'),
                     // Same convention as the email templates: the copy is resolved here, in the
                     // request's language, and the template only interpolates. That is what lets
-                    // the identical render run from `workers/pdf.worker.ts`, where there is no
+                    // the identical render run from `adapters/pdf.worker.ts`, where there is no
                     // request and no locale to resolve against.
                     invoiceDocument(request.locale ?? getDefaultLocale(), order)
                 )

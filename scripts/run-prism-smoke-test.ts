@@ -51,13 +51,17 @@ prism.on('exit', (code) => {
     if (code !== 0) finish(1, `[prism] server exited early with code ${code}.`);
 });
 
-/** Poll until the mock answers rather than sleeping a guessed number of seconds. */
-const waitForBoot = async (): Promise<void> => {
+/**
+ * Poll until the mock answers rather than sleeping a guessed number of seconds.
+ *
+ * The first answer IS the smoke test's answer, so it is returned rather than discarded: probing
+ * twice would ask the mock the same question again for nothing.
+ */
+const waitForBoot = async (): Promise<Response> => {
     const deadline = Date.now() + BOOT_TIMEOUT_MS;
     for (;;) {
         try {
-            await fetch(`http://127.0.0.1:${PORT}${PROBE}`);
-            return;
+            return await fetch(`http://127.0.0.1:${PORT}${PROBE}`);
         } catch {
             if (Date.now() > deadline)
                 finish(1, `[prism] did not accept connections on :${PORT} within 30s.`);
@@ -68,9 +72,7 @@ const waitForBoot = async (): Promise<void> => {
 
 // Wrapped rather than top-level: this package is CommonJS, where esbuild rejects a top-level await.
 const main = async (): Promise<void> => {
-    await waitForBoot();
-
-    const response = await fetch(`http://127.0.0.1:${PORT}${PROBE}`);
+    const response = await waitForBoot();
 
     if (!response.ok) finish(1, `[prism] GET ${PROBE} answered ${response.status}, expected 2xx.`);
 

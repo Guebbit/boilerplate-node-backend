@@ -580,21 +580,21 @@ describe('extractAndValidateId', () => {
         const { response } = makeResponse();
         const request = makeRequest({ params: { id: OBJECT_ID } });
 
-        expect(extractAndValidateId(request, response, 'Product')).toBe(OBJECT_ID);
+        expect(extractAndValidateId(request, response)).toBe(OBJECT_ID);
     });
 
     it('falls back to the body when there is no route param', () => {
         const { response } = makeResponse();
         const request = makeRequest({ body: { id: OBJECT_ID }, contentType: JSON_TYPE });
 
-        expect(extractAndValidateId(request, response, 'Product')).toBe(OBJECT_ID);
+        expect(extractAndValidateId(request, response)).toBe(OBJECT_ID);
     });
 
     it('answers 422 for a malformed id instead of letting Mongoose throw a 500', () => {
         const { response, sent } = makeResponse();
         const request = makeRequest({ params: { id: 'not-an-id' } });
 
-        expect(extractAndValidateId(request, response, 'Product')).toBeUndefined();
+        expect(extractAndValidateId(request, response)).toBeUndefined();
         expect(sent.status).toBe(422);
     });
 
@@ -602,7 +602,7 @@ describe('extractAndValidateId', () => {
         const { response, sent } = makeResponse();
         const request = makeRequest();
 
-        expect(extractAndValidateId(request, response, 'Product')).toBeUndefined();
+        expect(extractAndValidateId(request, response)).toBeUndefined();
         expect(sent.status).toBe(422);
     });
 });

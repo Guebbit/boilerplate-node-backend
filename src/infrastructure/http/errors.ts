@@ -53,8 +53,6 @@ export class ExtendedError extends Error {
         this.httpCode = httpCode;
         this.isOperational = isOperational;
         this.errors = errors;
-        // Capture stack trace for debugging if NOT extending Error
-        // Error.captureStackTrace(this);
         // Dangerous, better log it.
         // Logging in the constructor guarantees a record even if some caller swallows the
         // throw. Operational errors are skipped deliberately — a wrong password is not an

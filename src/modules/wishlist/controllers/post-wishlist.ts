@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 import { AddWishlistItemBody } from '@api/schemas.zod';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
-import { successResponse } from '@infrastructure/http/response';
-import { malformedProductId } from './shared/product-id';
+import { t } from '@infrastructure/i18n';
+import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AddWishlistItemRequest } from '@types';
 import { wishlistService } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -23,7 +23,12 @@ export const postWishlist = (
 
     const { productId } = body;
 
-    if (malformedProductId(response, productId)) return;
+    if (!isValidObjectId(productId)) {
+        // 422 rather than 404: the request is syntactically fine and its value is unusable,
+        // which is what tells a caller the id was malformed rather than merely absent.
+        rejectResponse(response, 422, [t('generic.error-missing-data')]);
+        return;
+    }
 
     return wishlistService
         .wishlistAdd(userId, productId, callerContextOf(request))

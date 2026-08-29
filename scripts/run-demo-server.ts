@@ -25,7 +25,8 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // The e2e suite is not a person browsing: 85 specs from one address clear the human-sized
     // budget in minutes and every 429 downstream reads as "login is broken".
     NODE_RATE_LIMIT_MAX: '1000',
-    NODE_AUTH_RATE_LIMIT_MAX: '1000'
+    NODE_AUTH_RATE_LIMIT_MAX: '1000',
+    NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '1000'
 };
 
 /** External services have no place here — force-disable whatever the shell happens to carry. */
@@ -33,9 +34,9 @@ const FORCED_ABSENT = [
     'NODE_REDIS_URL',
     'NODE_REDIS_HOST',
     'NODE_REDIS_PORT',
-    'NODE_AMQP_URL',
-    'NODE_AMQP_HOST',
-    'NODE_AMQP_PORT'
+    'NODE_RABBITMQ_URL',
+    'NODE_RABBITMQ_HOST',
+    'NODE_RABBITMQ_PORT'
 ];
 
 const waitForDatabase = (readyState: () => number): Promise<void> =>

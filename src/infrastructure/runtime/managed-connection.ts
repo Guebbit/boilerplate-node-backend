@@ -67,6 +67,12 @@ export interface ManagedConnectionOptions<THandle> {
      * closing that connection is the only thing that releases it.
      */
     close: (handle: THandle | undefined) => Promise<void>;
+
+    /** Log level for the unavailability warning. Most callers fail open, so `warn` is the default. */
+    unavailableLevel?: 'warn' | 'error';
+
+    /** Called once when a connect succeeds after having been reported unavailable. */
+    onRecovered?: () => void;
 }
 
 /** The lifecycle an adapter drives its public functions from. */
@@ -80,6 +86,12 @@ export interface ManagedConnection<THandle> {
      * now known to be clear) separates them with `isEnabled` instead.
      */
     get: () => Promise<THandle | undefined>;
+
+    /**
+     * Like {@link get}, but REJECTS instead of resolving `undefined` when the dependency cannot be
+     * reached — for the one caller (the rate limiter) that must fail closed, not open.
+     */
+    getOrThrow: () => Promise<THandle>;
 
     /** What this connection is doing, for `GET /observability/health`. Performs no I/O. */
     state: () => DependencyStatus;
@@ -119,16 +131,18 @@ export interface ManagedConnection<THandle> {
  */
 export const manageConnection = <THandle>({
     unavailableMessage,
+    unavailableLevel = 'warn',
     isEnabled,
     connect,
     isReady,
-    close
+    close,
+    onRecovered
 }: ManagedConnectionOptions<THandle>): ManagedConnection<THandle> => {
     /** The shared handle: one per process — a handle per request exhausts the server's limit. */
     let handle: THandle | undefined;
 
     /** The in-flight connect, so a burst during startup does not thunder-herd its own attempt. */
-    let connectPromise: Promise<THandle | undefined> | undefined;
+    let connectPromise: Promise<THandle> | undefined;
 
     /**
      * Latches the "it is down" warning: a dead dependency emits per failed operation, which would
@@ -139,11 +153,57 @@ export const manageConnection = <THandle>({
     const reportUnavailable = (error: unknown) => {
         if (warningLogged) return;
 
-        logger.warn({
-            message: unavailableMessage,
-            error: error instanceof Error ? error.message : String(error)
-        });
+        if (unavailableLevel === 'error') {
+            logger.error({
+                message: unavailableMessage,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        } else {
+            logger.warn({
+                message: unavailableMessage,
+                error: error instanceof Error ? error.message : String(error)
+            });
+        }
         warningLogged = true;
+    };
+
+    /** `connect()` resolving `undefined` means "cannot be built" — configuration ruled it out, not a failure. */
+    class NotConfigured extends Error {}
+
+    /** The one place a connection is actually attempted, deduplicated across concurrent callers. */
+    const attempt = (): Promise<THandle> => {
+        if (connectPromise) return connectPromise;
+
+        const wasWarned = warningLogged;
+
+        const running: Promise<THandle> = connect()
+            .then((opened) => {
+                if (opened === undefined) throw new NotConfigured();
+
+                handle = opened;
+                if (wasWarned) onRecovered?.();
+                warningLogged = false;
+                return opened;
+            })
+            .catch((error: unknown) => {
+                handle = undefined;
+                if (!(error instanceof NotConfigured)) reportUnavailable(error);
+                throw error;
+            })
+            .finally(() => {
+                // Cleared either way, so the next call can retry a dependency that was down.
+                connectPromise = undefined;
+            });
+
+        connectPromise = running;
+
+        return running;
+    };
+
+    const getOrThrow = (): Promise<THandle> => {
+        if (!isEnabled()) return Promise.reject(new NotConfigured());
+        if (handle && isReady(handle)) return Promise.resolve(handle);
+        return attempt();
     };
 
     const get = (): Promise<THandle | undefined> => {
@@ -151,35 +211,14 @@ export const manageConnection = <THandle>({
         if (!isEnabled()) return Promise.resolve(undefined);
         // Reuse a handle that is still good; a dead one falls through to a fresh attempt.
         if (handle && isReady(handle)) return Promise.resolve(handle);
-        // An attempt is already running — join it instead of opening a second connection.
-        if (connectPromise) return connectPromise;
-
-        const attempt: Promise<THandle | undefined> = connect()
-            .then((opened) => {
-                handle = opened;
-                // Connected → allow a warning again, so a later outage is still reported.
-                if (opened) warningLogged = false;
-                return opened;
-            })
-            .catch((error: unknown) => {
-                // Resolve, never reject: a failed connect is a skipped optimisation for the
-                // cache and an inline fallback for the queue, not a failed request.
-                reportUnavailable(error);
-                handle = undefined;
-                return undefined;
-            })
-            .finally(() => {
-                // Cleared either way, so the next call can retry a dependency that was down.
-                connectPromise = undefined;
-            });
-
-        connectPromise = attempt;
-
-        return attempt;
+        // Resolve, never reject: a failed connect is a skipped optimisation for the cache and an
+        // inline fallback for the queue, not a failed request.
+        return attempt().catch(() => undefined);
     };
 
     return {
         get,
+        getOrThrow,
 
         state: () => {
             if (!isEnabled()) return 'disabled';
@@ -199,8 +238,8 @@ export const manageConnection = <THandle>({
 
         stop: () => {
             // An attempt still running owns the handle this is about to close, so it is settled
-            // first. `connectPromise` never rejects — `get` already turned failure into
-            // `undefined` — so there is nothing to catch here.
+            // first. If it rejects, there was never a handle to close — `close(undefined)` would
+            // have been a no-op anyway, so the catch below skips straight past it.
             const settled = connectPromise ?? Promise.resolve(handle);
 
             return (

@@ -16,10 +16,11 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 import path from 'node:path';
 import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
+import { enabledModules } from '../../src/modules';
 
 /**
  * The modules contributing a standalone document, in the order the contract is assembled in.
@@ -59,6 +60,42 @@ export type SectionName = (typeof SECTION_ORDER)[number];
 /** A module's standalone contract. */
 export const moduleSpec = (section: ModuleSection): string =>
     path.join(REPO_ROOT, 'src', 'modules', section, 'openapi.yaml');
+
+/**
+ * Fail loudly the moment `MODULE_SECTIONS` drifts from reality, instead of a module silently
+ * shipping with no contract entry.
+ *
+ * "Reality" is `enabledModules` — the actual registry, `src/modules.ts` — filtered to whichever of
+ * those folders has its own `openapi.yaml` on disk: the same fact a human currently has to notice
+ * and copy into `MODULE_SECTIONS` by hand. The order itself stays hand-curated on purpose (see the
+ * comment above `MODULE_SECTIONS`); this only guards its MEMBERSHIP.
+ */
+const hasOwnOpenapiSpec = (name: string) =>
+    existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'openapi.yaml'));
+
+const assertModuleSectionsAreCurrent = (): void => {
+    const shouldBeListed = new Set(
+        enabledModules.map(({ name }) => name).filter((name) => hasOwnOpenapiSpec(name))
+    );
+    const listed = new Set<string>(MODULE_SECTIONS);
+
+    const missing = [...shouldBeListed].filter((name) => !listed.has(name));
+    const stale = [...listed].filter((name) => !shouldBeListed.has(name));
+
+    if (missing.length === 0 && stale.length === 0) return;
+
+    throw new Error(
+        `[openapi] MODULE_SECTIONS is out of sync with src/modules.ts.\n` +
+            (missing.length > 0
+                ? `  Has an openapi.yaml but is missing from MODULE_SECTIONS: ${missing.join(', ')}\n`
+                : '') +
+            (stale.length > 0
+                ? `  Listed in MODULE_SECTIONS but has no openapi.yaml (or isn't in enabledModules): ${stale.join(', ')}\n`
+                : '')
+    );
+};
+
+assertModuleSectionsAreCurrent();
 
 /** What no module owns: the preamble, the shared components, and `GET /`. */
 const ROOT_SPEC = path.join(REPO_ROOT, 'shared', 'contracts', 'openapi.root.yaml');

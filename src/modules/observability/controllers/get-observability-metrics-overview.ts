@@ -56,7 +56,9 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
         // Gauges, but read identically: `collect` recounts at scrape time, and an absent metric
         // (inventory module deleted) reads as zero like every other row here.
         readCounter('products_low_stock_total'),
-        readCounter('inventory_reserved_units_total')
+        readCounter('inventory_reserved_units_total'),
+        readCounter('db_queries_total'),
+        readCounter('db_errors_total')
     ])
         .then(
             ([
@@ -68,7 +70,9 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                 checkoutValues,
                 orderValues,
                 lowStockValues,
-                reservedValues
+                reservedValues,
+                databaseQueryValues,
+                databaseErrorValues
             ]) => {
                 const snapshot = processSnapshot();
                 const inFlight = inflightMetric.values.reduce((s, v) => s + v.value, 0);
@@ -92,21 +96,9 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                         lowStockProducts: lowStockValues.reduce((s, v) => s + v.value, 0),
                         reservedUnits: reservedValues.reduce((s, v) => s + v.value, 0)
                     },
-                    /*
-                     * PLACEHOLDERS, not measurements — the two literals in this payload that no
-                     * counter stands behind.
-                     *
-                     * `openapi.yaml` declares the `database` block, so the shape has to be here;
-                     * nothing instruments the driver yet, so there is no `db_queries_total` on the
-                     * registry for `readCounter` to find. Zero is the honest answer either way —
-                     * it is what every row above reports for a metric this build does not
-                     * register — but a hardcoded zero and a measured zero read identically, and
-                     * only one of them is a fact about the database. The day the driver is
-                     * instrumented these two lines become `readCounter` calls like the rest.
-                     */
                     database: {
-                        queriesTotal: 0,
-                        errorsTotal: 0
+                        queriesTotal: databaseQueryValues.reduce((s, v) => s + v.value, 0),
+                        errorsTotal: databaseErrorValues.reduce((s, v) => s + v.value, 0)
                     },
                     process: {
                         uptimeSeconds: snapshot.uptimeSeconds,
