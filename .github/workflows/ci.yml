@@ -337,6 +337,32 @@ jobs:
             - name: Check the dependency graph
               run: npm run check:dependencies
 
+    docs:
+        # The documentation site is a build like any other: VitePress fails on a dead link between
+        # pages, which is the only thing checking that the cross-references in `docs/` still
+        # resolve. `check:docs-graph` is the second half — `docs/modules/index.md` publishes the
+        # module graph, generated from the same dependency-cruiser output the job above uses, so a
+        # new cross-module import that nobody regenerated the page for fails here rather than
+        # leaving a diagram that quietly describes last month's architecture.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check the module graph is current
+              run: npm run check:docs-graph
+
+            - name: Build the documentation site
+              run: npm run docs:build
+
     typecheck:
         # `tsc --noEmit` — types only. `build` below repeats it as part of its own script; this
         # job exists so a type error is reported as one, not as a build failure.

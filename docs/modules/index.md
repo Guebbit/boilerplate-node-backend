@@ -27,32 +27,51 @@ Every arrow is a real `import` across a module boundary, through the target's `i
 top to bottom: the leaves at the bottom are depended on by everyone and depend on nobody, which is
 what makes them safe to change last and dangerous to change carelessly.
 
+::: tip Generated, not drawn
+The diagram and table below are produced by `npm run docs:graph`, which reads the graph
+`dependency-cruiser` already builds for `check:dependencies` — so they cannot drift from the
+imports they describe. `check:docs-graph` fails `npm run complete` when they have. Everything
+outside the markers, including the warning below, is written by hand.
+:::
+
+<!-- module-graph:start -->
+
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 26, 'rankSpacing': 52}}}%%
 flowchart TD
-    wishlist --> cart
+    account
+    audit_logs["audit-logs"]
+    cart
+    delivery
+    feedback
+    inventory
+    locales
+    observability
+    orders
+    payments
+    products
+    users
+    wishlist
+
+    account --> users
     cart --> account
     cart --> delivery
-    cart --> orders
     cart --> inventory
-    payments --> orders
-    payments --> inventory
-    delivery --> orders
-    orders --> inventory
-    inventory --> products
-    account --> users
-    observability --> auditlogs["audit-logs"]
-
-    wishlist --> products
-    wishlist --> users
+    cart --> orders
     cart --> products
     cart --> users
-    orders --> products
+    delivery --> orders
     delivery --> users
+    inventory --> products
+    observability --> audit_logs
+    orders --> inventory
+    orders --> products
+    payments --> inventory
+    payments --> orders
     payments --> users
-
-    feedback
-    locales
+    wishlist --> cart
+    wishlist --> products
+    wishlist --> users
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -60,25 +79,27 @@ flowchart TD
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
     class delivery,inventory,payments,wishlist supporting;
-    class account,auditlogs,observability,users generic;
+    class account,audit_logs,observability,users generic;
     class feedback,locales isolated;
 ```
 
 |                 | Reaches                                               | Reached by                                  |
 | --------------- | ----------------------------------------------------- | ------------------------------------------- |
 | `cart`          | account, delivery, inventory, orders, products, users | wishlist                                    |
-| `wishlist`      | cart, products, users                                 | —                                           |
-| `payments`      | inventory, orders, users                              | —                                           |
-| `delivery`      | orders, users                                         | cart                                        |
 | `orders`        | inventory, products                                   | cart, delivery, payments                    |
-| `observability` | audit-logs                                            | —                                           |
-| `account`       | users                                                 | cart                                        |
-| `inventory`     | products                                              | cart, orders, payments                      |
-| `audit-logs`    | —                                                     | observability                               |
-| `products`      | —                                                     | cart, inventory, orders, wishlist           |
 | `users`         | —                                                     | account, cart, delivery, payments, wishlist |
+| `inventory`     | products                                              | cart, orders, payments                      |
+| `products`      | —                                                     | cart, inventory, orders, wishlist           |
+| `delivery`      | orders, users                                         | cart                                        |
+| `payments`      | inventory, orders, users                              | —                                           |
+| `wishlist`      | cart, products, users                                 | —                                           |
+| `account`       | users                                                 | cart                                        |
+| `audit-logs`    | —                                                     | observability                               |
+| `observability` | audit-logs                                            | —                                           |
 | `feedback`      | —                                                     | —                                           |
 | `locales`       | —                                                     | —                                           |
+
+<!-- module-graph:end -->
 
 `feedback` and `locales` are drawn detached because they are: nothing reaches them and they reach
 nothing. Deleting either takes exactly one folder and one page with it.

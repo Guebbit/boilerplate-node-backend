@@ -53,6 +53,11 @@ const STEPS: readonly Step[] = [
         because: 'src/types/asyncapi.generated.ts, from the full asyncapi.yaml'
     },
     {
+        script: 'docs:graph',
+        because:
+            "docs/modules/index.md's module graph, read off the real imports by dependency-cruiser"
+    },
+    {
         script: 'seed:export',
         because:
             'db/demo/demo-data.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'
