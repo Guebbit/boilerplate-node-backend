@@ -1,23 +1,19 @@
 /**
- * The four token-facing lookups in `src/modules/users/service.ts` — `findByEmail`,
- * `findByPasswordResetToken`, `findByAccountDeleteToken` and `consumeToken`.
+ * The two token-facing lookups on `src/modules/users/service.ts` — `findByEmail` and
+ * `consumeToken`. A live reset/delete/verify token is read through `accountService.findLiveToken`
+ * instead, which also checks expiration; this file covers only what `service.ts` itself owns.
  *
- * They are one-liners, and that is precisely why they had no tests and why they need them: each
+ * `findByEmail` is a one-liner, and that is precisely why it had no test and why it needs one: it
  * delegates to `findOneWithCredentials` rather than the ordinary finder, and the reason is a
  * comment. `password` and `tokens` carry `select: false` on the schema, so the ordinary finder
- * returns a document whose `tokens` array is `undefined`. Every caller of these three immediately
- * reads or pushes a token, so swapping in the plain finder does not fail here — it fails later,
- * in the reset and delete flows, as a `TypeError` on `undefined`.
- *
- * The other invariant worth pinning is the pairing of token *value* with token *type*. The two
- * lookups differ only in the `tokens.type` half of their filter, so dropping it from either one
- * leaves both green against a single-token fixture — and turns a password-reset token into a
- * usable account-deletion token. Each case below therefore plants both kinds on one user and
- * asserts the lookup does not answer to the other's token.
+ * returns a document whose `tokens` array is `undefined`. Both its callers (reset-request,
+ * delete-request) immediately push a token onto that array, so swapping in the plain finder does
+ * not fail here — it fails later, as a `TypeError` on `undefined`.
  *
  * `consumeToken` is what makes a reset token one-time; the concurrency suite races two uses of
  * one token past it (`tests/integration/concurrency/`), and these cases pin the serial behaviour
- * that race is measured against.
+ * that race is measured against. The fixture still plants two token types on one user so
+ * "consuming one leaves the other alone" is a real assertion rather than a vacuous one.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factory';
@@ -62,62 +58,6 @@ describe('userService.findByEmail', () => {
     });
 });
 
-describe('userService.findByPasswordResetToken', () => {
-    it('finds the holder of a reset token', async () => {
-        const user = await createUserWithTokens();
-
-        const found = await userService.findByPasswordResetToken('reset-token-value');
-
-        expect(found?.id).toBe(user.id);
-    });
-
-    it('refuses a delete token, so one token type cannot stand in for the other', async () => {
-        await createUserWithTokens();
-
-        await expect(
-            userService.findByPasswordResetToken('delete-token-value')
-        ).resolves.toBeFalsy();
-    });
-
-    it('returns the token entries so the caller can read the expiration', async () => {
-        await createUserWithTokens();
-
-        const found = await userService.findByPasswordResetToken('reset-token-value');
-
-        expect(found?.tokens?.some((entry) => entry.token === 'reset-token-value')).toBe(true);
-    });
-
-    it('resolves empty for a token nobody holds', async () => {
-        await createUserWithTokens();
-
-        await expect(userService.findByPasswordResetToken('invented')).resolves.toBeFalsy();
-    });
-});
-
-describe('userService.findByAccountDeleteToken', () => {
-    it('finds the holder of a delete token', async () => {
-        const user = await createUserWithTokens();
-
-        const found = await userService.findByAccountDeleteToken('delete-token-value');
-
-        expect(found?.id).toBe(user.id);
-    });
-
-    it('refuses a reset token, so a password reset cannot delete an account', async () => {
-        await createUserWithTokens();
-
-        await expect(
-            userService.findByAccountDeleteToken('reset-token-value')
-        ).resolves.toBeFalsy();
-    });
-
-    it('resolves empty for a token nobody holds', async () => {
-        await createUserWithTokens();
-
-        await expect(userService.findByAccountDeleteToken('invented')).resolves.toBeFalsy();
-    });
-});
-
 describe('userService.consumeToken', () => {
     it('makes the consumed token unusable on the next lookup', async () => {
         // This is what "one-time" means, expressed as the property rather than as an array length.
@@ -125,9 +65,10 @@ describe('userService.consumeToken', () => {
 
         await userService.consumeToken(user, 'reset-token-value');
 
-        await expect(
-            userService.findByPasswordResetToken('reset-token-value')
-        ).resolves.toBeFalsy();
+        const reread = await userRepository.findOneWithCredentials({
+            email: 'tokens@example.com'
+        });
+        expect(reread?.tokens?.some((entry) => entry.token === 'reset-token-value')).toBe(false);
     });
 
     it('leaves the account’s other tokens alone', async () => {

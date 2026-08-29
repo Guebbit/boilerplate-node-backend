@@ -98,25 +98,12 @@ const toPascalCase = (value: string): string =>
         .join('');
 
 /*
- * Formats a model/message identifier as a PascalCase type name.
- *
- * Currently a pure pass-through to `toPascalCase` — every call site could use that directly.
- * Kept as its own name because a model/message identifier and an arbitrary source string are
- * different concepts that happen to format the same way today; if that ever stops being true,
- * this is where the difference belongs.
- *
- * @param value Raw model or message name.
- * @returns PascalCase type name.
- */
-const toModelName = (value: string): string => toPascalCase(value);
-
-/*
  * Resolves `#/components/...` refs to their generated type names.
  *
  * @param reference AsyncAPI `$ref` value.
  * @returns TypeScript type name for the referenced model.
  */
-const refToTypeName = (reference: string): string => toModelName(reference.split('/').pop() ?? '');
+const refToTypeName = (reference: string): string => toPascalCase(reference.split('/').pop() ?? '');
 
 /*
  * The real payload type a message carries — never the message's own alias name, which
@@ -267,7 +254,7 @@ const groupChannelsByNamespace = (channelNames: string[]): Map<string, string[]>
 };
 
 const modelNameConstraints = typeScriptDefaultModelNameConstraints({
-    NAMING_FORMATTER: (value: string) => toModelName(value)
+    NAMING_FORMATTER: (value: string) => toPascalCase(value)
 });
 
 const generator = new TypeScriptGenerator({
@@ -307,7 +294,7 @@ const seenTargets = new Set<string>();
 
 const messageTypeBlocks = Object.entries(messages)
     .map(([messageName]) => {
-        const aliasName = toModelName(messageName);
+        const aliasName = toPascalCase(messageName);
         const targetName = resolveMessagePayloadType(messageName, messages);
         // Skip self-referential aliases (message name resolves to same type as schema)
         if (aliasName === targetName) return '';

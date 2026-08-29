@@ -442,15 +442,10 @@ const actorOf = (authContext?: Caller): OrderActor => (authContext?.admin ? 'adm
  * @param authContext - the caller whose options are being described
  * @returns the serialized order carrying its `actions`
  */
-function withActions(order: OrderDocument, authContext?: Caller): Record<string, unknown>;
-function withActions(
+const withActions = (
     order: OrderDocument | undefined,
     authContext?: Caller
-): Record<string, unknown> | undefined;
-function withActions(
-    order: OrderDocument | undefined,
-    authContext?: Caller
-): Record<string, unknown> | undefined {
+): Record<string, unknown> | undefined => {
     // A success envelope types its payload as optional. No order, no actions — the caller's
     // `undefined` passes straight through rather than becoming an empty capability block.
     if (!order) return undefined;
@@ -462,7 +457,7 @@ function withActions(
         ...(serialized as Record<string, unknown>),
         actions: orderActionsFor(order.status, actorOf(authContext))
     };
-}
+};
 
 /**
  * Cancel an order — the one write a customer may make to one, or the system makes when a

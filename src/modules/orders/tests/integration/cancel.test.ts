@@ -263,7 +263,7 @@ describe('withActions', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        const body = orderService.withActions(order, asUser(user));
+        const body = orderService.withActions(order, asUser(user))!;
 
         expect(body.actions).toEqual({ transitions: ['cancelled'], cancel: true, pay: true });
     });
@@ -274,7 +274,7 @@ describe('withActions', () => {
         await orderService.cancelById(String(order._id), { admin: true });
         const cancelled = await orderRepository.findById(String(order._id));
 
-        const body = orderService.withActions(cancelled!, { admin: true });
+        const body = orderService.withActions(cancelled!, { admin: true })!;
 
         expect(body.actions).toEqual({ transitions: [], cancel: false, pay: false });
     });
@@ -285,7 +285,7 @@ describe('withActions', () => {
 
         for (const caller of [asUser(user), { admin: true }])
             expect(
-                (orderService.withActions(order, caller).actions as { transitions: string[] })
+                (orderService.withActions(order, caller)!.actions as { transitions: string[] })
                     .transitions
             ).not.toContain('paid');
     });
@@ -295,7 +295,7 @@ describe('withActions', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        const body = orderService.withActions(order, asUser(user));
+        const body = orderService.withActions(order, asUser(user))!;
 
         expect(body.id).toBe(String(order._id));
         expect(body).not.toHaveProperty('_id');
