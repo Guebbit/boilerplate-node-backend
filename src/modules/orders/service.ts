@@ -33,6 +33,7 @@ import type { OrderActor } from './domain';
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/base-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { withDocument, toggleSoftDelete } from '@infrastructure/persistence/crud-service';
 
 /**
  * Order Service
@@ -333,9 +334,8 @@ export const updateById = (
     data: UpdateOrderByIdRequest,
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    orderRepository.findById(id).then((order) => {
-        if (!order) return generateReject(404, [t('orders.not-found')]);
-        return update(order, data).then((result) => {
+    withDocument(orderRepository.findById(id), 'orders.not-found', (order) =>
+        update(order, data).then((result) => {
             if (result.success)
                 emitAuditEvent(
                     buildAuditEvent(context, {
@@ -346,8 +346,8 @@ export const updateById = (
                     })
                 );
             return result;
-        });
-    });
+        })
+    );
 
 /**
  * Remove an order document (soft or hard delete).
@@ -379,14 +379,8 @@ export const remove = (
                 .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
         );
 
-    // The toggle — see `hardDeleteSchema` in `@infrastructure/http/schemas` for what it means.
-    // An order is a financial record, which is why this is the default path and not the other.
-    order.deletedAt = order.deletedAt ? undefined : new Date();
-
-    // SOFT delete (or restore)
-    return orderRepository
-        .save(order)
-        .then((savedOrder) => generateSuccess(savedOrder, 200, t('orders.soft-deleted')));
+    // SOFT delete (or restore) — the default path for an order, which is a financial record.
+    return toggleSoftDelete(order, orderRepository.save, 'orders.soft-deleted');
 };
 
 /**
@@ -400,10 +394,9 @@ export const removeById = (
     id: string,
     hardDelete = false
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> =>
-    orderRepository.findById(id).then((order) => {
-        if (!order) return generateReject(404, [t('orders.not-found')]);
-        return remove(order, hardDelete);
-    });
+    withDocument(orderRepository.findById(id), 'orders.not-found', (order) =>
+        remove(order, hardDelete)
+    );
 
 /**
  * Which orders a caller is allowed to read.

@@ -1,7 +1,6 @@
 import { t } from '@infrastructure/i18n';
 import type { SearchProductsRequest, Product } from '@types';
 import {
-    generateReject,
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess,
@@ -22,6 +21,7 @@ import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { createVisibilityScope } from '@kernel/authorization';
+import { withDocument, toggleSoftDelete } from '@infrastructure/persistence/crud-service';
 
 /**
  * Product Service
@@ -218,11 +218,6 @@ export const update = (
  * Update an existing product by ID.
  * Fetches the document then delegates to update().
  *
- * Reports "no such product" by RETURNING a reject envelope, like `removeById` below and like the
- * order and user services. The alternative — throwing — forced its one caller to recognise the
- * failure by string-matching `error.message === '404'` inside a `.catch()`, where a genuine
- * database error was indistinguishable from a missing row.
- *
  * @param id
  * @param data
  */
@@ -231,9 +226,8 @@ export const updateById = (
     data: Partial<Omit<Product, 'id'>>,
     context: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
-    productRepository.findById(id).then((product) => {
-        if (!product) return generateReject(404, [t('products.not-found')]);
-        return update(product, data).then((updated) => {
+    withDocument(productRepository.findById(id), 'products.not-found', (product) =>
+        update(product, data).then((updated) => {
             emitAuditEvent(
                 buildAuditEvent(context, {
                     action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
@@ -243,8 +237,8 @@ export const updateById = (
                 })
             );
             return generateSuccess(updated);
-        });
-    });
+        })
+    );
 
 /**
  * Remove a product document (soft or hard delete).
@@ -272,13 +266,10 @@ export const remove = (
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
 
-    // The toggle — see `hardDeleteSchema` in `@infrastructure/http/schemas` for what it means.
-    product.deletedAt = product.deletedAt ? undefined : new Date();
-
     // SOFT delete (or restore)
-    return emitDomainEvent(PRODUCT_DELETED, { productId: id })
-        .then(() => productRepository.save(product))
-        .then((savedProduct) => generateSuccess(savedProduct, 200, t('products.soft-deleted')));
+    return emitDomainEvent(PRODUCT_DELETED, { productId: id }).then(() =>
+        toggleSoftDelete(product, productRepository.save, 'products.soft-deleted')
+    );
 };
 
 /**
@@ -292,10 +283,9 @@ export const removeById = (
     id: string,
     hardDelete = false
 ): Promise<ResponseSuccess<ProductDocument> | ResponseSuccess<undefined> | ResponseReject> =>
-    productRepository.findById(id).then((product) => {
-        if (!product) return generateReject(404, [t('products.not-found')]);
-        return remove(product, hardDelete);
-    });
+    withDocument(productRepository.findById(id), 'products.not-found', (product) =>
+        remove(product, hardDelete)
+    );
 
 /**
  * Every category and tag the PUBLIC catalogue carries, with counts.

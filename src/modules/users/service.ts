@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
-    generateReject,
     type ResponseSuccess,
     type ResponseReject,
     type ResponseErrorItem,
@@ -20,6 +19,7 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { withDocument, toggleSoftDelete } from '@infrastructure/persistence/crud-service';
 
 /**
  * User Admin Service
@@ -169,9 +169,8 @@ export const updateById = (
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.
-    userRepository.findByIdWithCredentials(id).then((user) => {
-        if (!user) return generateReject(404, [t('users.not-found')]);
-        return update(user, data).then((result) => {
+    withDocument(userRepository.findByIdWithCredentials(id), 'users.not-found', (user) =>
+        update(user, data).then((result) => {
             if (result.success) {
                 emitAuditEvent(
                     buildAuditEvent(context, {
@@ -191,8 +190,8 @@ export const updateById = (
                     });
             }
             return result;
-        });
-    });
+        })
+    );
 
 /**
  * Remove a user document (soft or hard delete).
@@ -215,12 +214,7 @@ export const remove = (
             .then(() => userRepository.deleteOne(user))
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
 
-    // The toggle — see `hardDeleteSchema` in `@infrastructure/http/schemas` for what it means.
-    user.deletedAt = user.deletedAt ? undefined : new Date();
-
-    return userRepository
-        .save(user)
-        .then((savedUser) => generateSuccess(savedUser, 200, t('users.soft-deleted')));
+    return toggleSoftDelete(user, userRepository.save, 'users.soft-deleted');
 };
 
 /**
@@ -272,10 +266,9 @@ export const removeById = (
     id: string,
     hardDelete = false
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> =>
-    userRepository.findById(id).then((user) => {
-        if (!user) return generateReject(404, [t('users.not-found')]);
-        return remove(user, hardDelete);
-    });
+    withDocument(userRepository.findById(id), 'users.not-found', (user) =>
+        remove(user, hardDelete)
+    );
 
 export const userService = {
     validateData,
