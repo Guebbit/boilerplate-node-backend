@@ -1,8 +1,7 @@
 import type { Request, Response } from 'express';
 import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { resolveImageUrl } from '@infrastructure/http/uploads';
-import { imageStore } from '@infrastructure/adapters/image-store';
+import { readUploadedImage } from '@infrastructure/adapters/image-store';
 import type { SignupRequest, SignupRequestMultipart } from '@types';
 import type { CastError } from 'mongoose';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -27,15 +26,8 @@ export const postSignup = (
      */
     const { email, username, password, passwordConfirm } = request.body;
 
-    /**
-     * Uploaded file takes priority over body imageUrl
-     */
-    const imageUrlFile = resolveImageUrl(request as Request);
-    const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
-    // If problem arises: remove the image THIS request uploaded — `imageUrlFile`, deliberately,
-    // and not the merged `imageUrl`: a body-supplied url names an image this request did not
-    // create, and deleting it because validation failed would destroy someone else's file.
-    const deleteUpload = () => imageStore.remove(imageUrlFile);
+    // `= ''` because `signup` passes this straight to `zodUserSchema`, which wants a string.
+    const { imageUrl = '', deleteUpload } = readUploadedImage(request);
 
     /**
      * Register

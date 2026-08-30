@@ -24,9 +24,9 @@
 
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import {
-    SEED_SAVE_OPTIONS,
     type SeedOutcome,
-    exportCollection
+    exportCollection,
+    upsertByOwner
 } from '@infrastructure/persistence/seed';
 import { makeAddressBook } from './factory';
 import { addressBookModel } from './model';
@@ -92,23 +92,13 @@ export const addressBookFixtures = [
 ];
 
 /**
- * Upsert one book by its OWNER rather than by id — see `../cart/demo`.
+ * Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`.
  *
- * `userId` is the unique column and the one every query here uses, so the skip-if-present policy
- * is stated against it even though these fixtures do pin an `_id`.
+ * Keyed on the owner even though these fixtures do pin an `_id`: `userId` is the unique column and
+ * the one every query here reaches a book through.
  */
-const upsertByOwner = async (
-    fixture: (typeof addressBookFixtures)[number]
-): Promise<SeedOutcome> => {
-    const existing = await addressBookRepository.findByUserId(fixture.userId.toString());
-    if (existing) return 'skipped';
-    await addressBookRepository.create(fixture, SEED_SAVE_OPTIONS);
-    return 'created';
-};
-
-/** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */
 export const seedAddressBooksCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(addressBookFixtures.map((book) => upsertByOwner(book)));
+    Promise.all(addressBookFixtures.map((book) => upsertByOwner(addressBookRepository, book)));
 
 /**
  * Read the seeded books back as stored, sorted by owner — see `../cart/demo`.

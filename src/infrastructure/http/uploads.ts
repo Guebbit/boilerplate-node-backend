@@ -70,7 +70,7 @@ export function getFormFiles(request: Request): string[] | undefined {
  *
  * @param request - Express request that has been through the upload middleware
  */
-export function resolveImageUrl(request: Request): string | undefined {
+export function resolveImageUrl(request: Pick<Request, 'storedImageUrls'>): string | undefined {
     // `[0]`: these endpoints accept a single image, so ignore any extras.
     return request.storedImageUrls?.[0];
 }

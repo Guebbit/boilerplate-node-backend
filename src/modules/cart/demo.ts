@@ -16,9 +16,9 @@ import { SEED_PRODUCT_IDS } from '@modules/products/demo';
 import { makeCart } from './factory';
 import { cartModel } from './model';
 import {
-    SEED_SAVE_OPTIONS,
     type SeedOutcome,
-    exportCollection
+    exportCollection,
+    upsertByOwner
 } from '@infrastructure/persistence/seed';
 import { cartRepository } from './repository';
 
@@ -33,22 +33,9 @@ export const cartFixtures = [
     })
 ];
 
-/**
- * Upsert one cart fixture by its OWNER rather than by id.
- *
- * `upsertById` cannot serve here — there is no pinned `_id` to key on — so this module states the
- * same skip-if-present policy against the field that does identify a cart.
- */
-const upsertByOwner = async (fixture: (typeof cartFixtures)[number]): Promise<SeedOutcome> => {
-    const existing = await cartRepository.findByUserId(fixture.userId.toString());
-    if (existing) return 'skipped';
-    await cartRepository.create(fixture, SEED_SAVE_OPTIONS);
-    return 'created';
-};
-
 /** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */
 export const seedCartsCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(cartFixtures.map((cart) => upsertByOwner(cart)));
+    Promise.all(cartFixtures.map((cart) => upsertByOwner(cartRepository, cart)));
 
 /**
  * Read the seeded carts back as stored — see `../products/demo`.

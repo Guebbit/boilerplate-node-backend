@@ -3,8 +3,7 @@ import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { resolveImageUrl } from '@infrastructure/http/uploads';
-import { imageStore } from '@infrastructure/adapters/image-store';
+import { readUploadedImage } from '@infrastructure/adapters/image-store';
 import type { UpdateAccountRequest, UpdateAccountRequestMultipart } from '@types';
 import { accountService } from '../services';
 import { sendVerificationEmail } from '../services';
@@ -25,14 +24,9 @@ export const putAccount = (
     /* Auth context is guaranteed by isAuth middleware */
     const { id, email: currentEmail } = authContextOf(request);
 
-    /**
-     * Uploaded file takes priority over body imageUrl — the same merge signup does.
-     */
-    const imageUrlFile = resolveImageUrl(request as Request);
-    const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl;
-    // On failure remove the image THIS request uploaded — `imageUrlFile`, never the merged
-    // value: a body-supplied url names an image this request did not create.
-    const deleteUpload = () => imageStore.remove(imageUrlFile);
+    // No `= ''` default here, unlike the create paths: `updateProfile` treats an absent
+    // `imageUrl` as "not sent" and leaves the stored one alone, where `''` would clear it.
+    const { imageUrl, deleteUpload } = readUploadedImage(request);
 
     /*
      * Read through the request type rather than parsed against `UpdateAccountBody`, for the reason

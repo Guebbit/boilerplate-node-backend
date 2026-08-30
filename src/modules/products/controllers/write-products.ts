@@ -5,8 +5,7 @@ import { productService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import { resolveImageUrl } from '@infrastructure/http/uploads';
-import { imageStore } from '@infrastructure/adapters/image-store';
+import { readUploadedImage } from '@infrastructure/adapters/image-store';
 import type {
     CreateProductRequest,
     CreateProductRequestMultipart,
@@ -51,15 +50,8 @@ export const writeProducts = (
         stringArrays: ['categories', 'tags']
     });
 
-    /**
-     * Uploaded file takes priority over body imageUrl
-     */
-    const imageUrlFile = resolveImageUrl(request);
-    const imageUrl = imageUrlFile ?? (request.body as { imageUrl?: string }).imageUrl ?? '';
-    // If problem arises: remove the image THIS request uploaded — `imageUrlFile`, deliberately,
-    // and not the merged `imageUrl`: a body-supplied url names an image this request did not
-    // create, and deleting it because validation failed would destroy someone else's file.
-    const deleteUpload = () => imageStore.remove(imageUrlFile);
+    // `= ''` because `zodProductSchema` wants a string: an absent image is an empty url here.
+    const { imageUrl = '', deleteUpload } = readUploadedImage(request);
 
     /**
      * Validation errors prevent creation end editing

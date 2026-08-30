@@ -25,6 +25,14 @@ export interface SeedRepository<TFixture> {
 }
 
 /**
+ * The same slice for a collection addressed by its OWNER — see {@link upsertByOwner}.
+ */
+export interface OwnedSeedRepository<TFixture> {
+    findByUserId: (userId: string) => PromiseLike<unknown>;
+    create: (data: TFixture, options?: { timestamps: false }) => Promise<unknown>;
+}
+
+/**
  * What every seed write passes to `save()`.
  *
  * A fixture states its own `createdAt` — read off its pinned `_id`, see `./factory` — and Mongoose's
@@ -47,15 +55,35 @@ export const SEED_SAVE_OPTIONS = { timestamps: false } as const;
  * @param repository - the owning module's repository
  * @param fixture - a document with a pinned `_id`
  */
-export const upsertById = async <TFixture extends { _id: Types.ObjectId }>(
+export const upsertById = <TFixture extends { _id: Types.ObjectId }>(
     repository: SeedRepository<TFixture>,
     fixture: TFixture
-): Promise<SeedOutcome> => {
-    const existing = await repository.findById(fixture._id.toString());
-    if (existing) return 'skipped';
-    await repository.create(fixture, SEED_SAVE_OPTIONS);
-    return 'created';
-};
+): Promise<SeedOutcome> =>
+    Promise.resolve(repository.findById(fixture._id.toString())).then((existing) =>
+        existing
+            ? 'skipped'
+            : repository.create(fixture, SEED_SAVE_OPTIONS).then((): SeedOutcome => 'created')
+    );
+
+/**
+ * Upsert one fixture by its OWNER rather than by its id.
+ *
+ * Carts, wishlists and address books have no pinned `_id` to key on — `userId` is the unique column
+ * and the one every query reaches them through — so the same skip-if-present policy {@link upsertById}
+ * states against `_id` is stated here against the owner.
+ *
+ * @param repository - the owning module's repository
+ * @param fixture - a document whose `userId` identifies it
+ */
+export const upsertByOwner = <TFixture extends { userId: Types.ObjectId }>(
+    repository: OwnedSeedRepository<TFixture>,
+    fixture: TFixture
+): Promise<SeedOutcome> =>
+    Promise.resolve(repository.findByUserId(fixture.userId.toString())).then((existing) =>
+        existing
+            ? 'skipped'
+            : repository.create(fixture, SEED_SAVE_OPTIONS).then((): SeedOutcome => 'created')
+    );
 
 /**
  * Read one collection back the way the exported dataset must record it.

@@ -15,8 +15,9 @@
  */
 
 import path from 'node:path';
+import type { Request } from 'express';
 import { deleteFile, moveFile } from '@infrastructure/adapters/filesystem';
-import { toPosixPath } from '@infrastructure/http/uploads';
+import { resolveImageUrl, toPosixPath } from '@infrastructure/http/uploads';
 
 export interface ImageStore {
     /**
@@ -140,3 +141,37 @@ export const filesystemImageStore: ImageStore = {
  * what `express.static` and the local `remove` are for.
  */
 export const imageStore: ImageStore = filesystemImageStore;
+
+/** What a write controller needs from the image half of its request. */
+export interface RequestImage {
+    /** The url to persist: this request's upload if it carried one, otherwise the body's own. */
+    imageUrl: string | undefined;
+    /**
+     * Remove the image THIS request uploaded, on a path that is about to answer an error.
+     *
+     * Keyed on the upload alone and never on the merged {@link RequestImage.imageUrl}: a
+     * body-supplied url names an image this request did not create, and deleting it because
+     * validation failed would destroy someone else's file. A no-op when nothing was uploaded.
+     */
+    deleteUpload: () => Promise<boolean>;
+}
+
+/**
+ * Read the image a write request carries, and the undo for it.
+ *
+ * The merge is the rule every write endpoint keeps: an uploaded file outranks a body `imageUrl`,
+ * because a caller that sent bytes meant those bytes. Destructure with a default —
+ * `const { imageUrl = '', deleteUpload } = readUploadedImage(request)` — where the endpoint's
+ * schema wants a string rather than an absent field.
+ *
+ * @param request - an Express request already through the upload middleware
+ */
+export const readUploadedImage = (
+    request: Pick<Request, 'storedImageUrls' | 'body'>
+): RequestImage => {
+    const uploaded = resolveImageUrl(request);
+    return {
+        imageUrl: uploaded ?? (request.body as { imageUrl?: string }).imageUrl,
+        deleteUpload: () => imageStore.remove(uploaded)
+    };
+};
