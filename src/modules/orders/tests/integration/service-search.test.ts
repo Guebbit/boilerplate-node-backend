@@ -1,7 +1,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factory';
-import { createProduct } from '@modules/products/tests/factory';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
+import { createProduct } from '@modules/products/tests/fixtures';
+import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import * as orderService from '@modules/orders/service';
 import type { OrderDocument } from '@modules/orders';
 

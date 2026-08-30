@@ -1,7 +1,7 @@
 /**
  * Zod-schema-driven fixture generator for request bodies, used by
  * `tests/contract/request-contract.test.ts` to answer a question the hand-written factories
- * (a module's `tests/factory.ts`) don't: "does the API honour its own contract for *any* legal
+ * (a module's `tests/fixtures.ts`) don't: "does the API honour its own contract for *any* legal
  * input", not "does this specific scenario behave correctly". Deterministic tests must keep
  * using the hand-written factories; this is additive.
  *

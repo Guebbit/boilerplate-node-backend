@@ -8,8 +8,8 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createProduct } from '@modules/products/tests/factory';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
+import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import { orderRepository } from '@modules/orders';
 import { shipOrder } from '@modules/delivery/service';
 

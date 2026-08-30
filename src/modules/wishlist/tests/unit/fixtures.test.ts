@@ -6,7 +6,7 @@
  * seed file from repeating it.
  */
 import { Types } from 'mongoose';
-import { makeWishlist } from '@modules/wishlist/factory';
+import { makeWishlist } from '@modules/wishlist/fixtures';
 
 const USER = '65dc8a99604c307b702b5ccc';
 const PANINO = '65dcdec2b18ad5e4bd597f0f';

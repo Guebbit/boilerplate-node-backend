@@ -12,7 +12,7 @@
 import type { IncomingMessage } from 'node:http';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 

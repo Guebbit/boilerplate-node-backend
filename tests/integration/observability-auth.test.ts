@@ -3,7 +3,7 @@ import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { userRepository } from '@modules/users';
 
 /**

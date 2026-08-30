@@ -15,7 +15,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import {
     accountService,
     passwordChangeWithCurrent,
@@ -116,7 +116,7 @@ describe('updateProfile', () => {
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(stored?.admin).toBe(false);
         expect(stored?.active).toBe(true);
-        // The password is untouched — the factory's original still logs in.
+        // The password is untouched — the fixture's original still logs in.
         const login = await accountService.login(user.email, PLAIN_PASSWORD);
         expect(login.success).toBe(true);
     });

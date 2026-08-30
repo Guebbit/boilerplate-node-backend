@@ -24,7 +24,7 @@ import {
     compact,
     toDate,
     type OverridesFor
-} from '@infrastructure/persistence/factory';
+} from '@infrastructure/persistence/fixtures';
 import type { Product } from '@types';
 import type { ProductDocument, ProductSnapshot } from './model';
 

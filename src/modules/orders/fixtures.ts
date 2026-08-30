@@ -3,7 +3,7 @@
  *
  * An order item embeds a product SNAPSHOT — `orderItemSchema` declares `product: productSchema`
  * with no `ref` — because a real order has to remember what was bought and at what price, even
- * after the catalogue moves on. So this factory takes the snapshot as a value: a caller hands over
+ * after the catalogue moves on. So this builder takes the snapshot as a value: a caller hands over
  * the product as it was, not an id to look up later.
  *
  * A snapshot deliberately carries NO `deletedAt`. The catalogue row's soft delete says the product
@@ -22,7 +22,7 @@ import {
     compact,
     toDate,
     type OverridesFor
-} from '@infrastructure/persistence/factory';
+} from '@infrastructure/persistence/fixtures';
 import type { ProductSnapshot } from '@modules/products';
 import type { Id, Order, OrderItem, Product } from '@types';
 import type { OrderDocument } from './model';
@@ -111,7 +111,7 @@ export const makeOrder = ({
     /*
      * The three shipping columns pass through rather than defaulting to anything. All three are
      * optional on the wire and absent on an order placed before the checkout asked for them, so a
-     * factory-supplied default would erase the difference between "not chosen" and "free" — which
+     * builder-supplied default would erase the difference between "not chosen" and "free" — which
      * is the distinction `pickup` (a real method, priced 0) exists to keep visible.
      *
      * `compact` is what makes "pass through" mean absent-stays-absent. `OrderOverrides` derives

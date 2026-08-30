@@ -1,8 +1,8 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factory';
-import { createProduct } from '@modules/products/tests/factory';
-import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
+import { createProduct } from '@modules/products/tests/fixtures';
+import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import type { ProductDocument } from '@modules/products';
 import { orderRepository } from '@modules/orders';
 import { DEFAULT_SORT } from '@infrastructure/persistence/search';

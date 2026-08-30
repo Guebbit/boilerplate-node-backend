@@ -106,12 +106,12 @@ The seed runner lives in `db/demo/index.ts` and uses the Mongoose repository lay
 
 The dataset is split by ROLE, and the split matters:
 
-| File                            | Holds                                                                                                                                                                                                                                                   |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/modules/<name>/factory.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a factory is for |
-| `src/modules/<name>/demo.ts`    | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory and owned by the module that owns the collection. Declared as `seeds` in the manifest; `db/demo/index.ts` walks the registry and names no domain         |
-| `src/kernel/seed-accounts.ts`   | The **six shared literals** — two account ids and four credentials. In the kernel because four modules need a piece of them and only one owns the record; the file explains why that beats three registry edges                                         |
-| `db/demo/demo-data.json`        | The **output** — every row as the API actually serves it. Written by `npm run seed:export`, never by hand                                                                                                                                               |
+| File                             | Holds                                                                                                                                                                                                                                                           |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/<name>/fixtures.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a fixture builder is for |
+| `src/modules/<name>/demo.ts`     | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory and owned by the module that owns the collection. Declared as `seeds` in the manifest; `db/demo/index.ts` walks the registry and names no domain                 |
+| `src/kernel/seed-accounts.ts`    | The **six shared literals** — two account ids and four credentials. In the kernel because four modules need a piece of them and only one owns the record; the file explains why that beats three registry edges                                                 |
+| `db/demo/demo-data.json`         | The **output** — every row as the API actually serves it. Written by `npm run seed:export`, never by hand                                                                                                                                                       |
 
 ### The dataset is published, not shared
 

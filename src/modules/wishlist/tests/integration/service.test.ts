@@ -9,8 +9,8 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/factory';
-import { createProduct } from '@modules/products/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
+import { createProduct } from '@modules/products/tests/fixtures';
 import { wishlistService } from '@modules/wishlist/service';
 import { wishlistRepository } from '@modules/wishlist/repository';
 import { cartService } from '@modules/cart';

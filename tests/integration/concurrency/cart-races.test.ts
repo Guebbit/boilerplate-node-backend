@@ -22,7 +22,7 @@
  */
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
 import { cartModel } from '@modules/cart/model';
 import { orderModel } from '@modules/orders/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';

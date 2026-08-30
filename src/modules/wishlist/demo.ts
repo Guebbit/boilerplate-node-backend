@@ -9,7 +9,7 @@
 
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import { SEED_PRODUCT_IDS } from '@modules/products/demo';
-import { makeWishlist } from './factory';
+import { makeWishlist } from './fixtures';
 import { wishlistModel } from './model';
 import {
     type SeedOutcome,

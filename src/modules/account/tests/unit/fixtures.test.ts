@@ -6,7 +6,7 @@
  * without one seeds a book whose entries cannot be edited or deleted.
  */
 import { Types } from 'mongoose';
-import { makeAddressBook } from '@modules/account/factory';
+import { makeAddressBook } from '@modules/account/fixtures';
 
 const USER = '65dc8a99604c307b702b5ccc';
 const ADDRESS = '65dcdec2b18ad5e4bd597f0f';

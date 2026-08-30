@@ -190,7 +190,7 @@ export interface BaseRepository<TDocument extends Document> {
      *
      * `options` reaches the underlying `save()`, and exists for one caller: seeding passes
      * `{ timestamps: false }` so a fixture's pinned `createdAt` survives instead of being
-     * overwritten with the moment the seeder ran. See `./factory`.
+     * overwritten with the moment the seeder ran. See `./fixtures`.
      */
     create: (data: Partial<TDocument>, options?: SaveOptions) => Promise<TDocument>;
     /** Persist in-memory changes to an already-fetched document. */

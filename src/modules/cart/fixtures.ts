@@ -18,7 +18,7 @@
  */
 
 import { Types } from 'mongoose';
-import { identityOf, type FactoryIdentity } from '@infrastructure/persistence/factory';
+import { identityOf, type FactoryIdentity } from '@infrastructure/persistence/fixtures';
 import type { CartItem, Id } from '@types';
 import type { CartDocument } from './model';
 
@@ -36,7 +36,7 @@ export interface CartOverrides extends FactoryIdentity {
 /**
  * A cart ready for `cartRepository.create`.
  *
- * `userId` is required, because the factory cannot build one without it — a cart is addressed by
+ * `userId` is required, because the builder cannot build one without it — a cart is addressed by
  * its owner. Leaving it optional under `Partial` forced `./demo` to assert `fixture.userId!` past
  * a type that was never actually unsure.
  */

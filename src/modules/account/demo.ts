@@ -28,7 +28,7 @@ import {
     exportCollection,
     upsertByOwner
 } from '@infrastructure/persistence/seed';
-import { makeAddressBook } from './factory';
+import { makeAddressBook } from './fixtures';
 import { addressBookModel } from './model';
 import { addressBookRepository } from './repository';
 

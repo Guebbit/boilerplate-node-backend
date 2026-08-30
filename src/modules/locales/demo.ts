@@ -48,7 +48,7 @@
  * behind.
  */
 import { backendTenant, frontendTenant } from './tenants';
-import { makeLocale, makeLocaleEntry } from './factory';
+import { makeLocale, makeLocaleEntry } from './fixtures';
 import { localeModel, localeMessageModel } from './model';
 import { localeRepository, localeMessageRepository } from './repository';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';

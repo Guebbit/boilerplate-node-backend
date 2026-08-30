@@ -16,7 +16,7 @@
  * "consuming one leaves the other alone" is a real assertion rather than a vacuous one.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
 import * as userService from '@modules/users/service';
 import { userRepository } from '@modules/users';
 import type { Token } from '@modules/users';

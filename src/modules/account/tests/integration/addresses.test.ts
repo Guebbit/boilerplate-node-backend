@@ -5,11 +5,11 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
 import { accountService } from '@modules/account/services';
 import { cartService } from '@modules/cart';
 import { productRepository } from '@modules/products';
-import { createProduct } from '@modules/products/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
 
 setupTestDb();
 

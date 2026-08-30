@@ -9,10 +9,10 @@
  * actually serves as `db/demo/demo-data.json`, so the facts can live in one normal TypeScript file
  * that this module's own code imports like any other.
  *
- * Every field a record does not state is left to `./model`'s `default:` — see `./factory`.
+ * Every field a record does not state is left to `./model`'s `default:` — see `./fixtures`.
  */
 
-import { makeProduct } from './factory';
+import { makeProduct } from './fixtures';
 import { productModel } from './model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { productRepository } from './repository';

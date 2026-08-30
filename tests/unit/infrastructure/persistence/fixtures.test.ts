@@ -1,5 +1,5 @@
 /**
- * The shared fixture helpers every module's `factory.ts` is built from.
+ * The shared fixture helpers every module's `fixtures.ts` is built from.
  *
  * These four functions decide what a seeded record MEANS when a field was left out, and each one
  * has a failure that is silent by construction:
@@ -17,7 +17,7 @@
  *     sharing the instant the seeder ran.
  */
 import { Types } from 'mongoose';
-import { compact, toDate, toObjectId, identityOf } from '@infrastructure/persistence/factory';
+import { compact, toDate, toObjectId, identityOf } from '@infrastructure/persistence/fixtures';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 

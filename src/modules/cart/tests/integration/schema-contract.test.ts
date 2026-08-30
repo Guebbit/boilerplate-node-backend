@@ -19,8 +19,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { cartRepository } from '@modules/cart/repository';
 import { cartModel } from '@modules/cart/model';
-import { createProduct } from '@modules/products/tests/factory';
-import { createUser } from '@modules/users/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
+import { createUser } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 

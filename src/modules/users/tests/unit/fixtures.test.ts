@@ -7,7 +7,7 @@
  * every login test would fail in a way that reads as a broken login rather than a broken fixture.
  */
 import { Types } from 'mongoose';
-import { makeUser, PLAIN_PASSWORD } from '@modules/users/factory';
+import { makeUser, PLAIN_PASSWORD } from '@modules/users/fixtures';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 

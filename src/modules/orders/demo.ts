@@ -25,7 +25,7 @@ import {
     SEED_USER_ID
 } from '@kernel/seed-accounts';
 import { SEED_PRODUCT_IDS, seedProductById } from '@modules/products/demo';
-import { makeOrder, type OrderSnapshotInput } from './factory';
+import { makeOrder, type OrderSnapshotInput } from './fixtures';
 import { orderModel } from './model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { orderRepository } from './repository';
@@ -109,7 +109,7 @@ export const orderFixtures = [
         /* Earlier in the day than the `createdAt` this order's id encodes, i.e. deleted before it
          * was placed. Left that way on purpose: the fixtures do not promise their three dates
          * agree, and nothing reads them together — the soft-delete branches test for the field's
-         * PRESENCE. See `@infrastructure/persistence/factory` for why chasing that consistency
+         * PRESENCE. See `@infrastructure/persistence/fixtures` for why chasing that consistency
          * costs more than it buys. */
         deletedAt: '2024-08-07T09:12:03.114Z'
     })

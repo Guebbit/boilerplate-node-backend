@@ -34,8 +34,8 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     enqueueEmail: jest.fn()
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
-import { createUser } from '@modules/users/tests/factory';
-import { createProduct } from '@modules/products/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
+import { createProduct } from '@modules/products/tests/fixtures';
 import {
     cartGet,
     cartGetForBadge,

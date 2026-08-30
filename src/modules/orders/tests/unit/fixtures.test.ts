@@ -13,7 +13,7 @@
  *     the invoice render. Everything else is compacted away and left to the schema.
  */
 import { Types } from 'mongoose';
-import { makeOrder } from '@modules/orders/factory';
+import { makeOrder } from '@modules/orders/fixtures';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';

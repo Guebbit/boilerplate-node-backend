@@ -274,7 +274,7 @@ flowchart TD
 | `probes.ts`                                                      | as needed                             | the requests a spec cannot describe — see below                                     |
 | `providers/`                                                     | if the domain has an outbound port    | `payments` is the only one — see below                                              |
 | `audit.ts` · `metrics.ts` · `demo.ts` · `locales/` · `events.ts` | as needed                             | the domain's slice of what used to be shared registries                             |
-| `analytics.ts` · `factory.ts`                                    | as needed                             | the event names it emits; how its records are built                                 |
+| `analytics.ts` · `fixtures.ts`                                   | as needed                             | the event names it emits; how its records are built                                 |
 | `emails.ts`                                                      | only if the domain sends email        | the finished copy of its emails — see below                                         |
 | `tests/unit/` · `tests/contract/`                                | yes, in practice                      | deleted with the module                                                             |
 

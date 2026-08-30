@@ -35,7 +35,7 @@ export { orderConfirmEmail } from './emails';
 /*
  * `OrderDocumentItem` is deliberately not here. It was published so that tests could hand-build an
  * order line as `{ product, quantity } as unknown as OrderDocumentItem` — a cast that existed only
- * because the shape was wrong for what the caller had. `tests/factory.ts`'s `toOrderItem` derives
+ * because the shape was wrong for what the caller had. `tests/fixtures.ts`'s `toOrderItem` derives
  * the line from a product document instead, so nothing outside this module names the type any more.
  */
 export type { OrderDocument } from './model';

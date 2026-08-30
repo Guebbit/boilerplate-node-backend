@@ -229,7 +229,7 @@ src/modules/<name>/openapi.yaml      its operations, and the types only it uses
 src/modules/<name>/asyncapi.yaml     its server, channels, messages and schemas — one whole document
 src/modules/<name>/analytics.ts      the events it emits
 src/modules/<name>/demo.ts          the demo records it owns
-src/modules/<name>/factory.ts        how those records are built
+src/modules/<name>/fixtures.ts        how those records are built
 src/modules/<name>/probes.ts         the requests a spec cannot describe
 ```
 

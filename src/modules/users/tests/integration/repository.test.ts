@@ -1,6 +1,6 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
-import { makeUser, createUser } from '@modules/users/tests/factory';
+import { makeUser, createUser } from '@modules/users/tests/fixtures';
 import { userRepository } from '@modules/users';
 import { TokenType, type UserDocument } from '@modules/users';
 // The model directly: it is no longer on the barrel, because no sibling MODULE needs it. A spec

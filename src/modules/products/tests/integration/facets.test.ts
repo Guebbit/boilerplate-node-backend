@@ -6,7 +6,7 @@
  * than no chip — and this is exactly the class of drift a green listing cannot show.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
 import { productRepository } from '@modules/products';
 
 setupTestDb();

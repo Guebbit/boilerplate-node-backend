@@ -3,15 +3,15 @@
  *
  * Like carts, a wishlist is addressed by its owner — `wishlists.userId` is unique and no wishlist id
  * reaches the wire — and, like carts, it pins an `_id` anyway so the exported dataset is byte-stable
- * across runs. See `../cart/factory` for why that is a determinism requirement rather than a new
+ * across runs. See `../cart/fixtures` for why that is a determinism requirement rather than a new
  * handle.
  *
  * A saved line is a product id and nothing else — a wishlist answers "do I want this", not "how
- * many" — so this takes ids where the cart factory takes lines.
+ * many" — so this takes ids where the cart builder takes lines.
  */
 
 import { Types } from 'mongoose';
-import { identityOf, type FactoryIdentity } from '@infrastructure/persistence/factory';
+import { identityOf, type FactoryIdentity } from '@infrastructure/persistence/fixtures';
 import type { Id } from '@types';
 import type { WishlistDocument } from './model';
 
@@ -28,7 +28,7 @@ export interface WishlistOverrides extends FactoryIdentity {
     productIds?: Id[];
 }
 
-/** A wishlist ready for `wishlistRepository.create` — `userId` required, see `../cart/factory`. */
+/** A wishlist ready for `wishlistRepository.create` — `userId` required, see `../cart/fixtures`. */
 export type WishlistFixture = Partial<WishlistDocument> & Pick<WishlistDocument, 'userId'>;
 
 export const makeWishlist = ({

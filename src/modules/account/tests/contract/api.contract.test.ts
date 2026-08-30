@@ -13,8 +13,8 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
-import { createProduct } from '@modules/products/tests/factory';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createProduct } from '@modules/products/tests/fixtures';
 import { userRepository } from '@modules/users';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
 

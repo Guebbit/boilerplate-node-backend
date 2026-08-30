@@ -93,7 +93,7 @@ Each answers something the others structurally cannot:
 
 | Layer             | Data source                                               | Catches                                                        |
 | ----------------- | --------------------------------------------------------- | -------------------------------------------------------------- |
-| **unit**          | `factory.ts`, mocked repositories                         | logic errors in one function                                   |
+| **unit**          | `fixtures.ts`, mocked repositories                        | logic errors in one function                                   |
 | **cross-cutting** | the module registry itself                                | a module breaking an architectural rule                        |
 | **integration**   | real in-memory Mongo via `tests/support/setup-test-db.ts` | anything the ORM or an index does differently than you assumed |
 | **contract**      | a Zod-walked request fuzzer + `jest-openapi`              | the API drifting from `openapi.yaml`, in either direction      |

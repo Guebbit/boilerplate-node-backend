@@ -1,6 +1,6 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
-import { makeProduct, createProduct } from '@modules/products/tests/factory';
+import { makeProduct, createProduct } from '@modules/products/tests/fixtures';
 import { productRepository } from '@modules/products';
 import { productModel } from '../../model';
 

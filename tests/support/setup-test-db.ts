@@ -17,7 +17,7 @@ import { connect, disconnect, clearAll } from './database';
  * server — far cheaper than the afternoon spent on a suite that only passes in one order.
  *
  * ── What it deliberately does NOT do ─────────────────────────────────────────────────────────
- * It seeds nothing. A test that needs data creates it through a module's `tests/factory.ts`, so the
+ * It seeds nothing. A test that needs data creates it through a module's `tests/fixtures.ts`, so the
  * fixtures a case depends on are visible in the case itself rather than inherited from a shared
  * seed that later grows to serve someone else's assertions.
  */

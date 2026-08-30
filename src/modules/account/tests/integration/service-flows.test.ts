@@ -16,7 +16,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import * as accountService from '@modules/account/services';
 // The namespace above is this file's house style, and `refreshAccessToken` is published on the
 // service object rather than as a bare name — so it is reached through the object, not the barrel.

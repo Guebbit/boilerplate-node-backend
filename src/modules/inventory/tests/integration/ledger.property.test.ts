@@ -28,7 +28,7 @@
  */
 import fc from 'fast-check';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
 import { productRepository } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { inventoryService } from '@modules/inventory';

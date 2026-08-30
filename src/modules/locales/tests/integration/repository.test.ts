@@ -10,7 +10,7 @@
 
 import { BACKEND, FRONTEND } from '../unit/tenants.fixture';
 import { setupTestDb } from '@tests/setup-test-db';
-import { makeLocale, makeLocaleEntry } from '@modules/locales/factory';
+import { makeLocale, makeLocaleEntry } from '@modules/locales/fixtures';
 import { localeMessageRepository, localeRepository } from '@modules/locales/repository';
 import type { LocaleDocument } from '@modules/locales/model';
 import { localeService } from '@modules/locales/services';

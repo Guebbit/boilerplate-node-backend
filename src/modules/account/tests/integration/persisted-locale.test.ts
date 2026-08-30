@@ -14,7 +14,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
 import * as accountService from '@modules/account/services';
 import { userRepository, userService } from '@modules/users';
 import { getDefaultLocale, runWithLocale } from '@infrastructure/i18n';

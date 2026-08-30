@@ -6,8 +6,8 @@
  * response must not carry admin fields it was never meant to expose, and the admin routes must
  * answer 401/403 rather than leaking a list.
  *
- * Records are created through the public endpoint rather than a factory — there is no feedback
- * factory, and going through the route means the payload under assertion is the one the
+ * Records are created through the public endpoint rather than a fixture builder — there is no feedback
+ * builder, and going through the route means the payload under assertion is the one the
  * application actually produces.
  */
 import '@tests/contract';

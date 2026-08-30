@@ -18,7 +18,7 @@
 
 import { sign } from 'jsonwebtoken';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
 import {
     verifyAccessToken,
     verifyRefreshToken,

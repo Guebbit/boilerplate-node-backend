@@ -9,7 +9,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createProduct } from '@modules/products/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
 import { productRepository } from '@modules/products';
 
 setupTestDb();

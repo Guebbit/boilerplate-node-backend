@@ -9,7 +9,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
-import { createProduct } from '@modules/products/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
 import { productRepository } from '@modules/products';
 import { StockMovementReason } from '@types';
 import {

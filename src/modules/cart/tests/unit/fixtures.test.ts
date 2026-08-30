@@ -7,7 +7,7 @@
  * populated and behaves as if it were empty.
  */
 import { Types } from 'mongoose';
-import { makeCart } from '@modules/cart/factory';
+import { makeCart } from '@modules/cart/fixtures';
 
 const USER = '65dc8a99604c307b702b5ccc';
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';

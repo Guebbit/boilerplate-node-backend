@@ -18,7 +18,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { productRepository } from '@modules/products';
-import { createProduct } from '@modules/products/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
 
 setupTestDb();
 

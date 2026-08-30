@@ -5,7 +5,7 @@
  * `CartResponseEnvelope`, which makes this resource the easiest place for a serialization drift
  * to hide: six endpoints, one shape, and until now not one of them crossed HTTP in a test.
  *
- * The cart is built through the API rather than through a factory on purpose. `CartResponse` is a
+ * The cart is built through the API rather than through a fixture builder on purpose. `CartResponse` is a
  * view computed from the stored lines and the products they price, not a serialization of the cart
  * document, so a hand-written fixture would be asserting on a shape the application never produces.
  *
@@ -15,9 +15,9 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createProduct } from '@modules/products/tests/factory';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factory';
-import { createUser } from '@modules/users/tests/factory';
+import { createProduct } from '@modules/products/tests/fixtures';
+import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
+import { createUser } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 

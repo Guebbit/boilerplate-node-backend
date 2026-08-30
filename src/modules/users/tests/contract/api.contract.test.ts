@@ -13,7 +13,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createUser } from '@modules/users/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 

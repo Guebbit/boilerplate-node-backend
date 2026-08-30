@@ -1,7 +1,7 @@
 /**
  * Order fixtures that touch the test database.
  *
- * The BUILDER lives one level up, in `src/modules/orders/factory.ts` — the same file the demo order
+ * The BUILDER lives one level up, in `src/modules/orders/fixtures.ts` — the same file the demo order
  * book is built from — and this file adapts it to what an integration test has in hand.
  *
  *   toOrderItem(product, qty?)  – a persisted product document → the line an order embeds.
@@ -14,7 +14,7 @@
  *
  * ## Why this one keeps its own signature
  *
- * `../factory`'s `makeOrder` takes a snapshot as DATA — `{ id, title, price, … }` — because the
+ * `../fixtures`'s `makeOrder` takes a snapshot as DATA — `{ id, title, price, … }` — because the
  * seeds build orders from catalogue fixtures that were never persisted. A test has real documents,
  * so this wrapper takes them and does the conversion, rather than making every call site spell out
  * a snapshot it already holds.
@@ -32,7 +32,7 @@ import {
     type OrderFixture,
     type OrderLineInput,
     type OrderOverrides
-} from '../factory';
+} from '../fixtures';
 
 /** Everything about an order a test may set beyond who placed it and what is in it. */
 type OrderExtras = Omit<OrderOverrides, 'userId' | 'email' | 'items'>;

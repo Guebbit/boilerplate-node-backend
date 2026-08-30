@@ -4,7 +4,7 @@
  * Two factories, because the two collections are addressed differently: a language is a record
  * with a pinned `_id` like any other, and an entry is identified by the pair `(locale, key)` — its
  * own id is an addressing detail rather than a fact about it. Both pin an id anyway so the
- * exported dataset is byte-stable across runs; see `@infrastructure/persistence/factory` for why
+ * exported dataset is byte-stable across runs; see `@infrastructure/persistence/fixtures` for why
  * that is a determinism requirement and not a convenience.
  *
  * Every field a fixture does not state is left to `./model`'s `default:`, which is what keeps
@@ -13,7 +13,7 @@
  */
 
 import type { Types } from 'mongoose';
-import { identityOf, compact, type OverridesFor } from '@infrastructure/persistence/factory';
+import { identityOf, compact, type OverridesFor } from '@infrastructure/persistence/fixtures';
 import type { Language, LocaleEntry } from '@types';
 import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleMessageDocument } from './model';

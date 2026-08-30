@@ -18,7 +18,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { userRepository } from '@modules/users';
-import { createUser } from '@modules/users/tests/factory';
+import { createUser } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 

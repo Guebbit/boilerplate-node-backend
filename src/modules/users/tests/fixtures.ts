@@ -1,12 +1,12 @@
 /**
  * User fixtures that touch the test database.
  *
- * The BUILDER lives one level up, in `src/modules/users/factory.ts`, and this file only persists
+ * The BUILDER lives one level up, in `src/modules/users/fixtures.ts`, and this file only persists
  * what it returns. That split is deliberate and recent: there used to be a `makeUser` here and
  * another one beside the seeds, with different defaults, and no name to tell you which you were
  * looking at. One module, one `makeUser`.
  *
- *   makeUser(overrides?)     – a plain payload, no database write. Re-exported from `../factory`
+ *   makeUser(overrides?)     – a plain payload, no database write. Re-exported from `../fixtures`
  *                              so a test importing "the user factory" gets one thing.
  *   createUser(overrides?)   – inserts and returns the Mongoose document.
  *   createAdminUser(…)       – the same, with `admin: true`.
@@ -25,10 +25,10 @@
 
 import type { UserDocument } from '@modules/users';
 import { userRepository } from '@modules/users';
-import { makeUser } from '../factory';
-import type { UserOverrides } from '../factory';
+import { makeUser } from '../fixtures';
+import type { UserOverrides } from '../fixtures';
 
-export { makeUser, PLAIN_PASSWORD, type UserOverrides } from '../factory';
+export { makeUser, PLAIN_PASSWORD, type UserOverrides } from '../fixtures';
 
 /** Insert a user into the test database and return the Mongoose document. */
 export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>

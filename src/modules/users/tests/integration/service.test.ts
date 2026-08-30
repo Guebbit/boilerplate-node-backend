@@ -1,7 +1,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import * as userService from '@modules/users/service';
 import { userRepository, USER_SETUP_REQUESTED } from '@modules/users';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';

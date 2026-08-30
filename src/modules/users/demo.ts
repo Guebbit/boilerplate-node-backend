@@ -22,7 +22,7 @@ import {
     SEED_USER_ID,
     SEED_USER_PASSWORD
 } from '@kernel/seed-accounts';
-import { makeUser } from './factory';
+import { makeUser } from './fixtures';
 import { userModel } from './model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { userRepository } from './repository';

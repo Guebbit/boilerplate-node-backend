@@ -2,7 +2,7 @@ import express from 'express';
 import supertest from 'supertest';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factory';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 
 /**
  * Two hardening properties that are invisible until someone attacks them.
