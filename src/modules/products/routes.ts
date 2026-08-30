@@ -6,7 +6,7 @@ import { writeProducts } from './controllers/write-products';
 import { deleteProducts } from './controllers/delete-products';
 import { getProductItem } from './controllers/get-product-item';
 import { getCatalogueFacets } from './controllers/get-catalogue-facets';
-import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
@@ -15,27 +15,13 @@ export const router = Router();
 // Apply getAuth to all routes so admins get extra visibility
 router.use(getAuth);
 
+const cacheProductsSearch = searchCache('products', searchProductsKeyParameters);
+
 // POST /products/search — must come before /:id to avoid matching "search" as an id
-router.post(
-    '/search',
-    setCache(3600, {
-        tags: ['products'],
-        keyParameters: searchProductsKeyParameters,
-        keyAs: 'products:search'
-    }),
-    getProducts
-);
+router.post('/search', cacheProductsSearch, getProducts);
 
 // GET /products — public
-router.get(
-    '/',
-    setCache(3600, {
-        tags: ['products'],
-        keyParameters: searchProductsKeyParameters,
-        keyAs: 'products:search'
-    }),
-    getProducts
-);
+router.get('/', cacheProductsSearch, getProducts);
 
 // POST /products — admin only (create)
 router.post(

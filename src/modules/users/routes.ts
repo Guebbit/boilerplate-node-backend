@@ -5,7 +5,7 @@ import { getUsers, searchUsersKeyParameters } from './controllers/get-users';
 import { writeUsers } from './controllers/write-users';
 import { deleteUsers } from './controllers/delete-users';
 import { getUserItem } from './controllers/get-user-item';
-import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /** Express router for user management (admin only). */
@@ -14,27 +14,13 @@ export const router = Router();
 // All routes require authentication + admin role
 router.use(getAuth, isAuth, isAdmin);
 
+const cacheUsersSearch = searchCache('users', searchUsersKeyParameters);
+
 // POST /users/search — must come before /:id to avoid matching "search" as an id
-router.post(
-    '/search',
-    setCache(3600, {
-        tags: ['users'],
-        keyParameters: searchUsersKeyParameters,
-        keyAs: 'users:search'
-    }),
-    getUsers
-);
+router.post('/search', cacheUsersSearch, getUsers);
 
 // GET /users
-router.get(
-    '/',
-    setCache(3600, {
-        tags: ['users'],
-        keyParameters: searchUsersKeyParameters,
-        keyAs: 'users:search'
-    }),
-    getUsers
-);
+router.get('/', cacheUsersSearch, getUsers);
 
 // POST /users (create)
 router.post('/', invalidateCache(['users', 'account']), upload.single('imageUpload'), writeUsers);

@@ -3,7 +3,7 @@ import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { postFeedbackContact } from './controllers/post-feedback-contact';
 import { getFeedback, searchFeedbackKeyParameters } from './controllers/get-feedback';
 import { putFeedbackStatus } from './controllers/put-feedback-status';
-import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, searchCache } from '@infrastructure/http/middlewares/cache';
 
 /** Express router for feedback/contact endpoints (public contact form; admin read/update). */
 export const router = Router();
@@ -35,23 +35,9 @@ router.use(getAuth, isAuth, isAdmin);
  * spelling asks first warms the other. The wire still says `no-store`: this is a Redis
  * arrangement, not a browser-cacheable POST.
  */
-router.post(
-    '/search',
-    setCache(600, {
-        tags: ['feedback'],
-        keyParameters: searchFeedbackKeyParameters,
-        keyAs: 'feedback:search'
-    }),
-    getFeedback
-);
+const cacheFeedbackSearch = searchCache('feedback', searchFeedbackKeyParameters, 600);
 
-router.get(
-    '/',
-    setCache(600, {
-        tags: ['feedback'],
-        keyParameters: searchFeedbackKeyParameters,
-        keyAs: 'feedback:search'
-    }),
-    getFeedback
-);
+router.post('/search', cacheFeedbackSearch, getFeedback);
+
+router.get('/', cacheFeedbackSearch, getFeedback);
 router.put('/:id', invalidateCache(['feedback']), putFeedbackStatus);

@@ -97,24 +97,36 @@ const list = (values: readonly unknown[] | undefined): string =>
  * separate way for a caching bug to be invisible — a wrong tag never invalidates, a missing key
  * parameter serves one caller's page to another.
  */
+const mockSetCache = (ttl: number, options?: Record<string, unknown>) =>
+    labelled(
+        `setCache(${ttl}, tags=[${list(options?.tags as unknown[])}], ` +
+            `keyParameters=[${list(options?.keyParameters as unknown[])}], ` +
+            `keyAs=${text(options?.keyAs)}, ` +
+            // `browserRevalidate` decides whether an editor sees their own save. It is a
+            // separate failure from a wrong tag — Redis is cleared either way, and the stale copy
+            // is the one already in the browser — so it is recorded separately.
+            `browserRevalidate=${text(options?.browserRevalidate ?? false)})`
+    );
+
+/**
+ * Built on {@link mockSetCache} rather than spread in from the real module: the real `searchCache`
+ * closes over the real `setCache`, which would produce an unlabelled middleware `routeTable`
+ * cannot see — the same reason `setCache` itself is replaced below.
+ */
+const mockSearchCache = (entity: string, keyParameters: readonly string[], seconds = 3600) =>
+    mockSetCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
+
 export const cacheMock = () => ({
     // Spread the real module first: `noStore` is exported from here too and is mounted directly
     // rather than through a factory, so it has a name already and must keep working. Replacing
-    // the whole module with two keys would leave `account`'s `router.use(noStore)` undefined.
+    // the whole module with a handful of keys would leave `account`'s `router.use(noStore)`
+    // undefined.
     ...jest.requireActual<typeof import('@infrastructure/http/middlewares/cache')>(
         '@infrastructure/http/middlewares/cache'
     ),
     __esModule: true,
-    setCache: (ttl: number, options?: Record<string, unknown>) =>
-        labelled(
-            `setCache(${ttl}, tags=[${list(options?.tags as unknown[])}], ` +
-                `keyParameters=[${list(options?.keyParameters as unknown[])}], ` +
-                `keyAs=${text(options?.keyAs)}, ` +
-                // `browserRevalidate` decides whether an editor sees their own save. It is a
-                // separate failure from a wrong tag — Redis is cleared either way, and the stale
-                // copy is the one already in the browser — so it is recorded separately.
-                `browserRevalidate=${text(options?.browserRevalidate ?? false)})`
-        ),
+    setCache: mockSetCache,
+    searchCache: mockSearchCache,
     invalidateCache: (tags: readonly string[]) => labelled(`invalidateCache([${list(tags)}])`)
 });
 

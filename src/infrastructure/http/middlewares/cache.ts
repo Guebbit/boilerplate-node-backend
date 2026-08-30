@@ -373,6 +373,19 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
 };
 
 /**
+ * `setCache` for a module's two search spellings — `GET /x` and `POST /x/search` — which must
+ * share one `keyAs` identity (see the note on it above) so that whichever spelling asks first
+ * warms the other. Every module wired the same three fields onto both routes by hand; this is
+ * that declaration, made once and reused, so the two routes cannot drift apart into two keys.
+ *
+ * @param entity - the module's cache tag, and half of its `keyAs` — `'products'` → `products:search`
+ * @param keyParameters - the module's own schema-derived key parameters
+ * @param seconds - TTL; defaults to the hour every search endpoint but `feedback` uses
+ */
+export const searchCache = (entity: string, keyParameters: readonly string[], seconds = 3600) =>
+    setCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
+
+/**
  * Clear Redis cache groups after successful write operations.
  * Example: after creating/updating/deleting a product, clear "products" cache.
  *

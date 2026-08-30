@@ -6,7 +6,7 @@ import { deleteOrders } from './controllers/delete-orders';
 import { getOrderItem } from './controllers/get-order-item';
 import { getOrderInvoice } from './controllers/get-order-invoice';
 import { postCancelOrder } from './controllers/post-cancel-order';
-import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /** Express router for order management (authenticated; non-admin users see only their own orders). */
@@ -15,27 +15,13 @@ export const router = Router();
 // All order routes require authentication
 router.use(getAuth, isAuth);
 
+const cacheOrdersSearch = searchCache('orders', searchOrdersKeyParameters);
+
 // POST /orders/search — must come before /:id
-router.post(
-    '/search',
-    setCache(3600, {
-        tags: ['orders'],
-        keyParameters: searchOrdersKeyParameters,
-        keyAs: 'orders:search'
-    }),
-    getOrders
-);
+router.post('/search', cacheOrdersSearch, getOrders);
 
 // GET /orders — list (non-admin sees own orders only)
-router.get(
-    '/',
-    setCache(3600, {
-        tags: ['orders'],
-        keyParameters: searchOrdersKeyParameters,
-        keyAs: 'orders:search'
-    }),
-    getOrders
-);
+router.get('/', cacheOrdersSearch, getOrders);
 
 // POST /orders — admin creates order directly
 router.post('/', isAdmin, invalidateCache(['orders', 'products']), writeOrders);
