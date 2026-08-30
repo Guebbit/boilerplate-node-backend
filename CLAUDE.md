@@ -5,3 +5,119 @@ It lists the expanded sources: `.2repo/graphify-out/GRAPH_REPORT.md`, `.2repo/EX
 relevant to the task, or retrieve across all of them with
 `2repo query <repo-path> "your question"`.
 <!-- 2repo:end -->
+
+## Changing a contract
+
+Contracts are edited at the leaves and generated everywhere else. The order is not optional:
+
+1. **Edit the module's own contract file** — `src/modules/<module>/openapi.yaml` or
+   `asyncapi.yaml`, or `shared/contracts/*.root.yaml` / `asyncapi.workers.yaml` for what belongs to
+   no module. Never hand-edit the root bundles: `openapi.yaml`, `asyncapi.yaml` and
+   `asyncapi.public.yaml` at the repo root are generated artifacts, and an edit there is overwritten
+   on the next bundle.
+2. **Bundle the root contract** from those fragments — `npm run contracts:bundle`.
+3. **Generate from the root bundle**, not from the fragments — `npm run gen:api` (the typed client
+   and the Zod schemas under `api/`, which the models themselves import) and `npm run gen:asyncapi`
+   (`src/types/asyncapi.generated.ts`, including `WORKER_CHANNELS`).
+4. **Hand the result to the paired frontend** — `npm run sync:frontend`.
+
+`npm run regenerate` runs all four in the only order that works, plus `docs:graph` and
+`seed:export`. Prefer it over the individual scripts. The pre-commit hook runs it with `--no-sync`,
+so `npm run complete` only ever verifies — but a contract change is not finished until
+`sync:frontend` has actually run against the frontend checkout.
+
+See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`
+
+## TypeScript
+
+- MUST use `strict: true` in all TypeScript code.
+- MUST NOT use `any` — use `unknown` plus type narrowing.
+- MUST use ESM imports only (`import`/`export`); no CommonJS (`require`, `module.exports`).
+
+## Function design
+
+- MUST apply SOLID principles.
+- MUST keep functions focused — one responsibility each.
+- MUST keep nesting ≤ 3 levels; extract a helper for anything deeper.
+- MUST prefer pure functions and shared abstractions over duplicated inline logic.
+
+## Async and error handling
+
+- **Prefer promise chaining** (`.then`/`.catch`/`.finally`) when there are only 1–2 awaits.
+- Use `async`/`await` only when several sequential awaits make chaining unreadable.
+- **Avoid `try`/`catch`** unless genuinely necessary — synchronous throws, or multi-step
+  transactions with partial rollback.
+- MUST handle errors explicitly — no swallowed promises.
+
+## Comments
+
+- Exported functions: JSDoc REQUIRED (`@param`, `@returns`, `@throws` as needed).
+- Exported interfaces/types: JSDoc REQUIRED — purpose plus what each field means.
+- Every file: a JSDoc `@module` header at the top explaining the **logic or pattern** the file
+  follows — what it is and how it works, not what it is for in the product. Keep it short: a few
+  lines, enough to orient someone opening the file cold. If it grows into prose, it belongs in
+  `docs/`.
+- Non-trivial internal helpers: a concise inline or JSDoc explanation.
+- Comments MUST be brief theory-level notes on what the code does and its role — ADHD friendly,
+  not line-by-line narration.
+- Docs describing flow, architecture or process MUST include Mermaid diagrams.
+
+Comments are **not** a replacement for the documentation. They are code-centric: they explain the
+code in front of you, and give a quick overview of what the docs already say in full. The
+reasoning, the alternatives and the diagrams live in `docs/` — a comment points at that, it does
+not reproduce it.
+
+## Code layout
+
+Orderly, scannable files. Two rules, always:
+
+- **Every top-level declaration gets JSDoc.** Top-level means the outermost body of the file —
+  and also the outermost body of whatever construct owns most of the file (a composable, a store
+  definition, a factory, a class body, a `setup()`). Constants, types, helpers, refs, computeds,
+  actions, exported and internal alike: each one carries its own JSDoc block.
+- **Two blank lines between them.** Every top-level declaration is separated from its neighbours by
+  two empty lines, so the JSDoc block visually belongs to the thing below it. Inside a
+  declaration, single blank lines are fine.
+
+```ts
+/**
+ * Rows currently visible after the active filter.
+ */
+const visibleRows = computed(() => rows.value.filter(isVisible))
+
+
+/**
+ * Reloads the table, discarding any optimistic edits.
+ *
+ * @throws {FetchError} When the endpoint is unreachable.
+ */
+const reload = () => fetchRows().then(applyRows)
+```
+
+## Commenting external calls
+
+Calls into an external dependency are the code we forget fastest — the parameters are someone
+else's vocabulary, not ours.
+
+- Any class instantiation or method call from an external dependency with **non-obvious
+  parameters** MUST be annotated: either a brief comment above the call, or a JSDoc block
+  documenting each unclear parameter.
+- Annotate the parameters that are not immediately clear — magic numbers, bare booleans,
+  option objects, positional arguments whose meaning comes only from the library's docs. Skip the
+  self-evident ones.
+- Prefer more comments over fewer. When in doubt, write it.
+
+All of it ADHD friendly: short lines, one idea per line, plain language, the "why" before the
+"how". No paragraphs, no restating the code.
+
+```ts
+// Sharp: resize to a fixed box, letterboxed rather than cropped.
+sharp(buffer).resize(
+  1200,           // width, px
+  630,            // height, px
+  {
+    fit: 'contain',              // pad instead of cropping
+    background: '#00000000',     // transparent padding
+  },
+)
+```
