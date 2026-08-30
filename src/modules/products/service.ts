@@ -271,8 +271,11 @@ export const remove = (
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
 
     // SOFT delete (or restore)
+    // A FLIP, not an assignment: run against an already soft-deleted product this restores it,
+    // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
+    product.deletedAt = product.deletedAt ? undefined : new Date();
     return emitDomainEvent(PRODUCT_DELETED, { productId: id })
-        .then(() => productRepository.toggleDeleted(product))
+        .then(() => productRepository.save(product))
         .then((saved) => generateSuccess(saved, 200, t('products.soft-deleted')));
 };
 

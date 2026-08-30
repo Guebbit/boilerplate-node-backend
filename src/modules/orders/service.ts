@@ -383,8 +383,11 @@ export const remove = (
         );
 
     // SOFT delete (or restore) — the default path for an order, which is a financial record.
+    // A FLIP, not an assignment: run against an already soft-deleted order this restores it,
+    // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
+    order.deletedAt = order.deletedAt ? undefined : new Date();
     return orderRepository
-        .toggleDeleted(order)
+        .save(order)
         .then((saved) => generateSuccess(saved, 200, t('orders.soft-deleted')));
 };
 

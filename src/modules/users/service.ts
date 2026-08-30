@@ -218,8 +218,11 @@ export const remove = (
             .then(() => userRepository.deleteOne(user))
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
 
+    // A FLIP, not an assignment: run against an already soft-deleted user this restores it,
+    // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
+    user.deletedAt = user.deletedAt ? undefined : new Date();
     return userRepository
-        .toggleDeleted(user)
+        .save(user)
         .then((saved) => generateSuccess(saved, 200, t('users.soft-deleted')));
 };
 

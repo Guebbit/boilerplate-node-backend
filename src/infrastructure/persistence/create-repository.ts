@@ -197,18 +197,6 @@ export interface Repository<TDocument extends Document> {
     save: (document: TDocument) => Promise<TDocument>;
     /** Remove a single document. */
     deleteOne: (document: TDocument) => Promise<void>;
-    /**
-     * Flip `deletedAt` and persist.
-     *
-     * The flip is the point: run against an already soft-deleted document this RESTORES it, which
-     * is what the `hardDelete: false` half of `hardDeleteSchema` in `@infrastructure/http/schemas`
-     * means. Assigning `new Date()` unconditionally would pass every soft-delete test and break
-     * only restore, which is why the rule lives here instead of being re-typed in each service.
-     *
-     * Envelope-free, unlike the service call it backs: the i18n message names the noun, the noun
-     * belongs to the module, so the caller wraps the saved document in its own `generateSuccess`.
-     */
-    toggleDeleted: (document: TDocument & { deletedAt?: Date }) => Promise<TDocument>;
     /** Filter → count → page → normalize, per the declared search spec. */
     search: (
         filters?: SearchFilters,
@@ -312,12 +300,6 @@ export function createRepository<TDocument extends Document>(
         // mongoose types `Document#deleteOne` as `any`; the cast restores the promise it returns
         (document.deleteOne() as Promise<unknown>).then(() => undefined);
 
-    /** Flip `deletedAt` and persist — see the contract above for why a flip, not an assignment. */
-    const toggleDeleted = (document: TDocument & { deletedAt?: Date }): Promise<TDocument> => {
-        document.deletedAt = document.deletedAt ? undefined : new Date();
-        return save(document);
-    };
-
     /**
      * Filter → count → page → normalize, in one call.
      *
@@ -362,8 +344,6 @@ export function createRepository<TDocument extends Document>(
         create: trackDatabaseQuery(create),
         save: trackDatabaseQuery(save),
         deleteOne: trackDatabaseQuery(deleteOne),
-        // Wrapped rather than calling the tracked `save`: one write, one counted query.
-        toggleDeleted: trackDatabaseQuery(toggleDeleted),
         search: trackDatabaseQuery(search),
         normalize,
         // Bound to this collection's spec, so callers pass filters only.

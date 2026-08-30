@@ -293,9 +293,12 @@ module.exports = {
          * Flat again since `crud-service.ts` was dissolved. It used to be negated out of this key:
          * `withDocument` and `toggleSoftDelete` were called only from the orders, products and
          * users services, which the unit run does not execute, so it read 0% functions while the
-         * six files beside it sat between 33% and 100%. `withDocument` is now inlined at its call
-         * sites and `toggleSoftDelete` is `toggleDeleted` on the repository factory, so the set
-         * this key matches is unchanged and the floor it carried still holds.
+         * six files beside it sat between 33% and 100%. Both are now inlined at their call sites,
+         * so the set this key matches is unchanged and the floor it carried still holds.
+         *
+         * `create-repository.ts` sits at 33.33 against the 33 below and has since before that
+         * refactor — the margin is one function, so anything added to the factory without a unit
+         * test trips this key.
          */
         'src/infrastructure/persistence/*.ts': {
             statements: 70,

@@ -25,22 +25,6 @@ const buildWhereFor = (searchable: SearchSpec) =>
         searchable
     }).buildWhere;
 
-/** A repository with no search spec — `toggleDeleted` reads none. */
-const plainRepository = () =>
-    createRepository<FixtureDocument>(stubModel, { transform: identityTransform });
-
-/** A document that records its own `save()` rather than reaching a collection. */
-const documentWith = (deletedAt: Date | undefined) => {
-    // Annotated rather than inferred: `save` resolves the object it lives on, and TypeScript
-    // cannot infer a type that references itself (TS7024).
-    const document: { deletedAt: Date | undefined; save: jest.Mock } = {
-        deletedAt,
-        save: jest.fn()
-    };
-    document.save.mockResolvedValue(document);
-    return document;
-};
-
 describe('buildWhere — objectIds', () => {
     const buildWhere = buildWhereFor({ objectIds: { id: '_id', userId: 'userId' } });
 
@@ -210,51 +194,5 @@ describe('buildWhere — composing multiple kinds at once', () => {
             active: false,
             price: { $gte: 5 }
         });
-    });
-});
-
-/**
- * `toggleDeleted` — the soft-delete flip, and the one member of this factory whose contract is a
- * RULE rather than a query.
- *
- * DB-free like `buildWhere` above, and for a related reason: the only Mongoose call in the path is
- * `document.save()`, which the fixture below supplies. What is under test is the flip itself.
- *
- * The restore case is the one that matters. Written as `deletedAt = new Date()` this function
- * still passes every "soft-deletes a document" test in the repo while silently breaking the
- * `hardDelete: false` half of `hardDeleteSchema` — the three service-level restore tests
- * (`products`/`users`/`orders` integration) would catch it, but only at the layer above and only
- * with a database running. This is the assertion at the level the rule actually lives.
- */
-describe('toggleDeleted', () => {
-    it('stamps deletedAt on a live document', async () => {
-        const document = documentWith(undefined);
-
-        await plainRepository().toggleDeleted(document as never);
-
-        expect(document.deletedAt).toBeInstanceOf(Date);
-    });
-
-    it('UNSETS deletedAt on an already soft-deleted document — the flip is the restore', async () => {
-        const document = documentWith(new Date('2026-01-01T00:00:00.000Z'));
-
-        await plainRepository().toggleDeleted(document as never);
-
-        // `undefined`, not null: `visibleScope` tests the field with `$exists: false`.
-        expect(document.deletedAt).toBeUndefined();
-    });
-
-    it('persists the flip instead of only mutating in memory', async () => {
-        const document = documentWith(undefined);
-
-        await plainRepository().toggleDeleted(document as never);
-
-        expect(document.save).toHaveBeenCalledTimes(1);
-    });
-
-    it('resolves the saved document, so a caller can build its envelope from the result', async () => {
-        const document = documentWith(undefined);
-
-        await expect(plainRepository().toggleDeleted(document as never)).resolves.toBe(document);
     });
 });
