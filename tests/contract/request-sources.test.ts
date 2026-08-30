@@ -199,7 +199,7 @@ const SURFACE_SOURCES = readSurfaceSources();
  * delete controllers through.
  */
 const SHARED_DECLARATION_FILES: Record<string, string> = {
-    'createDeleteController(': 'src/infrastructure/http/create-delete-controller.ts'
+    'createDeleteController(': 'src/infrastructure/surfaces/create-delete-controller.ts'
 };
 
 /**

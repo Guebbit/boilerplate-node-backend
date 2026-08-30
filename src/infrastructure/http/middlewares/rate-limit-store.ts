@@ -14,7 +14,7 @@
  * choice here is real: fail closed and a Redis outage becomes an authentication outage — nobody can
  * sign in — while failing open removes the brakes for as long as it lasts. This fails open, which
  * is the same answer the rest of the stack gives about its optional dependencies, and it is made
- * explicit rather than accidental: `passOnStoreError` in `security.ts` is what lets a request
+ * explicit rather than accidental: `passOnStoreError` in `rate-limit.ts` is what lets a request
  * through when the store errors, and every outage is logged.
  *
  * The choice of store is made ONCE, at startup, from whether Redis is configured. A store that
@@ -25,8 +25,7 @@
  * No socket is opened by importing this file — only by the first request that needs one. A process
  * that imports the limiters and never serves a request (a test file, `export-demo-dataset`, `sync-shared-files-to-frontend`)
  * must not be left holding a connection open, and one retrying a Redis that is not there would
- * never exit at all. That is not hypothetical: it is what the first version of this file did to the
- * test suite.
+ * never exit at all.
  *
  * Laziness takes a wrapper rather than falling out of the design, because `RedisStore.init()` loads
  * its Lua scripts eagerly — constructing one IS a round trip. `lazyRedisStore` holds the options
@@ -46,7 +45,7 @@ import { environmentFlag, environmentNumber } from '@infrastructure/runtime/envi
 import {
     manageConnection,
     type ManagedConnection
-} from '@infrastructure/runtime/managed-connection';
+} from '@infrastructure/adapters/managed-connection';
 
 /**
  * Key namespace for every limiter counter. Separate from the cache's prefix so

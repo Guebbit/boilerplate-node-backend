@@ -14,9 +14,9 @@
 
 import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
-import { successResponse } from './response';
-import { readInput, type RequestInputDeclaration } from './request';
-import { catchAs, parseBody } from './controller';
+import { successResponse } from '@infrastructure/http/response';
+import { readInput, type RequestInputDeclaration } from '@infrastructure/http/request';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /** What makes one entity's list different from another's. */
 export interface ListControllerSpec<TSchema extends ZodType> {
@@ -57,11 +57,17 @@ export const createListController = <TSchema extends ZodType>({
     input,
     runList
 }: ListControllerSpec<TSchema>) => {
+    // The name printed in stack traces, the request log line and `docs/modules/` — e.g. `getInventoryLevels`.
     const operation = `get${entity.charAt(0).toUpperCase()}${entity.slice(1)}`;
 
+    // A computed property key, not a plain function expression, so `handler.name` is `operation`
+    // instead of the generic name an anonymous function would carry.
     const handler = {
         [operation](request: Request, response: Response) {
-            // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+            // readInput: merges the query string (plus any extra fields the module declared) into
+            // one object, per the `list` surface's rules — see docs/theory/request-input.md.
+            // parseBody: validates that object against the query schema; 422s and returns
+            // undefined on failure.
             const parsed = parseBody(
                 schema,
                 readInput(request, { ...input, surface: 'list' }),
@@ -69,11 +75,12 @@ export const createListController = <TSchema extends ZodType>({
             );
             if (!parsed) return Promise.resolve();
 
+            // runList: the module's own query, given the validated input.
             return runList(parsed, request)
                 .then((result) => {
                     successResponse(response, result.data);
                 })
-                .catch(catchAs(response, operation));
+                .catch(catchAs(response, operation)); // logs the failure under `operation`, then 500s
         }
     }[operation];
 

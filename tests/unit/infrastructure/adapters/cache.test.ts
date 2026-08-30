@@ -282,7 +282,7 @@ describe('setCacheValue tag index', () => {
 
 // ─── The connection ──────────────────────────────────────────────────────────
 /**
- * The lifecycle rules themselves live in `runtime/managed-connection.ts` and are tested there
+ * The lifecycle rules themselves live in `adapters/managed-connection.ts` and are tested there
  * against a fake handle. What is left here is what is Redis-specific: how a client is built, and
  * how it is closed.
  */

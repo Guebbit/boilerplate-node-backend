@@ -5,9 +5,7 @@
  * unreachable is a degraded one, and neither may turn a request into an error. Expressing that
  * takes the same six pieces every time — a memoised handle, an in-flight connect shared by
  * concurrent callers, a warn-once flag re-armed on success, a getter resolving `undefined` rather
- * than rejecting, a `DependencyStatus` reader and a close — and stating them twice is how the two
- * adapters came to answer the same question by different rules: one reported `connecting` from the
- * client's socket flag, the other from whether a connect was in flight, in the same health payload.
+ * than rejecting, a `DependencyStatus` reader and a close.
  *
  * So the rules live here and the adapters supply only what is genuinely theirs: how to open the
  * thing, how to tell it is still usable, and how to close it.
@@ -223,9 +221,8 @@ export const manageConnection = <THandle>({
         state: () => {
             if (!isEnabled()) return 'disabled';
             if (handle && isReady(handle)) return 'ready';
-            // One rule for every managed dependency: the handshake window is exactly the time an
-            // attempt is in flight. Reading it from each client's own socket flags instead is what
-            // let two dependencies in one payload disagree about what `connecting` means.
+            // One rule for every managed dependency, rather than each client's own socket flags:
+            // the handshake window is exactly the time an attempt is in flight.
             if (connectPromise) return 'connecting';
             return 'unavailable';
         },

@@ -8,7 +8,7 @@ import {
 import { productService } from '../service';
 import { callerContextOf } from '@infrastructure/http/request';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
-import { createSearchController } from '@infrastructure/http/create-search-controller';
+import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 
 /**
  * Built on the orval-generated SearchProductsBody (kept in sync with

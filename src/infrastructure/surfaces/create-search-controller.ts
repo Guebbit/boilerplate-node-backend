@@ -1,13 +1,10 @@
 /**
- * The search-controller shape, written once.
- *
- * `products`, `users` and `orders` each expose the same pair of endpoints — `GET /x` and
- * `POST /x/search` — behind one controller, and until now that controller was hand-copied three
- * times: `readInput(surface:'search')` → merge in whatever the module needs decoded → `parseBody`
- * against the module's own schema → run the search → `successResponse` → `catchAs`. Only two
- * things differ per module — which extra fields the query form needs before validation, and what
- * actually runs the search — so the rest is duplication of the WHOLE controller, the same shape
- * `createDeleteController` addresses for deletes.
+ * The search-controller shape shared by `products`, `users` and `orders`, each exposing the same
+ * pair of endpoints — `GET /x` and `POST /x/search` — behind one controller:
+ * `readInput(surface:'search')` → merge in whatever the module needs decoded → `parseBody` against
+ * the module's own schema → run the search → `successResponse` → `catchAs`. Only two things differ
+ * per module: which extra fields the query form needs before validation, and what actually runs
+ * the search.
  *
  * `feedback`'s search controller is deliberately NOT built on this: it validates only pagination
  * and hand-lists its cache key rather than deriving one from a Zod schema (see `get-feedback.ts`),
@@ -16,9 +13,9 @@
 
 import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
-import { successResponse } from './response';
-import { readInput } from './request';
-import { catchAs, parseBody } from './controller';
+import { successResponse } from '@infrastructure/http/response';
+import { readInput } from '@infrastructure/http/request';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /** What makes one entity's search different from another's. */
 export interface SearchControllerSpec<TSchema extends ZodType, TResult> {
@@ -52,22 +49,31 @@ export const createSearchController = <TSchema extends ZodType, TResult>({
     extendInput,
     runSearch
 }: SearchControllerSpec<TSchema, TResult>) => {
+    // The name printed in stack traces, the request log line and `docs/modules/` — e.g. `getProducts`.
     const operation = `get${entity.charAt(0).toUpperCase()}${entity.slice(1)}`;
 
+    // A computed property key, not a plain function expression, so `handler.name` is `operation`
+    // instead of the generic name an anonymous function would carry.
     const handler = {
         [operation](request: Request, response: Response) {
-            // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+            // readInput: merges params/query/body into one object, per the `search` surface's
+            // rules — see docs/theory/request-input.md.
             const input = readInput(request, { surface: 'search', ids: ['id'] });
+            // extendInput: the module's own overlay — coercions or request-derived values a plain
+            // field list can't express.
             const merged = extendInput ? { ...input, ...extendInput(input, request) } : input;
 
+            // parseBody: validates the merged input against the module's schema; 422s and returns
+            // undefined on failure.
             const parsed = parseBody(schema, merged, response);
             if (!parsed) return;
 
+            // runSearch: the module's own search, given the validated input.
             return runSearch(parsed, request)
                 .then((result) => {
                     successResponse(response, result);
                 })
-                .catch(catchAs(response, operation));
+                .catch(catchAs(response, operation)); // logs the failure under `operation`, then 500s
         }
     }[operation];
 

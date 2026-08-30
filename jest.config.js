@@ -317,17 +317,46 @@ module.exports = {
             functions: 70,
             lines: 70
         },
+        /*
+         * Re-fitted on 2026-08-30 after `create-delete-controller.ts`, `create-item-controller.ts`,
+         * `create-list-controller.ts` and `create-search-controller.ts` left for `surfaces/` (see
+         * INFRASTRUCTURE_LAYOUT_PLAN.md step 3): they were exactly the hypothesis the plan named for
+         * why this floor sat at 62/42/50/62 while most infrastructure folders carry 70. With them
+         * gone the measured minimum across the remaining files is 87.43/42.85/50/87.43
+         * (`rate-limit.ts` on statements/lines, `validation-messages.ts` on branches, `controller.ts`
+         * on functions) — floored by one point each, branches and functions unchanged because they
+         * were already the tighter number.
+         */
         'src/infrastructure/http/**/*.ts': {
-            statements: 62,
+            statements: 87,
             branches: 42,
             functions: 50,
-            lines: 62
+            lines: 87
         },
+        // `managed-connection.ts` joined this glob from `runtime/` on 2026-08-30 (see
+        // INFRASTRUCTURE_LAYOUT_PLAN.md step 2) and clears the floor at 98.46/92/100/98.46 —
+        // comfortably above it, so the number itself did not need to move.
         'src/infrastructure/adapters/!(pdf|mailer).ts': {
             statements: 70,
             branches: 70,
             functions: 70,
             lines: 70
+        },
+        /*
+         * The four route-surface controller factories, split out of `http/` on 2026-08-30 (see
+         * INFRASTRUCTURE_LAYOUT_PLAN.md step 3). Unlike a per-module `controllers/` file — which
+         * this codebase deliberately leaves unfloored, see the note above — these are shared
+         * infrastructure with real unit coverage of their own (exercised transitively through the
+         * ten controllers built on them), so a floor is worth keeping. Measured minimum across the
+         * four is 62.09/100/50/62.09 — `create-delete-controller.ts` is the low file on
+         * statements/lines, all four tie on branches and functions — floored by one point on the
+         * fractional pair.
+         */
+        'src/infrastructure/surfaces/*.ts': {
+            statements: 62,
+            branches: 100,
+            functions: 50,
+            lines: 62
         },
         'src/infrastructure/observability/!(stream|metrics-http|tracer).ts': {
             statements: 70,

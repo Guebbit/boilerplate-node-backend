@@ -91,7 +91,7 @@ domain-free is `infrastructure`, no matter where it sits in the request lifecycl
 | locale negotiation             | `infrastructure/http/middlewares/locale.ts`         | wraps `infrastructure/i18n`; no module needed |
 | observability context          | `infrastructure/http/middlewares/observability.ts`  | seeds a request context                       |
 | access logging                 | `infrastructure/http/middlewares/request-logger.ts` | reads tracer + metrics labels                 |
-| rate limiting, metrics scraper | `infrastructure/http/middlewares/security.ts`       | generic HTTP hardening                        |
+| rate limiting, metrics scraper | `infrastructure/http/middlewares/rate-limit.ts`     | generic HTTP hardening                        |
 | conditional handler toggle     | `infrastructure/http/middlewares/route-flag.ts`     | imports nothing but Express                   |
 | email queue consumer           | `infrastructure/adapters/email.worker.ts`           | the consumer half of `adapters/mailer.ts`     |
 | PDF queue consumer             | `infrastructure/adapters/pdf.worker.ts`             | the consumer half of `adapters/pdf.ts`        |

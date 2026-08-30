@@ -214,7 +214,7 @@ describe('the limiter is raised for these suites, not disabled', () => {
 
         const expressModule = await import('express');
         const supertestModule = await import('supertest');
-        const { credentialLimiters } = await import('@infrastructure/http/middlewares/security');
+        const { credentialLimiters } = await import('@infrastructure/http/middlewares/rate-limit');
         const express = expressModule.default;
         const supertest = supertestModule.default;
 

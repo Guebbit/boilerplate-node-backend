@@ -1,21 +1,17 @@
 /**
- * The read-one controller, written once.
+ * The read-one controller: fetch by path id, 404 with the module's own key when nothing comes
+ * back, the SAME 404 when Mongoose rejects the id as a CastError, `rejectDatabaseError` for
+ * anything else.
  *
- * `GET /products/:id` and `GET /users/:id` were the same file twice: fetch by path id → 404 with
- * the module's own key when nothing comes back → the SAME 404 when Mongoose rejects the id as a
- * CastError → `rejectDatabaseError` for anything else. Only the fetch and the not-found key
- * differ, which is the shape `createDeleteController` and `createSearchController` already answer.
- *
- * The CastError branch is the reason this is worth sharing rather than leaving as ten lines each:
- * "a malformed id is a 404, not a 500" is a decision about the API's contract, and it should have
- * one landing site.
+ * The CastError branch is why this is shared rather than left inline: "a malformed id is a 404,
+ * not a 500" is a decision about the API's contract, and it should have one landing site.
  */
 
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
-import { rejectResponse, successResponse } from './response';
-import { rejectDatabaseError } from './errors';
+import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { rejectDatabaseError } from '@infrastructure/http/errors';
 
 /** What makes one entity's read-one different from another's. */
 export interface ItemControllerSpec {
@@ -46,10 +42,14 @@ export interface ItemControllerSpec {
  * @returns the express handler, named for the entity it reads
  */
 export const createItemController = ({ entity, fetch, notFoundKey }: ItemControllerSpec) => {
+    // The name printed in stack traces, the request log line and `docs/modules/` — e.g. `getProductItem`.
     const operation = `get${entity.charAt(0).toUpperCase()}${entity.slice(1)}Item`;
 
+    // A computed property key, not a plain function expression, so `handler.name` is `operation`
+    // instead of the generic name an anonymous function would carry.
     const handler = {
         [operation](request: Request, response: Response) {
+            // The module's own fetch — a miss answers `null`/`undefined`/`void`, never throws.
             return fetch(String(request.params.id), request)
                 .then((item) => {
                     if (!item) {

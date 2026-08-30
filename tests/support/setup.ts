@@ -23,7 +23,7 @@ import {
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 
 /**
- * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/security.ts, currently 100).
+ * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/rate-limit.ts, currently 100).
  *
  * A suite issues far more requests than a person does, and every one of them shares a single
  * source address, so the per-IP limiter sees one very busy client. Without this the later tests

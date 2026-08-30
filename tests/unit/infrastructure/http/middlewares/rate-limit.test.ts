@@ -1,5 +1,5 @@
 /**
- * `src/infrastructure/http/middlewares/security.ts` — the two rate-limit budgets and the metrics scrape guard.
+ * `src/infrastructure/http/middlewares/rate-limit.ts` — the two rate-limit budgets and the metrics scrape guard.
  *
  * `isMetricsScraper` is the substance here. It is the only credential check in the codebase that
  * does not go through the JWT middleware, because Prometheus cannot log in, and it protects an
@@ -28,7 +28,7 @@ import {
     DEFAULT_RATE_LIMIT_WINDOW_MS,
     DEFAULT_AUTH_RATE_LIMIT_MAX,
     isMetricsScraper
-} from '@infrastructure/http/middlewares/security';
+} from '@infrastructure/http/middlewares/rate-limit';
 import { makeResponseStub } from '@tests/express';
 
 /** Captures the status/body pair `rejectResponse` writes, without an HTTP server. */

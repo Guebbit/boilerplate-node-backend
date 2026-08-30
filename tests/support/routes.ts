@@ -131,7 +131,7 @@ export const cacheMock = () => ({
 });
 
 /**
- * Replacement for `@infrastructure/http/middlewares/security`'s `credentialLimiters`.
+ * Replacement for `@infrastructure/http/middlewares/rate-limit`'s `credentialLimiters`.
  *
  * The pair of rate limiters in front of every credential route arrives as two anonymous
  * `express-rate-limit` closures, indistinguishable in a route table from any other unnamed
@@ -143,8 +143,8 @@ export const cacheMock = () => ({
  * of them visible, which replacing the array with a single marker would not.
  */
 export const securityMock = () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/http/middlewares/security')>(
-        '@infrastructure/http/middlewares/security'
+    const actual = jest.requireActual<typeof import('@infrastructure/http/middlewares/rate-limit')>(
+        '@infrastructure/http/middlewares/rate-limit'
     );
 
     return {

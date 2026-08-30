@@ -87,7 +87,7 @@ describe('GET /observability/metrics', () => {
         if (token === undefined) delete process.env.NODE_METRICS_TOKEN;
         else process.env.NODE_METRICS_TOKEN = token;
 
-        const { isMetricsScraper } = await import('@infrastructure/http/middlewares/security');
+        const { isMetricsScraper } = await import('@infrastructure/http/middlewares/rate-limit');
         const guarded = express();
         guarded.use(cookieParser());
         guarded.get('/metrics', isMetricsScraper, (_request, response) => {

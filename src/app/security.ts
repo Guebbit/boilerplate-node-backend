@@ -15,7 +15,7 @@ import type { Express } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
-import { rateLimiter } from '@infrastructure/http/middlewares/security';
+import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**

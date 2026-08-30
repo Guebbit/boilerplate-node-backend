@@ -1,4 +1,4 @@
-import { createDeleteController } from '@infrastructure/http/create-delete-controller';
+import { createDeleteController } from '@infrastructure/surfaces/create-delete-controller';
 import { productService } from '../service';
 import { productsAuditActions } from '../audit';
 

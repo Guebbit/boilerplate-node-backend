@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin, isAdminViaCookie } from '@kernel/middlewares/authorizations';
-import { isMetricsScraper } from '@infrastructure/http/middlewares/security';
+import { isMetricsScraper } from '@infrastructure/http/middlewares/rate-limit';
 import { getObservabilityHealth } from './controllers/get-observability-health';
 import { getObservabilityMetricsOverview } from './controllers/get-observability-metrics-overview';
 import { getObservabilityAuditLogs } from './controllers/get-observability-audit';

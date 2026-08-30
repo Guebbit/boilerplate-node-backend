@@ -22,7 +22,7 @@ import { routeTable, routeSignatures, routerMiddleware, guardsOn } from '@tests/
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
 );
-jest.mock('@infrastructure/http/middlewares/security', () =>
+jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
 );
 jest.mock('@infrastructure/adapters/storage', () =>

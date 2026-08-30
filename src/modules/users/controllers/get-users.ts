@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { SearchUsersBody } from '@api/schemas.zod';
 import { userService } from '../service';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
-import { createSearchController } from '@infrastructure/http/create-search-controller';
+import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 
 /**
  * Built on the orval-generated SearchUsersBody (kept in sync with

@@ -57,7 +57,7 @@ pool, the event loop.
 ## Reading the result
 
 - **Non-2xx responses** are the first thing to check. A run that reports great latency and 40%
-  `429` is measuring the rate limiter (`middlewares/security.ts`), not the endpoint. Raise the
+  `429` is measuring the rate limiter (`middlewares/rate-limit.ts`), not the endpoint. Raise the
   limit for the run or expect the noise.
 - **p97.5 / p99, not the mean.** The mean hides exactly the requests users complain about.
 - **Compare runs, not absolutes.** Numbers from a laptop running Mongo, Redis, RabbitMQ, Grafana

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { credentialLimiters } from '@infrastructure/http/middlewares/security';
+import { credentialLimiters } from '@infrastructure/http/middlewares/rate-limit';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/adapters/storage';
 import { getAccount } from './controllers/get-account';

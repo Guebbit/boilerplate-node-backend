@@ -171,7 +171,7 @@ flowchart TD
 ```
 
 Each worker opens **its own connection** (`src/infrastructure/adapters/cache.ts` over
-`runtime/managed-connection.ts`, one lazy client per process), but every connection addresses the **same keyspace** — same
+`adapters/managed-connection.ts`, one lazy client per process), but every connection addresses the **same keyspace** — same
 `NODE_REDIS_URL`, same `NODE_REDIS_CACHE_PREFIX`. A worker never keeps a local copy of a cached
 response, so there is no such thing as "worker 2's cache" to fall out of date. There is one cache,
 and four processes reading it.

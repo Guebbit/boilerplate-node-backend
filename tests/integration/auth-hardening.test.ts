@@ -29,7 +29,7 @@ const limitersWithBudget = async (identityLimit: number, addressLimit = identity
     process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX = String(addressLimit);
     jest.resetModules();
 
-    const { credentialLimiters } = await import('@infrastructure/http/middlewares/security');
+    const { credentialLimiters } = await import('@infrastructure/http/middlewares/rate-limit');
 
     for (const [name, value] of [
         ['NODE_AUTH_RATE_LIMIT_MAX', originals.identity],

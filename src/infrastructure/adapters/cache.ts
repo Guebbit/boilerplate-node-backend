@@ -17,7 +17,7 @@
 // `RedisClientType` is the resulting client's type, needed for the generic below.
 import { createClient, type RedisClientType } from 'redis';
 import { logger } from '@infrastructure/adapters/logger';
-import { manageConnection } from '@infrastructure/runtime/managed-connection';
+import { manageConnection } from '@infrastructure/adapters/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 import { environmentFlag } from '@infrastructure/runtime/environment';
 

@@ -10,7 +10,7 @@
  * opening a second connection while one is in flight, warning exactly once per outage, and
  * closing on the way out even when the handle is mid-open.
  */
-import { manageConnection } from '@infrastructure/runtime/managed-connection';
+import { manageConnection } from '@infrastructure/adapters/managed-connection';
 import { logger } from '@infrastructure/adapters/logger';
 
 jest.mock('@infrastructure/adapters/logger', () => ({

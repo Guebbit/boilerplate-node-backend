@@ -17,7 +17,7 @@
 import type { EventEmitter } from 'node:events';
 import amqplib, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
 import { logger } from '@infrastructure/adapters/logger';
-import { manageConnection } from '@infrastructure/runtime/managed-connection';
+import { manageConnection } from '@infrastructure/adapters/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 import { WORKER_CHANNELS } from '@types';
 import { environmentFlag } from '@infrastructure/runtime/environment';

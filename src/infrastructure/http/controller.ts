@@ -2,9 +2,7 @@
  * The four steps every controller repeats, written once.
  *
  * A controller in this codebase reads input, validates it, calls one service method, branches on
- * the envelope that comes back, and catches. Four of those five steps are identical in every file
- * — which is why the same five-step shape was re-typed across 72 controllers, and why changing how
- * a service result maps to a status was a 63-site edit.
+ * the envelope that comes back, and catches. Four of those five steps are identical in every file.
  *
  * Helpers rather than a `defineController()` wrapper, deliberately. A wrapper owns the chain: the
  * stack trace gains a frame that points here instead of at the handler, the service result has to
@@ -12,9 +10,6 @@
  * `eslint/rules/controller-chain-must-catch.ts` — which walks the AST for a chain ending in a real
  * `.catch()` call — stops seeing the catch it exists to find. Each of these is a call the
  * controller still makes for itself, so the chain, the types and the guard all survive.
- *
- * `locales/controllers/write-locale-entries.ts` invented the 422 half locally first; this is that
- * idea, finished and shared.
  */
 
 import type { Response } from 'express';
@@ -41,10 +36,9 @@ interface ServiceResult<TData> {
 /**
  * Send the refusal if the service refused, and say whether it did.
  *
- * `if (refused(response, result)) return;` — four lines of identical branch in 39 controllers,
- * written once. It covers the REFUSAL only, deliberately: the success side is where controllers
- * genuinely differ (a raw payload, a transformed one, a 201, an audit event first), and a helper
- * that owned the send too would need a callback to hand most of that back.
+ * `if (refused(response, result)) return;` covers the REFUSAL only, deliberately: the success side
+ * is where controllers genuinely differ (a raw payload, a transformed one, a 201, an audit event
+ * first), and a helper that owned the send too would need a callback to hand most of that back.
  *
  * @param response - the express response
  * @param result - whatever the service returned
