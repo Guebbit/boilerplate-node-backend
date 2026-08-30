@@ -33,7 +33,6 @@ import type { OrderActor } from './domain';
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/base-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import { withDocument, toggleSoftDelete } from '@infrastructure/persistence/crud-service';
 
 /**
  * Order Service
@@ -334,8 +333,12 @@ export const updateById = (
     data: UpdateOrderByIdRequest,
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    withDocument(orderRepository.findById(id), 'orders.not-found', (order) =>
-        update(order, data).then((result) => {
+    orderRepository.findById(id).then((order) => {
+        // Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
+        // at the `.catch()` that has to tell them apart.
+        if (!order) return generateReject(404, [t('orders.not-found')]);
+
+        return update(order, data).then((result) => {
             if (result.success)
                 emitAuditEvent(
                     buildAuditEvent(context, {
@@ -346,8 +349,8 @@ export const updateById = (
                     })
                 );
             return result;
-        })
-    );
+        });
+    });
 
 /**
  * Remove an order document (soft or hard delete).
@@ -380,7 +383,9 @@ export const remove = (
         );
 
     // SOFT delete (or restore) — the default path for an order, which is a financial record.
-    return toggleSoftDelete(order, orderRepository.save, 'orders.soft-deleted');
+    return orderRepository
+        .toggleDeleted(order)
+        .then((saved) => generateSuccess(saved, 200, t('orders.soft-deleted')));
 };
 
 /**
@@ -394,9 +399,11 @@ export const removeById = (
     id: string,
     hardDelete = false
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> =>
-    withDocument(orderRepository.findById(id), 'orders.not-found', (order) =>
-        remove(order, hardDelete)
-    );
+    orderRepository
+        .findById(id)
+        .then((order) =>
+            order ? remove(order, hardDelete) : generateReject(404, [t('orders.not-found')])
+        );
 
 /**
  * Which orders a caller is allowed to read.

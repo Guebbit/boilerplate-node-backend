@@ -2,6 +2,7 @@ import { t } from '@infrastructure/i18n';
 import type { SearchProductsRequest, Product } from '@types';
 import {
     generateSuccess,
+    generateReject,
     type ResponseReject,
     type ResponseSuccess,
     type ResponseErrorItem,
@@ -21,7 +22,6 @@ import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { createVisibilityScope } from '@kernel/authorization';
-import { withDocument, toggleSoftDelete } from '@infrastructure/persistence/crud-service';
 
 /**
  * Product Service
@@ -226,8 +226,12 @@ export const updateById = (
     data: Partial<Omit<Product, 'id'>>,
     context: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
-    withDocument(productRepository.findById(id), 'products.not-found', (product) =>
-        update(product, data).then((updated) => {
+    productRepository.findById(id).then((product) => {
+        // Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
+        // at the `.catch()` that has to tell them apart.
+        if (!product) return generateReject(404, [t('products.not-found')]);
+
+        return update(product, data).then((updated) => {
             emitAuditEvent(
                 buildAuditEvent(context, {
                     action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
@@ -237,8 +241,8 @@ export const updateById = (
                 })
             );
             return generateSuccess(updated);
-        })
-    );
+        });
+    });
 
 /**
  * Remove a product document (soft or hard delete).
@@ -267,9 +271,9 @@ export const remove = (
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
 
     // SOFT delete (or restore)
-    return emitDomainEvent(PRODUCT_DELETED, { productId: id }).then(() =>
-        toggleSoftDelete(product, productRepository.save, 'products.soft-deleted')
-    );
+    return emitDomainEvent(PRODUCT_DELETED, { productId: id })
+        .then(() => productRepository.toggleDeleted(product))
+        .then((saved) => generateSuccess(saved, 200, t('products.soft-deleted')));
 };
 
 /**
@@ -283,9 +287,11 @@ export const removeById = (
     id: string,
     hardDelete = false
 ): Promise<ResponseSuccess<ProductDocument> | ResponseSuccess<undefined> | ResponseReject> =>
-    withDocument(productRepository.findById(id), 'products.not-found', (product) =>
-        remove(product, hardDelete)
-    );
+    productRepository
+        .findById(id)
+        .then((product) =>
+            product ? remove(product, hardDelete) : generateReject(404, [t('products.not-found')])
+        );
 
 /**
  * Every category and tag the PUBLIC catalogue carries, with counts.
