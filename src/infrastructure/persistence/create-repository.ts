@@ -148,7 +148,7 @@ export interface PaginatedResult<TDocument> {
     meta: PaginatedMeta;
 }
 
-export interface BaseRepositoryOptions {
+export interface RepositoryOptions {
     /** The model's wire-shape serializer, applied by `normalize` — and so by `search`. */
     transform: Transform;
     /** What `search()` accepts. Omit for collections that are never searched. */
@@ -162,7 +162,7 @@ export interface BaseRepositoryOptions {
  * inferred shape at an export boundary (TS7056) once it is spread into a repository object.
  * Naming the contract fixes that, and doubles as the one place to read what a repository can do.
  */
-export interface BaseRepository<TDocument extends Document> {
+export interface Repository<TDocument extends Document> {
     /**
      * Fetch one document by `_id`, as a hydrated document.
      *
@@ -227,15 +227,18 @@ export interface BaseRepository<TDocument extends Document> {
  * Beyond plain CRUD this owns the three pieces of Mongo knowledge a service must not carry: id
  * coercion, the lean→normalized mapping, and turning a filter bag into a query.
  *
- * A factory returning a closure-backed object, consumed by SPREAD — not a base class. There is no
- * `extends` and no protected hook, so a module that cannot honour part of the contract narrows its
- * own type (`orders` omits `search`, `audit-logs` exposes three members) instead of inheriting a
- * method it has to break. Do not unify this into a base class.
+ * Consumed by SPREAD. There is no `extends` and no protected hook, so a module that cannot honour
+ * part of the contract narrows its own type (`orders` omits `search`, `audit-logs` exposes three
+ * members) instead of inheriting a method it has to break.
+ *
+ * This used to be `createBaseRepository` in `base-repository.ts`, and the paragraph here had to
+ * spend four lines insisting it was not a base class — because the name said otherwise. The name
+ * now says what it is, so the warning is down to the sentence above.
  */
-export function createBaseRepository<TDocument extends Document>(
+export function createRepository<TDocument extends Document>(
     mongooseModel: Model<TDocument>,
-    options: BaseRepositoryOptions
-): BaseRepository<TDocument> {
+    options: RepositoryOptions
+): Repository<TDocument> {
     const { transform, searchable = {} } = options;
 
     /**

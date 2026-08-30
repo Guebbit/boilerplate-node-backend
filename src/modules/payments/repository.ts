@@ -2,23 +2,23 @@ import { paymentModel, applyPaymentTransform } from './model';
 import type { PaymentStatus } from '@types';
 import type { PaymentDocument } from './model';
 import {
-    createBaseRepository,
+    createRepository,
     toObjectId,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+    type Repository
+} from '@infrastructure/persistence/create-repository';
 
 /**
  * Payment Repository
- * Standard CRUD via the base factory, plus the two lookups and the one guarded write payments
+ * Standard CRUD via the repository factory, plus the two lookups and the one guarded write payments
  * actually take.
  *
  * `unique` on `orderId` makes "one payment per order" a database fact, so the intent upsert is
  * a single `findOneAndUpdate({ orderId }, …, { upsert: true })` with no read in front of it.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
-export const paymentRepository: BaseRepository<PaymentDocument> & {
+export const paymentRepository: Repository<PaymentDocument> & {
     ownerScope: (userId: string) => Record<string, unknown>;
     findByIdScoped: (
         paymentId: string,
@@ -40,7 +40,7 @@ export const paymentRepository: BaseRepository<PaymentDocument> & {
         extra?: Partial<PaymentDocument>
     ) => Promise<PaymentDocument | null>;
 } = {
-    ...createBaseRepository<PaymentDocument>(paymentModel, {
+    ...createRepository<PaymentDocument>(paymentModel, {
         transform: applyPaymentTransform
     }),
 

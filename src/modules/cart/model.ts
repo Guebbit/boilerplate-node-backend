@@ -123,8 +123,8 @@ cartSchema.index({ 'items.productId': 1 });
  * Normalizes a serialized cart: the shared `_id` → `id` and `__v` removal, nothing else.
  *
  * No endpoint serves this shape — `./service` builds `CartResponse` by hand from the lines
- * and their prices. It exists because every repository owes the base factory a transform for its
- * lean reads (see `normalize` in @infrastructure/persistence/base-repository).
+ * and their prices. It exists because every repository owes the repository factory a transform for its
+ * lean reads (see `normalize` in @infrastructure/persistence/create-repository).
  */
 export const applyCartTransform = applySerialization(cartSchema);
 

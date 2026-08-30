@@ -230,7 +230,7 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
  * Normalizes a serialized order: the shared `_id` → `id` and `__v` removal, plus this
  * collection's own two jobs — cleaning up the embedded items and deriving the totals.
  * Exported so aggregate results (which bypass `toJSON`) can be mapped
- * through the same logic — see `normalize` in @infrastructure/persistence/base-repository.
+ * through the same logic — see `normalize` in @infrastructure/persistence/create-repository.
  */
 export const applyOrderTransform = applySerialization(orderSchema, {
     after: (serialized) => {

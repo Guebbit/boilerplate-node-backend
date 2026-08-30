@@ -750,7 +750,7 @@ This is the thing worth understanding, because it explains an otherwise baffling
 
 ```ts
 export const userSchema = new Schema({ ... });        // runs at import
-export const userRepository = createBaseRepository(); // runs at import
+export const userRepository = createRepository(); // runs at import
 ```
 
 Stryker cannot swap those in and out per test. It has to reload the whole environment — and so, from its planner:

@@ -2,14 +2,14 @@ import type { UpdateWriteOpResult } from 'mongoose';
 import { wishlistModel, applyWishlistTransform } from './model';
 import type { WishlistDocument } from './model';
 import {
-    createBaseRepository,
+    createRepository,
     toObjectId,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+    type Repository
+} from '@infrastructure/persistence/create-repository';
 
 /**
  * Wishlist Repository
- * Standard CRUD via the base factory, plus the three writes a wishlist actually takes.
+ * Standard CRUD via the repository factory, plus the three writes a wishlist actually takes.
  *
  * Every one of them is keyed by `userId` — `unique` on the schema makes that a complete address —
  * so no caller ever fetches a wishlist before changing it. Unlike the cart there is no retry
@@ -17,19 +17,19 @@ import {
  * which is the write both of them are about.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  *
  * Every method is `async` because each assembles its filter with `toObjectId`, which throws on a
- * malformed id — see `base-repository.ts` for why that decides between a 4xx and a 500.
+ * malformed id — see `create-repository.ts` for why that decides between a 4xx and a 500.
  */
-export const wishlistRepository: BaseRepository<WishlistDocument> & {
+export const wishlistRepository: Repository<WishlistDocument> & {
     findByUserId: (userId: string) => Promise<WishlistDocument | null>;
     addLine: (userId: string, productId: string) => Promise<WishlistDocument>;
     removeLine: (userId: string, productId: string) => Promise<WishlistDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
-    ...createBaseRepository<WishlistDocument>(wishlistModel, {
+    ...createRepository<WishlistDocument>(wishlistModel, {
         transform: applyWishlistTransform
     }),
 

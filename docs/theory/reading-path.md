@@ -109,7 +109,7 @@ not touch Express (no `request`, no `response`) and do not write Mongo queries.
 
 ### 8 · `src/modules/products/repository.ts` — the database
 
-Built on `createBaseRepository`. Note the `SearchSpec`: filters are declared as **data** — filter
+Built on `createRepository`. Note the `SearchSpec`: filters are declared as **data** — filter
 key → Mongo path — so `$regex`, `$elemMatch` and `ObjectId` never leak up into a service.
 
 ### 9 · `src/infrastructure/http/response.ts` — what every answer looks like

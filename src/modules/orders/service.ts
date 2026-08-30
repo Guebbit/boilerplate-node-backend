@@ -31,7 +31,7 @@ import {
 import type { OrderActor } from './domain';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
-import { toObjectId } from '@infrastructure/persistence/base-repository';
+import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /**

@@ -2,11 +2,11 @@ import { orderModel, applyOrderTransform } from './model';
 import type { OrderDocument } from './model';
 import type { PipelineStage } from 'mongoose';
 import {
-    createBaseRepository,
+    createRepository,
     toObjectId,
     type SearchFilters,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+    type Repository
+} from '@infrastructure/persistence/create-repository';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -19,9 +19,9 @@ import {
  *
  * Unlike the other collections, orders are read through the aggregation framework: an order
  * embeds a product snapshot, and filtering on `items.product._id` is a pipeline concern. The
- * base factory still supplies plain CRUD; search is overridden below.
+ * repository factory still supplies plain CRUD; search is overridden below.
  */
-const base = createBaseRepository<OrderDocument>(orderModel, {
+const base = createRepository<OrderDocument>(orderModel, {
     transform: applyOrderTransform,
     searchable: {
         objectIds: {
@@ -50,7 +50,7 @@ const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =
  * stays in one place. `$match` does NOT cast the way `find()` does, which is exactly why the
  * coercion has to happen before the pipeline is assembled.
  *
- * `async` for the same reason as the base factory's `search`: `buildWhere` runs synchronously and
+ * `async` for the same reason as the repository factory's `search`: `buildWhere` runs synchronously and
  * can throw on a malformed id, and a function typed `Promise<T>` must reject rather than throw —
  * otherwise the caller's `.catch()` is bypassed and the client gets a 500 instead of a 422.
  */
@@ -185,7 +185,7 @@ const updateStatusIfIn = (
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056).
  */
-export const orderRepository: Omit<BaseRepository<OrderDocument>, 'search'> & {
+export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     aggregate: <T = OrderDocument>(pipeline: PipelineStage[]) => Promise<T[]>;
     search: (
         filters?: SearchFilters,

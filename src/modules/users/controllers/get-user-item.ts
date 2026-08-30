@@ -1,5 +1,5 @@
 import { userService } from '../service';
-import { createItemController } from '@infrastructure/http/item-controller';
+import { createItemController } from '@infrastructure/http/create-item-controller';
 
 /**
  * GET /users/:id

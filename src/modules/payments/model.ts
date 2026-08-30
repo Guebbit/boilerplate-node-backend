@@ -83,8 +83,8 @@ export const paymentSchema = new Schema<PaymentDocument>(
 );
 
 /**
- * Normalizes a serialized payment: `_id` → `id`, drops `__v`. Owed to the base factory for its
- * lean reads (see `normalize` in @infrastructure/persistence/base-repository).
+ * Normalizes a serialized payment: `_id` → `id`, drops `__v`. Owed to the repository factory for its
+ * lean reads (see `normalize` in @infrastructure/persistence/create-repository).
  */
 export const applyPaymentTransform = applySerialization(paymentSchema);
 

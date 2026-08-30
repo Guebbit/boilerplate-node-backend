@@ -1,6 +1,6 @@
 import { auditLogRepository, AUDIT_SORT } from './repository';
 import type { AuditLogSearchFilters } from './repository';
-import type { PaginatedResult } from '@infrastructure/persistence/base-repository';
+import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type { AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from './model';
 import { logger } from '@infrastructure/adapters/logger';

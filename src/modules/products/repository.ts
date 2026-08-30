@@ -2,17 +2,17 @@ import type { FacetCount } from '@types';
 import { productModel, applyProductTransform } from './model';
 import type { ProductDocument } from './model';
 import {
-    createBaseRepository,
+    createRepository,
     toObjectId,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+    type Repository
+} from '@infrastructure/persistence/create-repository';
 
 /**
  * Product Repository
- * Standard CRUD via the base factory, plus the catalogue's own query rules.
+ * Standard CRUD via the repository factory, plus the catalogue's own query rules.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 /** One product's counters and the availability derived from them, as the stock board reads it. */
 export interface AvailabilityRow {
@@ -36,7 +36,7 @@ const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
     deletedAt: { $exists: false }
 };
 
-export const productRepository: BaseRepository<ProductDocument> & {
+export const productRepository: Repository<ProductDocument> & {
     publicScope: () => Record<string, unknown>;
     findByIdScoped: (
         productId: string,
@@ -57,7 +57,7 @@ export const productRepository: BaseRepository<ProductDocument> & {
         maxAvailable?: number;
     }) => Promise<{ items: AvailabilityRow[]; totalItems: number }>;
 } = {
-    ...createBaseRepository<ProductDocument>(productModel, {
+    ...createRepository<ProductDocument>(productModel, {
         transform: applyProductTransform,
         searchable: {
             objectIds: { id: '_id' },
@@ -84,7 +84,7 @@ export const productRepository: BaseRepository<ProductDocument> & {
      * read is how a scoped find turns into an information leak. No scope means no restriction,
      * which is the admin branch (see `createVisibilityScope`).
      *
-     * `async` because `toObjectId` throws on a malformed id — see `base-repository.ts`.
+     * `async` because `toObjectId` throws on a malformed id — see `create-repository.ts`.
      * `orders.findByIdScoped` is the same idea.
      *
      * @param productId - the product's id

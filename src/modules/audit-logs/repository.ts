@@ -1,6 +1,6 @@
 import { auditLogModel, applyAuditLogTransform } from './model';
 import type { AuditLogDocument } from './model';
-import { createBaseRepository } from '@infrastructure/persistence/base-repository';
+import { createRepository } from '@infrastructure/persistence/create-repository';
 
 /**
  * Audit Log Repository
@@ -21,7 +21,7 @@ export interface AuditLogSearchFilters {
     pageSize?: unknown;
 }
 
-const base = createBaseRepository<AuditLogDocument>(auditLogModel, {
+const base = createRepository<AuditLogDocument>(auditLogModel, {
     transform: applyAuditLogTransform,
     searchable: {
         // All three are closed vocabularies or opaque ids — matched verbatim, never as a regex.

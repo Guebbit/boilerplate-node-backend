@@ -1,7 +1,7 @@
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListStockMovementsQueryParams } from '@api/schemas.zod';
 import { inventoryService } from '../service';
-import { createListController } from '@infrastructure/http/list-controller';
+import { createListController } from '@infrastructure/http/create-list-controller';
 
 /**
  * GET /inventory/movements

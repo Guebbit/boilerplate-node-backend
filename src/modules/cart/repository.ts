@@ -3,10 +3,10 @@ import { cartModel, applyCartTransform } from './model';
 import type { CartDocument } from './model';
 import { isDuplicateKey } from '@infrastructure/http/errors';
 import {
-    createBaseRepository,
+    createRepository,
     toObjectId,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+    type Repository
+} from '@infrastructure/persistence/create-repository';
 
 /** How {@link upsertLine} treats a quantity for a line already in the cart. */
 export type CartLineMode = 'set' | 'add';
@@ -66,16 +66,16 @@ const upsertLine = (
 
 /**
  * Cart Repository
- * Standard CRUD via the base factory, plus the four writes a cart actually takes.
+ * Standard CRUD via the repository factory, plus the four writes a cart actually takes.
  *
  * Every one of them is keyed by `userId` and none of them takes a cart id: `userId` is `unique` on
  * the schema, so "the user's cart" is a complete address. That is what keeps `findOneAndUpdate`
  * enough for each mutation, and it is why no caller ever has to fetch a cart before changing it.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize an
- * inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
+ * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
-export const cartRepository: BaseRepository<CartDocument> & {
+export const cartRepository: Repository<CartDocument> & {
     findByUserId: (userId: string) => Promise<CartDocument | null>;
     upsertLine: (
         userId: string,
@@ -89,7 +89,7 @@ export const cartRepository: BaseRepository<CartDocument> & {
     deleteByUserId: (userId: string) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
-    ...createBaseRepository<CartDocument>(cartModel, {
+    ...createRepository<CartDocument>(cartModel, {
         transform: applyCartTransform
     }),
 

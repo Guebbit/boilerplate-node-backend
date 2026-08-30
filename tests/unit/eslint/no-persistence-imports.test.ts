@@ -68,10 +68,10 @@ tester.run('no-persistence-imports', noPersistenceImports as never, {
             options: STRICT
         },
         {
-            // The shared helper every repository is built FROM. `base-repository` ends in the
+            // The shared helper every repository is built FROM. `create-repository` ends in the
             // word but is not a collection's door — the path check is anchored on a segment
             // boundary so this stays legal.
-            code: `import { createBaseRepository } from '@infrastructure/persistence/base-repository';`,
+            code: `import { createRepository } from '@infrastructure/persistence/create-repository';`,
             options: [{ bindings: [], paths: true }]
         }
     ],

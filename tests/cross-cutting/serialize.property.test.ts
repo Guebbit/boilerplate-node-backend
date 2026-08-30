@@ -153,7 +153,7 @@ describe('applySerialization — universal guarantees', () => {
     });
 
     it('returns the same object it was handed, mutated in place', () => {
-        // The lean path relies on this: `normalize` in @infrastructure/persistence/base-repository maps over rows and
+        // The lean path relies on this: `normalize` in @infrastructure/persistence/create-repository maps over rows and
         // keeps the returned value, while the toJSON path discards it and keeps the mutation.
         // Both work only because they are the same object.
         fc.assert(

@@ -1,16 +1,16 @@
 /**
- * `createBaseRepository(...).buildWhere` — the filter-bag-to-Mongo-query compiler every module's
+ * `createRepository(...).buildWhere` — the filter-bag-to-Mongo-query compiler every module's
  * `search()` goes through.
  *
  * Pure and DB-free by construction: `buildWhere` never touches the Mongoose model, only the
- * `SearchSpec` and the caller's filter bag, so the model passed to `createBaseRepository` here is
+ * `SearchSpec` and the caller's filter bag, so the model passed to `createRepository` here is
  * a stub that is never actually called. What is under test is the id-coercion, empty/blank
  * handling, and the per-kind compilation rules documented on `SearchSpec` and `buildWhere` in
- * `src/infrastructure/persistence/base-repository.ts`.
+ * `src/infrastructure/persistence/create-repository.ts`.
  */
 import { Types } from 'mongoose';
 import type { Model, Document } from 'mongoose';
-import { createBaseRepository, type SearchSpec } from '@infrastructure/persistence/base-repository';
+import { createRepository, type SearchSpec } from '@infrastructure/persistence/create-repository';
 
 interface FixtureDocument extends Document {
     name: string;
@@ -20,14 +20,14 @@ const stubModel = {} as Model<FixtureDocument>;
 const identityTransform = (item: Record<string, unknown>): Record<string, unknown> => item;
 
 const buildWhereFor = (searchable: SearchSpec) =>
-    createBaseRepository<FixtureDocument>(stubModel, {
+    createRepository<FixtureDocument>(stubModel, {
         transform: identityTransform,
         searchable
     }).buildWhere;
 
 /** A repository with no search spec — `toggleDeleted` reads none. */
 const plainRepository = () =>
-    createBaseRepository<FixtureDocument>(stubModel, { transform: identityTransform });
+    createRepository<FixtureDocument>(stubModel, { transform: identityTransform });
 
 /** A document that records its own `save()` rather than reaching a collection. */
 const documentWith = (deletedAt: Date | undefined) => {

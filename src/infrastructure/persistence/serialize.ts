@@ -14,7 +14,7 @@ import type { ToObjectOptions } from 'mongoose';
  *     `__v`, leaving only the `_id` deletion to do;
  *   - `.lean()` and `.aggregate()`, which return raw BSON with no virtuals and no `toJSON` options
  *     applied, and so need all three steps performed by hand — see `normalize` in
- *     `@infrastructure/persistence/base-repository`.
+ *     `@infrastructure/persistence/create-repository`.
  *
  * One function serves both, which is why it still writes `id` and deletes `__v` even though the
  * `toJSON` path does not need either.

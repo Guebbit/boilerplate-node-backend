@@ -2,10 +2,10 @@ import { userModel, applyUserTransform, TokenType } from './model';
 import type { UserDocument, Token } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
 import {
-    createBaseRepository,
+    createRepository,
     toObjectId,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+    type Repository
+} from '@infrastructure/persistence/create-repository';
 
 /**
  * `password` and `tokens` are `select: false` on the schema, so the plain finders never load
@@ -19,12 +19,12 @@ const CREDENTIAL_FIELDS = '+password +tokens';
 
 /**
  * User Repository
- * Standard CRUD via the base factory, plus credential reads and soft-delete scoping.
+ * Standard CRUD via the repository factory, plus credential reads and soft-delete scoping.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
-export const userRepository: BaseRepository<UserDocument> & {
+export const userRepository: Repository<UserDocument> & {
     updateMany: (
         filter: QueryFilter<UserDocument>,
         update: UpdateQuery<UserDocument>
@@ -39,7 +39,7 @@ export const userRepository: BaseRepository<UserDocument> & {
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
 } = {
-    ...createBaseRepository<UserDocument>(userModel, {
+    ...createRepository<UserDocument>(userModel, {
         transform: applyUserTransform,
         searchable: {
             objectIds: { id: '_id' },

@@ -5,10 +5,7 @@ import {
     applyLocaleMessageTransform
 } from './model';
 import type { LocaleDocument, LocaleMessageDocument } from './model';
-import {
-    createBaseRepository,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
 import type { LocaleTenant } from '@types';
 import { frontendTenantIds } from './tenants';
 
@@ -46,7 +43,7 @@ export interface ImportCounts {
     removed: number;
 }
 
-const localeBase = createBaseRepository<LocaleDocument>(localeModel, {
+const localeBase = createRepository<LocaleDocument>(localeModel, {
     transform: applyLocaleTransform,
     searchable: {
         exact: { tag: 'tag' },
@@ -54,7 +51,7 @@ const localeBase = createBaseRepository<LocaleDocument>(localeModel, {
     }
 });
 
-const entryBase = createBaseRepository<LocaleMessageDocument>(localeMessageModel, {
+const entryBase = createRepository<LocaleMessageDocument>(localeMessageModel, {
     transform: applyLocaleMessageTransform,
     searchable: {
         /*
@@ -278,12 +275,12 @@ const deleteLocaleCascade = async (locale: LocaleDocument): Promise<number> => {
 /*
  * Both contracts are written out rather than inferred. Mongoose's `Query` generics are large
  * enough that TypeScript refuses to serialize the inferred shape at an export boundary (TS7056)
- * once a base repository is spread into an object — the same reason `BaseRepository` itself is a
+ * once a base repository is spread into an object — the same reason `Repository` itself is a
  * named interface. Naming them doubles as the one place to read what each collection can do.
  */
 
 /** The languages. */
-export const localeRepository: BaseRepository<LocaleDocument> & {
+export const localeRepository: Repository<LocaleDocument> & {
     findByTag: (tag: string) => Promise<LocaleDocument | null>;
     publicScope: () => Record<string, unknown>;
     list: (scope?: Record<string, unknown>) => Promise<LocaleDocument[]>;
@@ -299,7 +296,7 @@ export const localeRepository: BaseRepository<LocaleDocument> & {
 };
 
 /** The words. */
-export const localeMessageRepository: BaseRepository<LocaleMessageDocument> & {
+export const localeMessageRepository: Repository<LocaleMessageDocument> & {
     countEntriesByLocale: () => Promise<Map<string, number>>;
     listEntries: (locale: string, tenant: LocaleTenant) => Promise<LocaleMessageDocument[]>;
     listEntriesByTenant: (tenant: LocaleTenant) => Promise<LocaleMessageDocument[]>;

@@ -23,7 +23,7 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { productRepository } from '@modules/products';
 import { StockMovementReason, type InventoryLevel } from '@types';
-import type { SearchFilters } from '@infrastructure/persistence/base-repository';
+import type { SearchFilters } from '@infrastructure/persistence/create-repository';
 import {
     normalizePagination,
     buildPaginatedMeta,

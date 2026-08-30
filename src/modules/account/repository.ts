@@ -2,10 +2,10 @@ import { addressBookModel, applyAddressBookTransform } from './model';
 import type { AddressBookDocument } from './model';
 import type { AddressInput, UpdateAddressRequest } from '@types';
 import {
-    createBaseRepository,
+    createRepository,
     toObjectId,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+    type Repository
+} from '@infrastructure/persistence/create-repository';
 
 /**
  * Address book Repository
@@ -19,9 +19,9 @@ import {
  * enough: the loser retries by hand, it does not oversell anything.
  *
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
-export const addressBookRepository: BaseRepository<AddressBookDocument> & {
+export const addressBookRepository: Repository<AddressBookDocument> & {
     findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
     addEntry: (userId: string, entry: AddressInput) => Promise<AddressBookDocument>;
     updateEntry: (
@@ -32,7 +32,7 @@ export const addressBookRepository: BaseRepository<AddressBookDocument> & {
     removeEntry: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
 } = {
-    ...createBaseRepository<AddressBookDocument>(addressBookModel, {
+    ...createRepository<AddressBookDocument>(addressBookModel, {
         transform: applyAddressBookTransform
     }),
 

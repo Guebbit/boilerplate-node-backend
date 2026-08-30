@@ -1,4 +1,4 @@
-import { createDeleteController } from '@infrastructure/http/delete-controller';
+import { createDeleteController } from '@infrastructure/http/create-delete-controller';
 import { userService } from '../service';
 import { usersAuditActions } from '../audit';
 

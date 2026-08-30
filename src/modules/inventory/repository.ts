@@ -9,17 +9,17 @@ import {
     type ReservationStatus
 } from './model';
 import {
-    createBaseRepository,
+    createRepository,
     toObjectId,
-    type BaseRepository
-} from '@infrastructure/persistence/base-repository';
+    type Repository
+} from '@infrastructure/persistence/create-repository';
 
 /**
  * The two collections this module owns. Rules live in `./service`; the counters these coordinate
  * with belong to `@modules/products`.
  *
  * Both types are written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `BaseRepository` exists.
+ * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 
 /**
@@ -37,7 +37,7 @@ const toReservationItems = (
     }));
 
 /**
- * The ledger. Append-only: the base factory's `create` and `search` are the whole surface, and
+ * The ledger. Append-only: the repository factory's `create` and `search` are the whole surface, and
  * there is deliberately no update or delete — a trail the application can edit is not a trail.
  *
  * `search` is inherited rather than replaced by a "latest N" read. A stock ledger is the record an
@@ -45,8 +45,8 @@ const toReservationItems = (
  * alongside the page: a read that silently returned only the newest rows would misreport history
  * as complete.
  */
-export const stockMovementRepository: BaseRepository<StockMovementDocument> =
-    createBaseRepository<StockMovementDocument>(stockMovementModel, {
+export const stockMovementRepository: Repository<StockMovementDocument> =
+    createRepository<StockMovementDocument>(stockMovementModel, {
         transform: applyStockMovementTransform,
         searchable: {
             objectIds: { productId: 'productId' },
@@ -56,7 +56,7 @@ export const stockMovementRepository: BaseRepository<StockMovementDocument> =
         }
     });
 
-export const reservationRepository: BaseRepository<ReservationDocument> & {
+export const reservationRepository: Repository<ReservationDocument> & {
     insertHold: (
         orderId: string,
         items: readonly { productId: string; quantity: number }[],
@@ -70,7 +70,7 @@ export const reservationRepository: BaseRepository<ReservationDocument> & {
     ) => Promise<ReservationDocument | null>;
     findExpired: (now: Date, limit: number) => Promise<ReservationDocument[]>;
 } = {
-    ...createBaseRepository<ReservationDocument>(reservationModel, {
+    ...createRepository<ReservationDocument>(reservationModel, {
         transform: applyReservationTransform
     }),
 

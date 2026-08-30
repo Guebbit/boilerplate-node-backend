@@ -1,6 +1,6 @@
 import { productService } from '../service';
 import { callerContextOf } from '@infrastructure/http/request';
-import { createItemController } from '@infrastructure/http/item-controller';
+import { createItemController } from '@infrastructure/http/create-item-controller';
 
 /**
  * GET /products/:id
