@@ -34,4 +34,5 @@ graphify-out/
 # concurrent session, and the way out people find is `--no-verify`, which costs the whole gate.
 .2repo/
 .codeboarding/
+.claude/
 CLAUDE.md
