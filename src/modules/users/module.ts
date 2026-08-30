@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { seedUsersCollection, exportSeededUsers } from './demo';
+import { userRepository } from './repository';
 import './events';
 
 /**
@@ -32,5 +33,10 @@ export default {
     seedExport: exportSeededUsers,
     /* `GET /users/:id` answers the serialized document as it stands. */
     demoShapes: { users: 'response' },
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    /*
+     * `account`'s signup and profile-update flows write through this same `userRepository` —
+     * there is no separate `users` collection for them to register their own target under.
+     */
+    imageTargets: { users: { writeback: userRepository.writebackImage } }
 } satisfies AppModule;

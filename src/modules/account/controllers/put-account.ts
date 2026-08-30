@@ -26,7 +26,7 @@ export const putAccount = (
 
     // No `= ''` default here, unlike the create paths: `updateProfile` treats an absent
     // `imageUrl` as "not sent" and leaves the stored one alone, where `''` would clear it.
-    const { imageUrl, deleteUpload } = readUploadedImage(request);
+    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 
     /*
      * Read through the request type rather than parsed against `UpdateAccountBody`, for the reason
@@ -38,7 +38,7 @@ export const putAccount = (
     return accountService
         .updateProfile(
             id,
-            { email, username, locale, imageUrl, phone, website },
+            { email, username, locale, imageUrl, thumbnailUrl, pendingImageKey, phone, website },
             callerContextOf(request)
         )
         .then((result) => {

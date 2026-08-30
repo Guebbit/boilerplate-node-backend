@@ -10,6 +10,7 @@ import {
 } from '@infrastructure/http/response';
 import type { FacetCount } from '@types';
 import { imageStore } from '@infrastructure/adapters/image-store';
+import { enqueueImageDigest } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -141,12 +142,37 @@ export const getByIdViewed = (
     });
 
 /**
+ * Enqueue the digest job for a just-persisted product, when its write carried a pending upload.
+ *
+ * Fire-and-forget, like every other post-write dispatch in this codebase (`enqueueEmail`): a
+ * `pendingImageKey` here only ever means a broker accepted the upload at request time (the
+ * no-broker path resolves everything inline before the record is ever saved — see
+ * `readUploadedImage`), so this is a queue publish, not a CPU-bound digest, and the caller must
+ * not wait on it.
+ */
+const enqueueIfPending = (product: ProductDocument): ProductDocument => {
+    if (product.pendingImageKey)
+        void enqueueImageDigest(
+            {
+                collection: 'products',
+                documentId: String(product._id),
+                key: product.pendingImageKey
+            },
+            productRepository.writebackImage
+        );
+    return product;
+};
+
+/**
  * Create a new product document in the database.
  *
  * @param data
  */
 export const create = (
-    data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>,
+    data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> & {
+        /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
+        pendingImageKey?: string;
+    },
     context: CallerContext
 ): Promise<ProductDocument> =>
     productRepository
@@ -164,7 +190,7 @@ export const create = (
                     target_id: String(product._id)
                 })
             );
-            return product;
+            return enqueueIfPending(product);
         });
 
 /**
@@ -176,7 +202,10 @@ export const create = (
  */
 export const update = (
     product: ProductDocument,
-    data: Partial<Omit<Product, 'id'>>
+    data: Partial<Omit<Product, 'id'>> & {
+        /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
+        pendingImageKey?: string;
+    }
 ): Promise<ProductDocument> => {
     // Apply incoming field changes
     if (data.title !== undefined) product.title = data.title;
@@ -198,19 +227,23 @@ export const update = (
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
 
-    // If a new image was uploaded, update the URL on the document
+    // If a new image was uploaded, update the url, thumbnail and pending key together — the three
+    // travel as one unit, all produced by the same `readUploadedImage` call on the controller.
     const oldImageUrl = product.imageUrl;
     const newImageUrl = data.imageUrl ?? '';
-    if (newImageUrl && oldImageUrl !== newImageUrl) product.imageUrl = newImageUrl;
+    const imageReplaced = Boolean(newImageUrl) && oldImageUrl !== newImageUrl;
+    if (imageReplaced) {
+        product.imageUrl = newImageUrl;
+        product.thumbnailUrl = data.thumbnailUrl;
+        product.pendingImageKey = data.pendingImageKey;
+    }
 
     // Persist the updated document
     return productRepository.save(product).then((updatedProduct) => {
-        // After saving the new image path, delete the old image file
-        return (
-            newImageUrl && oldImageUrl !== newImageUrl
-                ? imageStore.remove(oldImageUrl)
-                : Promise.resolve()
-        ).then(() => updatedProduct);
+        // After saving the new image path, delete the old image file (and its thumbnail)
+        return (imageReplaced ? imageStore.remove(oldImageUrl) : Promise.resolve()).then(() =>
+            enqueueIfPending(updatedProduct)
+        );
     });
 };
 
@@ -223,7 +256,7 @@ export const update = (
  */
 export const updateById = (
     id: string,
-    data: Partial<Omit<Product, 'id'>>,
+    data: Partial<Omit<Product, 'id'>> & { pendingImageKey?: string },
     context: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
     productRepository.findById(id).then((product) => {

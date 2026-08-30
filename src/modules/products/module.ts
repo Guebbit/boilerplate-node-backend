@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { seedProductsCollection, exportSeededProducts } from './demo';
+import { productRepository } from './repository';
 import './events';
 
 /**
@@ -29,5 +30,6 @@ export default {
     seedExport: exportSeededProducts,
     /* `GET /products/:id` answers the serialized document as it stands. */
     demoShapes: { products: 'response' },
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    imageTargets: { products: { writeback: productRepository.writebackImage } }
 } satisfies AppModule;

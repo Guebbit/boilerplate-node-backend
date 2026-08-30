@@ -70,6 +70,33 @@ channels:
                 and leaves request latency alone.
             message:
                 $ref: '#/components/messages/PdfJobConsumeMessage'
+    worker.image.digest:
+        description: >-
+            Image digest job queue — producers enqueue a quarantined upload once the document
+            naming it exists, the image worker consumes them.
+        servers:
+            - rabbitmqLocal
+        publish:
+            operationId: workerImageDigestPublish
+            summary: Enqueue a quarantined upload for digesting.
+            description: >-
+                Published only after the document referencing `key` as its `pendingImageKey` has
+                been persisted, so the job always carries a real id to write back to. Decoding,
+                re-encoding and thumbnailing an image is CPU-bound — exactly what must not happen
+                on a request thread.
+            message:
+                $ref: '#/components/messages/ImageDigestJobMessage'
+        subscribe:
+            operationId: workerImageDigestConsume
+            summary: Image worker digests the upload and promotes it.
+            description: >-
+                Strips metadata, caps dimensions and re-encodes the quarantined original, builds
+                its WebP thumbnail, promotes both into the public store, then writes the two urls
+                back onto the document — conditional on `pendingImageKey` still matching `key`, so
+                a stale or superseded job cannot overwrite a later upload, and a deleted document
+                is detected rather than silently ignored.
+            message:
+                $ref: '#/components/messages/ImageDigestJobConsumeMessage'
 components:
     messages:
         EmailJobMessage:
@@ -96,6 +123,18 @@ components:
             title: PDF generation job (worker consume)
             payload:
                 $ref: '#/components/schemas/PdfJobPayload'
+        ImageDigestJobMessage:
+            name: ImageDigestJobMessage
+            messageId: worker.image.digest
+            title: Image digest job
+            payload:
+                $ref: '#/components/schemas/ImageDigestJobPayload'
+        ImageDigestJobConsumeMessage:
+            name: ImageDigestJobConsumeMessage
+            messageId: worker.image.job.consume
+            title: Image digest job (worker consume)
+            payload:
+                $ref: '#/components/schemas/ImageDigestJobPayload'
     schemas:
         EmailJobPayload:
             type: object
@@ -159,4 +198,28 @@ components:
                 outputPath:
                     type: string
                     description: Filesystem path where the generated PDF will be written.
+            additionalProperties: false
+        ImageDigestJobPayload:
+            type: object
+            required:
+                - collection
+                - documentId
+                - key
+            properties:
+                collection:
+                    type: string
+                    description: >-
+                        Which module's `imageTargets` entry writes the result back — a registry
+                        key (see `kernel/registry.ts`), not a raw Mongo collection name.
+                documentId:
+                    type: string
+                    description: >-
+                        The target document's id. The writeback matches it against its own
+                        `pendingImageKey`, so a stale or duplicate delivery updates nothing.
+                key:
+                    type: string
+                    description: >-
+                        The opaque key `imageStore.quarantine()` returned. Never a filesystem
+                        path — the consumer calls back into the store, which stays free to change
+                        backend without this payload's shape changing.
             additionalProperties: false

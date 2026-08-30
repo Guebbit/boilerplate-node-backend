@@ -39,7 +39,14 @@ export interface ProductSnapshot extends Omit<
 /**
  * Product Document interface — the stored fields, plus everything Mongoose adds.
  */
-export interface ProductDocument extends ProductSnapshot, Document {}
+export interface ProductDocument extends ProductSnapshot, Document {
+    /**
+     * Document-only bookkeeping for the image digest pipeline — deliberately NOT on
+     * `ProductSnapshot`, so it never rides along on the embedded copy `orders` keeps of a product.
+     * See the schema field's own comment for what it means.
+     */
+    pendingImageKey?: string;
+}
 
 /**
  * Product Document instance methods
@@ -125,6 +132,23 @@ export const productSchema = new Schema<ProductDocument, ProductModel, ProductMe
         imageUrl: {
             type: String,
             default: process.env.NODE_DEFAULT_IMAGE_PRODUCT ?? 'https://placekitten.com/400/400'
+        },
+        /*
+         * Set together with `imageUrl` by `readUploadedImage` — never independently, and never by
+         * a client: `ThumbnailUrl` is `readOnly` on the contract. Absent for a product whose image
+         * came from a remote/default url rather than an upload (see IMAGE_PIPELINE_PLAN.md).
+         */
+        thumbnailUrl: {
+            type: String
+        },
+        /*
+         * The quarantine key of an upload still awaiting its digest job — set alongside the
+         * pending-image placeholder, cleared by the writeback once the job completes. Internal
+         * bookkeeping only: never part of the `Product` contract, never read by a controller.
+         * See `ImageTarget` in `kernel/registry.ts`.
+         */
+        pendingImageKey: {
+            type: String
         },
         categories: {
             type: [String],

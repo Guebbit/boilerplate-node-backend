@@ -6,6 +6,7 @@ import {
     toObjectId,
     type Repository
 } from '@infrastructure/persistence/create-repository';
+import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 
 /**
  * Product Repository
@@ -56,6 +57,7 @@ export const productRepository: Repository<ProductDocument> & {
         limit: number;
         maxAvailable?: number;
     }) => Promise<{ items: AvailabilityRow[]; totalItems: number }>;
+    writebackImage: ImageWriteback;
 } = {
     ...createRepository<ProductDocument>(productModel, {
         transform: applyProductTransform,
@@ -370,5 +372,26 @@ export const productRepository: Repository<ProductDocument> & {
             .then((results) => ({
                 items: results.at(0)?.items ?? [],
                 totalItems: results.at(0)?.total.at(0)?.count ?? 0
-            }))
+            })),
+
+    /**
+     * The image digest pipeline's writeback for the `products` collection — see `ImageTarget` in
+     * `kernel/registry.ts`. Conditional on `pendingImageKey` still matching `key`, so a stale or
+     * duplicate job delivery cannot overwrite a later upload, and a hard-deleted product is a
+     * detectable miss rather than a write to nothing.
+     *
+     * `timestamps: false` — the digest finishing is not an edit an admin made.
+     */
+    writebackImage: (documentId, key, urls) =>
+        productModel
+            .updateOne(
+                { _id: toObjectId(documentId), pendingImageKey: key },
+                {
+                    $set: { imageUrl: urls.imageUrl, thumbnailUrl: urls.thumbnailUrl },
+                    $unset: { pendingImageKey: '' }
+                },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ matchedCount }) => matchedCount > 0)
 };

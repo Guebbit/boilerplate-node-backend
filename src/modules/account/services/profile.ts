@@ -219,7 +219,13 @@ const zodProfileSchema = zodUserSchema
         locale: UpdateAccountBody.shape.locale,
         imageUrl: UpdateAccountBody.shape.imageUrl,
         phone: UpdateAccountBody.shape.phone,
-        website: UpdateAccountBody.shape.website
+        website: UpdateAccountBody.shape.website,
+        // Not on `UpdateAccountBody` — both are `readOnly`/absent from the contract because the
+        // server, not the client, produces them. They ride along here only because the controller
+        // passes them from its own `readUploadedImage` call, the same way `imageUrl` does when an
+        // upload — rather than a body value — is what set it.
+        thumbnailUrl: z.string().optional(),
+        pendingImageKey: z.string().optional()
     })
     .partial();
 

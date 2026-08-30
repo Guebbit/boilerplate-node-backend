@@ -218,6 +218,16 @@ components:
                 Absolute URL or server-relative upload path (e.g. `/uploads/abc.jpg`).
                 `uri-reference`, not `uri`: an uploaded image is stored and returned as a
                 path relative to the API host, which is not a valid absolute URI.
+        ThumbnailUrl:
+            type: string
+            format: uri-reference
+            readOnly: true
+            description: >-
+                Server-relative path to a small WebP derivative of `imageUrl`, produced by the
+                image digest pipeline once an uploaded image has finished processing (see
+                `docs/tools/image-processing.md`). Absent for a record whose image is a remote
+                or default URL rather than an upload — there is nothing to derive a thumbnail
+                from. Never accepted on a request body: the server is the only writer.
 
         # ---------- On the `imageUpload` fields below (and why they carry no limits) ----------
         #
@@ -396,6 +406,8 @@ components:
                     type: boolean
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '#/components/schemas/ThumbnailUrl'
                 locale:
                     $ref: '#/components/schemas/Locale'
                 phone:
@@ -465,6 +477,8 @@ components:
                     type: boolean
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '#/components/schemas/ThumbnailUrl'
                 categories:
                     type: array
                     items:

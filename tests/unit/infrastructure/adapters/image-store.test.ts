@@ -13,6 +13,7 @@ import path from 'node:path';
 import { filesystemImageStore } from '@infrastructure/adapters/image-store';
 
 const ORIGINAL_PUBLIC_PATH = process.env.NODE_PUBLIC_PATH;
+const ORIGINAL_QUARANTINE_PATH = process.env.NODE_QUARANTINE_PATH;
 
 let root: string;
 
@@ -23,15 +24,26 @@ const makeImage = async (name: string) => {
     return { file, imageUrl: '/images/' + name };
 };
 
+/** Creates the thumbnail derivative that `remove()` should clean up alongside a given main image. */
+const makeThumbnail = async (stem: string) => {
+    const directory = path.join(root, 'images', 'thumbs', 'v1');
+    await mkdir(directory, { recursive: true });
+    const file = path.join(directory, `${stem}.webp`);
+    await writeFile(file, 'not really a webp');
+    return file;
+};
+
 beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), 'image-store-test-'));
     await mkdir(path.join(root, 'images'));
     process.env.NODE_PUBLIC_PATH = root;
+    process.env.NODE_QUARANTINE_PATH = path.join(root, 'quarantine');
 });
 
 afterEach(async () => {
     await rm(root, { recursive: true, force: true });
     process.env.NODE_PUBLIC_PATH = ORIGINAL_PUBLIC_PATH;
+    process.env.NODE_QUARANTINE_PATH = ORIGINAL_QUARANTINE_PATH;
 });
 
 /** A file standing in for a staged upload, in its own directory outside the public root. */
@@ -43,56 +55,154 @@ const stageUpload = async (name: string, contents = 'image bytes') => {
     return file;
 };
 
-describe('filesystemImageStore.put', () => {
-    it('commits the staged file into the public images directory', async () => {
+describe('filesystemImageStore.quarantine', () => {
+    it('moves the staged file into the quarantine directory and returns its key', async () => {
         const staged = await stageUpload('abc123.png', 'the uploaded bytes');
 
-        const url = await filesystemImageStore.put(staged);
+        const key = await filesystemImageStore.quarantine(staged);
 
-        expect(url).toBe('/images/abc123.png');
-        expect(await readFile(path.join(root, 'images', 'abc123.png'), 'utf8')).toBe(
+        expect(key).toBe('abc123.png');
+        expect(await readFile(path.join(root, 'quarantine', 'abc123.png'), 'utf8')).toBe(
             'the uploaded bytes'
         );
     });
 
-    /* Staging exists so an unchecked upload is never publicly readable; leaving a copy behind
+    /* Staging exists so an unvalidated upload is never publicly readable; leaving a copy behind
        would defeat it, and would leak a file per upload besides. */
     it('consumes the staged file', async () => {
         const staged = await stageUpload('abc123.png');
 
-        await filesystemImageStore.put(staged);
+        await filesystemImageStore.quarantine(staged);
 
         expect(existsSync(staged)).toBe(false);
     });
 
-    /**
-     * The url is built from literals, not from the destination path, so a Windows separator cannot
-     * reach a stored value however the filesystem spells it.
-     */
-    it('returns a url, never a path', async () => {
+    /* Nothing else provisions this directory ahead of the first upload — same as
+       `resolveUploadDestination` does for the staging path in `storage.ts`. */
+    it('creates the quarantine directory on demand', async () => {
         const staged = await stageUpload('abc123.png');
+        expect(existsSync(path.join(root, 'quarantine'))).toBe(false);
 
-        const url = await filesystemImageStore.put(staged);
+        await filesystemImageStore.quarantine(staged);
+
+        expect(existsSync(path.join(root, 'quarantine', 'abc123.png'))).toBe(true);
+    });
+});
+
+describe('filesystemImageStore.readQuarantined', () => {
+    it('reads back the bytes quarantine() moved', async () => {
+        const staged = await stageUpload('abc123.png', 'the uploaded bytes');
+        const key = await filesystemImageStore.quarantine(staged);
+
+        await expect(filesystemImageStore.readQuarantined(key)).resolves.toEqual(
+            Buffer.from('the uploaded bytes')
+        );
+    });
+
+    it('rejects when nothing is quarantined under that key', async () => {
+        await expect(filesystemImageStore.readQuarantined('never-existed.png')).rejects.toThrow();
+    });
+});
+
+describe('filesystemImageStore.removeQuarantined', () => {
+    it('deletes the quarantined file', async () => {
+        const staged = await stageUpload('abc123.png');
+        const key = await filesystemImageStore.quarantine(staged);
+
+        await expect(filesystemImageStore.removeQuarantined(key)).resolves.toBe(true);
+        expect(existsSync(path.join(root, 'quarantine', 'abc123.png'))).toBe(false);
+    });
+
+    it('reports false for a key that is not quarantined', async () => {
+        await expect(filesystemImageStore.removeQuarantined('never-existed.png')).resolves.toBe(
+            false
+        );
+    });
+});
+
+describe('filesystemImageStore.promote', () => {
+    it('writes the digested bytes under the public images directory, keyed by the same name', async () => {
+        const url = await filesystemImageStore.promote('abc123.png', Buffer.from('digested bytes'));
+
+        expect(url).toBe('/images/abc123.png');
+        expect(await readFile(path.join(root, 'images', 'abc123.png'), 'utf8')).toBe(
+            'digested bytes'
+        );
+    });
+
+    it('returns a url, never a path', async () => {
+        const url = await filesystemImageStore.promote('abc123.png', Buffer.from('x'));
 
         expect(url).not.toMatch(/\\/);
         expect(url.startsWith('/')).toBe(true);
     });
 
-    it('round-trips: what put returns, remove deletes', async () => {
-        const staged = await stageUpload('abc123.png');
+    it('creates the images directory on demand', async () => {
+        await rm(path.join(root, 'images'), { recursive: true, force: true });
 
-        const url = await filesystemImageStore.put(staged);
+        await filesystemImageStore.promote('abc123.png', Buffer.from('x'));
 
-        await expect(filesystemImageStore.remove(url)).resolves.toBe(true);
-        expect(existsSync(path.join(root, 'images', 'abc123.png'))).toBe(false);
+        expect(existsSync(path.join(root, 'images', 'abc123.png'))).toBe(true);
+    });
+});
+
+describe('filesystemImageStore.putDerivative', () => {
+    it('writes the thumbnail under images/thumbs/v1/<stem>.webp, always as .webp', async () => {
+        const url = await filesystemImageStore.putDerivative(
+            'abc123.jpg',
+            Buffer.from('thumbnail bytes')
+        );
+
+        expect(url).toBe('/images/thumbs/v1/abc123.webp');
+        expect(
+            await readFile(path.join(root, 'images', 'thumbs', 'v1', 'abc123.webp'), 'utf8')
+        ).toBe('thumbnail bytes');
     });
 
-    /* Unlike `remove`, this one must fail loudly: the caller is about to persist the url. */
-    it('rejects when the images directory does not exist', async () => {
-        await rm(path.join(root, 'images'), { recursive: true, force: true });
-        const staged = await stageUpload('abc123.png');
+    it('creates the thumbnails directory on demand', async () => {
+        await filesystemImageStore.putDerivative('abc123.png', Buffer.from('x'));
 
-        await expect(filesystemImageStore.put(staged)).rejects.toThrow();
+        expect(existsSync(path.join(root, 'images', 'thumbs', 'v1', 'abc123.webp'))).toBe(true);
+    });
+});
+
+describe('filesystemImageStore.readImage', () => {
+    it('reads the bytes a stored url names', async () => {
+        const { imageUrl } = await makeImage('stored.png');
+
+        await expect(filesystemImageStore.readImage(imageUrl)).resolves.toEqual(
+            Buffer.from('not really a png')
+        );
+    });
+
+    /* The one place this store's read guard differs from its delete guard: a backfill has to
+       reach committed fixtures under `images/seed/`, which `remove()` refuses on purpose. */
+    it('reads a file in a subdirectory of the images directory, unlike remove()', async () => {
+        const seedDirectory = path.join(root, 'images', 'seed');
+        await mkdir(seedDirectory, { recursive: true });
+        await writeFile(path.join(seedDirectory, 'fixture.jpg'), 'committed asset');
+
+        await expect(filesystemImageStore.readImage('/images/seed/fixture.jpg')).resolves.toEqual(
+            Buffer.from('committed asset')
+        );
+    });
+
+    it('rejects a url outside the public directory', async () => {
+        await expect(filesystemImageStore.readImage('/../outside.png')).rejects.toThrow(
+            'Refuses to read outside the public directory'
+        );
+    });
+
+    it.each([
+        'https://cdn.example.com/x.png',
+        'http://cdn.example.com/x.png',
+        '//cdn.example.com/x.png'
+    ])('rejects %s as not a local image', async (imageUrl) => {
+        await expect(filesystemImageStore.readImage(imageUrl)).rejects.toThrow('Not a local image');
+    });
+
+    it('rejects a url whose file does not exist', async () => {
+        await expect(filesystemImageStore.readImage('/images/never-existed.png')).rejects.toThrow();
     });
 });
 
@@ -106,6 +216,30 @@ describe('filesystemImageStore.remove', () => {
 
     it('reports false for a url whose file is already gone', async () => {
         await expect(filesystemImageStore.remove('/images/never-existed.png')).resolves.toBe(false);
+    });
+
+    /**
+     * `remove()` is the only call site that knows a document's image is going away, so it is the
+     * one place responsible for its thumbnail too — otherwise every hard delete and every replaced
+     * image leaks its `thumbs/v1/` derivative forever.
+     */
+    it('also deletes the thumbnail that shares the image key’s stem', async () => {
+        const { file, imageUrl } = await makeImage('stored.jpg');
+        const thumbnail = await makeThumbnail('stored');
+
+        await expect(filesystemImageStore.remove(imageUrl)).resolves.toBe(true);
+
+        expect(existsSync(file)).toBe(false);
+        expect(existsSync(thumbnail)).toBe(false);
+    });
+
+    /* Most images predate the digest pipeline, or never went through a broker fast enough to grow
+       one — a missing thumbnail must not stop the main image from being deleted. */
+    it('still deletes the main image when it has no thumbnail', async () => {
+        const { file, imageUrl } = await makeImage('stored.png');
+
+        await expect(filesystemImageStore.remove(imageUrl)).resolves.toBe(true);
+        expect(existsSync(file)).toBe(false);
     });
 
     it.each([
@@ -179,10 +313,10 @@ describe('filesystemImageStore.remove', () => {
     });
 
     /*
-     * `put` lands a flat name in `<public>/images/`, so a subdirectory of it holds files this
-     * store did not write. `images/seed/` is the demo fixtures, committed to the repository:
-     * replacing a seeded record's image must not unlink one, or every later re-seed points at a
-     * 404 and the asset is gone outside version control.
+     * `promote` lands a flat name in `<public>/images/`, so a subdirectory of it holds files this
+     * store did not write as a main image. `images/seed/` is the demo fixtures, committed to the
+     * repository: replacing a seeded record's image must not unlink one, or every later re-seed
+     * points at a 404 and the asset is gone outside version control.
      */
     it('refuses to delete a file in a subdirectory of the images directory', async () => {
         const seedDirectory = path.join(root, 'images', 'seed');

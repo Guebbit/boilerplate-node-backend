@@ -51,7 +51,12 @@ export const writeProducts = (
     });
 
     // `= ''` because `zodProductSchema` wants a string: an absent image is an empty url here.
-    const { imageUrl = '', deleteUpload } = readUploadedImage(request);
+    const {
+        imageUrl = '',
+        thumbnailUrl,
+        pendingImageKey,
+        deleteUpload
+    } = readUploadedImage(request);
 
     /**
      * Validation errors prevent creation end editing
@@ -78,11 +83,21 @@ export const writeProducts = (
         );
 
     // Past the guard above, these have been checked against zodProductSchema — the assertion
-    // records what the validator just established rather than assuming it.
-    const validated = { imageUrl, active, price, categories, tags } as Pick<
-        Product,
-        'imageUrl' | 'active' | 'price' | 'categories' | 'tags'
-    >;
+    // records what the validator just established rather than assuming it. `thumbnailUrl` and
+    // `pendingImageKey` never went through the schema — they are server-derived, never
+    // client-supplied — `thumbnailUrl` is on `Product` itself (readOnly on the contract),
+    // `pendingImageKey` is not, so it joins via an intersection instead.
+    const validated = {
+        imageUrl,
+        active,
+        price,
+        categories,
+        tags,
+        thumbnailUrl,
+        pendingImageKey
+    } as Pick<Product, 'imageUrl' | 'active' | 'price' | 'categories' | 'tags' | 'thumbnailUrl'> & {
+        pendingImageKey?: string;
+    };
 
     /*
      * The opening count, and it is create-only — deliberately absent from `validated`, which both

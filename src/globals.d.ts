@@ -7,11 +7,20 @@ declare module 'express-serve-static-core' {
         authContext?: AuthContext;
         requestId?: string;
         /**
-         * URLs of the images this request uploaded, once the image store has committed them
-         * (`storeUploadedImages`). Read through `resolveImageUrl`, never directly: the point of
-         * the value is that a controller cannot tell a local path from a CDN url.
+         * URLs of the images this request uploaded, set only when there was no broker to hand the
+         * digest job to (`quarantineUploadedImages` ran the pipeline inline). Read through
+         * `resolveImageUrl`, never directly: the point of the value is that a controller cannot
+         * tell a local path from a CDN url.
          */
         storedImageUrls?: string[];
+        /** Thumbnail urls produced alongside {@link storedImageUrls} in the same inline run. */
+        storedThumbnailUrls?: string[];
+        /**
+         * Quarantine keys of the images this request uploaded, set only when a broker is
+         * configured — the digest happens later, in the worker, keyed by these
+         * (`imageStore.quarantine()`'s return value). Read through `resolvePendingImageKey`.
+         */
+        quarantinedImageKeys?: string[];
         /** Locale negotiated from `Accept-Language` (set by the locale middleware). */
         locale?: string;
         /**

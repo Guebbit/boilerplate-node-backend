@@ -12,6 +12,7 @@ import { zodUserSchema } from './model';
 import type { UserDocument } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
 import { userRepository } from './repository';
+import { enqueueImageDigest } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -92,7 +93,32 @@ export const getById = (id?: string) => {
  * `Pick<UserRecord, ...>`. `products/service.ts`'s `update`/`updateById` do the same off `Product`;
  * a hand-copied field list is what silently dropped `active` from this module's `update()` below.
  */
-export const create = (data: CreateUserRequest, context: CallerContext): Promise<UserDocument> => {
+/**
+ * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
+ *
+ * Fire-and-forget, like every other post-write dispatch in this codebase (`enqueueEmail`): a
+ * `pendingImageKey` here only ever means a broker accepted the upload at request time (the
+ * no-broker path resolves everything inline before the record is ever saved — see
+ * `readUploadedImage`), so this is a queue publish, not a CPU-bound digest, and the caller must
+ * not wait on it. Shared by the admin write path here and `account`'s signup/profile-update, since
+ * both persist through this same `userRepository`.
+ */
+export const enqueueIfPending = (user: UserDocument): UserDocument => {
+    if (user.pendingImageKey)
+        void enqueueImageDigest(
+            { collection: 'users', documentId: String(user._id), key: user.pendingImageKey },
+            userRepository.writebackImage
+        );
+    return user;
+};
+
+export const create = (
+    data: CreateUserRequest & {
+        /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
+        pendingImageKey?: string;
+    },
+    context: CallerContext
+): Promise<UserDocument> => {
     const passwordProvided = Boolean(data.password && data.password.trim().length > 0);
     // 32 random bytes as hex, same as `tokenAdd` below uses for a reset token: unguessable and
     // never surfaced anywhere, so "unusable until set" is enforced by nobody knowing it.
@@ -125,6 +151,8 @@ export const create = (data: CreateUserRequest, context: CallerContext): Promise
             properties: { admin_created: true }
         });
 
+        enqueueIfPending(user);
+
         if (passwordProvided || !data.sendSetupEmail) return user;
 
         return emitDomainEvent(USER_SETUP_REQUESTED, { userId: String(user._id) }).then(() => user);
@@ -143,20 +171,33 @@ export const create = (data: CreateUserRequest, context: CallerContext): Promise
  */
 export const update = (
     user: UserDocument,
-    data: UpdateUserByIdRequest
+    data: UpdateUserByIdRequest & {
+        /** Not on `UpdateUserByIdRequest` — `readOnly` on the contract, set only by the server. */
+        thumbnailUrl?: string;
+        /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
+        pendingImageKey?: string;
+    }
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
     if (data.username !== undefined) user.username = data.username;
     if (data.admin !== undefined) user.admin = data.admin;
     if (data.active !== undefined) user.active = data.active;
-    if (data.imageUrl !== undefined) user.imageUrl = data.imageUrl;
+    // The three travel as one unit, all produced by the same `readUploadedImage` call on the
+    // controller — set together whenever a new upload replaces the image.
+    if (data.imageUrl !== undefined) {
+        user.imageUrl = data.imageUrl;
+        user.thumbnailUrl = data.thumbnailUrl;
+        user.pendingImageKey = data.pendingImageKey;
+    }
     // The preference that outlives the request — see the `locale` field on the user schema.
     if (data.locale !== undefined) user.locale = data.locale;
     if (data.phone !== undefined) user.phone = data.phone;
     if (data.website !== undefined) user.website = data.website;
     if (data.password && data.password.trim().length > 0) user.password = data.password;
 
-    return userRepository.save(user).then((savedUser) => generateSuccess(savedUser));
+    return userRepository
+        .save(user)
+        .then((savedUser) => generateSuccess(enqueueIfPending(savedUser)));
 };
 
 /**
@@ -165,7 +206,7 @@ export const update = (
  */
 export const updateById = (
     id: string,
-    data: UpdateUserByIdRequest,
+    data: UpdateUserByIdRequest & { pendingImageKey?: string },
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     // Credentials included: `data.password`, when present, is assigned onto this document.
@@ -291,5 +332,6 @@ export const userService = {
     remove,
     removeById,
     findByEmail,
-    consumeToken
+    consumeToken,
+    enqueueIfPending
 };

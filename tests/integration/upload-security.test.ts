@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { maxUploadBytes } from '@infrastructure/adapters/storage';
@@ -19,10 +20,37 @@ import { maxUploadBytes } from '@infrastructure/adapters/storage';
 
 const UPLOAD_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public', 'images');
 
-const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+/**
+ * A genuinely decodable PNG, not merely a magic-byte header.
+ *
+ * A header-only stub was enough before the digest pipeline existed: `storeUploadedImages` moved
+ * bytes to disk without ever decoding them. Now every upload without a broker is digested inline
+ * (`quarantineUploadedImages`), which means sharp has to actually decode it — a stub answers
+ * "unsupported image format" and the request 500s, which is not the thing any test here means to
+ * exercise.
+ */
+let PNG_BYTES: Buffer;
 
-/** Files present in the upload directory, so a test can tell what a request left behind. */
-const uploadedFiles = () => (existsSync(UPLOAD_DIRECTORY) ? readdirSync(UPLOAD_DIRECTORY) : []);
+beforeAll(async () => {
+    PNG_BYTES = await sharp({
+        create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } }
+    })
+        .png()
+        .toBuffer();
+});
+
+/**
+ * Files present in the upload directory, so a test can tell what a request left behind.
+ *
+ * Files only — the digest pipeline's `thumbs/` derivative directory now lives alongside the
+ * uploads themselves, and it is not one of the per-test artifacts this suite cleans up.
+ */
+const uploadedFiles = () =>
+    existsSync(UPLOAD_DIRECTORY)
+        ? readdirSync(UPLOAD_DIRECTORY).filter((name) =>
+              statSync(path.join(UPLOAD_DIRECTORY, name)).isFile()
+          )
+        : [];
 
 const signupWith = (content: Buffer | string, filename: string, contentType: string) =>
     api()

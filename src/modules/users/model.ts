@@ -90,6 +90,13 @@ export interface UserRecord extends Omit<User, 'createdAt' | 'updatedAt' | 'dele
 export interface UserDocument extends UserRecord, UserMethods, Document {
     /** String version of _id — provided by Mongoose's Document getter */
     id: string;
+
+    /**
+     * Document-only bookkeeping for the image digest pipeline — the quarantine key of an upload
+     * still awaiting its digest job, cleared by the writeback once it completes. Never part of the
+     * `User` contract, never read by a controller. See `ImageTarget` in `kernel/registry.ts`.
+     */
+    pendingImageKey?: string;
 }
 
 /**
@@ -172,6 +179,21 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         imageUrl: {
             type: String,
             default: process.env.NODE_DEFAULT_IMAGE_USER ?? 'https://placekitten.com/600/600'
+        },
+        /*
+         * Set together with `imageUrl` by `readUploadedImage` — never independently, and never by
+         * a client: `ThumbnailUrl` is `readOnly` on the contract. Absent for a user whose image
+         * came from a remote/default url rather than an upload (see IMAGE_PIPELINE_PLAN.md).
+         */
+        thumbnailUrl: {
+            type: String
+        },
+        /*
+         * The quarantine key of an upload still awaiting its digest job — see the matching field
+         * on `products/model.ts` for the full rationale, identical here.
+         */
+        pendingImageKey: {
+            type: String
         },
         /**
          * The user's preferred language, for work that happens when they are not here.

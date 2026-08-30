@@ -25,6 +25,8 @@ import {
 } from '@infrastructure/adapters/image-signatures';
 import { deleteFile } from '@infrastructure/adapters/filesystem';
 import { imageStore } from '@infrastructure/adapters/image-store';
+import { digestQuarantinedImage } from '@infrastructure/adapters/image.worker';
+import { isQueueEnabled } from '@infrastructure/adapters/queue';
 import { getFormFiles } from '@infrastructure/http/uploads';
 import { logger } from '@infrastructure/adapters/logger';
 import { ExtendedError } from '@infrastructure/http/errors';
@@ -35,7 +37,7 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
  *
  *   1. A file in `public/` is a file the world can fetch, and between "multer wrote it" and "the
  *      request was accepted" sit every content check, validation and database write. Nothing is
- *      reachable until {@link storeUploadedImages} commits it.
+ *      reachable until {@link quarantineUploadedImages} commits it.
  *   2. A remote store takes a finished file, so staging is what makes "written" and "stored" two
  *      moments — which is what lets the second one be a bucket.
  *
@@ -295,27 +297,34 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
 };
 
 /**
- * Third and last step: hand the staged file to the image store.
+ * Third and last step: quarantine the staged file, and — with no broker to hand the digest job to
+ * — run the whole digest pipeline right here.
  *
  * Runs only once the bytes have been proven to be the image they claim to be, so nothing that
- * fails a check is ever committed — and, with a remote store, nothing that fails a check is ever
- * uploaded, which is the difference between a rejected file costing microseconds and costing a
- * round trip plus egress.
+ * fails a check is ever quarantined, let alone published.
  *
- * The resulting urls go on the request rather than being returned, because multer's three shapes
+ * The results go on the request rather than being returned, because multer's three shapes
  * (`.single()`, `.array()`, `.fields()`) already forced the same accommodation on `getFormFiles`;
- * controllers read `resolveImageUrl(request)` and never learn which they got.
+ * controllers read them back through `readUploadedImage`/`resolveImageUrl` and never learn which
+ * they got. Two shapes are possible, decided per file by whether a broker is configured:
  *
- * A failure here fails the request. That is the point of doing it before the controller: a stored
- * image the database write then contradicts is recoverable (the failure path deletes it), while a
- * database row pointing at bytes that were never stored is a 404 in someone's catalogue forever.
+ *   - broker: `request.quarantinedImageKeys` — the record is written with the pending-image
+ *     placeholder, and a job digests it later.
+ *   - no broker: `request.storedImageUrls` / `storedThumbnailUrls` — already promoted, real urls,
+ *     same shape the contract promises either way (see IMAGE_PIPELINE_PLAN.md's "No-broker
+ *     fallback").
  *
- * NOTE: after this runs, `request.file.path` names a file that no longer exists — `put` consumed
- * it. Nothing downstream reads it (that is what `resolveImageUrl` is for), and it is left as multer
- * set it rather than rewritten, because a path that lies about a moved file is easier to notice
- * than one that quietly describes the store's internals.
+ * A failure here fails the request. That is the point of doing it before the controller: a
+ * quarantined (or promoted) image the database write then contradicts is recoverable (the failure
+ * path deletes it), while a database row pointing at bytes that were never stored is a 404 in
+ * someone's catalogue forever.
+ *
+ * NOTE: after this runs, `request.file.path` names a file that no longer exists — `quarantine`
+ * consumed it. Nothing downstream reads it (that is what the request fields above are for), and it
+ * is left as multer set it rather than rewritten, because a path that lies about a moved file is
+ * easier to notice than one that quietly describes the store's internals.
  */
-export const storeUploadedImages: RequestHandler = (request, _response, next) => {
+export const quarantineUploadedImages: RequestHandler = (request, _response, next) => {
     const staged = getFormFiles(request);
     if (!staged || staged.length === 0) {
         next();
@@ -323,29 +332,46 @@ export const storeUploadedImages: RequestHandler = (request, _response, next) =>
     }
 
     // `allSettled`, not `all`: with several files the interesting failure is the partial one, and
-    // `all` rejects while the successful puts are still in flight — leaving images committed to
-    // storage that nothing will ever reference or delete. The results are needed to clean those up.
-    void Promise.allSettled(staged.map((stagedPath) => imageStore.put(stagedPath))).then(
+    // `all` rejects while the successful quarantines are still in flight — leaving files quarantined
+    // that nothing will ever reference or reap early. The results are needed to clean those up.
+    void Promise.allSettled(staged.map((stagedPath) => imageStore.quarantine(stagedPath))).then(
         (results) => {
             const failed = results.find((result) => result.status === 'rejected');
-            if (!failed) {
-                request.storedImageUrls = results.map(
-                    (result) => (result as PromiseFulfilledResult<string>).value
-                );
+            if (failed) {
+                return Promise.all([
+                    // Staged files are nobody's responsibility now. A successful `quarantine`
+                    // already consumed its own, and deleting a file that is gone is a no-op.
+                    ...staged.map((stagedPath) => deleteFile(stagedPath)),
+                    // Anything that DID make it into quarantine is now unreferenced — the request
+                    // is about to fail, so no row will ever name it.
+                    ...results
+                        .filter((result) => result.status === 'fulfilled')
+                        .map((result) => imageStore.removeQuarantined(result.value))
+                ]).then(() => next(failed.reason));
+            }
+
+            const keys = results.map((result) => (result as PromiseFulfilledResult<string>).value);
+
+            if (isQueueEnabled()) {
+                request.quarantinedImageKeys = keys;
                 next();
                 return;
             }
 
-            return Promise.all([
-                // Staged files are nobody's responsibility now. A successful `put` already consumed
-                // its own, and deleting a file that is gone is a no-op.
-                ...staged.map((stagedPath) => deleteFile(stagedPath)),
-                // Anything that DID make it into storage is now unreferenced — the request is about
-                // to fail, so no row will ever name it.
-                ...results
-                    .filter((result) => result.status === 'fulfilled')
-                    .map((result) => imageStore.remove(result.value))
-            ]).then(() => next(failed.reason));
+            // No broker: the contract promises a real `thumbnailUrl` regardless, so the digest
+            // runs now, inline, before the request is allowed to proceed — same shape as
+            // `enqueueEmail` sending inline rather than dropping the message.
+            return Promise.all(keys.map((key) => digestQuarantinedImage(key)))
+                .then((digested) => {
+                    request.storedImageUrls = digested.map((result) => result.imageUrl);
+                    request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);
+                    next();
+                })
+                .catch((error: Error) =>
+                    Promise.all(keys.map((key) => imageStore.removeQuarantined(key))).then(() =>
+                        next(error)
+                    )
+                );
         }
     );
 };
@@ -356,14 +382,15 @@ export const storeUploadedImages: RequestHandler = (request, _response, next) =>
  * The configured instance routes mount as `upload.single('imageUpload')`. Wrapped in the full
  * pipeline: the locale is restored across the body parse (see {@link withLocaleRestored}), the
  * bytes are checked against the format they claim to be (see {@link validateUploadedImages}), and
- * only then is the file committed to storage (see {@link storeUploadedImages}). Composing them
- * here rather than at the route mounts is deliberate — a route that forgets one looks perfectly
- * correct, and the one it forgets is a security check.
+ * only then is the file quarantined — and, with no broker, digested (see
+ * {@link quarantineUploadedImages}). Composing them here rather than at the route mounts is
+ * deliberate — a route that forgets one looks perfectly correct, and the one it forgets is a
+ * security check.
  */
 const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
     withLocaleRestored(middleware),
     validateUploadedImages,
-    storeUploadedImages
+    quarantineUploadedImages
 ];
 
 export const upload = {

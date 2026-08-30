@@ -38,6 +38,8 @@ describe('signup', () => {
                 VALID_PASSWORD,
                 VALID_PASSWORD,
                 undefined,
+                undefined,
+                undefined,
                 testCallerContext
             )
         );
@@ -60,6 +62,8 @@ describe('signup', () => {
             VALID_PASSWORD,
             VALID_PASSWORD,
             undefined,
+            undefined,
+            undefined,
             testCallerContext
         );
 
@@ -78,6 +82,8 @@ describe('signup', () => {
                 'mismatchuser',
                 VALID_PASSWORD,
                 'something-else',
+                undefined,
+                undefined,
                 undefined,
                 testCallerContext
             )
@@ -99,6 +105,8 @@ describe('signup', () => {
                 VALID_PASSWORD,
                 VALID_PASSWORD,
                 undefined,
+                undefined,
+                undefined,
                 testCallerContext
             )
         );
@@ -118,6 +126,8 @@ describe('signup', () => {
                 password,
                 password,
                 undefined,
+                undefined,
+                undefined,
                 testCallerContext
             )
         );
@@ -136,6 +146,8 @@ describe('signup', () => {
             'noimageuser',
             VALID_PASSWORD,
             VALID_PASSWORD,
+            undefined,
+            undefined,
             undefined,
             testCallerContext
         );

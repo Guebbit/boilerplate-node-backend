@@ -111,7 +111,7 @@ describe('user routes — caching and uploads', () => {
 
             expect(chain).toContain('upload.single(imageUpload)');
             expect(chain).toContain('validateUploadedImages');
-            expect(chain).toContain('storeUploadedImages');
+            expect(chain).toContain('quarantineUploadedImages');
         }
     );
 

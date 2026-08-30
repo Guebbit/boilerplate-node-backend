@@ -25,7 +25,7 @@
  * middleware it returns, as {@link ROUTE_LABEL}. `routeTable` reads that back. The replacements are
  * *labelling* wrappers rather than stubs wherever the real chain has names worth keeping —
  * `storageMock` calls through to the real `upload.single`, so `validateUploadedImages` and
- * `storeUploadedImages` still show up behind the label.
+ * `quarantineUploadedImages` still show up behind the label.
  *
  * A test file must declare these itself: `jest.mock` is hoisted per module registry and cannot be
  * applied from a helper. The one-liner form is
@@ -166,7 +166,7 @@ export const routeFlagMock = () => ({
  * Replacement for `@infrastructure/adapters/storage`'s `upload`.
  *
  * Calls THROUGH to the real `upload.single` and prepends the label, so the field name becomes
- * assertable without hiding `validateUploadedImages` / `storeUploadedImages` behind a stub — those
+ * assertable without hiding `validateUploadedImages` / `quarantineUploadedImages` behind a stub — those
  * are part of what an upload route promises, and a test that could not see them would pass with
  * them removed.
  */

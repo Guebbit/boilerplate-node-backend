@@ -145,7 +145,7 @@ describe('product routes — uploads and flags', () => {
             // Behind the label, the real chain — a route that accepts a file and never checks it
             // is how a disguised payload reaches storage.
             expect(chain).toContain('validateUploadedImages');
-            expect(chain).toContain('storeUploadedImages');
+            expect(chain).toContain('quarantineUploadedImages');
         }
     );
 

@@ -125,7 +125,8 @@ export default withMermaid(
                             { text: 'Runtime', link: '/tools/runtime' },
                             { text: 'Internationalisation', link: '/tools/i18n' },
                             { text: 'Demo profile', link: '/tools/demo-profile' },
-                            { text: 'Security', link: '/tools/security' }
+                            { text: 'Security', link: '/tools/security' },
+                            { text: 'Image Processing', link: '/tools/image-processing' }
                         ]
                     },
                     {

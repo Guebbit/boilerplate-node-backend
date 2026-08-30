@@ -6,6 +6,7 @@ import {
     toObjectId,
     type Repository
 } from '@infrastructure/persistence/create-repository';
+import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 
 /**
  * `password` and `tokens` are `select: false` on the schema, so the plain finders never load
@@ -38,6 +39,7 @@ export const userRepository: Repository<UserDocument> & {
     findByTokenValue: (token: string) => Promise<UserDocument | null>;
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
+    writebackImage: ImageWriteback;
 } = {
     ...createRepository<UserDocument>(userModel, {
         transform: applyUserTransform,
@@ -219,5 +221,27 @@ export const userRepository: Repository<UserDocument> & {
                 { $pull: { tokens: { _id: toObjectId(sessionId), type: TokenType.REFRESH } } },
                 { timestamps: false }
             )
+            .exec(),
+
+    /**
+     * The image digest pipeline's writeback for the `users` collection — see `ImageTarget` in
+     * `kernel/registry.ts`. Conditional on `pendingImageKey` still matching `key`, so a stale or
+     * duplicate job delivery cannot overwrite a later upload, and a hard-deleted user is a
+     * detectable miss rather than a write to nothing. `account`'s signup and profile-update flows
+     * share this: both persist through this same repository, never a separate one.
+     *
+     * `timestamps: false` — the digest finishing is not an edit the account holder made.
+     */
+    writebackImage: (documentId, key, urls) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(documentId), pendingImageKey: key },
+                {
+                    $set: { imageUrl: urls.imageUrl, thumbnailUrl: urls.thumbnailUrl },
+                    $unset: { pendingImageKey: '' }
+                },
+                { timestamps: false }
+            )
             .exec()
+            .then(({ matchedCount }) => matchedCount > 0)
 };

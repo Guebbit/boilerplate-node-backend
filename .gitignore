@@ -10,11 +10,14 @@ docs/.vitepress/cache
 
 # Uploaded images. `public/` is served by express.static (src/app.ts), so anything a user uploads
 # lands in a tracked directory — committing it would publish strangers' files with the repo.
-# `seed/` is negated because those ARE repository content: the demo fixtures db/demo/index.ts
-# references. Keeping fixtures in their own directory is what lets this stay two stable lines
-# instead of a list of filenames to maintain.
+# `seed/` and `system/` are negated because those ARE repository content: `seed/` holds the demo
+# fixtures db/demo/index.ts references, `system/` holds the pending-image placeholders the digest
+# pipeline serves while a job is in flight (see docs/tools/image-processing.md). Keeping both in
+# their own directories is what lets this stay stable lines instead of a list of filenames to
+# maintain.
 public/images/*
 !public/images/seed/
+!public/images/system/
 
 # test output
 coverage

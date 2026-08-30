@@ -60,6 +60,8 @@
         "db:seed:reset": "tsx db/demo/index.ts --reset",
         "db:cache:clear": "tsx db/cache-clear.ts",
         "db:bootstrap": "npm run db:migrate:up && npm run db:seed",
+        "backfill:image-thumbnails": "tsx scripts/backfill-image-thumbnails.ts",
+        "reap:quarantine": "tsx scripts/reap-quarantine.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",
         "compose:rebuild": "npm run compose -- down -v && npm run compose -- build --no-cache && npm run compose -- up -d",
@@ -172,6 +174,7 @@
         "puppeteer-core": "^24.40.0",
         "rate-limit-redis": "^6.0.1",
         "redis": "^5.12.1",
+        "sharp": "0.35.4",
         "tsx": "^4.21.0",
         "winston": "^3.19.0",
         "zod": "^4.3.6"

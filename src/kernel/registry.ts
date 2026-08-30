@@ -52,6 +52,35 @@ type DemoExport =
     | { seedExport?: never; demoShapes?: never };
 
 /**
+ * A module's writeback for the image digest pipeline — how the worker (or the no-broker inline
+ * fallback) turns a finished digest into a persisted `imageUrl`/`thumbnailUrl` on ITS collection.
+ *
+ * `infrastructure/adapters/image.worker.ts` may not import `src/modules/*` (see
+ * IMAGE_PIPELINE_PLAN.md's "the writeback problem"), so it cannot call a module's repository
+ * directly. A module registers this instead, keyed under `imageTargets` on its manifest, and the
+ * worker resolves it by the `collection` string its job payload carries.
+ */
+export interface ImageTarget {
+    /**
+     * Write the digested urls onto the document named by `documentId`, but ONLY if it still names
+     * `key` as its `pendingImageKey`. That guard is what makes a stale or duplicate job delivery
+     * (redelivered after a crash, or superseded by a second upload) a no-op instead of an
+     * overwrite, and what turns a deleted document into a detectable miss rather than a write to
+     * nothing.
+     *
+     * @param documentId - the target document's id
+     * @param key - the quarantine key this digest was produced from
+     * @param urls - the promoted image and thumbnail urls to persist
+     * @returns whether a document actually matched and was updated
+     */
+    writeback: (
+        documentId: string,
+        key: string,
+        urls: { imageUrl: string; thumbnailUrl: string }
+    ) => Promise<boolean>;
+}
+
+/**
  * Everything a module declares about itself.
  *
  * Keep this small: a field only one module ever fills belongs behind that module's own barrel, and
@@ -96,7 +125,34 @@ export type AppModule = {
      * boot — seeding is a script, not part of starting the application.
      */
     seeds?: () => Promise<SeedOutcome[]>;
+
+    /**
+     * This module's {@link ImageTarget}s, keyed by the `collection` string an
+     * `ImageDigestJobPayload` names. Most modules have none; a module whose documents can carry an
+     * uploaded image registers one entry per such collection.
+     */
+    imageTargets?: Readonly<Record<string, ImageTarget>>;
 } & DemoExport;
+
+/**
+ * Every registered module's {@link ImageTarget}s, flattened into one lookup keyed by `collection`.
+ *
+ * Built from the passed-in list rather than importing `enabledModules` itself, for the same reason
+ * {@link registerModules} takes one: this file must stay free of any `src/modules/*` import, so
+ * that `infrastructure/adapters/image.worker.ts` — which needs exactly this lookup, and may not
+ * import a module directly — can depend on `kernel/registry.ts` without a cycle. The app tier
+ * builds the lookup once (`app/workers.ts`) and hands the worker a plain resolver function.
+ *
+ * @param appModules - the enabled module list
+ */
+export const resolveImageTargets = (
+    appModules: AppModule[]
+    // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
+    // this a lookup by an unregistered `collection` string would type-check as always present.
+): Readonly<Record<string, ImageTarget | undefined>> =>
+    Object.fromEntries(
+        appModules.flatMap((appModule) => Object.entries(appModule.imageTargets ?? {}))
+    );
 
 /**
  * Let every module attach its domain-event handlers.

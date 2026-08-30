@@ -32,6 +32,8 @@ describe('a user’s persisted locale', () => {
                 'Password1!',
                 'Password1!',
                 undefined,
+                undefined,
+                undefined,
                 testCallerContext
             )
         );
@@ -46,6 +48,8 @@ describe('a user’s persisted locale', () => {
             'plain',
             'Password1!',
             'Password1!',
+            undefined,
+            undefined,
             undefined,
             testCallerContext
         );

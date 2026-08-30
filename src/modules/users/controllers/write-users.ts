@@ -46,7 +46,12 @@ export const writeUsers = (
     });
 
     // `= ''` because `zodUserSchema` wants a string: an absent image is an empty url here.
-    const { imageUrl = '', deleteUpload } = readUploadedImage(request);
+    const {
+        imageUrl = '',
+        thumbnailUrl,
+        pendingImageKey,
+        deleteUpload
+    } = readUploadedImage(request);
 
     /**
      * Validation errors prevent creation end editing.
@@ -78,8 +83,13 @@ export const writeUsers = (
         );
 
     // Past the guard above, these have been checked against zodUserSchema — the assertion
-    // records what the validator just established rather than assuming it.
-    const validated = { imageUrl, admin, active } as Pick<User, 'imageUrl' | 'admin' | 'active'>;
+    // records what the validator just established rather than assuming it. `thumbnailUrl` is on
+    // `User` itself (readOnly on the contract); `pendingImageKey` is not, so it joins via an
+    // intersection — both are server-derived, never client-supplied.
+    const validated = { imageUrl, admin, active, thumbnailUrl, pendingImageKey } as Pick<
+        User,
+        'imageUrl' | 'admin' | 'active' | 'thumbnailUrl'
+    > & { pendingImageKey?: string };
 
     /**
      * NO ID = new user

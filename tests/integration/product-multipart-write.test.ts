@@ -1,5 +1,6 @@
-import { existsSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 
@@ -22,10 +23,29 @@ import { setupTestDb } from '@tests/setup-test-db';
 
 const UPLOAD_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public', 'images');
 
-/** A minimal but genuine PNG header — `identifyImageFile()` reads the magic bytes, not the name. */
-const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+/**
+ * A genuinely decodable PNG, not merely a magic-byte header — see the matching fixture in
+ * `upload-security.test.ts` for why a header-only stub no longer suffices: every upload without a
+ * broker is now digested inline, which means sharp actually decodes it.
+ */
+let PNG_BYTES: Buffer;
 
-const uploadedFiles = () => (existsSync(UPLOAD_DIRECTORY) ? readdirSync(UPLOAD_DIRECTORY) : []);
+beforeAll(async () => {
+    PNG_BYTES = await sharp({
+        create: { width: 4, height: 4, channels: 3, background: { r: 10, g: 20, b: 30 } }
+    })
+        .png()
+        .toBuffer();
+});
+
+// Files only — the digest pipeline's `thumbs/` derivative directory now lives alongside the
+// uploads themselves, and it is not one of the per-test artifacts this suite cleans up.
+const uploadedFiles = () =>
+    existsSync(UPLOAD_DIRECTORY)
+        ? readdirSync(UPLOAD_DIRECTORY).filter((name) =>
+              statSync(path.join(UPLOAD_DIRECTORY, name)).isFile()
+          )
+        : [];
 
 setupTestDb();
 

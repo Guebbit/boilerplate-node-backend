@@ -190,6 +190,7 @@ export const stopQueue = (): Promise<void> => queueConnection.stop();
  */
 export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
 export const PDF_QUEUE = WORKER_CHANNELS.PDF_GENERATE;
+export const IMAGE_QUEUE = WORKER_CHANNELS.IMAGE_DIGEST;
 
 // ─── Dead letters ─────────────────────────────────────────────────────────────
 

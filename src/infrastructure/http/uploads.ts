@@ -56,12 +56,13 @@ export function getFormFiles(request: Request): string[] | undefined {
 }
 
 /**
- * The URL of the image this request uploaded, or `undefined` if it uploaded none.
+ * The URL of the image this request uploaded, or `undefined` if it uploaded none — or if a
+ * broker took the job, in which case there is no real url yet (see {@link resolvePendingImageKey}).
  *
- * The value is produced by the image store when it commits the staged file (`storeUploadedImages`
- * in `@infrastructure/adapters/storage`), and simply read back here — a controller never learns where the
- * bytes went. That is the boundary the whole storage seam rests on: it is what allows the same
- * controller to work whether the store answered `/images/x.png` or
+ * The value is produced when `quarantineUploadedImages` (`@infrastructure/adapters/storage`) runs
+ * the digest pipeline inline — the no-broker path — and simply read back here — a controller never
+ * learns where the bytes went. That is the boundary the whole storage seam rests on: it is what
+ * allows the same controller to work whether the store answered `/images/x.png` or
  * `https://cdn.example.com/images/x.png`.
  *
  * Constructing the url in the store, rather than deriving it by stripping `NODE_PUBLIC_PATH` off
@@ -73,4 +74,28 @@ export function getFormFiles(request: Request): string[] | undefined {
 export function resolveImageUrl(request: Pick<Request, 'storedImageUrls'>): string | undefined {
     // `[0]`: these endpoints accept a single image, so ignore any extras.
     return request.storedImageUrls?.[0];
+}
+
+/**
+ * The thumbnail URL produced alongside {@link resolveImageUrl}'s result, in the same inline run.
+ *
+ * @param request - Express request that has been through the upload middleware
+ */
+export function resolveThumbnailUrl(
+    request: Pick<Request, 'storedThumbnailUrls'>
+): string | undefined {
+    return request.storedThumbnailUrls?.[0];
+}
+
+/**
+ * The quarantine key of the image this request uploaded, when a broker is configured to digest it
+ * later — `undefined` when nothing was uploaded, or when it was processed inline instead (see
+ * {@link resolveImageUrl}).
+ *
+ * @param request - Express request that has been through the upload middleware
+ */
+export function resolvePendingImageKey(
+    request: Pick<Request, 'quarantinedImageKeys'>
+): string | undefined {
+    return request.quarantinedImageKeys?.[0];
 }

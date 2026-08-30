@@ -27,13 +27,27 @@ export const postSignup = (
     const { email, username, password, passwordConfirm } = request.body;
 
     // `= ''` because `signup` passes this straight to `zodUserSchema`, which wants a string.
-    const { imageUrl = '', deleteUpload } = readUploadedImage(request);
+    const {
+        imageUrl = '',
+        thumbnailUrl,
+        pendingImageKey,
+        deleteUpload
+    } = readUploadedImage(request);
 
     /**
      * Register
      */
     return accountService
-        .signup(email, username, password, passwordConfirm, imageUrl, callerContextOf(request))
+        .signup(
+            email,
+            username,
+            password,
+            passwordConfirm,
+            imageUrl,
+            thumbnailUrl,
+            pendingImageKey,
+            callerContextOf(request)
+        )
         .then((result) => {
             if (!result.success)
                 return deleteUpload().then(() => {

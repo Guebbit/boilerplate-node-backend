@@ -25,7 +25,13 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { zodUserSchema, userRepository, type TokenType, type UserDocument } from '@modules/users';
+import {
+    zodUserSchema,
+    userRepository,
+    userService,
+    type TokenType,
+    type UserDocument
+} from '@modules/users';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -281,6 +287,10 @@ export const signup = (
     // "expected string, received null" and is rejected before the `?? ''` below could see it.
     // The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
     imageUrl: string | undefined,
+    // Set together with `imageUrl` by `readUploadedImage` — never independently, and never part
+    // of the validated schema below: both are server-derived, not client input.
+    thumbnailUrl: string | undefined,
+    pendingImageKey: string | undefined,
     callerContext: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const parseResult = zodUserSchema
@@ -312,13 +322,17 @@ export const signup = (
                           username,
                           email,
                           imageUrl: imageUrl ?? '',
+                          thumbnailUrl,
+                          pendingImageKey,
                           password,
                           // The language they signed up in, kept for work that happens later
                           // without a request to read `Accept-Language` from — a queued email, a
                           // nightly job. Editable afterwards from the user endpoints.
                           locale: getCurrentLocale()
                       })
-                      .then((createdUser) => generateSuccess<UserDocument>(createdUser));
+                      .then((createdUser) =>
+                          generateSuccess<UserDocument>(userService.enqueueIfPending(createdUser))
+                      );
               })
               .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
