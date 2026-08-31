@@ -12,6 +12,7 @@ export default withMermaid(
             nav: [
                 { text: 'Home', link: '/' },
                 { text: 'Start', link: '/getting-started' },
+                { text: 'Demo Shop', link: '/demo-ecommerce/' },
                 { text: 'Theory', link: '/theory/' },
                 { text: 'Modules', link: '/modules/' },
                 { text: 'Tools', link: '/tools/' },
@@ -19,6 +20,18 @@ export default withMermaid(
                 { text: 'Files', link: '/reference/' }
             ],
             sidebar: {
+                '/demo-ecommerce/': [
+                    {
+                        text: 'The Demo Shop',
+                        items: [
+                            { text: 'Overview', link: '/demo-ecommerce/' },
+                            { text: 'The customer', link: '/demo-ecommerce/shopper' },
+                            { text: 'The shop manager', link: '/demo-ecommerce/manager' },
+                            { text: 'The warehouse', link: '/demo-ecommerce/warehouse' },
+                            { text: 'The support desk', link: '/demo-ecommerce/support' }
+                        ]
+                    }
+                ],
                 '/theory/': [
                     {
                         text: 'Theory',
