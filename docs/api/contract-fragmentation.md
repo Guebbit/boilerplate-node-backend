@@ -7,12 +7,12 @@ repositories and is easy to get wrong from either side.
 ## The one-line version
 
 > This repository **owns** the shared, domain-shaped documents. The frontend **holds
-> byte-identical copies** of the three it consumes and never edits them.
+> byte-identical copies** of the two it consumes and never edits them.
 
-## The eight bundles
+## The seven bundles
 
-`openapi.yaml` is not a special case. Eight documents are produced here from per-module
-sources; three of them — `openapi`, `asyncapi-public` and `analytics-events` — also exist in
+`openapi.yaml` is not a special case. Seven documents are produced here from per-module
+sources; two of them — `openapi` and `asyncapi-public` — also exist in
 `boilerplate-vue-frontend` as byte-identical copies, because the frontend's toolchain reads them.
 The four client collections stay in this repo only — they are derived from `openapi.yaml`, so a
 frontend copy could never disagree without the spec disagreeing first, and nothing there reads
@@ -23,7 +23,6 @@ them:
 | `openapi`         | `openapi.yaml`                              | `src/modules/<name>/openapi.yaml` — **compiled by `redocly bundle`** |
 | `asyncapi`        | `asyncapi.yaml`                             | `src/modules/<name>/asyncapi.yaml` + `shared/contracts/asyncapi.{root,workers}.yaml` — **merged** |
 | `asyncapi-public` | `asyncapi.public.yaml`                      | the same sources minus the backend-only ones — the half the frontend receives |
-| `analytics-events`| `src/infrastructure/observability/analytics-events.frontend.ts`| `shared/contracts/analytics.frontend.ts` — **sliced**; the `src/modules/<name>/analytics.ts` names are checked against it but never published |
 | `bruno`           | `contract.bruno.yml` *(untracked)*          | `openapi.yaml` + the demo dataset — **generated whole**         |
 | `insomnia`        | `contract.insomnia.json` *(untracked)*      | `openapi.yaml` + the demo dataset — **generated whole**         |
 | `mockoon`         | `contract.mockoon.json` *(untracked)*       | `openapi.yaml` + the demo dataset — **generated whole**         |
@@ -39,7 +38,6 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 | `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents                  |
 | `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies four maps; `$ref`s stay untouched |
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
-| `analytics-events.frontend.ts` | **assembled** | the frontend section's `as const` body sliced verbatim out of its source |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
 
 A hand-written restatement of the contract is a copy and copies rot, which is why the last row
@@ -90,8 +88,8 @@ flowchart TD
     class B,ORVAL,CLIENT tool;
 ```
 
-The picture is drawn for `openapi.yaml`; the other six bundles differ only in what reads the output
-(the realtime type generator, the analytics tracker, three API clients). Three properties fall out of
+The picture is drawn for `openapi.yaml`; the other five bundles differ only in what reads the output
+(the realtime type generator, four API clients). Three properties fall out of
 it, and each is load-bearing:
 
 1. **Fragments are authored here, and only here.** A module owns its slice of every shared document
@@ -262,13 +260,11 @@ property's value position is not the `allOf` problem the anchors were avoiding. 
 verified by dereferencing both contracts and deep-comparing: **82 operations before and after, three
 added schemas, nothing else.**
 
-Concatenation survives in exactly one bundle now, and it is no longer shared machinery.
-`analytics-events.frontend.ts` splices verbatim line slices out of each module's `analytics.ts`
-because those declarations carry comments no parse survives, and it owns that logic itself — the
-comma **between** slices and none after the last is a rule inside
-`scripts/contracts/analytics-events-bundle.ts`. `scripts/contracts/bundle-kinds.ts` used to hold a general
+Concatenation is gone entirely. `scripts/contracts/bundle-kinds.ts` used to hold a general
 segment/separator engine for every bundle; once the REST and AsyncAPI contracts moved to whole
-documents, nothing declared a segment any more and it was removed.
+documents, nothing declared a segment any more and it was removed. The last holdout was the
+analytics catalogue, which spliced verbatim line slices out of each module's `analytics.ts` so the
+comments explaining a name would reach the other repo — it went with the catalogue itself, below.
 
 ### Which schemas stayed shared, and why
 
@@ -311,7 +307,7 @@ What is already true and does not change:
 - `npm run lint:openapi`, `npm run gen:api`, and the `check:spec-identity` check
 - the frontend holding a byte-identical copy
 
-## The other six, and what each one taught
+## The other five, and what each one taught
 
 ### `asyncapi.yaml` — one whole document per section, merged
 
@@ -349,7 +345,7 @@ refuses on a collision, carrying `$ref` strings across untouched because every s
 resolves its own refs internally. That file's header is the full argument, and it is the file to
 read before anyone tries the symmetry again.
 
-### `analytics-events.frontend.ts` — a name lives with the code that emits it
+### The analytics names — the bundle that stopped being one
 
 `PRODUCTS_SEARCHED` is a fact about products and `CART_ITEM_ADDED` one about the cart, and both were
 declared in `src/infrastructure/`, the layer that must know no domain at all. Each module now owns
@@ -357,45 +353,40 @@ its names — as **ordinary TypeScript**, in `src/modules/<name>/analytics.ts`, 
 `as const` its own controllers import and augmenting the analytics port's `AnalyticsEventMap` exactly
 as `audit.ts` augments `AuditActionMap`.
 
-**One namespace, two scopes, and every name has exactly one emitter.** Both repos write into one
-Umami website, so the names form a single namespace across the pair — but each name is fired by
-exactly one side:
+**The bug that started it.** A single catalogue said which names EXIST and never which side EMITS
+them, both repos held it, and both fired most of it. One add-to-cart wrote two indistinguishable
+rows into Umami, and every count built on those names read twice reality.
 
-| Scope      | Declared in                              | Published? |
-| ---------- | ---------------------------------------- | ---------- |
-| `backend`  | `src/modules/<name>/analytics.ts`         | ❌ never — its controllers import it directly, so a copy would have no reader on either side |
-| `frontend` | `shared/contracts/analytics.frontend.ts` | ✅ as `src/infrastructure/observability/analytics-events.frontend.ts` |
+The first answer was a published half. Names only a browser could produce were declared in
+`shared/contracts/analytics.frontend.ts`, bundled into
+`src/infrastructure/observability/analytics-events.frontend.ts` and carried to the frontend, which
+imported them; a module's own names were never published, because its controllers import them
+directly and a copy would have no reader on either side. A cross-cutting test walked both scopes and
+rejected a name declared twice anywhere.
 
-So the published artefact carries **only** the names the client emits: the moments this service
-never observes. There is no `app_started` on a server that is always started, a logout is a token
-the browser discards with no request to attribute it to, and a checkout request that never arrived
-is — from here — indistinguishable from one that was never made.
+**The second answer was to publish nothing, and it is the one that stands.** Looked at again, the
+client's half held four names and three of them were not client-only at all:
 
-This is the analytics twin of the `asyncapi.public.yaml` split, and it answers the same question in
-the opposite direction. There both halves are published, because the full contract is what this repo
-generates its own types from; here only one half is.
+| Name | Why it left |
+| ---- | ----------- |
+| `app_started`, `app_ready` | the Umami tag writes a pageview on load by itself — these restated it |
+| `user_logged_out` | both logout routes are real requests this API answers, so it is emitted here, from `logoutCurrentSession` and `tokenRemoveAll` |
+| `checkout_request_failed` | a request that never arrived is already a failed span in the frontend's Faro tracing |
 
-**The bug it replaced.** A single catalogue said which names EXIST and never which side EMITS them,
-both repos held it, and both fired most of it. One add-to-cart wrote two indistinguishable rows into
-Umami, and every count built on those names read twice reality. Publishing only the client's half
-makes the double emission impossible to express — the constant simply does not exist in the repo
-that must not fire it. `shared/contracts/analytics.frontend.ts` also carries no `declare module`
-augmentation, which keeps its names out of `AnalyticsEventMap` so `emitAnalyticsEvent` rejects them:
-the rule is a compile error here, not a convention.
+So the frontend emits no custom events, the file crossing the boundary is gone, and with it the
+bundle, the `sync:frontend` entry and the `check:spec-identity` row. Every name in the shared Umami
+website is written in exactly one place — a module's `analytics.ts` — which is a stronger guarantee
+than the check it replaced, because there is no second catalogue left to disagree with.
 
-`contract-bundles.test.ts` walks both scopes and rejects a name or a value declared twice anywhere,
-which is what makes one namespace with two owners safe — a module cannot quietly claim
-`user_logged_out`, and the client cannot claim `checkout_failed`.
+What survives is the sweep: `tests/cross-cutting/analytics-events.test.ts` reads every
+`src/modules/<name>/analytics.ts` off disk and rejects two modules claiming one constant name or one
+event string, a name outside the convention, or a module that exports names without the
+`declare module` block that puts them in `AnalyticsEventMap`. No list to maintain, and a module
+added or deleted changes nothing but its own folder.
 
-The published file is an ARTEFACT rather than a source: nothing in this repo imports it, and it
-exists only because the frontend holds a byte-identical copy. It is built by slicing the `as const`
-body verbatim — the comments explaining *why* a name sits where it does have to reach the other repo
-— and the slice is then checked against the file's actual exported keys, so a reformatted
-declaration or a renamed constant fails the bundle instead of publishing a short catalogue.
-
-The entries are an object literal, so this is the bundle where the comma-as-separator rule earns its
-keep. Prettier's `trailingComma: 'none'` makes it load-bearing: a fragment that ended with a comma
-would leave a dangling one before `}` and fail `prettier:check`.
+The lesson worth keeping: **a shared artefact is only worth its machinery when both sides really
+write.** The split scope was the right fix for a real double count; the empty half was the sign that
+the whole document could go.
 
 ### The demo dataset — not a bundle at all, any more
 

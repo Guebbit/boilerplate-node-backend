@@ -37,7 +37,6 @@
 # explicitly-named ignored path. `regenerate` above still has to build them: the gate that follows
 # reads them off disk regardless of git's opinion of them.
 npm run regenerate -- --no-sync
-git add asyncapi.yaml asyncapi.public.yaml db/demo/demo-data.json \
-        src/infrastructure/observability/analytics-events.frontend.ts
+git add asyncapi.yaml asyncapi.public.yaml db/demo/demo-data.json
 
 npm run complete

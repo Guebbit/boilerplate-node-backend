@@ -7,10 +7,8 @@
  * collections) are `.gitignore`d and listed only so the CLI can find them by name: an uncommitted
  * file cannot be stale.
  *
- * Two publish a SUBSET, for opposite reasons. `asyncapi.yaml` keeps every channel because this
- * repo's own types come from it, and the frontend receives the public half;
- * `analytics-events.frontend.ts` publishes only the CLIENT's names, since the backend's are
- * ordinary TypeScript its controllers import.
+ * One publishes a SUBSET: `asyncapi.yaml` keeps every channel because this repo's own types come
+ * from it, and the frontend receives the public half.
  *
  * Adding a bundle is one entry here plus its spec file: the CLI, the staleness check and the
  * cross-cutting test all iterate this list.
@@ -21,7 +19,6 @@
 import type { ContractBundle } from './bundle-kinds';
 import { openapiBundle } from './openapi-bundle';
 import { asyncapiBundle, asyncapiPublicBundle } from './asyncapi-bundles';
-import { analyticsEventsBundle } from './analytics-events-bundle';
 import {
     brunoBundle,
     insomniaBundle,
@@ -33,7 +30,6 @@ export const CONTRACT_BUNDLES: readonly ContractBundle[] = [
     openapiBundle,
     asyncapiBundle,
     asyncapiPublicBundle,
-    analyticsEventsBundle,
     brunoBundle,
     insomniaBundle,
     mockoonBundle,

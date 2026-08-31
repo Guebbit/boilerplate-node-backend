@@ -6,8 +6,7 @@
  * COMPILED — built from authored sources in this repo. `openapi.yaml` from standalone OpenAPI
  * documents, one per module plus the root, joined by `redocly bundle` resolving `$ref` the way the
  * rest of the ecosystem does; the two AsyncAPI bundles merged through the YAML AST from one
- * document per section; the frontend's analytics event names concatenated from verbatim line
- * slices, because those declarations carry comments no parser preserves.
+ * document per section.
  *
  * These are COMMITTED, so they can be asked the strongest question: does the file on disk equal a
  * fresh build. Two sources for one document is a fork waiting to happen — that is what
@@ -22,13 +21,12 @@
  * that mattered anyway — a stale committed copy was only ever a proxy for a generator that had
  * stopped covering the contract.
  *
- * WHERE THE COMMENTS LIVE differs between the compiled bundles. A parse drops them, so the
- * analytics catalogue — the one still spliced rather than parsed — is the only bundle whose own
- * text can carry one. The REST contract stopped needing that guarantee once its
- * sources became whole documents: the explanations now sit in the module files where the thing
- * they explain is written, and nobody reads the bundle by hand. That placement is a design choice
- * rather than a property this file checks — a comment count is a floor nothing can tell apart from
- * noise, so unlike everything else below it was never a guard against a real fork.
+ * WHERE THE COMMENTS LIVE. A parse drops them, and every compiled bundle here is parsed — so none
+ * of them carries one. The REST contract stopped needing that guarantee once its sources became
+ * whole documents: the explanations now sit in the module files where the thing they explain is
+ * written, and nobody reads the bundle by hand. That placement is a design choice rather than a
+ * property this file checks — a comment count is a floor nothing can tell apart from noise, so
+ * unlike everything else below it was never a guard against a real fork.
  */
 
 import { readFileSync } from 'node:fs';
@@ -44,11 +42,8 @@ import {
     type ContractBundle
 } from '../../scripts/contracts/bundle-registry';
 import { MODULE_SECTIONS, moduleSpec } from '../../scripts/contracts/openapi-bundle';
-import { ANALYTICS_SECTIONS } from '../../scripts/contracts/analytics-events-bundle';
 import { allProbes } from '../../scripts/contracts/client-collections-bundle';
 import { SHARED_FILES } from '../../scripts/spec-identity';
-import { analyticsEvents } from '../../src/infrastructure/observability/analytics-events.frontend';
-import type { AnalyticsEventName } from '../../src/infrastructure/observability/analytics';
 
 /** How many requests a collection's folders hold, whichever key that tool nests them under. */
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>
@@ -226,60 +221,6 @@ describe('the public AsyncAPI bundle', () => {
             expect(full.servers[server]).toEqual(definition);
         for (const [message, definition] of Object.entries(shared.components.messages))
             expect(full.components.messages[message]).toEqual(definition);
-    });
-});
-
-describe('the analytics event bundle', () => {
-    it('lets no two sections declare the same name or the same value', () => {
-        // The failure this file exists to prevent, one level down. Both repos write into ONE Umami
-        // website, so every name across BOTH scopes has to be unique: two sections claiming
-        // `CHECKOUT_COMPLETED` produce a duplicate object key, two spelling one event differently
-        // split every funnel built on it, and a client name colliding with a server one puts two
-        // indistinguishable rows in the table for one action.
-        //
-        // `ANALYTICS_SECTIONS` deliberately holds both scopes, because a list holding one could
-        // never see that last collision.
-        const entries = ANALYTICS_SECTIONS.flatMap(({ events }) =>
-            Object.entries(events).map(([key, value]) => ({ key, value }))
-        );
-
-        expect(entries.length).toBeGreaterThan(0);
-        expect(new Set(entries.map(({ key }) => key)).size).toBe(entries.length);
-        expect(new Set(entries.map(({ value }) => value)).size).toBe(entries.length);
-    });
-
-    it('publishes the frontend section, and only that', () => {
-        // The published catalogue is what the paired frontend emits from, so a backend name
-        // leaking into it is a name two repos could fire — the double count, back again.
-        const frontend = ANALYTICS_SECTIONS.filter(({ scope }) => scope === 'frontend');
-        const declared = frontend.flatMap(({ events }) => Object.keys(events));
-
-        expect(declared.length).toBeGreaterThan(0);
-        expect(Object.keys(analyticsEvents).toSorted()).toEqual(declared.toSorted());
-    });
-
-    it('keeps every backend name out of the published catalogue', () => {
-        // Stated as its own case rather than left implied by the set comparison above: this is the
-        // rule the split exists to enforce, and it should fail by name when it breaks.
-        const backendNames = ANALYTICS_SECTIONS.filter(({ scope }) => scope === 'backend').flatMap(
-            ({ events }) => Object.values(events)
-        );
-        const published = new Set<string>(Object.values(analyticsEvents));
-
-        expect(backendNames.length).toBeGreaterThan(0);
-        expect(backendNames.filter((name) => published.has(name))).toEqual([]);
-    });
-
-    it('declares every backend name in the union the port exposes', () => {
-        // The augmentation is what makes `emitAnalyticsEvent` reject an unknown name. A module that
-        // exported its constant but forgot the `declare module` block would compile, emit fine, and
-        // silently widen nothing — so the type has to be checked against the values.
-        const backendEvents = ANALYTICS_SECTIONS.filter(({ scope }) => scope === 'backend');
-        for (const { events } of backendEvents)
-            for (const value of Object.values(events)) {
-                const name: AnalyticsEventName = value as AnalyticsEventName;
-                expect(typeof name).toBe('string');
-            }
     });
 });
 

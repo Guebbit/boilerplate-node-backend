@@ -136,24 +136,28 @@ series and starts another. Decide the name once, here, rather than after a dashb
 
 ### Where a name lives
 
-With the code that emits it — `src/modules/<name>/analytics.ts`, one module, one owner. Names only
-a browser can produce live in `shared/contracts/analytics.frontend.ts` and are published to the
-paired frontend. Both halves share ONE Umami website, so the two form one namespace:
-`contracts:bundle` refuses to build a catalogue in which two sections claim one name.
+With the code that emits it — `src/modules/<name>/analytics.ts`, one module, one owner. There is no
+second place: the paired frontend emits no custom events, so every name in the shared Umami website
+is written here. `tests/cross-cutting/analytics-events.test.ts` sweeps the module folders and fails
+when two of them claim one name or one value.
 
 ## One namespace, two repositories
 
-Both backends and the paired frontend write into ONE Umami website, so every name they emit shares a
-single namespace. Three things keep it coherent, and deliberately not a fourth.
+The backend and the paired frontend write into ONE Umami website. The frontend's half of that used
+to be a published catalogue, checked against this one; it is now empty by construction, which is a
+stronger guarantee than any check was.
 
-**Each repository refuses a collision inside itself.** `contracts:bundle` fails when two sections
-claim one name or one value — a module against another module, or a module against the client's
-half. It is why a module that declares no names is worth noticing: one that emits nothing used to be
-indistinguishable from one with nothing to emit.
+**The frontend emits nothing custom.** Its pageviews — including SPA route changes — are written by
+the Umami tag itself, and everything with an API request behind it is emitted here, from the handler
+that decided it: where it cannot be blocked by an extension, lost with the tab, or forged from a
+console. So every custom name in the website has exactly one emitter, and no fact can be counted
+twice.
 
-**The published catalogue is compared across the pair.** `check:spec-identity` hashes it against the
-paired repository's copy, and either backend writes the same bytes, so the frontend's copy is true
-of whichever backend is deployed.
+**This repository refuses a collision inside itself.** `tests/cross-cutting/analytics-events.test.ts`
+fails when two modules claim one constant name or one event string, and when a module declares names
+without the `declare module` block that puts them in `AnalyticsEventMap`. It is why a module that
+declares no names is worth noticing: one that emits nothing used to be indistinguishable from one
+with nothing to emit.
 
 **The two backends' own vocabularies are NOT compared, and that is a decision rather than a gap.**
 The deployment model is one backend at a time — the PHP one with the frontend, or the Node one with
@@ -163,15 +167,6 @@ outside both or be duplicated in each. What replaces it is that the two vocabula
 today, and that the rule above is written in both trees, at the place where the next name is chosen.
 
 Written down because that argument is not obvious and will otherwise be re-derived.
-
-**A `check:spec-identity` failure right after switching which backend you're pairing with is
-usually not a new defect.** The frontend compares against whichever backend its own `.env` names
-in `BACKEND_PATH` — not whichever one last ran `sync:frontend` — so the fix is to point that at
-this backend (unset, or `../boilerplate-node-backend`, is the default) and then run
-`sync:frontend` from here, in that order. The two backends' bundles are function-identical, and
-this one bundles byte-stably; the PHP twin does not, which is why the frontend's own check
-compares YAML parsed rather than as raw bytes. See the frontend's
-`docs/reference/contracts.md#keeping-the-pair-in-step` for the full mechanism.
 
 ## Two things Umami does not tell you
 

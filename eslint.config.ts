@@ -967,16 +967,15 @@ export default tseslint.config(
      * name itself. Only the first two are machine-checkable; the third is still prose, because no
      * selector knows a noun from a verb.
      *
-     * Scoped to where names are AUTHORED: a module's own file, and the client's half in
-     * `shared/contracts/analytics.frontend.ts`. The published catalogue is generated from these
-     * and carries `DO NOT EDIT`, so linting it would only ever report a bug in the bundler.
+     * Scoped to where names are AUTHORED: a module's own `analytics.ts`, which is now the only
+     * place they are written at all.
      *
      * The `TryStatement` selector is repeated from the `src/**` block: `no-restricted-syntax`
      * does not merge across configs — the nearest match REPLACES the list — so leaving it out
      * here would silently lift the try/catch restriction for exactly these files.
      */
     {
-        files: ['src/modules/*/analytics.ts', 'shared/contracts/analytics.frontend.ts'],
+        files: ['src/modules/*/analytics.ts'],
         rules: {
             'no-restricted-syntax': [
                 'error',
@@ -990,7 +989,7 @@ export default tseslint.config(
                 {
                     selector: 'Property > Identifier.key:not([name=/^[A-Z][A-Z0-9_]*$/])',
                     message:
-                        'An analytics event constant is SCREAMING_SNAKE — `CART_ITEM_ADDED`. The published catalogue is sliced out of this declaration by matching that shape, so a differently-cased key is dropped from the frontend copy without failing anything.'
+                        'An analytics event constant is SCREAMING_SNAKE — `CART_ITEM_ADDED`. Every other module spells its own that way, and one that does not is the entry a reader scanning the catalogue misses.'
                 },
                 {
                     selector: 'TryStatement',

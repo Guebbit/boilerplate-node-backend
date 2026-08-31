@@ -149,9 +149,10 @@ it on the cycle rule reports eight phantom type-only cycles — so a module reac
 `types/index.ts` and used by `globals.d.ts`. Turning it on to fix orphans breaks the cycle rule.
 A real trade-off, not a free win.
 
-It did surface one true orphan: `src/infrastructure/observability/analytics-events.frontend.ts`,
-which is generated and consumed by _path string_, never imported — an instance of the very coupling
-class the warning box in `docs/modules/index.md` describes.
+It did surface one true orphan: the generated `analytics-events.frontend.ts`, consumed by _path
+string_ and never imported — an instance of the very coupling class the warning box in
+`docs/modules/index.md` describes. That file has since been deleted along with the catalogue it
+published; the finding stands as the reason to look, not as a live one.
 
 **dependency-cruiser's `required` rules.** The inverse of `forbidden`: every file matching X must
 depend on something matching Y. Considered and declined, with the reasoning left in the config header

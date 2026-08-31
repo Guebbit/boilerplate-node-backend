@@ -3,7 +3,7 @@
  * Rebuild every generated artifact this repo commits — `npm run regenerate`.
  *
  * Run it after changing anything a generator reads: a module's `openapi.yaml` or `asyncapi.yaml`,
- * `shared/contracts/asyncapi.workers.yaml`, a `demo.ts` fixture, a `probes.ts`, an `analytics.ts`.
+ * `shared/contracts/asyncapi.workers.yaml`, a `demo.ts` fixture, a `probes.ts`.
  * Usually you will not have to remember — `.husky/pre-commit` runs it with `--no-sync` and stages
  * what it produced, so `npm run complete` only ever VERIFIES.
  *
@@ -41,8 +41,7 @@ interface Step {
 const STEPS: readonly Step[] = [
     {
         script: 'contracts:bundle',
-        because:
-            'openapi.yaml, the two asyncapi bundles and the analytics names, from the per-module sources'
+        because: 'openapi.yaml and the two asyncapi bundles, from the per-module sources'
     },
     {
         script: 'gen:api',

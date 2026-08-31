@@ -9,11 +9,9 @@
  * previous one.
  *
  * NO BUNDLE IS CONCATENATED BY THIS FILE. Each one owns its own build and they no longer share a
- * mechanism — `openapi.yaml` goes through `redocly bundle`, the AsyncAPI pair through the YAML AST,
- * and `analytics-events.frontend.ts` splices verbatim slices out of its sources itself, because
- * those declarations carry comments no parse survives. What is left here is only what all of them
- * have in common: an identity, a way to produce the text, and a way to read the committed copy so
- * the two can be compared.
+ * mechanism — `openapi.yaml` goes through `redocly bundle`, the AsyncAPI pair through the YAML AST.
+ * What is left here is only what all of them have in common: an identity, a way to produce the
+ * text, and a way to read the committed copy so the two can be compared.
  *
  * `tests/cross-cutting/contract-bundles.test.ts` asserts that comparison on every run.
  *

@@ -113,20 +113,15 @@ describe('SHARED_FILES', () => {
         expect(siblingRole(THIS_REPO)).toBe('frontend');
     });
 
-    it('covers the contract and the analytics names', () => {
+    it('covers both halves of the contract', () => {
         const backendPaths = new Set(SHARED_FILES.map(({ backend }) => backend));
 
         expect(backendPaths).toContain(OPENAPI);
         expect(backendPaths).toContain(ASYNCAPI);
-        // The one that went unguarded until the list could hold differing paths. (The demo
-        // dataset left the list with the frontend's MSW mocks: the demo profile seeds from
-        // this repo's own fixtures, so there is no second copy left to compare.)
-        expect(backendPaths).toContain(
-            'src/infrastructure/observability/analytics-events.frontend.ts'
-        );
-        // And nothing else. Three files, every one produced here, which is what makes a fork
-        // answerable at all.
-        expect(backendPaths.size).toBe(3);
+        // And nothing else. Two files, both produced here, which is what makes a fork answerable
+        // at all. (The demo dataset left the list with the frontend's MSW mocks: the demo profile
+        // seeds from this repo's own fixtures, so there is no second copy left to compare.)
+        expect(backendPaths.size).toBe(2);
     });
 
     it('excludes anything either repo regenerates from a file already in the list', () => {

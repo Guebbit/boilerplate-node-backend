@@ -22,10 +22,12 @@ apply to your domain is most of both procedures:
 | --------------------- | ---------------------------------------------- | ---------------------------------- |
 | `enabledModules`      | `src/modules.ts`                               | **always**                         |
 | `MODULE_SECTIONS`     | `scripts/contracts/openapi-bundle.ts`          | the domain serves HTTP             |
-| `ANALYTICS_SECTIONS`  | `scripts/contracts/analytics-events-bundle.ts` | the domain has an `analytics.ts`   |
 | `ASYNC_SECTION_ORDER` | `scripts/contracts/asyncapi-bundles.ts`        | the domain owns an `asyncapi.yaml` |
 | `SHARED_SECTIONS`     | `scripts/contracts/asyncapi-bundles.ts`        | …and an API client can reach it    |
 | `FRONTEND_PAIRING`    | `tests/cross-cutting/frontend-pairing.test.ts` | **always**                         |
+
+An `analytics.ts` needs no entry anywhere: `tests/cross-cutting/analytics-events.test.ts` sweeps the
+module folders for one.
 
 `FRONTEND_PAIRING` is the newest of the five and the only one that names the other repository: which
 frontend module answers this domain, or a sentence saying why none does.
@@ -49,14 +51,14 @@ Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the 
 the metrics registry all walk the registry instead — which is why none of them appears in either
 checklist.
 
-The last three exist because **the contract is fragmented and shared with the paired frontend**.
-They are the price of one document assembled from per-module pieces, not a leak. Leaving one stale
-is a hard error naming the missing file:
+The conditional three exist because **the contract is fragmented and shared with the paired
+frontend**. They are the price of one document assembled from per-module pieces, not a leak. Leaving
+one stale is a hard error naming the missing file:
 
 ```
-Error: [analytics-events] src/infrastructure/observability/analytics-events.frontend.ts
+Error: [openapi] openapi.yaml
   names a fragment that does not exist:
-  src/modules/products/analytics.ts
+  src/modules/products/openapi.yaml
   Deleting a domain means deleting its entry from the bundle's section list too —
   and mirroring both in the paired repo.
 ```
@@ -171,9 +173,9 @@ already — nothing below applies.
 ### 3 · The fragments and their section entries
 
 Write `openapi.yaml`, add the domain to `MODULE_SECTIONS`, and add its paths to the root's index. Do
-the same for `ANALYTICS_SECTIONS` if you wrote an `analytics.ts`, and for `ASYNC_SECTION_ORDER` if
-you wrote an `asyncapi.yaml`. A `demo.ts` needs no entry anywhere — the dataset is published from a
-real seeding run, not assembled from a list.
+the same for `ASYNC_SECTION_ORDER` if you wrote an `asyncapi.yaml`. An `analytics.ts` and a `demo.ts`
+need no entry anywhere — the names are swept off disk, and the dataset is published from a real
+seeding run rather than assembled from a list.
 
 An `asyncapi.yaml` costs one decision the others do not: whether the domain also belongs in
 `SHARED_SECTIONS`. It does if a browser can reach the channels — an SSE stream, a websocket — and it
@@ -279,7 +281,7 @@ flowchart LR
 ```bash
 rm -rf src/modules/<name>
 # delete the import and the array entry in src/modules.ts
-# delete its entry from MODULE_SECTIONS / ANALYTICS_SECTIONS / ASYNC_SECTION_ORDER
+# delete its entry from MODULE_SECTIONS / ASYNC_SECTION_ORDER
 # and, if it declared probes, from scripts/contracts/client-collections-bundle.ts
 ```
 
@@ -399,7 +401,7 @@ npx tsc --noEmit                                  # THE assertion: 0 errors in d
                                                   # in src/** from a module that did not DECLARE
                                                   # the dependency in its manifest
 
-# drop them from MODULE_SECTIONS, ANALYTICS_SECTIONS, ASYNC_SECTION_ORDER,
+# drop them from MODULE_SECTIONS, ASYNC_SECTION_ORDER,
 # and from generate-collections.ts if any of them declared probes
 npm run contracts:bundle
 npx spectral lint openapi.yaml --ruleset spectral.yaml
@@ -423,9 +425,8 @@ pick a different set. An earlier run of this check reported "zero files in `src/
 still at zero\*\*, and that is the number this exercise is actually defending.
 
 **Correct — the section lists and the co-located specs that assert a deleted domain.** Six of the
-errors are `scripts/contracts/analytics-events-bundle.ts` and `generate-collections.ts` naming
-`products`/`cart`/`orders`, which is step 3 of the removal procedure announcing itself rather than
-residue. Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
+errors were the section lists and `generate-collections.ts` naming `products`/`cart`/`orders`, which
+is step 3 of the removal procedure announcing itself rather than residue. Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
 go with their modules.
 
 **Residue — the rest.** Central specs using a domain as sample data:

@@ -99,11 +99,10 @@ phase and not the others.
 | `src/modules/*/openapi.yaml`                           | `contracts:bundle` → `gen:api`                       | `openapi.yaml`, then the types and Zod schemas from it |
 | `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
 | `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml` and `asyncapi.public.yaml`, then `src/types/asyncapi.generated.ts` |
-| `src/modules/*/analytics.ts`                          | `contracts:bundle`                                  | rebuilds `src/infrastructure/observability/analytics-events.frontend.ts` |
 | `src/modules/*/demo.ts`                             | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
 | `src/modules/*/module.ts`, `model.ts`, `routes.ts`    | nothing                                             | no generator reads them. If the change is worth a reader knowing, say so on the module's page in `docs/modules/` — by hand, like the rest of that page |
-| `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `contracts:bundle` for `analytics.ts` and `probes.ts` | the frontend analytics catalogue is published from the first, the client collections embed the second; the other three feed no generator |
+| `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `contracts:bundle` for `probes.ts` only | the client collections embed the probes; the other four feed no generator — an analytics name is read straight from the module that declares it |
 | A controller or service (no contract, no route change) | nothing                                             | no bundle reads source code, and no page states a service's internals |
 | `openapi.yaml` / `asyncapi*.yaml` **directly**        | stop — edit the fragment instead                    | the next bundle overwrites you, and `contracts:bundle --check` fails first |
 | `contract.{bruno,insomnia,mockoon,postman}.*`         | stop — these are generated                          | edit the contract or the probes; a hand edit is reverted by the next run |
@@ -122,7 +121,7 @@ npm run contracts:bundle -- asyncapi    # just asyncapi.yaml (asyncapi-public is
 npm run contracts:bundle -- bruno       # just contract.bruno.yml
 ```
 
-Known names: `openapi`, `asyncapi`, `asyncapi-public`, `analytics-events`, `bruno`, `insomnia`, `mockoon`, `postman`.
+Known names: `openapi`, `asyncapi`, `asyncapi-public`, `bruno`, `insomnia`, `mockoon`, `postman`.
 An unknown name exits with the list rather than doing nothing.
 
 The four collections are **only** produced by naming them: a full `contracts:bundle` assembles the
@@ -156,7 +155,6 @@ npm run test:contract             # do real responses match the contract?
 | `[contracts] STALE — these do not match the fragments`             | a fragment was edited without re-bundling, or a bundle was hand-edited                    | `npm run contracts:bundle`                              |
 | `contract-bundles.test.ts` fails                                    | the same thing, caught by the test suite instead                                          | `npm run contracts:bundle`                              |
 | `check:spec-identity` fails                                         | this repo and the frontend hold different bytes of a shared document                       | copy the bundle over; never re-bundle on both sides     |
-| `prettier:check` fails on `analytics-events.frontend.ts`              | a section's `as const` ends with a trailing comma — the join adds the separator, not the source | drop the trailing comma from that section's last entry    |
 | `check:seed-export` says the dataset is STALE                         | a fixture changed and the dataset was not re-exported                                       | `npm run seed:export`, then copy the result to the frontend |
 | spectral reports a dangling `$ref`                                   | a schema moved into a module document while another module still references it              | move it to `shared/contracts/openapi.root.yaml`         |
 
@@ -178,7 +176,6 @@ three of them are exactly that:
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
 | `asyncapi.yaml`                                                 | the AsyncAPI CLI · `gen:asyncapi`                                                                        | yes |
 | `asyncapi.public.yaml`                                          | the AsyncAPI CLI · the frontend's whole realtime pipeline                                                | yes |
-| `src/infrastructure/observability/analytics-events.frontend.ts` | the analytics tracker                                                                                    | yes |
 | `db/demo/demo-data.json`                                        | the generated collections and the paired frontend's mocks                                                | yes — regenerating it needs a real (seeded, then read back) database, materially heavier and more fragile to ask of `postinstall` than a pure text transform |
 | `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                     | no — generated on demand, see above |
 
@@ -188,15 +185,15 @@ fully derived — there is no diff to review because there is nothing committed 
 
 ## Handing the contract to the frontend
 
-The frontend holds **byte-identical copies** of the three bundles it consumes — `openapi.yaml`,
-`asyncapi.public.yaml` and `analytics-events.frontend.ts` — and never bundles or authors them. The
+The frontend holds **byte-identical copies** of the two bundles it consumes — `openapi.yaml` and
+`asyncapi.public.yaml` — and never bundles or authors them. The
 four client collections stay here, and are not committed at all: they are derived from
 `openapi.yaml`, so a copy there could not disagree without the spec disagreeing first, and nothing
 in either repo reads them.
 
 You do not move them by hand. `npm run regenerate` ends with `npm run sync:frontend`, which copies
-every backend-owned file into the sibling checkout — under its own name on that side, since three of
-the shared files are called something else there — and then runs the frontend's own `regenerate`, so
+every backend-owned file into the sibling checkout — under its own name on that side, since one of
+the shared files is called something else there — and then runs the frontend's own `regenerate`, so
 its client is rebuilt from the contract it was just handed:
 
 ```bash

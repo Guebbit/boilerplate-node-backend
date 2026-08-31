@@ -101,17 +101,30 @@ favicons to `.prettierrc` — but **"does a fork cause a silent bug?"** Everythi
 quietly: both sides keep building, keep passing their own suites, and disagree only in production
 or in a live-API run.
 
-Three files are on it, and the rule is one line: **produced here, copied there.** Each one is an
+Two files are on it, and the rule is one line: **produced here, copied there.** Each one is an
 _output_ on the frontend's side, which is what makes a fork answerable — there is one correct
 resolution, and `npm run sync:frontend` applies it without asking. Editing the copy is the failure
 this list is worst at describing and best at catching: the next regeneration reverts it, and the
 diff looks like the backend broke something.
 
-| Produced here                                                   | Lands over there as                                                                                     |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `openapi.yaml`                                                  | `openapi.yaml`                                                                                          |
-| `asyncapi.public.yaml`                                          | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned |
-| `src/infrastructure/observability/analytics-events.frontend.ts` | `src/infrastructure/observability/analytics-events.ts` — the two lint configs disagree on filename case |
+| Produced here          | Lands over there as                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| `openapi.yaml`         | `openapi.yaml`                                                                                          |
+| `asyncapi.public.yaml` | `asyncapi.yaml` — the shared subset is the whole of the async contract as far as that repo is concerned |
+
+A third entry used to sit here: the analytics event names the frontend emitted. It emits none any
+more — pageviews are automatic and everything with a request behind it is reported from the handler
+here that decided it — so there is no catalogue to publish and nothing to keep in step. See
+[Product Analytics](./analytics.md#one-namespace-two-repositories).
+
+**A `check:spec-identity` failure right after switching which backend you're pairing with is usually
+not a new defect.** The frontend compares against whichever backend its own `.env` names in
+`BACKEND_PATH` — not whichever one last ran `sync:frontend` — so the fix is to point that at this
+backend (unset, or `../boilerplate-node-backend`, is the default) and then run `sync:frontend` from
+here, in that order. The two backends' bundles are function-identical, and this one bundles
+byte-stably; the PHP twin does not, which is why the frontend's own check compares YAML parsed
+rather than as raw bytes. See the frontend's `docs/reference/contracts.md#keeping-the-pair-in-step`
+for the full mechanism.
 
 Deliberately **not** on it: `public/favicon/*`, `.prettierrc`, `.dockerignore`, `.husky/*`,
 `.docker/nginx.docs.conf`, `docs/.vitepress/theme/*`. They are identical by convention, not by

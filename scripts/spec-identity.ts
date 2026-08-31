@@ -24,10 +24,9 @@ export type RepoRole = 'backend' | 'frontend';
 /**
  * One shared file, named on both sides.
  *
- * Two paths rather than one because identity does not imply a shared location: the demo dataset is
- * published seed data here and test scaffolding there, and the analytics names sit under a
- * filename each repo's lint config insists on. A single-path list could not express either, which
- * is why they went unguarded.
+ * Two paths rather than one because identity does not imply a shared location: `asyncapi.yaml` is
+ * published here in full and lands there as its public half. A single-path list could not express
+ * that, which is why it went unguarded.
  */
 export interface SharedFile {
     backend: string;
@@ -83,7 +82,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * `asyncapi.yaml`. Both come out of one set of section documents, so the two bundles cannot
      * describe a shared channel differently — see `scripts/contracts/asyncapi-bundles.ts`.
      */
-    { backend: 'asyncapi.public.yaml', frontend: 'asyncapi.yaml' },
+    { backend: 'asyncapi.public.yaml', frontend: 'asyncapi.yaml' }
     /*
      * `src/types/asyncapi.generated.ts` is deliberately absent: an OUTPUT whose every input is
      * already compared, and the two are not meant to match — this repo's carries the queue
@@ -96,17 +95,6 @@ export const SHARED_FILES: readonly SharedFile[] = [
      * The `contract.<tool>.*` collections are deliberately absent: generated from `openapi.yaml`,
      * which is compared above, so the frontend holds no copy at all.
      */
-
-    /*
-     * The analytics names the FRONTEND emits — the only analytics file crossing the boundary. One
-     * Umami namespace, one emitter per name; the backend's own names are never published because a
-     * module's controllers import them directly. Different paths on the two sides because the lint
-     * configs disagree on filename case.
-     */
-    {
-        backend: 'src/infrastructure/observability/analytics-events.frontend.ts',
-        frontend: 'src/infrastructure/observability/analytics-events.ts'
-    }
 ] as const;
 
 export type SpecComparisonStatus = 'match' | 'drift' | 'missing-here' | 'missing-there';
@@ -216,7 +204,7 @@ export const formatSharedFileProblems = (
         `  Both repos carry byte-identical copies of ${SHARED_FILES.length} files, and EVERY ONE\n` +
         `  is produced in the backend from per-module sources — so this never needs a decision\n` +
         `  about which copy is right. The frontend's is an output. Rebuild it and hand it over:\n` +
-        `    cd <backend> && npm run contracts:bundle   # the shared specs and the analytics names\n` +
+        `    cd <backend> && npm run contracts:bundle   # the shared specs\n` +
         `    cd <backend> && npm run sync:frontend      # copies them across\n` +
         `  Then regenerate each repo's OWN outputs, which are not shared and not copied:\n` +
         `    npm run gen:api && npm run gen:asyncapi`
