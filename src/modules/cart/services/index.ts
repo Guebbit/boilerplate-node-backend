@@ -1,16 +1,9 @@
 /**
  * @module
- * Cart service — shopping cart operations, identified by userId.
- *
- * A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
- *
- * | file          | what is in it                                             |
- * | ------------- | --------------------------------------------------------- |
- * | `view.ts`     | joining lines to products, and the contract's shape (internal) |
- * | `items.ts`    | reading a cart and changing what is in it                 |
- * | `checkout.ts` | turning a cart into an order, and the race that guards it |
- * | `reorder.ts`  | an old order refilling the cart                            |
- * | `cleanup.ts`  | tearing down carts when a user or product is deleted      |
+ * Cart service — shopping cart operations, identified by userId. A folder rather than one file
+ * because it passed ~300 lines; see `docs/theory/layers.md`. `view.ts` joins lines to products,
+ * `items.ts` reads/writes the cart, `checkout.ts` turns it into an order, `reorder.ts` refills it
+ * from an old order, and `cleanup.ts` tears down carts on user/product deletion.
  */
 
 import {

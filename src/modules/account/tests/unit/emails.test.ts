@@ -1,12 +1,9 @@
 /**
  * @module
- * The account emails — the four that carry a link, and the two that confirm something happened.
- *
- * These builders look like data and fail like code: a wrong `template` renders someone else's
- * email, a wrong `linkUrl` 404s every reset/verify/delete link, a missing `t()` slot leaks a raw
- * key, and a swapped token hands a password reset to the wrong flow. None of that throws, and the
- * integration tier only asserts that mail was SENT — not what it said. So these assertions check
- * the built content itself, including that interpolation actually used the value it was given.
+ * The account emails — four that carry a link, two that confirm something happened. These
+ * builders look like data and fail like code: a wrong `template` renders someone else's email, a
+ * wrong `linkUrl` 404s the link, a swapped token hands a reset to the wrong flow — none of which
+ * throws. So these assert the built content itself, including that interpolation ran.
  */
 
 import {
@@ -23,11 +20,9 @@ const TOKEN = 'a1b2c3d4e5f6';
 
 /**
  * The four that exist to deliver a link, paired with the path segment each must produce.
- *
- * `setupRequestEmail` shares `resetRequestEmail`'s route deliberately — both spend a `password`-type
- * token at the same `POST /account/reset-confirm`, see `authentication.ts`'s `requestAccountSetup`
- * — so it is excluded from the "each token to its own route" case below rather than making that
- * case wrong.
+ * `setupRequestEmail` shares `resetRequestEmail`'s route deliberately — both spend a
+ * `password`-type token at `POST /account/reset-confirm` (see `authentication.ts`'s
+ * `requestAccountSetup`) — so it's excluded from the "each token to its own route" case below.
  */
 const LINK_EMAILS = [
     ['verifyRequestEmail', verifyRequestEmail, 'account.verify-request', 'verify'],

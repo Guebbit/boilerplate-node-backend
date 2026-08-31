@@ -1,11 +1,9 @@
 /**
  * @module
- * Pins the feedback module's audit vocabulary — `src/modules/feedback/audit.ts`.
- *
- * The action STRINGS are a wire contract read by external log queries and alerts, not just an
- * internal identifier, so a rename here type-checks cleanly but can silently stop an alert
- * firing. `tests/cross-cutting/audit-actions.test.ts` only proves the shape (present, unique,
- * dotted lower snake_case); the values themselves are asserted by their owner, here.
+ * Pins the feedback module's audit vocabulary (`src/modules/feedback/audit.ts`). The action
+ * STRINGS are a wire contract read by external log queries and alerts, so a rename here
+ * type-checks cleanly but can silently stop an alert firing — the cross-cutting suite only proves
+ * the shape, the values themselves are asserted by their owner, here.
  */
 
 import type { AuditAction } from '@infrastructure/observability/audit';

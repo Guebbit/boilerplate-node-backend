@@ -2,11 +2,9 @@
  * @module
  * Payments service (`src/modules/payments/service.ts`) — pins the invariants: the intent freezes
  * the ORDER's total (shipping included), a confirm moves the order `pending → paid` conditionally
- * so the payment row only says `succeeded` when the order does, a decline is retryable rather than
- * an error path, and a refund (the `ORDER_CANCELLED` listener) is at-most-once.
- *
- * Real Mongo throughout (`setupTestDb`), because the guarantees are the conditional writes. The
- * provider is the real `fake` one: its magic cards ARE its contract.
+ * so the payment row only says `succeeded` when the order does, a decline is retryable, and a
+ * refund (the `ORDER_CANCELLED` listener) is at-most-once. Real Mongo throughout, because the
+ * guarantees are the conditional writes; the provider is the real `fake` one.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -293,16 +291,10 @@ describe('refund on cancel', () => {
 });
 
 /**
- * Committing the order's held stock — the other thing a confirm does.
- *
- * These live here rather than in `cart/tests/unit/stock.test.ts` for the ordinary boundary
- * reason: committing is this service's work, and reaching `@modules/payments/service` from the
- * cart's suite is what `eslint-plugin-boundaries` forbids. The rest of
- * the lifecycle — checkout holds, cancel releases, the sweep expires — is asserted over there.
- *
- * The orders are placed through `orderService.create` rather than written as fixtures, because a
- * fixture order has no hold behind it and there would be nothing for a commit to claim. That is
- * the whole point being checked: units leave the shop if and only if they were paid for.
+ * Committing the order's held stock — the other thing a confirm does. Lives here, not in
+ * `cart/tests/unit/stock.test.ts`, because reaching `@modules/payments/service` from that suite
+ * is what `eslint-plugin-boundaries` forbids. Orders are placed via `orderService.create` rather
+ * than fixtures, so there is a real hold for the commit to claim.
  */
 /** Counters straight from the catalogue row, which is where the truth lives. */
 const countersOf = async (productId: unknown) => {

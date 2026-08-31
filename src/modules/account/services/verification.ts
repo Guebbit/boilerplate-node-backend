@@ -1,16 +1,10 @@
 /**
  * @module
- * Email verification — issuing the token and sending the mail, in one place.
- *
- * Three flows start a verification and they must not drift: signup (the first send), a profile
- * update that changes the address (the old confirmation no longer vouches for the new address),
- * and `POST /account/verify-request` (the re-send for the mail that never arrived). Each of them
- * calls this and nothing else.
- *
- * The old tokens are removed before the new one is issued, so at any moment exactly one
- * verification link works. Not for security — spending any of them proves the same mailbox — but
- * because a re-send exists for the user whose first mail vanished, and "the newest email is the
- * one that works" is the only behaviour that never confuses them.
+ * Email verification — issuing the token and sending the mail, in one place. Three flows start a
+ * verification (signup, a profile update that changes the address, and the explicit re-send) and
+ * must not drift, so each calls this and nothing else. Old tokens are removed before the new one
+ * is issued — not for security, since spending any of them proves the same mailbox, but so "the
+ * newest email is the one that works" and a re-send never confuses the user.
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
@@ -38,10 +32,8 @@ export const EMAIL_VERIFY_TOKEN_TTL_MS = 86_400_000;
 
 /**
  * Issue a fresh verification token for `user` and enqueue the email carrying it.
- *
  * @param user - the account to verify; must carry its credential fields (`tokens`)
- * @param context - the caller's context; its `locale` is the fallback language when the account
- *   has no stored preference of its own
+ * @param context - caller context; its `locale` is the fallback when the account has none
  * @returns resolves when the job is queued — the send itself happens in the email worker
  */
 export const sendVerificationEmail = (user: UserDocument, context: CallerContext): Promise<void> =>
@@ -67,12 +59,10 @@ export const sendVerificationEmail = (user: UserDocument, context: CallerContext
         });
 
 /**
- * The explicit re-send, `POST /account/verify-request` — the one of this function's three callers
- * that is a user asking for something, rather than a side effect of signup or an email change.
- *
+ * The explicit re-send, `POST /account/verify-request` — the one of this function's three
+ * callers that is a user asking for something, not a side effect of signup or an email change.
  * A wrapper around {@link sendVerificationEmail} rather than an emit inside it: signup and the
- * email-change path in `./profile` call that function too, and neither is "a request" in the
- * sense this audit action means — an emit inside the shared function would count both of them.
+ * email-change path call that function too, and neither counts as "a request" for this audit action.
  */
 export const requestEmailVerification = (
     user: UserDocument,
@@ -88,18 +78,12 @@ export const requestEmailVerification = (
     });
 
 /**
- * `POST /account/verify-request` end to end: load the caller's own account, refuse the two states
- * that cannot be verified, and send.
- *
- * The two refusals are the reason this exists rather than the controller loading the document and
- * checking them. `requestEmailVerification` takes an already-loaded user, so it could not enforce
- * its own precondition — an already-verified account reached it and got a fresh link that proves
- * nothing. Owning the load here is what lets the precondition sit next to the operation it
- * guards, where a second caller inherits it.
- *
- * Unlike the reset request there is no enumeration surface to blur: the caller is authenticated
- * and asking about their own account, so an already-verified account gets an honest 409 rather
- * than a soothing 200 that would re-send nothing.
+ * `POST /account/verify-request` end to end: loads the caller's own account, refuses the two
+ * states that can't be verified, and sends. The refusals live here since
+ * `requestEmailVerification` takes an already-loaded user and can't enforce its own precondition.
+ * Unlike the reset request, there's no enumeration surface to blur: the caller is authenticated
+ * and asking about their own account, so an already-verified one gets an honest 409, not a
+ * soothing 200 that re-sends nothing.
  */
 export const requestEmailVerificationFor = (
     userId: string,
@@ -117,11 +101,9 @@ export const requestEmailVerificationFor = (
 
 /**
  * Spend a verification token and mark the account verified.
- *
- * `postVerifyConfirm` has already found the token with `findLiveToken` and spent it with
- * `spendLiveToken` — the race between two simultaneous clicks is settled by the atomic `$pull`
- * inside the latter — so this is deliberately just the write and its emit, not a second copy of
- * that check. See `./tokens` for why finding and spending are two calls.
+ * `postVerifyConfirm` already found and spent the token — the race is settled by the atomic
+ * `$pull` in `spendLiveToken` — so this is deliberately just the write and its emit, not a
+ * second copy of that check. See `./tokens` for why finding and spending are two calls.
  */
 export const completeEmailVerification = (
     user: UserDocument,

@@ -2,12 +2,9 @@
  * @module
  * The invoice PDF comes out in the language its producer resolved. The code under test is the
  * generic PDF worker, but the scenario is this module's, so it lives here rather than in a
- * worker test asserting against strings that vanish once `orders` is deleted.
- *
- * `invoiceDocument` resolves the copy up front and the worker only interpolates — an ambient `t`
- * resolving against the boot language would fail silently instead. The second half covers the
- * upload chain, which still re-enters the locale by hand because multer consumes the stream
- * mid-request.
+ * worker test asserting against strings that vanish once `orders` is deleted. `invoiceDocument`
+ * resolves the copy up front and the worker only interpolates; the second half covers the upload
+ * chain, which re-enters the locale by hand because multer consumes the stream mid-request.
  */
 
 import { asStub } from '@tests/stub';
@@ -85,17 +82,10 @@ describe('the PDF worker renders the copy it was given', () => {
     });
 
     /**
-     * The document names the order it is for — and it has to do so for the caller who actually
-     * downloads invoices, which is the customer.
-     *
-     * `invoiceJob`'s order is deliberately the shape an OWNER's read produces: a plain object
-     * carrying `id`, with no `_id`, because `orderRepository.findByIdScoped` runs a scoped read
-     * through `applyOrderTransform` and the serializer deletes `_id` after writing `id`. An
-     * admin's unscoped read resolves a hydrated document instead, which carries both — so code
-     * reading `_id` works for an admin, and interpolates the literal string `undefined` for
-     * everyone else. That is precisely what shipped, in this title and in the PDF's filename,
-     * and no assertion existed to see it: the two shapes serialize identically on the wire, so
-     * only a value read before serialization can tell them apart.
+     * The document has to name the order for the customer downloading it. `invoiceJob`'s order
+     * is owner-shaped — `id` only, no `_id` — since a scoped read's `applyOrderTransform` deletes
+     * `_id` after writing `id`. An admin's unscoped read keeps both, so code reading `_id` renders
+     * the literal string `undefined` for everyone else.
      */
     it('names the order in the title for an owner-shaped read, not `undefined`', async () => {
         const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
@@ -145,11 +135,9 @@ describe('the PDF worker renders the copy it was given', () => {
  */
 describe('upload.single restores the locale', () => {
     /**
-     * Returns the whole pipeline — the locale-restoring multer wrapper, then the content check,
-     * then the commit to the image store. Asserted rather than assumed, because mounting only the
-     * first would type-check and silently accept a file whose bytes are not an image, and mounting
-     * only the first two would leave every upload staged in a temp directory with nothing ever
-     * pointing at it.
+     * Returns the whole pipeline — locale-restoring wrapper, content check, then image-store
+     * commit. Asserted rather than assumed: mounting only the first would accept non-image bytes,
+     * and mounting only the first two would leave uploads staged with nothing pointing at them.
      */
     it('returns the full guard chain', async () => {
         const { upload } = await import('@infrastructure/adapters/storage');

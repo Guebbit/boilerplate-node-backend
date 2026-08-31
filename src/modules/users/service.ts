@@ -31,17 +31,10 @@ import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /**
- * Validate user data for admin create/edit forms.
- * Returns an array of UI-friendly error messages (empty array means valid).
- *
- * Validates the WHOLE schema, not a `.pick()` of email/username/password: a pick would leave
- * `admin`, `active` and `imageUrl` unchecked, so a wrong-typed value reaches Mongoose untouched
- * and `POST /users` with `admin: 'not-a-boolean'` answers 500 (a CastError on save) instead of
- * the 422 the contract promises. The schema is not strict, so unrelated body keys (`id` on a PUT)
- * are still ignored.
- *
- * Takes `unknown` on purpose: this is the boundary that ESTABLISHES the type, so a narrower
- * parameter would only force its callers — all holding raw request bodies — to cast on the way in.
+ * Validate user data for admin create/edit forms; returns UI-friendly error messages (empty means
+ * valid). Validates the WHOLE schema, not a `.pick()`: a pick would leave `admin`/`active`/
+ * `imageUrl` unchecked, so a wrong-typed value would reach Mongoose and answer 500 instead of the
+ * 422 the contract promises. Takes `unknown` since this is the boundary that establishes the type.
  */
 export const validateData = (userData: unknown, requirePassword = true): ResponseErrorItem[] => {
     const schema = requirePassword ? zodUserSchema : zodUserSchema.partial({ password: true });
@@ -52,11 +45,9 @@ export const validateData = (userData: unknown, requirePassword = true): Respons
 };
 
 /**
- * Search users (DTO-friendly) — admin panel.
- * Uses shared search-helpers for pagination (OCP).
- *
- * No scope argument: `active` is an ordinary searchable column, handled by the repository's
- * `searchable.booleans` like any other filter, and independent of `deletedAt`.
+ * Search users (DTO-friendly) — admin panel. No scope argument: `active` is an ordinary
+ * searchable column, handled by the repository's `searchable.booleans` like any other filter,
+ * independent of `deletedAt`.
  */
 export const search = (
     filters: SearchUsersRequest = {}
@@ -65,10 +56,7 @@ export const search = (
     meta: PaginatedMeta;
 }> => userRepository.search(filters);
 
-/**
- * Get a single user by ID.
- * Returns undefined when no id provided; result union otherwise (LSP).
- */
+/** Get a single user by ID. Returns undefined when no id is provided. */
 export const getById = (id?: string) => {
     if (!id) return Promise.resolve();
     return userRepository.findById(id).then((user) => user ?? undefined);
@@ -76,13 +64,9 @@ export const getById = (id?: string) => {
 
 /**
  * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
- *
- * Fire-and-forget, like every other post-write dispatch in this codebase (`enqueueEmail`): a
- * `pendingImageKey` here only ever means a broker accepted the upload at request time (the
- * no-broker path resolves everything inline before the record is ever saved — see
- * `readUploadedImage`), so this is a queue publish, not a CPU-bound digest, and the caller must
- * not wait on it. Shared by the admin write path here and `account`'s signup/profile-update, since
- * both persist through this same `userRepository`.
+ * Fire-and-forget, like every other post-write dispatch here: a `pendingImageKey` only ever means
+ * a broker accepted the upload at request time, so this is a queue publish, not a CPU-bound
+ * digest, and the caller must not wait on it.
  */
 export const enqueueIfPending = (user: UserDocument): UserDocument => {
     if (user.pendingImageKey)
@@ -94,25 +78,12 @@ export const enqueueIfPending = (user: UserDocument): UserDocument => {
 };
 
 /**
- * Create a new user document, with no email confirmation step.
- *
- * The self-service path is `accountService.signup`, which sends a verification email and leaves
- * `verified` at the schema's `false`. This one exists for the admin write endpoints, where an
- * operator vouches for the address — which is why `verified` is hardcoded `true` here rather than
- * accepted from the caller: it is not a field `CreateUserRequest` exposes, and no caller in this
- * codebase has ever needed to override it.
- *
- * `password` is optional on this contract: an admin may set it directly, exactly as if the user had
- * registered it themselves, or leave it out. When it is left out, Mongoose still needs *something*
- * in the field (`required: true`, `select: false` — see `./model`), so a random value nobody is ever
- * told fills it in; the account is unusable until `sendSetupEmail` (or a later `PUT` with a real
- * password) gives it one. `sendSetupEmail: true` queues the same mail `account`'s "forgot your
- * password" flow sends, worded for "you have none yet" — see `USER_SETUP_REQUESTED` and
- * `account/module.ts`'s subscriber, which is where the token is actually issued.
- *
- * Typed off `CreateUserRequest` — the contract's own generated shape — rather than a hand-picked
- * `Pick<UserRecord, ...>`. `products/service.ts`'s `update`/`updateById` do the same off `Product`;
- * a hand-copied field list is what silently dropped `active` from this module's `update()` below.
+ * Create a new user document, with no email confirmation step — the self-service path is
+ * `accountService.signup`. `verified` is hardcoded `true` since an operator typing the address is
+ * the vouching. `password` is optional: left out, a random value nobody is told fills the
+ * `required` field, and `sendSetupEmail: true` queues a setup mail (`USER_SETUP_REQUESTED`) until
+ * a real one is set. Typed off `CreateUserRequest` rather than a hand-picked `Pick`, since a
+ * hand-copied list is what silently dropped `active` from `update()` below.
  */
 export const create = (
     data: CreateUserRequest & {
@@ -162,14 +133,10 @@ export const create = (
 };
 
 /**
- * Update an existing user document.
- * Returns a result envelope instead of throwing (LSP) — the protocol every service here follows.
- *
- * Typed off `UpdateUserByIdRequest` — the generated contract shape, shared with `updateById()`
- * below — rather than a hand-picked `Pick<UserRecord, ...>`. That hand-picked list was missing
- * `active`, so a `PUT /users/:id` with `active: false` fired `USER_DEACTIVATED` (see
- * `updateById()`) while never actually writing the field: the document stayed active. Typing this
- * off the contract's own shape means a field the contract declares cannot go unhandled here again.
+ * Update an existing user document. Returns a result envelope instead of throwing, the protocol
+ * every service here follows. Typed off `UpdateUserByIdRequest` rather than a hand-picked `Pick`:
+ * the old hand-picked list was missing `active`, so `active: false` fired `USER_DEACTIVATED`
+ * without ever writing the field.
  */
 export const update = (
     user: UserDocument,
@@ -202,10 +169,7 @@ export const update = (
         .then((savedUser) => generateSuccess(enqueueIfPending(savedUser)));
 };
 
-/**
- * Update an existing user by ID.
- * Fetches the document then delegates to update().
- */
+/** Update an existing user by ID. Fetches the document then delegates to update(). */
 export const updateById = (
     id: string,
     data: UpdateUserByIdRequest & { pendingImageKey?: string },
@@ -241,16 +205,11 @@ export const updateById = (
     });
 
 /**
- * Remove a user document (soft or hard delete).
- * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
- *
- * A hard delete takes the cart with it. The cart is its own document keyed by `userId`, reachable
- * only through the account, so leaving it behind would strand a row nothing can ever read or
- * clean up. A soft delete keeps it, the same way it keeps everything else about the account.
- *
- * The cleanup arrives as `user.deleted`, emitted and awaited before the write: this module does not
- * know the cart exists, which is what keeps the dependency arrow pointing cart → users rather than
- * both ways. Only the hard path emits, because a soft delete is a restore waiting to happen.
+ * Remove a user document (soft or hard delete). Soft delete toggles `deletedAt` (restores if
+ * already soft-deleted). A hard delete emits `user.deleted`, awaited before the write, so cart
+ * cleanup happens without this module knowing the cart exists — keeping the dependency arrow
+ * pointing cart → users. Only the hard path emits, since a soft delete is a restore waiting to
+ * happen.
  */
 export const remove = (
     user: UserDocument,
@@ -281,22 +240,12 @@ export const findByEmail = (email: string): Promise<UserDocument | undefined | n
     userRepository.findOneWithCredentials({ email });
 
 /**
- * Remove the given token from the user document and persist it.
- * Used to consume a one-time password-reset token after the reset completes.
- *
- * An atomic `$pull`, not a read-modify-write, for the same reason as `tokenAdd`/`tokenRemoveAll`
- * in `./model` — and here the read-modify-write was not merely lossy, it was a 500.
- *
- * `POST /account/reset-confirm` loads the user, changes the password (one `save()`), then calls
- * this (a second `save()` of the same loaded document). Two simultaneous confirms of one token
- * therefore both loaded the document at version V, and the second `save()` to arrive found the
- * version had moved: Mongoose raised a `VersionError`, the controller's blanket `.catch()` turned
- * it into a 500, and a user who clicked a reset link twice saw a server error on a request that
- * had, in fact, already worked.
- *
- * `$pull` is evaluated by mongod against the document as it exists at write time, so a second
- * consume of an already-spent token is a no-op rather than a conflict — which is what "one-time"
- * should mean at the storage layer, rather than being enforced only by whoever read first.
+ * Remove the given token from the user document and persist it — used to consume a one-time
+ * password-reset token after the reset completes. An atomic `$pull`, not read-modify-write:
+ * `POST /account/reset-confirm` saves the document twice (password, then this), so two
+ * simultaneous confirms of one token both loaded version V and a read-modify-write would raise a
+ * `VersionError` (500) on a request that had, in fact, already worked. `$pull` at write time
+ * makes a second consume a no-op instead.
  *
  * @param user - the loaded document, kept in step with the write for callers that read it back
  * @param token - the token value to spend
@@ -310,10 +259,7 @@ export const consumeToken = (user: UserDocument, token: string): Promise<boolean
         return modifiedCount > 0;
     });
 
-/**
- * Remove a user by ID (soft or hard delete).
- * Fetches the document then delegates to remove().
- */
+/** Remove a user by ID (soft or hard delete). Fetches the document then delegates to remove(). */
 export const removeById = (
     id: string,
     hardDelete = false

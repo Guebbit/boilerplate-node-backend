@@ -1,13 +1,9 @@
 /**
  * @module
- * The self-service account surface — profile update, authenticated password change, session
- * revocation and email verification — at the service/repository layer.
- *
- * Grouped by the invariant each defends, like `service.test.ts`: a profile update can't touch
- * role, account state or password; changing email must unverify the account; a wrong current
- * password must be a 422 never a 401, which would log out a valid session; a session handle must
- * revoke REFRESH tokens only; and at most one verification link may work, and it must be the
- * newest.
+ * The self-service account surface — profile update, password change, session revocation, email
+ * verification — at the service/repository layer, grouped by the invariant each defends: a
+ * profile update can't touch role/state/password; a wrong current password is a 422 never a 401
+ * (which would log out a valid session); at most one verification link works, always the newest.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -308,7 +304,11 @@ describe('tokenRemoveByValue', () => {
 
 describe('logoutCurrentSession', () => {
     it('revokes the named refresh token and records the logout', async () => {
+        // Reported HERE and not by the paired frontend: this is a real request the API answers, so
+        // it can count the logout that succeeded rather than the one that was attempted. `scope`
+        // separates it from a logout-everywhere without splitting the funnel across two names.
         const auditSpy = observePort(auditPort.emitAuditEvent);
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'phone');
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'laptop');
@@ -323,12 +323,19 @@ describe('logoutCurrentSession', () => {
                 outcome: 'success'
             })
         );
+        expect(analyticsSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: accountAnalyticsEvents.USER_LOGGED_OUT,
+                properties: { scope: 'session' }
+            })
+        );
     });
 
     it('records the logout even with no cookie to revoke', async () => {
         // `getRefreshToken` answers 200 for "already logged out here" — the audit event fires
         // either way, matching that: there is simply nothing to revoke.
         const auditSpy = observePort(auditPort.emitAuditEvent);
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
 
         await accountService.logoutCurrentSession(undefined, testCallerContext);
 
@@ -337,6 +344,9 @@ describe('logoutCurrentSession', () => {
                 action: accountAuditActions.AUTH_LOGGED_OUT,
                 outcome: 'success'
             })
+        );
+        expect(analyticsSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ event: accountAnalyticsEvents.USER_LOGGED_OUT })
         );
     });
 });

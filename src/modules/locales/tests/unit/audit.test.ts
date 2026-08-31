@@ -1,13 +1,10 @@
 /**
  * @module
- * The audit vocabulary this module emits — `src/modules/locales/audit.ts`.
- *
- * Pinned string by string, because an action is a WIRE CONTRACT, not just an identifier: the
- * constant's name is this codebase's business, but the string is read by log queries, dashboards
- * and alert rules outside the repo that are not refactored with it.
- *
- * `tests/cross-cutting/audit-actions.test.ts` proves the shape of every module's vocabulary; the
- * values are asserted here, by their owner.
+ * The audit vocabulary this module emits — `src/modules/locales/audit.ts`. Pinned string by
+ * string because an action is a WIRE CONTRACT, not just an identifier: the string is read by log
+ * queries, dashboards and alert rules outside the repo that aren't refactored with it. The shape
+ * is proved by `tests/cross-cutting/audit-actions.test.ts`; the values are asserted here, by their
+ * owner.
  */
 
 import type { AuditAction } from '@infrastructure/observability/audit';

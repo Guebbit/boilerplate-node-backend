@@ -1,13 +1,9 @@
 /**
  * @module
- * Who the two demo accounts are: their ids, and how to log in as them.
- *
- * In the kernel rather than in `users` because four modules need a handle on these people and only
- * one owns the record — sharing six string literals here costs less than three registry edges.
- *
- * Two constraints before editing: the credentials must stay fixed (the frontend's e2e login types
- * them, both READMEs quote them), and the password stays PLAINTEXT (the schema's pre-save hook
- * hashes it; a hash written here would drift from that hook).
+ * Who the two demo accounts are: their ids, and how to log in as them. Lives in the kernel, not
+ * `users`, since four modules need a handle on these people and only one owns the record. Two
+ * constraints before editing: credentials must stay fixed (the frontend's e2e login types them),
+ * and the password stays PLAINTEXT — the schema's pre-save hook hashes it.
  *
  * See: docs/tools/demo-profile.md#the-two-seed-accounts
  */

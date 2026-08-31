@@ -1,14 +1,11 @@
 /**
  * @module
- * Delivery — the rates rules, the shipment lifecycle, and the fake courier.
- *
- * What is worth pinning: the free-above rule prices against the items total and nothing else;
- * an order reaching `shipped` gets exactly one parcel and exactly one email however many times
- * the status wobbles; the courier tick moves the ORDER first (conditionally) and only then the
- * parcel, so the two can lag but never contradict.
- *
- * Real Mongo (`setupTestDb`); the shipped email is asserted through the mocked queue, the same
- * seam the cart's confirmation-email tests use.
+ * Delivery — the rates rules, the shipment lifecycle, and the fake courier. What is worth
+ * pinning: the free-above rule prices against the items total alone; `shipped` produces exactly
+ * one parcel and one email however many times the status wobbles; and the courier tick moves the
+ * order first, then the parcel, so the two can lag but never contradict. Real Mongo
+ * (`setupTestDb`); the shipped email is asserted through the mocked queue, the cart's
+ * confirmation-email seam.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

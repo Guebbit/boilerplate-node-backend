@@ -1,11 +1,9 @@
 /**
  * @module
- * The payment schema's contract.
- *
- * One declaration here is the module's whole idempotence story: `unique: true` on `orderId`. An
- * order has at most one payment, enforced by the database, so a retried intent — a double-clicked
- * checkout, a replayed webhook — fails its insert instead of creating a second payment against the
- * same order. Remove it and nothing throws; the shop simply becomes able to charge twice.
+ * The payment schema's contract. One declaration here is the module's whole idempotence story:
+ * `unique: true` on `orderId` — an order has at most one payment, enforced by the database, so a
+ * retried intent (double-clicked checkout, replayed webhook) fails its insert instead of creating
+ * a second payment. Remove it and nothing throws; the shop simply becomes able to charge twice.
  */
 
 import { paymentSchema } from '@modules/payments/model';

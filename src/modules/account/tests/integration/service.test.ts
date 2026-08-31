@@ -1,13 +1,10 @@
 /**
  * @module
- * `src/modules/account/service.ts` — the security invariants of signup, login, password change
- * and bulk token removal.
- *
- * Grouped by the invariant each defends, not by function: the two login failures must be
- * INDISTINGUISHABLE (or the endpoint enumerates accounts), a soft-deleted account must not log
- * in, and a password must never be stored as it arrived. Each survives a mutation a happy-path
- * test cannot see, and each is a real incident if it regresses — the controller suites that
- * covered this file before only exercised the happy paths.
+ * `services/index.ts` — the security invariants of signup, login, password change and bulk
+ * token removal. Grouped by the invariant each defends, not by function: the two login failures
+ * must be INDISTINGUISHABLE (or the endpoint enumerates accounts), a soft-deleted account must
+ * not log in, and a password must never be stored as it arrived — each survives a mutation a
+ * happy-path test cannot see, which is a real incident if it regresses.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -17,6 +14,19 @@ import { accountService } from '@modules/account/services';
 import { userRepository } from '@modules/users';
 import { TokenType, type Token, type UserDocument } from '@modules/users';
 import { asReject, asSuccess } from '@tests/response';
+import * as analyticsPort from '@infrastructure/observability/analytics';
+import { accountAnalyticsEvents } from '../../analytics';
+import { observePort } from '@tests/ports';
+
+/*
+ * The analytics port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
+ * getter a CommonJS namespace import exposes. See `tests/support/ports.ts`.
+ */
+jest.mock('@infrastructure/observability/analytics', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/analytics'),
+    emitAnalyticsEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -399,6 +409,22 @@ describe('tokenRemoveAll', () => {
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['reset-a']);
+    });
+
+    it('reports the logout under the same name as a single-session one', async () => {
+        // One funnel counts logouts, whichever route ended the session; `scope` is what tells the
+        // two apart. A second event name would make every rate built on the first silently wrong.
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
+        const user = await createUserWithBothTokenTypes();
+
+        await accountService.tokenRemoveAll(String(user._id), TokenType.REFRESH, testCallerContext);
+
+        expect(analyticsSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: accountAnalyticsEvents.USER_LOGGED_OUT,
+                properties: { scope: 'everywhere' }
+            })
+        );
     });
 
     it('leaves the other types alone', async () => {

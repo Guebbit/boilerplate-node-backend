@@ -1,16 +1,10 @@
 /**
  * @module
- * The paged-list controller, written once.
- *
- * A `list` route is a GET with no body-carrying sibling: the query string is the only place a
- * filter can arrive from, so the whole controller is `readInput(surface:'list')` → validate against
- * the generated query schema → run the service → answer its `data` → `catchAs`. Inventory's two
- * boards are that shape twice over, down to the docblock on the schema.
- *
- * The sibling of `createSearchController`, and separate from it on purpose: a search reads the body
- * FIRST (that is what lets one controller serve `GET /x` and `POST /x/search`), and a list has no
- * body to read. Folding the two would mean a `surface` knob on a factory whose whole subject is
- * where the input comes from.
+ * The paged-list controller, written once: `readInput(surface:'list')` → validate against the
+ * query schema → run the service → answer its `data` → `catchAs`. Sibling of
+ * `createSearchController`, kept separate because a search reads the body FIRST (letting one
+ * controller serve `GET /x` and `POST /x/search`), while a list has no body to read — folding
+ * the two would mean a `surface` knob on a factory whose whole subject is where input comes from.
  */
 
 import type { Request, Response } from 'express';
@@ -65,10 +59,9 @@ export const createListController = <TSchema extends ZodType>({
     // instead of the generic name an anonymous function would carry.
     const handler = {
         [operation](request: Request, response: Response) {
-            // readInput: merges the query string (plus any extra fields the module declared) into
-            // one object, per the `list` surface's rules — see docs/theory/request-input.md.
-            // parseBody: validates that object against the query schema; 422s and returns
-            // undefined on failure.
+            // readInput merges the query string into one object per the `list` surface's rules
+            // (docs/theory/request-input.md); parseBody then validates it against the query
+            // schema, 422ing and returning undefined on failure.
             const parsed = parseBody(
                 schema,
                 readInput(request, { ...input, surface: 'list' }),

@@ -1,11 +1,10 @@
 /**
  * @module
  * Domain events this module emits — declared by augmenting the kernel's payload map, so the
- * catalogue grows with the modules that own events and no shared file enumerates domains.
- *
- * Exactly one. Stock changes aren't events (see `products/events.ts`) — the counter and the row
- * explaining it are one write. A hold timing out is different: `orders` must cancel the order,
- * but it already imports this module, so the event avoids importing back and forming a cycle.
+ * catalogue grows with the modules that own events and no shared file enumerates domains. Exactly
+ * one: stock changes aren't events (see `products/events.ts`), since the counter and the row
+ * explaining it are one write. A hold timing out is different — `orders` must cancel the order,
+ * but already imports this module, so the event avoids importing back and forming a cycle.
  *
  * See: docs/modules/inventory.md
  */
@@ -14,12 +13,9 @@
 declare module '@kernel/events' {
     interface DomainEventMap {
         /**
-         * A hold's window closed before the order was paid for, and its units are already
-         * released.
-         *
-         * Emitted AFTER the release, by `runReservationSweep` — past tense on purpose: the
-         * listener (`orders`) is compensating for a fact, not approving a plan, and cancels the
-         * order so it doesn't stay `pending` with its stock gone.
+         * A hold's window closed before the order was paid for; its units are already released.
+         * Emitted AFTER the release, past tense on purpose — the listener (`orders`) cancels the
+         * order rather than approving a plan, so it doesn't stay `pending` with its stock gone.
          */
         'inventory.reservation_expired': { orderId: string };
     }

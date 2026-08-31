@@ -1,16 +1,9 @@
 /**
  * @module
- * `deleteAccountRequest` and `deleteAccountConfirm` — the two-step account-deletion controllers,
- * at the wiring level rather than the service's own unit tests.
- *
- * The property worth pinning at THIS layer is enumeration prevention: an unknown email must
- * answer 200 exactly like a known one, so a caller cannot use the delete-request endpoint to
- * learn which addresses have accounts. The confirm side pins the opposite kind of ambiguity —
- * an already-spent token and a never-live one both refuse with the same 422, so neither leaks
- * which case actually happened.
- *
- * Every collaborator is mocked; what content the request/confirm mails carry is asserted where
- * they are built, not here — see `self-service.test.ts` and `emails.test.ts`.
+ * `deleteAccountRequest` and `deleteAccountConfirm` — two-step account deletion, at the wiring
+ * level. Pins enumeration prevention: an unknown email answers 200 like a known one, and a
+ * spent or never-live token both refuse with the same 422, so neither leaks which case happened.
+ * Every collaborator is mocked; mail content is asserted in `emails.test.ts`.
  */
 
 import { deleteAccountRequest } from '@modules/account/controllers/delete-account-request';
@@ -28,11 +21,10 @@ jest.mock('@modules/users', () => ({
 }));
 
 /*
- * `requestAccountDeletion` and `removeOwnAccount` are the two functions under test here now, not
- * `tokenAdd`/`userService.remove` directly: both moved behind these wrappers this session, along
- * with the audit/analytics emit each one carries — see `profile.ts`/`authentication.ts`. This
- * suite asserts the controller reaches the right wrapper with the right arguments; the emit itself
- * is that wrapper's own unit test's job, not this one's.
+ * `requestAccountDeletion` and `removeOwnAccount` are under test here, not `tokenAdd` /
+ * `userService.remove` directly — both sit behind these wrappers, along with the audit/analytics
+ * emit each carries (see `profile.ts`/`authentication.ts`). The emit itself is that wrapper's
+ * own unit test's job, not this one's.
  */
 jest.mock('@modules/account/services', () => ({
     __esModule: true,

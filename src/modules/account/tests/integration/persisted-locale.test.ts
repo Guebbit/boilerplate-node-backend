@@ -1,16 +1,10 @@
 /**
  * @module
- * The persisted `locale` on the user document.
- *
- * `Accept-Language` answers "what language is this request in", which is the right source for a
- * response and all a stateless API needs for one. It cannot answer "what language should the
- * email a worker sends at 3am be in", because there is no request to read. This field is that
- * answer, and it only works if it is actually captured at signup and actually writable
- * afterwards — hence both halves below.
- *
- * It is `account`'s spec rather than a central i18n one because signup is what captures the field,
- * and signup is behind this module's routes. The edits go through the `users` barrel, which is the
- * same surface `account` uses in production — it is a second service over the same entity.
+ * The persisted `locale` on the user document. `Accept-Language` answers "what language is
+ * this request in" — enough for a response, but not for "what language should the email a
+ * worker sends at 3am be in", since there is no request to read then. This field is that
+ * answer, captured at signup and writable afterwards — hence both halves below — and it lives
+ * in `account` because signup, which captures it, is behind this module's routes.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

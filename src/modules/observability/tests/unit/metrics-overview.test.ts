@@ -1,20 +1,10 @@
 /**
  * @module
- * `GET /observability/metrics/overview` — that the domain rows carry real numbers.
- *
- * This exists because of how the endpoint reaches those numbers. The counters belong to `account`,
- * `cart` and `orders`; importing them here would give `observability` a dependency on three
- * domains and make deleting any of them a compile error in the one module whose job is to outlive
- * them. So the controller resolves each counter by metric NAME off the shared prom registry.
- *
- * That indirection is untyped by construction — a renamed metric, or a module whose `metrics.ts`
- * is never imported and therefore never registers, both degrade to "counter absent" and report
- * zero. Nothing else in the suite would notice: the only other coverage is a smoke test asserting
- * the endpoint returns 200, which it does just as happily with every row zeroed.
- *
- * Hence one test per wired row, each incrementing the real counter and reading the real registry.
- * The absent-counter path is asserted too, because that is the state every deleted module leaves
- * behind and it must stay a zero rather than a crash.
+ * `GET /observability/metrics/overview` — that the domain rows carry real numbers. The controller
+ * resolves each counter by metric NAME off the shared prom registry rather than importing
+ * `account`/`cart`/`orders` directly, so a renamed metric or an unregistered module both silently
+ * degrade to zero and nothing else would notice. Hence one test per wired row, incrementing the
+ * real counter; the absent-counter path is asserted too, since that's what a deleted module leaves.
  */
 
 import { asStub } from '@tests/stub';

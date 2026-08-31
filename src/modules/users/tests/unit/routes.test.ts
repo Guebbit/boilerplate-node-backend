@@ -1,16 +1,9 @@
 /**
  * @module
- * The user-administration route table.
- *
- * Every route here is admin-only, and it is admin-only by ONE line — `router.use(getAuth, isAuth,
- * isAdmin)` at the top. That is the strongest arrangement available (a route added later inherits
- * the guard rather than having to remember it), and it is also the one whose failure is widest: if
- * that single `use` loses `isAdmin`, the entire user directory — every email address in the
- * system — becomes readable by any logged-in customer, with no other line in the file changing.
- *
- * So the guard is asserted per endpoint rather than once. A single `expect(routerMiddleware(...))`
- * would state the same fact, but it would keep passing if a route were later mounted above the
- * `use`, which is exactly the mistake `feedback` and `locales` are shaped to avoid.
+ * The user-administration route table. Every route is admin-only by one line —
+ * `router.use(getAuth, isAuth, isAdmin)` — so a route added later inherits the guard, but losing
+ * `isAdmin` there makes the entire directory readable by any logged-in customer. The guard is
+ * asserted per endpoint rather than once, so a route mounted above that `use` still fails here.
  */
 import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 
@@ -30,6 +23,7 @@ import { router } from '@modules/users/routes';
 const chainOf = (signature: string) =>
     routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
+/** Every documented endpoint on this router, in mount order. */
 const ALL = [
     'POST /search',
     'GET /',

@@ -1,10 +1,8 @@
 /**
  * @module
  * The rows themselves — one language's translated keys, read a page at a time and written one key
- * or one batch at a time.
- *
- * Every write here narrows to a single tenant, because a key is only unique within one keyspace
- * and a collision only matters inside the tree it would share.
+ * or one batch at a time. Every write narrows to a single tenant: a key is unique only within one
+ * keyspace, and a collision only matters inside the tree it shares.
  */
 
 import type {
@@ -33,12 +31,8 @@ import { languageNotFound, readableTenant, rejectUnknownTenant } from './languag
 /**
  * One page of a language's rows, for the editing screen.
  *
- * `tenant` arrives as the caller typed it and is passed through {@link readableTenant}, which
- * drops an id this deployment does not know instead of refusing the request. That leniency is the
- * read half of the same decision `rejectUnknownTenant` makes strictly for every write in this
- * file, and it lives beside its sibling rather than in the controller for the reason the pair's
- * docblock gives: two halves of one policy, split across two layers, read as one of them having
- * been forgotten.
+ * `tenant` goes through {@link readableTenant}, which drops an unknown id instead of refusing the
+ * request — the lenient read half of the strict write policy in `rejectUnknownTenant`.
  */
 export const searchEntries = async (
     tag: string,
@@ -121,10 +115,8 @@ export const createEntry = async (
 /**
  * Change one entry's text.
  *
- * The row is looked up by id and then CHECKED against the language in the path, so
- * `PUT /locales/it/entries/<a spanish entry>` is a 404 rather than a silent cross-language edit.
- * Two routes addressing one row is the shape this API uses everywhere; the path segment being
- * decorative is not.
+ * Looked up by id, then CHECKED against the language in the path — so
+ * `PUT /locales/it/entries/<a spanish entry>` 404s rather than silently cross-editing.
  */
 export const updateEntry = async (
     tag: string,
@@ -189,13 +181,9 @@ export const deleteEntry = async (
 /**
  * Bulk import, in either of its two meanings.
  *
- * `replace` deletes what the body did not name; `merge` leaves it alone. The flag is the ONLY
- * difference, which is why they are one function — two implementations of an import are two places
- * for the collision rules to be got right, and the second one is always the one that is not.
- *
- * The whole batch is validated before anything is written. A half-applied import of five hundred
- * keys is worse than a rejected one: the caller cannot tell which half landed, and re-sending is
- * only safe because nothing was.
+ * `replace` deletes keys the body did not name; `merge` leaves them alone — the only difference,
+ * kept as one flag rather than two functions. The whole batch validates before anything writes: a
+ * half-applied import is worse than a rejected one.
  */
 export const importEntries = async (
     tag: string,

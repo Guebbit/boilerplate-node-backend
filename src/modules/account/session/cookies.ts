@@ -1,12 +1,9 @@
 /**
  * @module
- * Cookie Service — HTTP cookie creation and destruction, decoupled from JWT token logic.
- *
- * Two cookies, two jobs: `jwt` carries the refresh token itself and is the credential, `isAuth` is
- * a non-secret UI hint so the client shell can render the right chrome before its first request
- * answers. Flag-by-flag rationale for the `jwt` cookie is in the doc below.
- *
- * See: docs/modules/account-sessions.md
+ * Cookie service — HTTP cookie creation and destruction, decoupled from JWT logic. Two cookies,
+ * two jobs: `jwt` carries the refresh token and is the credential, `isAuth` is a non-secret UI
+ * hint so the client shell can render the right chrome before its first request answers. See
+ * docs/modules/account-sessions.md for the flag-by-flag rationale.
  */
 
 import type { Response } from 'express';

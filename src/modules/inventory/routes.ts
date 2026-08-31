@@ -20,10 +20,8 @@ import { postReservationsSweep } from './controllers/post-reservations-sweep';
 export const router = Router();
 
 /*
- * Every inventory route is staff's, and the customer-facing half of this module is not a route at
- * all: a shopper learns about stock from `available` on the product they are looking at. Exposing
- * the counters or the ledger publicly would tell competitors what sells and tell customers how
- * close they are to missing out, which is a dark pattern when it is true and a lie when it is not.
+ * Exposing the counters or ledger publicly would tell competitors what sells and tell customers
+ * how close they are to missing out — a dark pattern when true, a lie when not.
  */
 router.use(getAuth, isAuth, isAdmin);
 

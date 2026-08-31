@@ -1,14 +1,10 @@
 /**
  * @module
- * Contract tests for /orders.
- *
- * This resource is why the contract suite exists. The list endpoint returned
- * `totalItems`/`totalQuantity`/`totalPrice` while `openapi.yaml` required a single `total`,
- * and `GET /orders/{id}` returned a *different shape depending on the caller's role* — the
- * scoped (non-admin) path aggregated the computed fields in, the admin path did a plain
- * `findById` and did not. Nothing caught either, because no test crossed HTTP.
- *
- * Both role branches of `getById` are asserted below for exactly that reason.
+ * Contract tests for /orders. This resource is why the contract suite exists: the list endpoint
+ * returned `totalItems`/`totalQuantity`/`totalPrice` while `openapi.yaml` required a single
+ * `total`, and `GET /orders/{id}` answered a different shape per caller role — nothing caught
+ * either because no test crossed HTTP. Both role branches of `getById` are asserted below for
+ * that reason.
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -121,11 +117,9 @@ describe('GET /orders/{id}', () => {
     });
 
     /*
-     * One case per role, because the two roles take different queries into `getById` and used to
-     * answer differently for the same malformed id: the admin's `findById` raised a Mongoose
-     * `CastError`, which the controller mapped to 404, while the scoped aggregate's own coercion
-     * raised a driver `BSONError`, which reached the interpreter and answered 422. A single
-     * assertion over one role would have passed throughout.
+     * One case per role: the two roles used different queries and used to answer differently for
+     * a malformed id — admin's `findById` raised a Mongoose `CastError` mapped to 404, the scoped
+     * aggregate's own coercion raised a `BSONError` that reached the interpreter as 422.
      */
     it.each([['admin'], ['user']] as const)(
         '404s on a malformed id for a %s caller',

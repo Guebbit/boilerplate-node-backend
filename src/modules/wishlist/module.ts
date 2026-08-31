@@ -1,16 +1,10 @@
 /**
  * @module
- * The wishlist: one document per user, holding product references and nothing else.
- *
- * Depends on products because a saved line is meaningless without the product it points at, on
- * users because the list belongs to an account, and on cart because the move-to-cart exit writes
- * a cart line — the same one-way arrows the cart itself declares. Products and users reach back
- * the same way they reach the cart: a deleted product must leave every wishlist and a destroyed
- * account must take its wishlist with it, both arriving as domain events so the import graph
- * stays acyclic.
- *
- * A saved list with one exit into the cart. It holds no rules worth modelling — deleting it costs the
- * shop a convenience, not a capability.
+ * The wishlist: one document per user, holding product references and nothing else. Depends on
+ * products (a saved line is meaningless without one), users (the list belongs to an account), and
+ * cart (move-to-cart writes a line). Products and users reach back the same way they reach the
+ * cart — a deleted product or account cleans up via domain events, keeping the import graph
+ * acyclic. No rules worth modelling here: deleting it costs a convenience, not a capability.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      cart, products, users

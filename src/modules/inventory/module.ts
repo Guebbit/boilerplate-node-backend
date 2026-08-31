@@ -1,7 +1,6 @@
 /**
  * @module
  * Inventory: the two counters, the reservation lifecycle, and the ledger that explains both.
- *
  * Counters live on the product document (no join needed), but only this module writes them —
  * each transition is exactly-once via a conditionally claimed status, so a cancel racing the
  * sweep or a duplicate webhook still resolves to one winner.

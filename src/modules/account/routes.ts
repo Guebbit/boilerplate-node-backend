@@ -3,8 +3,6 @@
  * Express router for the account module: auth (login, signup, refresh, logout), password reset,
  * email verification, sessions, and the address book. See `./module.ts` for the mount point and
  * `docs/modules/account.md` for the story.
- *
- * See: docs/modules/account.md
  */
 
 import { Router } from 'express';
@@ -41,16 +39,11 @@ router.use(getAuth);
 
 /*
  * Credentials and auth-state changes: never cacheable. Mounted here rather than per controller so
- * a route added later cannot silently omit it — see `noStore`.
- *
- * It covers `GET /account` too, deliberately. That route once also mounted `setCache`, whose
- * `response.set('Cache-Control', …)` REPLACES the header this sets — so the one router-wide
- * guarantee was silently off for the one route serving the caller's own profile, and a browser
- * stored it for an hour. A profile is the caller's identity: `no-store` is the answer, and the
- * read is one indexed lookup.
- *
- * That combination can no longer recur silently: `noStore` marks the response, and `setCache`
- * refuses to run on one it finds marked — see both in `infrastructure/http/middlewares/cache.ts`.
+ * a route added later cannot silently omit it — see `noStore`. Covers `GET /account` too,
+ * deliberately: that route once also mounted `setCache`, whose `Cache-Control` REPLACES the
+ * header this sets, so a browser cached the caller's own profile for an hour. `noStore` marks the
+ * response and `setCache` now refuses to run on one it finds marked — see both in
+ * `infrastructure/http/middlewares/cache.ts`.
  */
 router.use(noStore);
 

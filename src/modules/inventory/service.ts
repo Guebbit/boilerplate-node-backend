@@ -1,14 +1,9 @@
 /**
  * @module
- * Inventory — the only place stock changes.
- *
- * One rule holds it together: a counter never moves without a ledger row, and never the reverse.
- * Both halves live in `applyTransition`, which every function here goes through.
- *
- * No Mongo transactions, matching the rest of the repo — the resulting gaps are noted at the call
- * sites that own them.
- *
- * See: docs/modules/inventory.md
+ * Inventory — the only place stock changes. A counter never moves without a ledger row, and
+ * never the reverse; both halves happen inside `applyTransition`, which every function here
+ * goes through. No Mongo transactions, matching the rest of the repo — gaps are noted at the
+ * call sites that own them. See: docs/modules/inventory.md
  */
 
 import { Types } from 'mongoose';
@@ -54,12 +49,8 @@ export interface StockShortfall {
 }
 
 /**
- * What a reserve answers.
- *
- * A result rather than a boolean, because "we could not hold this" is not actionable on its own:
- * the customer has to be told WHICH line and how many are left, or they are left editing a cart by
- * trial and error. The failing line is read back at the moment it refused, so the number reported
- * is the one that blocked it rather than a stale pre-flight figure.
+ * What a reserve answers — a result rather than a boolean, so a refusal can name which line and
+ * how many are left, read back at the moment it refused rather than a stale pre-flight figure.
  */
 export type ReserveOutcome = { held: true } | { held: false; shortfalls: StockShortfall[] };
 
@@ -78,10 +69,8 @@ export interface MovementFilters extends SearchFilters {
 const SWEEP_BATCH_SIZE = 200;
 
 /**
- * Which repository call performs a given transition.
- *
- * Kept as a table so it reads against `counterDeltaFor`'s reason→deltas table: the two must agree,
- * and `tests/unit/transitions.test.ts` asserts they do.
+ * Which repository call performs a given transition — kept as a table so it stays in sync with
+ * `counterDeltaFor`'s reason→deltas table, asserted by `tests/unit/transitions.test.ts`.
  *
  * @param reason - the transition
  * @returns the conditional write that performs it, answering whether it matched
@@ -162,13 +151,11 @@ const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
 /**
  * Hold every line for an order, or hold none of it.
  *
- * The hold document is written first, and its unique `orderId` is what makes this exactly once —
- * a retried checkout loses the insert without touching a counter. Only then are the lines taken,
- * one conditional write each, so two checkouts racing the last unit resolve inside mongod.
- *
- * A failed line puts back what was taken and deletes the hold. The rollback goes through
- * `applyTransition` like everything else, so the ledger shows the take and the give-back rather
- * than netting them to silence.
+ * Exactly-once: the hold is written first, and its unique `orderId` means a retried checkout
+ * loses the insert without touching a counter. Lines are then taken one conditional write each,
+ * so two checkouts racing the last unit resolve inside mongod. A failed line rolls back through
+ * `applyTransition` — same as every other change — so the ledger shows the take and give-back
+ * rather than netting them to silence.
  *
  * @param orderId - the order the hold belongs to
  * @param lines - what it claims
@@ -193,9 +180,9 @@ export const reserveForOrder = async (
         );
         if (!held) {
             /*
-             * Read the blocker back before unwinding, so the number reported is the one that
-             * actually refused this line rather than whatever a pre-flight saw earlier. A product
-             * that has since been deleted reads as nothing available, which is true.
+             * Read the blocker back before unwinding, so the reported number is the one that
+             * actually refused this line, not what a pre-flight saw earlier. A deleted product
+             * reads as nothing available, which is true.
              */
             const blocker = await productRepository.findByIdRaw(line.productId);
             const shortfall: StockShortfall = {
@@ -285,9 +272,9 @@ export const releaseForOrder = async (
 /**
  * Are this order's units bound to the lines it currently holds?
  *
- * The hold froze its own copy of the basket, and `held`/`committed` mean the counters answer to
- * that copy — so anything rewriting the order's lines has to ask this first. A released or expired
- * hold, or no hold at all, binds nothing.
+ * The hold freezes its own copy of the basket; `held`/`committed` means the counters answer to
+ * that copy, so anything rewriting the order's lines must ask this first. A released, expired,
+ * or missing hold binds nothing.
  *
  * @param orderId - the order being asked about
  * @returns whether stock is currently committed to this order's lines
@@ -300,16 +287,13 @@ const isStockBoundToOrder = (orderId: string): Promise<boolean> =>
 /**
  * The expiry tick: every hold whose window has closed gives its units back.
  *
- * A job rather than an internal schedule — the application ships no scheduler, so this is driven
- * from outside, exactly as with the courier in `delivery`. Each hold is released here AND
- * announced: the release
- * frees the units, the announcement lets `orders` cancel the order behind it, so the shop never
- * keeps a `pending` order whose stock is gone. `orders`' own cancel calls back into
- * `releaseForOrder` and finds the hold already released, so neither path can double-release.
+ * Driven from outside — the app ships no scheduler, same as the courier in `delivery`. Each hold
+ * is released and announced: the release frees the units, the announcement lets `orders` cancel
+ * the order behind it. `orders`' own cancel calls back into `releaseForOrder` and finds the hold
+ * already released, so neither path can double-release.
  *
+ * @param context - audit context for `ADMIN_RESERVATIONS_SWEPT`; tests omit it to skip the emit
  * @returns how many holds were expired
- * @param context - caller context for the `ADMIN_RESERVATIONS_SWEPT` audit emit; omitted by the
- *   property/unit tests that call this as a plain helper — no context means no emit
  */
 export const runReservationSweep = async (context?: CallerContext): Promise<number> => {
     const stale = await reservationRepository.findExpired(new Date(), SWEEP_BATCH_SIZE);
@@ -346,15 +330,13 @@ export const runReservationSweep = async (context?: CallerContext): Promise<numb
 };
 
 /**
- * Units arrive from a supplier.
- *
- * The only guard is that the product exists, so a refusal means it does not.
+ * Units arrive from a supplier. The only guard is that the product exists, so a refusal means
+ * it does not.
  *
  * @param productId - the product
  * @param quantity - how many arrived; strictly positive, the contract enforces it too
- * @param note - what to record on the row: the supplier, the delivery note, the operator's words
- * @param context - caller context for the `ADMIN_STOCK_RECEIVED` audit emit; omitted by tests that
- *   call this as a plain helper — no context means no emit
+ * @param note - what to record: supplier, delivery note, operator's words
+ * @param context - audit context for `ADMIN_STOCK_RECEIVED`; tests omit it to skip the emit
  * @returns the counters after the delivery, or 404 if the product is unknown
  */
 export const receive = async (
@@ -389,19 +371,15 @@ export const receive = async (
 };
 
 /**
- * A stocktake correction — signed, because shrinkage is the common case and it is negative.
- *
- * A correction that would leave fewer units than are already reserved is refused: those units are
- * promised to orders that exist, and the fix is to cancel orders rather than let availability go
- * negative and oversell everyone behind it.
+ * A stocktake correction — signed, since shrinkage is the common case and negative. Refused if it
+ * would leave fewer units than are already reserved: those are promised to orders that exist, and
+ * the fix is to cancel orders rather than let availability go negative and oversell.
  *
  * @param productId - the product
  * @param delta - signed and non-zero; the controller rejects zero
- * @param note - why. An unexplained correction is what an audit is looking for.
- * @param context - caller context for the `ADMIN_STOCK_ADJUSTED` audit emit; omitted by tests that
- *   call this as a plain helper — no context means no emit
- * @returns the counters after the correction, 404 if the product is unknown, or 409 if it would
- *          fall below what is reserved
+ * @param note - why; an unexplained correction is what an audit looks for
+ * @param context - audit context for `ADMIN_STOCK_ADJUSTED`; tests omit it to skip the emit
+ * @returns the counters after the correction, 404 if unknown, or 409 if below reserved
  */
 export const adjust = async (
     productId: string,
@@ -421,10 +399,9 @@ export const adjust = async (
     if (!adjusted) {
         /*
          * The write's guard covers two things at once — the product existing and the correction
-         * fitting above what is reserved — so `false` alone cannot say which refused. Re-reading
-         * separates them, because a product hard-deleted between the check above and this write
-         * would otherwise be reported as a stock conflict, which is a misleading thing to hand an
-         * operator staring at a stocktake.
+         * fitting above what is reserved — so `false` alone can't say which refused. Re-reading
+         * separates them, so a product deleted between the check and this write reports 404
+         * rather than a misleading stock conflict.
          */
         const stillThere = await productRepository.findByIdRaw(productId);
         if (!stillThere) return generateReject(404, [t('inventory.product-not-found')]);
@@ -455,12 +432,8 @@ export const adjust = async (
 };
 
 /**
- * A page of the stock board — every product's counters, scarcest first.
- *
- * Sorted by what is left rather than by name, because the board answers "what do I need to order"
- * and that question wants the empty shelves at the top. Paged and sorted inside mongod: the sort
- * key is derived, so it is projected in an aggregation rather than computed here over every
- * product in the catalogue.
+ * A page of the stock board — every product's counters, scarcest first, sorted by what's left
+ * rather than name. Paged and sorted inside mongod via aggregation, since the sort key is derived.
  *
  * @param filters - `lowOnly` to keep only scarce rows, plus the shared `page`/`pageSize`
  * @returns the page and its pagination meta
@@ -479,10 +452,8 @@ export const listLevels = async (
 };
 
 /**
- * A page of the ledger, newest first.
- *
- * Paged rather than capped, and it reports `totalItems`: this is the record an auditor works
- * through, so a read that returned only the newest rows would misreport history as complete.
+ * A page of the ledger, newest first. Reports `totalItems` since this is the record an auditor
+ * works through — a read that silently truncated it would misreport history as complete.
  *
  * @param filters - `productId`, `reason`, and the shared `page`/`pageSize`
  * @returns the page and its pagination meta

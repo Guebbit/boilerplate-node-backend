@@ -1,16 +1,10 @@
 /**
  * @module
- * How a language fixture and an entry fixture are built.
- *
- * Two factories, because the two collections are addressed differently: a language is a record
- * with a pinned `_id` like any other, and an entry is identified by the pair `(locale, key)` — its
- * own id is an addressing detail rather than a fact about it. Both pin an id anyway so the
- * exported dataset is byte-stable across runs; see `@infrastructure/persistence/fixtures` for why
- * that is a determinism requirement and not a convenience.
- *
- * Every field a fixture does not state is left to `./model`'s `default:`, which is what keeps
- * `db/demo/demo-data.json` a record of what the SCHEMA does rather than of what a fixture guessed
- * it does.
+ * How a language fixture and an entry fixture are built. Two factories, since the
+ * collections are addressed differently — a language by a pinned `_id`, an entry by the
+ * pair `(locale, key)` — though both pin an id for a byte-stable exported dataset. Fields
+ * a fixture doesn't state fall to `./model`'s `default:`, keeping `demo-data.json` a
+ * record of the schema, not of a fixture's guess.
  */
 
 import type { Types } from 'mongoose';
@@ -26,11 +20,8 @@ export type LocaleOverrides = OverridesFor<Language> & {
 };
 
 /**
- * A language ready for `localeRepository.create`.
- *
- * `_id` and `tag` are required rather than optional: the id is what `upsertById` addresses the
- * fixture by, and the tag is what every entry references. Both are always set, so declaring them
- * optional would only force a `!` at each call site.
+ * A language ready for `localeRepository.create`. `_id` and `tag` are required, not
+ * optional: `upsertById` addresses the fixture by id, and every entry references the tag.
  */
 export type LocaleFixture = Partial<LocaleDocument> & {
     _id: Types.ObjectId;

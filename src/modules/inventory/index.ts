@@ -1,14 +1,10 @@
 /**
  * @module
- * Inventory — public barrel.
- *
- * The only surface a sibling module may import; lint enforces that reaching `./service` from
- * outside is an error rather than a shortcut.
- *
- * The repositories, both models and every counter primitive are deliberately absent. This module
- * exists so that nothing outside it can move a stock number, and publishing a repository would
- * hand back the ability it was created to take away. A sibling asks for a transition by name and
- * gets a boolean; what it costs in counters is not their business.
+ * Inventory — public barrel, the only surface a sibling module may import (lint enforces that
+ * reaching `./service` directly is an error). The repositories, both models and every counter
+ * primitive are deliberately absent: publishing one would hand back the ability this module
+ * exists to take away. A sibling asks for a transition by name and gets a boolean — what it costs
+ * in counters is not their business.
  *
  * See: docs/modules/inventory.md
  */

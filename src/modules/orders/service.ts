@@ -41,19 +41,10 @@ import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /**
- * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI.
- *
- * Filters: id, userId, productId, email
- * Pagination: page (1-based), pageSize
- *
- * Note on productId: product data is embedded rather than referenced, so the filter is on
- * `items.product._id` — declared once, in the repository's `searchable.objectIds`.
- *
- * @param search
- * @param scope - Additional query filters merged into the $match stage
- * @param context - caller context for the `orders_viewed` analytics emit; omitted by callers that
- *   are not a request answering `GET /orders` (tests, and any future internal reuse of this as a
- *   plain query helper) — no context means no emit, rather than a synthetic one.
+ * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI. `productId` filters
+ * `items.product._id`, since product data is embedded rather than referenced.
+ * @param scope - extra filters merged into the $match stage
+ * @param context - for the `orders_viewed` emit; omit outside a `GET /orders` request
  */
 export const search = (
     search: SearchOrdersRequest = {},
@@ -88,15 +79,10 @@ export const getById = (
 };
 
 /**
- * Report that an order was created — from wherever it was: the admin route (this module's own
- * `create`) or a customer's checkout (`@modules/cart`'s `orderConfirm`).
- *
- * Split out rather than folded into `create()`, because the two paths' writes cannot share more
- * than this: checkout resolves stock and its own rejection codes differently, holds a race-safe
- * cart-clear, and sends its own confirmation mail — the fact that an order now exists is the one
- * thing both are reporting. `actorRole` defaults to the caller's own role, but checkout overrides
- * it to `'user'` unconditionally — a purchase is a customer action regardless of whether the
- * account making it happens to be an admin's.
+ * Report that an order was created — from the admin route or a customer's checkout
+ * (`@modules/cart`'s `orderConfirm`), split out since the two paths' writes share only this
+ * fact. `actorRole` defaults to the caller's role, but checkout overrides it to `'user'`: a
+ * purchase is a customer action regardless of the account making it.
  */
 export const recordCreated = (
     order: OrderDocument,
@@ -120,20 +106,15 @@ export const recordCreated = (
 };
 
 /**
- * Create a new order from a list of { productId, quantity } items.
- * Looks up each product and stores a full snapshot in the order document.
- *
- * @param userId
- * @param email
- * @param items - Array of { productId, quantity }
+ * Create a new order from `{ productId, quantity }` items — looks up each product and stores a
+ * full snapshot.
+ * @param items - `{ productId, quantity }` pairs
  * @param context - caller context for the `order_created` analytics/audit emit
  */
-// `async`, so `toObjectId(userId)` below rejects rather than throws: a malformed id must reach
-// the caller the same way every other failure in this function does, as a rejected promise, not
-// a synchronous exception one level up. Written as a flat sequence of `await`s — write order,
-// hold its units, roll the order back on failure — rather than nested `.then()`s, for the same
-// reason `@modules/cart`'s `runCheckout` is: each step depends on the last step's resolved value,
-// so chaining nested a callback per step. Same order of operations, same rejection paths.
+// `async` so `toObjectId(userId)` rejects rather than throws — malformed input must reach the
+// caller as a rejected promise like every other failure here. Flat `await`s, not nested
+// `.then()`s, for the same reason `@modules/cart`'s `runCheckout` uses them: each step depends
+// on the last one's resolved value.
 export const create = async (
     userId: string,
     email: string,
@@ -163,14 +144,11 @@ export const create = async (
     }));
 
     /*
-     * Write the order, then hold its units — the same order of operations the storefront
-     * checkout uses, and forced by the same thing: a hold is keyed by the order it belongs
-     * to, so the order has to exist first.
-     *
-     * The admin path sells the same shelf the storefront does. Skipping the hold here is how
-     * a manually entered order oversells everything the checkout was carefully guarding, so
-     * this goes through exactly the same `reserveForOrder` — one conditional write per line,
-     * all-or-nothing, rolled back by `inventory` if any line cannot be covered.
+     * Write the order, then hold its units — a hold is keyed by the order it belongs to, so
+     * the order must exist first. The admin path sells the same shelf the storefront does:
+     * skipping the hold here is how a manual order oversells it, so this goes through the same
+     * `reserveForOrder` — one conditional write per line, all-or-nothing, rolled back by
+     * `inventory` if any line can't be covered.
      */
     const order = await orderRepository.create({
         userId: toObjectId(userId),
@@ -202,15 +180,10 @@ export const create = async (
 
     /*
      * The confirmation mail for THIS path only — `recordCreated` is shared with
-     * `@modules/cart`'s checkout, which sends its own, so putting it there would mail
-     * every storefront order twice.
-     *
-     * `context.locale` is the whole language chain here, unlike every other mail in
-     * this codebase, and the reason is that an admin-created order has no recipient
-     * record: only an address was supplied, so there is no stored preference to
-     * prefer over the request's. That is also why this used to sit in the controller
-     * — the request was the only source of a language, and until `CallerContext`
-     * carried one there was no way to reach it from here.
+     * `@modules/cart`'s checkout, which sends its own, so mailing here too would double-send.
+     * `context.locale` is the whole language chain: an admin-created order has no recipient
+     * record, only a supplied address, so there's no stored preference to prefer over the
+     * request's.
      */
     const mail = orderConfirmEmail(context.locale ?? getDefaultLocale(), email, order);
     void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
@@ -219,12 +192,8 @@ export const create = async (
 };
 
 /**
- * Update an existing order document (admin).
- * Only updates the fields provided.
- *
- * Writes the moves that are pure status — `processing`, `shipped`, `delivered`. A cancellation is
- * not one of them and lives in `cancelById`.
- *
+ * Update an existing order document (admin), only the fields provided. Writes pure-status moves
+ * (`processing`, `shipped`, `delivered`); cancellation lives in `cancelById`.
  * @param order
  * @param data
  */
@@ -357,15 +326,11 @@ export const updateById = (
     });
 
 /**
- * Remove an order document (soft or hard delete).
- * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
- *
- * The soft path is what an order actually wants most of the time: it is a financial record, and
- * unsetting it from a customer's view is not the same as destroying it. The hard path gives the
- * units back first — an order holds stock, so destroying the row without releasing it leaves the
- * shelf holding units for an order nobody can look up, until the TTL sweep notices and records
- * the deliberate deletion as an expiry.
- *
+ * Remove an order document (soft or hard delete). Soft toggles `deletedAt` (restores if already
+ * soft-deleted) — an order is a financial record, so hiding it isn't destroying it. Hard gives
+ * the units back first: an order holds stock, and destroying the row without releasing it
+ * leaves the shelf holding units for nothing, until the TTL sweep records the deletion as an
+ * expiry.
  * @param order
  * @param hardDelete
  */
@@ -413,40 +378,26 @@ export const removeById = (
         );
 
 /**
- * Which orders a caller is allowed to read.
- *
- * The authorization boundary for order reads: the difference between a user seeing their own
- * orders and seeing everyone's, and between seeing a soft-deleted order and not. `visibleScope`
- * is what makes it BOTH — `ownerScope` alone would answer "whose" and leave soft-deleted rows
- * visible to their owner.
- *
- * Returns `undefined` for admins, meaning "no restriction", so callers must spread it
- * (`{ ...callerScope(ctx), status: 'paid' }`) rather than treat it as a filter. Why the scope
- * rides in the read, and why a caller with no id throws rather than widening, are the shared
- * rule's to explain — see `createOwnerScope`.
+ * Which orders a caller is allowed to read — the authorization boundary for order reads: own
+ * orders vs everyone's, and a soft-deleted order visible or not. `visibleScope` makes it BOTH;
+ * `ownerScope` alone would leave soft-deleted rows visible to their owner. Returns `undefined`
+ * for admins ("no restriction"), so callers must spread it, not treat it as a filter — see
+ * `createOwnerScope` for why the scope rides in the read.
  */
 export const callerScope = createOwnerScope(orderRepository.visibleScope);
 
 /**
- * Which column of the lifecycle table a caller reads.
- *
- * Two actors reach the HTTP surface. `system` is not one of them: it names the moves that follow a
- * fact from outside the application, and no request may claim it.
- *
- * @param authContext - the caller
+ * Which column of the lifecycle table a caller reads. Two actors reach the HTTP surface;
+ * `system` names moves that follow a fact from outside the application, and no request may
+ * claim it.
  * @returns the actor whose permissions apply
  */
 const actorOf = (authContext?: Caller): OrderActor => (authContext?.admin ? 'admin' : 'customer');
 
 /**
- * The single-order response body: the order as it serializes, plus what this caller may do to it.
- *
- * The serialization is explicit because the two read branches return different things — the admin
- * branch a Mongoose document, the scoped branch an already-normalized plain object. `actions` has
- * to ride on the wire shape; set on a document it would be dropped by the schema's transform.
- *
- * @param order - the order, from either read branch
- * @param authContext - the caller whose options are being described
+ * The single-order response body: the order as it serializes, plus what this caller may do to
+ * it — explicit because the two read branches return different shapes, and `actions` must ride
+ * on the wire shape or the schema's transform drops it.
  * @returns the serialized order carrying its `actions`
  */
 const withActions = (
@@ -467,23 +418,13 @@ const withActions = (
 };
 
 /**
- * Cancel an order — the one write a customer may make to one, or the system makes when a
- * reservation times out unpaid.
- *
- * A conditional status move, not a read-check-write: the repository's filter carries the
- * caller's scope AND the `pending` requirement, so a cancel racing the admin's "shipped" (or a
- * double-clicked cancel) resolves at the storage layer — exactly one write matches. The
- * follow-up read on the `null` branch exists only to tell 404 from 409 in the answer; by then
- * the decision is already made.
- *
- * @param id - the order to cancel
- * @param authContext - whose view of the collection the write happens in ({@link callerScope})
- * @param context - caller context for the audit/analytics emit. Optional: the reservation-sweep
- *   expiry (`module.ts`'s `RESERVATION_EXPIRED` handler) calls this with no context at all — a
- *   lease timing out is not a request, so there is nothing to attribute it to. The audit entry
- *   still fires (tagged `actor_role: 'admin'`, `actor_user_id: 'system'` — the order's state still
- *   changed and the trail must say so), and analytics reports `order_reservation_expired` rather
- *   than `order_cancelled`: the same status move, a different reason for it.
+ * Cancel an order — the one write a customer may make, or the system makes when a reservation
+ * times out unpaid. A conditional status move, not read-check-write: the filter carries the
+ * caller's scope AND the `pending` requirement, so a racing admin "shipped" (or a double-click)
+ * resolves at the storage layer — exactly one write matches. The follow-up read on `null` only
+ * tells 404 from 409; the decision is already made.
+ * @param context - omitted by the reservation-sweep expiry, which is not a request; still
+ *   audited as a system actor and reported under its own analytics name
  */
 export const cancelById = (
     id: string,
@@ -513,19 +454,13 @@ export const cancelById = (
         .then(async (order) => {
             if (order) {
                 /*
-                 * The hold is given back. After the status write, deliberately: the conditional
-                 * move is what guarantees this runs at most once per order — a second cancel
-                 * loses the `$in: ['pending']` match and never reaches here.
-                 *
-                 * That is now belt AND braces, because `releaseForOrder` claims the
-                 * reservation's own status conditionally too. Either guard alone would be
-                 * enough; both exist because the two callers are different — this one is a
-                 * customer cancelling, the sweep is a deadline passing, and they can happen at
-                 * the same moment. Exactly one of them moves the counters.
-                 *
-                 * Whether it released is not checked. An order cancelled after its hold already
-                 * expired is a perfectly ordinary sequence, and there is nothing left to do
-                 * about it: the units are already back.
+                 * The hold is given back after the status write, deliberately: the conditional
+                 * move guarantees this runs at most once per order — a second cancel loses the
+                 * `$in: ['pending']` match. Belt AND braces, since `releaseForOrder` claims the
+                 * reservation's status conditionally too — both guards exist because the two
+                 * callers (a customer cancelling, the sweep's deadline) can race, and exactly
+                 * one moves the counters. Unchecked here: a hold already expired is an ordinary
+                 * sequence, the units are already back.
                  */
                 await inventoryService.releaseForOrder(String(order._id));
 

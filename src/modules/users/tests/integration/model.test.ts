@@ -1,12 +1,9 @@
 /**
  * @module
- * Credentials must never reach a response body.
- *
- * A raw Mongoose user document carries the bcrypt hash and every live refresh token, so two
- * independent mechanisms guard `GET /users` / `GET /users/:id`: `select: false` on the schema
- * keeps them from being loaded, and `applyUserTransform`'s allowlist strips them again at
- * serialization — including `.lean()` results, which bypass `toJSON` entirely. Both are asserted
- * here, since either alone would let the leak back in through a path the other doesn't cover.
+ * Credentials must never reach a response body. A raw Mongoose user document carries the bcrypt
+ * hash and every live token, so two independent guards are asserted here: `select: false` keeps
+ * them from loading, and `applyUserTransform`'s allowlist strips them again at serialization —
+ * including `.lean()` results, which bypass `toJSON` entirely.
  */
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -25,6 +22,7 @@ const expectNoCredentials = (payload: unknown) => {
     expect(serialised).not.toContain('$2b$');
 };
 
+// A user seeded with one live refresh token.
 const withTokens = () =>
     createUser({
         tokens: [
@@ -114,11 +112,8 @@ describe('user credential exposure', () => {
             ]);
         });
 
-        /*
-         * `active` and `deletedAt` are independent, and this is the test that says so. All four
-         * combinations are exercised deliberately: a deleted-but-active account and a
-         * live-but-deactivated one are exactly the states a derived `active` cannot express.
-         */
+        // `active` and `deletedAt` are independent: a deleted-but-active account and a
+        // live-but-deactivated one are states a derived `active` cannot express.
         it('keeps active independent of deletedAt', async () => {
             const cases = [
                 { email: 'live-active@example.com', active: true, deletedAt: undefined },
@@ -140,14 +135,8 @@ describe('user credential exposure', () => {
             expect((user.toJSON() as { active: boolean }).active).toBe(true);
         });
 
-        /*
-         * `deletedAt` is exposed, as `Product` exposes it: with `active` an independent fact,
-         * stripping it would leave deletion with no representation at all and an admin list could
-         * not tell a deleted account from a live one.
-         *
-         * The key-list test above is the other half of this: an account that was never deleted has
-         * no `deletedAt` key to emit, so the field appears only where it means something.
-         */
+        // `deletedAt` is exposed, as `Product` exposes it: stripping it would leave deletion with
+        // no representation, and an admin list couldn't tell a deleted account from a live one.
         it('exposes deletedAt on a soft-deleted account', async () => {
             const deletedAt = new Date('2026-03-04T05:06:07.000Z');
             const user = await createUser({ email: 'gone@example.com', deletedAt });

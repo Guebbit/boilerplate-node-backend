@@ -1,9 +1,8 @@
 /**
  * @module
- * The manifest — which languages this deployment offers, and what each of them can do.
- *
- * Two tiers answer that question: languages deployed as files, and languages registered as rows.
- * This file is where they become one list without ever implying they are the same capability.
+ * The manifest — which languages this deployment offers, and what each can do. Two tiers answer
+ * that: languages deployed as files, and languages registered as rows, merged into one list here
+ * without ever implying they are the same capability.
  */
 
 import {
@@ -21,12 +20,9 @@ import { localeMessageRepository, localeRepository } from '../repository';
 import { backendTenant, frontendTenant, listTenants as configuredTenants } from '../tenants';
 
 /**
- * Base languages written right to left.
- *
- * A list rather than `Intl.Locale.prototype.getTextInfo`, which is recent enough that its
- * availability would be a deployment question rather than a code one — and this answer has to be
- * the same on every worker. It is consulted only for STATIC languages, which have no row to state
- * their own direction; a language registered through the admin routes says which way it runs.
+ * Base languages written right to left, consulted only for STATIC languages — a registered
+ * language states its own direction. A plain list rather than
+ * `Intl.Locale.prototype.getTextInfo`, whose availability varies by deployment.
  */
 const RIGHT_TO_LEFT_BASE_LANGUAGES = new Set([
     'ar',
@@ -50,11 +46,8 @@ export const isRightToLeft = (tag: string): boolean =>
 
 /**
  * A language's name in some language — `('es', 'en')` is `Spanish`, `('es', 'es')` is `Español`.
- *
- * For STATIC languages only, which are a directory listing and carry no display names of their
- * own. Falling back to the tag itself is deliberate: a manifest row reading `es` is worse than one
- * reading `Spanish` and far better than a 500, and an ICU build without the data is a deployment
- * fact this code cannot fix.
+ * For STATIC languages only. Falls back to the tag itself on a bad tag or missing ICU data: a
+ * manifest reading `es` beats a 500.
  */
 export const describeLanguage = (tag: string, inLanguage: string): string => {
     // eslint-disable-next-line no-restricted-syntax -- Intl.DisplayNames throws on malformed tags; the tag itself is the only sane fallback
@@ -101,14 +94,9 @@ export const dynamicCapability = (
 });
 
 /**
- * The two tiers as one list, without ever implying they are the same capability.
- *
- * A tag in both merges into ONE row carrying BOTH tenants. The dynamic side supplies the display
- * fields because it is the only side that has any — a static language's name is derived from its
- * tag — so there is nothing for the two to disagree about.
- *
- * Ordered by tag, so the response is stable and a client diffing two manifests sees only real
- * changes.
+ * The two tiers as one list. A tag in both merges into ONE row carrying BOTH tenants, using the
+ * dynamic side's display fields — the only side that has any. Sorted by tag so the response is
+ * stable across diffs.
  */
 export const mergeCapabilities = (
     staticTags: readonly string[],
@@ -137,16 +125,9 @@ export const mergeCapabilities = (
 };
 
 /**
- * The dynamic half of the manifest, or nothing.
- *
- * The one place in this module that swallows a database failure, and the reason is the promise the
- * whole tier split exists to keep: `GET /locales` is what a client asks when everything else has
- * already failed it. A Mongo outage must cost the DYNAMIC half of the answer — which languages
- * offer a downloadable dictionary — and never the static half, which is held in memory and is the
- * part that says which languages the API can actually answer in.
- *
- * Logged at warn rather than silently: a manifest quietly missing its dynamic languages looks
- * exactly like a deployment that has none.
+ * The dynamic half of the manifest, or nothing. Swallows a database failure on purpose: a Mongo
+ * outage must cost only the downloadable-dictionary half of the answer, never the in-memory static
+ * half `GET /locales` exists to guarantee. Logged at warn, not silently.
  */
 export const readDynamicTier = (
     scope?: Record<string, unknown>
@@ -197,15 +178,7 @@ export const listCapabilities = async (
 /**
  * Every tenant this deployment holds words for — the keyspaces an entry can belong to.
  *
- * A passthrough over `../tenants`, and deliberately one. `GET /locales/tenants` is a locale read
- * like the four beside it, and what the namespace buys is that its controller does not know WHERE
- * the answer comes from: today the list is read off the environment, and a deployment that ever
- * moved it into a collection would otherwise be a change in a controller. One line here keeps that
- * a service question — and keeps `localeService` the whole surface `services/index.ts` claims it
- * is, rather than a surface with one endpoint reaching around it.
- *
- * It belongs on THIS file rather than beside the writes: "which languages, and which tenants, this
- * deployment offers" is one question asked twice, and `listCapabilities` above already answers the
- * other half — the tenants named in every capability row are these same ids.
+ * A deliberate passthrough over `../tenants`, keeping "where the list comes from" a service
+ * question rather than one the controller answers directly.
  */
 export const listTenants = (): LocaleTenantDescriptor[] => configuredTenants();

@@ -1,10 +1,9 @@
 /**
  * @module
  * Graceful shutdown orchestration — closing the server and tearing down infra in a fixed order,
- * with a deadline so a stuck teardown cannot hang the process forever.
- *
- * Decoupled from Express middleware and route mounting: this file only sequences the stop calls
- * each adapter already exposes, it does not know how any one of them stops.
+ * with a deadline so a stuck teardown cannot hang the process forever. Decoupled from Express
+ * middleware and route mounting: this file only sequences the stop calls each adapter already
+ * exposes, it does not know how any one of them stops.
  */
 
 import type { Server } from 'node:http';
@@ -38,12 +37,10 @@ export const getShutdownTimeoutMs = () => {
 };
 
 /**
- * Promisify server.close() — resolves when all connections are drained.
+ * Promisify server.close() — resolves once all connections are drained.
  *
- * `http.Server.close()` is callback-based and, importantly, *stops accepting new*
- * connections while letting in-flight requests finish. It only invokes the callback once the
- * last keep-alive socket is idle, which is exactly the drain semantics we want.
- * The callback receives an error when the server was not listening in the first place.
+ * `http.Server.close()` is callback-based, stops accepting new connections while letting
+ * in-flight requests finish, and only fires its callback once the last socket is idle.
  */
 export const closeServer = (server: Server) =>
     new Promise<void>((resolve, reject) => {
@@ -57,18 +54,11 @@ export const closeServer = (server: Server) =>
     });
 
 /**
- * Graceful shutdown: close server, drain connections, then stop infra.
- *
- * Order matters and is the reverse of startup:
- *  1. stop accepting traffic (so nothing new needs the resources we are about to close)
- *  2. the locale-override refresh timer, then the two Redis clients — the cache and the
- *     rate-limit store — which nothing still serving traffic needs
- *  3. RabbitMQ, then MongoDB — the stores in-flight requests were still using
- *  4. analytics flush, then tracing flush — these buffer in memory, so they go *last*
- *     and therefore capture the teardown of everything above them.
- *
- * Each step swallows its own failures (see the individual adapters), so a broken Redis
- * cannot prevent the database from closing.
+ * Graceful shutdown: close server, drain connections, then stop infra in the reverse of startup —
+ * traffic first, then things nothing still-serving traffic needs, then the stores in-flight
+ * requests were using, and analytics/tracing last since they buffer in memory and must capture
+ * the teardown above them. Each step swallows its own failures, so a broken Redis cannot prevent
+ * the database from closing.
  */
 export const shutdownInfra = (server?: Server) =>
     // `Promise.resolve(server)` starts the chain uniformly whether or not a server was passed

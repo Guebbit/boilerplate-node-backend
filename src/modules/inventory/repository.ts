@@ -1,10 +1,9 @@
 /**
  * @module
  * The two collections this module owns. Rules live in `./service`; the counters these coordinate
- * with belong to `@modules/products`.
- *
- * Both types are written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
+ * with belong to `@modules/products`. Both types are written out because Mongoose's generics are
+ * too large for TypeScript to serialize an inferred one at an export boundary (TS7056) — the same
+ * reason `Repository` exists.
  *
  * See: docs/modules/inventory.md
  */
@@ -40,13 +39,8 @@ const toReservationItems = (
     }));
 
 /**
- * The ledger. Append-only: the repository factory's `create` and `search` are the whole surface, and
- * there is deliberately no update or delete — a trail the application can edit is not a trail.
- *
- * `search` is inherited rather than replaced by a "latest N" read. A stock ledger is the record an
- * auditor works through, so it pages like every other collection here and reports `totalItems`
- * alongside the page: a read that silently returned only the newest rows would misreport history
- * as complete.
+ * The ledger. Append-only: `create` and `search` are the whole surface — there is deliberately
+ * no update or delete, because a trail the application can edit is not a trail.
  */
 export const stockMovementRepository: Repository<StockMovementDocument> =
     createRepository<StockMovementDocument>(stockMovementModel, {
@@ -82,11 +76,8 @@ export const reservationRepository: Repository<ReservationDocument> & {
     }),
 
     /**
-     * Open a hold for an order.
-     *
-     * The unique index on `orderId` is what detects a duplicate, so two simultaneous checkouts for
-     * one order cannot both see "no hold yet". A duplicate is a retry, not a fault, so it is
-     * answered rather than thrown; Mongo signals it as code 11000 and anything else is rethrown.
+     * The unique index on `orderId` answers a duplicate rather than throwing — two racing
+     * checkouts for one order cannot both see "no hold yet". Mongo signals it as code 11000.
      *
      * @param orderId - the order the hold belongs to
      * @param items - what it claims
@@ -117,12 +108,8 @@ export const reservationRepository: Repository<ReservationDocument> & {
         reservationModel.findOne({ orderId: toObjectId(orderId) }).exec(),
 
     /**
-     * Move a hold between statuses, and answer whether THIS call is the one that moved it.
-     *
-     * The module's exactly-once primitive. Naming the status it comes FROM means exactly one of N
-     * concurrent callers matches — a cancel racing the sweep, a webhook delivered twice — and the
-     * losers correctly do nothing. `findOneAndUpdate` because the winner needs the items it is
-     * about to give back or take away.
+     * The module's exactly-once primitive: naming the FROM status means only one of N concurrent
+     * callers can match, so a racing cancel, sweep, or duplicate webhook loses cleanly.
      *
      * @param orderId - the order whose hold is being claimed
      * @param from - the status the hold must currently be in
@@ -134,16 +121,14 @@ export const reservationRepository: Repository<ReservationDocument> & {
             .findOneAndUpdate(
                 { orderId: toObjectId(orderId), status: from },
                 { $set: { status: to } },
+                // Return the post-update doc — caller needs the items it just claimed.
                 { returnDocument: 'after' }
             )
             .exec(),
 
     /**
-     * Holds whose window has closed, oldest deadline first.
-     *
-     * Capped rather than unbounded so one sweep cannot try to cancel every stale order in a
-     * single request. Truncation is safe here and not in the ledger read: the sweep is idempotent
-     * and reports when it hit the cap, so the work is resumed rather than lost.
+     * Capped so one sweep can't try to cancel every stale order in a single request —
+     * truncation is safe because the sweep is idempotent and reports when it hits the cap.
      *
      * @param now - the moment to measure deadlines against
      * @param limit - how many to return at most

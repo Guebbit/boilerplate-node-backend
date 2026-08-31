@@ -1,10 +1,9 @@
 /**
  * @module
- * The seeding primitive every module's `demo.ts` upserts through.
- *
- * Lives in `infrastructure` because it knows nothing about any domain: a repository shape and a fixture with
- * a fixed `_id`. The demo dataset itself belongs to the modules — `infrastructure` naming `products` is the
- * coupling this whole layout exists to remove.
+ * The seeding primitive every module's `demo.ts` upserts through. Lives in `infrastructure`
+ * because it knows nothing about any domain — just a repository shape and a fixture with a fixed
+ * `_id`; the demo dataset itself belongs to the modules, since `infrastructure` naming `products`
+ * is exactly the coupling this layout exists to remove.
  */
 
 import type { Model, Types } from 'mongoose';
@@ -15,10 +14,9 @@ export type SeedOutcome = 'created' | 'skipped';
 /**
  * The slice of a repository seeding needs. Structural, so every module's repository satisfies it.
  *
- * Generic over the fixture rather than declaring `create: (data: never)`. `never` made every
- * repository assignable — nothing can be passed to it, so nothing conflicts — at the price of an
- * `as never` at the one call site that actually passes something. Naming the type instead means
- * the fixture is checked against the repository that will store it.
+ * Generic over the fixture rather than `create: (data: never)` — `never` made every repository
+ * assignable at the cost of an `as never` cast at the one call site that used it. Naming the type
+ * checks the fixture against the repository that will actually store it.
  */
 export interface SeedRepository<TFixture> {
     findById: (id: string) => PromiseLike<unknown>;
@@ -36,22 +34,19 @@ export interface OwnedSeedRepository<TFixture> {
 /**
  * What every seed write passes to `save()`.
  *
- * A fixture states its own `createdAt` — read off its pinned `_id`, see `./fixtures` — and Mongoose's
- * `timestamps: true` would overwrite it with the instant the seeder ran. That is not a cosmetic
- * loss: `scripts/export-demo-dataset.ts` commits what it reads back, so a run-dependent timestamp would
- * make `db/demo/demo-data.json` differ on every export and its staleness check could never pass.
+ * A fixture states its own `createdAt` (see `./fixtures`), and Mongoose's `timestamps: true`
+ * would overwrite it with "whenever the seeder ran" — making `db/demo/demo-data.json` differ on
+ * every export and its staleness check never pass.
  */
 export const SEED_SAVE_OPTIONS = { timestamps: false } as const;
 
 /**
  * Upsert one fixture by its fixed `_id`.
  *
- * Documents go through `create()` — and therefore `save()` — rather than
- * `updateOne(..., { upsert: true })`, so the model's pre-save hooks still run. Most importantly the
- * bcrypt password hash, which a raw driver write would skip.
- *
- * Note what idempotent means here: an existing `_id` is SKIPPED, not rewritten. Re-running the
- * seeder does not repair a database seeded from older fixtures — a migration does that.
+ * Goes through `create()`/`save()` rather than `updateOne(..., { upsert: true })`, so pre-save
+ * hooks still run — most importantly the bcrypt password hash, which a raw driver write would skip.
+ * An existing `_id` is SKIPPED, not rewritten: re-running the seeder does not repair a database
+ * seeded from older fixtures.
  *
  * @param repository - the owning module's repository
  * @param fixture - a document with a pinned `_id`
@@ -69,9 +64,9 @@ export const upsertById = <TFixture extends { _id: Types.ObjectId }>(
 /**
  * Upsert one fixture by its OWNER rather than by its id.
  *
- * Carts, wishlists and address books have no pinned `_id` to key on — `userId` is the unique column
- * and the one every query reaches them through — so the same skip-if-present policy {@link upsertById}
- * states against `_id` is stated here against the owner.
+ * Carts, wishlists and address books have no pinned `_id` — `userId` is the unique column every
+ * query reaches them through, so {@link upsertById}'s skip-if-present policy is stated here
+ * against the owner instead.
  *
  * @param repository - the owning module's repository
  * @param fixture - a document whose `userId` identifies it

@@ -1,14 +1,11 @@
 /**
  * @module
  * Order CRUD — the write half of `src/modules/orders/service.ts` (`getById`, `create`, `update`,
- * `updateById`, `remove`, `removeById`). `orders.test.ts` covers the read/aggregation half
- * (`search`); these had no unit test at all before this file.
- *
- * Two behaviours carry real weight: `create` stores a full product snapshot, not a reference, so
- * repricing an item later cannot rewrite what a customer was charged — only visible by mutating
- * the product after the order exists. And `getById`'s `scope` argument is an authorization
- * boundary: a scope that doesn't match must yield `undefined`, not the order, which is what stops
- * one user reading another's order by id.
+ * `updateById`, `remove`, `removeById`); `orders.test.ts` covers the read/aggregation half
+ * (`search`). Two behaviours carry real weight: `create` stores a full product snapshot, not a
+ * reference, so repricing later cannot rewrite what a customer was charged; and `getById`'s
+ * `scope` argument is an authorization boundary — a mismatched scope must yield `undefined`, not
+ * the order.
  */
 
 import { asStub } from '@tests/stub';
@@ -193,21 +190,9 @@ describe('getById', () => {
     });
 
     /**
-     * DIVERGENCE — pinned, not endorsed.
-     *
-     * The two branches of `getById` return structurally different objects despite one signature:
-     *
-     *   no scope → `orderRepository.findById()` — a Mongoose document, identified by `_id`.
-     *   scope    → an aggregation piped through `applyOrderTransform` — a plain object where
-     *              `_id` has been renamed to `id` and the computed totals added.
-     *
-     * So `order._id` works for the unscoped (admin) path and is `undefined` for the scoped
-     * (owner) one, while `order.id` is the reverse — a Mongoose document exposes `id` as a
-     * virtual, so that one happens to work both ways. Any caller reading `_id` therefore behaves
-     * differently depending on who is asking, which is exactly the kind of role-dependent bug
-     * that survives a green suite.
-     *
-     * See the report for the suggested fix.
+     * DIVERGENCE, pinned not endorsed: unscoped `getById` returns a Mongoose document keyed by
+     * `_id`; scoped returns a transformed plain object keyed by `id`. `order.id` works both ways
+     * (a Mongoose virtual), so `_id` is the field that behaves differently depending on who asks.
      */
     it('returns a transformed plain object when scoped, and a document when not', async () => {
         const { order, user } = await seedOrder();
@@ -265,11 +250,10 @@ describe('update', () => {
     });
 
     /**
-     * The lifecycle grants an operator this edge and `update` still refuses to run it. A
-     * cancellation is a sequence, not a field: it releases the held units and announces
-     * `ORDER_CANCELLED`, which is what makes `payments` refund. Executed here as an assignment
-     * plus a save, a paid order ends `cancelled` with the customer's money kept and the stock
-     * held until the sweep.
+     * The lifecycle grants an operator this edge, but `update` still refuses to run it: a
+     * cancellation is a sequence, not a field — it releases held units and announces
+     * `ORDER_CANCELLED`, which is what makes `payments` refund. As a bare assignment, a paid
+     * order would end `cancelled` with the money kept and the stock never released.
      */
     it('refuses to cancel through the status field, whoever is asking', async () => {
         const { order } = await seedOrder();

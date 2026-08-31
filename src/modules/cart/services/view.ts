@@ -16,11 +16,9 @@ import type { CartDocument } from '../model';
 
 /**
  * A cart line joined with the product it references.
- *
- * `productId` and `product` are separate fields on purpose. `populate()` overwrites the stored
- * reference in place, and it writes `null` there when the product no longer exists — so reading
- * the id off that field afterwards loses it exactly when a caller most needs to know which
- * product a broken line pointed at. {@link readCartLines} captures the id first.
+ * `productId` and `product` are separate fields on purpose: `populate()` overwrites the
+ * reference in place with `null` when the product is gone, so the id must be captured first
+ * (see {@link readCartLines}).
  */
 export interface CartLine extends CartItem {
     /** The joined product, or `null` for a reference that resolves to nothing. */
@@ -78,12 +76,9 @@ export const readCartLines = (cart: CartDocument | null): Promise<CartLine[]> =>
 
 /**
  * Turn a cart document into the response the contract declares.
- *
- * The joined `product` prices the cart and is then dropped: `CartItem` in `openapi.yaml` is
- * `additionalProperties: false` over `{ productId, quantity }`, so shipping the whole product per
- * line is over-serialization the contract suite fails on. No client reads it — the frontend renders
- * the cart from `productId`/`quantity` and looks products up in its own store. Use `cartGet`
- * where the joined product is actually needed.
+ * The joined `product` prices the cart, then is dropped: `CartItem` in `openapi.yaml` is
+ * `additionalProperties: false` over `{ productId, quantity }`. Use `cartGet` where the joined
+ * product is actually needed.
  */
 export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
     readCartLines(cart).then((lines) => {

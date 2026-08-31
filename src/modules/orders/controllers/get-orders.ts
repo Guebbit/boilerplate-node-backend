@@ -11,12 +11,9 @@ import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 
 /**
- * Built on the orval-generated SearchOrdersBody (kept in sync with
- * openapi.yaml); page/pageSize are coerced from strings since GET requests
- * carry them as query-string text, not JSON numbers.
- *
- * `page`/`pageSize` come from `@infrastructure/http/schemas` so all four search endpoints agree on what a
- * legal one is; absent stays absent, because `normalizePagination` owns the defaults.
+ * Extends the orval-generated SearchOrdersBody with page/pageSize coerced from query-string text.
+ * Both come from `@infrastructure/http/schemas` so every search endpoint agrees on what's legal;
+ * an absent value stays absent for `normalizePagination` to default.
  */
 const searchOrdersQuerySchema = SearchOrdersBody.extend({
     page: pageSchema,
@@ -25,10 +22,7 @@ const searchOrdersQuerySchema = SearchOrdersBody.extend({
 
 /**
  * Query parameters that change this endpoint's answer, and therefore its cache key.
- *
- * Derived from the schema rather than hand-listed, because the two must not drift: a parameter
- * the controller reads but the key omits would let two different requests share one cached
- * response. Anything outside this list is stripped by the validator and changes nothing.
+ * Derived from the schema, not hand-listed, so the two cannot drift apart.
  */
 export const searchOrdersKeyParameters = Object.keys(searchOrdersQuerySchema.shape);
 

@@ -1,10 +1,9 @@
 /**
  * @module
  * Drains one queued PDF job: render the EJS template to HTML, then rasterize it via
- * `renderHtmlToPdf` and write the result to the requested path.
- *
- * Same split as `email.worker.ts` — a malformed payload dead-letters, a failed render is left to
- * reject so `consumeFromQueue` requeues it.
+ * `renderHtmlToPdf` and write the result to the requested path. Same split as `email.worker.ts` —
+ * a malformed payload dead-letters, a failed render is left to reject so `consumeFromQueue`
+ * requeues it.
  *
  * See: docs/tools/email-and-rendering.md
  */
@@ -19,13 +18,11 @@ import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 export { PDF_QUEUE } from '@infrastructure/adapters/queue';
 
 /**
- * Process a single PDF generation job from the queue.
- * Renders an EJS template to HTML, then uses Puppeteer to produce a PDF file.
+ * Process a single PDF generation job from the queue: render an EJS template to HTML, then
+ * rasterize it with Puppeteer.
  *
- * Same split as `handleEmailJob`: `false` only for a payload naming no template or destination. A
- * failed render is left to reject, so the broker retries it.
- *
- * Typed parameter, `Partial` because it came off a broker — see `handleEmailJob` for the reasoning.
+ * Same split as `handleEmailJob`: `false` only for a payload naming no template or destination; a
+ * failed render is left to reject, so the broker retries it. `Partial` because it came off a broker.
  */
 export const handlePdfJob = (job: Partial<PdfJobPayload>): Promise<boolean> => {
     // Both ends of the render: what to render, and where to write it. The check narrows on its

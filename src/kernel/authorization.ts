@@ -1,18 +1,11 @@
 /**
  * @module
  * The one authorization rule four domains share: *an admin reads everything, everyone else reads
- * a narrowed slice*.
- *
- * The slice differs — `orders` and `payments` narrow to the caller's own rows, `products` and
- * `locales` to the published ones — but the sentence around it does not, and it was written four
- * times: the same `undefined` for admins, the same paragraph of docblock. Four copies of an
- * authorization rule is four places for it to drift, and the drift is silent: widening a scope
- * does not fail a test, it just returns more rows.
- *
- * Lives in the kernel next to `authentication.ts` and `middlewares/authorizations.ts`, which own
- * the other half of the same question — those decide WHO the caller is and whether they may reach
- * the route, this decides which ROWS they may see once they have. The scope builder arrives as an
- * argument rather than an import, which is what keeps the kernel from naming a module.
+ * a narrowed slice*. The slice differs — own rows for `orders`/`payments`, published-only for
+ * `products`/`locales` — but was written four times identically otherwise, and the drift is
+ * silent: a widened scope doesn't fail a test, it just returns more rows. Lives beside
+ * `authentication.ts`/`middlewares/authorizations.ts` (WHO the caller is); this decides which ROWS
+ * they see. The scope builder arrives as an argument, not an import, keeping the kernel domain-free.
  */
 
 import type { Caller } from '@types';

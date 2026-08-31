@@ -1,15 +1,12 @@
 /**
  * @module
- * Request input.
+ * Request input: a value may arrive as a route param, a query string or a JSON body field, and
+ * the same endpoint often accepts more than one — which is what lets one controller serve `GET
+ * /products?text=x` and `POST /products/search {text}` without duplicating the handler. This
+ * module owns the *rules* of that polymorphism, behind one entry point, `readInput`, so
+ * controllers don't re-assemble them.
  *
- * A value an endpoint needs may arrive as a route param, a query string or a JSON body field, and
- * the same endpoint often accepts more than one of those — that is what lets one controller serve
- * `GET /products?text=x` and `POST /products/search {text}` without duplicating the handler.
- *
- * This module owns the *rules* of that polymorphism so controllers don't re-assemble them. There
- * is one entry point, `readInput`, which takes a route's declaration and returns its input;
- * `docs/theory/request-input.md` holds the resulting endpoint × parameter table and the known
- * places where it and `openapi.yaml` disagree.
+ * See: docs/theory/request-input.md
  */
 
 import type { Request, Response } from 'express';
@@ -27,12 +24,7 @@ import { rejectResponse } from '@infrastructure/http/response';
  * Read `request.body` as a plain object.
  *
  * Express 5 leaves `req.body` UNDEFINED when the request carries no body (express 4 defaulted it
- * to `{}`), so every reader has to cope with that — a body-less `DELETE /cart/:productId`, which
- * is exactly what the frontend sends, otherwise threw "Cannot read properties of undefined" and
- * surfaced as a 500.
- *
- * Typed as a `Record` rather than `any`: body values come off the wire and are `unknown` until
- * something validates them.
+ * to `{}`) — a body-less `DELETE /cart/:productId` otherwise threw and surfaced as a 500.
  */
 const getRequestBody = (request: Request): Record<string, unknown> =>
     (request.body ?? {}) as Record<string, unknown>;
@@ -40,14 +32,9 @@ const getRequestBody = (request: Request): Record<string, unknown> =>
 /**
  * True when the body arrived as `multipart/form-data`.
  *
- * This is the only question worth asking about a *body*, because it is the only body that is not
- * already typed. A JSON body needs no coercion — and coercing it anyway is how a contract
- * violation gets swallowed: `!!'not-a-boolean'` is `true`, so a wrong-typed JSON field became a
- * valid value before validation ever saw it, and the endpoint answered 201 where its own contract
- * promises 422.
- *
- * Note express answers `null`, not `false`, for a request with no body at all — a distinction
- * `!!` has to flatten, or a body-less request would be treated as a form.
+ * The only body not already typed: a JSON body needs no coercion, and coercing it anyway would
+ * swallow a contract violation (`!!'not-a-boolean'` is `true`). Express answers `null`, not
+ * `false`, for no body at all — a distinction `!!` has to flatten here.
  */
 const isMultipartRequest = (request: Request): boolean => !!request.is('multipart/form-data');
 
@@ -80,15 +67,10 @@ const parseFormBoolean = (value: unknown): unknown => {
 /**
  * Parse a string-transported value as a number.
  *
- * The same shape as `parseFormBoolean` and for the same reason: a multipart body carries no
- * types, so a numeric field arrives as `'101'` and a schema declaring `z.number()` rejects it —
- * a 422 on every write that happens to carry a file.
- *
- * Anything not recognisable as a finite number is returned untouched, so `price=abc` reaches the
- * validator as the string it was and is rejected with the contract's own message. Coercing it to
- * `NaN` would also fail, but the failure would describe this helper's guess rather than the
- * caller's input. An empty string is likewise left alone — `Number('')` is `0`, and a blank field
- * means "not sent", never "zero".
+ * Same shape as `parseFormBoolean`: a multipart body carries no types, so `'101'` would fail a
+ * `z.number()` schema. Anything not a finite number is returned untouched so the validator's own
+ * message applies — and an empty string is left alone too, since `Number('')` is `0` and a blank
+ * field means "not sent", never "zero".
  */
 const parseFormNumber = (value: unknown): unknown => {
     if (typeof value !== 'string') return value;
@@ -114,25 +96,15 @@ export type RequestInputSource = 'params' | 'body' | 'query';
 export type RequestSurface = 'search' | 'list' | 'write' | 'delete' | 'path';
 
 /**
- * The sources each surface reads, HIGHEST precedence first.
+ * The sources each surface reads, HIGHEST precedence first — a CLOSED set, so precedence is a
+ * property of the surface, not an ad hoc choice per controller.
  *
- * - `search` — body before query, so `POST /products/search {text}` and `GET /products?text=x`
- *   are one controller. Never reads `params`: a search has no id in its path.
- * - `list` — query only: a collection read whose filters have nowhere else to arrive, because the
- *   route is a GET and has no `POST …/search` sibling. Distinct from `search` and not a
- *   convenience: content on a GET has no defined semantics (RFC 9110 9.3.1) and the Fetch spec
- *   refuses to send it, so a `search` declaration on a GET-only route claims a source no client
- *   can use — and, where the route is cached, one `setCache` cannot key on. Four list endpoints
- *   held that claim; `GET /feedback` held it and was cached, which is how two different filter
- *   sets came to share one entry.
- * - `write` — params before body, so `PUT /products/:id` and `PUT /products` (id in body) are one
- *   controller, and the explicit path id wins when a request carries both.
- * - `delete` — params, then query, then body: the full delete surface, where `hardDelete` arrives
- *   as a path segment (via `routeFlag`), a query parameter, or a body field. `hardDelete` itself
- *   is declared `anyTrue` and so escapes this ranking — see the field on the declaration below.
- * - `path` — params only, for a route whose value cannot arrive any other way. `DELETE
- *   /cart/{productId}` declares no body, and could not use one: the route cannot match without
- *   the segment, so a body `productId` was unreachable rather than merely undocumented.
+ * `search` reads body before query (unifies `POST .../search` and `GET ?text=`); `list` is
+ * query-only (a GET has no body semantics per RFC 9110); `write` reads params before body;
+ * `delete` reads params, query, then body, except `hardDelete` which is `anyTrue` and escapes
+ * ranking; `path` is params-only, for a value that cannot arrive any other way.
+ *
+ * See: docs/theory/request-input.md
  */
 const SURFACE_SOURCES: Record<RequestSurface, readonly RequestInputSource[]> = {
     search: ['body', 'query'],
@@ -158,16 +130,13 @@ export interface RequestInputDeclaration<TId extends string> {
     /** Fields declared boolean by the contract — decoded on the string transports. */
     booleans?: readonly string[];
     /**
-     * Fields resolved by OR across the sources instead of by precedence, and decoded as booleans
-     * without also being listed in `booleans`.
+     * Fields resolved by OR across the sources instead of by precedence, decoded as booleans
+     * without also being listed in `booleans`: any source `true` wins, an undecodable value is
+     * passed through untouched, and otherwise it's `false` (absent if nothing stated one).
      *
-     *   any source `true`   → `true`
-     *   otherwise            → `false`, or absent if no source stated one
-     *   any undecodable value → passed through, so the schema answers 422
-     *
-     * For a flag whose default is `false` and which is therefore rarely sent, a stated `true` is
-     * the only real signal in the request; ranking sources lets a default-shaped `false` outrank
-     * it. `hardDelete` is the case this exists for — see `delete-controller.ts`.
+     * For a flag whose default is `false` and rarely sent, a stated `true` is the only real
+     * signal — ranking sources would let a default-shaped `false` outrank it. `hardDelete` is the
+     * case this exists for.
      */
     anyTrue?: readonly string[];
     /** Fields declared numeric by the contract — decoded on the string transports. */
@@ -185,26 +154,15 @@ export type RequestInput<TId extends string> = Record<string, unknown> &
     Partial<Record<TId, string>>;
 
 /**
- * Read a route's input according to one declaration, so the multi-source rules are not
+ * Read a route's input according to one declaration, so the multi-source rules aren't
  * re-assembled at every call site.
  *
- * Four rules:
- *
- * - **Precedence is a `||` chain over the surface's sources**, highest first, so an empty value
- *   falls through as if the key were absent.
- * - **Explicit `undefined` keys are dropped.** An object spread *keeps* them, and such a key
- *   handed to Mongoose becomes a `field: undefined` filter clause rather than being ignored.
- * - **Absent is not empty.** A field nobody sent stays absent, never `false` or `[]`: the service
- *   layer assigns anything defined, so defaulting here would turn a partial update into a full
- *   overwrite and wipe whatever the caller did not mention.
- * - **Only the string transports are decoded.** A route param and a query entry are strings by
- *   construction — there is no type in them to destroy — so a declared boolean or string array
- *   coming from either is always decoded. A body is decoded only when it is multipart, because a
- *   JSON body carries its own types and coercing it is what swallows a contract violation.
- *
- * One declared exception to the first rule: **`anyTrue` fields are OR'd, not ranked.** Precedence
- * asks which source is the more explicit statement; that question has no honest answer for a flag
- * whose `false` is a default nobody typed. See the field on the declaration above.
+ * Four rules: precedence is a `||` chain over the surface's sources, highest first; an explicit
+ * `undefined` key is dropped rather than spread through as a Mongoose filter clause; absent stays
+ * absent rather than defaulting to `false`/`[]`, so a partial update can't wipe what wasn't sent;
+ * and only string transports (params, query, or a multipart body) get decoded — a JSON body keeps
+ * its own types. `anyTrue` fields are the one exception: OR'd across sources, not ranked, because
+ * a flag whose `false` is a default nobody typed has no honest precedence order.
  */
 export const readInput = <TId extends string = never>(
     request: Request,
@@ -249,9 +207,8 @@ export const readInput = <TId extends string = never>(
         decodes && stringTransport[source] ? decode(values[source]) : values[source]
     );
 
-    // Assigned lowest-precedence first, so the higher ones overwrite. `Object.assign` copies own
-    // keys the same way a spread does — including keys whose value is `undefined`, which the
-    // second pass below then removes.
+    // Assigned lowest-precedence first, so higher ones overwrite. `Object.assign` copies keys
+    // the same way a spread would — including `undefined` ones, removed by the pass below.
     const merged = Object.assign({}, ...sources.toReversed()) as Record<string, unknown>;
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(merged)) if (value !== undefined) result[key] = value;
@@ -294,20 +251,12 @@ export const readInput = <TId extends string = never>(
 /**
  * The caller on a route mounted behind `isAuth`.
  *
- * `Request.authContext` is optional on the global augmentation, correctly — it is absent until the
- * auth middleware resolves it, and a public route never gets one. A controller BEHIND `isAuth`
- * then has three bad options, and this repo used all three: re-check and answer a 401 the router
- * already answered (13 branches that cannot execute), assert with `!` (10 sites), or branch on a
- * ternary. Three spellings of one fact, and the re-check is the worst of them because it reads as
- * though the route were optionally authenticated.
- *
- * So the claim is made ONCE, here, where it can carry its own justification. A narrower request
- * type would be better still and is not available: Express' `RequestHandler` is contravariant in
- * its request, so a handler asking for more than `Request` will not mount.
- *
- * What no type can say is that the ROUTE is behind `isAuth`. `tests/cross-cutting/
- * authenticated-controllers.test.ts` asserts that half; the two together are what make this honest
- * rather than a tidier-looking assumption.
+ * `Request.authContext` is optional on the global augmentation — absent until the auth middleware
+ * resolves it — so this makes the "route is authenticated" claim ONCE, rather than each controller
+ * re-checking, asserting with `!`, or branching on a ternary. A narrower request type isn't
+ * available: Express' `RequestHandler` is contravariant, so asking for more than `Request` won't
+ * mount. `tests/cross-cutting/authenticated-controllers.test.ts` asserts the other half — that the
+ * route actually is behind `isAuth`.
  *
  * @param request - a request whose route mounts `isAuth`
  * @returns the resolved caller
@@ -317,12 +266,12 @@ export const authContextOf = (request: { authContext?: AuthContext }): AuthConte
 
 /**
  * Everything a service needs to know about the request that reached it — who made it, where it
- * came from, and what language it was made in — built once in the controller and passed down as a
- * parameter, because the service tier is defined by never seeing a `Request`. See
- * `docs/tools/analytics.md#caller-context` for why this is threaded rather than read off an
- * `AsyncLocalStorage`: a missing `CallerContext` is a compile error at the call site, where an
- * ALS-backed accessor would return the wrong request (or none) silently, across an async boundary,
- * at the exact moment nobody is looking.
+ * came from, what language it was made in — built once in the controller and passed down, because
+ * the service tier is defined by never seeing a `Request`. Threaded rather than read off an
+ * `AsyncLocalStorage` so a missing `CallerContext` is a compile error, not an ALS accessor
+ * silently returning the wrong (or no) request across an async boundary.
+ *
+ * See: docs/tools/analytics.md#caller-context
  */
 export interface CallerContext {
     /** The authenticated caller, or `{}` for anonymous — same shape authorization rules use. */
@@ -336,20 +285,13 @@ export interface CallerContext {
     /** The request id assigned by the request-id middleware, for correlating with the access log. */
     requestId?: string;
     /**
-     * The language this request was made in, negotiated from `Accept-Language` by the locale
-     * middleware — the FALLBACK for copy addressed to someone whose own preference is unknown.
+     * The language this request was made in, negotiated from `Accept-Language` — the FALLBACK for
+     * copy addressed to someone whose own preference is unknown.
      *
-     * It is on this interface rather than threaded as a second parameter because of what its
-     * absence used to cost. A service composing an email needs
-     * `recipient.locale ?? requestLocale ?? default`, and with no channel for the middle term the
-     * whole email — compose and enqueue — moved up into the controller to reach `request.locale`.
-     * Five controllers ended up publishing queue jobs that way, and `orders` ended up sending one
-     * confirmation mail from a controller and the identical one from `cart`'s service. The field
-     * is small; what it buys is that "services publish jobs" needs no exceptions.
-     *
-     * Optional, and deliberately last in precedence: a stored preference is the better answer
-     * wherever one exists, because it is the language the recipient chose rather than the language
-     * of whichever browser happened to submit the form.
+     * On this interface, not a second parameter, because without it a service composing email
+     * needed `request.locale` reached from the controller, pulling compose-and-enqueue logic up
+     * out of services. Optional, and last in precedence: a stored preference is the better answer
+     * wherever one exists.
      */
     locale?: string;
 }
@@ -358,10 +300,8 @@ export interface CallerContext {
  * Build the `CallerContext` for the current request. Call once per controller, at the top, and
  * pass the result down to whichever service call ends up emitting.
  *
- * Structurally typed rather than `express.Request`, for the reason `authContextOf`'s docblock
- * gives: a controller typed `Request<SpecificParams, ..., SpecificBody>` narrows past what the
- * generic `Request` accepts, and Express' handler contravariance means asking for more than the
- * minimum a helper actually reads is what breaks a route that otherwise mounts fine.
+ * Structurally typed rather than `express.Request`, for the reason `authContextOf` gives: asking
+ * for more than the minimum a helper reads is what breaks Express' contravariant handler typing.
  */
 export const callerContextOf = (request: {
     authContext?: Caller;
@@ -387,22 +327,15 @@ export const callerContextOf = (request: {
 };
 
 /**
- * Validate a MongoDB ObjectId from request params/body.
- * Returns the id or sends a 422 response and returns undefined.
+ * Validate a MongoDB ObjectId from request params/body, answering 422 and returning `undefined`
+ * when it doesn't validate.
  *
- * Kept separate from `readInput` because it *responds* as well as extracts, which is a different
- * job. The caller must therefore bail out on `undefined` without touching the response again:
- *   `const id = extractAndValidateId(...); if (!id) return;`
- *
- * Validating before querying matters: passing a malformed id to Mongoose throws a CastError
- * that would surface as an opaque 500 instead of a clear 422.
- *
- * `surface` is a parameter and not a constant because a route reads ONE surface: a delete
- * controller that took its id under `write` and its `hardDelete` under `delete` twelve lines later
- * would be reading one request two ways, which is the single property the closed `RequestSurface`
- * set exists to guarantee.
+ * `surface` is a parameter, not a constant: a route reads ONE surface, and a delete controller
+ * reading its id under `write` but `hardDelete` under `delete` would be reading one request two
+ * ways — the property the closed `RequestSurface` set exists to guarantee.
  *
  * @param surface - the route's precedence rule, the same one its `readInput` call declares
+ * @returns the validated id, or `undefined` when 422 has already been sent
  */
 export const extractAndValidateId = (
     request: Request,
@@ -422,13 +355,11 @@ export const extractAndValidateId = (
 };
 
 /**
- * Check if a value is a valid MongoDB ObjectId.
- * Thin wrapper around Mongoose's ObjectId.isValid for readability.
+ * Check if a value is a valid MongoDB ObjectId. Thin wrapper around Mongoose's `isValid` for
+ * readability.
  *
- * The `id is string` return type makes this a *type guard*: after `if (isValidObjectId(x))`
- * TypeScript narrows `x` from `string | undefined` to `string`, removing the need for a
- * non-null assertion downstream. That narrowing is what earns it its own line at the cart call
- * sites, where `readInput` hands over a `string | undefined` that Mongo still has to accept.
+ * The `id is string` return type makes this a type guard: `if (isValidObjectId(x))` narrows `x`
+ * from `string | undefined` to `string`, removing the need for a non-null assertion downstream.
  */
 export const isValidObjectId = (id: string | undefined): id is string =>
     !!id && Types.ObjectId.isValid(id);

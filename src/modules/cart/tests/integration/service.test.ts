@@ -1,14 +1,11 @@
 /**
  * @module
- * Cart service tests — `src/modules/cart/service.ts`.
- *
- * Highest-risk seam: `set` vs `add` share one private `upsertCartItem`, differing only in `$set`
- * vs `$inc` on one repository line — a collapsed mutation is invisible in review and silently
- * multiplies or drops a user's quantity. Also pins the over-serialization guard on the cart view
- * and that a cart is its own per-user document with no per-line `_id`.
- *
- * Real Mongo throughout (`setupTestDb`) — the behaviour lives in `cartRepository.upsertLine`'s
- * guarded writes, which a mock can't exercise.
+ * Cart service tests — `src/modules/cart/service.ts`. Highest-risk seam: `set` vs `add` share
+ * one private `upsertCartItem`, differing only in `$set` vs `$inc` on one repository line — a
+ * collapsed mutation is invisible in review and silently multiplies or drops a user's quantity.
+ * Also pins the over-serialization guard on the cart view, and that a cart is its own per-user
+ * document with no per-line `_id`. Real Mongo throughout (`setupTestDb`) — the behaviour lives
+ * in `cartRepository.upsertLine`'s guarded writes, which a mock can't exercise.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -732,14 +729,10 @@ describe('productRemoveFromCartsById', () => {
 });
 
 /**
- * Registers the modules for real rather than reaching into the users service directly. The list is
- * the cart's dependency closure, not just the two domains at play: a
- * module's `subscribe` hook reaches its siblings for real, so a partial list boots a registry whose
- * handlers resolve against modules that are not there.
- *
- * The users module no longer calls the cart — it emits `user.deleted` and this module subscribes.
- * That subscription only exists once the registry has run, so a test that skipped it would assert
- * the cleanup never happens and pass for the wrong reason.
+ * Registers the real modules rather than reaching into the users service directly — the
+ * `subscribe` hook reaches siblings for real, so a partial list boots handlers against modules
+ * that aren't there. Also proves the subscription exists: the cart no longer hears from a direct
+ * call, only from `user.deleted`, so skipping registration would pass for the wrong reason.
  */
 describe('cartDeleteByUserId', () => {
     beforeEach(() => {

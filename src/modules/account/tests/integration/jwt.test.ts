@@ -1,14 +1,10 @@
 /**
  * @module
- * JWT creation and verification — `src/modules/account/jwt.ts`.
- *
- * The security-critical distinction is between the two token types: the access token is
- * stateless — signature and expiry only, no database round trip — while the refresh token is
- * stateful, checked against the user document so logout (which removes the token row) actually
- * ends the session. Several tests exist purely to keep that lookup mandatory.
- *
- * Secrets are set explicitly rather than inherited from `.env`, since unit tests don't load
- * dotenv and a test depending silently on a developer's local environment isn't a test.
+ * JWT creation and verification (`session/jwt.ts`). The security-critical distinction is
+ * between token types: the access token is stateless (signature and expiry only), while the
+ * refresh token is stateful, checked against the user document so logout — which removes the
+ * token row — actually ends the session. Secrets are set explicitly here rather than inherited
+ * from `.env`, since unit tests don't load dotenv.
  */
 
 import { sign } from 'jsonwebtoken';

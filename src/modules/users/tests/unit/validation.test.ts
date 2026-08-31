@@ -2,11 +2,9 @@
  * @module
  * `zodUserSchema`'s six message thunks — exercised here because import-time coverage lies about
  * them: the schema is a declaration, so it reports 100% covered whether or not a thunk ever runs.
- *
- * A thunk that never runs is a message nobody has read. The case that matters most: `error: t('…')`
- * instead of `error: () => t('…')` resolves at import time, before `i18next.init()`, so Zod silently
- * falls back to its own English wording — these cases catch that regression, and a message attached
- * to the wrong validation rule, by asserting on `en.json`'s own copy rather than prose written here.
+ * The case that matters most: `error: t('…')` instead of `error: () => t('…')` resolves at import
+ * time, before `i18next.init()`, so Zod silently falls back to English — these cases catch that,
+ * and a message attached to the wrong rule, by asserting on `en.json`'s own copy.
  */
 import { zodUserSchema } from '@modules/users';
 import { createUserBodyPasswordMin } from '@api/schemas.zod';

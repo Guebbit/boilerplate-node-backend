@@ -39,31 +39,11 @@ interface ReorderLine {
 /**
  * Copy an order's lines back into the caller's cart.
  *
- * Scoped to the caller's OWN orders — `visibleScope`, admin or not — because the cart being
- * filled is the caller's: reordering someone else's purchases into your basket is not a
- * privilege, it is a leak of what they bought.
- *
- * The order carries product SNAPSHOTS, so each line is re-resolved against the catalogue as it
- * is today, through `findPublicById`: a product that has since been deleted, deactivated or
- * hidden is skipped rather than re-added, exactly as it could not be added from the product page.
- * The quantities come from the order; an item already in the cart is INCREMENTED, matching what
- * "add to cart" does everywhere else.
- *
- * This is the one path that answers the catalogue question for itself instead of letting
- * `./items`' `upsertCartItem` answer it, and SKIPPING is the reason: that function refuses, which
- * is the right answer for a caller naming one product and the wrong one for a basket being
- * refilled from a year-old order. Resolving the batch in a single parallel pass is also what
- * keeps a ten-line reorder at one round of reads rather than ten. The predicate is the same call
- * in both places, so the two cannot disagree about what "on sale" means.
- *
- * Skipping everything is a refusal, not a success: an order whose every product has vanished
- * answers 409 with `REORDER_UNAVAILABLE`, because "your cart now holds none of what you asked
- * for" is not an outcome to dress as 200. A partial skip is reported by the answer itself — the
- * cart view carries what actually landed.
- *
- * Writes are sequential on purpose. Parallel upserts against one cart document all fight the
- * unique `userId` index and resolve by retry; a reduce chain issues them one at a time and needs
- * none.
+ * Scoped to the caller's OWN orders (`visibleScope`) — refilling someone else's purchases would
+ * leak what they bought, not just misuse a privilege. Lines are re-resolved against today's
+ * catalogue via `findPublicById`, and a vanished/inactive product is SKIPPED, not refused, unlike
+ * `./items`' `upsertCartItem` — a total skip answers 409 `REORDER_UNAVAILABLE` rather than an
+ * empty 200. Writes to the cart happen sequentially; see the loop below for why.
  */
 export const reorderIntoCart = (
     userId: string,

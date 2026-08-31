@@ -1,13 +1,9 @@
 /**
  * @module
  * Locale service — the override tier: what it can be asked, and the rules that make it safe to ask.
- *
- * A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
- *
- * Everything here reads or writes the database, and nothing here is ever AWAITED by `t()`,
- * `negotiateLocale` or the locale middleware — the property the whole module is arranged around.
- * Which languages the API can answer in is still decided by deployed files at boot, and the
- * overrides these functions write reach `t()` only through an overlay rebuilt off the request path.
+ * A folder rather than one file because it passed ~300 lines (see `docs/theory/layers.md`).
+ * Nothing here is ever AWAITED by `t()`, `negotiateLocale` or the locale middleware — the overrides
+ * these functions write reach `t()` only through an overlay rebuilt off the request path.
  */
 
 /*

@@ -1,10 +1,8 @@
 /**
  * @module
- * HTTP and process metrics (Prometheus).
- *
- * Metrics are *aggregates* — cheap, always-on, and the right signal for dashboards and alerts.
- * Traces (see `observability/tracer`) are per-request and answer "why was this one slow";
- * metrics answer "how is the service doing overall".
+ * HTTP and process metrics (Prometheus). Metrics are *aggregates* — cheap, always-on, and the
+ * right signal for dashboards and alerts. Traces (`observability/tracer`) are per-request and
+ * answer "why was this one slow"; metrics answer "how is the service doing overall".
  *
  * See: docs/tools/opentelemetry.md
  */
@@ -14,15 +12,11 @@ import { getHeapStatistics } from 'node:v8';
 import { register, Counter, Histogram, Gauge, collectDefaultMetrics } from 'prom-client';
 
 /**
- * Shared prom-client registry.
- *
- * `register` is the library's default global registry — the collection that
- * `/metrics` serializes. Re-exported under a project name so each module's `metrics.ts` registers
- * against the same instance instead of creating its own, which would leave those counters
- * invisible to the scrape endpoint.
- *
- * It is also how `GET /observability/metrics/overview` reaches the domain counters: by name off
- * this registry, never by importing the module that owns them.
+ * Shared prom-client registry. `register` is the library's default global registry, the
+ * collection `/metrics` serializes — re-exported under a project name so each module's
+ * `metrics.ts` registers against the same instance instead of creating its own invisible one.
+ * Also how `GET /observability/metrics/overview` reaches domain counters, by name off this
+ * registry rather than importing the owning module.
  */
 export const metricsRegistry = register;
 
@@ -36,15 +30,12 @@ collectDefaultMetrics({ register: metricsRegistry });
  * Assigned to an unused underscore-prefixed variable purely to satisfy lint rules: the
  * constructor's side effect (registering itself) is the whole point, not the reference.
  */
+// Gauge: name follows Prometheus's snake_case/_seconds convention; help is mandatory and shown
+// verbatim as `# HELP`; collect() runs at scrape time (non-arrow so `this` is the gauge).
 const _processUptimeGauge = new Gauge({
-    // Metric name. Prometheus convention: snake_case, unit-suffixed (`_seconds`).
     name: 'process_uptime_seconds',
-    // `help` is mandatory and is exposed verbatim in the scrape output as `# HELP`.
     help: 'Uptime of the Node.js process in seconds.',
-    // Which registry this metric belongs to.
     registers: [metricsRegistry],
-    // `collect()` is invoked at *scrape* time, so the value is computed on demand rather than
-    // maintained by a timer. `this` is the gauge, hence the non-arrow function.
     collect() {
         this.set(process.uptime());
     }
@@ -53,15 +44,10 @@ const _processUptimeGauge = new Gauge({
 /**
  * The ceiling V8 will not grow the heap past, in bytes.
  *
- * prom-client ships `nodejs_heap_size_used_bytes` and `nodejs_heap_size_total_bytes` but no
- * limit, and the two it does ship do not describe saturation: `total` is the heap V8 has
- * *committed so far*, which it grows on demand, so `used / total` sits near 1 on a perfectly
- * healthy process and an alert written against that ratio fires permanently. `heap_size_limit`
- * is the fixed ceiling (`--max-old-space-size`), so `used / limit` is the ratio that actually
- * means "close to OOM" — see the `HighHeapUsage` rule in `prometheus.alert-rules.yaml`.
- *
- * Read at scrape time like the uptime gauge above; the value is constant for the life of the
- * process, but reading it on demand keeps it correct if the process is ever resized.
+ * prom-client ships `used`/`total` but not this: `total` is heap V8 has committed so far and
+ * grows on demand, so `used / total` sits near 1 on a healthy process — an alert on that ratio
+ * fires permanently. `heap_size_limit` is the fixed ceiling, so `used / limit` is what actually
+ * means "close to OOM" (see `HighHeapUsage` in `prometheus.alert-rules.yaml`).
  */
 const _heapSizeLimitGauge = new Gauge({
     name: 'nodejs_heap_size_limit_bytes',
@@ -90,13 +76,10 @@ export const httpRequestsTotal = new Counter({
 export const httpRequestDuration = new Histogram({
     name: 'http_request_duration_milliseconds',
     help: 'HTTP request duration in milliseconds.',
-    // Deliberately no `status_code` here: it would multiply the series count by the number of
-    // buckets for little analytical gain.
+    // No `status_code` label (would multiply series by bucket count). Buckets are roughly
+    // logarithmic — cache hits (5-25ms), DB-backed (50-250ms), pathological (1-5s) — tighter at
+    // the low end since percentiles can only resolve to a bucket boundary.
     labelNames: ['method', 'route'] as const,
-    // Bucket upper bounds in ms. Chosen roughly logarithmically to cover cache hits (5-25 ms),
-    // normal DB-backed requests (50-250 ms) and pathological ones (1-5 s). Percentiles can only
-    // ever resolve to a bucket boundary, so this list *is* the precision limit — hence the
-    // tighter spacing at the low end, where most requests live.
     buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
     registers: [metricsRegistry]
 });
@@ -133,11 +116,9 @@ export const httpInflightRequests = new Gauge({
 export const UNMATCHED_ROUTE = 'unmatched';
 
 /**
- * The route template a request matched, as its metric label.
- *
- * Express populates `request.route` during routing, so every caller reads this inside a `finish`
- * listener. `route.path` is relative to the router's mount point; `baseUrl` supplies the rest. A
- * request that reached no handler collapses to a single `unmatched` series.
+ * The route template a request matched, as its metric label. Express populates `request.route`
+ * during routing, so every caller reads this inside a `finish` listener; `route.path` is relative
+ * to the router's mount point, `baseUrl` supplies the rest. No match collapses to `unmatched`.
  *
  * @param request - the request, read after routing
  * @returns the mounted route template, or `unmatched`
@@ -202,10 +183,9 @@ export const decrementInflight = (): void => {
 };
 
 /**
- * Sum raw metric sample values from a prom-client get() result.
- *
- * A metric's `get()` returns one entry per label combination, so totalling across every
- * method/route/status series is the only way to get a single overall number.
+ * Sum raw metric sample values from a prom-client get() result. A metric's `get()` returns one
+ * entry per label combination, so totalling across every series is the only way to get one
+ * overall number.
  */
 const sumMetricValues = (values: { value: number }[]) =>
     values.reduce((sum, value) => sum + value.value, 0);
@@ -237,7 +217,7 @@ const aggregateLatencyBuckets = (
     for (const { value, labels, metricName } of values) {
         // prom-client sets `metricName` only on the derived `_sum` and `_count` rows; bucket
         // rows leave it undefined. Including them would inflate the counts badly.
-        if (metricName) continue; // skip _sum / _count rows
+        if (metricName) continue;
         // `le` ("less than or equal") is the standard Prometheus bucket-boundary label.
         const { le } = labels;
         if (le === undefined) continue;
@@ -261,15 +241,12 @@ const aggregateLatencyBuckets = (
 };
 
 /**
- * Estimate a percentile from cumulative histogram buckets.
+ * Estimate a percentile from cumulative histogram buckets. Walks up the buckets and returns the
+ * first boundary whose cumulative count reaches the target rank.
  *
- * Walks up the buckets and returns the first boundary whose cumulative count reaches the
- * target rank. Exported for unit testing.
- *
- * Accuracy note: the result is always a bucket *boundary*, so it over-estimates within the
- * bucket — with the bucket list above, a true p95 of 60 ms reports as 100 ms. Real Prometheus
- * interpolates (`histogram_quantile`); this is a deliberately simpler approximation for the
- * in-app overview endpoint.
+ * The result is always a bucket *boundary*, so it over-estimates within the bucket — a true p95
+ * of 60ms reports as 100ms here. Real Prometheus interpolates (`histogram_quantile`); this is a
+ * deliberately simpler approximation for the in-app overview endpoint.
  *
  * @param percentile - fraction in [0, 1], e.g. 0.95
  */
@@ -313,14 +290,12 @@ export const getHttpRequestCounters = () =>
 export const getPrometheusMetrics = (): Promise<string> => metricsRegistry.metrics();
 
 /**
- * Estimate p50 and p95 latency (ms) from the request-duration histogram buckets.
+ * Estimate p50 and p95 latency (ms) from the request-duration histogram buckets. Percentiles
+ * rather than an average, because an average hides the tail: p95 is what the unluckiest 5% of
+ * users experience.
  *
- * Percentiles rather than an average, because an average hides the tail: p95 is what the
- * unluckiest 5% of users actually experience.
- *
- * Scope caveat: these are computed over the *entire process lifetime*, not a recent window, so
- * they smooth out over time and a spike gets diluted. For time-windowed values, query the
- * scraped histogram with `histogram_quantile` instead.
+ * Computed over the *entire process lifetime*, not a recent window, so a spike gets diluted over
+ * time — for time-windowed values, query the scraped histogram with `histogram_quantile` instead.
  */
 export const getLatencyPercentiles = (): Promise<{ p50: number; p95: number }> =>
     httpRequestDuration.get().then(({ values }) => {

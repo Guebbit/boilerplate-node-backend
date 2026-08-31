@@ -1,14 +1,10 @@
 /**
  * @module
- * One reading of the process, in the units it reports.
- *
- * Three payloads (the SSE stream and two REST endpoints) read from here rather than calling
- * `process.memoryUsage()`/`process.uptime()` themselves — separate readings can disagree, and
- * differing rounding would report drifting uptimes with no bug behind it. Units are bytes
- * everywhere; megabytes is a presentation choice made by whoever renders the payload.
- *
- * `metrics-http.ts` is the one exception: its prom-client `Gauge` reads `process.uptime()` itself
- * because it must answer at scrape time, not compose a payload from here.
+ * One reading of the process, in the units it reports. Three payloads (the SSE stream and two
+ * REST endpoints) read from here rather than calling `process.memoryUsage()`/`process.uptime()`
+ * themselves, since separate readings can disagree and drift with no bug behind it. Units are
+ * bytes everywhere. `metrics-http.ts` is the one exception, reading `process.uptime()` itself
+ * since its prom-client `Gauge` must answer at scrape time.
  */
 
 /** Process memory in bytes — the four fields every payload publishes, and no more. */
@@ -29,11 +25,8 @@ export interface ProcessMemorySnapshot {
 /** The process at one instant: memory in bytes, uptime in whole seconds. */
 export interface ProcessSnapshot {
     /**
-     * Seconds since process start, floored.
-     *
-     * Floored rather than rounded, and the same way in all three payloads. Every contract types
-     * this `integer`, so the choice decides nothing except whether two endpoints polled together
-     * are allowed to disagree — and they are not.
+     * Seconds since process start, floored — the same way in all three payloads, so two
+     * endpoints polled together cannot disagree (every contract types this `integer`).
      */
     uptimeSeconds: number;
     memory: ProcessMemorySnapshot;

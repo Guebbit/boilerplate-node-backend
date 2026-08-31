@@ -1,11 +1,9 @@
 /**
  * @module
- * Prometheus HTTP metrics.
- *
- * Mounted before the routes so the timer wraps the handler rather than following it. The route
- * label is read in the `finish` listener, not here: `request.route` is populated during routing,
- * so a label taken in the middleware body would have to guess at the template from the path — and
- * a guess is unbounded for every path the app does not serve.
+ * Prometheus HTTP metrics, mounted before the routes so the timer wraps the handler rather than
+ * following it. The route label is read in the `finish` listener, not here: `request.route` is
+ * populated during routing, so a label taken in the middleware body would have to guess at the
+ * template from the path — unbounded for every path the app doesn't serve.
  */
 
 import type { Express } from 'express';

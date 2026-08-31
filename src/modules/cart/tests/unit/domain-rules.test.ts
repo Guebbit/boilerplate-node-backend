@@ -10,11 +10,8 @@ import { availabilityOf } from '@modules/inventory';
 
 /**
  * A line asking for `quantity`, against a product holding `onHand` with `reserved` spoken for.
- *
- * Both counters are stated rather than only the total, because the whole point of the pre-flight
- * now is that it reads the DIFFERENCE — a fixture that could only set one number could not tell
- * "nothing on the shelf" apart from "everything on it is promised", which is the distinction
- * these cases exist to check.
+ * Both counters are stated, not just the total: the pre-flight reads the DIFFERENCE, and a
+ * fixture with only one number couldn't distinguish "nothing on the shelf" from "all promised".
  */
 const line = (quantity = 1, onHand?: number, reserved = 0): CartLineCandidate => ({
     quantity,
@@ -59,12 +56,10 @@ describe('evaluateCheckout', () => {
     });
 
     /*
-     * ── The case the reservation model added ─────────────────────────────────────────────────
-     *
-     * Forty units on the shelf and all forty promised to open orders. Under the old single-count
-     * model this line read as comfortably in stock and was refused later, by the write; now it is
-     * refused here, because availability — not the pile in the warehouse — is what a customer can
-     * buy. This is the case that could not be expressed before, so it is the one worth asserting.
+     * The case the reservation model added: forty units on the shelf, all forty promised. The
+     * old single-count model saw this as comfortably in stock and refused it later, at the
+     * write; now it's refused here, because availability — not the warehouse pile — is what a
+     * customer can buy.
      */
     it('refuses a line whose units are all reserved', () => {
         expect(evaluateCheckout([line(1, 40, 40)])).toMatchObject({
@@ -80,16 +75,10 @@ describe('evaluateCheckout', () => {
     });
 
     /*
-     * A missing count means REFUSE, not allow — the counter-intuitive half of this rule.
-     *
-     * Reading absence as "unconstrained" is the natural instinct and the wrong direction to be
-     * wrong in for a rule whose only job is to refuse: it lets any quantity through on exactly the
-     * documents nothing is known about. The safe reading of "we do not know how many there are" is
-     * "do not sell it".
-     *
-     * Nothing is lost by it: `db/migrations/20260817120000-inventory-counters.js` backfills every
-     * row, so this defends against a document that should not exist rather than a state the shop
-     * relies on.
+     * A missing count means REFUSE, not allow. Reading absence as "unconstrained" would let any
+     * quantity through on exactly the documents nothing is known about — the safe reading of "we
+     * don't know how many" is "don't sell it". Backfilled by `20260817120000-inventory-counters.js`,
+     * so this defends a document that shouldn't exist, not a state the shop relies on.
      */
     it('treats absent counters as nothing to sell', () => {
         expect(evaluateCheckout([line(1)])).toMatchObject({
@@ -110,14 +99,10 @@ describe('evaluateCheckout', () => {
 });
 
 /**
- * The duplication guard.
- *
- * `rules.ts` carries its own copy of the availability subtraction, because the domain layer may
- * not import a sibling module (see the note there, and `eslint.config.ts`). A copy that nothing
- * compares is a copy that drifts, so this compares it — against `inventory`'s `availabilityOf`,
- * which is the authority — through the only observable the pure rule exposes: its verdict.
- *
- * A test file is allowed the import the rule is not. That asymmetry is the whole trick.
+ * The duplication guard: `rules.ts` carries its own copy of the availability subtraction because
+ * the domain layer may not import a sibling module. This compares it against `inventory`'s
+ * `availabilityOf` — the authority — through the only observable the pure rule exposes: its
+ * verdict. A test file may import the rule that the domain layer may not.
  */
 describe('availability agrees with the inventory authority', () => {
     const cases: { onHand: number; reserved: number }[] = [
@@ -134,13 +119,10 @@ describe('availability agrees with the inventory authority', () => {
         const available = availabilityOf({ onHand, reserved });
 
         /*
-         * The boundary, pinned from both sides — which is what makes a copy that is off by one
-         * fail rather than merely look different.
-         *
-         * The `available > 0` guard is not a get-out: a line for zero units is not a thing a cart
-         * can hold (`CartItem.quantity` has `minimum: 1`), so there is no boundary below to pin
-         * when nothing is available. The assertion that still runs in that case — one unit is
-         * refused — is the one that matters there.
+         * The boundary, pinned from both sides — what makes an off-by-one copy fail rather than
+         * merely look different. `available > 0` is not a get-out: a zero-unit line isn't a thing
+         * a cart can hold (`CartItem.quantity` has `minimum: 1`), so the assertion that still
+         * runs there — one unit refused — is the one that matters.
          */
         if (available > 0)
             expect(evaluateCheckout([line(available, onHand, reserved)])).toEqual({ ok: true });

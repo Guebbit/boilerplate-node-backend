@@ -18,12 +18,10 @@ import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 
 /**
- * Built on the orval-generated SearchProductsBody (kept in sync with
- * openapi.yaml); page/pageSize/minPrice/maxPrice are coerced from strings
- * since GET requests carry them as query-string text, not JSON numbers.
- *
- * `page`/`pageSize` come from `@infrastructure/http/schemas` so all four search endpoints agree on what a
- * legal one is; absent stays absent, because `normalizePagination` owns the defaults.
+ * Extends the orval-generated `SearchProductsBody` (kept in sync with openapi.yaml), coercing
+ * page/pageSize/minPrice/maxPrice from strings since GET carries them as query text, not JSON
+ * numbers. `page`/`pageSize` come from the shared schemas so all four search endpoints agree on
+ * what's legal; absent stays absent, since `normalizePagination` owns the defaults.
  */
 const searchProductsQuerySchema = SearchProductsBody.extend({
     page: pageSchema,
@@ -44,11 +42,9 @@ const searchProductsQuerySchema = SearchProductsBody.extend({
 });
 
 /**
- * Query parameters that change this endpoint's answer, and therefore its cache key.
- *
- * Derived from the schema rather than hand-listed, because the two must not drift: a parameter
- * the controller reads but the key omits would let two different requests share one cached
- * response. Anything outside this list is stripped by the validator and changes nothing.
+ * Query parameters that change this endpoint's answer, and therefore its cache key. Derived from
+ * the schema rather than hand-listed, so the two can't drift — a parameter the controller reads
+ * but the key omits would let two different requests share one cached response.
  */
 export const searchProductsKeyParameters = Object.keys(searchProductsQuerySchema.shape);
 

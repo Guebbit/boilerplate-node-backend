@@ -14,18 +14,15 @@ import {
 } from '@infrastructure/persistence/create-repository';
 
 /**
- * Address book Repository
- *
  * Every write loads the book, edits it in memory and saves — a READ-MODIFY-WRITE, which the cart
- * deliberately avoids, and the difference is the point: "exactly one default" is an invariant
- * across the WHOLE array, and no single `$set`/`$pull` can demote the old default, promote the
- * new one and prune the removed entry as one server-side expression. Concurrency worry is also
- * of a different order — nobody edits their address book from two devices in the same second the
- * way two tabs race a cart — so mongoose's optimistic versioning on `save()` is protection
- * enough: the loser retries by hand, it does not oversell anything.
+ * avoids, because "exactly one default" is an invariant across the WHOLE array and no single
+ * `$set`/`$pull` can demote the old default, promote the new one and prune the removed entry
+ * atomically. Nobody edits their book from two devices in the same second the way two tabs race
+ * a cart, so mongoose's optimistic versioning on `save()` is protection enough — the loser
+ * retries by hand.
  *
- * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
+ * The type is written out because Mongoose's generics are too large for TS to serialize an
+ * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 export const addressBookRepository: Repository<AddressBookDocument> & {
     findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
@@ -69,12 +66,10 @@ export const addressBookRepository: Repository<AddressBookDocument> & {
     },
 
     /**
-     * Edit one entry of the caller's own book.
-     *
-     * Resolves `null` when the book or the entry is absent — someone else's address id matches
-     * nothing here, which is what lets the controller answer the same 404 an invented id gets.
-     * `default: true` claims the slot; `false`/absent leave the assignment alone (see the
-     * contract note — demoting without a successor would leave the book with none).
+     * Edit one entry of the caller's own book. Resolves `null` when the book or entry is absent,
+     * so the controller answers the same 404 an invented id gets. `default: true` claims the
+     * slot; `false`/absent leaves the assignment alone (demoting without a successor would leave
+     * the book with none).
      */
     updateEntry: async (userId: string, addressId: string, changes: UpdateAddressRequest) => {
         const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();

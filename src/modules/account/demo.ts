@@ -1,14 +1,9 @@
 /**
  * @module
- * The address book's slice of the demo dataset.
- *
- * The admin keeps two entries because "exactly one default" is only observable with more than
- * one; the ordinary customer keeps one, for the common single-address case. Nobody keeps zero —
- * an empty book and no book read the same here, and every signup already has one.
- *
- * `orders/demo.ts` freezes a copy of the admin's default entry as one order's `shippingAddress`,
- * which is what makes "an order remembers where it was sent" checkable against a book that can
- * still change.
+ * The address book's slice of the demo dataset. The admin keeps two entries so "exactly one
+ * default" is observable; the ordinary customer keeps one, the common case. `orders/demo.ts`
+ * freezes a copy of the admin's default entry as one order's `shippingAddress`, which is what
+ * makes "an order remembers where it was sent" checkable against a book that can still change.
  */
 
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
@@ -28,11 +23,9 @@ export const addressBookFixtures = [
         userId: SEED_ADMIN_ID,
         items: [
             /*
-             * `orders/demo.ts` freezes a matching copy of this entry as one order's
-             * `shippingAddress`. It RESTATES it rather than importing it, and that is the correct
-             * shape: `orders` declares no edge on this module, an order's address is a snapshot
-             * that must be free to differ from the live book, and sharing the literal would make
-             * the two unable to disagree — which is the property the fixture exists to show.
+             * `orders/demo.ts` restates (not imports) a copy of this entry as its `shippingAddress`: an
+             * order's address is a snapshot that must be free to differ from the live book — sharing
+             * the literal would make them unable to disagree, which is what this fixture demonstrates.
              */
             {
                 id: '65dd2ce31f5b3a9e04c7b211',
@@ -92,12 +85,9 @@ export const seedAddressBooksCollection = (): Promise<SeedOutcome[]> =>
 
 /**
  * Read the seeded books back as stored, sorted by owner — see `../cart/demo`.
- *
- * No endpoint serves a raw book: `GET /account/addresses` answers `{ addresses: [...] }`, which
- * `./services/addresses` builds from `items`. What is published here is therefore the stored row,
- * whose entries serialize as the contract's `Address` because `addressItemSchema` carries the
- * shared serializer — so the frontend's mock can answer the endpoint by reading `items` straight
- * out of this file.
+ * No endpoint serves a raw book; the stored row's entries already serialize as the contract's
+ * `Address` (via `addressItemSchema`'s shared serializer), so the frontend's mock can read
+ * `items` straight out of this file.
  */
 export const exportSeededAddressBooks = async (): Promise<Record<string, unknown[]>> => ({
     addressBooks: await exportCollection(addressBookModel, { userId: 1 })

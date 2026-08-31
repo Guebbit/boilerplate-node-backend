@@ -1,10 +1,9 @@
 /**
  * @module
- * The product catalogue: public read, admin write, soft delete with restore.
- *
- * Depends on nothing — a leaf module. Everything downstream (cart, orders, stock) is a
- * statement about a product, which is what makes this the one model other contexts conform
- * to. It stays a leaf by emitting `product.deleted` rather than importing the cart directly.
+ * The product catalogue: public read, admin write, soft delete with restore. Depends on nothing —
+ * a leaf module, and everything downstream (cart, orders, stock) is a statement about a product,
+ * which is what makes this the one model other contexts conform to. It stays a leaf by emitting
+ * `product.deleted` rather than importing the cart directly.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      nothing

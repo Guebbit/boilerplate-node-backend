@@ -1,15 +1,10 @@
 /**
  * @module
- * The address book — the one collection this module owns outright.
- *
- * Every endpoint answers the whole book (`{ addresses }`), never one entry: the invariant worth
- * seeing after any write is "exactly one default", and that is a property of the list. A client
- * that wrote one entry and re-rendered only that entry would happily display two defaults.
- *
- * One slice of `./index`'s service rather than a service of its own. It was `addresses-service.ts`
- * beside `service.ts` at the module root, which made the account's two aggregates look like two
- * layers; they are one layer over two collections, and the namespace in `./index` is where both
- * arrive.
+ * The address book — the one collection this module owns outright. Every endpoint answers the
+ * whole book (`{ addresses }`), never one entry: the invariant worth seeing after any write is
+ * "exactly one default", and that's a property of the list, not of one entry. A slice of
+ * `./index`'s service rather than its own — see `./index` for why the account's two aggregates
+ * share one namespace.
  */
 
 import { t } from '@infrastructure/i18n';
@@ -82,12 +77,9 @@ export const addressRemove = (
 
 /**
  * The address a checkout should ship to — a named entry, the default, or nothing.
- *
- * Exposed through the barrel for the cart's checkout. `undefined` for "the caller keeps no
- * addresses and named none" (an address is not required to buy), `null` for "the caller NAMED
- * an entry that is not theirs or does not exist" — which the checkout must refuse rather than
- * ship nowhere. The split is the whole return type: collapsing the two would let a stale
- * address id silently downgrade to "no address".
+ * `undefined` means the caller keeps no addresses and named none (not required to buy); `null`
+ * means they named an entry that isn't theirs or doesn't exist — checkout must refuse this, not
+ * silently ship nowhere. Collapsing the two would let a stale id downgrade to "no address".
  */
 export const addressForCheckout = (
     userId: string,

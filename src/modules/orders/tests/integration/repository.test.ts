@@ -2,15 +2,10 @@
  * @module
  * `orderRepository` — inserts through the fixture builder, the raw `.aggregate()` passthrough
  * `orderService.search` is built on, and `findByIdScoped`'s two branches (unscoped/admin vs
- * scoped/owner).
- *
- * The aggregate cases exist because the repository does not reshape Mongo's pipeline stages in
- * any way — `$match`/`$count`/`$addFields`/pagination are asserted directly here so that stays a
- * deliberate design rather than an untested assumption.
- *
- * `findByIdScoped` gets its own block: the two branches resolve structurally different values (a
- * hydrated document vs a plain aggregated object), and `id` is the only field both agree on. See
- * that describe block's own comment for what specifically is pinned and why.
+ * scoped/owner). The aggregate cases pin that the repository does not reshape Mongo's pipeline
+ * stages, so `$match`/`$count`/`$addFields`/pagination stay a deliberate design rather than an
+ * untested assumption. `findByIdScoped` gets its own block below since its two branches resolve
+ * structurally different values, and `id` is the only field both agree on.
  */
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -28,7 +23,6 @@ describe('orderRepository', () => {
         it('inserts an order and returns the Mongoose document', async () => {
             const user = await createUser();
             const product = await createProduct({ price: 15 });
-            // toOrderItem converts the product document into the embedded shape
             const order = await createOrder(user, [toOrderItem(product, 2)]);
 
             expect(order._id).toBeDefined();
@@ -163,17 +157,10 @@ describe('orderRepository', () => {
     });
 
     /**
-     * `findByIdScoped` is polymorphic by scope, deliberately — unscoped (admin) resolves a
-     * hydrated document, scoped (owner) resolves an aggregate row already through
-     * `applyOrderTransform`. What makes that safe is a single guarantee: **`id` resolves on both
-     * branches, `_id` on only one.**
-     *
-     * These pin exactly that, because nothing else can. TypeScript cannot — `OrderDocument`
-     * extends `Document`, so `_id` type-checks on a value that will not carry it at runtime — and
-     * neither can a response-body assertion, since the transform is also the schema's `toJSON` and
-     * the two shapes serialize identically. The gap is only visible to code reading the value
-     * before it is serialized, which is where the invoice filename and the invoice's own title
-     * both read `_id` and both said `undefined` for every non-admin caller.
+     * `findByIdScoped` resolves structurally different values by scope — hydrated document
+     * (unscoped) vs already-transformed aggregate row (scoped) — so `id` is the only field both
+     * guarantee; `_id` type-checks but isn't reliably present. Pinned here because neither
+     * TypeScript nor a response-body assertion can catch the gap before serialization.
      */
     describe('findByIdScoped', () => {
         it('exposes a usable `id` on both the scoped and the unscoped branch', async () => {

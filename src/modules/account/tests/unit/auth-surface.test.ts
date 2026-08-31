@@ -1,13 +1,10 @@
 /**
  * @module
- * `index.ts` is this module's front door, and it is one function wide.
- *
- * A barrel's only failure mode is a missing or misrouted name — a re-export resolving to the WRONG
- * binding compiles fine and is caught by nothing else. This suite pins the surface by name and
- * checks each export is the same object its source module exports, not merely that it exists.
- *
- * The token surface is deliberately absent: the kernel's auth port is what every request goes
- * through, filled from `module.ts` directly, so no sibling needs a token.
+ * `index.ts` is this module's front door, one function wide. A barrel's only failure mode is a
+ * missing or misrouted name — a re-export resolving to the WRONG binding compiles fine and is
+ * caught by nothing else — so this suite pins the surface by name and checks each export is the
+ * same object its source exports. The token surface is deliberately absent: the kernel's auth
+ * port is what every request goes through, filled from `module.ts` directly.
  */
 
 import * as account from '@modules/account';

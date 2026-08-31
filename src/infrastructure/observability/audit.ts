@@ -1,10 +1,9 @@
 /**
  * @module
- * Audit trail — the "who did what to which resource, and did it work" record.
- *
- * Deliberately separate from application logging: audit entries are a security/compliance
- * artefact, so they go to a dedicated always-on logger (see `auditLogger`) with a stable,
- * machine-readable field set that must not be reshaped for convenience.
+ * Audit trail — the "who did what to which resource, and did it work" record. Deliberately
+ * separate from application logging: audit entries are a security/compliance artefact, so they
+ * go to a dedicated always-on logger (`auditLogger`) with a stable, machine-readable field set
+ * that must not be reshaped for convenience.
  *
  * See: docs/tools/winston.md
  */
@@ -14,16 +13,13 @@ import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import type { CallerContext } from '@infrastructure/http/request';
 
 /**
- * Action constants — domain.resource.verb dot-notation.
- * The dotted convention lets a log backend filter by prefix: `auth.*` for all authentication
- * activity, `admin.product.*` for one resource. A closed vocabulary (not raw strings) is what
- * stops an alert built on `auth.login` being defeated by a typo at a call site.
+ * Action constants — domain.resource.verb dot-notation, so a log backend can filter by prefix
+ * (`auth.*`, `admin.product.*`) and a typo at a call site can't silently defeat an alert.
  *
- * Only the app-level actions live here. Every domain action belongs to the module that performs
- * it — `modules/account/audit.ts`, `modules/products/audit.ts`, and so on — because this file sits
- * in `infrastructure`, which must not know which domains exist. These three are the exception that proves
- * it: they are emitted by `middlewares/authorizations.ts` about requests that were refused before
- * any domain saw them, so no module could own them.
+ * Only the app-level actions live here — every domain action belongs to its own module
+ * (`modules/account/audit.ts`, etc.), because `infrastructure` must not know which domains exist.
+ * These three are the exception: `middlewares/authorizations.ts` emits them for requests refused
+ * before any domain saw them, so no module could own them.
  */
 export const coreAuditActions = {
     SECURITY_UNAUTHORIZED: 'security.unauthorized',
@@ -35,12 +31,9 @@ export const coreAuditActions = {
 type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
 
 /**
- * Module name → that module's action strings. Augmented per module; see
- * `modules/account/audit.ts` for the shape.
- *
- * Intentionally empty here, exactly like `DomainEventMap` in `kernel/events.ts`: this is the
- * extension point, and its members live with the domains that emit them. The augmentation is
- * type-only, so the vocabulary stays closed and `infrastructure` still imports nothing from a module.
+ * Module name → that module's action strings. Augmented per module (declaration merging, like
+ * `DomainEventMap` in `kernel/events.ts`), so this stays empty and `infrastructure` never imports
+ * from a module — see `modules/account/audit.ts` for the shape.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own actions
 export interface AuditActionMap {}
@@ -94,37 +87,29 @@ export interface AuditEntry extends AuditEvent {
 /**
  * Where emitted entries are persisted, so an admin endpoint can query them back.
  *
- * A port rather than a direct call, for a structural reason: this module lives in `src/infrastructure/**`,
- * which is the bottom of the dependency graph and is forbidden by `no-restricted-imports` from
- * reaching up into `@modules/*` or `@kernel/*`. Inverting it keeps that rule intact — infrastructure
- * states what it needs, and `app.ts` supplies the implementation at boot. It is the same shape as
- * `ImageStore` in `@infrastructure/adapters/image-store`, and it has the same payoff: the durable store
- * can be swapped for a log-backend writer without a single audit call site changing.
+ * A port rather than a direct call: `infrastructure` sits at the bottom of the dependency graph
+ * and cannot import `@modules/*`/`@kernel/*`, so it states what it needs and `app.ts` supplies
+ * the implementation at boot — same shape as `ImageStore` in `@infrastructure/adapters/image-store`.
  *
  * Implementations MUST NOT throw and MUST NOT reject. See {@link registerAuditSink}.
  */
 export type AuditSink = (entry: AuditEntry) => void;
 
 /**
- * The registered sink, if any.
- *
- * Unregistered is a supported state, not a misconfiguration: unit tests import this module with no
- * database, and the queue workers audit nothing. In that state `emitAuditEvent` still writes the
- * log line, which is the compliance record — persistence is the queryable *convenience* on top.
+ * The registered sink, if any. Unregistered is a supported state, not a misconfiguration: unit
+ * tests import this module with no database, and queue workers audit nothing. `emitAuditEvent`
+ * still writes the log line regardless — persistence is the queryable convenience on top.
  */
 let auditSink: AuditSink | undefined;
 
 /**
- * Install the persistence sink. Called once, at import time, from `@modules/audit-logs/module`.
+ * Install the persistence sink. Called once, at import time, from `@modules/audit-logs/module` —
+ * module LOAD, not database connect, so the sink must cope with being called while disconnected
+ * (see `bufferCommands: false` on the audit-log schema).
  *
- * That is module LOAD, not database connect: anything importing the app registers the sink whether
- * or not a connection exists or ever will. The sink is therefore written to cope with being called
- * while disconnected — see `bufferCommands: false` on the audit-log schema.
- *
- * The sink is invoked on paths that are already answering a request — every login, every blocked
- * permission — so it must be fire-and-forget on the caller's side: no awaiting, no rejecting, no
- * throwing. A failure to *store* an audit entry must never become a failed request, and must never
- * lose the log line that already went out above it.
+ * Invoked on paths already answering a request, so it MUST be fire-and-forget: no awaiting, no
+ * rejecting, no throwing. A failure to store an entry must never fail the request or lose the
+ * log line already written above it.
  */
 export const registerAuditSink = (sink: AuditSink): void => {
     auditSink = sink;
@@ -180,9 +165,8 @@ export const extractRequestContext = (
 
 /**
  * Resolve actor role from the caller context.
- * Returns 'admin', 'user', or 'anonymous'.
  * @param context - the caller context built once in the controller
- * @returns actor role string
+ * @returns the actor's role
  */
 export const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
     // Order matters: most-privileged first, since an admin also satisfies the `user` check.

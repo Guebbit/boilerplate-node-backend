@@ -1,13 +1,9 @@
 /**
  * @module
- * The address-book schema's contract.
- *
- * The one collection in `account` shaped like the cart and the wishlist — one document per user,
- * `unique: true` on `userId`, mutated by upsert — with one deliberate difference: its lines keep
- * an `_id`, because two addresses can be identical in every typed field and still be different
- * entries. Stated explicitly here since it's the kind of thing a later "consistency" cleanup
- * removes, and asserted here rather than against `cartSchema` directly, since reaching into a
- * sibling module's `model.ts` is the import the boundaries rule forbids.
+ * The address-book schema's contract. Shaped like the cart and the wishlist — one document per
+ * user, `unique: true` on `userId`, mutated by upsert — but its lines keep an `_id`, since two
+ * addresses can be identical in every typed field and still be different entries. Asserted here
+ * rather than against `cartSchema` directly, since a sibling's `model.ts` is off-limits.
  */
 
 import { addressBookSchema } from '@modules/account/model';
@@ -56,11 +52,10 @@ describe('addressBookSchema — an entry', () => {
     });
 
     it('keeps an _id of its own, unlike a cart or wishlist line', () => {
-        // The difference that matters, asserted against its sibling so a cleanup that "aligns"
-        // them fails here. Two addresses can be identical in every typed field and still be
-        // different entries, so `PUT /account/addresses/:addressId` needs something to name.
-        // `true` here, where the cart's and wishlist's lines are `false` — see
-        // `cart/tests/unit/schema-contract.test.ts` for the matching assertion on that side.
+        // The difference that matters, asserted against its sibling so a cleanup that "aligns" them
+        // fails here: two addresses can be identical in every typed field and still be different
+        // entries, so `PUT /account/addresses/:addressId` needs something to name. `true` here, vs
+        // `false` on the cart's and wishlist's lines — see `cart/tests/unit/schema-contract.test.ts`.
         expect(optionsOf(subSchema(addressBookSchema, 'items'))._id).toBe(true);
     });
 

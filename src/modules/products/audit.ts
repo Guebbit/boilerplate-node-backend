@@ -1,10 +1,8 @@
 /**
  * @module
- * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
- * augmentation rather than in a shared enum.
- *
- * Only the writes. Reading the catalogue is public and unauthenticated, so there is no actor to
- * record and nothing a compliance query would ask about it.
+ * Audit actions this module emits — declared by augmentation rather than a shared enum (see
+ * `modules/account/audit.ts` for why). Only the writes: reading the catalogue is public and
+ * unauthenticated, so there is no actor to record and nothing a compliance query would ask about.
  */
 
 /** The audit action vocabulary this module owns. */

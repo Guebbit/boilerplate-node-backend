@@ -1,14 +1,10 @@
 /**
  * @module
- * The analytics vocabulary this module emits — `src/modules/wishlist/analytics.ts`.
- *
- * Pinned string by string, the same reasoning `orders/tests/unit/audit.test.ts` pins its audit
- * vocabulary by: the constant's NAME is refactored freely, but the STRING is what Umami keys its
- * series on (`docs/tools/analytics.md#renaming-is-not-free`) — rename it silently and a dashboard's
- * series just stops, with nothing here to say why.
- *
- * No mocks, no database. `service.test.ts` moved to `tests/integration/` because firing an event
- * for real needs a document to move; the vocabulary itself is a static map and belongs here.
+ * The analytics vocabulary this module emits (`src/modules/wishlist/analytics.ts`), pinned
+ * string by string: the constant's NAME is refactored freely, but the STRING is what Umami keys
+ * its series on — rename it silently and a dashboard's series just stops
+ * (`docs/tools/analytics.md#renaming-is-not-free`). No mocks, no database; a static map needs
+ * neither.
  */
 
 import type { AnalyticsEventMap } from '@infrastructure/observability/analytics';

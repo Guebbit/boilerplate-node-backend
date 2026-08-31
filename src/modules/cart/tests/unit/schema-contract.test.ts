@@ -1,16 +1,10 @@
 /**
  * @module
- * The cart schema's contract.
- *
- * The cart and the wishlist are the same shape for the same reasons, and they differ in exactly
- * one field — a cart line has a `quantity` and a wishlist line does not. That difference is the
- * boundary between the two features ("how many" versus "do I want this"), so it is asserted here
- * rather than assumed.
- *
- * The declaration doing the real work is `unique: true` on `userId`: it makes "one cart per user"
- * a database fact, which is what lets every mutation be a single `findOneAndUpdate(..., { upsert:
- * true })` with no read in front of it. Without it a concurrent first-add creates two carts and
- * one of them silently stops being the cart.
+ * The cart schema's contract. The cart and the wishlist are the same shape except one field — a
+ * cart line has `quantity`, a wishlist line does not — asserted here as the boundary between the
+ * two features. `unique: true` on `userId` does the real work: it makes "one cart per user" a
+ * database fact, so every mutation is a single `findOneAndUpdate(upsert: true)` with no read in
+ * front of it.
  */
 
 import { cartSchema } from '@modules/cart/model';

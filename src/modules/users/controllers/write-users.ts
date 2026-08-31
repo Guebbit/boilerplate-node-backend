@@ -25,12 +25,8 @@ import type {
 } from '@types';
 
 /**
- * POST /users — create a new user (admin).
- * PUT /users — update a user by id in the request body (admin).
- * PUT /users/:id — update a user by path id (admin).
- *
- * Behaviour: if an id is found (path param or body), the user is updated;
- * otherwise a new user is created (POST only — PUT without id returns 422).
+ * POST /users creates; PUT /users or PUT /users/:id updates — one handler for both.
+ * An id (path or body) triggers update; its absence creates (POST only; PUT without id → 422).
  */
 export const writeUsers = (
     request: Request<
@@ -62,12 +58,9 @@ export const writeUsers = (
     } = readUploadedImage(request);
 
     /**
-     * Validation errors prevent creation end editing.
-     *
-     * `false`: password is never required at this schema layer, on either branch. An edit may
-     * leave it untouched (see `userService.update`), and a create may leave it to `sendSetupEmail`
-     * below instead of stating one — that combination is a business rule this schema cannot express
-     * on its own, so it is checked separately, just past the `!id` guard.
+     * `false`: password is never required at this schema layer. An edit may leave it untouched;
+     * a create may satisfy it via `sendSetupEmail` instead — checked separately just past the
+     * `!id` guard, since the schema can't express that either/or on its own.
      */
     const errors = userService.validateData(
         {

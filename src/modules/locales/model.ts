@@ -1,21 +1,17 @@
+/**
+ * @module
+ * The two collections behind the OVERRIDE tier — both dictionaries' runtime edits. Nothing here is
+ * ever AWAITED on the request path: `t()` reaches the backend tenant's rows only through an
+ * overlay `@infrastructure/i18n` rebuilds at boot, on a timer, and after a write. Mongo down or a
+ * malformed key costs only that overlay going stale, never a request failing to resolve its own
+ * copy. See `openapi.yaml` for the tier split.
+ */
+
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { LocaleDirection } from '@types';
 import type { Language, LocaleEntry } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-
-/**
- * @module
- * The two collections behind the OVERRIDE tier — both dictionaries' runtime edits.
- *
- * Nothing here is AWAITED on the request path, which is the property to preserve when changing any
- * of it. `negotiateLocale` never reads a row, and `t()` never waits for one: the backend tenant's rows
- * reach it through an overlay that `@infrastructure/i18n` rebuilds at boot, on a timer and after a
- * write, and that overlay is layered onto dictionaries already loaded from deployed files. Mongo
- * down, a language half-translated, a malformed key — the worst outcome is the two endpoints that
- * read these rows failing and the overlay going stale, never a request that cannot resolve its own
- * copy. See `openapi.yaml` for the tier split in full.
- */
 
 /**
  * The ISO 639-1 primary subtag of a BCP 47 tag: `pt-BR` → `pt`, `es` → `es`.
@@ -61,15 +57,9 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
             trim: true
         },
         /*
-         * The ISO 639-1 code at the front of `tag`, kept as its own column.
-         *
-         * Derived, never supplied: `deriveBaseLanguage` is the one place that computes it, and
-         * every write path goes through it. A client that could send this could send a `pt-BR`
-         * whose base says `es`.
-         *
-         * Worth a column rather than a `split('-')` at each call site because it is the field
-         * that groups a language's variants — "everything Portuguese" is a query on this, and a
-         * query cannot be written against a string operation.
+         * The ISO 639-1 code at the front of `tag`, kept as its own column and always derived —
+         * never supplied — by `deriveBaseLanguage`. Worth a column, not a `split('-')` per call
+         * site, because it is what an "everything Portuguese" query groups on.
          */
         baseLanguage: {
             type: String,
@@ -103,11 +93,10 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
             default: true
         },
         /*
-         * Bumped on any write to this language's entries. A client stores the revision it
-         * downloaded and re-fetches only when the manifest reports a higher one.
-         *
-         * The bump lives in the repository, in the same call as the write that earns it (see
-         * `./repository`), so no service path can change an entry without moving the number.
+         * Bumped on any write to this language's entries; a client re-fetches only when the
+         * manifest reports a higher revision than the one it holds. The bump lives in the
+         * repository (see `./repository`), so no service path can change an entry without moving
+         * it.
          */
         revision: {
             type: Number,
@@ -121,29 +110,21 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
 );
 
 /*
- * Derived on every save, so the column cannot drift from the tag it comes from.
- *
- * A hook rather than an assignment in `createLanguage`, because "derived" has to hold for every
- * write path and there is more than one: the service creates, tests and migrations write
- * documents directly, and a future caller will not know it owes this field a value. Setting it
- * here means the only way to get it wrong is to change `tag` and `baseLanguage` in the same
- * breath, which nothing can do — the field is not in any request schema.
- *
- * `pre('validate')` and not `pre('save')`: `required: true` is checked during validation, so a
- * `save` hook would run after the error it exists to prevent.
+ * Derived on every save so the column cannot drift from `tag` — a hook rather than an assignment
+ * in `createLanguage`, since every write path (including tests and migrations) must derive it.
+ * `pre('validate')`, not `pre('save')`, because `required: true` is checked at validation time.
  */
 localeSchema.pre('validate', function derivesBaseLanguage() {
     if (this.tag) this.baseLanguage = deriveBaseLanguage(this.tag);
 });
 
 /*
- * Names given rather than derived, for the reason `users/model.ts` states at length: Mongo
- * identifies an index by name as well as by key, and `db/migrations/20260817140000-locale-
- * collections.js` creates these same two under these same names. A derived name on one side would
- * be an index-options conflict at boot on every migrated database, and nowhere else.
+ * Named explicitly, not derived: `db/migrations/20260817140000-locale-collections.js` creates
+ * this same index under this same name, and a derived name would conflict at boot on migrated
+ * databases (see `users/model.ts`).
  *
- * UNIQUE on the tag: a language is created by a check-then-insert, so only the database can refuse
- * the second of two concurrent creations of `es`.
+ * UNIQUE on tag: a language is created by check-then-insert, so only the database can refuse two
+ * concurrent creations of `es`.
  */
 localeSchema.index({ tag: 1 }, { name: 'locales_tag', unique: true });
 
@@ -151,13 +132,9 @@ localeSchema.index({ tag: 1 }, { name: 'locales_tag', unique: true });
 export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessageModel>(
     {
         /*
-         * The language's `tag`, stored as the string rather than as an ObjectId reference.
-         *
-         * The read this collection exists for is "give me every row for `es`", and a string match
-         * on an indexed field answers it with no join and no populate. What a reference would have
-         * bought — referential integrity — is enforced where it actually matters instead: deleting
-         * a language cascades its entries in one repository call, and refuses while the language is
-         * still active.
+         * The language's `tag`, stored as a string rather than an ObjectId reference — the read
+         * this collection exists for ("every row for `es`") needs no join. Referential integrity
+         * is enforced elsewhere: deleting a language cascades its entries in one repository call.
          */
         locale: {
             type: String,
@@ -166,17 +143,12 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
             trim: true
         },
         /*
-         * Whose dictionary this row overrides — a tenant id, see `./tenants`.
+         * Whose dictionary this row overrides — a tenant id, see `./tenants`. Part of the row's
+         * IDENTITY (see the unique index below), not a label: two tenants may both declare a
+         * top-level `generic`, so a key alone cannot tell them apart.
          *
-         * Part of the row's IDENTITY, not a label on it — see the unique index below. Two tenants
-         * are independently authored and may both declare a top-level `generic`, so
-         * `generic.error-internal` is one string in the API's copy and a different one in a
-         * client's. A key alone cannot tell them apart.
-         *
-         * A plain string rather than an enum: which tenants exist is configuration (`./tenants`),
-         * and the service refuses an unknown one with a 422 before a row is written. The schema
-         * stays ignorant on purpose — an enum here would have to be rebuilt from the environment
-         * at model load, which is exactly the kind of boot-order trap `./tenants` avoids.
+         * A plain string, not an enum: which tenants exist is configuration (`./tenants`), and the
+         * service refuses an unknown one with 422 before a row is written.
          * `db/migrations/20260822120000-locale-entry-tenant.js` renames the old `scope` column.
          */
         tenant: {
@@ -186,12 +158,9 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
             trim: true
         },
         /*
-         * Flat and dotted (`products.list.title`), and stored AS A STRING.
-         *
-         * The alternative — one document per language holding a nested `messages` object — turns
-         * editing one word into `$set: { "messages.products.list.title": v }`, which Mongo reads as
-         * three levels of nesting rather than as one key. Escaping the dots to avoid that is a trap
-         * that bites once and then keeps biting.
+         * Flat and dotted (`products.list.title`), stored AS A STRING. The alternative — one
+         * document per language with a nested `messages` object — turns `$set` on one key into
+         * three levels of Mongo nesting, a trap that bites once and keeps biting.
          */
         key: {
             type: String,
@@ -215,18 +184,13 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
 );
 
 /*
- * UNIQUE, which is what makes a duplicate key a database guarantee rather than a service-layer
- * hope: every write path here is a check-then-insert, and two concurrent imports of the same key
- * would otherwise both read "absent".
+ * UNIQUE, so a duplicate key is a database guarantee, not a service-layer hope: two concurrent
+ * imports of the same key would otherwise both read "absent".
  *
- * `tenant` sits in the middle rather than at the end, and that ordering is the read this collection
- * exists for. A compound index serves queries on any PREFIX of its keys, so this one answers both
- * `find({ locale, tenant })` — the whole-dictionary read, once per download — and `find({ locale })`
- * for the admin listing that shows every tenant at once. Ending on `tenant` would answer neither
- * without a scan.
- *
- * There is deliberately no second index on `locale` alone for that reason, which is exactly what
- * `db/migrations/20260808180000-prune-unused-indexes.js` exists to have removed.
+ * `tenant` sits in the middle, not the end: a compound index serves any PREFIX of its keys, so
+ * this one answers both `find({ locale, tenant })` (the per-download read) and `find({ locale })`
+ * (the admin listing) without a scan. No separate `locale`-only index for that reason —
+ * `db/migrations/20260808180000-prune-unused-indexes.js` removed it.
  */
 localeMessageSchema.index(
     { locale: 1, tenant: 1, key: 1 },

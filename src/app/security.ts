@@ -1,12 +1,9 @@
 /**
  * @module
- * Transport-level protections and body parsing.
- *
- * Grouped because the order matters and is not obvious: `trust proxy` before the rate limiter,
- * which keys buckets on `request.ip`; body parsers before anything reading `request.body`.
- *
- * Infrastructure supplies the handlers; this file decides which ones this application installs and
- * in what order.
+ * Transport-level protections and body parsing, grouped because the order matters and isn't
+ * obvious: `trust proxy` before the rate limiter (which keys buckets on `request.ip`), body
+ * parsers before anything reading `request.body`. Infrastructure supplies the handlers; this
+ * decides which ones this application installs, and in what order.
  *
  * See: docs/tools/security.md#main-security-tools
  */

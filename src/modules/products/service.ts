@@ -31,12 +31,9 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { createVisibilityScope } from '@kernel/authorization';
 
 /**
- * Validate product data using the Zod schema.
- * Returns an array of UI-friendly error messages (empty array means valid).
- *
- * Takes `unknown` on purpose: this is the boundary that ESTABLISHES the type. Declaring a
- * narrower parameter would force every caller — all of which hold raw request bodies — to cast
- * on the way in, which is precisely the assertion this function exists to replace.
+ * Validates product data against the Zod schema; empty array means valid.
+ * Takes `unknown` on purpose: this is the boundary that establishes the type, so callers passing
+ * raw request bodies don't have to cast on the way in.
  *
  * @param productData
  */
@@ -64,10 +61,7 @@ export const callerScope = createVisibilityScope(productRepository.publicScope);
 /**
  * Search products (DTO-friendly) — matches POST /products/search in OpenAPI.
  *
- * Filters: id (product), text, minPrice, maxPrice
- * Pagination: page (1-based), pageSize
- *
- * @param filters
+ * @param filters - id, text, minPrice, maxPrice, page (1-based), pageSize
  * @param scope - which rows this caller may read ({@link callerScope})
  */
 export const search = (
@@ -144,12 +138,9 @@ export const getByIdViewed = (
 
 /**
  * Enqueue the digest job for a just-persisted product, when its write carried a pending upload.
- *
- * Fire-and-forget, like every other post-write dispatch in this codebase (`enqueueEmail`): a
- * `pendingImageKey` here only ever means a broker accepted the upload at request time (the
- * no-broker path resolves everything inline before the record is ever saved — see
- * `readUploadedImage`), so this is a queue publish, not a CPU-bound digest, and the caller must
- * not wait on it.
+ * Fire-and-forget, like `enqueueEmail`: a `pendingImageKey` here means a broker accepted the
+ * upload at request time (the no-broker path resolves inline before saving, see
+ * `readUploadedImage`) — this is a queue publish, and the caller must not wait on it.
  */
 const enqueueIfPending = (product: ProductDocument): ProductDocument => {
     if (product.pendingImageKey)
@@ -213,15 +204,13 @@ export const update = (
     if (data.price !== undefined) product.price = data.price;
     /*
      * No stock write here, and the contract no longer offers one: `UpdateProductRequest` and its
-     * three siblings carry no counter field.
+     * siblings carry no counter field.
      *
-     * This used to be the "one legitimate ABSOLUTE stock write", and being absolute is what made
-     * it wrong. Setting a count to 40 says nothing about what happened — it is a keystroke, not
-     * an event — so the ledger had to guess by subtracting the old value, and two admins editing
-     * the same product concurrently would each overwrite the other with a number read before the
-     * other's sale. Counters now move only by signed, conditional transitions through
-     * `@modules/inventory`: `POST /inventory/receipts` for a delivery, `POST /inventory/adjustments`
-     * for a stocktake correction. Both say what happened, and neither can lose a concurrent sale.
+     * This used to be an absolute stock write, which is what made it wrong: setting a count to 40
+     * says nothing about what happened, so the ledger had to guess by subtracting the old value —
+     * two concurrent edits could each overwrite the other's sale. Counters now move only through
+     * signed, conditional transitions in `@modules/inventory` (`POST /inventory/receipts`,
+     * `POST /inventory/adjustments`), each of which says what happened and can't lose a sale.
      */
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;
@@ -279,14 +268,12 @@ export const updateById = (
     });
 
 /**
- * Remove a product document (soft or hard delete).
- * Hard delete additionally removes the image file from disk.
- * Soft delete toggles `deletedAt` (acts as a restore if already soft-deleted).
+ * Remove a product document (soft or hard delete). Hard delete also removes the image file;
+ * soft delete toggles `deletedAt`, acting as a restore when already soft-deleted.
  *
- * `product.deleted` is emitted and awaited before the write in both paths, so a listener that
- * cleans up references — the cart module empties the product out of every user's cart — has run
- * before the product can stop resolving. This module does not know who listens, which is what
- * keeps the dependency arrow pointing cart → products and not both ways.
+ * `product.deleted` is emitted and awaited before the write, so a listener that cleans up
+ * references (cart empties the product from every cart) has run before it can stop resolving —
+ * this module doesn't know who listens, which keeps the dependency arrow one-way.
  *
  * @param product
  * @param hardDelete
@@ -333,12 +320,9 @@ export const removeById = (
 /**
  * Every category and tag the PUBLIC catalogue carries, with counts.
  *
- * A pass-through today: the scoping the storefront needs is already in the aggregation
- * (`facets()` matches active, non-deleted rows), so there is no decision left to make here. It
- * exists anyway because a controller reaching past the service is the one shape this layer stack
- * does not allow — see `docs/theory/layers.md`. The day facets grow an audience (admin counts
- * including inactive rows) or a cached variant, this is where that goes, and no controller has to
- * be rewritten to make room for it.
+ * A pass-through today — `facets()` on the repository already scopes to active, non-deleted rows.
+ * Kept here anyway since a controller reaching past the service is the one shape this layer stack
+ * disallows; see `docs/theory/layers.md`.
  */
 const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
     productRepository.facets();

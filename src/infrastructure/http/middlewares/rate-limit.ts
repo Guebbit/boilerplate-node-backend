@@ -57,12 +57,11 @@ const windowMs = () =>
 
 /**
  * What a caller sees when a budget is spent: the shared error envelope, never express-rate-limit's
- * own plain-text body, and `Retry-After` so a well-behaved client can wait rather than hammer.
+ * own plain-text body.
  *
- * `audit` is opt-in per limiter. The credential budgets record every refusal, because a burst of
- * them IS what credential stuffing looks like from the inside and it is the one signal that arrives
- * before an account is taken rather than after. The global brake does not: a port scan would fill
- * the trail with noise and bury exactly the entries worth reading.
+ * `audit` is opt-in per limiter. The credential budgets record every refusal — a burst of them IS
+ * what credential stuffing looks like, and the one signal that arrives before an account is taken.
+ * The global brake does not: a port scan would just bury the trail in noise.
  */
 const refuse =
     (audit: boolean) =>
@@ -91,15 +90,13 @@ const refuse =
 const limiterOptions = (store: Store, audit: boolean) => ({
     store,
     windowMs: windowMs(),
+    // draft-7 rate-limit headers (RateLimit-*), not the deprecated X-RateLimit-* set.
     standardHeaders: 'draft-7' as const,
     legacyHeaders: false,
     /*
-     * A store that cannot answer lets the request through, rather than answering 500.
-     *
-     * This is the fail-open choice made explicit — see `rate-limit-store.ts`. Failing closed would
-     * turn a Redis blip into an authentication outage: nobody could sign in, which is a worse
-     * failure than a window during which the budgets are not enforced. The outage is logged at
-     * `error` level once, so it is never a silent one.
+     * A store that cannot answer lets the request through, rather than answering 500. Failing
+     * closed would turn a Redis blip into an authentication outage — worse than a window with
+     * unenforced budgets. The outage is logged at `error` once, so it is never a silent one.
      */
     passOnStoreError: true,
     handler: refuse(audit)
@@ -120,9 +117,8 @@ export const rateLimiter = rateLimit({
  * Who a credential attempt names, normalised the way the login lookup normalises it — otherwise
  * `Ada@Example.com` and `ada@example.com` are two budgets for one account.
  *
- * Hashed because the key reaches Redis, and a `KEYS *` or an RDB dump should not hand over the
- * user list. An attempt naming nobody is bucketed as `anonymous`: it still costs something,
- * because a flood of shapeless requests at a credential route is itself the attack.
+ * Hashed because the key reaches Redis, and a `KEYS *` or RDB dump should not hand over the user
+ * list. An attempt naming nobody is bucketed as `anonymous`, which still costs something.
  */
 const identityOf = (request: Request): string => {
     const body: unknown = request.body;
@@ -141,23 +137,13 @@ const identityOf = (request: Request): string => {
 /**
  * The credential budgets, for the routes that accept a password or mint a token.
  *
- * TWO independent limiters, applied together, and that is the whole design:
+ * TWO independent limiters: one bounds failed attempts against ONE account (defeats a botnet
+ * spreading guesses), the other bounds attempts from ONE host (defeats spraying a user list).
+ * Keying on the PAIR instead is the weakest of the three — either half varied gets a fresh bucket.
  *
- * - the first bounds failed attempts against ONE account, however many hosts they come from. It is
- *   what a botnet spreading its guesses defeats when the key is the address alone.
- * - the second bounds failed attempts from ONE host, however many accounts they name. It is what a
- *   single machine spraying a user list defeats when the key is the account alone.
- *
- * Keying on the PAIR — `email|ip` — reads like it does both and does neither: an attacker who
- * varies either half gets a fresh bucket, so the pair is the weakest of the three keys rather than
- * the strongest. Two buckets cost one extra store round-trip and close both holes.
- *
- * `skipSuccessfulRequests` on both, so only FAILURES spend the budget: proving the password is the
- * strongest possible evidence that this caller is not guessing, and a shared address — an office,
- * a CI runner, the paired frontend's e2e suite — must not be locked out by people getting it right.
- *
- * Exported as an array because Express flattens one, so a route reads
- * `router.post('/login', credentialLimiters, postLogin)` and cannot apply half of the pair.
+ * `skipSuccessfulRequests` on both: only FAILURES spend the budget, so a shared address (an
+ * office, CI, the e2e suite) is never locked out by people getting it right. Exported as an array
+ * because Express flattens one, so a route cannot apply half of the pair.
  *
  * See: docs/tools/security.md#the-two-rate-limit-budgets
  */
@@ -200,9 +186,8 @@ export const isMetricsScraper = (request: Request, response: Response, next: Nex
         return;
     }
 
-    // The scheme is required, not stripped-if-present: accepting a bare token would mean the
-    // credential is read from a header shape no client should be sending, which is one more way
-    // for it to end up somewhere it was not meant to be.
+    // The scheme is required, not stripped-if-present: a bare token would mean the credential is
+    // read from a header shape no client should be sending — one more way for it to leak.
     const authorization = request.header('Authorization') ?? '';
     const provided = authorization.startsWith('Bearer ')
         ? authorization.slice('Bearer '.length)

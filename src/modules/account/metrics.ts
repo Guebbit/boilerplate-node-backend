@@ -1,14 +1,9 @@
 /**
  * @module
- * Domain counters this module owns, registered on the shared `metricsRegistry` so one
- * `/metrics` scrape carries these alongside the HTTP metrics.
- *
- * Nothing imports these to *read* them — `GET /observability/metrics/overview` resolves by
- * metric name off the registry, so deleting this module just zeroes its counters.
- *
- * Distinct from audit and analytics: these are cheap always-on aggregates meant to be
- * *alerted* on ("failure ratio above 20% for 5 minutes"), not queried per-user or per-event.
- * The `status` label is what makes each counter usable as both a volume and success-ratio signal.
+ * Domain counters this module owns, registered on the shared `metricsRegistry` so one `/metrics`
+ * scrape carries these alongside the HTTP metrics. Nothing imports these to *read* them —
+ * `GET /observability/metrics/overview` resolves by metric name off the registry. The `status`
+ * label is what makes each counter usable as both a volume and success-ratio signal.
  */
 
 import { Counter } from 'prom-client';
@@ -66,10 +61,9 @@ export const authRefreshTotal = new Counter({
 
 /**
  * Authenticated password changes (the current-password flow, not the email reset).
- * Kept separate from `auth_password_reset_total` for the same reason that one excludes the
- * confirmation step: two flows in one counter cannot be read as a funnel. The failure series
- * doubles as a security signal — repeated wrong current passwords against a live session
- * suggests a hijacked device probing for the credential it does not have.
+ * Kept separate from `auth_password_reset_total` since two flows in one counter cannot be read
+ * as a funnel; the failure series also doubles as a security signal for a hijacked device
+ * probing without the credential.
  */
 export const authPasswordChangeTotal = new Counter({
     name: 'auth_password_change_total',

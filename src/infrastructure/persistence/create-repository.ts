@@ -2,13 +2,10 @@
  * @module
  * The generic repository factory every module's `repository.ts` builds on: CRUD plus search,
  * built once against a Mongoose model and a declared {@link SearchSpec}, so no module hand-rolls
- * `$regex`/`$elemMatch`/`ObjectId` conversion or the lean→normalized mapping.
- *
- * Three pieces of Mongo-specific knowledge live here and nowhere else: id coercion, filter-bag →
- * query (`buildWhere`, driven by each collection's declared `SearchSpec`), and the lean/aggregate
- * → transformed-document mapping (`normalize`). A module spreads the factory's result into its own
- * repository object — no `extends`, no protected hook — so a module that cannot honour part of the
- * contract narrows its own type instead of inheriting a method it has to break.
+ * `$regex`/`$elemMatch`/`ObjectId` conversion or the lean→normalized mapping. A module spreads the
+ * factory's result into its own repository object — no `extends`, no protected hook — so one that
+ * can't honour part of the contract narrows its own type instead of inheriting a method it must
+ * break.
  *
  * See: docs/tools/mongodb-mongoose.md
  */
@@ -35,21 +32,21 @@ export const FIND_ALL_LIMIT = 1000;
 
 /** Pagination/sort options shared across all repository `findAll` calls. */
 export interface FindAllOptions {
+    /** Sort order, per Mongo query syntax. */
     sort?: Record<string, 1 | -1>;
+    /** Documents to skip before the page starts. */
     skip?: number;
     /** How many documents at most. Defaults to {@link FIND_ALL_LIMIT}. */
     limit?: number;
 }
 
 /**
- * What a collection can be filtered by, expressed as data: filter key (what the caller sends)
- * → Mongo path it targets.
+ * What a collection can be filtered by: filter key (what the caller sends) → Mongo path it targets.
  *
- * Declaring this per repository is what keeps `$regex`, `$elemMatch`, `$gte` and `ObjectId` out
- * of services: a service says *what* to filter, the repository owns *how* it becomes a query.
- *
- * Empty/blank/nullish values are skipped throughout — `?text=` is an absent filter, not a
- * request to match the empty string.
+ * Declaring this per repository keeps `$regex`/`$elemMatch`/`$gte`/`ObjectId` out of services — a
+ * service says *what* to filter, the repository owns *how* it becomes a query. Empty/blank/nullish
+ * values are skipped throughout: `?text=` is an absent filter, not a request to match the empty
+ * string.
  */
 export interface SearchSpec {
     /** Holds a document id. Coerced to `ObjectId` — a string never matches one. */
@@ -84,13 +81,10 @@ export interface SearchSpec {
 export type SearchFilters = object;
 
 /**
- * A model's wire-shape serializer — `applySerialization`'s return value, exported by each model
- * as `applyProductTransform` and friends. Mostly `_id` → `id`, though `audit-logs` drops the id
- * outright; `@infrastructure/persistence/serialize` is the authority on what each collection owes.
+ * A model's wire-shape serializer — `applySerialization`'s return value, exported by each model.
  *
- * Needed because `.lean()` and `.aggregate()` both bypass the schema's `toJSON`, so their plain
- * objects still carry `_id`/`__v`. Passing it to the factory is what lets repositories return
- * serialized results instead of every service remembering to map.
+ * `.lean()`/`.aggregate()` bypass the schema's `toJSON`, so plain objects still carry `_id`/`__v`;
+ * this is what lets the factory return already-serialized results.
  */
 export type Transform = (serialized: Record<string, unknown>) => Record<string, unknown>;
 
@@ -228,16 +222,9 @@ export interface Repository<TDocument extends Document> {
 /**
  * Creates the standard CRUD operations for a Mongoose model.
  *
- * Beyond plain CRUD this owns the three pieces of Mongo knowledge a service must not carry: id
- * coercion, the lean→normalized mapping, and turning a filter bag into a query.
- *
- * Consumed by SPREAD. There is no `extends` and no protected hook, so a module that cannot honour
- * part of the contract narrows its own type (`orders` omits `search`, `audit-logs` exposes three
- * members) instead of inheriting a method it has to break.
- *
- * This used to be `createBaseRepository` in `base-repository.ts`, and the paragraph here had to
- * spend four lines insisting it was not a base class — because the name said otherwise. The name
- * now says what it is, so the warning is down to the sentence above.
+ * Owns the Mongo-specific knowledge a service must not carry (id coercion, lean→normalized
+ * mapping, filter-bag → query) and is consumed by SPREAD, not `extends` — so a module that can't
+ * honour part of the contract narrows its own type instead of inheriting a method it must break.
  */
 export function createRepository<TDocument extends Document>(
     mongooseModel: Model<TDocument>,
@@ -248,10 +235,8 @@ export function createRepository<TDocument extends Document>(
     /**
      * Normalize a batch of lean/aggregate results.
      *
-     * `.lean()` returns plain objects, the transform rewrites their keys, and the app types the
-     * outcome as the document. The conversion is spelled as two honest single steps — into the
-     * record the transform reads, out of the `unknown[]` it leaves — confined to this one
-     * function, so there is one place to get it wrong.
+     * `.lean()` returns plain objects; the transform rewrites their keys and the app types the
+     * result as the document. Confined to this one function, so there's one place to get it wrong.
      */
     const normalize = (items: unknown[]): TDocument[] => {
         const transformed: unknown[] = items.map((item) =>
@@ -300,10 +285,9 @@ export function createRepository<TDocument extends Document>(
     /**
      * Insert a new document.
      *
-     * The two branches are not stylistic. `Model.create(doc, options)` is ambiguous — mongoose reads
-     * a trailing plain object as a SECOND DOCUMENT to insert — so the options path goes through
-     * `new Model(...).save(options)`, which is what `create` does internally anyway. Callers that
-     * pass no options keep the single-document call they have always made.
+     * The branch matters: `Model.create(doc, options)` is ambiguous — Mongoose reads a trailing
+     * plain object as a SECOND document to insert — so passing options goes through
+     * `new Model(...).save(options)` instead.
      */
     const create = (data: Partial<TDocument>, options?: SaveOptions): Promise<TDocument> =>
         options === undefined ? mongooseModel.create(data) : new mongooseModel(data).save(options);
@@ -319,13 +303,11 @@ export function createRepository<TDocument extends Document>(
     /**
      * Filter → count → page → normalize, in one call.
      *
-     * `async` is load-bearing, not style. The two lines below run synchronously before any
-     * promise exists, and `buildWhere` can throw: `toObjectId` hands a client string to
-     * `new Types.ObjectId(...)`, which rejects anything but 24 hex chars. Without `async` that
-     * throw escapes the function, the caller's `.then().catch()` is never even built, and
-     * Express answers 500 — `POST /products/search` with `{"id": ""}` was an unauthenticated
-     * 500 (found by `tests/fuzz/endpoints.fuzz.test.ts`). A signature saying `Promise<T>` must
-     * reject, never throw synchronously.
+     * `async` is load-bearing: `buildWhere` can throw synchronously (`toObjectId` rejects
+     * anything but 24 hex chars), and without `async` that throw would escape before the
+     * caller's `.then().catch()` is even built — Express then answers with an unauthenticated
+     * 500 instead of a handled rejection (`POST /products/search` with `{"id": ""}`, found by
+     * `tests/fuzz/endpoints.fuzz.test.ts`).
      */
     const search = async (
         filters: SearchFilters = {},

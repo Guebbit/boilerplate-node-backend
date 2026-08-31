@@ -1,12 +1,10 @@
 /**
  * @module
  * What every backing service this process needs is doing, right now — readiness, not liveness.
- * `GET /` answers liveness and drives the orchestrator's restart decision; this module answers
+ * `GET /` answers liveness and drives the orchestrator's restart decision; this answers
  * `GET /observability/health` and must never feed that decision, so a degraded Redis stays
- * degraded instead of killing a healthy container.
- *
- * No I/O: each dependency already tracks its own connection state, so this is a memory read. One
- * shared vocabulary — `ready`/`connecting`/`unavailable`/`disabled` — covers three unlike backends.
+ * degraded instead of killing a healthy container. No I/O: each dependency already tracks its
+ * own state, so this is a memory read across one shared vocabulary spanning three unlike backends.
  *
  * See: docs/tools/observability-layer.md
  */
@@ -16,11 +14,9 @@ import { cacheState } from '@infrastructure/adapters/cache';
 import { queueState } from '@infrastructure/adapters/queue';
 
 /**
- * One dependency's state, in the only four words this payload uses.
- *
- * `disabled` is not a failure and never degrades the service: a deployment that runs without Redis
- * or without RabbitMQ is a supported configuration, and reporting it as broken would train every
- * reader to ignore the field. Mongo has no `disabled` — there is no such deployment.
+ * One dependency's state, in the only four words this payload uses. `disabled` is not a failure
+ * and never degrades the service — a deployment without Redis or RabbitMQ is supported, and
+ * reporting it as broken would train readers to ignore the field. Mongo has no `disabled`.
  */
 export type DependencyStatus = 'ready' | 'connecting' | 'unavailable' | 'disabled';
 
@@ -32,11 +28,9 @@ export interface DependencyHealth {
 }
 
 /**
- * Mongoose's `readyState` integer, in this module's vocabulary.
- *
- * `3` is Mongoose's `disconnecting`. It maps to `unavailable` rather than `connecting` because the
- * two differ in direction: a disconnecting connection is on its way out and will not start serving
- * again, so treating it as "nearly ready" would report a shutdown as a startup.
+ * Mongoose's `readyState` integer, in this module's vocabulary. `3` (`disconnecting`) maps to
+ * `unavailable` rather than `connecting`: it is on its way out and will not start serving again,
+ * so treating it as "nearly ready" would report a shutdown as a startup.
  */
 const DATABASE_STATES: Record<number, DependencyStatus> = {
     0: 'unavailable',
@@ -56,11 +50,9 @@ export const dependencyHealth = (): DependencyHealth => ({
 });
 
 /**
- * Fold the dependencies into the one word a dashboard colours a dot with.
- *
- * `degraded` rather than a third value for "one optional thing is down", because the distinction a
- * reader acts on is binary: is this instance serving everything it promises, or not. Which part is
- * missing is the `dependencies` map's job to say, and it is right there in the same payload.
+ * Fold the dependencies into the one word a dashboard colours a dot with. `degraded` rather than
+ * a third value, because the distinction a reader acts on is binary: serving everything promised,
+ * or not — which part is missing is the `dependencies` map's job to say.
  *
  * @param dependencies - the reading to fold, passed in so this stays a pure function
  */

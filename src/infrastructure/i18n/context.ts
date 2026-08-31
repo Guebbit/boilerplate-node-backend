@@ -1,14 +1,10 @@
 /**
  * @module
- * Request-scoped translation: the ambient `t`, and the storage that carries it.
- *
- * `i18next`'s default export is one global instance with one active language, so two overlapping
- * requests in different languages would interleave and one gets answered in the other's — a bug
- * that only appears under concurrency. `getFixedT(locale)` binds a `t` to one language with no
- * global touched; an `AsyncLocalStorage` carries it down the request's async chain.
- *
- * ALS is scoped to an async CALL CHAIN: queued work, boot-time callbacks and scripts run outside
- * it and fall back to the boot locale — out-of-band work must carry its locale and bind with
+ * Request-scoped translation: the ambient `t`, and the storage that carries it. `i18next`'s
+ * default export is one global instance with one active language, so two overlapping requests in
+ * different languages would interleave without this — `getFixedT(locale)` binds a `t` per
+ * language, and `AsyncLocalStorage` carries it down the request's async chain. Out-of-band work
+ * (queues, boot-time callbacks) falls outside that chain and must bind explicitly with
  * {@link runWithLocale}.
  *
  * See: docs/tools/i18n.md
@@ -23,7 +19,9 @@ import { getDefaultLocale } from './catalog';
  * What a request carries: the negotiated locale and a `t` bound to it.
  */
 export interface LocaleContext {
+    /** BCP-47 locale this context is bound to. */
     locale: string;
+    /** `t` already bound to `locale`. */
     t: TFunction;
 }
 
@@ -74,12 +72,10 @@ export const getCurrentLocale = (): string =>
     getDefaultLocale();
 
 /**
- * The ambient `t`.
+ * The ambient `t`: the request's bound version when there is one, the global instance's otherwise.
  *
- * Reads the request's bound `t` when there is one and the global instance's otherwise. Same
- * signature as `i18next`'s own `t`, so repointing an import is the whole migration — the cast is
- * unavoidable because `TFunction` is a union of overloads that no single arrow can satisfy
- * structurally, and it is safe because the arguments are forwarded untouched.
+ * Same signature as `i18next`'s own `t`, so repointing an import is the whole migration — the cast
+ * is unavoidable since `TFunction`'s overloads can't be satisfied by a single arrow.
  */
 export const t = ((...arguments_: Parameters<TFunction>) =>
     (localeStorage.getStore()?.t ?? i18next.t)(...arguments_)) as TFunction;

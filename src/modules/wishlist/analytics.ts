@@ -1,12 +1,8 @@
 /**
  * @module
  * Analytics event names this module emits — a save funnel with one exit into the purchase funnel.
- * Naming rule: docs/tools/analytics.md#naming.
- *
- * Declared by augmenting the analytics port's name map, same pattern as `./audit.ts` for audit
- * actions. These names stay here rather than being published to the frontend — only the moments
- * this service never observes go through `shared/contracts/analytics.frontend.ts`, which keeps one
- * event from being counted twice.
+ * Declared by augmenting the analytics port's name map, same pattern as `./audit.ts`. Naming rule:
+ * docs/tools/analytics.md#naming.
  */
 
 /** The event names this module fires, keyed by intent. */

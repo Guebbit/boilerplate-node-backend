@@ -1,12 +1,9 @@
 /**
  * @module
- * `tokenAdd`, `tokenRemoveAll` and `tokenRemoveExpired` — the three places a session is created
- * or destroyed, tested here because both instance methods write to `select: false` fields: the
- * schema's types claim `this.tokens` is always an array, and `select: false` makes that a lie.
- *
- * Both methods therefore write to the DATABASE first and update the in-memory copy only if one
- * was loaded — get that order wrong and a logout throws AFTER the tokens were already revoked.
- * The model is a double, so none of this needs a database.
+ * `tokenAdd` and `tokenRemoveAll` — where a session is created or destroyed. Both write to
+ * `select: false` fields, so they write to the DATABASE first and update the in-memory copy
+ * only if one was loaded; getting that order wrong makes a logout throw after the tokens were
+ * already revoked. The model is a double — none of this needs a database.
  */
 import { userSchema, type Token } from '@modules/users/model';
 import { TokenType } from '@modules/users';
@@ -26,11 +23,9 @@ const methods = asStub<{
 }>(userSchema.methods);
 
 /**
- * A document double.
- *
- * `tokens` is passed explicitly so each case states whether the array was LOADED — the whole
- * distinction these methods are written around. `undefined` is the ordinary case, because
- * `select: false` means nothing loads it unless a query asked.
+ * A document double. `tokens` is passed explicitly so each case states whether the array was
+ * LOADED, the distinction these methods are built around — `undefined` is the ordinary case
+ * since `select: false` means nothing loads it unless a query asked.
  */
 const documentDouble = (tokens?: Token[]) => {
     const updateOne = jest.fn().mockResolvedValue({ modifiedCount: 1 });
@@ -191,16 +186,9 @@ describe('tokenRemoveAll', () => {
 });
 
 /*
- * `tokenRemoveExpired` used to be tested here, as a schema STATIC. It is now
- * `userRepository.tokenRemoveExpired`, because it resolved `{ status: 200 | 500, success }` — an
- * HTTP status code minted below the repository, which a controller replayed into the response.
- * Its tests moved with it:
- *
- *   - `users/tests/integration/repository.test.ts` proves the sweep against a real collection and
- *     that it now REJECTS rather than inventing a status;
- *   - `account/tests/unit/token-cleanup-job.test.ts` proves what a failed sweep means to a caller,
- *     which is the service's decision to make.
- *
- * The two document methods above stay here: they are genuinely the model's, because both are
- * `$push`/`$pull` against `this` and keep the loaded array in step with the write.
+ * `tokenRemoveExpired` moved to `userRepository.tokenRemoveExpired` — it resolved an HTTP status,
+ * which belongs below the repository, not on the schema. Its tests moved too, into
+ * `repository.test.ts` (the sweep itself) and `account/tests/unit/token-cleanup-job.test.ts` (what
+ * a failed sweep means to a caller). The two methods above stay: both are `$push`/`$pull` against
+ * `this`, keeping the loaded array in step with the write.
  */

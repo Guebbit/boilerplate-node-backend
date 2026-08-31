@@ -59,40 +59,16 @@ const toShippingAddress = (address: AddressItem) => ({
 });
 
 /**
- * The checkout body proper, split out of {@link orderConfirm} so that function can wrap it in one
- * `.catch` for the database-error envelope and run its observability side effects uniformly over
- * both success and failure, without either concern nesting inside this one.
+ * The checkout body proper, split out of {@link orderConfirm} for its `.catch` envelope and
+ * observability side effects. `async`/`await`, not chained: every step depends on the value
+ * the previous one resolved, and any throw here still rejects through the caller's `.catch`.
  *
- * Written as a single sequential `async` function rather than a `.then` chain: every step here
- * depends on the value the previous one resolved, so chaining nested a callback per step,
- * several levels past the file's usual depth. As `async`/`await` the exact same order of
- * operations reads top to bottom, and every early `return` below still rejects through the same
- * `.catch` on the caller's side, because a throw or rejection anywhere inside this function
- * rejects the promise it returns — nothing about the error handling below changed, only its shape.
- *
- * The user is loaded for one reason — an order records the address it was placed from — so a
- * checkout for an account that no longer exists is the one cart operation that can still 404.
- *
- * A line whose product no longer exists rejects the whole checkout, matching what
- * the orders service `create()` already does for an unresolvable product id: an order embeds a
- * snapshot, and there is nothing to snapshot.
- *
- * CONCURRENCY. Read cart → write order → empty cart is three statements, and until the cart write
- * was made conditional, nothing tied the third to the first. Two parallel `POST /cart/checkout`
- * both read the same lines, both wrote an order, and both emptied an already-empty cart: one cart,
- * two orders, the customer charged twice. A double-clicked button is enough to reach it.
- *
- * So the cart is emptied CONDITIONALLY, on the `__v` it was read at, and that write is what
- * decides the race — exactly one of the two matches. The loser has already created an order by
- * then, which is the cost of not using a transaction, so it deletes it and answers 409. That
- * ordering matters: the order is written first and retracted on failure, rather than the cart
- * being cleared first, because an order that briefly exists and is removed is recoverable while a
- * cart emptied without an order is a customer's basket silently thrown away.
- *
- * The 409 is deliberate rather than a retry. The loser's cart is empty and its lines are on the
- * winner's order — the request has been superseded, not defeated, and re-running it would produce
- * "empty cart" anyway. `../repository` `clearLinesIfUnchanged` documents why the guard is a
- * conditional write rather than a transaction.
+ * CONCURRENCY. Read cart → write order → empty cart is three statements; nothing ties the third
+ * to the first unless the cart write is conditional on the `__v` it was read at — exactly one of
+ * two racing checkouts wins that write. The order is written (and stock held) before the cart is
+ * cleared, so the loser deletes its own order and answers 409 rather than double-charging —
+ * a briefly-created order is recoverable, a cart emptied with no order is not. `../repository`'s
+ * `clearLinesIfUnchanged` documents why this is a conditional write, not a transaction.
  *
  * @param userId - the caller's id
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
@@ -107,11 +83,9 @@ const runCheckout = async (
     if (!user) return generateReject(404, []);
 
     /*
-     * Which method ships. Resolved BEFORE any stock moves for the same reason the
-     * address is: a name that matches nothing refuses the checkout while nothing has
-     * been written yet. `undefined` — no method named — is fine; shipping is not (yet)
-     * required to buy, exactly like the address. The COST is priced later, once the
-     * joined lines say what the items total is.
+     * Resolved before any stock moves: an unmatched name refuses the checkout while
+     * nothing has been written yet. `undefined` (no method named) is fine — shipping
+     * isn't required to buy. Cost is priced later, once the joined lines total.
      */
     const shippingMethod =
         shippingMethodId === undefined ? undefined : findShippingMethod(shippingMethodId);
@@ -231,11 +205,8 @@ const runCheckout = async (
     const clearedCart = await cartRepository.clearLinesIfUnchanged(userId, version);
     if (clearedCart) {
         /*
-         * The confirmation, from the service unlike every
-         * other email: only this point knows the order stood,
-         * and only here is the recipient's record in scope —
-         * the email goes out in the customer's own language,
-         * not the request's.
+         * Sent from the service, not the controller: only this point knows the order
+         * stood. Goes out in the customer's own locale, not the request's.
          */
         const mail = orderConfirmEmail(user.locale ?? getDefaultLocale(), user.username, order);
         void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
@@ -265,12 +236,9 @@ export const orderConfirm = (
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
             /*
-             * `order_created` reports from here, not just from the admin route's `create()` —
-             * this is what §0 of `OBSERVABILITY_EMISSION_LAYER.md` calls the whole case: a
-             * customer completing checkout creates an order exactly as much as an admin typing
-             * one in does, so the event that says "an order exists" has to fire on both paths.
-             * `actorRole` is forced to `'user'`: a purchase is a customer action even when the
-             * account making it happens to belong to an admin.
+             * `order_created` fires here too, not just from the admin route's `create()` —
+             * see §0 of `OBSERVABILITY_EMISSION_LAYER.md`. `actorRole` is forced to `'user'`:
+             * a purchase is a customer action even on an admin's account.
              */
             if (result.success && result.data) {
                 orderService.recordCreated(result.data, context, 'user');

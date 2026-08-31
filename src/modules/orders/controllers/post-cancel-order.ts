@@ -12,16 +12,11 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
- * POST /orders/:id/cancel
- * Cancel an order — the one order write a customer can make.
+ * POST /orders/:id/cancel — the one order write a customer can make.
  *
- * The service's conditional write carries the caller's scope, so a non-admin can only cancel an
- * order they can see (their own, not soft-deleted) and only from the statuses the lifecycle gives
- * a customer. An admin cancels anyone's — the same privilege the admin status write grants,
- * spelled as the same endpoint the customer uses.
- *
- * `refund` is the operator's choice of whether the money goes back with the cancellation; the
- * service ignores it for a customer, who is always refunded.
+ * The service scopes the write to the caller: a non-admin can only cancel their own order, from
+ * the statuses the lifecycle allows a customer; an admin can cancel any order. `refund` is the
+ * caller's choice but only honored for admins — a customer's cancel is always refunded.
  */
 export const postCancelOrder = (
     // The body is OPTIONAL on this route — a customer's cancel sends none — and Express leaves

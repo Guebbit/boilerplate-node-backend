@@ -122,10 +122,9 @@ export const startTracing = (): void => {
 /**
  * Flush pending spans and shut down the SDK cleanly.
  *
- * `BatchSpanProcessor` holds spans in memory between flushes, so skipping this on exit
- * loses the last few seconds of telemetry — exactly the spans covering a crash.
- * Called last in the shutdown chain (see `runtime/server-lifecycle.ts`) so infra
- * teardown is itself still traced.
+ * `BatchSpanProcessor` holds spans in memory between flushes, so skipping this on exit loses
+ * the last few seconds of telemetry — exactly the spans covering a crash. Called last in the
+ * shutdown chain so infra teardown is itself still traced.
  */
 export const shutdownTracing = (): Promise<void> => {
     if (!sdk) return Promise.resolve();

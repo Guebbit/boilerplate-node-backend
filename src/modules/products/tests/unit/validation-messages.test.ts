@@ -1,9 +1,7 @@
 /**
  * @module
- * This module's validation copy resolves against the active locale.
- *
- * The sibling case in `modules/users` documents the failure being defended against in full; this
- * is the same property for the catalogue's own schema, which has its own copy and its own thunks.
+ * This module's validation copy resolves against the active locale — the same property
+ * `modules/users` documents in full, applied here to the catalogue's own schema and thunks.
  */
 
 import { loadBeforeI18n, mergedResources } from '@tests/i18n-boot';

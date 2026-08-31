@@ -1,20 +1,11 @@
 /**
  * @module
- * Turns a quarantined upload into its promoted original plus thumbnail, and writes the result
- * back onto the document that is waiting for it.
- *
- * `digestQuarantinedImage` is the one pipeline; two callers share it. `handleImageDigestJob` wraps
- * it for `consumeFromQueue` when a broker is configured — the normal path. `enqueueImageDigest` is
- * what a module's service calls right after creating or updating a document with a
- * `pendingImageKey`: it publishes a job when a broker is reachable, and runs the same pipeline
- * inline, in the request, when one is not (mirroring `enqueueEmail` in `adapters/mailer.ts`).
- *
- * This file lives in `infrastructure`, the bottom of the dependency graph, and may not import
- * `@kernel/*` or `@modules/*` — but `handleImageDigestJob` still has to turn a job's `collection`
- * string into a specific module's writeback, and only the app tier knows every module. The port
- * is inverted, same shape as `AuditSink` in `observability/audit.ts`: this file declares
- * {@link ImageWriteback} and a registration function, and `app/workers.ts` supplies the resolver
- * at boot, built from `resolveImageTargets(enabledModules)` in `kernel/registry.ts`.
+ * Turns a quarantined upload into its promoted original plus thumbnail, then writes the result
+ * back onto the waiting document. `digestQuarantinedImage` is the one pipeline; the queued worker
+ * (`handleImageDigestJob`) and the no-broker inline path (`enqueueImageDigest`) both share it.
+ * Since this file sits below `@kernel`/`@modules` and cannot import either, the writeback is an
+ * inverted port — {@link ImageWriteback} plus a registration function — supplied at boot by
+ * `app/workers.ts`.
  *
  * See: IMAGE_PIPELINE_PLAN.md, docs/tools/image-processing.md
  */
@@ -42,7 +33,9 @@ const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMi
 
 /** The two urls a finished digest produces, ready to persist. */
 export interface DigestedImageUrls {
+    /** The promoted original's url. */
     imageUrl: string;
+    /** The promoted thumbnail's url. */
     thumbnailUrl: string;
 }
 
@@ -111,8 +104,7 @@ export const digestQuarantinedImage = (key: string): Promise<DigestedImageUrls> 
  * Call a module's writeback, and clean up after it when it matches nothing.
  *
  * Shared by {@link handleImageDigestJob} and {@link enqueueImageDigest}'s inline fallback, so a
- * stale job or a document deleted mid-flight is handled identically on both paths — a gap here
- * previously existed only on the inline one, since nothing else exercised it.
+ * stale job or a deleted-mid-flight document is handled identically on both paths.
  *
  * @param writeback - the module's own writeback
  * @param documentId - the target document's id
@@ -145,10 +137,8 @@ const settleWriteback = (
  * Process a single image digest job from the queue.
  *
  * `false` for a malformed payload or an unregistered collection — both permanent, both
- * dead-lettered. A bad decode dead-letters too (see the catch below); anything else thrown is
- * left to reject, so `consumeFromQueue` requeues it.
- *
- * Typed parameter, `Partial` because it came off a broker — see `handleEmailJob` for the reasoning.
+ * dead-lettered, same as a bad decode. Anything else thrown is left to reject, so
+ * `consumeFromQueue` requeues it. `Partial<ImageDigestJobPayload>` because it came off a broker.
  */
 export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promise<boolean> => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
@@ -184,16 +174,13 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
 
 /**
  * Queue-aware image digest dispatch — what a module's service calls right after persisting a
- * document with a `pendingImageKey`.
- *
- * Same shape as `enqueueEmail`: when a broker is reachable the job is published and this resolves
- * immediately, leaving the record on its placeholder until the worker catches up; when one is not
- * configured, or the publish itself fails, the pipeline runs right here instead, and the caller's
- * `await` covers it.
+ * document with a `pendingImageKey`. Same shape as `enqueueEmail`: a reachable broker gets the
+ * job published and this resolves immediately, leaving the record on its placeholder; no broker
+ * (or a failed publish) runs the pipeline right here instead, covered by the caller's `await`.
  *
  * @param payload - the job envelope
- * @param writeback - the calling module's OWN writeback, supplied directly rather than looked up —
- *   the caller already knows which collection it is
+ * @param writeback - the calling module's OWN writeback, supplied directly — the caller already
+ *   knows which collection it is
  */
 export const enqueueImageDigest = (
     payload: ImageDigestJobPayload,

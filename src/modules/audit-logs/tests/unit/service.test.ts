@@ -1,23 +1,10 @@
 /**
  * @module
- * `src/modules/audit-logs/service.ts` — the persistence sink behind `@infrastructure/observability/audit`.
- *
- * The two functions in this module are deliberately asymmetric about failure, and that asymmetry
- * is the only thing worth testing here:
- *
- *   - `record` is **fail-open**. It is called while answering requests — including failing ones —
- *     so a Mongo hiccup must not turn a rejected login into a 500. It returns `void`, swallows
- *     every rejection into a log line, and must never produce an unhandled rejection. The
- *     compliance record is the audit *logger*, which has already written the entry by the time
- *     this runs; losing the queryable copy degrades a dashboard and nothing else.
- *   - `search` is **fail-closed**. It answers an admin's explicit request for the data, so a
- *     failed read is a failed request rather than something to hide.
- *
- * Swap either behaviour and the suite stays green everywhere else in the repo: nothing observes
- * `record`'s return value, and nothing else calls `search` directly. Hence these cases.
- *
- * The repository is mocked rather than driven against the in-memory Mongo, because what is under
- * test is the error contract, and a real repository cannot be made to fail on demand.
+ * `audit-logs/service.ts`'s two functions are deliberately asymmetric about failure — the only
+ * thing worth testing here. `record` is **fail-open**: called mid-request, it swallows every
+ * rejection into a log line and must never throw, since the audit *logger* already has the
+ * compliance copy. `search` is **fail-closed**: an admin's explicit read, so a failure IS the
+ * response. The repository is mocked, since a real one can't be made to fail on demand.
  */
 
 import { auditLogService } from '@modules/audit-logs';

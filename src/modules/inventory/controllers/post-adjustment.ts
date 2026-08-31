@@ -20,12 +20,8 @@ export const postAdjustment = (request: Request, response: Response) => {
     if (!body) return;
 
     const { productId, delta, note } = body;
-    /*
-     * Zero is rejected here rather than in the contract, because `minimum`/`maximum` cannot
-     * express "any integer except 0" and an `enum` of every other integer is absurd. A no-op
-     * correction is refused rather than accepted-and-ignored: it would write a ledger row saying
-     * nothing happened, which is exactly the kind of row that makes a ledger unreadable.
-     */
+    // Zero can't be expressed as a schema constraint, so it's checked here.
+    // Refused rather than silently accepted — a no-op would write a meaningless ledger row.
     if (delta === 0) {
         rejectResponse(response, 422, [t('inventory.adjust-zero')]);
         return Promise.resolve();

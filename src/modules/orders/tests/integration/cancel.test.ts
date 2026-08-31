@@ -1,14 +1,10 @@
 /**
  * @module
  * `orderService.cancelById` — the customer's one order write, and the invariants that make it
- * safe to expose:
- *
- *   - the status gate and the write are ONE statement, so no interleaving can cancel a shipped
- *     order;
- *   - the caller's scope rides in the same statement, so "someone else's order" and "no such
- *     order" are the same 404;
- *   - the refusal reasons map to different statuses (404 vs 409) because a client can act on
- *     that difference — refresh the list vs explain the state.
+ * safe to expose: the status gate and the write are one statement, so no interleaving can cancel
+ * a shipped order; the caller's scope rides in the same statement, so "someone else's order" and
+ * "no such order" are the same 404; and the refusal reasons map to different statuses (404 vs
+ * 409) because a client can act on that difference.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
@@ -113,11 +109,9 @@ describe('cancelById', () => {
     });
 
     /**
-     * The lifecycle gives `processing → cancelled` to `admin` and to nobody else, and this is the
-     * only code path that can run it — `update()` refuses to execute a cancellation at all. Read
-     * as `customer` regardless of caller, the operator's own edge would exist in the table and
-     * nowhere else, and `orderActionsFor(status, 'admin')` would keep offering a control the
-     * server refuses.
+     * `processing → cancelled` belongs to `admin` alone, and this is the only path that can run
+     * it — `update()` refuses to execute the transition otherwise. Read as `customer` regardless
+     * of caller, this edge would silently exist in the table for everyone.
      */
     it('an operator cancels a processing order, which a customer cannot', async () => {
         const owner = await createUser({ email: 'owner@example.com', username: 'owner' });

@@ -1,23 +1,14 @@
-import { LocaleTenantKind, type LocaleTenant, type LocaleTenantDescriptor } from '@types';
-
 /**
  * @module
- * The tenants this deployment holds words for — the keyspaces an entry can belong to.
- *
- * A tenant is one consumer of the translation service, authored by one team: this API is a tenant
- * of itself, the frontend it is paired with is another, and a second client would be a third. Two
- * tenants may declare the same key in the same language and mean two unrelated strings, which is
- * why every stored row is identified by (language, tenant, key) and not by the key alone.
- *
- * CONFIGURATION, not data, and deliberately so. Which tenants exist is a deployment fact — it says
- * which clients this API serves copy to — and a table an admin could add rows to would let a typo
- * in an import create a keyspace nobody serves. The ids come from the environment, default to the
- * demo pair, and `GET /locales/tenants` publishes the list so no client has to hardcode it.
- *
- * Exactly one tenant is `backend`: the API's own copy, whose rows are layered over the deployed
- * files by `@infrastructure/i18n` and never leave the API. Every other tenant is a `frontend`,
- * whose rows `GET /locales/{locale}/messages` serves.
+ * The tenants this deployment holds words for — the keyspaces an entry can belong to. A tenant
+ * is one consumer of the translation service, identified by (language, tenant, key) so two
+ * tenants can share a key and mean two unrelated strings. The id set is CONFIGURATION, not data:
+ * letting an admin add rows would let an import typo create a keyspace nobody serves. Exactly one
+ * tenant is `backend` — the API's own copy, layered over deployed files by `@infrastructure/i18n`
+ * — every other is a `frontend`, and `GET /locales/tenants` publishes the whole list.
  */
+
+import { LocaleTenantKind, type LocaleTenant, type LocaleTenantDescriptor } from '@types';
 
 /** The id of the API's own tenant — `NODE_LOCALE_TENANT_BACKEND`, `demo-be` by default. */
 export const backendTenant = (): LocaleTenant =>
@@ -25,9 +16,8 @@ export const backendTenant = (): LocaleTenant =>
 
 /**
  * The id of the default frontend tenant — `NODE_LOCALE_TENANT_FRONTEND`, `demo-fe` by default.
- *
- * What `GET /locales/{locale}/messages` builds when the client does not say which tenant it is:
- * a frontend paired one-to-one with this API never needs to.
+ * Used when the client omits which tenant it wants, since a frontend paired one-to-one with this
+ * API never needs to say.
  */
 export const frontendTenant = (): LocaleTenant =>
     process.env.NODE_LOCALE_TENANT_FRONTEND?.trim() || 'demo-fe';

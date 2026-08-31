@@ -15,16 +15,8 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 /**
  * POST /cart/checkout
  * Converts the cart into an order and clears the cart.
- *
- * The one cart handler with something to do on BOTH sides of the branch: `cart_checkout_total` is
- * the business metric the observability overview reports, and a checkout that failed is exactly as
- * much of an outcome as one that succeeded. That is why the counter is incremented before
- * `refused()` rather than inside either arm — one increment per result, whichever way it went,
- * with no path through this handler that can answer and forget to record why.
- *
- * The rejection and the database failure are still the shared helpers' to send. Nothing about a
- * checkout makes its 409 or its 500 different from any other route's, and hand-writing them here
- * is how this file came to be the only cart controller that did.
+ * `cart_checkout_total` increments once per call, before `refused()`, on both outcomes —
+ * a failed checkout is still a result the business metric must record.
  */
 export const postCheckout = (request: Request, response: Response) => {
     const userId = authContextOf(request).id;
@@ -46,9 +38,7 @@ export const postCheckout = (request: Request, response: Response) => {
             );
         })
         .catch((error: Error) => {
-            // The third outcome, and the reason this `.catch` is spelled out rather than handed
-            // straight to `catchAs`: a checkout that threw is a checkout that failed, and the
-            // counter has to say so before the shared handler answers.
+            // A thrown error is a failed checkout too — record it before delegating.
             cartCheckoutTotal.inc({ status: 'failure' });
             catchAs(response, 'postCheckout')(error);
         });

@@ -1,11 +1,9 @@
 /**
  * @module
- * `makeUser` — the account fixture builder.
- *
- * `PLAIN_PASSWORD` is the interesting export: the fixture stores the password in PLAINTEXT and
- * relies on the model's own pre-save hashing to turn it into what is persisted. Tests then sign in
- * with the same constant. If this ever stored a hash directly, the hook would hash the hash and
- * every login test would fail in a way that reads as a broken login rather than a broken fixture.
+ * `makeUser`, the account fixture builder. `PLAIN_PASSWORD` stores the password in plaintext and
+ * relies on the model's own pre-save hook to hash it; tests sign in with the same constant. A
+ * hash stored directly here would be hashed again by the hook, failing login tests in a way that
+ * reads as a broken login rather than a broken fixture.
  */
 import { Types } from 'mongoose';
 import { makeUser, PLAIN_PASSWORD } from '@modules/users/fixtures';

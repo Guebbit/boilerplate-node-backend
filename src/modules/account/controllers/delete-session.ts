@@ -12,17 +12,13 @@ import { catchAs } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
- * DELETE /account/sessions/:sessionId
- * Revoke one of the caller's own sessions — "log out that device".
- *
- * The repository pins the filter to the caller's document and to `type: refresh`, so a session
- * id that belongs to someone else, or the id of a pending reset/delete/verify token, matches
- * nothing and answers the same 404 as an invented id. A malformed id is a 422 — `toObjectId`
- * throws and the catch below maps it — keeping the split every other id-taking endpoint has.
- *
- * Revoking the CURRENT session is allowed: it is `POST /account/logout` minus the cookie
- * clearing, which this endpoint cannot do for another client anyway — its next refresh simply
- * fails.
+ * DELETE /account/sessions/:sessionId — revoke one of the caller's own sessions ("log out that
+ * device").
+ * Filtered to the caller's document and `type: refresh`, so someone else's session id, or a
+ * pending reset/delete/verify token id, 404s exactly like an invented one; a malformed id 422s
+ * via `toObjectId`, matching every other id-taking endpoint.
+ * Revoking the CURRENT session is allowed — same effect as `POST /account/logout` minus the
+ * cookie clearing, which this endpoint can't do for another client anyway.
  */
 export const deleteSession = (request: Request<{ sessionId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */

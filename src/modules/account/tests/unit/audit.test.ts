@@ -1,14 +1,10 @@
 /**
  * @module
- * The audit vocabulary this module emits — `src/modules/account/audit.ts`.
- *
- * Pinned string by string: an action is a WIRE CONTRACT, read by dashboards and alert rules
- * outside this repo, not just an identifier — renaming the constant is a refactor, changing the
- * string breaks something silently elsewhere.
- *
- * `tests/cross-cutting/audit-actions.test.ts` proves the SHAPE (present, unique, dotted lower
- * snake_case) across every module; it can't assert values without naming every domain, so each
- * owner asserts its own here, and deleting the module takes its vocabulary with it.
+ * The audit vocabulary this module emits (`audit.ts`). Pinned string by string: an action is a
+ * WIRE CONTRACT, read by dashboards and alert rules outside this repo — renaming the constant is
+ * a refactor, changing the string breaks something silently elsewhere.
+ * `tests/cross-cutting/audit-actions.test.ts` proves the SHAPE across every module; it can't
+ * assert values without naming every domain, so each owner asserts its own here.
  */
 
 import type { AuditAction } from '@infrastructure/observability/audit';
@@ -47,11 +43,10 @@ describe('the account audit vocabulary', () => {
     });
 
     /*
-     * The `declare module` augmentation in `audit.ts` is what puts these into `AuditAction`.
-     * Drop it and the module still compiles on its own — but `emitAuditEvent` then rejects every
-     * action this module owns, at the call sites rather than here. Checked at type-check time:
-     * `tsconfig.json` includes the whole `src` tree, so this line is compiled even though jest
-     * does not type-check it.
+     * The `declare module` augmentation in `audit.ts` puts these into `AuditAction`. Drop it and
+     * `emitAuditEvent` rejects every action this module owns, at the call sites rather than here.
+     * Checked at type-check time — `tsconfig.json` covers the whole `src` tree — even though
+     * jest itself does not type-check.
      */
     it('registers its actions in the app-wide union', () => {
         const action: AuditAction = accountAuditActions.AUTH_LOGIN;

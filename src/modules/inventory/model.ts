@@ -22,8 +22,6 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 export const MOVEMENT_REASONS = Object.values(StockMovementReason);
 
 /**
- * Stock Movement Document interface.
- *
  * The field list comes from the contract's `StockMovement`, the same way `ProductDocument` takes
  * its own from `Product`. Only what storage genuinely disagrees with the wire about is restated:
  * `productId` is a real `ObjectId` here, and the timestamps are `Date`s rather than ISO strings.
@@ -80,8 +78,6 @@ export const stockMovementSchema = new Schema<StockMovementDocument>(
 );
 
 /*
- * Indexes.
- *
  * The names are given rather than derived: Mongo identifies an index by its name as much as by
  * its key, so asking for a key it already holds under a different name fails at startup instead
  * of doing nothing.
@@ -118,8 +114,6 @@ export interface ReservationItem {
 export type ReservationStatus = 'held' | 'committed' | 'released';
 
 /**
- * Reservation Document interface.
- *
  * Deliberately not derived from a contract type, because there is none: a reservation is never
  * serialized to a client. The customer already has a better view of it — their order — and
  * publishing this would invite a frontend to read stock state from two places.
@@ -188,11 +182,8 @@ export const reservationSchema = new Schema<ReservationDocument>(
             required: true
         },
         /*
-         * When the hold stops being honoured. Stamped at reserve time from
-         * `NODE_RESERVATION_TTL_MINUTES`, so changing the window leaves existing promises alone.
-         *
-         * No Mongo TTL index: that would DELETE the document, and the units have to be given back
-         * and the story has to survive. Expiry is a sweep — see `runReservationSweep`.
+         * No Mongo TTL index: that would delete the document outright, but the units still need
+         * giving back and the story needs to survive. Expiry is a sweep — see `runReservationSweep`.
          */
         expiresAt: {
             type: Date,

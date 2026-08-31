@@ -1,13 +1,10 @@
 /**
  * @module
- * The inventory schemas' contracts — the ledger and the hold.
- *
- * Both encode rules enforced by the DATABASE, not by any code path: unique `orderId` is what
- * makes reserving exactly-once, the `status` enum's `held` default is what every lifecycle
- * operation moves off of, and the ledger's two zero-defaulted deltas are what make it replayable.
- * Weaken any of these and no code path fails — the guarantee just stops existing, silently.
- *
- * See `tests/support/schema.ts`.
+ * The inventory schemas' contracts — the ledger and the hold. Both encode rules enforced by the
+ * database, not by any code path: unique `orderId` makes reserving exactly-once, `status`'s
+ * `held` default is what every lifecycle operation moves off of, and the ledger's two
+ * zero-defaulted deltas make it replayable. Weaken any of these and no code path fails — the
+ * guarantee just stops existing, silently.
  */
 
 import { stockMovementSchema, reservationSchema, MOVEMENT_REASONS } from '@modules/inventory/model';

@@ -10,13 +10,10 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
 
 /**
- * GET /account/sessions
- * List the authenticated user's live refresh tokens as sessions.
- *
- * The refresh cookie is read here and passed down because it is the one input only the controller
- * can see: `current` means "the session this very request authenticated with", which is a fact
- * about the request rather than about the account. Which token types count as a session, and the
- * rule that a token value never reaches the wire, belong to `services/tokens.ts`.
+ * GET /account/sessions — the caller's live refresh tokens, as sessions.
+ * The refresh cookie is read here and passed down so the service can mark `current`; which
+ * token types count as a session, and keeping token values off the wire, belong to
+ * `services/tokens.ts`.
  */
 export const getSessions = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */

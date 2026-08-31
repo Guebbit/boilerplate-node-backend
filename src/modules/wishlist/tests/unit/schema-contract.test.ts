@@ -1,17 +1,11 @@
 /**
  * @module
- * The wishlist schema's contract.
- *
- * Two declarations carry the whole design here, and both are invisible from a document:
- *
- *   - `unique: true` on `userId` is what makes "one wishlist per user" a database fact, which in
- *     turn is what lets every mutation be a single `findOneAndUpdate(..., { upsert: true })` with
- *     no read in front of it. Without it, a concurrent first-add creates two wishlists and one of
- *     them starts being ignored.
- *   - `_id: false` on a line, because a line is addressed by its product and `WishlistItem` in
- *     `openapi.yaml` is `additionalProperties: false` — a generated subdocument id is a contract
- *     violation waiting to be serialized.
+ * The wishlist schema's contract. Two invisible-from-a-document declarations carry the whole
+ * design: `unique: true` on `userId` makes "one wishlist per user" a database fact, so every
+ * mutation is a single unguarded `findOneAndUpdate(..., { upsert: true })`; `_id: false` on a
+ * line, since `WishlistItem` in `openapi.yaml` is `additionalProperties: false`.
  */
+
 import { wishlistSchema } from '@modules/wishlist/model';
 import {
     defaultOf,

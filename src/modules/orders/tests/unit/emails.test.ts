@@ -1,13 +1,9 @@
 /**
  * @module
- * The order confirmation email and the invoice document.
- *
- * Both render MONEY and a line per item, making them the two places where a formatting slip is
- * read as a billing error by the person least able to check it — so assertions target a wrong
- * item field, a total that ignores shipping, and `lines` built off anything but `order.items`.
- *
- * `orderTotal` itself is covered by `totals.property.test.ts`; here it's only asserted that this
- * builder USES it rather than recomputing a second, drifting answer.
+ * The order confirmation email and the invoice document. Both render MONEY and a line per item,
+ * making them the two places where a formatting slip is read as a billing error by the person
+ * least able to check it. `orderTotal` itself is covered by `totals.property.test.ts`; here it's
+ * only asserted that this builder USES it rather than recomputing a second, drifting answer.
  */
 import { orderConfirmEmail, invoiceDocument, type OrderLines } from '@modules/orders/emails';
 import { orderTotal } from '@modules/orders/domain';

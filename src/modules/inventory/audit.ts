@@ -1,11 +1,9 @@
 /**
  * @module
- * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
- * augmentation rather than in a shared enum.
- *
- * Three, and only the three things a HUMAN does to stock — the lifecycle transitions (reserve,
- * commit, release, expire) are consequences of a checkout, payment or cancellation, each of which
- * already audits itself and already leaves a ledger row naming the order.
+ * Audit actions this module emits, declared by augmentation rather than a shared enum — see
+ * `modules/account/audit.ts` for why. Only three: the lifecycle transitions (reserve, commit,
+ * release, expire) are consequences of a checkout, payment or cancellation, each of which already
+ * audits itself and leaves a ledger row naming the order.
  *
  * See: docs/modules/inventory.md
  */

@@ -1,9 +1,8 @@
 /**
  * @module
- * Domain events this module emits.
- *
- * Declared by augmenting the kernel's payload map rather than by editing it, so the catalogue of
- * events grows with the modules that own them and no shared file enumerates domains.
+ * Domain events this module emits, declared by augmenting the kernel's payload map rather than
+ * editing it, so the catalogue of events grows with the modules that own them and no shared file
+ * enumerates domains.
  */
 
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
@@ -21,11 +20,9 @@ declare module '@kernel/events' {
 }
 
 /*
- * There is deliberately no stock event. It used to exist (`product.stock_moved`), but that made
- * the ledger row a reaction to a counter change instead of part of it — movers forgot to announce
- * on rollback paths, corrupting the audit trail. The row is now written by the same call that
- * moves the counter, in `@modules/inventory`. `product.deleted` stays an event because a listener
- * genuinely is optional.
+ * Deliberately no stock event: `product.stock_moved` let the ledger row react to a counter change
+ * instead of being part of it, so rollback paths sometimes skipped it, corrupting the audit trail.
+ * That row is now written by the same call that moves the counter, in `@modules/inventory`.
  */
 
 /**

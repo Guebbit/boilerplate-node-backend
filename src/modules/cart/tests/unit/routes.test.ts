@@ -1,13 +1,9 @@
 /**
  * @module
- * The cart route table.
- *
- * A cart is per-caller state, so every route is authenticated at the router level and none is
- * admin — there is no operator view of someone else's cart. What this file mostly guards is
- * ORDER: `/summary`, `/checkout` and `/reorder/:orderId` are all single- or two-segment paths
- * competing with `/:productId`, and Express takes the first match. Declared the other way round,
- * `GET /cart/summary` becomes a lookup for a product with the id "summary", and `POST
- * /cart/checkout` silently stops being checkout.
+ * The cart route table. Every route is authenticated at the router level and none is admin —
+ * there is no operator view of someone else's cart. Mostly guards ORDER: `/summary`, `/checkout`
+ * and `/reorder/:orderId` compete with `/:productId`, and Express takes the first match —
+ * declared the other way round, `GET /cart/summary` becomes a product lookup for id "summary".
  */
 
 import { routeTable, routeSignatures, guardsOn } from '@tests/routes';

@@ -1,11 +1,8 @@
 /**
  * @module
- * The wishlist's slice of the demo dataset.
- *
- * Only PUBLICLY VISIBLE products are saved, and the named ids are what makes that checkable rather
- * than merely asserted: a line pointing at `carinoSoftDeleted` or `bundleInactive` would render as
- * a hole in the storefront's wishlist page — the row resolves to a product the scoping rules then
- * refuse to return.
+ * The wishlist's slice of the demo dataset. Only PUBLICLY VISIBLE products are saved — the named
+ * ids matter because a line pointing at `carinoSoftDeleted` or `bundleInactive` would render as a
+ * hole in the storefront's wishlist page, a product the scoping rules then refuse to return.
  */
 
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';

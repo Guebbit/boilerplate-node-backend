@@ -1,14 +1,11 @@
 /**
  * @module
  * Order read scoping — `orderService.callerScope`, the authorization boundary for order reads.
- * Three properties, each a distinct way to leak data if it breaks: admin gets `undefined` (no
- * restriction); anyone else gets a filter on their own `userId` excluding soft-deleted rows; no
- * auth context *throws*, deliberately, rather than widening the scope.
- *
- * The user-scoped filter additionally requires a real BSON `ObjectId`, not a string — `$match`
- * inside an aggregation pipeline skips schema casting, so a string id reads as "you have no
- * orders" instead of as an error. The coercion lives in `orderRepository.ownerScope`, which these
- * tests confirm survives the delegation from `visibleScope`.
+ * Admin gets `undefined` (no restriction); anyone else gets a filter on their own `userId`
+ * excluding soft-deleted rows; no auth context *throws*, rather than widening the scope. The
+ * filter's `userId` must be a real BSON `ObjectId`, not a string — `$match` inside an aggregation
+ * skips schema casting, so a string id reads as "no orders" rather than as an error; the coercion
+ * lives in `orderRepository.ownerScope`.
  */
 
 import { Types } from 'mongoose';

@@ -1,10 +1,8 @@
 /**
  * @module
- * Contract tests for /inventory.
- *
- * Every route is staff's; what these pin is each contract branch reached over HTTP — the two
- * reads, the two write transitions with their 200/404/409/422, the sweep, and the 401/403 that
- * keep the counters off a customer's screen. The transitions' rules live in the unit suite.
+ * Contract tests for /inventory — pins each contract branch reached over HTTP: the two reads,
+ * the two write transitions with their 200/404/409/422, the sweep, and the 401/403 that keep
+ * the counters off a customer's screen. The transitions' own rules live in the unit suite.
  */
 
 import '@tests/contract';
@@ -16,11 +14,8 @@ setupTestDb();
 
 /**
  * A syntactically valid ObjectId no fixture or seed can hold — the 404 branch, not the 422 one.
- *
- * All-`f` rather than a plausible-looking hex string. The value here used to be
- * `65dc8a99604c307b702b5ccc`, which is `SEED_PRODUCT_IDS.panino`: the constant claimed to be
- * guaranteed absent while naming a seeded product, and only passed because the contract suite
- * does not seed. A sentinel should be unable to collide, not merely observed not to.
+ * All-`f` rather than a plausible-looking hex string: a value that merely looks unused risks
+ * later colliding with a real seeded id, where this one cannot.
  */
 const MISSING_ID = 'f'.repeat(24);
 

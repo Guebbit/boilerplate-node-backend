@@ -1,11 +1,10 @@
 /**
  * @module
- * Housekeeping for the `tokens` array: sweeping out entries that have expired.
- *
- * Two triggers, two functions. `runTokenCleanup` is a fire-and-forget pre-flight step login and
- * refresh run on every request, and must never fail the request that triggered it. `adminTokenCleanup`
- * is the deliberate admin action behind `DELETE /account/tokens/expired`, which needs an outcome to
- * answer the request with and is worth its own audit record.
+ * Housekeeping for the `tokens` array: sweeping out entries that have expired. Two triggers, two
+ * functions — `runTokenCleanup` is a fire-and-forget pre-flight step login and refresh run on
+ * every request and must never fail the request that triggered it; `adminTokenCleanup` is the
+ * deliberate admin action behind `DELETE /account/tokens/expired`, which needs an outcome to
+ * answer with and is worth its own audit record.
  */
 
 import { userRepository } from '@modules/users';
@@ -32,13 +31,10 @@ export const runTokenCleanup = (): Promise<void> => {
         })
         .catch((error: unknown) => {
             /*
-             * Contained on purpose: this runs as a pre-flight step on login and refresh, and a
-             * sweep that could not run must never fail the request that triggered it.
-             *
-             * `error.message`, not the Error itself — the logger serializes its argument as JSON
-             * and an Error has no enumerable properties, so passing the object logs `"error":{}`
-             * and the operator reading this line afterwards learns nothing about why. This job
-             * runs unwatched; the line IS the output.
+             * Contained on purpose: a pre-flight step on login/refresh must never fail the
+             * request that triggered it. Logs `error.message`, not the Error itself — the logger
+             * serializes as JSON, and an Error has no enumerable properties, so logging it alone
+             * would print `"error":{}`.
              */
             logger.error({
                 message: 'Token cleanup: failed',
@@ -70,10 +66,9 @@ export const adminTokenCleanup = (
         })
         .catch((error: unknown) => {
             /*
-             * The status is decided HERE, not two layers down. `tokenRemoveExpired` used to be a
-             * schema static that resolved `{ status: 500 }` on failure and a controller replayed
-             * that number into the response — a Mongoose model choosing an HTTP status. The sweep
-             * now reports a count or throws, and what a failed sweep means to a client is this
+             * Status decided HERE, not two layers down — `tokenRemoveExpired` used to resolve
+             * `{ status: 500 }` on failure, a Mongoose model choosing an HTTP status. The sweep
+             * now reports a count or throws; what a failed sweep means to a client is this
              * layer's call.
              */
             logger.error({

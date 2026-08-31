@@ -1,14 +1,10 @@
 /**
  * @module
- * Where the rate limiters keep their counters.
- *
- * `express-rate-limit`'s default store is an in-process `Map`, and `cluster.ts` forks one worker
- * per CPU — so a single-process budget becomes `budget × workers`, split by whichever worker the
- * OS handed the socket to. Redis makes it one budget again, across workers and instances.
- *
- * Fails open on a Redis error: failing closed would turn an outage into an authentication outage.
- * `passOnStoreError` in `rate-limit.ts` is what lets requests through, and every outage is logged.
- * A separate connection from the cache, so `NODE_REDIS_CACHE_ENABLED=0` never disables this too.
+ * Where the rate limiters keep their counters. `express-rate-limit`'s default store is an
+ * in-process `Map`, and `cluster.ts` forks one worker per CPU — so a single-process budget becomes
+ * `budget × workers`. Redis makes it one budget again, across workers and instances, and fails
+ * open on error (`passOnStoreError` in `rate-limit.ts`) rather than turning an outage into an
+ * authentication outage. A separate connection from the cache, so disabling that never disables this.
  */
 
 import { createClient, type RedisClientType } from 'redis';
@@ -34,12 +30,10 @@ const KEY_PREFIX = process.env.NODE_REDIS_RATE_LIMIT_PREFIX ?? 'rate-limit';
  */
 const redisUrl = (): string | undefined => {
     /*
-     * The explicit kill switch, the twin of `NODE_REDIS_CACHE_ENABLED`.
-     *
-     * Needed because the URL is INHERITED from the cache's, so "do not share counters" cannot be
-     * said by leaving a variable unset — the suites are the case that proves it: `src/app.ts`
-     * imports `dotenv/config`, so `.env`'s compose hostname reaches every test, and without this
-     * the limiters would spend the run failing open against a Redis that is not there.
+     * The explicit kill switch, the twin of `NODE_REDIS_CACHE_ENABLED`. Needed because the URL is
+     * INHERITED from the cache's, so "do not share counters" cannot be said by leaving a variable
+     * unset — `src/app.ts` imports `dotenv/config`, so `.env`'s compose hostname reaches every
+     * test, and without this the limiters would fail open against a Redis that is not there.
      */
     if (!environmentFlag('NODE_RATE_LIMIT_REDIS_ENABLED', true)) return;
     if (process.env.NODE_RATE_LIMIT_REDIS_URL) return process.env.NODE_RATE_LIMIT_REDIS_URL;
@@ -61,10 +55,8 @@ const build = (url: string): RedisClientType => {
         socket: {
             connectTimeout: 1000,
             /*
-             * No reconnect loop, exactly like the cache's client. The loop would retry in the
-             * background forever — which keeps the event loop alive, so a process that has stopped
-             * serving never exits — and would log on every attempt. One clean try per command
-             * instead, with the next request driving the next one.
+             * No reconnect loop, like the cache's client: it would retry forever, keeping the
+             * event loop alive after the process should exit. One clean try per command instead.
              */
             reconnectStrategy: false
         }
@@ -88,12 +80,10 @@ let redisConnection: ManagedConnection<RedisClientType> | undefined;
 const connectionFor = (url: string): ManagedConnection<RedisClientType> => {
     if (redisConnection) return redisConnection;
 
-    // The client object itself, kept apart from `manageConnection`'s own memoised handle: a
-    // client whose handshake has not finished is still the SAME socket worth reconnecting, not
-    // one to throw away. node-redis rejects a second `connect()` on a second object racing the
-    // first with `Socket already opened`, so a fresh client per attempt is not an option here the
-    // way it is for the cache adapter. Cleared alongside
-    // `forget()`/`close()` below, so a forgotten or closed client is rebuilt from scratch.
+    // Kept apart from `manageConnection`'s own memoised handle: a client whose handshake hasn't
+    // finished is still the SAME socket worth reconnecting, not one to throw away. node-redis
+    // rejects a second `connect()` racing the first with `Socket already opened`, so a fresh
+    // client per attempt (like the cache adapter) is not an option here.
     let redisClient: RedisClientType | undefined;
 
     const connection = manageConnection<RedisClientType>({
@@ -153,10 +143,9 @@ const send = (url: string, command: string[]): Promise<RedisReply> => {
 
     return connection.getOrThrow().then((redisClient) =>
         /*
-         * The reply type is stated rather than inferred: node-redis answers a wide `ReplyUnion`
-         * for an arbitrary command, while only `INCR`, `DECR`, `PTTL` and `DEL` are ever sent from
-         * here and all four answer an integer. `sendCommand`'s type parameter is where node-redis
-         * asks the caller to say which command it issued.
+         * The reply type is stated, not inferred: node-redis answers a wide `ReplyUnion` for an
+         * arbitrary command, while only `INCR`, `DECR`, `PTTL` and `DEL` are ever sent here — all
+         * four answer an integer.
          */
         redisClient.sendCommand<RedisReply>(command).catch((error: unknown) => {
             redisClient.destroy();
@@ -170,13 +159,10 @@ const send = (url: string, command: string[]): Promise<RedisReply> => {
 /**
  * A `RedisStore` that is not built until something is counted.
  *
- * `express-rate-limit` calls `init` while the middleware is being constructed — at module load —
- * and `RedisStore.init` loads its Lua scripts, which is a command, which is a connection. Holding
- * the options and deferring construction to the first `increment` is what keeps importing this
- * module free.
- *
- * Every method delegates; only `increment` can be the first, because `express-rate-limit` never
- * decrements or resets a key it has not counted.
+ * `express-rate-limit` calls `init` at module load, and `RedisStore.init` loads Lua scripts — a
+ * connection. Deferring construction to the first `increment` keeps importing this module free.
+ * Every other method delegates; `increment` is always first, since nothing decrements or resets a
+ * key it hasn't counted.
  */
 const lazyRedisStore = (namespace: string, url: string): Store => {
     let inner: RedisStore | undefined;
@@ -190,15 +176,13 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
                 // is the one line that binds it to node-redis.
                 sendCommand: (...command: string[]) => send(url, command)
             });
-            // The options `init` was given at construction, replayed now that there is a store to
-            // give them to. `windowMs` is the only one `RedisStore` reads, and it needs it.
+            // The options `init` was given at construction, replayed now that there is a store.
+            // `windowMs` is the only one `RedisStore` reads.
             //
-            // The `.catch()` is load-bearing, not defensive styling: `init()` awaits both Lua
-            // script loads internally, so ANY failure there — Redis unreachable, or a reply
-            // `rate-limit-redis` does not recognise — rejects the promise this fires and forgets.
-            // An uncaught rejection is fatal by default (Node 15+), which would turn "Redis had a
-            // bad moment" into "the process is gone" — exactly the outage this file's `send()`
-            // is written to fail open from instead.
+            // The `.catch()` is load-bearing: `init()` awaits Lua script loads, so any failure —
+            // Redis unreachable, an unrecognised reply — rejects this fire-and-forget promise. An
+            // uncaught rejection is fatal by default (Node 15+), turning "Redis had a bad moment"
+            // into "the process is gone" — exactly the outage `send()` is written to fail open from.
             if (options)
                 void inner.init(options).catch((error: unknown) => {
                     logger.error({
@@ -235,9 +219,9 @@ export const rateLimitStore = (namespace: string): Store => {
 
     if (!url) {
         /*
-         * `error`, not `warn`. With more than one worker this is a security control that is not
-         * doing what its configuration claims, and the number in `.env` is off by a factor of the
-         * worker count — that belongs at the level someone is paged for, not in the noise.
+         * `error`, not `warn`: with more than one worker this is a security control silently not
+         * doing what its config claims, off by a factor of the worker count — that belongs at the
+         * level someone is paged for, not in the noise.
          */
         if (environmentNumber('NODE_CLUSTER_WORKERS', 0) !== 1)
             logger.error({

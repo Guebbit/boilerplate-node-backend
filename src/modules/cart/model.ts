@@ -1,12 +1,9 @@
 /**
  * @module
- * Cart model — one document per user, not a subdocument of the user, so a user response can't
- * leak a cart it doesn't carry and touching a cart never touches the whole user. Field names
- * match `openapi.yaml`'s `CartItem` so stored and wire shapes are identical — no mapper to keep
- * in sync.
- *
- * Mongo, not Redis: Redis here is cache-only, no persistence, fails open — the wrong properties
- * for the only durable copy of what's in someone's cart.
+ * Cart model — one document per user, not a subdocument, so a user response can't leak a cart it
+ * doesn't carry. Field names match `openapi.yaml`'s `CartItem` for identical stored/wire shapes.
+ * Mongo, not Redis: Redis here is cache-only, fails open — the wrong properties for the only
+ * durable copy of what's in someone's cart.
  *
  * See: docs/modules/cart.md
  */
@@ -103,12 +100,9 @@ export const cartSchema = new Schema<CartDocument>(
 );
 
 /*
- * Every other query here reaches a cart through `userId`, which `unique: true` above already
- * indexes. This is the exception: deleting a product has to find every cart holding it, and
- * without an index that reads the whole collection.
- *
- * Left unnamed because nothing else creates it, so Mongoose's derived name is the only name it
- * will ever have and there is nothing for it to disagree with.
+ * The one query that reaches a cart by something other than `userId`: deleting a product has
+ * to find every cart holding it, and without an index that reads the whole collection. Left
+ * unnamed since nothing else creates it.
  */
 cartSchema.index({ 'items.productId': 1 });
 

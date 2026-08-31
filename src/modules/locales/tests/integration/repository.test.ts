@@ -1,12 +1,9 @@
 /**
  * @module
- * The write paths, driven against a real database.
- *
- * These are unit tests in the sense the rest of this repo uses the word — no HTTP, no auth — but
- * they need Mongo, because every property worth pinning here is one an in-memory fake would
- * satisfy by construction: the revision counter moving in the same call as the write, a cascade
- * that spans two collections, and an import whose whole point is what it does to rows it was not
- * given.
+ * The write paths, driven against a real database. These are unit tests in this repo's sense — no
+ * HTTP, no auth — but need Mongo, because every property here is one an in-memory fake would
+ * satisfy by construction: the revision counter moving with the write, a cascade spanning two
+ * collections, an import's effect on rows it was not given.
  */
 
 import { BACKEND, FRONTEND } from '../unit/tenants.fixture';
@@ -553,11 +550,9 @@ describe('list', () => {
 });
 
 /**
- * The provider `@infrastructure/i18n` rebuilds its overlay from.
- *
- * Driven against the database because the property that matters is the SPLIT: the same key exists
- * on both sides of this collection, and a query that forgot the tenant would hand the API's overlay
- * the frontend's words. An in-memory fake would be built from the same assumption the code is.
+ * The provider `@infrastructure/i18n` rebuilds its overlay from. Driven against the database
+ * because the property that matters is the SPLIT: the same key exists on both sides, and a query
+ * that forgot the tenant would hand the API's overlay the frontend's words.
  */
 describe('readApiOverrides', () => {
     it('returns only the API’s half, nested', async () => {

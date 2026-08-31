@@ -1,8 +1,7 @@
 /**
  * @module
- * Order rules — `src/modules/orders/domain/rules.ts`.
- *
- * No mocks, no database, no fake timers — the rules take arguments and return verdicts.
+ * Order rules — `src/modules/orders/domain/rules.ts`. No mocks, no database, no fake timers:
+ * the rules take arguments and return verdicts.
  */
 
 import { checkOrderLines, type OrderLineCandidate } from '../../domain/rules';

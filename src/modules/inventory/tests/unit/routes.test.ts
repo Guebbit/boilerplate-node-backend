@@ -1,15 +1,10 @@
 /**
  * @module
- * The inventory route table.
- *
- * Every route here is staff's, guarded by one `router.use(getAuth, isAuth, isAdmin)` at the top.
- * The customer-facing half of this module is deliberately not a route at all — a shopper learns
- * about stock from `available` on the product they are looking at.
- *
- * That makes the failure mode here specific and severe: a single route mounted above the `use`,
- * or the `use` losing `isAdmin`, publishes the counters and the ledger. The module's own comment
- * says why that matters — it tells competitors what sells and tells customers how close they are
- * to missing out, which is a dark pattern when true and a lie when not.
+ * Inventory route table tests. Every route here is staff's, guarded by one
+ * `router.use(getAuth, isAuth, isAdmin)` at the top — the customer-facing half of this module is
+ * deliberately not a route at all, since a shopper learns about stock from `available` on the
+ * product page. A route mounted above the guard, or the guard losing `isAdmin`, would publish
+ * the counters and the ledger to anyone.
  */
 
 import { routeSignatures, guardsOn } from '@tests/routes';

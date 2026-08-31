@@ -1,12 +1,10 @@
 /**
  * @module
  * Payments: an order's money, behind a provider port (`./providers`), so the generic part of
- * taking money can be bought rather than built.
- *
- * Depends on orders (a payment is ABOUT an order — the intent freezes its total, refunds answer
- * `ORDER_CANCELLED`) and on inventory (the confirm is the single moment an order's held stock
- * becomes a sale, committed here rather than announced). Depends on users to resolve the payer —
- * groundwork for a future payment history, not a current feature.
+ * taking money can be bought rather than built. Depends on orders (a payment freezes an order's
+ * total and refunds answer `ORDER_CANCELLED`) and on inventory (the confirm commits an order's
+ * held stock into a sale). Depends on users to resolve the payer, groundwork for a future payment
+ * history.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      inventory, orders, users

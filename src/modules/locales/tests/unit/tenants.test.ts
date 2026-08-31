@@ -1,10 +1,9 @@
 /**
  * @module
- * The tenant registry: configuration read back, with the demo pair as its floor.
- *
- * Every reader is lazy, so each case sets the environment and reads; `afterEach` restores what
- * the suite started with, because a leaked `NODE_LOCALE_TENANTS_EXTRA` would make an unrelated
- * contract test accept a tenant nobody configured.
+ * The tenant registry: configuration read back, with the demo pair as its floor. Every reader is
+ * lazy, so each case sets the environment and reads; `afterEach` restores what the suite started
+ * with, since a leaked `NODE_LOCALE_TENANTS_EXTRA` would let an unrelated contract test accept a
+ * tenant nobody configured.
  */
 
 import {

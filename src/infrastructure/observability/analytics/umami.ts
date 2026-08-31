@@ -1,11 +1,9 @@
 /**
  * @module
- * Umami analytics provider — the default.
- *
- * Umami is the self-hosted analytics the compose stack already starts for the paired frontend,
- * and this provider puts the backend half of every shared funnel into the same database. The
- * browser posts to `/api/send` through its tracking script; a server posts the identical payload
- * over HTTP, which is the whole integration — there is no server SDK to add.
+ * Umami analytics provider — the default. Umami is the self-hosted analytics the compose stack
+ * already starts for the paired frontend, and this puts the backend half of every shared funnel
+ * into the same database: the browser posts to `/api/send` via its tracking script, and a server
+ * posts the identical payload over HTTP — the whole integration, no server SDK needed.
  *
  * See: docs/tools/analytics.md
  */
@@ -14,17 +12,10 @@ import { logger } from '@infrastructure/adapters/logger';
 import type { AnalyticsEvent, AnalyticsProvider } from './index';
 
 /**
- * A stand-in user-agent for events with no browser behind them.
- *
- * Umami's collect endpoint DISCARDS an event that arrives without a `User-Agent`, and answers
- * `200` while doing it: verified against umami 2.14, the same payload sent with and without the
- * header returns `200` both times and only the one carrying it appears in `website_event`. The
- * drop is therefore undetectable from the response, so the header is never left off.
- * (An unknown website id, by contrast, is a loud `404`.)
- *
- * Some events are genuinely server-originated — a webhook, a scheduled job, a queue consumer —
- * and have no caller whose header could be forwarded. A recognisable placeholder keeps those in
- * the dataset and visible as what they are, rather than silently absent.
+ * Stand-in user-agent for events with no browser behind them (webhooks, scheduled jobs, queue
+ * consumers). Umami's collect endpoint silently DISCARDS an event missing `User-Agent` while
+ * still answering `200` (verified against umami 2.14) — the header is never left off, and this
+ * keeps server-originated events visible instead of silently absent.
  */
 const SERVER_USER_AGENT = 'boilerplate-node-api/server (analytics; no browser)';
 
@@ -33,13 +24,9 @@ type UmamiEventData = Record<string, unknown>;
 
 /**
  * Strip the port from a `Host` header.
- *
- * Umami validates `hostname` as a bare host and answers `400` for anything carrying a port —
- * and `Host` carries one on every non-default port, so `localhost:3000` (the entire local
- * development case) is rejected outright. The port says nothing a hostname needs to say.
- *
- * IPv6 literals arrive bracketed (`[::1]:3000`), so the split is on the LAST colon and only
- * when it follows the closing bracket; a bare `[::1]` is left alone.
+ * Umami validates `hostname` as a bare host and 400s on anything carrying a port — and `Host`
+ * carries one on every non-default port, so `localhost:3000` (the whole local-dev case) would
+ * otherwise be rejected outright.
  */
 const stripPort = (host: string): string => {
     const lastColon = host.lastIndexOf(':');
@@ -50,18 +37,13 @@ const stripPort = (host: string): string => {
 };
 
 /**
- * Read the configuration each time rather than caching it.
+ * Read the configuration each time rather than caching it, since the registry already memoises
+ * the provider — caching here too would freeze the environment at whichever test resolved first.
  *
- * The provider is memoised by the registry, so caching here as well would freeze the
- * environment at whichever test happened to resolve first.
- *
- * `NODE_UMAMI_INGEST_HOST` and `NODE_UMAMI_HOST` are two different addresses for one server and
- * are not interchangeable. `NODE_UMAMI_HOST` is declarative — the PUBLIC origin a browser loads
- * the tracking script from, reported by `GET /observability/health`. This provider dials Umami
- * from inside the network, where that public origin is frequently wrong: in compose it is
- * `http://localhost:3080`, and `localhost` inside the API container is the API. Hence the
- * dedicated ingest variable, falling back to the public one for the single-host deployments
- * where they genuinely are the same.
+ * `NODE_UMAMI_INGEST_HOST` and `NODE_UMAMI_HOST` are two different addresses for one server:
+ * `NODE_UMAMI_HOST` is the PUBLIC origin a browser loads the tracking script from, which is often
+ * unreachable from inside the network (compose's `localhost:3080` means the API container
+ * itself). This dials the ingest host, falling back to the public one for single-host setups.
  */
 const readConfig = (): { host: string; websiteId: string } | undefined => {
     const host = (process.env.NODE_UMAMI_INGEST_HOST ?? process.env.NODE_UMAMI_HOST)?.trim();
@@ -78,11 +60,9 @@ const readConfig = (): { host: string; websiteId: string } | undefined => {
 let warnedAboutConfiguration = false;
 
 /**
- * Flatten an event into the `data` map.
- *
- * `distinctId` becomes `user_id` and the trace id becomes `trace_id`, so both are filterable in
- * Umami's event-data view — Umami keys visitors on an IP + user-agent hash, so this is the only
- * place a user id can live, and the only way a funnel here can be narrowed to one account.
+ * Flatten an event into the `data` map: `distinctId` becomes `user_id`, trace id becomes
+ * `trace_id`, so both are filterable in Umami's event-data view. Umami keys visitors on an IP +
+ * user-agent hash, so this is the only place a user id can live.
  */
 const buildEventData = (event: AnalyticsEvent): UmamiEventData => ({
     // Caller-supplied context first, so the fields below cannot be overwritten by a property
@@ -116,31 +96,26 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
             return;
         }
 
-        // No `await`, and no returned promise: the contract is fire-and-forget, so the request
-        // is launched and the request that triggered it carries on immediately.
+        // Fire-and-forget POST to Umami's collect endpoint — not awaited, so this returns before
+        // the network call resolves. User-Agent is required or Umami drops the event (see above);
+        // X-Forwarded-For attributes it to the same visitor as the browser events around it.
         fetch(`${config.host}/api/send`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                // Umami derives browser/OS from this, and drops the event without it.
                 'User-Agent': event.userAgent ?? SERVER_USER_AGENT,
-                // Umami hashes the caller's address into the visitor id. Forwarding the original
-                // client address is what makes a server-side event attribute to the same visitor
-                // as the browser events around it, instead of to the API container.
                 ...(event.clientIp ? { 'X-Forwarded-For': event.clientIp } : {})
             },
             body: JSON.stringify({
                 type: 'event',
                 payload: {
                     website: config.websiteId,
-                    // Both optional to Umami, both worth sending: `hostname` separates
-                    // environments sharing one website id, and `url` gives the event a row in
-                    // the pages view instead of an empty one.
+                    // hostname separates environments sharing one website id; url gives the
+                    // event a row in the pages view instead of an empty one.
                     ...(event.hostname ? { hostname: stripPort(event.hostname) } : {}),
                     url: `/server/${event.event}`,
                     name: event.event,
-                    // No `event.timestamp`: `/api/send` declares no such field, so Umami stamps
-                    // ingest time. See the field's docblock in `./index`.
+                    // No timestamp: `/api/send` has no such field, so Umami stamps ingest time.
                     data: buildEventData(event)
                 }
             })
@@ -165,10 +140,9 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
     },
 
     /**
-     * Nothing to flush: each event is its own request, launched as it happens.
-     *
-     * In-flight requests are deliberately not awaited — the shutdown chain is on a clock, and an
-     * analytics beacon is the last thing that should hold a deploy open.
+     * Nothing to flush: each event is its own request, launched as it happens. In-flight
+     * requests are deliberately not awaited — the shutdown chain is on a clock, and an analytics
+     * beacon is the last thing that should hold a deploy open.
      */
     shutdown(): Promise<void> {
         return Promise.resolve();

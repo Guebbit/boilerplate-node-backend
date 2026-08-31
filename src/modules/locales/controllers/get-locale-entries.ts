@@ -12,24 +12,16 @@ import { catchAs, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * GET /locales/:locale/entries (admin)
- * The rows behind one language's dictionary — what a translation screen lists.
- *
- * Flat and paginated, because a row is what gets edited. The nested tree a client consumes is
- * `GET /locales/:locale/messages`; one endpoint trying to be both is how this feature usually goes
- * wrong, so the two are named for what they are.
- *
- * Deliberately NOT cached. Every other locale read is, because they answer the same bytes to
- * everyone for an hour — this one is the screen a translator is typing into, where a stale page
- * means editing a value that has already changed. The saving would be a single indexed query
- * against a collection only admins can reach.
+ * Flat, paginated rows for one language's dictionary — what a translation screen edits.
+ * The nested tree a client consumes is served separately by GET /locales/:locale/messages.
+ * Deliberately not cached: this is the screen a translator is actively typing into.
  */
 export const getLocaleEntries = (
     request: Request<{ locale: string }, unknown, unknown, Record<string, string>>,
     response: Response
 ) => {
-    // Query only — the `list` surface. The editing screen reaches this over a GET and there is
-    // no `POST /locales/:locale/entries/search` to carry a body, so declaring one would claim a
-    // source no client can send. See docs/theory/request-input.md.
+    // Query params only — a GET has no body to carry a search payload.
+    // See docs/theory/request-input.md.
     const { page, pageSize, text, tenant } = readInput(request, { surface: 'list' }) as Record<
         string,
         string | undefined
@@ -40,13 +32,8 @@ export const getLocaleEntries = (
     const parseResult = paginationSchema.safeParse({ page, pageSize });
     if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
 
-    /*
-     * `tenant` is handed over as the caller typed it. What an unrecognised one means is the
-     * service's answer, not this file's — dropped on a read, refused on a write — and the two
-     * halves of that policy are stated together in `services/languages.ts`. A check here would
-     * have covered only this route, and left the reader of the write half with no sign that a
-     * lenient sibling exists.
-     */
+    // `tenant` is passed through unchecked — what an unrecognised one means is the
+    // service's call (dropped on read, refused on write); see services/languages.ts.
     return localeService
         .searchEntries(request.params.locale, { ...parseResult.data, text, tenant })
         .then((result) =>

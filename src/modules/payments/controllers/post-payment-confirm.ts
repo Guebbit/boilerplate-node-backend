@@ -1,11 +1,9 @@
 /**
  * @module
  * POST /payments/:id/confirm
- * The card dialog's submit — where the money moves, so where the events fire.
- *
- * A decline is reported like any refusal (409, `PAYMENT_DECLINED`) but still counted and
- * audited: a support thread about a payment starts with "was it us or the card", and the audit
- * row answers it.
+ * The card dialog's submit — where the money moves, so where the events fire. A decline is
+ * reported like any refusal (409, `PAYMENT_DECLINED`) but still counted and audited: a support
+ * thread about a payment starts with "was it us or the card", and the audit row answers it.
  */
 
 import type { Request, Response } from 'express';
@@ -32,6 +30,7 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
         .then((result) => {
             const declined =
                 !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
+            // Counted outcomes only: not-found/race rejections aren't confirm attempts.
             if (result.success || declined)
                 paymentConfirmTotal.inc({ outcome: result.success ? 'succeeded' : 'declined' });
 

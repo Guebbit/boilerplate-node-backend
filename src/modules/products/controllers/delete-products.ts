@@ -9,12 +9,9 @@ import { productService } from '../service';
 import { productsAuditActions } from '../audit';
 
 /**
- * DELETE /products/:id
- * Delete a product by path id (admin).
- * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
- *
- * The hard path also announces `PRODUCT_DELETED` and removes the image, so a deleted product does
- * not outlive itself in a wishlist or on disk.
+ * DELETE /products/:id — delete a product by path id (admin). `?hardDelete=true` deletes
+ * permanently; otherwise soft-deletes. The hard path also announces `PRODUCT_DELETED` and removes
+ * the image, so a deleted product does not outlive itself in a wishlist or on disk.
  */
 export const deleteProducts = createDeleteController({
     entity: 'product',

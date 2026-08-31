@@ -55,35 +55,11 @@ export const cartGetForView = (userId: string, context: CallerContext): Promise<
 /**
  * Shared logic for adding/setting a cart item quantity.
  *
- * **The catalogue gate lives here, not in a controller.** A cart line may only name a product the
- * storefront would show, and this is where that is decided, so every caller that adds ONE product
- * inherits it — `POST /cart`, `PUT /cart/{productId}`, and the wishlist's move-to-cart, which
- * reaches this function through the module barrel and never sees the catalogue itself.
- *
- * `./reorder` is the one caller that applies the rule itself, because it needs a different answer
- * to it: a discontinued line is SKIPPED there, not refused, so it resolves the whole order's
- * products in one pass and writes the survivors through the repository. Same predicate,
- * `findPublicById`, named in both places rather than derived twice.
- *
- * A route is the wrong place for it. Each one would have to ask the question for itself, in its
- * own words, and a route that forgets produces a stored line for a product no page will serve —
- * silently, because the view drops a reference that resolves to nothing, so the line is invisible
- * in the response that created it and shows up as a priced item at checkout. A rule every caller
- * must obey belongs under all of them rather than beside one, which is what a service layer is
- * for — see `docs/theory/layers.md`.
- *
- * `findPublicById` rather than a scope assembled here: `active`, not soft-deleted, and no variance
- * by role — the catalogue's own definition of "on sale", named once in the products module so this
- * cannot drift from what the product page will actually serve.
- *
- * Stock is deliberately NOT part of it. The shelf is checked when the cart becomes an order
- * (`./checkout`), because units are held at that moment and not before: refusing to hold a
- * sold-out product in a basket would throw away the customer's intent over a number that changes
- * by the minute.
- *
- * Then one write: the repository's update pipeline creates the cart, appends the line or rewrites
- * its quantity server-side and hands back the result, so the only remaining query is the join that
- * prices the answer.
+ * The catalogue gate — may this product be in a cart — lives here, not in a controller, so every
+ * single-product caller (`POST /cart`, `PUT /cart/{productId}`, wishlist move-to-cart) inherits it
+ * via `findPublicById`. `./reorder` applies the same predicate itself because it SKIPS unavailable
+ * lines rather than refusing. Stock is deliberately excluded here — checked only at checkout,
+ * where units are actually held.
  */
 const upsertCartItem = (
     userId: string,
@@ -115,13 +91,8 @@ export const cartItemSetById = (
 
 /**
  * `POST /cart` — add a product to the cart, or replace the quantity of a line already there.
- *
- * Named apart from `PUT /cart/{productId}`'s wrapper below for the same reason each already
- * carried its own analytics event at the controller: the two routes say different things about
- * the identical write (`cartItemSetById`, unchanged — this does not switch the route to
- * increment). Wrapping rather than folding the emit into `cartItemSetById` itself keeps every
- * other caller — the dozens of unit tests that use it as a plain setup step, `PUT`'s own wrapper
- * below — free of a `CallerContext` neither one needs.
+ * Wraps `cartItemSetById` rather than folding the emit into it, so callers with no
+ * `CallerContext` (tests, `PUT`'s own wrapper below) stay free of one.
  */
 export const cartItemAdd = (
     userId: string,

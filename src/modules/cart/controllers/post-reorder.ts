@@ -11,11 +11,9 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /cart/reorder/:orderId
- * Copy one of the caller's own orders back into their cart.
- *
- * Filed under cart because of what it writes: the order is only read. Lines whose product has
- * since left the public catalogue are skipped — the response's cart view is the honest record of
- * what landed — and an order with nothing left to add answers 409 rather than a hollow 200.
+ * Copy one of the caller's own orders back into their cart. The order is only read — this
+ * writes to the cart, hence living here. Lines whose product left the catalogue are skipped;
+ * an order with nothing left to add answers 409 rather than a hollow 200.
  */
 export const postReorder = (request: Request<{ orderId: string }>, response: Response) => {
     const userId = authContextOf(request).id;

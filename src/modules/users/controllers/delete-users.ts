@@ -11,11 +11,8 @@ import { usersAuditActions } from '../audit';
 
 /**
  * DELETE /users — delete a user by id in the request body (admin).
- * DELETE /users/:id — delete a user by path id (admin).
- * Pass ?hardDelete=true to permanently delete; otherwise soft-deletes.
- *
- * The hard path announces `USER_DELETED`, which is what takes the account's cart, wishlist and
- * address book with it.
+ * DELETE /users/:id — delete by path id. `?hardDelete=true` deletes permanently, else soft.
+ * Hard delete announces `USER_DELETED`, cascading to cart, wishlist and address book.
  */
 export const deleteUsers = createDeleteController({
     entity: 'user',

@@ -1,10 +1,9 @@
 /**
  * @module
  * Product repository: standard CRUD via the repository factory, plus the catalogue's own query
- * rules and the counter transitions that back inventory (`onHand`/`reserved`).
- *
- * The exported type is written out because Mongoose's generics are too large for TypeScript to
- * serialize an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
+ * rules and the counter transitions that back inventory (`onHand`/`reserved`). The exported type
+ * is written out because Mongoose's generics are too large for TypeScript to serialize an
+ * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 
 import type { FacetCount } from '@types';
@@ -27,12 +26,11 @@ export interface AvailabilityRow {
 }
 
 /**
- * What a non-admin caller is allowed to see: published, not soft-deleted. A rule about which *rows*
- * exist for an audience, so it belongs to the repository — spread it into any filter. Admin callers
- * pass nothing and see everything.
+ * What a non-admin caller is allowed to see: published, not soft-deleted — spread into any filter;
+ * admin callers pass nothing and see everything.
  *
- * A `const` above the literal because three members below need it, and reading it back off
- * `productRepository` would only work through lazy property resolution.
+ * A `const` above the literal because three members below need it; reading it back off
+ * `productRepository` only works through lazy property resolution.
  */
 const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
     active: true,
@@ -85,12 +83,10 @@ export const productRepository: Repository<ProductDocument> & {
     /**
      * Fetch one product, optionally narrowed to a caller's authorization scope.
      *
-     * The id lookup and the scope are applied by the same query — checking visibility after the
-     * read is how a scoped find turns into an information leak. No scope means no restriction,
-     * which is the admin branch (see `createVisibilityScope`).
-     *
-     * `async` because `toObjectId` throws on a malformed id — see `create-repository.ts`.
-     * `orders.findByIdScoped` is the same idea.
+     * The id lookup and the scope are applied by the same query — checking visibility after the read
+     * is how a scoped find turns into an information leak. No scope means no restriction, the admin
+     * branch (see `createVisibilityScope`). `async` because `toObjectId` throws on a malformed id —
+     * see `create-repository.ts`; `orders.findByIdScoped` is the same idea.
      *
      * @param productId - the product's id
      * @param scope - the caller's filter fragment, or `undefined` to read unrestricted
@@ -100,12 +96,8 @@ export const productRepository: Repository<ProductDocument> & {
         productRepository.findOne({ _id: toObjectId(productId), ...scope }),
 
     /**
-     * The publicly visible product with this id, or `null`.
-     *
-     * {@link findByIdScoped} bound to the public scope, named so "a hidden product cannot be
-     * wishlisted or reordered" is one call rather than a spread each caller must remember. The
-     * two domain readers that want exactly this — `cart/services/reorder.ts`, `wishlist/service.ts`
-     * — never vary by role, so they say what they mean instead of building a scope.
+     * The publicly visible product with this id, or `null` — {@link findByIdScoped} bound to the
+     * public scope, used by `cart/services/reorder.ts` and `wishlist/service.ts`.
      *
      * @param productId - the product's id
      * @returns the product if it is published and not soft-deleted, otherwise `null`
@@ -116,11 +108,9 @@ export const productRepository: Repository<ProductDocument> & {
     /**
      * Every category and tag the PUBLIC catalogue carries, counted.
      *
-     * One `$facet` pipeline rather than two aggregations, so both lists are counted against the
-     * same snapshot of the collection — two round trips could disagree with each other about a
-     * product written in between. The `$match` is `PUBLIC_SCOPE` itself, not a copy of its
-     * conditions: a category held only by hidden products renders as a filter chip that finds
-     * nothing.
+     * One `$facet` pipeline rather than two, so both lists count against the same snapshot — two
+     * round trips could disagree about a product written in between. `$match` reuses `PUBLIC_SCOPE`
+     * itself, so a category held only by hidden products can't render as a chip that finds nothing.
      */
     facets: () =>
         productModel
@@ -153,20 +143,14 @@ export const productRepository: Repository<ProductDocument> & {
             })),
 
     /*
-     * The counter transitions — the only writes to `onHand` and `reserved` in the codebase.
+     * The counter transitions — the only writes to `onHand`/`reserved`, living here because each is
+     * one conditional `updateOne`; which transition is legal when belongs to `@modules/inventory`.
      *
-     * They live here, in the repository that owns the collection, because each is one conditional
-     * `updateOne` and none of them knows what a reservation is. Which transition is legal when,
-     * and the ledger row that must accompany it, belong to `@modules/inventory` — the only caller.
+     * Every one is conditional: the guard rides IN the filter, so mongod evaluates it atomically and
+     * two checkouts racing the last unit cannot both take it. None returns `void` — an unmatched
+     * write must be detectable, unlike the old `incrementStock`, which lost units silently.
      *
-     * Every one is conditional and answers whether it matched. The guard rides IN the filter, so
-     * mongod evaluates it while holding the document and two checkouts racing the last unit cannot
-     * both take it. There is no unconditional counter write anywhere: the previous design's
-     * `incrementStock` returned `void`, so a cancel whose product had been hard-deleted lost its
-     * units silently.
-     *
-     * `timestamps: false` throughout — stock moving is not an edit to the catalogue entry, and
-     * `updatedAt` keeps meaning "the product changed".
+     * `timestamps: false` throughout — stock moving isn't an edit to the catalogue entry.
      */
 
     /**
@@ -278,11 +262,8 @@ export const productRepository: Repository<ProductDocument> & {
             .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
-     * How many products a buyer would find at or under `threshold` units.
-     *
-     * Counts AVAILABILITY rather than `onHand`, which is the number an operator restocking the
-     * shop cares about: a product with forty units all reserved is out of stock to every customer
-     * looking at it, and a gauge reading forty would say the opposite.
+     * How many products a buyer would find at or under `threshold` units — counts AVAILABILITY, not
+     * `onHand`, since fully-reserved stock reads as out of stock to a customer.
      *
      * @param threshold - the low-availability mark
      * @returns how many publicly visible products are at or under it
@@ -297,10 +278,8 @@ export const productRepository: Repository<ProductDocument> & {
 
     /**
      * Every unit currently promised to an open order, across the whole catalogue.
-     *
-     * Summed over the products rather than the holds: the counters are what the shop acts on, so a
-     * total taken from them measures the thing that would oversell if it were wrong. No scope
-     * filter — an inactive product with units still held is exactly what an operator wants to see.
+     * Summed over the products, not the holds, since the counters are what the shop acts on. No scope
+     * filter — an inactive product with units held is exactly what an operator wants to see.
      *
      * @returns the total reserved units
      */
@@ -310,23 +289,13 @@ export const productRepository: Repository<ProductDocument> & {
             .then((results) => results.at(0)?.total ?? 0),
 
     /**
-     * A page of the stock board — counters plus availability, scarcest first.
+     * A page of the stock board — counters plus availability, scarcest first. An aggregation, not a
+     * `find`: `available` isn't a stored column, so it must be projected before it can be sorted.
+     * `$facet` counts and pages against one snapshot, so the total can't disagree with the rows.
      *
-     * An aggregation rather than a `find`, because the sort key does not exist as a column:
-     * availability is `onHand - reserved`, so it has to be projected before it can be sorted or
-     * filtered on. Doing that in mongod rather than in the service is what keeps this bounded —
-     * an earlier version read the whole catalogue with `limit: 0` and sorted it in JavaScript,
-     * which is fine for five products and fatal for fifty thousand.
-     *
-     * `$facet` runs the count and the page against one snapshot of the collection, so the total
-     * cannot disagree with the rows beside it.
-     *
-     * The scaling limit, stated rather than left to be discovered: `available` is derived, so no
-     * index can cover the sort and mongod does it in memory. That is bounded by its 100MB sort
-     * limit, which a catalogue in the low millions would reach. The fix at that size is to store
-     * `available` as a real column maintained by the same transitions that move the counters, and
-     * index it — deliberately not done here, because a stored third counter is one more thing that
-     * can disagree with the two it comes from.
+     * Scaling limit: a derived sort has no index, so mongod sorts in memory (100MB cap, reachable in
+     * the low millions) — the fix is a stored, transition-maintained column, deliberately not done
+     * here since a third counter could disagree with the two it comes from.
      *
      * @param options - `skip`/`limit` for the page, and `maxAvailable` to keep only scarce rows
      * @returns the page and the count of everything matching

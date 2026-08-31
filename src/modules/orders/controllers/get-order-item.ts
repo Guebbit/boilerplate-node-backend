@@ -12,21 +12,13 @@ import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
 
 /**
- * GET /orders/:id
- * Get a single order by path id.
- * Non-admin users can only access their own orders.
+ * GET /orders/:id — single order by path id; non-admin callers see only their own.
  *
- * An id that is not a usable ObjectId answers 404 here, the same as on every other single-item read
- * (`get-product-item.ts`, `get-user-item.ts`): it names no order, which is the same thing a
- * well-formed id matching nothing means.
- *
- * The ANSWER is shared; the mechanism is not. Those two let the query run and map the Mongoose
- * `CastError` it raises (`error.kind === 'ObjectId'`) to the 404 in their `.catch`. This one checks
- * BEFORE the query, because its two role branches fail differently: the admin branch is a
- * `findById` and raises that same `CastError`, while the scoped branch is an aggregate whose
- * `$match` coerces the id itself and raises a driver `BSONError` — which the response layer reads
- * as 422. Answering on the error class here would therefore make the status depend on WHO asked,
- * for the same malformed value, so the check has to happen where neither branch has run yet.
+ * The id is checked BEFORE the query, unlike other single-item reads that let the query fail and
+ * map the error in `.catch`. Here the two role branches raise different error classes for the same
+ * malformed id — `findById`'s `CastError` vs the scoped aggregate's `BSONError` (422) — so checking
+ * post-query would make the status depend on who asked. Checking first keeps the answer at 404
+ * regardless of role.
  */
 export const getOrderItem = (request: Request<{ id?: string }>, response: Response) => {
     if (!isValidObjectId(request.params.id)) {
@@ -34,10 +26,6 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
         return;
     }
 
-    /**
-     * User role filters:
-     * Only admin can see all orders. Regular users can only see their own.
-     */
     return orderService
         .getById(request.params.id, orderService.callerScope(request.authContext))
         .then((order) => {

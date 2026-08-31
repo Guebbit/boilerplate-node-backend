@@ -1,21 +1,10 @@
 /**
  * @module
- * The audit-log schema's contract.
- *
- * This is the one collection in the system whose schema is a compliance artifact rather than a
- * convenience, and three of its declarations are unlike every other model here:
- *
- *   - `timestamps: false`, with an explicit REQUIRED `timestamp` field instead. An audit entry is
- *     stamped when the event happened, by the emitter, not when the row was written by whatever
- *     drained the queue. Turning Mongoose's timestamps back on would add a second, subtly
- *     different time and invite a reader to pick the wrong one.
- *   - `bufferCommands: false`. If the database is unreachable, an audit write must FAIL rather
- *     than sit in a buffer waiting: the caller's fallback is to log the entry where it will at
- *     least be collected, and a silent buffer that resolves later removes the signal that the
- *     fallback was needed.
- *   - a TTL index on `timestamp`. This is the only place in the codebase where documents are
- *     deleted by the database, and it is the retention policy — so it is asserted against the
- *     configured window rather than against a hardcoded number.
+ * The audit-log schema's contract — a compliance artifact, not a convenience, unlike every other
+ * model here: `timestamps: false` with an explicit REQUIRED `timestamp` (stamped by the emitter,
+ * not the writer); `bufferCommands: false`, so an unreachable database FAILS the write rather
+ * than silently buffering it; and a TTL index on `timestamp`, the only DB-deleted documents in
+ * the codebase, asserted against the configured window, not a hardcoded number.
  */
 
 import { auditLogSchema } from '@modules/audit-logs/model';

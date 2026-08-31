@@ -22,14 +22,11 @@ import { logger } from '@infrastructure/adapters/logger';
 export const router = Router();
 
 /*
- * Both of these are authenticated. Neither carries user data, but both are a map of how the
- * service behaves — request volumes, error rates, latency percentiles, login success/failure
- * counters, uptime and heap — which is reconnaissance worth having if you intend to attack it.
- *
- * They authenticate differently because their callers can authenticate differently: the SSE
- * stream is opened by a browser's `EventSource`, which cannot set a header and must use the
- * session cookie; the metrics endpoint is scraped by Prometheus, which cannot log in and must
- * use a static credential. See `isAdminViaCookie` and `isMetricsScraper`.
+ * Both authenticated, though neither carries user data — both expose request volumes, error
+ * rates, latency, login counters, uptime and heap, reconnaissance worth having before an attack.
+ * They authenticate differently because their callers must: the SSE stream is opened by a
+ * browser's `EventSource`, which can't set a header and so uses the session cookie; the scrape
+ * endpoint is hit by Prometheus, which can't log in and so uses a static credential.
  */
 router.get('/events', isAdminViaCookie, (_request, response) => {
     streamObservabilityMetrics(response);

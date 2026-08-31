@@ -1,12 +1,9 @@
 /**
  * @module
- * The feedback-request schema's contract.
- *
- * A contact form is the one place a stranger writes to the database, so what it requires is a
- * decision about who can reach the operators at all: too much and a visitor with a genuine
- * problem gives up, too little and the queue fills with unanswerable rows. The line drawn here is
- * "we must be able to reply, and know what about" — email, subject, message — with the name left
- * optional because someone reporting a problem is not obliged to say who they are.
+ * The feedback-request schema's contract. A contact form is the one place a stranger writes to
+ * the database, so what it requires is a decision about who can reach operators at all. The line
+ * drawn: "we must be able to reply, and know what about" — email, subject, message required, name
+ * optional, since reporting a problem doesn't obligate saying who you are.
  */
 import { feedbackRequestSchema } from '@modules/feedback/model';
 import { FeedbackRequestStatus } from '@types';

@@ -1,11 +1,9 @@
 /**
  * @module
  * POST /payments/intent
- * Freeze an order's price into a payment intent, ready to confirm.
- *
- * Thin on purpose: ownership, the `pending` gate and the amount all live in the service. No
- * audit and no analytics here — an intent is a page load's preparation, not a business event;
- * the events fire on the confirm, where money actually moves.
+ * Freeze an order's price into a payment intent, ready to confirm. Thin on purpose: ownership,
+ * the `pending` gate and the amount all live in the service — no audit or analytics here, since
+ * an intent is a page load's preparation, not a business event; those fire on the confirm.
  */
 
 import type { Request, Response } from 'express';

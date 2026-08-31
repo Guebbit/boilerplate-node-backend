@@ -1,12 +1,10 @@
 /**
  * @module
- * Inventory service — `src/modules/inventory/service.ts`.
- *
- * The lifecycle across modules is covered by `cart/tests/unit/stock.test.ts`, and the replay
- * invariant by `ledger.property.test.ts`. What is left for this file is the module's own edges:
- * the exactly-once claims, the two admin transitions and their refusals, and the sweep.
- *
- * Real Mongo (`setupTestDb`) throughout, because every guarantee here is a conditional write.
+ * Inventory service tests. The lifecycle across modules is covered by
+ * `cart/tests/unit/stock.test.ts`, and the replay invariant by `ledger.property.test.ts`, so
+ * what's left here is the module's own edges: the exactly-once claims, the two admin transitions
+ * and their refusals, and the sweep. Real Mongo throughout, since every guarantee is a
+ * conditional write.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -40,10 +38,8 @@ const countersOf = async (productId: string) => {
 
 /**
  * Run `body` with the reservation window closed, so every hold it opens is already stale.
- *
- * At module scope rather than inside the describe because the TTL is read lazily on each reserve
- * — precisely so a test can vary it — and leaving it at zero would expire the holds every other
- * case in this file depends on.
+ * Defined at module scope, not inside a describe, because leaving the TTL at zero for the whole
+ * file would expire the holds every other case here depends on.
  */
 const withoutWindow = (body: () => Promise<void>) =>
     withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', body);
@@ -82,11 +78,9 @@ describe('reserveForOrder', () => {
             { productId: String(scarce._id), quantity: 5 }
         ]);
 
-        /*
-         * A reserve and its undo, both on the row. A ledger that hid its own reversals would be
-         * one nobody could reconcile — "nothing happened" and "two things happened that cancelled
-         * out" are different facts, and only the second one explains a gap in a stock take.
-         */
+        // A reserve and its undo, both on the row — hiding the reversal would make the ledger
+        // unreconcilable: "nothing happened" and "two things cancelled out" are different facts,
+        // and only the second explains a gap in a stock take.
         const rows = await listMovements({ productId: String(plenty._id) });
         expect(rows.data?.items.map((row) => row.reason)).toEqual([
             StockMovementReason.release,
@@ -108,10 +102,10 @@ describe('reserveForOrder', () => {
 
     /*
      * Surfaced by mutation testing: replacing the duplicate-key check in `insertHold` with `true`
-     * survived every test. That mutant is not cosmetic — swallowing any error into `null` makes
-     * `reserveForOrder` read it as "already held" and answer `true`, so a database failure would
-     * report the basket as held while holding nothing, and the checkout above it would write an
-     * order with no stock behind it. Only 11000 may become `null`; everything else must propagate.
+     * survived every test. Swallowing any error into `null` makes `reserveForOrder` read it as
+     * "already held", so a database failure would report a hold while holding nothing and the
+     * order behind it would ship with no stock. Only 11000 may become `null` — everything else
+     * must propagate.
      */
     it('propagates a non-duplicate database error instead of reporting a hold', async () => {
         const product = await createProduct({ onHand: 10 });
@@ -300,9 +294,8 @@ describe('adjust', () => {
         /*
          * The write's guard covers both "the product exists" and "the correction fits", so a
          * vanished product and a blocked correction look identical to it. Deleting between the
-         * pre-check and the write is the only way to reach that ambiguity, and the wrong answer
-         * here — a stock conflict for a product that is simply gone — is what an operator would
-         * waste time on.
+         * pre-check and the write is the only way to reach that ambiguity — the wrong answer
+         * would waste an operator's time chasing a stock conflict that doesn't exist.
          */
         const blocked = productRepository.adjustUnits;
         const spy = jest

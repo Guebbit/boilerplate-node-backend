@@ -1,15 +1,10 @@
 /**
  * @module
- * Contract scalars, as they arrive over HTTP.
- *
- * `readInput` decodes a transport; it deliberately does not validate, so a value it could not
- * recognise reaches a schema intact. These are the schemas for the handful of scalars that more
- * than one endpoint accepts, so the answer to "what is a legal page size" is written once rather
- * than re-derived per controller — which is how `GET /products` came to answer 422 for
- * `?pageSize=500` while `GET /feedback` silently clamped the same request.
- *
- * Bounds and defaults come from the orval-generated constants, so they track `openapi.yaml`
- * rather than drifting from it.
+ * Contract scalars, as they arrive over HTTP. `readInput` decodes a transport but deliberately
+ * does not validate, so these are the schemas for the handful of scalars more than one endpoint
+ * accepts — written once rather than re-derived per controller, which is how `GET /products` and
+ * `GET /feedback` once disagreed on what a legal page size is. Bounds and defaults come from the
+ * orval-generated constants, so they track `openapi.yaml` rather than drifting from it.
  */
 
 import { z } from 'zod';
@@ -18,16 +13,10 @@ import { z } from 'zod';
  * Largest `pageSize` a caller may request, declared here rather than imported from the generated
  * client.
  *
- * `PageSize` is a single shared component in `openapi.yaml`, so every operation referencing it
- * carries the same number — but orval flattens a shared component into one constant PER OPERATION.
- * There is no shared constant to import, only forty identical ones named after whichever endpoint
- * they were emitted for. Importing one of those — the `products` one, say — would put a domain's
- * name in `infrastructure` and break outright the day that module's contract fragment is deleted.
- *
- * So infrastructure owns the scalar and `tests/cross-cutting/contract-scalars.test.ts` proves it
- * still matches every operation orval generated. The dependency is inverted, not dropped: change
- * the component in `openapi.yaml` without changing this and the build fails, which is the property
- * the import was there for.
+ * `PageSize` is one shared `openapi.yaml` component, but orval flattens it into forty identical
+ * per-operation constants — importing any one would put a domain's name in `infrastructure` and
+ * break the day that module's contract fragment is deleted. So infrastructure owns the scalar, and
+ * `tests/cross-cutting/contract-scalars.test.ts` proves it still matches what orval generated.
  */
 const PAGE_SIZE_MAX = 100;
 
@@ -55,14 +44,10 @@ const blankToUndefined = (value: unknown): unknown =>
  * The soft/hard delete switch.
  *
  * Read as a VALUE, never as presence: `!!request.query.hardDelete` would make `?hardDelete=false`
- * permanently delete the record, because the string `'false'` is truthy. It is a boolean in the
- * contract and it is a boolean here: `readInput` decodes the string spellings a URL can carry, and
- * anything left unrecognised fails this schema and answers 422 rather than being guessed at.
- * Absent means soft delete, which is what the contract's `default: false` says.
- *
- * **What a soft delete does, for every collection that has one.** It is a TOGGLE: `deletedAt` is
- * stamped if absent and cleared if present, so a second `DELETE` RESTORES the record. Every
- * module's `remove` writes that one statement; this is where it is explained.
+ * permanently delete the record, since the string `'false'` is truthy. `readInput` decodes the
+ * URL's string spellings; anything unrecognised fails this schema and answers 422 rather than
+ * being guessed at. Absent means soft delete — a TOGGLE that stamps `deletedAt` if absent and
+ * clears it if present, so a second `DELETE` RESTORES the record.
  */
 export const hardDeleteSchema = z.preprocess(
     blankToUndefined,
@@ -70,14 +55,11 @@ export const hardDeleteSchema = z.preprocess(
 );
 
 /**
- * `page` as a caller sends it.
+ * `page` as a caller sends it: coerced because a query string carries numbers as text,
+ * integer-only because `?page=1.5` produced a fractional `skip`.
  *
- * Coerced because a query string carries numbers as text, integer-only because `?page=1.5` produced
- * a fractional `skip`, which is not a page.
- *
- * Absent stays absent: `normalizePagination` (`@infrastructure/persistence/search`) is the single
- * authority on what "page 1, ten per page" means, and it runs on every search. Defaulting here as
- * well would only add a second set of numbers that the later one always overwrites.
+ * Absent stays absent — `normalizePagination` (`@infrastructure/persistence/search`) is the single
+ * authority on defaults, and defaulting here too would just add numbers it always overwrites.
  */
 export const pageSchema = z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional());
 

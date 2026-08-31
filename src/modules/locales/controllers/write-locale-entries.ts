@@ -1,10 +1,9 @@
 /**
  * @module
- * The four write routes on a language's entries: one key at a time, and two bulk imports.
- *
- * The two bulk routes are two METHODS, not one route with a flag: PUT replaces — what is not sent
- * is deleted — and PATCH merges — what is not sent is left alone. A client cannot ask for one and
- * receive the other, and a mis-set boolean cannot silently empty a dictionary.
+ * The four write routes on a language's entries: one key at a time, plus two bulk imports.
+ * The bulk routes are two methods rather than one route with a flag — PUT replaces (what
+ * isn't sent is deleted), PATCH merges (what isn't sent is left alone) — so a mis-set
+ * boolean can't silently empty a dictionary.
  */
 
 import type { Request, Response } from 'express';
@@ -31,15 +30,9 @@ import { catchAs, refused, rejectValidation } from '@infrastructure/http/control
 
 /**
  * Re-read the API's own overrides after a write that may have changed them.
- *
- * Fire-and-forget, and not awaited before answering: the caller edited a row, and whether THIS
- * worker's copy overlay has caught up is not something their 200 should wait on. It makes the edit
- * visible immediately on the worker that served the write; the others pick it up on their next
- * scheduled refresh.
- *
- * Called after frontend-tenant writes too. Those cannot affect the overlay, and checking would
- * mean threading the tenant through the two delete controllers to save a query that runs once per
- * admin keystroke at most.
+ * Fire-and-forget: makes the edit visible immediately on the worker that served the write,
+ * others catch up on their next scheduled refresh. Called for frontend-tenant writes too,
+ * even though those can't affect the overlay — cheaper than threading the tenant through.
  */
 const refreshOverrides = () => void refreshLocaleOverrides();
 
@@ -68,10 +61,8 @@ export const createLocaleEntry = (
 
 /**
  * PUT /locales/:locale/entries/:entryId (admin)
- * Edit one value.
- *
- * The key is not editable: it is the identity a client looks the string up by, so changing it is a
- * delete plus an add, and the two collision checks that go with them.
+ * Edit one value. The key is not editable — it's the identity a client looks the string
+ * up by, so changing it is a delete plus an add, not an update.
  */
 export const updateLocaleEntry = (
     request: Request<{ locale: string; entryId: string }, unknown, UpdateLocaleEntryRequest>,

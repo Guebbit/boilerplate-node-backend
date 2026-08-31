@@ -1,13 +1,10 @@
 /**
  * @module
- * Token configuration — `src/modules/account/tokens.ts`.
- *
- * Pure env-var parsing, but every value controls a JWT lifetime or signing secret — a tier that
- * reads the wrong variable produces sessions too long (security) or too short (support), and
- * neither shows up as a failing request elsewhere. Assertions are derived from the module's
- * documented contract: each tier reads its own env var, an unspecified tier falls back to
- * `NODE_TOKEN_ACCESS_TIME`, values are seconds-as-integer (0 if unset), the millisecond helper is
- * the second helper × 1000, and secrets fall back to `''` rather than `undefined`.
+ * Token configuration (`session/config.ts`). Pure env-var parsing, but every value controls a
+ * JWT lifetime or signing secret — a tier reading the wrong variable produces sessions too long
+ * (security) or too short (support), and neither shows up as a failing request elsewhere.
+ * Assertions follow the documented contract: each tier reads its own env var, falling back to
+ * `NODE_TOKEN_ACCESS_TIME`, seconds-as-integer, secrets defaulting to `''` not `undefined`.
  */
 
 import {

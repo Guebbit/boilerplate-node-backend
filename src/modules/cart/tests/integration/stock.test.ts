@@ -1,14 +1,10 @@
 /**
  * @module
- * Stock across the whole order lifecycle — the reservation model's behavioural suite.
- *
- * The invariant under test: units leave the shop only once PAID for. Between checkout and
- * payment they are held — unavailable to other buyers, still on the shelf, recoverable by
- * cancel or expiry sweep. Every case asserts both `onHand` and `reserved` together, since either
- * alone can pass for a shop that never reserved, or one that destroyed units at checkout.
- *
- * The payment half of this lives in `payments/tests/unit/service.test.ts` (module boundary).
- * Real Mongo throughout (`setupTestDb`) — the guarantees are conditional writes a mock can't show.
+ * Stock across the whole order lifecycle — the reservation model's behavioural suite. The
+ * invariant under test: units leave the shop only once PAID for; between checkout and payment
+ * they are held, not sold, and recoverable by cancel or expiry sweep. Every case asserts
+ * `onHand` and `reserved` together, since either alone can pass for a shop that never reserved.
+ * Real Mongo throughout — the guarantees are conditional writes a mock can't show.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

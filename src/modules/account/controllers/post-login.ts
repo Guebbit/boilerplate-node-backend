@@ -24,12 +24,9 @@ import { accountAnalyticsEvents } from '../analytics';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /*
- * Deliberately NOT moved into `accountService.login` with the rest of this batch: the SUCCESS
- * emit fires only after the refresh token, cookies and access token are all created below —
- * `login()` itself only proves the credentials matched. Folding the emit into the service would
- * make it fire a step earlier than it does today, reporting a session that might still fail to
- * establish. The failure emit stays here too, for symmetry with success and because there is
- * nothing gained by splitting one flow's observability across two layers.
+ * Deliberately not in `accountService.login`: the SUCCESS emit must fire only after the refresh
+ * token, cookies and access token all exist — `login()` only proves credentials matched.
+ * The failure emit stays here too, for symmetry with success.
  */
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
@@ -83,17 +80,11 @@ export const postLogin = (
     response: Response
 ) => {
     /*
-     * Read, not parsed against `LoginBody`, and this one is a security decision rather than an
-     * omission.
-     *
-     * A login answers ONE way for every wrong credential. Parsing first makes a password shorter
-     * than the contract's minimum answer 422 while a wrong password of the right length answers
-     * 401 — which tells a caller something about the secret they guessed. It also answers before
-     * `recordLoginFailure`, so the failed attempt never reaches the audit trail: the request that
-     * most needs recording becomes the one that is not.
-     *
-     * The credentials are checked against the stored hash, which is the only check that decides
-     * anything here.
+     * Read, not parsed against `LoginBody` — a security decision, not an omission.
+     * A login must answer ONE way for every wrong credential: parsing first would 422 a
+     * too-short password while a wrong-but-valid-length one gets 401, leaking info about the
+     * guess — and would reject before `recordLoginFailure`, dropping the attempt from the audit
+     * trail. The stored-hash check below is the only thing that decides the outcome.
      */
     const { email, password } = request.body;
 
@@ -109,23 +100,15 @@ export const postLogin = (
     }
     const { remember } = tier.data;
 
-    /*
-     * Run token cleanup as a background pre-flight step, then authenticate.
-     */
     return runTokenCleanup()
         .then(() => accountService.login(email, password))
         .then((result) => {
             if (!result.success) {
-                // Record failed login before responding
                 recordLoginFailure(request);
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
 
-            /*
-             * Authentication successful.
-             * Create refresh token and add it to the client cookies.
-             */
             const { data } = result;
             if (data === undefined) {
                 // A success verdict without a user is a broken service contract, not a login failure.
@@ -137,10 +120,6 @@ export const postLogin = (
                 .then((refreshToken) => {
                     createRefreshCookie(response, refreshToken, remember);
                     createLoggedCookie(response, remember);
-                    /*
-                     * Send the newly created access token to the client through the response.
-                     * It will be used for the following requests.
-                     */
                     return createAccessToken(refreshToken);
                 })
                 .then((accessToken) => {

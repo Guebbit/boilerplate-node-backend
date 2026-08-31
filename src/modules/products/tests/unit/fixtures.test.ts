@@ -1,15 +1,10 @@
 /**
  * @module
- * `makeProduct` — the catalogue fixture builder.
- *
- * This is not test-only code: `demo.ts` seeds the shipped demo dataset through it, and
- * `scripts/export-demo-dataset.ts` publishes what that produces as `db/demo/demo-data.json` for
- * the paired frontend. A defect here therefore reaches a published artifact, not just a test run.
- *
- * The rule it exists to hold: everything a record does not state is left to the SCHEMA's
- * `default:`, never restated here. That is what `compact` buys — an unspecified override must be
- * absent from the object, because a key present with `undefined` is "set to nothing" to Mongoose
- * and the schema default never applies.
+ * `makeProduct` — the catalogue fixture builder. Not test-only: `demo.ts` seeds the shipped demo
+ * dataset through it, and `scripts/export-demo-dataset.ts` publishes the result as
+ * `db/demo/demo-data.json`, so a defect here reaches a published artifact. The rule it holds:
+ * anything a record doesn't state is left to the SCHEMA's `default:` — `compact` drops unset
+ * overrides entirely, since a key present as `undefined` blocks Mongoose's default from applying.
  */
 
 import { Types } from 'mongoose';

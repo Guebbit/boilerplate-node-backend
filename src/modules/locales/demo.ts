@@ -1,16 +1,9 @@
 /**
  * @module
- * The dynamic locale tier's slice of the demo dataset.
- *
- * Four languages, picked to cover every square of this module's grid: Spanish is active with rows
- * but deliberately no deployed file — the honest fixture for a language a client downloads rather
- * than bundles. Italian is both a deployed file and overridden rows, so it exercises the merge.
- * French is translated but inactive, proving an inactive language stays hidden. Japanese is
- * registered with no entries at all, the state every language passes through before its first
- * translation. English is left unseeded on purpose, as the static-only row nothing merges into.
- *
- * `revision` is stated explicitly rather than left at the schema's default: these rows are written
- * straight to Mongo, bypassing the repository call that normally bumps it.
+ * The dynamic locale tier's slice of the demo dataset — four languages chosen to exercise
+ * every state a language and its entries can be in (see the fixtures below for which).
+ * `revision` is stated explicitly since these rows bypass the repository call that
+ * normally bumps it.
  */
 
 import { backendTenant, frontendTenant } from './tenants';
@@ -64,10 +57,9 @@ export const localeFixtures = [
         revision: 1
     }),
     /*
-     * Registered, empty, and inactive because of it — the state a language is in between the
-     * `POST` that creates it and the first key anyone translates. No entries at all, so it is also
-     * the fixture for every count that has to survive a language with nothing in it: `entryCount`
-     * of 0, a `revision` still at the schema's default, and a cascade delete that removes no rows.
+     * Registered, empty and inactive — the state between the `POST` that creates a
+     * language and its first translated key. Covers the zero-entries case: `entryCount`
+     * of 0, `revision` at its default, a cascade delete that removes no rows.
      */
     makeLocale({
         id: '65e01f3c9a7d4b2e1c0f0004',
@@ -157,20 +149,9 @@ export const localeEntryFixtures = [
 
     /*
      * The API's own half, for the same language — STORED, VALID, AND NOT APPLIED.
-     *
-     * Spanish has no deployed dictionary in this repository, and `applyLocaleOverrides` refuses to
-     * register a bundle for a language `listSupportedLocales()` does not name: negotiating a
-     * language i18next cannot resolve would answer `Content-Language: es` over English copy, and a
-     * header that lies is worse than the language being unavailable. So these two rows are skipped
-     * and logged, which is the branch they are here to give a fixture — the state a deployment is
-     * in when someone has translated the backend half of a language nobody has shipped files for.
-     * Deploy `src/locales/es.json` and the same two rows start answering, with nothing else
-     * changed.
-     *
-     * They also stay the sharpest available proof that two tenants are separate keyspaces:
-     * `generic.*` is declared by the frontend as well, and if tenant were a label rather than part
-     * of the row's identity these would collide with the `app` rows above. Neither appears in
-     * `GET /locales/es/messages`, which serves `app` rows only.
+     * Spanish has no deployed dictionary, so `applyLocaleOverrides` skips and logs these:
+     * the fixture for a backend translated ahead of its file. Also proves tenants are
+     * separate keyspaces — `generic.*` exists for the frontend tenant too, without colliding.
      */
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f3001',
@@ -188,14 +169,9 @@ export const localeEntryFixtures = [
     }),
 
     /*
-     * The overlay that DOES apply, and the counterpart to the two rows above.
-     *
-     * Both keys exist in the deployed `src/locales/it.json`, so these override real strings rather
-     * than introducing new ones — which is the mechanism stated in the smallest form that can be
-     * checked: a 401 under `Accept-Language: it` answers this text, and the file's text is what it
-     * answers with these rows deleted. Same two keys as the Spanish pair on purpose; the only
-     * difference between the two sets is whether a file is deployed, so a reader comparing them
-     * sees exactly what that one fact decides.
+     * The overlay that DOES apply — counterpart to the two Spanish rows above, same keys,
+     * but Italian has a deployed `src/locales/it.json`, so these override real strings
+     * rather than introducing new ones.
      */
     makeLocaleEntry({
         id: '65e0200a9a7d4b2e1c0f3101',
@@ -231,10 +207,8 @@ export const localeEntryFixtures = [
 
 /**
  * Seed both collections. Declared in `module.ts`; called by `db/demo/index.ts`.
- *
- * Languages first, and sequentially against the entries: an entry names a language by tag, and a
- * dataset whose entries could land before their language would publish a dictionary for a language
- * the manifest does not list.
+ * Languages first: an entry names its language by tag, and landing entries before
+ * their language would publish a dictionary the manifest doesn't list.
  */
 export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
     const languages = await Promise.all(
@@ -248,16 +222,10 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
 };
 
 /**
- * Read both collections back as stored — `module.ts` declares this, `scripts/export-demo-dataset.ts` calls
- * it.
- *
- * These are STORED ROWS, and neither collection is what any endpoint returns: the manifest is a
- * merge of two tiers and the dictionary is built from these rows. The frontend's mocks answer the
- * endpoints from them, which means the mock does the same assembly the API does — the alternative,
- * publishing the assembled responses, would publish this repo's answer and let the mock stop
- * exercising the assembly at all.
- *
- * Sorted so the published file is byte-stable rather than dependent on Mongo's natural order.
+ * Read both collections back as stored — `module.ts` declares this, `export-demo-dataset.ts`
+ * calls it. These are stored rows, not endpoint responses: the frontend's mocks do the
+ * same tier-merge assembly the API does, rather than replaying a published answer.
+ * Sorted so the exported file is byte-stable regardless of Mongo's natural order.
  */
 export const exportSeededLocales = async (): Promise<Record<string, unknown[]>> => ({
     locales: await exportCollection(localeModel, { tag: 1 }),

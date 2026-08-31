@@ -1,9 +1,7 @@
 /**
  * @module
- * File upload storage (multer).
- *
- * Defines *where* uploads land, *what* they are renamed to, and *which* MIME types are
- * accepted. The resulting `upload` middleware is attached per-route.
+ * File upload storage (multer): defines *where* uploads land, *what* they are renamed to, and
+ * *which* MIME types are accepted. The resulting `upload` middleware is attached per-route.
  */
 
 import type { Request, RequestHandler } from 'express';
@@ -36,14 +34,11 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
 /**
  * Where an upload is written while the request is still being decided — NOT the public directory.
  *
- *   1. A file in `public/` is a file the world can fetch, and between "multer wrote it" and "the
- *      request was accepted" sit every content check, validation and database write. Nothing is
- *      reachable until {@link quarantineUploadedImages} commits it.
- *   2. A remote store takes a finished file, so staging is what makes "written" and "stored" two
- *      moments — which is what lets the second one be a bucket.
- *
- * Override with `NODE_UPLOAD_STAGING_PATH` when temp is small, a tmpfs below the upload cap, or
- * not writable by the app user.
+ * A file in `public/` is fetchable by the world, and between "multer wrote it" and "accepted" sit
+ * every content check, validation and database write — nothing is reachable until
+ * {@link quarantineUploadedImages} commits it. Staging is also what makes "written" and "stored"
+ * two separate moments, which is what lets the second one be a remote bucket. Override with
+ * `NODE_UPLOAD_STAGING_PATH` when temp is small, a tmpfs below the cap, or unwritable by the app user.
  *
  * See: docs/tools/security.md
  */
@@ -51,14 +46,11 @@ export const uploadStagingPath = () =>
     process.env.NODE_UPLOAD_STAGING_PATH ?? path.join(tmpdir(), 'node-api-uploads');
 
 /**
- * Write file into the staging directory
+ * Write an uploaded file into the staging directory.
  *
- * Routing by `fieldname` (the form field the file arrived in) rejects anything unrecognised rather
- * than defaulting to a shared dump.
- *
- * Exported, rather than inlined into `diskStorage`, so it can be exercised directly: a storage
- * engine hides its callbacks, and these two encode security decisions (a field whitelist, and
- * never reusing a client-supplied name) that are worth asserting rather than assuming.
+ * Routes by `fieldname`, rejecting anything unrecognised rather than defaulting to a shared dump.
+ * Exported (not inlined into `diskStorage`) so this security decision — a field whitelist — is
+ * something a test can exercise directly rather than assume.
  *
  * @param request - the in-flight Express request (available for per-user paths, unused here)
  * @param file - multer's descriptor: fieldname, originalname, mimetype, size
@@ -85,18 +77,14 @@ export const resolveUploadDestination = (
 };
 
 /**
- * Change file name
+ * Choose the stored filename — never the client-supplied `originalname`, in whole or in part.
  *
- * The client-supplied `originalname` is never reused, in whole OR IN PART. Reusing the stem
- * would allow path traversal (`../../etc/passwd`), overwriting an existing file by name
- * collision, and enumeration of other users' uploads.
- *
- * Reusing its EXTENSION is just as dangerous once the upload directory is served, and less
- * obviously so: the extension decides the `Content-Type` a static file server sends, and a PNG
- * may legally carry arbitrary bytes in its metadata chunks. Valid image bytes stored as `.html`
- * are therefore served as `text/html` and executed — stored XSS that passes a content check
- * cleanly. The extension comes from the declared type instead, which `fileFilter` has already
- * constrained to a closed set, and `validateUploadedImages` then confirms the bytes agree.
+ * Reusing the stem would allow path traversal (`../../etc/passwd`), name-collision overwrites,
+ * and enumeration of other users' uploads. Reusing its EXTENSION is just as dangerous once the
+ * directory is served statically: the extension decides the `Content-Type` sent, and valid image
+ * bytes stored as `.html` would be served as `text/html` — stored XSS past a content check. The
+ * extension comes from the declared type instead, already constrained by `fileFilter` and
+ * confirmed against the bytes by `validateUploadedImages`.
  *
  * @param request - the in-flight Express request (available for per-user paths, unused here)
  * @param file - multer's descriptor: fieldname, originalname, mimetype, size
@@ -128,14 +116,10 @@ export const fileStorage = multer.diskStorage({
 /**
  * First gate: the type the client CLAIMS.
  *
- * Called by multer before the file is written, so an obviously-wrong upload never touches disk —
- * which is its whole value. It is not, and cannot be, a real type check: `mimetype` comes from
- * the client's own `Content-Type` on the part, and nothing verifies it. The bytes are checked
- * after the write, by {@link validateUploadedImages}.
- *
- * Rejecting with `callback(null, false)` silently *drops* the file — the request still succeeds
- * with no `request.file`, so the handler must treat a missing file as a validation failure.
- * Passing an Error instead would surface it as a request error.
+ * Runs before the file is written, so an obviously-wrong upload never touches disk. Not a real
+ * type check — `mimetype` is client-supplied and unverified; the bytes are checked after the
+ * write by {@link validateUploadedImages}. Rejecting with `callback(null, false)` silently drops
+ * the file (the request still succeeds with no `request.file`), rather than surfacing an Error.
  *
  * @param request - the in-flight Express request (unused here)
  * @param file - multer's descriptor: fieldname, originalname, mimetype, size
@@ -152,10 +136,9 @@ export const fileFilter = (
 /**
  * Ceiling on a single upload, in bytes. 5 MB by default, overridable per deployment.
  *
- * Multer's own default is UNLIMITED, which on a public endpoint is a denial of service with no
- * exploit required: a client streams until the disk fills, and every byte is written before any
- * handler runs. A limit is the only thing that stops it, and it has to be here rather than in a
- * handler for the same reason.
+ * Multer's own default is UNLIMITED — on a public endpoint that's a DoS with no exploit needed,
+ * since every byte is written to disk before any handler runs. Has to live here, not in a
+ * handler, for the same reason.
  */
 const DEFAULT_MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
@@ -170,13 +153,10 @@ export const maxUploadBytes = (): number =>
 /**
  * The configured multer instance, built on first use.
  *
- * Memoised rather than created at module scope because `limits` are FROZEN at construction: a
- * value read while this module is being evaluated is fixed before `.env` has necessarily been
- * loaded, and a test that sets `NODE_MAX_UPLOAD_BYTES` then imports this file gets whichever
- * import happened first. Every other adapter reads its environment lazily for the same reason.
- *
- * One instance for the whole process, not one per request: multer keeps no per-request state in
- * it, and rebuilding it per call would rebuild the storage engine with it.
+ * Memoised because `limits` are FROZEN at construction — a value read while this module is being
+ * evaluated is fixed before `.env` has necessarily loaded, same lazy-env reason every other
+ * adapter uses. One instance for the whole process: multer keeps no per-request state, so
+ * rebuilding it per call would just rebuild the storage engine too.
  */
 let configuredUpload: Multer | undefined;
 
@@ -205,21 +185,13 @@ const rawUpload = (): Multer =>
  * Wraps a multer middleware so the request's locale survives it.
  *
  * Multer consumes the request stream, so the rest of the chain resumes from a socket read
- * callback — and that callback's async context is the one the CONNECTION was created in, not the
- * one `attachLocale` established. `AsyncLocalStorage` propagates through async resources created
- * inside a scope; an `EventEmitter` listener is not one, it simply runs in whatever context the
- * emitter is in. So everything after a multipart upload runs outside the store, and the ambient
- * `t` silently falls back to the boot language.
+ * callback whose async context is the CONNECTION's, not the one `attachLocale` established —
+ * `AsyncLocalStorage` propagates through async resources created inside a scope, and an
+ * `EventEmitter` listener isn't one. Left unfixed, everything after a multipart upload runs
+ * outside the store and the ambient `t` silently falls back to the boot language.
  *
- * It failed exactly one way and it was invisible: `POST /account/signup` with
- * `Accept-Language: it` answered `Content-Language: it` — the header is set by the middleware,
- * which does still run — with English validation messages, because the Zod thunks ran after the
- * context was gone. The JSON path was unaffected (`express.json()` runs *before* `attachLocale`,
- * so nothing awaits the stream afterwards), which is why the integration suite, which posts JSON,
- * saw nothing wrong.
- *
- * Fixed here rather than at the seven route mounts: a route that forgets the wrapper looks
- * perfectly correct and fails only in a language nobody tests in.
+ * Fixed here rather than at each route mount: a route that forgets the wrapper looks perfectly
+ * correct and fails only in a language nobody tests in.
  */
 const withLocaleRestored =
     (middleware: RequestHandler): RequestHandler =>
@@ -235,15 +207,11 @@ const withLocaleRestored =
 /**
  * Second gate: the type the FILE ACTUALLY IS.
  *
- * Runs after multer, because the bytes do not exist until then — a `fileFilter` sees headers, not
- * content, so a content check cannot live there. Anything whose leading bytes are not one of the
- * accepted image formats is deleted and the request fails; the window in which a rejected file
- * exists on disk is the few milliseconds between the write and this read, under a random name in
- * a directory this app does not serve.
- *
- * Rejecting with a 422 rather than dropping the file silently, unlike `fileFilter`: a client that
- * uploaded a real file and got a success with no image would have no idea why, and a client
- * uploading something disguised should be told plainly that it was rejected.
+ * Runs after multer, since the bytes don't exist until then — `fileFilter` sees only headers.
+ * Anything whose leading bytes don't match an accepted format is deleted and the request fails;
+ * the rejected file exists on disk only the few milliseconds between the write and this read,
+ * under a random name in a directory this app doesn't serve. Rejects with a 422 rather than
+ * silently dropping the file, unlike `fileFilter` — the client should be told plainly.
  *
  * @param request - Express request already processed by a multer middleware.
  * @param _response - Unused; the error handler formats the rejection.
@@ -299,32 +267,16 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
 };
 
 /**
- * Third and last step: quarantine the staged file, and — with no broker to hand the digest job to
- * — run the whole digest pipeline right here.
+ * Third and last step: quarantine the staged file and — with no broker to hand the digest job
+ * to — run the whole digest pipeline right here.
  *
- * Runs only once the bytes have been proven to be the image they claim to be, so nothing that
- * fails a check is ever quarantined, let alone published.
+ * Runs only once the bytes are proven to be the image they claim. Results go on the request, in
+ * one of two shapes depending on whether a broker is configured: `request.quarantinedImageKeys`
+ * (pending placeholder, digested later) or `request.storedImageUrls`/`storedThumbnailUrls`
+ * (already promoted, real urls).
  *
- * The results go on the request rather than being returned, because multer's three shapes
- * (`.single()`, `.array()`, `.fields()`) already forced the same accommodation on `getFormFiles`;
- * controllers read them back through `readUploadedImage`/`resolveImageUrl` and never learn which
- * they got. Two shapes are possible, decided per file by whether a broker is configured:
- *
- *   - broker: `request.quarantinedImageKeys` — the record is written with the pending-image
- *     placeholder, and a job digests it later.
- *   - no broker: `request.storedImageUrls` / `storedThumbnailUrls` — already promoted, real urls,
- *     same shape the contract promises either way (see IMAGE_PIPELINE_PLAN.md's "No-broker
- *     fallback").
- *
- * A failure here fails the request. That is the point of doing it before the controller: a
- * quarantined (or promoted) image the database write then contradicts is recoverable (the failure
- * path deletes it), while a database row pointing at bytes that were never stored is a 404 in
- * someone's catalogue forever.
- *
- * NOTE: after this runs, `request.file.path` names a file that no longer exists — `quarantine`
- * consumed it. Nothing downstream reads it (that is what the request fields above are for), and it
- * is left as multer set it rather than rewritten, because a path that lies about a moved file is
- * easier to notice than one that quietly describes the store's internals.
+ * A failure here fails the request: a quarantined image the database write then contradicts is
+ * recoverable, while a row pointing at bytes never stored is a 404 forever.
  */
 export const quarantineUploadedImages: RequestHandler = (request, _response, next) => {
     const staged = getFormFiles(request);
@@ -379,15 +331,11 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
 };
 
 /**
- * Multer middleware.
- *
- * The configured instance routes mount as `upload.single('imageUpload')`. Wrapped in the full
- * pipeline: the locale is restored across the body parse (see {@link withLocaleRestored}), the
- * bytes are checked against the format they claim to be (see {@link validateUploadedImages}), and
- * only then is the file quarantined — and, with no broker, digested (see
- * {@link quarantineUploadedImages}). Composing them here rather than at the route mounts is
- * deliberate — a route that forgets one looks perfectly correct, and the one it forgets is a
- * security check.
+ * Compose the full upload pipeline: locale restored across the body parse (see
+ * {@link withLocaleRestored}), bytes checked against their claimed format (see
+ * {@link validateUploadedImages}), and only then quarantined — with no broker, digested too (see
+ * {@link quarantineUploadedImages}). Done here, not at each route mount, because the one thing a
+ * route could forget is a security check.
  */
 const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
     withLocaleRestored(middleware),

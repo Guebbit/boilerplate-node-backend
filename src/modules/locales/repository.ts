@@ -1,3 +1,12 @@
+/**
+ * @module
+ * The two collections' queries, and the one invariant that could not be left to a caller: every
+ * write to `localemessages` goes through a function below that also bumps `revision`, so no
+ * service call can change an entry without moving the number a client uses to know when to
+ * re-download. Not a transaction — the two writes are ordered rows-then-counter, so a crash
+ * between them only makes a client under-fetch once, never cache a stale dictionary as current.
+ */
+
 import {
     localeModel,
     localeMessageModel,
@@ -8,28 +17,6 @@ import type { LocaleDocument, LocaleMessageDocument } from './model';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
 import type { LocaleTenant } from '@types';
 import { frontendTenantIds } from './tenants';
-
-/**
- * @module
- * The two collections' queries, and the one invariant that could not be left to a caller.
- *
- * ## Why the revision bump lives here
- *
- * `revision` is how a client decides whether to re-download a dictionary: it stores the number it
- * downloaded and re-fetches when the manifest reports a higher one. A bump that a service has to
- * remember is a bump some future service forgets, and the failure is silent — every client keeps
- * serving yesterday's translation, and nothing in this repo would notice.
- *
- * So every write to `localemessages` goes through a function below that also bumps, and none of
- * them is separable from its bump. The service layer cannot change an entry without moving the
- * number because there is no call that does one without the other.
- *
- * Not a transaction, and it does not need to be: the two writes are ordered rows-then-counter, so
- * a crash between them leaves entries that are newer than the revision claims. A client under-
- * fetches for one revision — it re-reads on the next write — which is the harmless direction. The
- * reverse ordering would have clients caching a dictionary they believed current and never
- * correcting it.
- */
 
 /** One key and its translation, as a write supplies them. */
 export interface EntryInput {
@@ -78,13 +65,8 @@ const publicScope = (): Record<string, unknown> => ({ active: true });
 /**
  * The languages this deployment offers, unpaginated and sorted by tag.
  *
- * Unpaginated on purpose, and safe to be: this is the set a deployment offers, which is a handful
- * of rows by construction — a deployment with a thousand languages has a different problem.
- * `findAll` is not used because its default limit is ten, and a manifest silently truncated at ten
- * languages is the kind of bug that only appears on the deployment that grew.
- *
- * The scope is the caller's, spread into the same query rather than picked between two methods —
- * the pair mirrors the products repository, where `publicScope` narrows and admins pass nothing.
+ * Unpaginated on purpose: a deployment's languages are a handful of rows by construction, and
+ * `findAll`'s default limit of ten would silently truncate a manifest that grew past it.
  *
  * @param scope - the caller's filter fragment, or `undefined` to read every row
  */
@@ -98,11 +80,8 @@ const list = (scope?: Record<string, unknown>): Promise<LocaleDocument[]> =>
 /**
  * How many DOWNLOADABLE entries each language has, in one query rather than one per language.
  *
- * Frontend tenants' rows only, because this number is the manifest's `entryCount` and the manifest
- * is read by clients deciding whether a language is worth switching to. Counting the API's own
- * overrides in it would inflate a language that has nothing a client could download — a Spanish
- * with fifty backend overrides and no client strings would advertise as a fifty-key dictionary
- * and arrive empty.
+ * Frontend tenants' rows only: this feeds the manifest's `entryCount`, and counting the API's own
+ * overrides would advertise a language as having strings a client cannot actually download.
  */
 const countEntriesByLocale = async (): Promise<Map<string, number>> => {
     const rows = await localeMessageModel
@@ -135,12 +114,9 @@ const listEntries = (locale: string, tenant: LocaleTenant): Promise<LocaleMessag
 /**
  * Every row of one tenant, across every language, for the override overlay.
  *
- * One query rather than one per language: the overlay is rebuilt whole on every refresh, and the
- * backend tenant's share of this collection is a handful of rows by construction — it holds only
- * the keys somebody has chosen to override, never a dictionary.
- *
- * Sorted by `(locale, key)` so a rebuilt overlay is byte-identical to the last one when nothing
- * changed, which is what makes a diff of two refreshes readable.
+ * One query rather than one per language: the backend tenant's share of this collection is a
+ * handful of rows by construction. Sorted by `(locale, key)` so a rebuilt overlay is
+ * byte-identical to the last one when nothing changed.
  */
 const listEntriesByTenant = (tenant: LocaleTenant): Promise<LocaleMessageDocument[]> =>
     localeMessageModel
@@ -213,13 +189,9 @@ const removeEntry = async (entry: LocaleMessageDocument): Promise<number> => {
 /**
  * Write a whole set of entries, and bump once for the batch.
  *
- * `replace` is the only difference between the two bulk routes, and it is a single `deleteMany` of
- * the keys the caller did not send. Expressed as a flag HERE, where both callers can be read side
- * by side; expressed as two HTTP methods at the edge, where a client cannot ask for one and get the
- * other.
- *
- * One `bulkWrite` rather than a loop of upserts: five hundred keys is the size an import actually
- * arrives in, and five hundred round trips is the difference between a request and a timeout.
+ * `replace` is the only difference between the two bulk routes — a single `deleteMany` of keys the
+ * caller did not send. One `bulkWrite` rather than a loop of upserts: five hundred keys is the
+ * size an import actually arrives in.
  */
 const importEntries = async (
     locale: string,
@@ -261,13 +233,12 @@ const importEntries = async (
 /**
  * Remove a language and every string translated into it.
  *
- * The cascade this collection has instead of a foreign key, and the reason it is one call: the
- * entries reference the language by tag, so a language removed on its own would leave its rows
- * behind as an invisible orphan set that the next language of the same tag would silently inherit.
+ * The cascade this collection has instead of a foreign key: entries reference the language by
+ * tag, so removing it alone would leave an orphan row set the next language of that tag would
+ * silently inherit.
  *
- * Entries go FIRST. Interrupted the other way round, the surviving language keeps rows it can
- * still serve; interrupted this way, the language is briefly empty, which is the state the caller
- * asked for anyway.
+ * Entries go FIRST — interrupted the other way, the surviving language keeps stale rows;
+ * interrupted this way, it is briefly empty, which is the state the caller asked for anyway.
  */
 const deleteLocaleCascade = async (locale: LocaleDocument): Promise<number> => {
     const { deletedCount } = await localeMessageModel.deleteMany({ locale: locale.tag }).exec();

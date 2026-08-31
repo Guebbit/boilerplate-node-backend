@@ -1,10 +1,8 @@
 /**
  * @module
- * The shipment-dispatched email.
- *
- * One builder, and the field that matters is `tracking`: it is the only place the customer is
- * given the code, and a code that renders empty or interpolated wrong turns "your parcel is on
- * its way" into a message with no way to act on it.
+ * The shipment-dispatched email. One builder, and the field that matters is `tracking`: it's the
+ * only place the customer is given the code, and a code that renders empty or interpolated wrong
+ * turns "your parcel is on its way" into a message with no way to act on it.
  */
 
 import { shipmentShippedEmail } from '@modules/delivery/emails';

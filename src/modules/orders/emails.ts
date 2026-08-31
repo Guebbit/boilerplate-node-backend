@@ -1,12 +1,10 @@
 /**
  * @module
- * The copy of every document this module produces, resolved into finished strings.
- *
- * Same rule as `@modules/account/emails`: the language is an argument, the output is finished
- * text, and whatever renders it later resolves nothing. See that file for why.
- *
- * Both artefacts here are rendered from an EJS template that only interpolates — the confirmation
- * email through the queue, the invoice through Puppeteer — so neither template resolves a key.
+ * The copy of every document this module produces, resolved into finished strings. Same rule as
+ * `@modules/account/emails`: the language is an argument, the output is finished text, and
+ * whatever renders it later resolves nothing — see that file for why. Both artefacts are
+ * rendered from an EJS template that only interpolates (confirmation through the queue, invoice
+ * through Puppeteer), so neither template resolves a key.
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
@@ -26,12 +24,10 @@ export interface OrderLines {
 }
 
 /**
- * Order confirmation, sent to the customer.
- *
- * The bought lines are resolved here, one translated string each, for the same reason the invoice
- * does it — per-line copy interpolates per-line values, so it cannot be a single string decided up
- * front. The total is `orderTotal`'s arithmetic, not a fresh sum: the email quotes the number the
- * order stands for, shipping included.
+ * Order confirmation, sent to the customer. The bought lines are resolved here, one translated
+ * string each, since per-line copy interpolates per-line values and can't be a single string
+ * decided up front. The total is `orderTotal`'s arithmetic, not a fresh sum — the email quotes
+ * what the order stands for, shipping included.
  */
 export const orderConfirmEmail = (
     locale: string,

@@ -1,16 +1,9 @@
 /**
  * @module
- * The catalogue's slice of the demo dataset.
- *
- * The records are stated HERE, in the module that owns them, so `rm -rf src/modules/products` takes
- * the demo catalogue with it. They used to live in a `seed-identities.fragment.ts` beside this file
- * that no module could import — a text slice concatenated into one cross-repo file — because the
- * paired frontend needed the same records and the only way to give them to it was to share source.
- * It no longer shares source: `scripts/export-demo-dataset.ts` seeds these rows and publishes what the API
- * actually serves as `db/demo/demo-data.json`, so the facts can live in one normal TypeScript file
- * that this module's own code imports like any other.
- *
- * Every field a record does not state is left to `./model`'s `default:` — see `./fixtures`.
+ * The catalogue's slice of the demo dataset, stated here so `rm -rf src/modules/products` removes
+ * it too. `scripts/export-demo-dataset.ts` seeds these rows and publishes what the API actually
+ * serves as `db/demo/demo-data.json`, so the paired frontend gets the data without sharing source.
+ * A field a record omits falls to `./model`'s `default:` — see `./fixtures`.
  */
 
 import { makeProduct } from './fixtures';
@@ -19,13 +12,11 @@ import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/
 import { productRepository } from './repository';
 
 /**
- * The catalogue ids, named by what makes each row worth having.
+ * The catalogue ids, named by what each row is for.
  *
- * `cart`, `wishlist` and `orders` all seed rows pointing at products, and all three declare a
- * `conformist` edge on this module, so they read these through `@modules/products/demo` rather
- * than repeating a hex string. Naming them is the part that pays: `wishlist` saying it stores
- * `panino` and `pufettino` makes "only publicly visible products are saved" checkable by eye,
- * where `65dc8a99…` and `65dcdec2…` made it a claim in a comment.
+ * `cart`, `wishlist` and `orders` read these via `@modules/products/demo` instead of repeating a
+ * hex string — a name like `panino` makes intent like "only visible products are saved" checkable
+ * by eye, where a raw id would just be a claim in a comment.
  */
 export const SEED_PRODUCT_IDS = {
     panino: '65dc8a99604c307b702b5ccc',
@@ -37,13 +28,10 @@ export const SEED_PRODUCT_IDS = {
 } as const;
 
 /**
- * Six products, chosen to cover the branches the storefront and the repositories actually have
- * rather than to look like a shop.
- *
- * `categories` is non-empty on every RICH record: `GET /products/categories` and the storefront's
- * filter chips need something to show out of the box, and a facet endpoint that returns `[]` on a
- * fresh install reads as broken rather than as empty. `barebones` is the deliberate exception —
- * see its note below.
+ * Six products, chosen to cover the branches the storefront and repositories actually exercise
+ * rather than to look like a shop. `categories` is non-empty on every RICH record, since a facet
+ * endpoint returning `[]` on a fresh install reads as broken rather than empty — `barebones` is
+ * the deliberate exception, see its note below.
  */
 export const productFixtures = [
     makeProduct({
@@ -57,10 +45,9 @@ export const productFixtures = [
         imageUrl: '/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg'
     }),
     /*
-     * The soft-deleted one. `isVisibleToCaller` on the frontend and the repositories' soft-delete
-     * filters here both branch on `deletedAt`, and a branch with no fixture behind it is a branch
-     * nothing tests. Exactly one record carries it, for the same reason exactly one is inactive:
-     * the two states are independent and the dataset has to be able to tell them apart.
+     * The soft-deleted one — exercises the `deletedAt` branch that `isVisibleToCaller` and the
+     * repositories' soft-delete filters both check. Exactly one record carries it, independent of
+     * the inactive one, so the dataset can tell the two states apart.
      */
     makeProduct({
         id: SEED_PRODUCT_IDS.carinoSoftDeleted,
@@ -74,12 +61,9 @@ export const productFixtures = [
         deletedAt: '2024-02-26T23:34:44.832Z'
     }),
     /*
-     * `onHand: 0` on purpose. The storefront needs an out-of-stock badge to render and checkout
-     * needs a refusal to demonstrate; a dataset where nothing is ever scarce can exercise neither.
-     * Note that it is the ONHAND that is zero, not merely the availability — this row is out of
-     * stock because there is nothing there. The other way to be unbuyable, units present but all
-     * spoken for, is deliberately NOT seeded: it only exists once someone has checked out, and
-     * `orders/demo.ts` explains why inventing it here would be both racy and untrue.
+     * `onHand: 0` on purpose — the storefront needs an out-of-stock badge and checkout needs a
+     * refusal to exercise. It's `onHand` itself that is zero, not just availability; the other way
+     * to be unbuyable (units held, all reserved) is deliberately not seeded — see `orders/demo.ts`.
      */
     makeProduct({
         id: SEED_PRODUCT_IDS.micionaOutOfStock,
@@ -115,16 +99,10 @@ export const productFixtures = [
         imageUrl: '/images/seed/043cf5b2517fc99ce9a2c2f84288416d.jpg'
     }),
     /*
-     * The minimal one — `title` and `price` and nothing else, so every optional field lands on
-     * `./model`'s `default:`: an empty `description`, empty `categories`, empty `tags`, the
-     * placeholder `imageUrl`, `onHand` at 100.
-     *
-     * The four above are all richly populated, which makes them unable to catch the failure this
-     * one exists for: a storefront card that assumes a description to truncate, or a filter chip
-     * row that assumes at least one category, renders blank or throws on a record the API can
-     * legitimately answer with — a product created through `POST /products` with only the required
-     * fields is exactly this shape. It is PUBLIC on purpose; hiding it behind `active: false`
-     * would keep it out of every list the storefront actually renders.
+     * The minimal one — only `title` and `price`, so every optional field falls to `./model`'s
+     * defaults. The other five are richly populated and can't catch a card or filter chip that
+     * wrongly assumes a description or category is present. Public on purpose, so it appears in
+     * every list the storefront actually renders.
      */
     makeProduct({
         id: SEED_PRODUCT_IDS.barebones,
@@ -134,16 +112,11 @@ export const productFixtures = [
 ];
 
 /**
- * One demo product, by id, or a thrown error naming the id that is missing.
+ * One demo product by id, or a thrown error naming what's missing.
  *
- * The question `orders` actually asks — it seeds order lines that embed a product SNAPSHOT, so it
- * needs the record rather than a reference to it. Published as a lookup rather than as the array
- * because the throw belongs next to the data it validates: an order pointing at a product nobody
- * wrote is a corrupt fixture, and it should stop the seeder rather than write an order whose line
- * renders as a blank row. A second consumer inherits that instead of reimplementing it.
- *
- * The caller reshapes. `orders` embeds its own `OrderSnapshotInput`, and returning that type from
- * here would make the catalogue depend on the order book to describe its own rows.
+ * `orders` needs the actual record — it embeds a product SNAPSHOT, not a reference — so the throw
+ * lives here, next to the data it validates, instead of every consumer reimplementing it. Returns
+ * the fixture type directly; reshaping to `orders`' own snapshot type is the caller's job.
  */
 export const seedProductById = (productId: string): (typeof productFixtures)[number] => {
     const product = productFixtures.find((candidate) => candidate._id.toString() === productId);

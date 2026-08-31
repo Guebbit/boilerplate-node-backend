@@ -1,14 +1,9 @@
 /**
  * @module
- * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
- * augmentation rather than in a shared enum.
- *
- * A *read* is audited here, which is unusual and deliberate: feedback rows carry an email address
- * and free text from the public, so who looked at them is the question a data-protection review
- * actually asks. Contrast the product catalogue, where reads are public and auditing them would
- * record nothing worth keeping.
- *
- * See: docs/modules/feedback.md
+ * Audit actions this module emits, declared by augmentation — see `modules/account/audit.ts` for
+ * why. Reads are audited too: feedback rows carry a stranger's email and free text, so who looked
+ * is a data-protection question the public product catalogue's reads never raise. See
+ * docs/modules/feedback.md.
  */
 
 /** The audit action vocabulary this module owns. */

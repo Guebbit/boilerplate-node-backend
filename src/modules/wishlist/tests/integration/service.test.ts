@@ -1,13 +1,11 @@
 /**
  * @module
- * `wishlistService` — the rules that make a wishlist safe to lean on:
- *
- *   - saving is idempotent (`$addToSet`), so no interleaving of double-clicks produces two lines;
- *   - only publicly visible products can be saved, the same gate the catalogue itself applies;
- *   - move-to-cart writes the cart BEFORE dropping the line, so the failure mode is "still
- *     saved", never "vanished" — including when the cart REFUSES the product;
- *   - the module's event subscriptions clean up after product and user deletions.
+ * `wishlistService` — the rules that make a wishlist safe to lean on: saving is idempotent
+ * (`$addToSet`), only publicly visible products can be saved, move-to-cart writes the cart
+ * BEFORE dropping the line (so a refusal leaves it "still saved", never "vanished"), and the
+ * module's event subscriptions clean up after product/user deletions.
  */
+
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/fixtures';

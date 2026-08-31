@@ -1,12 +1,9 @@
 /**
  * @module
- * User fixtures that touch the test database. The plain-payload builder lives in `../fixtures`;
- * this file only persists what it returns — kept separate after two divergent `makeUser` copies
- * once caused confusion.
- *
- * Passwords are always plain-text (the model hashes on save); authenticate with `PLAIN_PASSWORD`.
- * Defaulted fields (`admin`, `active`, `verified`, `locale`, `tokens`) are left unset unless a test
- * overrides them, so `createUser()` exercises the real schema default.
+ * User fixtures that touch the test database, built on `../fixtures`'s plain-payload builder and
+ * kept separate after two divergent `makeUser` copies once caused confusion. Passwords are plain
+ * text until the model hashes on save — authenticate with `PLAIN_PASSWORD` — and defaulted fields
+ * are left unset so `createUser()` exercises the real schema default.
  */
 
 import type { UserDocument } from '@modules/users';

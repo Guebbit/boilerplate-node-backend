@@ -1,10 +1,9 @@
 /**
  * @module
- * Contract tests for /payments.
- *
- * Every route requires authentication and answers the same `PaymentEnvelope`; what these pin is
- * that each contract branch — the 201 intent, the 200 confirm, the three distinguishable 409s,
- * the 404s — is actually reached over HTTP. The money rules live in the unit suite.
+ * Contract tests for /payments. Every route requires authentication and answers the same
+ * `PaymentEnvelope`; what these pin is that each contract branch — the 201 intent, the 200
+ * confirm, the three distinguishable 409s, the 404s — is actually reached over HTTP. The money
+ * rules live in the unit suite.
  */
 
 import '@tests/contract';

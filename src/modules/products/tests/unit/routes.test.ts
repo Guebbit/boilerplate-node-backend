@@ -1,12 +1,9 @@
 /**
  * @module
- * The product catalogue's route table.
- *
- * Guards against silent failures that no type checker catches: an admin guard dropped from a
- * write route, a static path like `/search` declared after `/:id` and shadowed, or a cache
- * tag renamed on the writer but not the reader.
- *
- * See `tests/support/routes.ts` for why the middleware factories are replaced with mocks.
+ * The product catalogue's route table — guards against silent failures no type checker catches:
+ * a dropped admin guard, a static path like `/search` shadowed by a later `/:id`, or a cache tag
+ * renamed on the writer but not the reader. See `tests/support/routes.ts` for why the middleware
+ * factories are replaced with mocks.
  */
 
 import { routeTable, routerMiddleware, routeSignatures, optionsOf } from '@tests/routes';

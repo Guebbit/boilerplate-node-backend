@@ -1,16 +1,12 @@
 /**
  * @module
- * Contract tests for /feedback.
- *
- * The only resource with a genuinely public write endpoint (`POST /feedback/contact`, `security: []`)
- * sitting next to two admin-only ones. That mix is what this suite is really guarding: the public
- * response must not carry admin fields it was never meant to expose, and the admin routes must
- * answer 401/403 rather than leaking a list.
- *
- * Records are created through the public endpoint rather than a fixture builder — there is no feedback
- * builder, and going through the route means the payload under assertion is the one the
- * application actually produces.
+ * Contract tests for /feedback: the only resource with a genuinely public write endpoint
+ * (`POST /feedback/contact`, `security: []`) next to two admin-only ones. Guards that the public
+ * response carries no admin fields, and the admin routes 401/403 rather than leak a list. Records
+ * are created through the public endpoint (no fixture builder exists) so the payload under
+ * assertion is what the app actually produces.
  */
+
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

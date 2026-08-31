@@ -1,16 +1,10 @@
 /**
  * @module
- * The four steps every controller repeats, written once.
- *
- * A controller in this codebase reads input, validates it, calls one service method, branches on
- * the envelope that comes back, and catches. Four of those five steps are identical in every file.
- *
- * Helpers rather than a `defineController()` wrapper, deliberately. A wrapper owns the chain: the
- * stack trace gains a frame that points here instead of at the handler, the service result has to
- * be threaded through a generic or inference degrades to `unknown`, and
- * `eslint/rules/controller-chain-must-catch.ts` — which walks the AST for a chain ending in a real
- * `.catch()` call — stops seeing the catch it exists to find. Each of these is a call the
- * controller still makes for itself, so the chain, the types and the guard all survive.
+ * The four steps every controller repeats — read input, validate, call one service method, branch
+ * on the envelope, catch — written once as helpers rather than a `defineController()` wrapper. A
+ * wrapper would own the chain: it adds a stack frame pointing here instead of the handler, forces
+ * the service result through a generic, and hides the `.catch()` call that
+ * `controller-chain-must-catch` walks the AST looking for. Helpers keep all three visible.
  */
 
 import type { Response } from 'express';
@@ -22,9 +16,8 @@ import { rejectDatabaseError } from './errors';
 /**
  * What a service hands back: either data with a status, or a status and the reasons.
  *
- * Structural rather than importing the service's own union, because `@infrastructure` may not
- * reach into a module — and because every service already produces exactly this shape through
- * `generateSuccess` / `generateReject`.
+ * Structural, not the service's own union — `@infrastructure` cannot reach into a module, and
+ * every service already produces this shape via `generateSuccess` / `generateReject`.
  */
 interface ServiceResult<TData> {
     success: boolean;
@@ -37,9 +30,8 @@ interface ServiceResult<TData> {
 /**
  * Send the refusal if the service refused, and say whether it did.
  *
- * `if (refused(response, result)) return;` covers the REFUSAL only, deliberately: the success side
- * is where controllers genuinely differ (a raw payload, a transformed one, a 201, an audit event
- * first), and a helper that owned the send too would need a callback to hand most of that back.
+ * Covers the REFUSAL only: the success side is where controllers genuinely differ (a raw payload,
+ * a transformed one, a 201, an audit event first), so only this half is common enough to share.
  *
  * @param response - the express response
  * @param result - whatever the service returned
@@ -55,9 +47,7 @@ export const refused = <TData>(response: Response, result: ServiceResult<TData>)
 /**
  * The `.catch` every controller ends with, as a callback.
  *
- * `catchAs(response, 'getProducts')` reads as the name of the operation whose failure is being
- * logged, which is the argument `rejectDatabaseError` wanted anyway. The literal `.catch(` stays
- * at the call site, so `controller-chain-must-catch` still sees it.
+ * The literal `.catch(` stays at the call site, so `controller-chain-must-catch` still sees it.
  *
  * @param response - the express response
  * @param context - developer-facing operation name, recorded in the log line
@@ -81,13 +71,8 @@ export const rejectValidation = (response: Response, error: ZodError) =>
  * Parse a request body against its generated schema, answering 422 and returning `undefined` when
  * it does not match.
  *
- * Same contract as {@link extractAndValidateId} in `./request`: it RESPONDS as well as extracts, so
- * the caller must bail out on `undefined` without touching the response again —
- * `const body = parseBody(...); if (!body) return;`
- *
- * Returning the parsed data rather than taking over the chain is what preserves the narrowing
- * controllers rely on: `parseResult.data` is typed by the schema, and several controllers
- * destructure it immediately.
+ * RESPONDS as well as extracts — the caller must bail out on `undefined` without touching the
+ * response again: `const body = parseBody(...); if (!body) return;`
  *
  * @param schema - the generated Zod schema for this operation's body
  * @param body - `request.body`

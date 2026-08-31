@@ -23,19 +23,12 @@ export type CartLineMode = 'set' | 'add';
 /**
  * Set or increment one cart line, creating the cart if the user has none.
  *
- * Two writes at most, and the second only for a product the cart has never held. Each carries its
- * condition IN THE FILTER rather than in a preceding read, so mongod evaluates it while holding
- * the document: two requests adding the same product cannot both conclude "absent" and both
- * append, which is what leaves a cart with one product on two lines.
- *
- * The one that loses that race hits the unique `userId` index, in either of two ways — the cart
- * now holds the line, so `$ne` matches nothing and `upsert` tries to insert a second cart; or
- * neither request found a cart and both tried to create one. Both mean the same thing: the world
- * moved between the two steps.
- *
- * So a duplicate key is retried rather than surfaced, which is what MongoDB prescribes for a
- * contended upsert. It converges — on the next pass either the line exists (increment) or the cart
- * exists without it (append, no insert attempted). The budget only bounds a pathological loop.
+ * CONCURRENCY. Each write's condition lives IN THE FILTER, not a preceding read, so mongod
+ * evaluates it while holding the document — two requests adding the same product cannot both
+ * conclude "absent" and both append. The loser instead hits the unique `userId` index (a second
+ * cart insert, or a duplicate line), so a duplicate key is retried rather than surfaced, per
+ * MongoDB's own guidance for a contended upsert — it converges next pass. `attemptsLeft` only
+ * bounds a pathological loop.
  */
 const upsertLine = (
     userId: string,
@@ -75,14 +68,9 @@ const upsertLine = (
 
 /**
  * Cart Repository
- * Standard CRUD via the repository factory, plus the four writes a cart actually takes.
- *
- * Every one of them is keyed by `userId` and none of them takes a cart id: `userId` is `unique` on
- * the schema, so "the user's cart" is a complete address. That is what keeps `findOneAndUpdate`
- * enough for each mutation, and it is why no caller ever has to fetch a cart before changing it.
- *
- * The type is written out because Mongoose's generics are too large for TypeScript to serialize an
- * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
+ * Standard CRUD via the repository factory, plus the writes a cart actually takes — each keyed
+ * by `userId` alone, since `unique: true` on the schema makes that a complete address. Written
+ * out explicitly: Mongoose's generics are too large for TS to infer at this export boundary (TS7056).
  */
 export const cartRepository: Repository<CartDocument> & {
     findByUserId: (userId: string) => Promise<CartDocument | null>;
@@ -142,15 +130,14 @@ export const cartRepository: Repository<CartDocument> & {
     /**
      * Empty a user's cart ONLY IF it still holds exactly the lines the caller read.
      *
-     * The conditional-write half of checkout: emptying the cart is made the step that can fail, so
-     * exactly one of two parallel `POST /cart/checkout` matches and the loser undoes the order it
-     * already wrote. Without it, one cart yields two orders and the customer is charged twice.
+     * The conditional-write half of checkout: emptying the cart is the step that can fail, so
+     * exactly one of two parallel `POST /cart/checkout` matches, and the loser undoes the order
+     * it already wrote — without this, one cart yields two orders and the customer is charged twice.
      *
-     * `$inc: { __v: 1 }` makes the guard reusable — otherwise a cart emptied and refilled still
-     * matches the version an in-flight checkout holds. Mongoose's own optimistic concurrency does
-     * not apply: it covers `save()` on a loaded document, and every write here is
-     * `findOneAndUpdate`. A transaction would also work but would force `MongoMemoryReplSet` on
-     * every suite touching a cart, to serialise two writes to one document.
+     * `$inc: { __v: 1 }` makes the guard reusable — a cart emptied and refilled would otherwise
+     * still match an in-flight checkout's version. Mongoose's own optimistic concurrency doesn't
+     * apply (it covers `save()`, not `findOneAndUpdate`); a transaction would work too but forces
+     * `MongoMemoryReplSet` on every cart-touching suite.
      *
      * @param userId - whose cart
      * @param version - the `__v` the caller read the cart at

@@ -13,12 +13,9 @@ import { authAccountDeleteTotal } from '../metrics';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
- * Request handler — resolves with 200 after sending the confirmation email.
- *
- * The token is minted and delivered by `accountService.requestAccountDeletion`, which never hands
- * its value back: a live delete credential has no business in a controller.
- *
- * @param request - Express request with populated authContext (isAuth required)
+ * Sends the account-deletion confirmation email; the token is minted and delivered by the
+ * service, never returned here.
+ * @param request - authenticated request (isAuth required)
  * @param response - Express response
  */
 export const deleteAccountRequest = (request: Request, response: Response) => {

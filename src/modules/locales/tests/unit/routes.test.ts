@@ -1,12 +1,10 @@
 /**
  * @module
- * The locales route table.
- *
- * Two deliberate choices, asserted here so "fixing" either one fails loudly: the reads are
- * public — a client that just failed to reach the API is exactly who needs a dictionary — and
- * every admin route spells its own guard rather than a single router-level gate, since the public
- * reads must be declared first (Express takes the first match, and `/tenants` would otherwise read
- * as a language code) and a mid-file gate would guard by line number instead of by route.
+ * The locales route table. Two deliberate choices, asserted here so "fixing" either one fails
+ * loudly: reads are public, since a client that just failed to reach the API is exactly who needs
+ * a dictionary; and every admin route spells its own guard rather than a router-level gate, since
+ * public reads must be declared first (Express takes the first match) and a mid-file gate would
+ * guard by line number instead of by route.
  */
 
 import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';

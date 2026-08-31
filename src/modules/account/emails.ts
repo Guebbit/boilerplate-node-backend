@@ -1,14 +1,10 @@
 /**
  * @module
- * The copy of every email this module sends, resolved into finished strings.
- *
- * Templates only interpolate, never translate — an email renders in `adapters/email.worker.ts`,
- * possibly hours later with no request or locale store to resolve against. So language is an
- * explicit argument: a builder binds its own `t` to the locale it's handed, since these go out in
- * the *recipient's* language, not the requester's.
- *
- * Each builder returns the whole `EmailContent` — template, subject and render context — so
- * template and copy change together, in this file.
+ * The copy of every email this module sends, resolved into finished strings. Templates only
+ * interpolate, never translate — an email renders later in `adapters/email.worker.ts` with no
+ * request or locale store to resolve against, so language is an explicit argument: each builder
+ * binds its own `t` to the recipient's locale and returns the whole `EmailContent` — template,
+ * subject and render context together.
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

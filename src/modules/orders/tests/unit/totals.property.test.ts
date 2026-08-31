@@ -1,14 +1,10 @@
 /**
  * @module
- * Property-based tests — `src/modules/orders/domain/totals.ts`.
- *
- * `sumLineItems` is the arithmetic behind every order total and cart summary: total by
- * construction, a line whose product failed to populate contributes nothing rather than NaN.
- * Additivity and scaling are asserted EXACTLY in cents — what the minor-unit arithmetic buys,
- * since a float accumulator only satisfies that to a tolerance.
- *
- * The run is SEEDED for reproducibility; any counterexample found is written back as an ordinary
- * `it()` with its seed.
+ * Property-based tests — `src/modules/orders/domain/totals.ts`. `sumLineItems` is the arithmetic
+ * behind every order total and cart summary: total by construction, a line whose product failed
+ * to populate contributes nothing rather than NaN. Additivity and scaling are asserted EXACTLY in
+ * cents, since a float accumulator only satisfies that to a tolerance — seeded, so any
+ * counterexample found is written back as an ordinary `it()`.
  */
 import fc from 'fast-check';
 import { sumLineItems, orderTotal, type LineItem } from '../../domain/totals';
@@ -17,10 +13,9 @@ import { sumLineItems, orderTotal, type LineItem } from '../../domain/totals';
 const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
 
 /**
- * The two nullish spellings a failed populate can leave behind.
- *
- * Both are in scope for `Number(...) || 0` and both must contribute 0 rather than NaN, so neither
- * can be dropped to satisfy a lint rule that would rather this codebase had only `undefined`.
+ * The two nullish spellings a failed populate can leave behind — both must contribute 0 rather
+ * than NaN, so neither can be dropped to satisfy a lint rule that would rather this codebase had
+ * only `undefined`.
  */
 const nullish = () => fc.constantFrom(null, undefined);
 
@@ -172,10 +167,10 @@ describe('sumLineItems — arithmetic invariants', () => {
 });
 
 /**
- * `orderTotal` is the COMPOSITION rule — lines plus the shipping frozen against them — and it has
- * three callers who each owe the customer the same number: the order serializer, the payment
- * intent and the confirmation email. What it must never do is disagree with `sumLineItems` about
- * the part they share, or turn an order with no shipping into a different order.
+ * `orderTotal` is the COMPOSITION rule — lines plus the shipping frozen against them. Three
+ * callers (serializer, payment intent, confirmation email) must each get the same number, so it
+ * must never disagree with `sumLineItems` on the part they share, or drift for an order with no
+ * shipping.
  */
 describe('orderTotal', () => {
     it('is the line total when nothing was charged for shipping', () => {

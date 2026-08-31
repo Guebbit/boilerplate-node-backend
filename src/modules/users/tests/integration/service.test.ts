@@ -109,15 +109,9 @@ describe('userService.validateData', () => {
     });
 
     /**
-     * The messages are what the API sends a client verbatim, so a wrong i18n key is a
-     * user-visible bug — and the assertions above cannot see it, because a missing key makes
-     * i18next return the key itself, which is still a non-empty string.
-     *
-     * That is exactly what had happened: `user-validation.ts` asked for `signup.user-field-*`
-     * while `en.json` defined them under `login.*`, so every user whose email failed validation
-     * was told "users.field-email-invalid". A raw key is recognisable by shape — a dotted
-     * identifier with no spaces — which is what this asserts against, so it keeps working when
-     * the copy is reworded.
+     * A wrong i18n key is a user-visible bug the assertions above can't see: a missing key makes
+     * i18next return the key itself, still a non-empty string. This asserts against the SHAPE of
+     * a raw key — a dotted identifier, no spaces — so it keeps working when the copy is reworded.
      */
     it('returns translated messages, never raw i18n keys', () => {
         const errors = userService.validateData({
@@ -136,13 +130,8 @@ describe('userService.validateData', () => {
     });
 });
 
-/*
- * Backs the three `active` filter cases below.
- *
- * Built so the two facts DISAGREE: the deactivated account is not deleted, and the deleted
- * account is still active. That is what makes the cases discriminating — a filter that resolved
- * `active` through `deletedAt` would answer all three the other way round.
- */
+// Backs the three `active` filter cases below, built so the two facts DISAGREE: the deactivated
+// account is not deleted, and the deleted account is still active.
 const seedActiveAndDeleted = () =>
     Promise.all([
         createUser({ email: 'enabled@example.com', username: 'enabled', active: true }),

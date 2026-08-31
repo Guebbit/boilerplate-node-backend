@@ -1,23 +1,22 @@
 /**
  * @module
- * This module's validation copy resolves against the ACTIVE locale, not the boot one.
- *
- * The failure this defends against is PROBLEM 01: `t()` called at module scope, before
- * `i18next.init()`, returning `undefined` so Zod fell back to its own English defaults. The only
- * guard that existed asserted a message was not shaped like a dotted key — which a Zod default
- * ("Too small: expected string…") satisfies perfectly. These assert the exact shipped strings, so
- * a fallback to a Zod default fails them.
- *
- * `loadBeforeI18n` is what makes the ordering real; see `tests/support/i18n-boot.ts`.
+ * This module's validation copy resolves against the ACTIVE locale, not the boot one. Defends
+ * against `t()` being called at module scope, before `i18next.init()`, which returns `undefined`
+ * and lets Zod fall back to its own English defaults — asserting the exact shipped strings catches
+ * that fallback, where a mere "not a dotted key" check would not. `loadBeforeI18n` makes the
+ * ordering real; see `tests/support/i18n-boot.ts`.
  */
 
 import { loadBeforeI18n, mergedResources } from '@tests/i18n-boot';
 
+/** This locale's users-namespace translation strings. */
 const copy = (locale: 'en' | 'it') =>
     (mergedResources()[locale].translation as { users: Record<string, string> }).users;
 
+/** A payload that fails every rule these cases check messages for. */
 const invalidUser = { email: 'not-an-email', username: 'ab', password: 'x' };
 
+/** Zod's validation messages for `invalidUser`, parsed under the given locale. */
 const messagesFor = async (locale: 'en' | 'it') => {
     const { zodUserSchema } = await loadBeforeI18n(
         locale,

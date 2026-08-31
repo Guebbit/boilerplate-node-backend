@@ -1,12 +1,10 @@
 /**
  * @module
- * `runTokenCleanup` — the scheduled job that drops expired tokens from every user.
- *
- * The obvious test — call the job, assert the repository method ran — passes in both branches, so
- * it produces near-zero mutation coverage. The logging IS the behaviour here: this job runs
- * unattended, and its log line is the only way an operator learns whether cleanup is still
- * working. So every case asserts on the log, and the two branches are asserted mutually exclusive
- * — which is what a forced `true`/`false` mutant fails.
+ * `runTokenCleanup` — the scheduled job that drops expired tokens from every user. The obvious
+ * test — call it, assert the repository method ran — passes in both branches, producing
+ * near-zero mutation coverage. The logging IS the behaviour here: this job runs unattended, and
+ * its log line is the only way an operator learns whether cleanup is still working. So every
+ * case asserts on the log, and the two branches are asserted mutually exclusive.
  */
 
 import { userRepository } from '@modules/users';
@@ -17,15 +15,10 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../../audit';
 
 /*
- * Only `userRepository` is replaced. The rest has to stay REAL because this file reaches the job
- * through `@modules/account/services`, and that barrel evaluates every service beside it —
- * `profile.ts` builds its zod schema from `zodUserSchema` at module scope, so a mock that omits it
- * throws before a single test runs. Spreading the actual module keeps the barrel loadable and
- * still lets the one call this job makes be observed.
- *
- * The sweep used to be a `static` on `userModel` that resolved `{ status, success }`; it is now a
- * repository method that resolves a COUNT or rejects, which is why the branches below are
- * resolve-vs-reject rather than two shapes of the same resolution.
+ * Only `userRepository` is replaced. The rest stays REAL: this file reaches the job through
+ * `@modules/account/services`, and that barrel evaluates every sibling service at load time —
+ * `profile.ts` builds its zod schema from `zodUserSchema` at module scope, so a mock omitting it
+ * throws before a single test runs. Spreading the actual module keeps the barrel loadable.
  */
 jest.mock('@modules/users', () => ({
     ...jest.requireActual('@modules/users'),
@@ -45,11 +38,10 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 }));
 
 /*
- * `emitAuditEvent` is replaced too, rather than reached with `jest.spyOn(auditPort, ...)` on the
- * namespace import below. TypeScript's CommonJS `__importStar` interop copies a namespace import's
- * properties as non-configurable getters, which `jest.spyOn` cannot redefine — a mismatch some
- * transpile paths mask and some (Stryker's instrumented sandbox, at minimum) do not. Mocking the
- * module gives every consumer a plain, always-configurable `jest.fn()` instead.
+ * `emitAuditEvent` is replaced too, not reached via `jest.spyOn(auditPort, ...)`: TypeScript's
+ * CommonJS `__importStar` interop copies a namespace import's properties as non-configurable
+ * getters, which `jest.spyOn` cannot redefine (masked by some transpile paths, not by Stryker's
+ * sandbox). Mocking the module gives every consumer a plain, configurable `jest.fn()` instead.
  */
 jest.mock('@infrastructure/observability/audit', () => ({
     __esModule: true,

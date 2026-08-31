@@ -1,10 +1,9 @@
 /**
  * @module
- * The user record: admin-facing search, read, write and soft delete.
- *
- * Depends on nothing — deleting an account empties that user's cart via `user.deleted`, keeping
- * cart → users a one-way arrow. Authentication lives in `account`, which reaches this module's
- * barrel for the record it authenticates.
+ * The user record: admin-facing search, read, write and soft delete. Depends on nothing —
+ * deleting an account empties that user's cart via `user.deleted`, keeping cart → users a
+ * one-way arrow. Authentication lives in `account`, which reaches this module's barrel for the
+ * record it authenticates.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      nothing

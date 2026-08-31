@@ -1,15 +1,10 @@
 /**
  * @module
- * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
- * augmentation rather than in a shared enum.
- *
- * No `admin.`/`user.` prefix: `actor_role` is already a mandatory field on every audit record, so
- * repeating it in the name would just be the same fact twice. `order.created` fires from BOTH an
- * admin writing an order directly (`orderService.create`) and a customer's checkout
- * (`@modules/cart`'s `orderConfirm`, via `orderService.recordCreated`) — an order exists either
- * way, and `actor_role` is what tells the two apart on the record, not a second event name. Kept
- * distinct from `cartCheckoutTotal`/`orderCreatedTotal`, which are metrics counting requests to
- * two different routes, not this audit trail's count of orders.
+ * Audit actions this module emits, declared by augmentation rather than a shared enum — see
+ * `modules/account/audit.ts`. No `admin.`/`user.` prefix: `actor_role` on every record already
+ * tells who did it, so `order.created` fires from both an admin write and a customer checkout,
+ * not two different actions. Distinct from `cartCheckoutTotal`/`orderCreatedTotal`, which count
+ * route requests, not this audit trail's orders.
  */
 
 /** The audit action vocabulary this module owns. */

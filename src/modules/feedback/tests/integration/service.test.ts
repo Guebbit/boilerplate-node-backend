@@ -1,11 +1,9 @@
 /**
  * @module
- * Integration tests for the feedback request service — `src/modules/feedback/service.ts`.
- *
- * Pins three behaviours: create normalises (lowercased email, trimmed fields, blank `name`
- * collapsing to `undefined`); `toFeedbackStatus` accepts only the generated
- * `FeedbackRequestStatus` values, mapping anything else to `undefined`; and `respondedAt` is
- * stamped once, so re-resolving an already-resolved item never moves it.
+ * Integration tests for the feedback request service. Pins three behaviours: create normalises
+ * (lowercased email, trimmed fields, blank `name` → `undefined`); `toFeedbackStatus` accepts only
+ * generated `FeedbackRequestStatus` values; and `respondedAt` stamps once, so re-resolving an
+ * already-resolved item never moves it.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

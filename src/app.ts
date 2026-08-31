@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+/**
+ * @module
+ * The process entry point: builds the Express app, wires infrastructure (OTel, cache, queue,
+ * i18n), mounts every enabled module, and owns the start/stop lifecycle. OTel initializes before
+ * anything it instruments is imported — the only ordering constraint the rest of the file exists
+ * to preserve.
+ */
+
 // OTel must initialize before express/http/mongoose are imported.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 startTracing();

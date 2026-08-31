@@ -1,11 +1,9 @@
 /**
  * @module
- * The copy of every email this module sends, resolved into finished strings.
- *
- * Same rule as `@modules/account/emails`: the language is an argument, the output is finished
- * text, the worker resolves nothing — see that file for why. This notification goes to the
- * support mailbox, so it renders in `NODE_DEFAULT_LOCALE` while the customer's own words stay
- * untranslated; it also has no `footer`, the one template that skips the shared partial.
+ * The copy of every email this module sends, resolved into finished strings — same rule as
+ * `@modules/account/emails`: language is an argument, output is finished text. Goes to the
+ * support mailbox, so it renders in `NODE_DEFAULT_LOCALE`; the customer's own words stay
+ * untranslated, and it skips the shared `footer` partial.
  *
  * See: docs/tools/email-and-rendering.md
  */

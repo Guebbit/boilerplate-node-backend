@@ -1,13 +1,10 @@
 /**
  * @module
  * Schema contract — the declarations themselves (defaults, `required`, `select: false`), not the
- * transforms the sibling specs in this folder cover.
- *
- * These are equally part of the API and untested elsewhere: a field's default decides what a
- * client gets when it sends nothing, `required` is what stops a malformed write reaching readers,
- * and `select: false` is why credentials don't leak from an ordinary read.
- *
- * Real Mongo — these are Mongoose's behaviours, not ours; a mock would assert its own opinion.
+ * transforms the sibling specs cover. Equally part of the API and untested elsewhere: a default
+ * decides what a client gets when it sends nothing, `required` stops a malformed write reaching
+ * readers, and `select: false` is why credentials don't leak from an ordinary read. Real Mongo —
+ * these are Mongoose's behaviours, not ours; a mock would assert its own opinion.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

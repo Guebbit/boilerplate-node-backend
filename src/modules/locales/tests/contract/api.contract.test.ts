@@ -1,16 +1,10 @@
 /**
  * @module
- * Contract tests for /locales — both tiers, and the boundary between them.
- *
- * The manifest exists so a client can ask what a DEPLOYMENT offers, which is runtime state and
- * cannot be an enum in `openapi.yaml`: the answer depends on which dictionary files were deployed
- * and which languages have been registered since. That makes the response SHAPE the only thing the
- * contract can pin, and pinning it is what lets a client rely on the endpoint at all.
- *
- * The property this suite is really guarding is the one §2 of the design rests on: a language
- * existing in the database never implies the API can answer in it. Two endpoints one segment apart
- * serve two different keyspaces from two different stores, and the assertions below are written so
- * that a change collapsing them fails here rather than in a client.
+ * Contract tests for /locales — both tiers, and the boundary between them. The manifest's SHAPE
+ * is the only thing `openapi.yaml` can pin, since which languages are deployed is runtime state;
+ * the property really being guarded is that a language existing in the database never implies the
+ * API can answer in it, and the assertions below are written so a change collapsing the two tiers
+ * fails here rather than in a client.
  */
 
 import '@tests/contract';
@@ -163,11 +157,9 @@ describe('GET /locales/:locale', () => {
         expect(response.body.data.locale).toBe('it');
         // The shared half — `generic.*` in particular, which the paired frontend reads by name.
         expect(response.body.data.messages).toMatchObject(itTranslation);
-        // And the module half. A client rendering API copy itself needs the domain messages too,
-        // so the merge has to reach the wire and not just `i18next`'s in-memory resources.
-        //
-        // Asserted as "namespaces the shared file does not have" rather than by naming a domain:
-        // this module knows that modules contribute copy, not which modules exist.
+        // The module half: a client rendering API copy needs domain messages on the wire too, not
+        // just i18next's in-memory resources. Asserted as "extra namespaces" rather than by name,
+        // since this test doesn't know which modules exist.
         const shared = new Set(Object.keys(itTranslation));
         const contributed = Object.keys(
             response.body.data.messages as Record<string, unknown>
@@ -312,11 +304,9 @@ describe('POST /locales', () => {
     });
 
     /*
-     * Found by `tests/fuzz/endpoints.fuzz.test.ts`, which is the only suite that would have: a
-     * single space satisfies the contract's `minLength: 1`, then trims to the empty string at a
-     * column declared `required`, and the resulting Mongoose ValidationError answered 500 — a
-     * server fault reported for a stray space. JSON Schema cannot say "non-empty after trimming",
-     * so the constraint lives in the controller and this is what holds it there.
+     * Found by the fuzz suite: a single space satisfies `minLength: 1`, then trims to empty at a
+     * column declared `required`, and Mongoose's ValidationError answered 500 for a stray space.
+     * JSON Schema can't express "non-empty after trim", so the check lives in the controller.
      */
     it.each(['name', 'nativeName'])(
         '422s on a whitespace-only %s rather than 500',
@@ -694,11 +684,9 @@ const seedTwoKeys = async (bearer: string) => {
 };
 
 /**
- * The two bulk routes, asserted AS A PAIR.
- *
- * "Does an import delete the keys it did not mention" is the semantic most likely to be
- * implemented backwards, and either half of this pair passes on its own against a build that
- * ignores the distinction entirely. Together they cannot.
+ * The two bulk routes, asserted AS A PAIR: "does an import delete keys it didn't mention" is the
+ * semantic most likely implemented backwards, and either half alone passes against a build that
+ * ignores the distinction. Together they cannot.
  */
 describe('PUT vs PATCH /locales/:locale/entries', () => {
     it('PUT removes what was not sent', async () => {
@@ -792,13 +780,10 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
 });
 
 /**
- * The independence rule, asserted from the API's side: a language works end to end with no client
- * involvement whatsoever. `it.json` sits in `src/locales/` and nothing else was configured — no
- * route change, no list to update, no row in any collection.
- *
- * Asserted with Italian rather than Spanish deliberately. Spanish used to be the fixture here and
- * is now the OPPOSITE fixture: it exists only as database rows (see `../../demo.ts`), so it is the
- * language the case below proves the API will not start answering in.
+ * The independence rule, from the API's side: a language works end to end with no client
+ * involvement — no route change, no list to update, no row in any collection. Uses Italian rather
+ * than Spanish deliberately: Spanish is now the OPPOSITE fixture, existing only as database rows
+ * (see `../../demo.ts`).
  */
 describe('a locale only the API has', () => {
     it('answers validation errors in Italian for Accept-Language: it', async () => {

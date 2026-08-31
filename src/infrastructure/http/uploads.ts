@@ -11,26 +11,18 @@ import type { Request } from 'express';
 /**
  * Rewrite a filesystem path as a URL path: every backslash becomes a forward slash.
  *
- * `path.posix.normalize()` is deliberately NOT used — it leaves existing backslashes alone,
- * because on POSIX a backslash is a legal character in a filename rather than a separator. The
- * problem here is the opposite one: a path produced by `path.join()` on Windows, being read as a
- * URL. A literal replacement is the only thing that fixes that, and it is safe precisely because
- * upload filenames are random hex and can never contain a backslash of their own.
+ * `path.posix.normalize()` won't do this — it leaves existing backslashes alone, since on POSIX
+ * one is a legal filename character. The literal replacement is safe here because upload
+ * filenames are random hex and can never contain a backslash of their own.
  *
  * @param value - a path in whatever separator style the platform produced
  */
 export const toPosixPath = (value: string): string => value.replaceAll('\\', '/');
 
 /**
- * Extract uploaded file paths from a multer-processed request.
- * Handles both single-file (req.file) and multi-file (req.files) uploads.
- * Returns an array of file paths, or undefined if no files were uploaded.
- *
- * Exists because multer populates *three* different shapes depending on which middleware
- * variant a route used, and controllers should not have to care which:
- *   `.single()` → `request.file`               (one object)
- *   `.array()`  → `request.files`              (an array)
- *   `.fields()` → `request.files`              (an object keyed by field name)
+ * Extract uploaded file paths from a multer-processed request, from whichever of the three shapes
+ * multer populates (`.single()` → `request.file`; `.array()`/`.fields()` → `request.files`), so
+ * controllers don't have to care which middleware variant a route used.
  *
  * @param request - Express request already processed by a multer middleware
  */
@@ -40,11 +32,10 @@ export function getFormFiles(request: Request): string[] | undefined {
 
     // Multiple file upload (multer.array() or multer.fields())
     if (request.files) {
-        // `.array()` is already a flat list. `.fields()` is an object keyed by field name, each
-        // value an array — flattened across fields, since callers want paths, not the field
-        // structure. Collected rather than returned per-branch so the normalization below
-        // applies to both: returning `[]` from one branch and `undefined` from the other is the
-        // exact difference this function exists to hide, and it is truthy on one side only.
+        // `.array()` is already a flat list; `.fields()` is an object keyed by field name, each
+        // value an array — flattened across fields, since callers want paths, not structure.
+        // Collected rather than returned per-branch so the empty-array normalization below
+        // applies uniformly to both shapes.
         const paths: string[] = Array.isArray(request.files)
             ? request.files.map((file) => file.path)
             : Object.values(request.files).flatMap((files) => files.map((file) => file.path));
@@ -57,18 +48,14 @@ export function getFormFiles(request: Request): string[] | undefined {
 }
 
 /**
- * The URL of the image this request uploaded, or `undefined` if it uploaded none — or if a
- * broker took the job, in which case there is no real url yet (see {@link resolvePendingImageKey}).
+ * The URL of the image this request uploaded, or `undefined` if it uploaded none — or if a broker
+ * took the job, in which case there is no real url yet (see {@link resolvePendingImageKey}).
  *
- * The value is produced when `quarantineUploadedImages` (`@infrastructure/adapters/storage`) runs
- * the digest pipeline inline — the no-broker path — and simply read back here — a controller never
- * learns where the bytes went. That is the boundary the whole storage seam rests on: it is what
- * allows the same controller to work whether the store answered `/images/x.png` or
- * `https://cdn.example.com/images/x.png`.
- *
- * Constructing the url in the store, rather than deriving it by stripping `NODE_PUBLIC_PATH` off
- * multer's path, keeps a filesystem separator away from the value that gets persisted — see
- * {@link toPosixPath} for what that costs when it does not.
+ * Produced when `quarantineUploadedImages` (`@infrastructure/adapters/storage`) runs the digest
+ * pipeline inline and is simply read back here — the boundary that lets the same controller work
+ * whether the store answered a local path or a CDN URL. Built in the store, not derived by
+ * stripping `NODE_PUBLIC_PATH` off multer's path, which keeps a filesystem separator out of the
+ * persisted value — see {@link toPosixPath} for what that costs when it doesn't.
  *
  * @param request - Express request that has been through the upload middleware
  */

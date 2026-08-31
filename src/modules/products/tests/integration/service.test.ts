@@ -28,10 +28,9 @@ import ordersModule from '@modules/orders/module';
 /**
  * Mock the image store, not the filesystem underneath it.
  *
- * What this service owes its collaborator is a *stored-image handle* — the `imageUrl` value — and
- * nothing about where those bytes live. Asserting on `deleteFile(publicPath + url)` instead would
- * pin the service to the filesystem backend: the test would keep passing while silently covering
- * the wrong thing the moment images move to a bucket. See `@infrastructure/adapters/image-store`.
+ * The service owes its collaborator only a *stored-image handle* (`imageUrl`); asserting on
+ * `deleteFile(publicPath + url)` would pin it to the filesystem backend and keep passing while
+ * silently covering the wrong thing once images move to a bucket.
  */
 jest.mock('@infrastructure/adapters/image-store', () => ({
     imageStore: { remove: jest.fn().mockResolvedValue(true) }
@@ -167,15 +166,10 @@ describe('productService.validateData', () => {
     });
 
     /**
-     * The messages are what the API sends a client verbatim, so a wrong i18n key is a
-     * user-visible bug — and the assertions above cannot see it, because a missing key makes
-     * i18next return the key itself, which is still a non-empty string.
-     *
-     * That is exactly what had happened: `user-validation.ts` asked for `signup.user-field-*`
-     * while `en.json` defined them under `login.*`, so every user whose email failed validation
-     * was told "users.field-email-invalid". A raw key is recognisable by shape — a dotted
-     * identifier with no spaces — which is what this asserts against, so it keeps working when
-     * the copy is reworded.
+     * The messages are what the API sends a client verbatim, so a wrong i18n key is a user-visible
+     * bug the assertions above can't see — a missing key makes i18next return the key itself, still a
+     * non-empty string. This caught exactly that: `user-validation.ts` asked for `signup.user-field-*`
+     * while `en.json` defined them under `login.*`, so a failed email showed "users.field-email-invalid".
      */
     it('returns translated messages, never raw i18n keys', () => {
         const errors = productService.validateData({ title: 'ab', price: -5 });
@@ -445,11 +439,9 @@ describe('productService.updateById', () => {
 
     it('reports a missing product as a 404 envelope, not as a rejection', async () => {
         /*
-         * Returned, never thrown. Throwing made the one caller recognise the case by
-         * string-matching `error.message === '404'` in a `.catch()`, where a genuine database
-         * failure and a missing row were the same event. The user and order services already
-         * reported it this way; now all three agree, which is what lets one controller shape
-         * serve all of them.
+         * Returned, never thrown. Throwing made the one caller recognise the case by string-matching
+         * `error.message === '404'` in a `.catch()`, conflating a genuine database failure with a
+         * missing row. The user and order services already reported it this way; now all three agree.
          */
         const result = await productService.updateById(
             '000000000000000000000000',
@@ -499,13 +491,10 @@ describe('productService.removeById', () => {
     });
 
     /**
-     * Registers the modules for real rather than reaching into the cart directly. The list is the
-     * cart's dependency closure, not just the two domains at play: the registry refuses to install
-     * a module whose subscribers reach a sibling that is not there.
-     *
-     * The catalogue no longer calls the cart — it emits `product.deleted` and the cart module
-     * subscribes. That subscription only exists once the registry has run, so a test that skipped
-     * it would assert the cleanup never happens and pass for the wrong reason.
+     * Registers the modules for real rather than reaching into the cart directly — the list is the
+     * cart's full dependency closure, since the registry refuses a module whose subscribers reach a
+     * sibling that isn't installed. Only once registered does the cart's `product.deleted` subscription
+     * exist, so a test that skipped this would pass for the wrong reason.
      */
     it('hard-deletes the product and removes it from all carts', async () => {
         registerModules([

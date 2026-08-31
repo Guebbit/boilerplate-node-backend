@@ -1,14 +1,9 @@
 /**
  * @module
- * Product analytics — the port, and the registry of implementations behind it.
- *
- * Distinct from metrics and tracing: this answers PRODUCT questions ("how many users abandon
- * checkout?") rather than operational ones. Callers do not know where an event lands; which
- * implementation answers is a deployment decision (`NODE_ANALYTICS_PROVIDER`), the same shape
- * `NODE_PAYMENT_PROVIDER` uses.
- *
- * Default `umami` — the one this repo's compose stack starts. `posthog` when the funnel is
- * identity-shaped, `none` for a deployment that collects nothing.
+ * Product analytics — the port, and the registry of implementations behind it. Distinct from
+ * metrics/tracing: this answers PRODUCT questions, not operational ones. Which implementation
+ * answers is a deployment decision (`NODE_ANALYTICS_PROVIDER`); default `umami`, `posthog` for
+ * identity-shaped funnels, `none` to collect nothing.
  *
  * See: docs/tools/analytics.md
  */
@@ -22,27 +17,16 @@ import { noneAnalyticsProvider } from './none';
 // ─── Event taxonomy ───────────────────────────────────────────────────────────
 
 /**
- * Module name → that module's event names. Augmented per module; see `modules/cart/analytics.ts`.
- *
- * Intentionally empty here, exactly like `AuditActionMap` in `../audit.ts` and `DomainEventMap` in
- * `kernel/events.ts`: this is the extension point, and its members live with the domains that emit
- * them. The augmentation is type-only, so the vocabulary stays closed and `infrastructure` still
- * imports nothing from a module.
- *
- * `PRODUCTS_SEARCHED` is a fact about products and `CART_ITEM_ADDED` one about the cart. Both used
- * to be declared here, in the layer that must know no domain at all; now deleting a module takes
- * its names out of the funnel with it, and this file is left holding the transport.
+ * Module name → that module's event names. Augmented per module (declaration merging), so this
+ * stays empty here and `infrastructure` never imports from a module — see `modules/cart/analytics.ts`.
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own events
 export interface AnalyticsEventMap {}
 
 /**
  * Every name this build can emit — whatever the enabled modules declare.
- *
- * The union is exactly the SERVER's half of one namespace shared with the paired frontend. The
- * client's half is declared in `shared/contracts/analytics.frontend.ts` and deliberately augments
- * nothing here, so `emitAnalyticsEvent` rejects a client name: this service cannot report a moment
- * it never observed, and no event can be written into Umami twice.
+ * Shared 1:1 with the frontend namespace: each event has exactly one emitter, enforced by
+ * `tests/cross-cutting/analytics-events.test.ts`.
  */
 export type AnalyticsEventName = AnalyticsEventMap[keyof AnalyticsEventMap];
 
@@ -50,11 +34,9 @@ export type AnalyticsEventName = AnalyticsEventMap[keyof AnalyticsEventMap];
 
 /**
  * Core fields shared by every analytics event.
- *
- * The last three are attribution, and they exist because a server-side event has no browser
- * behind it: without the caller's address and user-agent forwarded on, every event the API emits
- * would be attributed to the API itself, collapsing an entire product's traffic onto one
- * "visitor". They are optional because a provider keyed on user id has no use for them.
+ * The last three are attribution: a server-side event has no browser behind it, so without the
+ * caller's IP/user-agent forwarded on, everything collapses onto one "visitor". Optional because
+ * a provider keyed on user id doesn't need them.
  */
 export interface AnalyticsEvent {
     /** Authenticated user ID, or `anonymous`. PostHog's `distinct_id`; a property under Umami. */
@@ -94,11 +76,9 @@ export interface AnalyticsProvider {
 
     /**
      * Whether this provider has what it needs to deliver an event.
-     *
-     * `capture` is fire-and-forget, so a provider selected without its credentials warns once and
-     * then discards silently for the life of the process — the most common analytics failure there
-     * is, and one nothing outside the provider could observe. `none` answers `true`: collecting
-     * nothing IS its configuration.
+     * `capture` is fire-and-forget, so an unconfigured provider warns once then discards silently —
+     * the most common analytics failure, and invisible outside the provider. `none` always
+     * answers `true`.
      */
     configured(): boolean;
 
@@ -120,18 +100,13 @@ const PROVIDERS: Record<string, AnalyticsProvider> = {
     none: noneAnalyticsProvider
 };
 
+/** Memoised provider handle — see `resolveAnalyticsProvider`. */
 let provider: AnalyticsProvider | undefined;
 
 /**
- * The configured provider, memoised on first use.
- *
- * Read lazily rather than at import time because tests vary the environment per case, and
- * because an env var read during module evaluation is fixed before `.env` has necessarily
- * been loaded.
- *
- * A typo'd `NODE_ANALYTICS_PROVIDER` resolves to `undefined` and the next call on it throws —
- * loud, at the same moment, without a bespoke message saying the same thing. Turning analytics off
- * has its own spelling (`none`), so the undefined branch is only ever reached by a typo.
+ * The configured provider, memoised on first use. Lazy so tests can vary the env per case, and
+ * so a typo'd `NODE_ANALYTICS_PROVIDER` throws loudly here rather than resolving to `undefined`
+ * silently. Turning analytics off has its own spelling (`none`).
  *
  * @returns the implementation `NODE_ANALYTICS_PROVIDER` names (default `umami`)
  */
@@ -149,10 +124,8 @@ export const resetAnalyticsProvider = (): void => {
 
 /**
  * Build the fields every call site would otherwise repeat.
- *
- * Typed as `Pick<...>` so it stays in lockstep with `AnalyticsEvent`: renaming a field there
- * breaks this signature at compile time instead of silently producing a wrong shape.
- * Usage: `emitAnalyticsEvent({ ...buildAnalyticsBase(context), event: cartAnalyticsEvents.CART_VIEWED })`
+ * Typed as `Pick<...>` so it stays in lockstep with `AnalyticsEvent` — renaming a field there
+ * breaks this signature at compile time instead of quietly producing a wrong shape.
  *
  * @param context - the caller context built once in the controller, see `callerContextOf`
  */
@@ -184,10 +157,9 @@ export const emitAnalyticsEvent = (event: AnalyticsEvent): void => {
 
 /**
  * Flush pending events and release the provider's client on server stop.
- *
- * Resolves without doing anything when no provider was ever resolved — a process that emitted
- * no events has nothing to flush, and resolving one here purely to shut it down would turn a
- * misconfigured `NODE_ANALYTICS_PROVIDER` into a crash on the way out.
+ * Resolves as a no-op when no provider was ever resolved — a process that emitted nothing has
+ * nothing to flush, and resolving one here just to shut it down would turn a typo'd
+ * `NODE_ANALYTICS_PROVIDER` into a crash on the way out.
  */
 export const shutdownAnalytics = (): Promise<void> => {
     if (!provider) return Promise.resolve();

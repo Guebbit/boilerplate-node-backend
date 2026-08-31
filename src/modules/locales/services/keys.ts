@@ -1,10 +1,9 @@
 /**
  * @module
  * The key rules — everything that decides whether a translation key can be stored and rendered.
- *
  * Internal to `services/`; `entries.ts` and `messages.ts` share these and none of them owns it.
- * Pure and database-free by construction. An i18n admin is a solved problem with no rules worth a
- * `domain/` folder, so this file is where the pure ones live instead.
+ * Pure and database-free by construction — an i18n admin has no rules worth a separate `domain/`
+ * folder.
  */
 
 import { t } from '@infrastructure/i18n';
@@ -14,12 +13,11 @@ import type { EntryInput } from '../repository';
 /**
  * Key segments that must never reach a tree.
  *
- * `__proto__` assigned onto a plain object mutates its PROTOTYPE rather than creating a property,
- * which is prototype pollution reached through a translation key. {@link buildMessageTree} is built
- * from null-prototype objects so it cannot happen there either, but a key nobody can render is not
- * worth storing — this is the half that answers with a reason instead of silently doing nothing.
- *
- * An empty segment (`a..b`, `a.`) is in the same bucket: it names a node no client could address.
+ * `__proto__` written onto a plain object mutates its PROTOTYPE rather than creating a property —
+ * prototype pollution reached through a translation key. {@link buildMessageTree} already builds
+ * from null-prototype objects so it cannot happen there, but a key nobody can render is not worth
+ * storing either. An empty segment (`a..b`, `a.`) is in the same bucket: it names a node no client
+ * could address.
  */
 const UNSAFE_KEY_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -30,15 +28,13 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 /**
  * Flat dotted rows into the nested shape `GET /locales/{locale}` already serves.
  *
- * THROWS on a collision rather than dropping a key, and that is the point. If both `products.list`
- * and `products.list.title` exist, no tree can hold them — one is a string, the other needs to be
- * an object at the same path — and a builder that quietly picked one would make the outcome depend
- * on insertion order. Every write path refuses such a pair (see {@link findKeyCollision}), so
- * reaching this throw means an invariant was broken behind the API's back; answering 500 is the
- * honest report of that, and `tests/unit/service.test.ts` asserts the throw exists.
+ * THROWS on a collision (`products.list` and `products.list.title` both existing) rather than
+ * picking one silently — every write path already refuses such a pair (see
+ * {@link findKeyCollision}), so reaching this throw means an invariant broke behind the API's
+ * back; `tests/unit/service.test.ts` asserts it.
  *
  * Nodes are null-prototype objects, so a stored `__proto__` segment creates an ordinary property
- * instead of reassigning a prototype. `JSON.stringify` treats them exactly like plain objects.
+ * instead of reassigning a prototype.
  */
 export const buildMessageTree = (
     entries: readonly Pick<EntryInput, 'key' | 'value'>[]
@@ -124,24 +120,10 @@ export const findDuplicateKey = (keys: readonly string[]): string | undefined =>
  * `others` is what the key will have to live alongside once written — for a create that is
  * everything already stored, for a bulk replace it is only the rest of the batch.
  *
- * ## What is NOT checked, and cannot be
- *
- * That the key is one anything actually renders. A row may name a key no dictionary defines, and
- * that is deliberate on both counts:
- *
- *   By DESIGN, because entries add keys as well as override them — a page's copy can be written
- *   entirely in the database, which is the point of letting someone maintain a site without
- *   touching a JSON file.
- *
- *   By NECESSITY for a frontend tenant's rows, because their keyspace belongs to that client and
- *   lives in another repository. This API has never seen `navigation.label-home` and has no way to learn
- *   it. Only a client holding its own dictionaries can say whether a key is one it uses, so if
- *   that warning is ever wanted it belongs in the admin screen, not here.
- *
- * The cost is small and worth naming: a typo — `prodcuts.list.titel` — saves cleanly and then
- * renders nowhere. Nothing is broken and nothing is overwritten; a key simply does nothing, and
- * whoever typed it has to notice. The checks below are the ones where the alternative IS damage:
- * a key no tree can hold, and a key that would collide with one already stored.
+ * Does NOT check that the key is one anything renders — entries may add keys a dictionary never
+ * defined (by design), or belong to a frontend tenant's own keyspace this API cannot see (by
+ * necessity). A typo saves cleanly and renders nowhere; the checks below guard against actual
+ * damage instead: an unstorable key, and one that collides with a key already stored.
  */
 export const rejectUnusableKey = (
     key: string,

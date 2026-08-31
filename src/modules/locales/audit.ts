@@ -1,14 +1,9 @@
 /**
  * @module
- * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
- * augmentation rather than in a shared enum.
- *
- * Every one of these is a write that changes what users read, and these rows are the only record —
- * the dictionary itself keeps no history. Reads are deliberately not audited: the messages endpoint
- * is public, anonymous text written to be published.
- *
- * Segments are snake_case, not hyphenated: `tests/cross-cutting/audit-actions.test.ts` requires
- * `noun.noun.verb` in lower snake_case.
+ * Audit actions this module emits (see `modules/account/audit.ts` for why they are declared by
+ * augmentation, not a shared enum). Each is a write that changes what users read — these rows are
+ * the only history, since reads are deliberately not audited. Segments are snake_case:
+ * `tests/cross-cutting/audit-actions.test.ts` requires `noun.noun.verb`.
  */
 
 /** Every audit action this module emits, keyed by the constant name call sites use. */

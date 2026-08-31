@@ -1,13 +1,9 @@
 /**
  * @module
- * The audit vocabulary this module emits — `src/modules/cart/audit.ts`.
- *
- * Pinned string by string: the action is a WIRE CONTRACT, not an identifier. Renaming the
- * constant type-checks and passes every other test while quietly breaking external log queries
- * and alert rules — so each value is asserted by its owner rather than left to
- * `tests/cross-cutting/audit-actions.test.ts`, which only proves the shape is well-formed.
- *
- * Whole-object equality: fails on a changed value AND on an action added or removed unnoticed.
+ * The audit vocabulary this module emits — `src/modules/cart/audit.ts`. Pinned string by string:
+ * the action is a WIRE CONTRACT, not an identifier — renaming the constant type-checks and passes
+ * every other test while quietly breaking log queries and alert rules, so each value is asserted
+ * by its owner. Whole-object equality also fails on an action added or removed unnoticed.
  */
 
 import type { AuditAction } from '@infrastructure/observability/audit';
@@ -22,11 +18,9 @@ describe('the cart audit vocabulary', () => {
     });
 
     /*
-     * The `declare module` augmentation in `audit.ts` is what puts these into `AuditAction`.
-     * Drop it and the module still compiles on its own — but `emitAuditEvent` then rejects every
-     * action this module owns, at the call sites rather than here. Checked at type-check time:
-     * `tsconfig.json` includes the whole `src` tree, so this line is compiled even though jest
-     * does not type-check it.
+     * The `declare module` augmentation in `audit.ts` puts these into `AuditAction`. Drop it and
+     * the module still compiles alone, but `emitAuditEvent` then rejects every action it owns —
+     * at the call sites, not here. Checked at type-check time even though jest itself does not.
      */
     it('registers its actions in the app-wide union', () => {
         const action: AuditAction = cartAuditActions.USER_CART_ITEM_REMOVED;

@@ -1,13 +1,10 @@
 /**
  * @module
- * Authentication — proving who is asking, and the tokens that keep proving it.
- *
- * Signup and login establish an identity; `tokenAdd` and `tokenRemoveAll` are the two writes
- * every flow that issues or revokes one goes through. What is deliberately NOT here is anything
- * about the credential's VALUE — hashing lives on the model's pre-save hook, signing lives in
- * `../session/jwt`, and changing a password is `./profile`'s.
- *
- * See `./index` for why this module's service is a folder.
+ * Authentication — proving who is asking, and the tokens that keep proving it. Signup and login
+ * establish an identity; `tokenAdd` and `tokenRemoveAll` are the two writes every flow that
+ * issues or revokes a token goes through. Deliberately NOT here: the credential's VALUE — hashing
+ * lives on the model's pre-save hook, signing in `../session/jwt`, password changes in
+ * `./profile`. See `./index` for why this module's service is a folder.
  */
 
 import { z } from 'zod';
@@ -50,28 +47,19 @@ export const tokenAdd = (
     expirationTime?: number
 ): Promise<string> => {
     const token = randomBytes(16).toString('hex');
-    // Delegates to the document method the JWT layer already uses, rather than keeping a second
-    // copy of "append a token" here. Both issue a `$push`, which is the property that matters:
-    // the array must be APPENDED TO, never rebuilt. Rebuilding it — `user.tokens = [...]` — makes
-    // mongoose write the whole array back, and a request holding a copy loaded moments earlier
-    // then erases whatever was added in between. `tokens` is exactly the field where that bites,
-    // because two sessions and a reset link are routinely added by different requests at once.
+    // Delegates to the document method the JWT layer already uses, rather than duplicating
+    // "append a token" here. Both issue a `$push` — the array must be APPENDED TO, never rebuilt.
+    // Rebuilding it (`user.tokens = [...]`) writes the whole array back, erasing anything added
+    // by a concurrent request in between; `tokens` is exactly the field where two sessions and a
+    // reset link routinely collide like that.
     return user.tokenAdd(type, expirationTime ?? 0, token);
 };
 
 /**
- * Issue a delete-confirmation token, deliver it, and record that the caller asked for one.
- *
- * A wrapper around `tokenAdd(user, 'delete', ...)` rather than an emit inside `tokenAdd` itself:
- * that function's third caller, `sendVerificationEmail`, must stay silent — pushing a
- * verification token is a side effect of signup and profile updates, not a request anyone made.
- * `tokenAdd` cannot tell those apart from its own arguments without a flag, so the callers that
- * DO want an audit record wrap it instead.
- *
- * Issuing and sending are one function, and the return type is why: the token value never leaves
- * this file. It used to be returned so a controller could compose the mail, which put a live
- * credential in a layer that has no reason to hold one — and made "a delete token exists" and "the
- * link reached its owner" two steps a caller could get half-right.
+ * Issue a delete-confirmation token, deliver it, and record the request. Wraps `tokenAdd`
+ * rather than emitting inside it, since `tokenAdd`'s other caller (`sendVerificationEmail`)
+ * must stay silent. The token value never leaves this file — returning it would hand a live
+ * delete credential to a layer that has no business holding one.
  */
 export const requestAccountDeletion = (user: UserDocument, context: CallerContext): Promise<void> =>
     tokenAdd(user, 'delete', 3_600_000).then((token) => {
@@ -108,17 +96,11 @@ export const PASSWORD_RESET_TOKEN_TYPE = 'password';
 export const PASSWORD_RESET_TOKEN_TTL_MS = 3_600_000;
 
 /**
- * Issue a password-reset token and deliver it — or do nothing, silently, for an address that has
- * no account.
- *
- * The silence is the feature. `POST /account/reset-request` answers 200 either way so that the
- * response cannot be used to find out which addresses are registered, and this function is shaped
- * to make that easy to keep: it reports what happened as a boolean for the caller's METRIC, and
- * never as a refusal that could reach a client. Its caller emits the audit record
- * unconditionally, which is why no emit happens here — see `controllers/post-reset-request.ts`.
- *
- * Like {@link requestAccountDeletion}, the token value never leaves.
- *
+ * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
+ * address. The silence is the feature: `POST /account/reset-request` always answers 200, so the
+ * response can't be used to enumerate registered addresses. The boolean return is for the
+ * caller's metric only, never a client-visible refusal — the caller audits unconditionally.
+ * Like {@link requestAccountDeletion}, the token value never leaves this file.
  * @returns `true` when a mail was queued, `false` when the address has no account
  */
 export const requestPasswordReset = (
@@ -155,18 +137,10 @@ export const requestPasswordReset = (
 };
 
 /**
- * Issue a password-set token for a user an admin just created with no password, and deliver it.
- *
- * The `users` module's `USER_SETUP_REQUESTED` domain event is the only caller — see
- * `../module.ts`'s subscriber. A domain event carries a `userId`, not a `CallerContext`, so unlike
- * {@link requestAccountDeletion} and {@link requestPasswordReset} there is no request here to audit
- * against; the admin's action is recorded once, at the point it happened, on `usersAuditActions.
- * ADMIN_USER_CREATED` in `users/service.ts`'s `create()`.
- *
- * Reuses the password-reset token type and TTL on purpose: `POST /account/reset-confirm` is exactly
- * the endpoint that should consume this link too, since setting a first password and resetting a
- * forgotten one are the same write to the same field. Only the mail's copy differs — see
- * {@link setupRequestEmail}.
+ * Issue a password-set token for an admin-created user with no password, and deliver it. Only
+ * caller: `users`' `USER_SETUP_REQUESTED` event — no `CallerContext`, so nothing to audit here
+ * (already recorded as `ADMIN_USER_CREATED` in `users/service.ts`). Reuses the reset token
+ * type/TTL; only the mail copy differs, see {@link setupRequestEmail}.
  */
 export const requestAccountSetup = (user: UserDocument): Promise<void> =>
     tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then((token) => {
@@ -200,10 +174,8 @@ export const sessionRevoke = (
 /**
  * Log out of the current session only: revoke the refresh token the caller's cookie names, if
  * any, and record it either way.
- *
- * A missing cookie is not a failure — `postLogout` answers 200 for it, matching "the caller is
- * not logged in here," which is the state they asked for — so the audit event still fires; there
- * is simply nothing to revoke.
+ * A missing cookie isn't a failure — `postLogout` answers 200 for it either way — so the audit
+ * event still fires; there's simply nothing to revoke.
  */
 export const logoutCurrentSession = (
     refreshToken: string | undefined,
@@ -217,6 +189,16 @@ export const logoutCurrentSession = (
                     outcome: 'success'
                 })
             );
+            /*
+             * This route authenticates by cookie alone, so there is no bearer to resolve and
+             * `distinctId` falls back to 'anonymous'. Under Umami the visitor is still separated
+             * by the IP + user-agent hash; under PostHog these rows do not attribute to a person.
+             */
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: accountAnalyticsEvents.USER_LOGGED_OUT,
+                properties: { scope: 'session' }
+            });
         }
     );
 
@@ -233,11 +215,9 @@ class MissingRefreshTokenError extends Error {
 
 /**
  * Exchange a refresh token for a fresh access token, recording the attempt either way.
- *
- * Takes the cookie as the caller found it, absence included, so all three outcomes — no token, a
- * token that does not verify, a token that does — are decided and recorded here. The two failures
- * stay apart in `metadata.reason`: "never sent a cookie" and "sent one that no longer works" are
- * the same 401 to the caller and very different facts in a trail.
+ * Takes the cookie as found, absence included, so all three outcomes — missing, invalid, valid —
+ * are decided and recorded here. The two failures stay apart in `metadata.reason`: same 401 to
+ * the caller, different facts in the audit trail.
  */
 export const refreshAccessToken = (
     refreshToken: string | undefined,
@@ -402,13 +382,10 @@ export const login = (
 };
 
 /**
- * Remove all tokens of a given type for the user identified by userId.
- * Used by logout-everywhere flows.
- *
- * The audit emit fires unconditionally, matching the controller it moved down from: whatever this
- * resolves to, the caller's next step is "destroy the local cookies and answer success" either
- * way, so the emit was never actually gated on `result.success` and this preserves that exactly
- * rather than introducing a new condition on the way down.
+ * Remove all tokens of a given type for the user (logout-everywhere).
+ * The audit emit fires unconditionally: the caller's next step is "clear cookies, answer
+ * success" either way, so it was never actually gated on `result.success` — this preserves
+ * that rather than introducing a new condition.
  */
 export const tokenRemoveAll = (
     userId: string,
@@ -426,12 +403,10 @@ export const tokenRemoveAll = (
                 | ResponseReject
                 | Promise<ResponseSuccess<UserDocument>> => {
                 if (!user) return generateReject(404, []);
-                // `$pull` rather than filter-and-save, for the reason above read in the other
-                // direction: `user.tokens = user.tokens.filter(...)` is a rebuild, so it writes
-                // the whole array back and erases anything added between this function's own read
-                // and its write. That window is small and cannot be opened deterministically from
-                // a test, which is the argument for closing it in the implementation rather than
-                // asserting about it — `$pull` describes a change, so there is no window at all.
+                // `$pull` rather than filter-and-save: `user.tokens = user.tokens.filter(...)`
+                // rebuilds the array, writing it back whole and erasing anything added between
+                // this function's read and write. That race window is hard to assert in a test —
+                // `$pull` describes a change instead, closing it in the implementation.
                 return user.tokenRemoveAll(type).then(() => generateSuccess<UserDocument>(user));
             }
         )
@@ -443,5 +418,12 @@ export const tokenRemoveAll = (
                     outcome: 'success'
                 })
             );
+            // Same name as the single-session logout, told apart by `scope`: one funnel counts
+            // logouts, and splitting it across two names would make every rate built on it wrong.
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: accountAnalyticsEvents.USER_LOGGED_OUT,
+                properties: { scope: 'everywhere' }
+            });
             return result;
         });

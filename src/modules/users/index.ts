@@ -1,13 +1,10 @@
 /**
  * @module
- * Users — public barrel. The only surface a sibling module may import; lint enforces it by
- * erroring on any reach into internals like `@modules/users/service`.
- *
- * Wider than most, deliberately: `account` is a second service over the same User record (signup,
- * login, password reset), so it needs `userRepository` too — the repo's one `shared-kernel`
- * relationship, held by `module-coupling-account` in `.dependency-cruiser.cjs`. `userModel` is
- * deliberately not exported: nothing outside this module calls it anymore.
- *
+ * Users — public barrel, the only surface a sibling module may import; lint errors on any reach
+ * into internals like `@modules/users/service`. Wider than most: `account` needs `userRepository`
+ * too, since it is a second service over the same record — the repo's one `shared-kernel`
+ * relationship (`module-coupling-account` in `.dependency-cruiser.cjs`). `userModel` stays
+ * unexported; nothing outside this module calls it.
  * See: docs/modules/users.md
  */
 

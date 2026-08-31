@@ -1,14 +1,9 @@
 /**
  * @module
- * PostHog analytics provider.
- *
- * The alternative to the default `umami`, for projects whose funnels are identity-shaped:
- * PostHog stitches a user's timeline by `distinct_id`, so "this logged-in user did X then Y"
- * is a question it can answer and Umami cannot. The cost is a hosted dependency in an otherwise
- * self-hosted estate, which is why it is not the default.
- *
- * Select with `NODE_ANALYTICS_PROVIDER=posthog`, and set both `NODE_POSTHOG_API_KEY` and
- * `NODE_POSTHOG_HOST`.
+ * PostHog analytics provider — the alternative to the default `umami`, for identity-shaped
+ * funnels: PostHog stitches a user's timeline by `distinct_id`, which Umami cannot do. The cost
+ * is a hosted dependency, which is why it is not the default. Select with
+ * `NODE_ANALYTICS_PROVIDER=posthog`, and set both `NODE_POSTHOG_API_KEY` and `NODE_POSTHOG_HOST`.
  *
  * See: docs/tools/analytics.md
  */
@@ -38,15 +33,11 @@ let _client: PostHog | undefined;
  * the non-null assertion on the API key below safe.
  */
 const getClient = (): PostHog => {
-    // First argument is the project API key (a *write-only* key, safe on a server).
+    // PostHog client: key is a write-only server key (safe here); host is the target region/
+    // self-host URL; flushAt/flushInterval batch events and cap staleness — flushed manually on shutdown.
     _client ??= new PostHog(process.env.NODE_POSTHOG_API_KEY!, {
-        // Target instance: PostHog cloud region or a self-hosted URL.
         host: process.env.NODE_POSTHOG_HOST,
-        // Disable auto-flush; we flush manually on shutdown.
-        // `flushAt` — send once 20 events have accumulated.
         flushAt: 20,
-        // `flushInterval` — or after 10s, whichever comes first. The pair bounds both
-        // request overhead (batching) and data staleness (the timer).
         flushInterval: 10_000
     });
     return _client;
@@ -75,33 +66,23 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
             return;
         }
 
-        // `capture()` enqueues the event locally and returns immediately — the network call
-        // happens on the batch flush described above.
+        // capture() enqueues locally and returns immediately; PostHog flushes per the batching
+        // config above. distinctId stitches the user's timeline; properties spreads caller data
+        // first so trace_id below can't be overwritten, and is added only when the event is traced.
         getClient().capture({
-            // Who the event belongs to; PostHog stitches a user's timeline by this id.
             distinctId: event.distinctId,
-            // The event name (see the shared catalogue).
             event: event.event,
-            // Optional explicit time — pass it when back-filling, otherwise PostHog stamps now.
             timestamp: event.timestamp,
             properties: {
-                // Caller-supplied domain context, spread first so the fields below cannot be
-                // overwritten by a property that happens to share their name.
                 ...event.properties,
-                // Attach OTel trace ID for log/trace/analytics correlation. Conditional spread
-                // keeps the key out entirely when untraced, rather than recording
-                // `trace_id: undefined` as a property value.
                 ...(event.traceId ? { trace_id: event.traceId } : {})
             }
         });
     },
 
     /**
-     * Flush pending events and shut down the client.
-     *
-     * Necessary because of the buffering above: without it, up to 20 events (or 10 seconds'
-     * worth) are lost on every deploy. `shutdown()` flushes the queue and waits for the request
-     * to finish.
+     * Flush pending events and shut down the client. Necessary because of the buffering above:
+     * without it, up to 20 events (or 10s worth) are lost on every deploy.
      */
     shutdown(): Promise<void> {
         if (!_client) return Promise.resolve();

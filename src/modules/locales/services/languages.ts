@@ -1,9 +1,8 @@
 /**
  * @module
- * The language rows — registering one, editing it, and removing it with everything under it.
- *
- * Also the home of the rules the other files share: a language nobody has registered, and BOTH
- * halves of what an unknown tenant means — refused on a write, dropped on a read.
+ * The language rows — registering one, editing it, and removing it with everything under it. Also
+ * the home of the rules the other files share: a language nobody has registered, and BOTH halves
+ * of what an unknown tenant means — refused on a write, dropped on a read.
  */
 
 import {
@@ -40,18 +39,9 @@ export const rejectUnknownTenant = (tenant: string): ResponseReject | undefined 
  * The same question asked by a READ: a tenant filter, with an unrecognised id dropped rather than
  * refused.
  *
- * Writes are strict and reads are lenient, and the two live beside each other because the
- * asymmetry is a decision rather than an accident — split across two layers it read as one of them
- * having been forgotten:
- *
- * - A WRITE NAMES the keyspace its row lands in. A tenant nobody serves would store copy no client
- *   can ever ask for, invisible until someone goes looking for a translation that was saved and
- *   never shown, so {@link rejectUnknownTenant} refuses it at 422 before anything is written.
- * - A READ only NARROWS a listing, and a filter matching nothing shows a translator an empty
- *   screen that blames the data. Dropping it shows every tenant, which is what the parameter
- *   defaults to anyway — the same answer `text=` and every other optional filter gives. A 422
- *   here would also make a stale admin screen, still holding a tenant since removed from the
- *   environment, unable to list anything at all.
+ * Writes are strict ({@link rejectUnknownTenant}, 422) because a tenant nobody serves would store
+ * invisible copy; reads are lenient because a bad filter should show every tenant, not an empty
+ * screen that blames the data.
  *
  * @param tenant - whatever arrived on the query string, unvalidated
  * @returns the tenant to filter by, or `undefined` for "every tenant"
@@ -138,10 +128,8 @@ export const updateLanguage = async (
 /**
  * Remove a language and everything translated into it.
  *
- * Refuses while the language is still active. The two-step is the whole safeguard: this destroys
- * work that took a person days, and an accidental `DELETE` should cost a toggle rather than the
- * work. Deactivating first is a state an admin has a reason to use anyway, so the guard asks for
- * nothing artificial.
+ * Refuses while still active — the two-step is the whole safeguard: this destroys days of work,
+ * and an accidental `DELETE` should cost a toggle first, not the work itself.
  */
 export const deleteLanguage = async (
     tag: string,

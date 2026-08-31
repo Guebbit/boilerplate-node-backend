@@ -1,14 +1,13 @@
 /**
  * @module
- * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database.
+ * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
+ * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
+ * claimed); what a customer may buy is the difference, and `availabilityOf` is the only
+ * definition of it in the codebase. Six transitions move those counters, and this file is the one
+ * place that says what each does — a seventh is one entry here plus one enum value in
+ * `openapi.yaml`.
+ *
  * See: docs/theory/domain-layer.md
- *
- * A product carries two counters: `onHand` (units that exist) and `reserved` (units an open order
- * has claimed). What a customer may buy is the difference, and `availabilityOf` is the only
- * definition of it in the codebase.
- *
- * Six transitions move those counters, and this file is the one place that says what each does.
- * A seventh is one entry here plus one enum value in `openapi.yaml`.
  */
 
 import { StockMovementReason } from '@types';
@@ -26,13 +25,10 @@ export interface CounterDelta {
 }
 
 /**
- * The six transitions, as a total map from reason to what it does.
- *
- * Reading it as a table is the point: only `receive`, `adjust` and `commit` change how many units
- * exist; `commit` moves both columns together so a sale does not change availability; `release`
- * and `expire` are the same arithmetic under two names, kept separate because the ledger's job is
- * to say which story it was.
- *
+ * The six transitions, as a total map from reason to what it does. Only `receive`, `adjust` and
+ * `commit` change how many units exist; `commit` moves both columns together so a sale doesn't
+ * change availability; `release` and `expire` are the same arithmetic under two names, kept
+ * separate because the ledger records which story it was.
  * @param reason - which transition
  * @param quantity - how many units; signed only for `adjust`, positive for everything else
  * @returns the pair of counter deltas the transition implies
@@ -72,12 +68,8 @@ export const counterDeltaFor = (reason: StockMovementReason, quantity: number): 
 };
 
 /**
- * Availability, in the one place it is defined.
- *
- * Trivial and exported anyway: three transcriptions of `a - b` is how one of them ends up
- * subtracting the wrong pair. Clamped at zero — `reserved > onHand` should be unreachable, but a
- * negative count must never reach a screen.
- *
+ * Availability, in the one place it is defined. Clamped at zero: `reserved > onHand` should be
+ * unreachable, but a negative count must never reach a screen.
  * @param counters - a product's two counters; either may be absent
  * @returns units a customer may buy, never below zero
  */

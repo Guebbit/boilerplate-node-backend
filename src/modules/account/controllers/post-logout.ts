@@ -12,16 +12,10 @@ import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/logout
- * Log out the CURRENT session only.
- *
- * The refresh cookie is both the credential and the address: whoever presents it IS this
- * session, so no bearer token is required — mirroring `GET /account/refresh`, the other endpoint
- * that works from the cookie alone. The stored token is revoked and the cookies cleared; other
- * devices keep their own tokens and stay signed in.
- *
- * Always 200. A missing cookie or an already-revoked token means the caller is not logged in
- * here — which is the state they asked for, not an error to report.
+ * POST /account/logout — logs out the CURRENT session only.
+ * The refresh cookie is both credential and address (like `GET /account/refresh`), so no bearer
+ * token is needed: the stored token is revoked and cookies cleared, other devices stay signed in.
+ * Always 200 — a missing or already-revoked cookie just means "not logged in here", not an error.
  */
 export const postLogout = (request: Request, response: Response) => {
     const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;

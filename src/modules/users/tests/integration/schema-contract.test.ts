@@ -1,11 +1,8 @@
 /**
  * @module
- * Schema contract — the declarations themselves, not the transforms.
- *
- * The sibling specs in this folder cover behaviour; this covers what the SCHEMA says — defaults,
- * `required`, and `select: false` on credentials — which is equally part of the API and not
- * exercised anywhere else. Runs against real Mongo, since these are Mongoose's behaviours rather
- * than ours: a mocked model would only assert the mock's opinion of what `default` means.
+ * Schema contract — the declarations themselves, not the transforms: defaults, `required`, and
+ * `select: false` on credentials. Runs against real Mongo, since these are Mongoose's own
+ * behaviours rather than ours — a mocked model would only assert the mock's opinion of `default`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -70,18 +67,12 @@ describe('user schema', () => {
     });
 
     /**
-     * `email` is unique at the DATABASE level, and this is the case that says so.
-     *
-     * The application check in `authService.signup` (`findOne({ email })` → 409) is not enough on
-     * its own, and cannot be: it is not atomic. Two concurrent signups for one address both pass
-     * the lookup and both insert, and `login` then resolves to whichever document Mongo returns
-     * first, which can change between requests.
-     *
-     * No application-level check can close that, because the gap is between the check and the
-     * write. The index is what refuses the second insert.
-     * `tests/integration/concurrency/auth-races.test.ts` drives the race itself; this case pins
-     * the constraint the race relies on, so a schema edit that quietly drops `unique` fails here
-     * rather than in a timing-dependent test.
+     * `email` is unique at the DATABASE level — this pins the constraint a concurrency race
+     * relies on. The application check in `authService.signup` (`findOne` → 409) isn't atomic:
+     * two concurrent signups for one address can both pass the lookup and both insert, so only
+     * the index can refuse the second write.
+     * `tests/integration/concurrency/auth-races.test.ts` drives the race itself; this case fails
+     * fast if a schema edit quietly drops `unique`.
      */
     it('enforces email uniqueness at the database level', async () => {
         await createUser({ email: 'duplicate@example.com' });

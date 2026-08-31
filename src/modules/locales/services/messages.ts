@@ -1,10 +1,8 @@
 /**
  * @module
- * The two reads that hand out stored copy — a frontend's downloadable overrides, and the API's
- * own overlay.
- *
- * Both expand flat rows through {@link buildMessageTree}, and they differ in exactly one thing:
- * which tenant's keyspace they are allowed to serve.
+ * The two reads that hand out stored copy — a frontend's downloadable overrides, and the API's own
+ * overlay. Both expand flat rows through {@link buildMessageTree}, differing in exactly one thing:
+ * which tenant's keyspace each is allowed to serve.
  */
 
 import type { LocaleMessages, LocaleTenant } from '@types';
@@ -21,17 +19,12 @@ import { languageNotFound } from './languages';
 
 /**
  * The OVERRIDES a client downloads for one language — one frontend tenant's rows, never the
- * backend's.
+ * backend's. Not a dictionary: a client merges this over what it bundles, key by key, so a
+ * language nobody has finished falls back per key.
  *
- * Not a dictionary: a client merges this over what it bundles, key by key, so a key nobody has
- * edited keeps its bundled text and a language nobody has finished falls back per key. Handing a
- * frontend the API's own rows instead would give it the backend's keyspace, which it did not
- * author and cannot render — so the backend tenant, and any id nobody configured, answer 404 here
- * exactly as an unknown language does.
- *
- * An INACTIVE language answers exactly as an unknown one does. Inactive means invisible to the
- * public, and a 403 or an empty 200 would both leak that the language exists — which is the one
- * thing a draft translation is being kept from doing.
+ * The backend tenant, an unconfigured id, and an INACTIVE language all answer 404 exactly as an
+ * unknown language does — a 403 or empty 200 for "inactive" would leak that a draft translation
+ * exists.
  *
  * @param tenant - whose dictionary; omitted, the deployment's default frontend tenant
  */
@@ -54,21 +47,14 @@ export const readMessages = async (
 };
 
 /**
- * Every override of the BACKEND tenant, grouped by language and expanded into trees.
+ * Every override of the BACKEND tenant, grouped by language and expanded into trees. The provider
+ * `@infrastructure/i18n` calls to rebuild its overlay.
  *
- * The provider `@infrastructure/i18n` calls to rebuild its overlay — see the "Database overrides"
- * block there for what the overlay guarantees. Nested here rather than there because expanding a
- * dotted key is this module's job: {@link buildMessageTree} is the one place that refuses
- * `__proto__` and reports a key that is both a string and a group.
+ * INACTIVE languages are included on purpose: `active` governs what the PUBLIC can see, and an
+ * override is neither — excluding them would silently revert backend copy mid-translation.
  *
- * INACTIVE languages are included, and deliberately so. `active` governs what the PUBLIC can see —
- * the manifest and the downloadable dictionary — and an override is neither. Excluding them would
- * mean a language deactivated mid-translation silently reverted the backend copy already approved
- * for it, which is a different decision than "hide this from visitors".
- *
- * A key both a string and a group throws in the builder. That would take the whole refresh down,
- * so it is caught per language: one malformed dictionary costs its own overrides and leaves every
- * other language's applied.
+ * A key that is both a string and a group throws in the builder; caught per language so one
+ * malformed dictionary does not take the whole refresh down.
  */
 export const readApiOverrides = async (): Promise<Record<string, Record<string, unknown>>> => {
     const rows = await localeMessageRepository.listEntriesByTenant(backendTenant());

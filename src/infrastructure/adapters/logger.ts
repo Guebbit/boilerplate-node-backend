@@ -13,16 +13,12 @@ import winston from 'winston';
 /**
  * Field names that must never be logged in clear text.
  *
- * A `Set` rather than an array so the recursive walk below is O(1) per key instead of O(n).
- * Keys are stored lowercase and compared lowercase, which catches `Authorization`,
- * `AUTHORIZATION` and `authorization` with one entry.
- */
-/*
- * Exported so `tests/unit/infrastructure/adapters/logger.test.ts` can drive a case PER ENTRY rather than
- * sampling a handful. A redaction list is a declarative table, and this repo has already paid
- * once for testing a declarative table by sampling it: `responseSchemaMap.ts` in the paired
- * frontend scored 55% with 182 survivors that way. Sampling a security policy is worse — the
- * entries nobody sampled are the ones that leak.
+ * A `Set`, not an array, so the recursive walk below is O(1) per key. Keys are stored and
+ * compared lowercase, catching `Authorization`/`AUTHORIZATION`/`authorization` with one entry.
+ *
+ * Exported so `tests/unit/infrastructure/adapters/logger.test.ts` can assert every entry
+ * individually rather than sampling — a redaction list is a security policy, and the entries
+ * nobody sampled are the ones that leak.
  */
 export const SENSITIVE_FIELDS = new Set([
     'password',
@@ -103,14 +99,11 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
 /**
  * Apply error serialization and redaction before transport output.
  *
- * `winston.format(fn)` wraps a transform into a reusable format *factory*; calling the result
- * (`redactFormat()`, below) produces the actual format instance. The transform receives the
- * mutable `info` record and must return it (returning `false` would drop the record entirely).
- */
-/*
- * Exported for the same reason as `SENSITIVE_FIELDS`: this is the WIRING, and a perfect
- * `redactSensitiveFields` behind broken wiring redacts nothing in production. Call it as
- * `redactFormat().transform(info)` to drive it directly.
+ * `winston.format(fn)` wraps a transform into a reusable format *factory* — calling the result
+ * (`redactFormat()`, below) yields the actual format instance; the transform must return the
+ * mutated `info` record (returning `false` would drop it entirely). Exported for the same reason
+ * as `SENSITIVE_FIELDS`: this is the WIRING, and perfect redaction logic behind broken wiring
+ * redacts nothing in production.
  */
 export const redactFormat = winston.format((info) => {
     // `level` and `message` are winston's own reserved fields; separating them means the
@@ -132,11 +125,10 @@ export const redactFormat = winston.format((info) => {
 /**
  * Resolve runtime log level with sensible defaults per environment.
  *
- * Winston levels are hierarchical (error < warn < info < http < verbose < debug < silly):
- * setting `info` suppresses everything more verbose. `debug` locally, `info` in production
- * to avoid paying ingestion cost for noise.
+ * Winston levels are hierarchical (error < warn < info < http < verbose < debug < silly);
+ * `debug` locally, `info` in production to avoid paying ingestion cost for noise. Exported so
+ * the environment matrix can be asserted rather than assumed.
  */
-/* Exported so the environment matrix can be asserted rather than assumed. */
 export const resolveLogLevel = (): string => {
     if (process.env.NODE_LOG_LEVEL) return process.env.NODE_LOG_LEVEL;
     return process.env.NODE_ENV === 'production' ? 'info' : 'debug';
@@ -145,10 +137,9 @@ export const resolveLogLevel = (): string => {
 /**
  * Shared JSON format for production log shipping.
  *
- * `format.combine()` composes transforms left to right, so order is significant:
- * timestamp is added first, redaction then runs over the full record, and `json()`
- * serializes last — one line per record, which is what log collectors
- * (Loki, CloudWatch, Datadog) expect to parse.
+ * `format.combine()` composes transforms left to right: timestamp first, then redaction over the
+ * full record, then `json()` serializes last — one line per record, which log collectors (Loki,
+ * CloudWatch, Datadog) expect.
  */
 const baseFormat = winston.format.combine(
     // Explicit ISO-8601 with milliseconds and offset; the winston default is locale-dependent.
@@ -180,16 +171,13 @@ const prettyFormat = winston.format.combine(
 );
 
 /**
- * Pick the console format from WHO IS READING, not from `NODE_ENV` — the two are different
- * questions, and conflating them silently breaks log shipping.
- *
- * `isTTY` is true only for an interactive terminal and false for a pipe or a container log file,
- * which is exactly when something downstream has to parse the line. Production stays JSON
- * regardless.
+ * Pick the console format from WHO IS READING, not from `NODE_ENV` — conflating the two silently
+ * breaks log shipping. `isTTY` is true only for an interactive terminal, false for a pipe or a
+ * container log file — exactly when something downstream has to parse the line. Production stays
+ * JSON regardless. Exported so the environment matrix can be asserted rather than assumed.
  *
  * See: docs/tools/loki.md
  */
-/* Exported so the matrix can be asserted rather than assumed. */
 export const resolveConsoleFormat = (): winston.Logform.Format =>
     process.env.NODE_ENV !== 'production' && process.stdout.isTTY ? prettyFormat : baseFormat;
 
@@ -222,10 +210,9 @@ export const logger = winston.createLogger({
 /**
  * Dedicated stream for security/audit events. Always JSON.
  *
- * Separate from `logger` on purpose: audit records are a compliance artefact, so they must
- * not be silenced by `NODE_LOG_LEVEL` (hard-coded `info`) and must not be reformatted for
- * human reading in dev (always `baseFormat`) — the shape has to stay machine-stable.
- * Fed by `@infrastructure/observability/audit`.
+ * Separate from `logger` on purpose: audit records are a compliance artefact, so they can't be
+ * silenced by `NODE_LOG_LEVEL` (hard-coded `info`) or reformatted for dev reading (always
+ * `baseFormat`) — the shape has to stay machine-stable. Fed by `@infrastructure/observability/audit`.
  */
 export const auditLogger = winston.createLogger({
     // Fixed, not env-driven: audit trails cannot be turned off by configuration.

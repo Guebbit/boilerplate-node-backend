@@ -16,12 +16,10 @@ import { sendVerificationEmail } from '../services';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
- * PUT /account
- * The authenticated user updates their OWN profile — email, username, locale, image, phone,
- * website.
- *
- * This endpoint is why a normal user can edit their profile at all: the `/users` writes sit
- * behind `isAdmin`, and self-service going through them answered every non-admin a 403.
+ * PUT /account — the authenticated user updates their OWN profile (email, username, locale,
+ * image, phone, website).
+ * This is why a normal user can edit at all: `/users` writes sit behind `isAdmin`, which would
+ * 403 every non-admin doing self-service through them.
  */
 export const putAccount = (
     request: Request<unknown, unknown, UpdateAccountRequest | UpdateAccountRequestMultipart>,

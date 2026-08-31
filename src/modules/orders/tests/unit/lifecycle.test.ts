@@ -1,9 +1,8 @@
 /**
  * @module
  * The order lifecycle — `src/modules/orders/domain/lifecycle.ts`. Pure: no mocks, no database.
- *
- * Asserts the SENTENCES the table encodes, not the rows. A test restating it row by row passes
- * against a table copied wrong, because the copy and the expectation are the same mistake twice.
+ * Asserts the SENTENCES the table encodes, not the rows — restating it row by row would pass
+ * against a table copied wrong, since the copy and the expectation repeat the same mistake.
  *
  * See `docs/theory/tactical-ddd.md` §1 for what each rule is protecting.
  */

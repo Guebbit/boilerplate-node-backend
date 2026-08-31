@@ -17,12 +17,8 @@ import { rejectValidation } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/password
- * Change the authenticated user's password by proving the current one.
- *
- * The email reset proves possession of the mailbox; this proves possession of the credential
- * being replaced — no email round-trip, no token. Other sessions stay live, matching what the
- * contract says: revoking them is `logout-all`'s or the sessions endpoints' job.
+ * POST /account/password — changes the password by proving the current one (no email
+ * round-trip, unlike the reset flow). Other sessions stay live; revoking them is `logout-all`'s job.
  */
 export const postPasswordChange = (
     request: Request<unknown, unknown, ChangePasswordRequest>,

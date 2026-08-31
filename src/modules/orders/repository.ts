@@ -1,10 +1,9 @@
 /**
  * @module
- * Order repository.
- *
- * Unlike the other collections, orders are read through the aggregation framework: an order
- * embeds a product snapshot, and filtering on `items.product._id` is a pipeline concern. The
- * repository factory still supplies plain CRUD; search is overridden below.
+ * Order repository. Unlike the other collections, orders are read through the aggregation
+ * framework: an order embeds a product snapshot, and filtering on `items.product._id` is a
+ * pipeline concern. The repository factory still supplies plain CRUD; search is overridden
+ * below.
  */
 
 import { orderModel, applyOrderTransform } from './model';
@@ -47,15 +46,11 @@ const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =
     orderModel.aggregate<T>(pipeline);
 
 /**
- * Filter → count → page → normalize, over the aggregation framework.
- *
- * The `$match` is built from the same declared spec the other repositories use, so id coercion
- * stays in one place. `$match` does NOT cast the way `find()` does, which is exactly why the
- * coercion has to happen before the pipeline is assembled.
- *
- * `async` for the same reason as the repository factory's `search`: `buildWhere` runs synchronously and
- * can throw on a malformed id, and a function typed `Promise<T>` must reject rather than throw —
- * otherwise the caller's `.catch()` is bypassed and the client gets a 500 instead of a 422.
+ * Filter → count → page → normalize, over the aggregation framework. `$match` is built from the
+ * same declared spec the other repositories use, so id coercion happens before the pipeline is
+ * assembled — unlike `find()`, `$match` doesn't cast. `async` so `buildWhere`'s synchronous
+ * throw on a malformed id becomes a rejection, not a thrown error that bypasses the caller's
+ * `.catch()`.
  */
 const search = async (
     filters: SearchFilters = {},
@@ -88,27 +83,14 @@ const search = async (
 };
 
 /**
- * Fetch one order, optionally restricted to a caller's own rows.
- *
- * Goes through the pipeline rather than `findById` so the `_id` lookup and the authorization
- * scope are applied by the same query — checking ownership after the read is how a scoped find
- * turns into an information leak.
- *
- * **The return is polymorphic, deliberately: the scope picks the shape.** Unscoped (an admin,
- * whose `callerScope` is `undefined`) resolves a *hydrated* Mongoose document — mutable,
- * `save()`-able. Scoped (an owner) resolves an aggregate row already through
- * `applyOrderTransform` — a plain object, and `search` does the same for the same reason. Both
- * serialize identically on the wire, because the transform is also the schema's `toJSON`, so a
- * response body never shows the difference.
- *
- * **What a caller may read is therefore `id`, never `_id`.** `id` resolves on both branches: on
- * the document it is Mongoose's virtual, on the plain object it is written by the transform,
- * which deletes `_id` on the very next line (`@infrastructure/persistence/serialize`). `_id`
- * resolves only on the admin branch, and TypeScript cannot catch the difference — `OrderDocument`
- * extends `Document`, so `_id` type-checks on a value that will not carry it at runtime. The
- * failure is silent, role-dependent and survives a green suite: it reads as `undefined` for
- * exactly the callers who are not admins. That is not hypothetical — the invoice filename and
- * the invoice's own title both shipped that way.
+ * Fetch one order, optionally restricted to a caller's own rows. Goes through the pipeline
+ * rather than `findById` so the lookup and the authorization scope apply in the same query —
+ * checking ownership after the read is how a scoped find becomes an information leak. The
+ * return is polymorphic: unscoped (admin) resolves a hydrated Mongoose document, scoped (owner)
+ * resolves a plain object already through `applyOrderTransform` — both serialize identically,
+ * but only `id` resolves on both. `_id` type-checks on `OrderDocument` yet is `undefined` for
+ * non-admins at runtime, silently and unchecked by TypeScript — the invoice filename shipped
+ * that bug once already.
  */
 const findByIdScoped = (
     id: string,
@@ -136,17 +118,12 @@ const ownerScope = (userId: string): Record<string, unknown> => ({
 });
 
 /**
- * What a non-admin caller is allowed to see: their own orders, not soft-deleted.
- *
- * The counterpart of `publicScope` in `@modules/products`, and it lives here for the same
- * reason — it is a rule about which *rows* exist for a given audience, not about a request.
- *
- * Two axes, deliberately composed rather than merged: `ownerScope` answers "whose", the
- * `deletedAt` clause answers "still there". An admin passes no scope at all, which is how they
- * read both other people's orders and soft-deleted ones.
- *
- * `$exists: false` rather than `null`: `remove` unsets the field to restore, so a restored order
- * has no `deletedAt` key rather than a null one.
+ * What a non-admin caller is allowed to see: their own orders, not soft-deleted — the
+ * counterpart of `publicScope` in `@modules/products`, a rule about which *rows* exist for an
+ * audience. Two axes, composed rather than merged: `ownerScope` answers "whose", `deletedAt`
+ * answers "still there"; an admin passes no scope, which is how they read other people's orders
+ * and soft-deleted ones. `$exists: false` not `null`: `remove` unsets the field to restore, so a
+ * restored order has no `deletedAt` key.
  */
 const visibleScope = (userId: string): Record<string, unknown> => ({
     ...ownerScope(userId),
@@ -154,18 +131,13 @@ const visibleScope = (userId: string): Record<string, unknown> => ({
 });
 
 /**
- * Move an order between statuses, but only from one of the expected ones — atomically.
- *
- * The condition rides IN THE FILTER, not in a preceding read, for the same reason the cart's
- * checkout guard does: two requests racing an order (a customer cancelling while the admin marks
- * it shipped) must not both read `pending` and both write. mongod evaluates the filter while
- * holding the document, so exactly one of them matches; the loser gets `null` and the caller
- * decides whether that means "gone" or "no longer cancellable" with a follow-up read that only
- * informs the error message.
- *
- * The scope composes like everywhere else: the caller's `visibleScope` rides in the same filter,
- * so a non-admin cannot move an order they cannot see — there is no window between an ownership
- * check and the write because there is no separate ownership check.
+ * Move an order between statuses, but only from one of the expected ones — atomically. The
+ * condition rides IN THE FILTER, not a preceding read: two requests racing an order (a customer
+ * cancelling while admin marks it shipped) must not both read `pending` and both write. mongod
+ * evaluates the filter while holding the document, so exactly one matches; the loser gets `null`
+ * and a follow-up read only informs the error message. The scope composes the same way:
+ * `visibleScope` rides in the same filter, so there's no window between an ownership check and
+ * the write.
  */
 const updateStatusIfIn = (
     id: string,

@@ -16,12 +16,8 @@ import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
 
 /**
- * GET /orders/:id/invoice
- * Generate and return a PDF invoice for the order.
- * Non-admin users can only access their own orders.
- *
- * WARNING: Images and other link-related resources will NOT work in the PDF.
- * To embed them, convert images to base64.
+ * GET /orders/:id/invoice — PDF invoice for the order; non-admin callers see only their own.
+ * WARNING: image/link resources will not render in the PDF — embed images as base64 instead.
  */
 export const getOrderInvoice = (request: Request<{ id?: string }>, response: Response) => {
     // 404 on an unusable id, and checked before the query for the reason `get-order-item.ts`
@@ -51,9 +47,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
              */
             const orderId = String((order as typeof order & { id?: string }).id ?? order._id);
 
-            /**
-             * Create PDF file using the invoice EJS template
-             */
+            // ejs.renderFile: compiles the template file against the given locals into HTML.
             return ejs
                 .renderFile(
                     path.resolve('shared', 'views', 'templates-files', 'orders.invoice.ejs'),

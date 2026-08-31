@@ -28,11 +28,8 @@ export interface CheckoutShortfall {
 
 /**
  * What this line's product has left to sell.
- *
- * A deliberate second copy of `inventory`'s `availabilityOf`: the domain layer may import no
- * sibling module, and two lines of arithmetic is cheaper than opening that door.
- * `tests/unit/domain-rules.test.ts` asserts the two agree, so they cannot drift silently.
- * `inventory` is the authority — if they ever disagree, this one is wrong.
+ * Deliberately duplicates `inventory`'s `availabilityOf` — the domain layer may import no
+ * sibling module. `domain-rules.test.ts` asserts the two agree; `inventory` is the authority.
  *
  * @param product - the joined product, or nothing
  * @returns units a customer may still buy

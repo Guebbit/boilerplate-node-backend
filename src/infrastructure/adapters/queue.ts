@@ -1,20 +1,16 @@
 /**
  * @module
- * RabbitMQ (AMQP 0-9-1) adapter.
- *
- * Like the cache adapter, every function degrades to a no-op when the broker is not
- * configured — `publishToQueue` returns `false` and callers fall back to doing the work
- * inline (see `adapters/mailer.ts` → `enqueueEmail`).
+ * RabbitMQ (AMQP 0-9-1) adapter. Like the cache adapter, every function degrades to a no-op when
+ * the broker is not configured — `publishToQueue` returns `false` and callers fall back to doing
+ * the work inline (see `adapters/mailer.ts` → `enqueueEmail`).
  *
  * See: docs/tools/rabbitmq.md
  */
 
-// `amqplib` is the AMQP 0-9-1 client. Key concepts used below:
-//  - `ChannelModel` — the TCP *connection* to the broker (expensive; one per process).
-//  - `Channel` — a lightweight multiplexed session inside that connection; all commands
-//    (assertQueue/sendToQueue/consume/ack) are issued on a channel, never on the connection.
-//  - `ConsumeMessage` — a delivered message: `.content` (Buffer) plus delivery metadata,
-//    including the delivery tag that `ack`/`nack` reference.
+// `amqplib` is the AMQP 0-9-1 client: `ChannelModel` is the TCP connection to the broker
+// (expensive, one per process); `Channel` is a lightweight session inside it that all commands
+// run on; `ConsumeMessage` is a delivered message — `.content` (Buffer) plus the delivery tag
+// `ack`/`nack` reference.
 import type { EventEmitter } from 'node:events';
 import amqplib, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
 import { logger } from '@infrastructure/adapters/logger';
@@ -67,10 +63,9 @@ let connection: ChannelModel | undefined;
 /**
  * Attach the mandatory `error` and `close` listeners to an amqplib handle.
  *
- * Both the connection and the channel are EventEmitters that fail independently, and an unhandled
- * `error` on either takes the process down. One helper so the pair cannot be attached to one and
- * forgotten on the other. `onClose` drops the cached reference: that is the whole reconnect
- * strategy, driven by demand.
+ * Both connection and channel are EventEmitters that fail independently — an unhandled `error`
+ * takes the process down. One helper so the pair can't be attached on one and forgotten on the
+ * other. `onClose` drops the cached reference; that's the whole reconnect strategy.
  *
  * @param handle - the connection or channel to supervise
  * @param onClose - what to forget when it closes
@@ -83,10 +78,9 @@ const superviseHandle = (handle: EventEmitter, onClose: () => void): void => {
 /**
  * The one channel this process publishes and consumes on.
  *
- * Memoising, sharing the in-flight connect, warning once and reporting a `DependencyStatus` are
- * `manageConnection`'s job — the same rules `cache.ts` runs on, so two dependencies in one health
- * payload cannot answer "what does `connecting` mean" differently. What is AMQP-specific is the
- * two-step open (connection, then channel) and the fact that both halves need supervising.
+ * Memoising, sharing the in-flight connect, and warning once are `manageConnection`'s job — same
+ * rules `cache.ts` runs on, so `connecting` means the same thing in one health payload. What's
+ * AMQP-specific is the two-step open (connection, then channel), and both halves need supervising.
  */
 const queueConnection = manageConnection<Channel>({
     unavailableMessage: 'RabbitMQ unavailable, queue operations will be skipped.',
@@ -213,12 +207,11 @@ export const deadLetterQueueOf = (queue: string): string => `${queue}.dead`;
 /**
  * Declare a work queue, its dead-letter queue, and the binding between them.
  *
- * Idempotent, and called on both the publish and consume paths so producer and consumer may start
- * in any order. The dead-letter queue is bound BEFORE the work queue names the exchange: a queue
- * whose `x-dead-letter-exchange` resolves to nothing drops the message anyway.
- *
- * `assertQueue` throws `PRECONDITION_FAILED` when a queue already exists with different arguments,
- * which kills the channel — see `docs/tools/rabbitmq.md` for upgrading an existing broker.
+ * Idempotent, called on both publish and consume paths so producer and consumer may start in any
+ * order. The dead-letter queue is bound BEFORE the work queue names the exchange — otherwise a
+ * queue whose `x-dead-letter-exchange` resolves to nothing just drops the message. `assertQueue`
+ * throws `PRECONDITION_FAILED` (killing the channel) if it already exists with different args —
+ * see `docs/tools/rabbitmq.md` for upgrading an existing broker.
  *
  * @param ch - the channel to declare on
  * @param queue - the work queue
@@ -255,20 +248,15 @@ export interface PublishOptions<TPayload = unknown> {
 }
 
 /**
- * Publish a message to a queue.
- * No-op when RabbitMQ is not configured.
+ * Publish a message to a queue. No-op when RabbitMQ is not configured.
  *
- * @returns `true` when the broker accepted the message, `false` when the queue is
- *          unavailable — callers use this to decide whether to fall back to inline work.
+ * Publishes to the *default exchange* (empty name), where the routing key IS the queue name — the
+ * simplest AMQP topology there is. `TPayload` is the job envelope: naming it explicitly
+ * (`publishToQueue<EmailJob>(…)`) checks this call against the same type its consumer declares, so
+ * a field added on one side and forgotten on the other is a compile error, not a 3am silent drop.
  *
- * Publishes to the *default exchange* (empty name), where the routing key is taken as a
- * literal queue name — the simplest AMQP topology there is. The only exchange this file declares
- * is the dead-letter one, which the broker uses on the way OUT of a queue, never on the way in.
- *
- * `TPayload` is the job envelope. A producer that names it — `publishToQueue<EmailJob>(…)` in
- * `enqueueEmail` — gets the same type checked here that its consumer declares, so a field added
- * on one side and forgotten on the other is a compile error rather than a message the worker
- * discards at 3am. Left inferred it defaults to `unknown`, which costs a caller nothing.
+ * @returns `true` when the broker accepted the message, `false` when the queue is unavailable —
+ *          callers use this to decide whether to fall back to inline work.
  */
 export const publishToQueue = <TPayload = unknown>(
     options: PublishOptions<TPayload>
@@ -293,11 +281,9 @@ export const publishToQueue = <TPayload = unknown>(
                     })
                 )
                 // `sendToQueue` returns a boolean: false means amqplib's internal write buffer is
-                // full (backpressure) and the caller should wait for the channel's 'drain' event.
-                // This is surfaced to the caller as-is rather than handled.
-                //
-                // The catch is the declared contract: a channel that died since the cached-handle
-                // check rejects here, and every caller reads a boolean.
+                // full (backpressure), surfaced to the caller as-is rather than handled. The catch
+                // is the declared contract: a channel that died since the cached-handle check
+                // rejects here, and every caller reads a boolean either way.
                 .catch((error: unknown) => {
                     queueConnection.reportUnavailable(error);
                     return false;
@@ -343,10 +329,9 @@ const parseMessageBody = (incoming: ConsumeMessage): unknown => {
  * Handle one delivered message: parse it, run the caller's handler, and translate the outcome
  * into ack/nack.
  *
- * Split out of `consumeFromQueue` because this is the genuinely nested half of that function —
- * amqplib's `consume` callback fires once per delivery for the life of the process, not once as
- * part of the connect/prefetch chain that registers it — so this holds the ack-decision logic at
- * its own ≤3-level depth instead of piling it inside that callback inside that chain.
+ * Split out of `consumeFromQueue` because amqplib's `consume` callback fires once per delivery
+ * for the process lifetime, not once during the connect/prefetch chain that registers it — so
+ * the ack-decision logic gets its own ≤3-level depth instead of piling inside that chain.
  *
  * @param ch - channel to ack/nack on
  * @param queue - queue name, for the parse-failure log line
@@ -371,15 +356,11 @@ const handleDelivery = <TPayload>(
     }
 
     /*
-     * The one assertion in this pipeline, and the only place it belongs: this
-     * is where bytes become a value, so it is the only line that can lie about
-     * the shape. `JSON.parse` cannot know `TPayload`, and no generic makes it
-     * know — the handler is still responsible for checking the fields it needs
-     * before using them, which is why the workers narrow with a predicate and
-     * declare their payload `Partial<…>` rather than fully-formed.
-     *
-     * Keeping it here means it happens once, at the boundary, instead of once
-     * per worker in code that has no idea where the value came from.
+     * The one assertion in this pipeline: this is where bytes become a value, and `JSON.parse`
+     * can't know `TPayload` — no generic makes it. The handler still checks the fields it needs
+     * before using them, which is why workers narrow with a predicate and declare their payload
+     * `Partial<…>` rather than fully-formed. Keeping it here means it happens once, at the
+     * boundary, instead of once per worker.
      */
     // The handler's boolean *is* the ack decision — see the policy above.
     handler(parsed as TPayload, incoming)
@@ -395,26 +376,16 @@ const handleDelivery = <TPayload>(
 };
 
 /**
- * Register a consumer on a queue.
- * No-op when RabbitMQ is not configured.
+ * Register a consumer on a queue. No-op when RabbitMQ is not configured.
  *
- * Acknowledgement policy, which is the important part of this function (enforced by
- * {@link handleDelivery}):
- *  - handler resolves `true`  → `ack`  — done, broker deletes the message
+ * Acknowledgement policy (enforced by {@link handleDelivery}):
+ *  - handler resolves `true`  → `ack` — done, broker deletes the message
  *  - handler resolves `false` → `nack` without requeue — permanent business rejection
  *  - handler *throws*         → `nack` with requeue — assumed transient, try again
  *  - unparseable message      → `nack` without requeue — will never parse, so requeuing loops
  *
- * Both `nack`-without-requeue arms route to `DEAD_LETTER_EXCHANGE`, so "discard" means "moved to
- * `<queue>.dead`", not "deleted".
- *
- * Caveat: requeue-on-throw spins hot if the failure is actually permanent — bounded by `prefetch`,
- * and loud rather than silent.
- *
- * `TPayload` is inferred from the handler, which is how a worker gets to declare its own job type
- * (`handleEmailJob(job: Partial<EmailJob>)`) instead of taking `unknown` and asserting its way
- * back to it. The type is a *claim about the wire*, never a check — see the assertion in
- * {@link handleDelivery}.
+ * Both `nack`-without-requeue arms route to `DEAD_LETTER_EXCHANGE`. `TPayload` is inferred from
+ * the handler as a *claim about the wire*, never a check.
  */
 export const consumeFromQueue = <TPayload = unknown>(
     options: ConsumeOptions<TPayload>

@@ -1,14 +1,8 @@
 /**
  * @module
- * Redis cache adapter — a byte store with tags, and nothing above that.
- *
- * Every function here *fails open*: if Redis is unreachable the app keeps serving requests
- * without a cache rather than returning errors. A cache is an optimisation, never a dependency.
- *
- * What it stores is an opaque `string`. The one thing cached today is an HTTP response, but the
- * envelope that makes a response replayable belongs to the middleware that caches responses, not
- * here — a project that wants to cache something else writes its own bytes through the same four
- * functions instead of abusing a response shape.
+ * Redis cache adapter — an opaque byte store with tags, nothing more. Every function fails open:
+ * if Redis is unreachable the app keeps serving without a cache rather than erroring. What gets
+ * cached (today, HTTP responses) and how it's framed is the caller's business, not this module's.
  *
  * See: docs/tools/redis-cache.md
  */
@@ -42,20 +36,17 @@ const getRedisUrl = (): string | undefined => {
 };
 
 /**
- * Turn cache usage on only when Redis is configured and not explicitly disabled.
- *
- * Two independent switches: no URL means "not available", while `NODE_REDIS_CACHE_ENABLED=0`
- * is an explicit kill switch — useful for debugging a suspected stale-cache problem in
- * production without tearing down the Redis service itself.
+ * Cache usage is on only when Redis is configured and not explicitly disabled — two independent
+ * switches, since `NODE_REDIS_CACHE_ENABLED=0` is a kill switch for debugging a stale cache
+ * without tearing down Redis itself.
  */
 const isCacheEnabled = () =>
     Boolean(getRedisUrl()) && environmentFlag('NODE_REDIS_CACHE_ENABLED', true);
 
 /**
  * The one connection this process opens to Redis — a client per request exhausts Redis' limit.
- *
- * The lifecycle rules (memoise, share the in-flight connect, warn once, resolve `undefined`
- * instead of rejecting) are `manageConnection`'s; what is Redis-specific is below.
+ * Lifecycle rules (memoise, share in-flight connect, warn once) live in `manageConnection`; only
+ * what's Redis-specific is below.
  */
 const cacheConnection = manageConnection<RedisClientType>({
     unavailableMessage: 'Redis cache unavailable, continuing without server-side cache.',
@@ -121,11 +112,8 @@ const cacheConnection = manageConnection<RedisClientType>({
 export const cacheState = (): DependencyStatus => cacheConnection.state();
 
 /**
- * Build one namespaced Redis key.
- *
- * Callers pass a sub-namespace, giving the two key families used here:
- *   `<prefix>:key:<hash>` → a cached value    (a Redis string)
- *   `<prefix>:tag:<name>` → the keys under a tag   (a Redis set)
+ * Build one namespaced Redis key: `<prefix>:key:<hash>` for a cached value (a Redis string),
+ * `<prefix>:tag:<name>` for the keys under a tag (a Redis set).
  */
 const prefix = (value: string) => `${CACHE_PREFIX}:${value}`;
 
@@ -145,9 +133,8 @@ export const stopCache = (): Promise<void> => cacheConnection.stop();
 /**
  * Read one cached value from Redis.
  *
- * Resolves with `undefined` on a miss, on a Redis failure, and when caching is disabled — the
- * caller cannot distinguish them, and does not need to. What the bytes MEAN is the caller's
- * business; this returns them exactly as they were written.
+ * Resolves `undefined` on a miss, a Redis failure, or when caching is disabled — callers can't
+ * tell which. Bytes are returned exactly as written; what they mean is the caller's business.
  */
 export const getCacheValue = (key: string): Promise<string | undefined> =>
     cacheConnection
@@ -205,13 +192,9 @@ export const setCacheValue = (
                         EX: ttlSeconds
                     })
                     .then(() =>
-                        // Also index this key by tags so future writes can invalidate related reads.
-                        // `sAdd` = SADD, adding the key to each tag's Redis set (idempotent by nature
-                        // of sets). This reverse index is what makes group invalidation possible:
-                        // Redis cannot delete "all keys matching a pattern" efficiently.
-                        // NOTE: the tag sets carry no TTL of their own, so they accumulate references
-                        // to expired keys until `invalidateCacheTags` clears them — harmless, since
-                        // deleting an already-expired key is a no-op.
+                        // Index this key by tags too — `sAdd`/SADD adds it to each tag's Redis
+                        // set, which is what makes group invalidation possible (Redis cannot
+                        // delete by pattern efficiently).
                         Promise.all(
                             cacheTags.map((tag) => redisClient.sAdd(prefix(`tag:${tag}`), cacheKey))
                         )
@@ -232,14 +215,10 @@ export const setCacheValue = (
 /**
  * Remove every cached entry linked to the given tags — called after a successful write.
  *
- * No cross-instance broadcast is needed: the entries live in shared Redis, so one call invalidates
- * them for every worker and replica.
- *
- * Reports through the same {@link ClearCacheResult} `clearCache` does, and for the same reason its
- * docblock gives — except this one runs on every successful write rather than from an operator's
- * hand. `reachable: false` means the pre-write response is still cached and will be served until
- * its TTL expires: the customer edits a product, gets a 200, and the catalogue shows the old one
- * for up to an hour. Never rejects; the caller decides what to do with the answer.
+ * No cross-instance broadcast needed: entries live in shared Redis, so one call invalidates them
+ * for every worker and replica. `reachable: false` means the pre-write response is still cached
+ * and served until its TTL expires — a stale read window, not a crash — so the caller decides
+ * what to do with the answer; this never rejects.
  *
  * See: docs/tools/redis-cache.md#why-there-is-no-cross-instance-broadcast
  */
@@ -254,10 +233,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
             // no client is a connect that failed — the lifecycle reports both as void.
             if (!redisClient) return { deleted: 0, reachable: !isCacheEnabled() };
 
-            // For each tag:
-            // 1) read all cached keys in that group
-            // 2) delete those cached entries
-            // 3) delete the tag set itself
+            // For each tag: read its members, delete those keys, then delete the tag set itself.
             return Promise.all(
                 cacheTags.map((tag) => {
                     const tagKey = prefix(`tag:${tag}`);
@@ -303,10 +279,9 @@ export interface ClearCacheResult {
     /**
      * Whether the cache is now known to be clear.
      *
-     * `false` in exactly one case: caching is switched on but Redis could not be reached, so
-     * stale entries survive the call and will be served until their TTL expires. `true` when
-     * the scan-and-delete ran, and also when caching is disabled — there is nothing to reach
-     * and nothing cached to go stale, which makes "clear" trivially true.
+     * `false` only when caching is on but Redis is unreachable, so stale entries survive until
+     * their TTL expires. `true` covers a completed scan-and-delete, and also caching being off —
+     * nothing to reach, nothing to go stale.
      */
     reachable: boolean;
 }
@@ -342,13 +317,10 @@ const drainMatchingKeys = async (
 
 /**
  * Delete every cached entry and tag set belonging to this app — the escape hatch for writes
- * that never ran `invalidateCache`.
+ * that never ran `invalidateCache`. Deliberately NOT `FLUSHALL`: scoped to `<CACHE_PREFIX>:*`,
+ * so a shared Redis is untouched, and `SCAN` iterates in batches rather than blocking the server.
  *
- * Deliberately **not** `FLUSHALL`: scoped to `<CACHE_PREFIX>:*`, so a shared Redis is untouched.
- * `SCAN` iterates in batches rather than blocking the server the way `KEYS` would.
- *
- * Never rejects, but REPORTS via `reachable`, so fail-open is each caller's choice: `db:seed`
- * ignores it, `db:cache:clear` exits non-zero on it.
+ * Never rejects, but reports via `reachable` — fail-open is each caller's own choice.
  *
  * See: docs/tools/redis-cache.md#writes-that-bypass-the-api
  */
@@ -358,10 +330,8 @@ export const clearCache = (): Promise<ClearCacheResult> =>
         .then((redisClient) => {
             if (!redisClient) {
                 /*
-                 * Two different situations land here, and the lifecycle cannot distinguish them
-                 * for us: caching is switched off, or it is on and the connect failed — `get()`
-                 * reports that by resolving void rather than rejecting, which is why the `.catch`
-                 * below never sees a connection error. `isCacheEnabled()` is what separates
+                 * Two situations land here and the lifecycle can't tell them apart: caching is
+                 * off, or it's on and the connect failed. `isCacheEnabled()` is what separates
                  * "nothing to clear" from "could not clear".
                  */
                 return { deleted: 0, reachable: !isCacheEnabled() };

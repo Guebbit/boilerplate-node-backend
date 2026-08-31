@@ -1,12 +1,9 @@
 /**
  * @module
- * Property-based tests — `src/modules/orders/domain/money.ts`.
- *
- * `Money` claims that no monetary arithmetic here can produce `NaN`, `Infinity` or a fraction of a
- * cent. That is a statement about EVERY input, so the arbitraries are hostile rather than realistic.
- *
- * Seeded, so a failure reproduces. Any counterexample found gets written back as an ordinary
- * `it()`: the property states the rule, the example remembers the bug.
+ * Property-based tests — `src/modules/orders/domain/money.ts`. `Money` claims that no monetary
+ * arithmetic here can produce `NaN`, `Infinity` or a fraction of a cent, for EVERY input — so the
+ * arbitraries are hostile rather than realistic. Seeded, so a failure reproduces; any
+ * counterexample found gets written back as an ordinary `it()`.
  *
  * See `docs/theory/tactical-ddd.md` §3.
  */

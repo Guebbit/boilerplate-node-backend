@@ -1,13 +1,10 @@
 /**
  * @module
- * Auth cookies — `src/modules/account/cookies.ts`.
- *
- * Four one-liners that together decide whether a session can be stolen, asserted individually:
- * `jwt` (the refresh token) must be httpOnly, since script access to it is an account takeover;
- * `isAuth` must NOT be, since the frontend has to read it and it carries no secret; `secure` must
- * track production so local HTTP still works while deployed traffic never sends it in the clear;
- * and clearing must repeat the same flags, or a mismatched `clearCookie` leaves the session
- * cookie in place — a logout that silently does nothing.
+ * Auth cookies (`session/cookies.ts`) — four one-liners that together decide whether a session
+ * can be stolen, asserted individually: `jwt` must be httpOnly (script access is account
+ * takeover); `isAuth` must NOT be (the frontend reads it and it carries no secret); `secure`
+ * must track production; and clearing must repeat the same flags, or a mismatched
+ * `clearCookie` leaves the session cookie in place — a logout that silently does nothing.
  */
 
 import { asStub } from '@tests/stub';

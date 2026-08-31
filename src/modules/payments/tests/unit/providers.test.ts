@@ -1,9 +1,8 @@
 /**
  * @module
  * The payment provider port and its `fake` implementation — `src/modules/payments/providers/`.
- *
- * No mocks, no database. `service.test.ts` moved to `tests/integration/` because it persists a
- * payment document; the provider selection and the fake PSP's own outcome logic do not touch
+ * No mocks, no database: `service.test.ts` moved to `tests/integration/` because it persists a
+ * payment document, while the provider selection and the fake PSP's outcome logic don't touch
  * Mongo and belong here.
  */
 

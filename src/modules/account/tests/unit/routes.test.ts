@@ -1,13 +1,10 @@
 /**
  * @module
- * The account route table — the module where getting the router wrong is an account takeover.
- *
- * Three arrangements here are load-bearing and invisible to a type checker, so each is asserted
- * per route: `router.use(noStore)` must cover every route (a past regression let `setCache`
- * override it on `GET /account`); the credential routes must carry BOTH rate-limit budgets —
- * identity and address — or one attack goes unbudgeted; and the token-bearing routes
- * (`reset-confirm`, `verify-confirm`, `delete-confirm`, `refresh`, `logout`) are deliberately
- * public, since the emailed token or cookie IS the credential.
+ * The account route table — where getting the router wrong is an account takeover. Three
+ * arrangements are load-bearing and invisible to a type checker: `router.use(noStore)` must cover
+ * every route (a past regression let `setCache` override it on `GET /account`); credential routes
+ * must carry BOTH rate-limit budgets; token-bearing routes are deliberately public — the token IS
+ * the credential.
  */
 
 import { routeTable, routeSignatures, routerMiddleware, guardsOn } from '@tests/routes';

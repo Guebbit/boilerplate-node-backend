@@ -11,12 +11,9 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/verify-request
- * Re-send the email-verification link to the authenticated user.
- *
- * Signup already sends one; this exists for the mail that never arrived. Which states cannot be
- * verified — no such account, or one already verified — is the service's to decide, so that a
- * second caller cannot reach the send without them; see `services/verification.ts`.
+ * POST /account/verify-request — re-sends the verification link (signup already sent one; this
+ * covers mail that never arrived). Which states can't be verified is the service's call, so a
+ * second caller can't bypass it; see `services/verification.ts`.
  */
 export const postVerifyRequest = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */

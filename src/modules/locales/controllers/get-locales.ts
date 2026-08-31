@@ -12,15 +12,9 @@ import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * GET /locales
- * Every language this deployment offers, from both tiers, each stating what it can actually do.
- *
- * Which locales exist is a runtime fact — it depends on deployed dictionaries and registered
- * languages — so it can't be an `openapi.yaml` enum; a client asks instead.
- *
- * `scopes` keeps the two tiers distinct: `api` means usable as `Accept-Language`, `app` means a
- * dictionary is downloadable, a locale can have either or both.
- *
- * The dynamic half is best-effort (see `localeService.readDynamicTier`) — a database outage only
+ * Every language this deployment offers, from both tiers, each stating what it can do.
+ * `scopes` distinguishes them: `api` means usable as `Accept-Language`, `app` means a
+ * dictionary is downloadable. The dynamic half is best-effort — a database outage only
  * costs the downloadable languages, never the ones the API can still answer in.
  */
 export const getLocales = (request: Request, response: Response) =>
@@ -33,12 +27,8 @@ export const getLocales = (request: Request, response: Response) =>
 /**
  * GET /locales/:locale
  * This API's own dictionary for one language — its ~60 message keys, nothing else.
- *
- * Not "the translations a client needs": client UI copy is a separate keyspace, served by
- * `GET /locales/:locale/messages` (database-backed). This one reads the filesystem and stays
- * doing so, since it exists precisely for the outage where that route is unreachable.
- *
- * Public and cacheable: static copy, identical for every caller, no user data.
+ * Separate keyspace from client UI copy (`GET /locales/:locale/messages`, database-backed);
+ * this one reads the filesystem, since it exists for the outage where that route is not.
  */
 export const getLocaleDictionary = (request: Request<{ locale?: string }>, response: Response) => {
     const { locale } = request.params;

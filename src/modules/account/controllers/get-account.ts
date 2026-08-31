@@ -9,14 +9,9 @@ import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * GET /account
- * Returns the full profile of the authenticated user.
- *
- * Read fresh from the users collection rather than echoed from the token: `authContext` carries
- * only what the JWT was minted with (id/email/username/admin), while the contract's `User` also
- * declares `verified` and `locale` — the fields the client's verify banner and saved-language
- * flow read. Echoing the token silently served a profile with neither, which the schema's
- * optional fields let pass: the paired frontend's features worked only against its own mock.
+ * GET /account — the authenticated user's full profile, read fresh from the users collection.
+ * The JWT only carries id/email/username/admin; echoing it would silently drop `verified` and
+ * `locale`, which the client's verify banner and saved-language flow need.
  */
 export const getAccount = (request: Request, response: Response): void => {
     const { authContext } = request;

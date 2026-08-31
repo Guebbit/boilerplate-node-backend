@@ -1,13 +1,10 @@
 /**
  * @module
- * `src/modules/account/service.ts` — the signup, login, token and password-change FLOWS.
- *
- * The sibling `service.test.ts` covers this file's security invariants; this covers the ordinary
- * paths they sit on — a signup that succeeds, a login that returns a user, a token that is added,
- * a password that changes — plus the argument-level rejections in front of them. Both drive a
- * real database through `setupTestDb`.
- *
- * Lives here rather than with `users` because the code under test is `account`'s.
+ * `services/index.ts` flows: signup, login, token add and password change. The sibling
+ * `service.test.ts` covers this file's security invariants; this covers the ordinary paths they
+ * sit on — a signup that succeeds, a login that returns a user, a token that's added, a password
+ * that changes — plus the argument-level rejections in front of them, driving a real database via
+ * `setupTestDb`. Lives here rather than with `users` because the code under test is `account`'s.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -240,12 +237,9 @@ const issueRefreshToken = async () => {
 
 /**
  * `refreshAccessToken` — the three outcomes of exchanging a refresh cookie, and the record each
- * one leaves.
- *
- * Driven off a real signed token rather than a stub because the refresh path is stateful by
- * design: verification consults the user document, so a mocked verifier would pass a test that a
- * revoked token must fail. The secrets are set here for the same reason `jwt.test.ts` sets them —
- * unit tests do not load dotenv, and a test that depends on a developer's environment is not one.
+ * leaves. Driven off a real signed token, not a stub: verification consults the user document,
+ * so a mocked verifier would let a revoked token pass. Secrets are set here for the same reason
+ * `jwt.test.ts` sets them — unit tests don't load dotenv.
  */
 describe('accountService.refreshAccessToken', () => {
     const ENV_KEYS = [

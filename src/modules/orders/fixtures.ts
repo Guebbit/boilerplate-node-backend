@@ -1,12 +1,10 @@
 /**
  * @module
- * How an order fixture is built.
- *
- * An order item embeds a product SNAPSHOT (`orderItemSchema` declares `product: productSchema`
- * with no `ref`), so this builder takes the snapshot as a value rather than an id to look up
- * later. It deliberately carries no `deletedAt` — a catalogue soft-delete says nothing about an
- * order already placed — and no totals, since those are derived at serialization time by
- * `applyOrderTransform` rather than stored.
+ * How an order fixture is built. An order item embeds a product SNAPSHOT (`orderItemSchema`
+ * declares `product: productSchema` with no `ref`), so this builder takes the snapshot as a
+ * value rather than an id to look up later. It deliberately carries no `deletedAt` — a catalogue
+ * soft-delete says nothing about an order already placed — and no totals, since those are
+ * derived at serialization time by `applyOrderTransform` rather than stored.
  */
 
 import { Types } from 'mongoose';
@@ -21,17 +19,10 @@ import type { Id, Order, OrderItem, Product } from '@types';
 import type { OrderDocument } from './model';
 
 /**
- * The product as it was when the order was placed.
- *
- * The contract already says what that is: `OrderItem.product` is a `Product`, so this is the
- * generated `Product` with the three fields a snapshot must carry made required, rather than a
- * hand-written list of the six a seeder happens to copy.
- *
- * `createdAt` and `updatedAt` are the CATALOGUE row's, carried in rather than left to Mongoose.
- * `productSchema` declares `timestamps: true`, and a subdocument gets stamped on insert even when
- * the parent save passes `{ timestamps: false }` — that option does not reach nested schemas. Left
- * alone, every snapshot claimed the product was created at the instant the seeder ran, which is
- * both false and different on every run, so the exported dataset could never be byte-stable.
+ * The product as it was when the order was placed — the generated `Product`, with the three
+ * fields a snapshot must carry made required. `createdAt`/`updatedAt` are the CATALOGUE row's,
+ * carried in explicitly: a subdocument's timestamps stamp on insert regardless of the parent's
+ * `{ timestamps: false }`, which would otherwise make every export non-deterministic.
  */
 export type OrderSnapshotInput = OverridesFor<Product> &
     Required<Pick<Product, 'id' | 'title' | 'price'>>;
@@ -40,12 +31,9 @@ export type OrderSnapshotInput = OverridesFor<Product> &
 export type OrderLineInput = Omit<OrderItem, 'product'> & { product: OrderSnapshotInput };
 
 /**
- * What a caller may pin, derived from the generated `Order`.
- *
- * The three totals and `status` are dropped rather than made optional: they are required on the
- * wire but never stored — `applyOrderTransform` derives them at serialization time — so a fixture
- * that could state one would be inventing a column, and `scripts/export-demo-dataset.ts` would publish the
- * invention as though the API had produced it. `items` is replaced because a line here takes a
+ * What a caller may pin, derived from the generated `Order`. The three totals and `status` are
+ * dropped, not optional: they're required on the wire but never stored, so stating one would
+ * invent a column the API never produced. `items` is replaced because a line here takes a
  * snapshot as DATA; see `OrderLineInput`.
  */
 export type OrderOverrides = Omit<

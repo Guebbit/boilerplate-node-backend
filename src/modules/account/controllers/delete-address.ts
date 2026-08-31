@@ -11,14 +11,9 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
 
 /**
- * DELETE /account/addresses/:addressId — remove one entry.
- *
- * Singular, like the URL it serves and like `wishlist/controllers/delete-wishlist-item.ts`: this
- * removes one entry, never the book.
- *
- * Removing the default promotes the oldest remaining entry, so a book is never left with entries
- * and no default — `repository.ts` owns that, and the answer here is the whole book so the caller sees
- * where the flag landed without a second request.
+ * DELETE /account/addresses/:addressId — remove one entry, never the whole book.
+ * Removing the default promotes the oldest remaining entry (`repository.ts` owns that); the
+ * response returns the full list so the caller sees where the flag landed.
  */
 export const deleteAddress = (request: Request<{ addressId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */

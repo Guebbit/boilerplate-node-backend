@@ -1,13 +1,9 @@
 /**
  * @module
- * Token configuration — parse and expose token expiry settings from env.
- *
- * `config.ts` rather than `tokens.ts`, which is what it was called at the module root: it holds no
- * token and issues none. It reads how long each tier of them lives, which `./jwt` signs against and
- * `./cookies` sets `maxAge` from — the one place the deployment's answer to "how long is a session"
- * is parsed.
- *
- * See: docs/modules/account-sessions.md
+ * Token configuration — parses and exposes token expiry settings from env. Named `config.ts`
+ * rather than `tokens.ts` (its name at the module root) because it holds no token and issues
+ * none: it just reads how long each tier lives, which `./jwt` signs against and `./cookies` sets
+ * `maxAge` from. See docs/modules/account-sessions.md.
  */
 
 import { environmentNumber } from '@infrastructure/runtime/environment';

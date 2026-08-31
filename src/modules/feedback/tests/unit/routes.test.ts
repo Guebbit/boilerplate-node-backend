@@ -1,17 +1,12 @@
 /**
  * @module
- * The feedback route table — and the positional guard it is built around.
- *
- * `routes.ts` mounts ONE public route, the visitor contact form, and then calls
- * `router.use(getAuth, isAuth, isAdmin)`. Everything below that line is the operator's view of
- * what visitors sent; everything above it is public. The file says so in a comment, because the
- * arrangement is load-bearing and invisible: a route appended in the wrong half is public, or
- * admin-only, purely by where it was typed, and nothing about it looks wrong either way.
- *
- * These assertions are positional for that reason — see `effectiveRouteTable` in
- * `tests/support/routes.ts`. Asserting the per-route middleware alone would report every route
- * here as unguarded and pass whatever happened.
+ * The feedback route table. `routes.ts` mounts ONE public route (the visitor contact form), then
+ * `router.use(getAuth, isAuth, isAdmin)` — everything below is admin-only, purely by position, and
+ * nothing looks wrong either way if that's gotten wrong. Assertions here are positional for that
+ * reason (see `effectiveRouteTable` in `tests/support/routes.ts`); per-route middleware alone
+ * would pass whatever happened.
  */
+
 import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>

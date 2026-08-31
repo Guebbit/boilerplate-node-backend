@@ -1,11 +1,8 @@
 /**
  * @module
- * The analytics event names this module emits — the order record's own lifecycle. `CHECKOUT_*`
- * is NOT here: the cart module owns it, since `POST /cart/checkout` reports it.
- *
- * Declared by augmenting the analytics port's name map, as `./audit.ts` does for audit actions,
- * rather than editing a shared file.
- *
+ * The analytics event names this module emits — the order record's own lifecycle.
+ * `CHECKOUT_*` lives in cart instead, since `POST /cart/checkout` reports it. Declared by
+ * augmenting the analytics port's name map, as `./audit.ts` does for audit actions.
  * Naming rule: docs/tools/analytics.md#naming.
  */
 

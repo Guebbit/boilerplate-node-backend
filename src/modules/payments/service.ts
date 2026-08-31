@@ -1,12 +1,9 @@
 /**
  * @module
- * Payments — how an order's money moves, behind the provider port.
- *
- * Three rules, everything else delegated: only a `pending` order's owner can start paying; the
- * order's move to `paid` is the gate, not the charge — the charge happens first, and if the order
- * slipped away in between it is refunded on the spot, so money moved if and only if the order
- * says `paid` (the same gate commits the order's held stock); a refund answers a fact, never a
- * plan — it is the `ORDER_CANCELLED` listener, made at-most-once by the conditional
+ * Payments — how an order's money moves, behind the provider port. Three rules: only a `pending`
+ * order's owner can start paying; the order's move to `paid` is the gate, not the charge — charge
+ * first, and a slipped-away order is refunded on the spot, so money moved iff the order says
+ * `paid`; a refund is the `ORDER_CANCELLED` listener, made at-most-once by the conditional
  * `succeeded → refunded` move.
  */
 
@@ -45,14 +42,11 @@ import type { PaymentDocument } from './model';
 
 /**
  * The payment statuses the confirm endpoint accepts. `declined` is here because a decline is
- * retryable with another card, which is the one place this lifecycle goes backwards.
+ * retryable with another card — the one place this lifecycle goes backwards.
  *
- * An ARRAY rather than a `Set`, because this module reads the rule two ways and both readers are
- * below it: as a membership test (the confirm's precondition, and `withActions`' `pay`), and as
- * the `$in` of the conditional writes that re-assert the same precondition while mongod holds the
- * document. A `Set` serves only the first and has to be spread back into an array for the second,
- * which is how this rule came to be written out four times in one file — and four spellings is
- * four places to forget that a decline is retryable the next time this lifecycle changes.
+ * An ARRAY, not a `Set`: this rule is read both as a membership test and as the `$in` of the
+ * conditional writes that re-assert it while mongod holds the document, and a `Set` would need
+ * re-spreading for the second.
  */
 const CONFIRMABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
     'requires_confirmation',
@@ -63,19 +57,10 @@ const CONFIRMABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
 const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
 
 /**
- * Who is paying, resolved against `users` rather than copied off the order.
- *
- * The order already carries a `userId`, and taking it verbatim is what this did before. The
- * difference matters for the thing a payment IS: a financial record that outlives the order page.
- * A payment history — "everything this account has ever paid" — is a query on this id, so it wants
- * to be an id that pointed at a real account at the moment the money moved, not one inherited
- * from a row that may have been written long before.
- *
- * A payer that cannot be resolved does NOT refuse the payment. Orders deliberately survive the
- * deletion of the account that placed them, so an unresolvable payer is a legitimate state, and
- * failing here would make a deleted account's outstanding order unpayable rather than merely
- * unattributed. The order's own id is kept and the gap is logged — the history simply records the
- * id it was given.
+ * Who is paying, resolved against `users` rather than copied off the order — a payment history
+ * wants an id that pointed at a real account when the money moved, not the order's stale copy.
+ * An unresolvable payer does NOT refuse the payment: orders survive account deletion, so the
+ * order's id is kept and the gap logged.
  *
  * @param orderUserId - the account id the order carries
  * @returns the id to persist on the payment
@@ -94,11 +79,8 @@ const resolvePayerId = (orderUserId: string): Promise<string> =>
 
 /**
  * Which payments a caller may read — the same rule `orderService.callerScope` applies, over this
- * module's collection.
- *
- * `ownerScope` rather than a `visibleScope`: payments are never soft-deleted, so "whose" is the
- * only axis there is. The rest — the `undefined` for admins, the scope riding in the read, the
- * throw on a caller with no id — is `createOwnerScope`'s to explain.
+ * module's collection. `ownerScope` not `visibleScope`: payments are never soft-deleted, so
+ * "whose" is the only axis there is.
  */
 const callerScope = createOwnerScope(paymentRepository.ownerScope);
 
@@ -218,13 +200,12 @@ export const confirmPayment = (
             );
 
             /*
-             * The units finally leave. Until now they were HELD — unavailable since checkout, still
-             * on the shelf, still recoverable if the customer never paid.
+             * The units finally leave — held since checkout, recoverable until now.
              *
-             * After the order move, for the same reason rule 2 gives for the charge: the conditional
-             * `pending → paid` is what makes this at most once. The answer is not checked — `false`
-             * means an expiry sweep beat the payment to the hold, which this module cannot fix and
-             * `inventory` logs; the customer has a paid order either way.
+             * The conditional `pending → paid` move (rule 2) is what makes this at-most-once. The
+             * result is not checked: `false` means an expiry sweep beat the payment to the hold,
+             * which this module cannot fix and `inventory` logs — the customer has a paid order
+             * either way.
              */
             await inventoryService.commitForOrder(String(payment.orderId));
 
@@ -287,9 +268,6 @@ export const getForOrder = (
 /**
  * What this caller may do to a payment, as the contract's `PaymentActions`.
  *
- * @param payment - the payment record
- * @param order - the order it belongs to, when it is still readable by this caller
- * @param authContext - the caller
  * @returns the serialized payment carrying its `actions`
  */
 const withActions = (
@@ -347,10 +325,8 @@ const performRefund = (orderId: string, context?: CallerContext): Promise<Paymen
         });
 
 /**
- * `POST /payments/order/:orderId/refund` — the operator returning money on its own.
- *
- * Separate from cancelling: a goodwill refund leaves the order where it is, and "cancel and
- * refund" is a client sending both calls. Admin-only at the route.
+ * `POST /payments/order/:orderId/refund` — the operator returning money on its own, separate
+ * from cancelling. Admin-only at the route.
  *
  * @param orderId - the order whose payment is being returned
  * @param authContext - the caller, for the read that distinguishes 404 from 409
@@ -382,10 +358,9 @@ export const refundByOrder = (
 /**
  * `ORDER_CANCELLED`'s listener: give the money back if any was taken.
  *
- * The conditional `succeeded → refunded` move is the idempotence — a second event (or a cancel
- * of a never-paid order) finds nothing in `succeeded` and does nothing. Event handlers have no
- * request to answer, so the outcome is logged: for an unattended compensation, the log line IS
- * the contract, same as the token-cleanup job's.
+ * The conditional `succeeded → refunded` move is the idempotence — a second event, or a cancel
+ * of a never-paid order, finds nothing in `succeeded` and does nothing. Unattended, so the
+ * outcome is logged rather than audited, same as the token-cleanup job's.
  *
  * @param orderId - the order that was cancelled
  */

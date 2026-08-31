@@ -1,13 +1,9 @@
 /**
  * @module
- * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
- * augmentation rather than in a shared enum.
- *
- * `admin.` on the refund because it is genuinely admin-only, unlike confirm/fail which any
- * checkout can produce. `refundByOrder` (the operator's standalone refund) is a real admin
- * request and audits `ADMIN_PAYMENT_REFUNDED`. `refundForOrder` (the cancel listener's
- * compensation) has no request to build an event from and logs instead, the same trade the
- * token-cleanup job documents.
+ * Audit actions this module emits, declared by augmentation — see `modules/account/audit.ts` for
+ * why. `admin.` marks the refund because it is genuinely admin-only, unlike confirm/fail which any
+ * checkout can produce; `refundForOrder` (the cancel listener's compensation) has no request to
+ * audit and logs instead, like the token-cleanup job.
  */
 
 export const paymentsAuditActions = {

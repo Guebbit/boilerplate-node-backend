@@ -1,13 +1,10 @@
 /**
  * @module
  * Order totals — what a list of priced lines adds up to, and what the customer owes on top.
- *
- * Owned by `orders`; `cart` and `payments` read it through the barrel, so a cart summary, the
- * order it previews and the intent that freezes it can never disagree — `openapi.yaml` just
- * names the same numbers differently per resource (e.g. `count`/`totalItems`/`itemsCount`).
- *
- * The arithmetic runs in minor units and converts once on the way out — see `money.ts`. Nothing
- * here rounds, because there is nothing to round.
+ * Owned by `orders`; `cart` and `payments` read it through the barrel so a cart summary, the
+ * order it previews, and the frozen intent can never disagree. The arithmetic runs in minor units
+ * and converts once on the way out — see `money.ts`. Nothing here rounds, because there is
+ * nothing to round.
  */
 
 import {
@@ -38,13 +35,10 @@ export interface LineItemTotals {
 }
 
 /**
- * Sum a list of priced line items.
- *
- * Total by construction: `toMinorUnits` and `wholeCount` absorb junk, so a line whose product
- * failed to populate contributes nothing rather than turning the total into `NaN`.
- *
+ * Sum a list of priced line items. `toMinorUnits`/`wholeCount` absorb junk, so a line whose
+ * product failed to populate contributes nothing rather than turning the total into `NaN`.
  * @param items - the priced lines
- * @returns line count, total quantity and the total as a decimal amount
+ * @returns line count, total quantity, and the total as a decimal amount
  */
 export const sumLineItems = (items: readonly LineItem[]): LineItemTotals => {
     let quantity = 0;
@@ -72,11 +66,9 @@ export interface OrderTotalInput {
 }
 
 /**
- * What the customer owes: the lines plus the shipping frozen against them.
- *
- * `money.ts` owns rounding; this owns composition. Three callers must agree on this number — the
- * order, the payment intent and the confirmation email — so none of them sums it themselves.
- *
+ * What the customer owes: the lines plus the frozen shipping cost. `money.ts` owns rounding, this
+ * owns composition — the order, its payment intent, and its confirmation email must all agree on
+ * this number, so none of them sums it independently.
  * @param order - the order's lines and its frozen shipping cost
  * @returns the grand total as the decimal amount the contract publishes
  */

@@ -1,17 +1,11 @@
 /**
  * @module
- * The contact-request notification — the email an OPERATOR receives, not a customer.
- *
- * That audience is what shapes it. Two decisions in the builder exist so an operator can work
- * from the mailbox rather than from the admin screen, and both are the kind of detail that is
- * quietly removed as redundant:
- *
- *   - the ticket's own subject is appended to the translated prefix, so a mailbox scan reads what
- *     each message is about without opening it;
- *   - a missing name falls back to translated copy HERE rather than in the template, because a
- *     template that only interpolates cannot choose between a value and a placeholder — it would
- *     render an empty line where the sender's name should be.
+ * The contact-request notification — the email an OPERATOR receives, not a customer. That
+ * audience is why the ticket's own subject is appended to the translated prefix (a mailbox scan
+ * reads what each message is about) and why a missing name falls back to translated copy HERE
+ * rather than in the template, which can't choose between a value and a placeholder.
  */
+
 import { contactRequestEmail, type ContactRequest } from '@modules/feedback/emails';
 
 const REQUEST: ContactRequest = {

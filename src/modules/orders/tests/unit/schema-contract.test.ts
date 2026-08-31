@@ -1,16 +1,10 @@
 /**
  * @module
  * The order schema's contract — the declarations, not the documents.
- *
- * `tests/integration/model.test.ts` drives this schema through real saves and asserts what comes
- * back. That covers the behaviour and misses the declaration: dropping `required` from `email`,
- * flipping `_id: false` on the embedded item, reversing the direction of the `createdAt` index or
- * turning off `timestamps` all leave every fixture in that suite passing, because none of them
- * changes what a VALID document looks like. Each is a live defect the moment it merges.
- *
- * So this asserts the schema object directly — see `tests/support/schema.ts` for why that needs no
- * database. The two suites are complementary and neither replaces the other: this one says what
- * was declared, that one says what happens when you use it.
+ * `tests/integration/model.test.ts` drives the schema through real saves and misses a declaration
+ * defect (a dropped `required`, a flipped `_id: false`, a reversed index direction) since none of
+ * those change what a VALID document looks like. This asserts the schema object directly instead
+ * — see `tests/support/schema.ts` for why that needs no database.
  */
 import { orderSchema } from '@modules/orders/model';
 import { OrderStatus } from '@types';
@@ -108,10 +102,9 @@ describe('orderSchema — the embedded snapshots', () => {
 
 describe('orderSchema — indexes', () => {
     it('declares exactly the three documented indexes, named and directed', () => {
-        // Names are given rather than derived because Mongo identifies an index by name: a rename
-        // leaves the old index in production and builds a second copy beside it. The DIRECTION on
-        // `createdAt` is what serves "my orders, newest first" from the index instead of sorting
-        // in memory — a change there is a latency incident, never a wrong answer.
+        // Names are given rather than derived, since Mongo identifies an index by name — a rename
+        // leaves the old index in production. The `createdAt` DIRECTION serves "newest first"
+        // from the index rather than an in-memory sort; getting it wrong is a latency incident.
         expect(indexSpecs(orderSchema)).toEqual([
             'orders_email: email+1',
             'orders_userId_createdAt: userId+1, createdAt-1',

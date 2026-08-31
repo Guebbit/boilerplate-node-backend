@@ -1,15 +1,9 @@
 /**
  * @module
- * The cart's slice of the demo dataset.
- *
- * Stated here, where the collection is owned. A `cart` array hanging off each seeded person would
- * be shorter to write and would put one module's records inside another's, which is what a module
- * owning its own slice of the dataset exists to prevent.
- *
- * Only users with something in their cart get a document: absence and an empty cart are the same
- * state, and the first write upserts one into existence. So the ordinary customer has no row at all
- * — which is itself the fixture for "a person who has never added anything", the state every fresh
- * signup is in.
+ * The cart's slice of the demo dataset, stated here where the collection is owned rather than
+ * nested under each seeded person. Only users with something in their cart get a document —
+ * absence and an empty cart are the same state, so the ordinary customer has no row at all,
+ * which is itself the fixture for a person who has never added anything.
  */
 
 import { SEED_ADMIN_ID } from '@kernel/seed-accounts';

@@ -1,12 +1,9 @@
 /**
  * @module
- * The user schema's contract, and the two token-bearing methods on it.
- *
- * The most security-sensitive schema in the codebase: `select: false` on `password` and `tokens`
- * keeps them out of ordinary reads, `omit` on the transform repeats the guarantee at
- * serialization, and each is tested independently since neither is load-bearing alone. The
- * `pre('save')` hook hashes only when `password` is modified, so an ordinary profile update
- * cannot re-hash an existing hash into an unusable one.
+ * The user schema's contract, and its two token-bearing methods. The most security-sensitive
+ * schema in the codebase: `select: false` on `password` and `tokens` keeps them out of ordinary
+ * reads, `omit` on the transform repeats the guarantee at serialization, and the `pre('save')`
+ * hook hashes only when `password` is modified so a profile update can't re-hash an existing hash.
  */
 import bcrypt from 'bcrypt';
 import { userSchema, applyUserTransform } from '@modules/users/model';
@@ -72,12 +69,9 @@ describe('userSchema — what a user must carry', () => {
     });
 
     /*
-     * The case above cannot tell a working `??` from a broken one, and that is worth stating
-     * rather than leaving as a gap. This checkout's `.env` sets `NODE_DEFAULT_LOCALE=en` and
-     * `NODE_DEFAULT_IMAGE_USER` to the very string the `??` falls back to — so the configured
-     * value and the fallback are identical, and an expression that returned the WRONG one of the
-     * two would satisfy it. The defaults are captured when the module loads, so the only way to
-     * tell them apart is to load the module again with a different environment.
+     * The case above can't tell a working `??` from a broken one: this checkout's env vars equal
+     * the hardcoded fallbacks, so a wrong expression would still pass. Defaults are captured at
+     * module load, so telling them apart means reloading the module with a different environment.
      */
     it.each([
         ['NODE_DEFAULT_LOCALE', 'locale', 'it'],
@@ -205,13 +199,10 @@ describe('userSchema — indexes', () => {
 });
 
 /**
- * The hook itself, reached off the schema rather than through a `save()`.
- *
- * Kareem — Mongoose's middleware layer — keeps registered pre-hooks in `schema.s.hooks._pres`,
- * keyed by the method they wrap. Reaching in is deliberate: the alternative is a real save,
- * which needs a database and would make this an integration test for a function that is pure
- * apart from the bcrypt call. If Mongoose moves this, the failure is a loud `undefined` here
- * rather than a silently skipped assertion.
+ * The hook itself, reached off the schema rather than through a real `save()`. Mongoose's
+ * middleware layer keeps pre-hooks in `schema.s.hooks._pres`; reaching in avoids a database and
+ * keeps this a pure-function test. If Mongoose moves this storage, the failure is a loud
+ * `undefined` here rather than a silently skipped assertion.
  */
 const preSaveHook = (): ((this: unknown) => Promise<void> | undefined) => {
     const pres = asStub<{
@@ -222,11 +213,9 @@ const preSaveHook = (): ((this: unknown) => Promise<void> | undefined) => {
         };
     }>(userSchema).s.hooks._pres;
 
-    // Mongoose registers its OWN pre-save hooks (subdocument collection, validation) on every
-    // schema, and they come first. Ours is selected by what it does rather than by position:
-    // taking `[0]` reaches an internal hook that fails on a plain object with
-    // `this.$getAllSubdocs is not a function`, which reads as a broken test rather than as
-    // the wrong hook.
+    // Mongoose registers its OWN pre-save hooks first, so selecting `[0]` would grab an internal
+    // one that throws `this.$getAllSubdocs is not a function` on a plain object — a broken test,
+    // not "wrong hook". Selecting by what the hook does avoids that.
     const ours = (pres.get('save') ?? []).filter(({ fn }) =>
         fn.toString().includes("isModified('password')")
     );
@@ -259,6 +248,7 @@ describe('userSchema — the pre-save password hook', () => {
     it('leaves an untouched password alone', async () => {
         // The guard that matters: without it, every profile update re-hashes the stored HASH,
         // and the account becomes unloggable-into with no error anywhere.
+        // Cost factor 4 (bcrypt's minimum) — fast is fine here, this isn't the real hashing path.
         const stored = await bcrypt.hash('Password1!', 4);
         const document = { password: stored, isModified: jest.fn().mockReturnValue(false) };
 

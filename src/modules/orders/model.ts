@@ -1,15 +1,11 @@
 /**
  * @module
  * The order Mongoose schema and the serialization transform that derives its wire-only totals.
- *
  * An order embeds the product SNAPSHOT it was bought against (`productSchema`, no `ref`) rather
- * than referencing the live catalogue row, because a later edit to a product must not rewrite the
- * history of what was purchased. `totalItems`, `totalQuantity` and `totalPrice` are never stored —
- * `applyOrderTransform` derives them from `items` at the single serialization point every order
- * response passes through, which is what lets the contract mark the three fields required without
- * a writer ever needing to keep them in sync.
- *
- * See: docs/modules/orders.md
+ * than referencing the live catalogue row, since a later product edit must not rewrite purchase
+ * history. `totalItems`, `totalQuantity` and `totalPrice` are never stored — `applyOrderTransform`
+ * derives them from `items` at the single serialization point every response passes through,
+ * letting the contract mark them required. See: docs/modules/orders.md
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -22,13 +18,9 @@ import { OrderStatus } from '@types';
 import type { Order } from '@types';
 
 /**
- * A single item stored inside an order document.
- *
- * Uses `ProductSnapshot` rather than the OpenAPI `OrderItem`, because Mongoose embeds the product
- * directly — and rather than `ProductDocument`, because what is embedded is a subdocument with none
- * of `Document`'s methods on it. Claiming the stronger type meant nothing could produce one without
- * a cast: this service did it twice and the fixtures once, each over a comment explaining that the
- * value was fine really.
+ * A single item stored inside an order document. Uses `ProductSnapshot` rather than OpenAPI's
+ * `OrderItem`, since Mongoose embeds the product directly — and not `ProductDocument`, since
+ * what's embedded is a subdocument with none of `Document`'s methods on it.
  */
 export interface OrderDocumentItem {
     /**
@@ -43,16 +35,10 @@ export interface OrderDocumentItem {
 }
 
 /**
- * Order Document interface.
- * Intentionally overrides the API-generated Order type's 'userId' (ObjectId vs string),
- * 'items' (embedded OrderDocumentItem instead of OpenAPI OrderItem), and 'status'.
- *
- * `totalItems`, `totalQuantity` and `totalPrice` are omitted rather than inherited: they are
- * required on the wire but never persisted — `applyOrderTransform` derives them at serialization
- * time — so declaring them here would claim a stored field that does not exist.
- *
- * `deletedAt` is omitted and redeclared for the same reason it is in `ProductDocument` and
- * `User`: the contract types it as an ISO string, the schema stores a `Date`.
+ * Order Document interface: overrides the generated `Order`'s `userId`/`items`/`status`, and
+ * redeclares `deletedAt` as `Date` (the contract types it as an ISO string). `totalItems`,
+ * `totalQuantity` and `totalPrice` are omitted rather than inherited — required on the wire but
+ * never persisted, so declaring them here would claim a stored field that doesn't exist.
  */
 export interface OrderDocument
     extends
@@ -94,12 +80,8 @@ export type OrderModel = Model<OrderDocument, unknown, unknown>;
 const orderItemSchema = new Schema(
     {
         /*
-         * `excludeIndexes` because Mongoose copies an embedded schema's indexes onto whatever
-         * embeds it. Without it, every index the catalogue declares would reappear here pointed
-         * at `items.product.*`, so each order write would maintain a set of indexes describing
-         * how the catalogue is searched — which is nothing anyone asks of an order. These copies
-         * are frozen history; they are read as part of the order that owns them and never
-         * searched on their own.
+         * `excludeIndexes`: without it, Mongoose copies the catalogue's indexes onto every
+         * order's `items.product.*` — frozen history that is never searched on its own.
          */
         product: { type: productSchema, excludeIndexes: true },
         quantity: {
@@ -133,18 +115,12 @@ export const orderSchema = new Schema<OrderDocument>(
             type: String
         },
         /*
-         * The shipping choice, frozen at checkout like everything else on an order: the method's
-         * id and what it COST THEN — a later change to the delivery module's rates cannot
-         * re-price history.
-         *
-         * `shippingMethod` is absent when no method was chosen — shipping is not required to buy,
-         * exactly like the address. `shippingCost` is NOT: it defaults to 0, because what the
-         * customer owes for shipping is always a number, and an order that chose nothing owes
-         * nothing. That is what keeps `orderTotal`'s tolerance of an absent value a defence
-         * against a malformed document rather than a live contract with the schema.
-         *
-         * `db/migrations/20260820140000-order-shipping-cost.js` backfills the rows written before
-         * this default existed.
+         * The shipping choice, frozen at checkout: the method's id and what it COST THEN, so a
+         * later rate change can't re-price history. `shippingMethod` is absent when none was
+         * chosen. `shippingCost` is NOT — it defaults to 0, since what's owed for shipping is
+         * always a number, keeping `orderTotal`'s tolerance of an absent value a defence, not a
+         * live contract. `db/migrations/20260820140000-order-shipping-cost.js` backfills rows
+         * written before this default existed.
          */
         shippingMethod: {
             type: String
@@ -189,13 +165,10 @@ export const orderSchema = new Schema<OrderDocument>(
 );
 
 /*
- * Indexes.
- *
- * Declared on the schema, which makes this the one place that decides what is indexed here.
- *
- * The names are given rather than derived: Mongo identifies an index by its name as much as by
- * its key, so asking for a key it already holds under a different name fails at startup instead
- * of doing nothing. These are the names the databases already carry.
+ * Indexes, declared on the schema so this is the one place deciding what's indexed. Names are
+ * given rather than derived — Mongo identifies an index by name, so reusing a key under a new
+ * name fails at startup instead of silently doing nothing; these are the names the databases
+ * already carry.
  */
 /* "My orders" lookups, newest first. */
 orderSchema.index({ userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt' });
@@ -220,14 +193,10 @@ const applyOrderItems = (serialized: Record<string, unknown>) => {
 };
 
 /**
- * Derives `totalItems`, `totalQuantity` and `totalPrice` from `items`.
- *
- * Done at the single serialization point every order response passes through, so the list, both
- * `getById` role branches, create and update all agree — which is what lets `openapi.yaml` mark
- * the three fields required.
- *
- * Note the name collision with `PaginationMeta.totalItems`: there it is the number of orders
- * matching a search, here it is the number of line items in one order. Pre-existing; unrelated.
+ * Derives `totalItems`, `totalQuantity` and `totalPrice` from `items`, at the single
+ * serialization point every response passes through, so list, both `getById` branches, create
+ * and update all agree. (Name collision with `PaginationMeta.totalItems` — unrelated,
+ * pre-existing.)
  */
 const applyOrderTotals = (serialized: Record<string, unknown>) => {
     const items = Array.isArray(serialized.items) ? (serialized.items as LineItem[]) : [];

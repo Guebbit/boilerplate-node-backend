@@ -1,11 +1,8 @@
 /**
  * @module
- * Contact requests: anyone may file one, admins read and triage them.
- *
- * Records an email address rather than referencing a user, since the form is open to people
- * with no account — which is also why deleting an account leaves their feedback standing, and
- * why this module needs nothing from `users`. A leaf in both directions, so the cheapest thing
- * that works is also the correct one.
+ * Contact requests: anyone may file one, admins read and triage them. Records an email address
+ * rather than referencing a user, since the form is open to people with no account — which is
+ * also why deleting an account leaves their feedback standing. A leaf in both directions.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      nothing

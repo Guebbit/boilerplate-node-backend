@@ -1,12 +1,10 @@
 /**
  * @module
  * JWT creation and verification. Secrets and TTLs come from `./config`, which owns the policy.
- *
- * This was app-level middleware until the domains became modules, and it never belonged there:
- * issuing and verifying this application's tokens is what `account` IS. It reaches `users` for the
- * stored refresh tokens, which is exactly the dependency the manifest already declares.
- *
- * See: docs/modules/account-sessions.md
+ * This was app-level middleware until the domains became modules — issuing and verifying this
+ * application's tokens is what `account` IS, and it reaches `users` for the stored refresh
+ * tokens, exactly the dependency the manifest already declares. See
+ * docs/modules/account-sessions.md.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -87,17 +85,13 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
             if (!user) throw new Error('User not found');
             /*
              * `jwtid` is what makes two refresh tokens minted in the same second different.
-             *
-             * The payload is `{ id }` and the claims JWT adds are `iat`/`exp`, both at one-second
-             * resolution — so signing twice within a second for one user produced byte-identical
-             * tokens. Two devices signing in together therefore shared one credential, stored as
-             * two rows holding the same string, and revoking either revoked both: logging out a
-             * phone silently logged out the laptop that had signed in alongside it.
-             *
-             * A random `jti` gives every issued token its own identity, which is what the rest of
-             * the token handling already assumes — `tokens.token` is queried as though it
-             * addressed one session, and now it does. Verification is unaffected: `jti` is a
-             * registered claim that `verify` carries through without checking.
+             * The payload is `{ id }` plus JWT's own `iat`/`exp`, both at one-second resolution —
+             * so signing twice within a second for one user produced byte-identical tokens. Two
+             * devices signing in together then shared one credential stored as two identical
+             * rows, and revoking either revoked both: logging out a phone silently logged out the
+             * laptop signed in alongside it. A random `jti` gives every token its own identity —
+             * `tokens.token` is now queried as though it addressed one session, because it does;
+             * `verify` carries `jti` through without checking it.
              */
             const token = sign({ id } as TokenData, getRefreshTokenSecret(), {
                 expiresIn: getExpiryTime(remember),
@@ -109,19 +103,11 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
 
 /**
  * Stamp a refresh token as used, so `GET /account/sessions` can show which device is idle.
- *
- * Called from the REFRESH route only, never from `createAccessToken` — which login also uses, to
- * mint the first access token of a session. Stamping there would mark every session as used the
- * moment it was issued, and a field that always says "just now" distinguishes nothing. Issuing a
- * session is not the session using one.
- *
- * The write itself is `userRepository.tokenTouch`, which explains why it has to be a positional
- * update rather than a read-modify-write.
- *
- * Resolves even when it fails. This is bookkeeping: a refresh that was valid must not answer 401
- * because a stamp could not be written, which is the same reasoning `getRefreshToken` already
- * applies to `runTokenCleanup`.
- *
+ * Called from the REFRESH route only, never from `createAccessToken` (which login also uses to
+ * mint a session's first access token) — stamping there would mark every session "just now" the
+ * moment it's issued, distinguishing nothing.
+ * Resolves even on failure: a valid refresh must not 401 because this bookkeeping write failed —
+ * same reasoning `getRefreshToken` applies to `runTokenCleanup`.
  * @param refreshToken - the refresh JWT that was just exchanged
  */
 export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>

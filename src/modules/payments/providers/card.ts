@@ -1,8 +1,8 @@
 /**
  * @module
- * Card details as they cross the provider port, and the one safe projection of a card number.
- *
- * Its own file so both the port and every provider can read it without importing each other.
+ * Card details as they cross the provider port, and the one safe projection of a card number the
+ * provider layer may keep — its own file so both the port and every provider can read it without
+ * importing each other.
  */
 
 /** What the provider needs to know about the card. The demo asks for no more than the number. */

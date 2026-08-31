@@ -1,12 +1,10 @@
 /**
  * @module
- * The token-cleanup pre-flight step wired into `postLogin` and `getRefreshToken`.
- *
- * `runTokenCleanup` is a sweep across every user document, so it must not run on a request that
- * cannot possibly succeed — a refresh call with no cookie at all — or every anonymous hit costs a
- * full-table pass. Where it DOES run, it must run BEFORE the credential check, which is asserted
- * through Jest's `invocationCallOrder` rather than call counts alone, since call counts cannot
- * tell "ran first" from "ran after".
+ * The token-cleanup pre-flight step wired into `postLogin` and `getRefreshToken`. It is a sweep
+ * across every user document, so it must not run on a request that cannot possibly succeed — a
+ * refresh call with no cookie at all — or every anonymous hit costs a full-table pass. Where it
+ * DOES run, it must run BEFORE the credential check, asserted via Jest's `invocationCallOrder`
+ * rather than call counts, which can't tell "ran first" from "ran after".
  */
 
 import { asStub } from '@tests/stub';
@@ -15,15 +13,10 @@ import { getRefreshToken } from '@modules/account/controllers/get-refresh-token'
 import { accountService, runTokenCleanup } from '@modules/account/services';
 
 /*
- * One factory for the whole service folder. `runTokenCleanup` and `login` used to be two modules
- * (`../token-cleanup` and `../service`) and so took a `jest.mock` each; they are two members of one
- * barrel now, and a second `jest.mock` of the same path REPLACES the first rather than merging with
- * it — which would leave whichever half came first undefined at call time.
- *
- * `refreshAccessToken` joined the barrel this session: `getRefreshToken` no longer reaches
- * `../session/jwt`'s `createAccessToken` directly, it calls this wrapper, which is what now emits
- * the audit record — see `authentication.ts`. Mocked here rather than left to call through, so
- * this suite keeps testing only the one thing it owns: that cleanup runs BEFORE it.
+ * One `jest.mock` for the whole service folder: a second `jest.mock` of the same path REPLACES
+ * the first rather than merging with it, which would leave whichever half came first undefined
+ * at call time. `refreshAccessToken` is mocked here too, since `getRefreshToken` now calls it
+ * instead of `../session/jwt` directly — this suite tests only that cleanup runs BEFORE it.
  */
 jest.mock('@modules/account/services', () => ({
     __esModule: true,

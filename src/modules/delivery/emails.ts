@@ -1,9 +1,8 @@
 /**
  * @module
- * The copy of the emails this module sends, resolved into finished strings.
- *
- * Same rule as `@modules/account/emails`: the language is an argument, the output is finished
- * text, and whatever renders it later resolves nothing. See that file for why.
+ * The copy of the emails this module sends, resolved into finished strings — same rule as
+ * `@modules/account/emails`: the language is an argument, the output is finished text, and
+ * whatever renders it later resolves nothing. See that file for why.
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

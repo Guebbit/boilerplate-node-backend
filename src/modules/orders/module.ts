@@ -2,11 +2,9 @@
  * @module
  * Placed orders: admin write and soft delete, plus each account reading back its own. See
  * `TACTICAL_DDD_PLAN.md` §5 for the invariants — totals, legal status transitions, what
- * cancelling restores.
- *
- * Depends on products (an order embeds the catalogue row at purchase time) and inventory (an
- * order is a claim on units, released on cancel or `RESERVATION_EXPIRED`); cart depends on this
- * module in turn, keeping the import graph acyclic.
+ * cancelling restores. Depends on products (an order embeds the catalogue row at purchase time)
+ * and inventory (a claim on units, released on cancel or `RESERVATION_EXPIRED`); cart depends on
+ * this module in turn, keeping the import graph acyclic.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      inventory, products
@@ -31,12 +29,11 @@ export default {
     basePath: '/orders',
     routes: router,
     /*
-     * A hold that timed out takes its order with it. The units are already released by the time
-     * this fires; what `inventory` cannot do is cancel an order without importing this module.
-     *
-     * Admin scope because the shop is cancelling, not the customer, so the write must not be
-     * filtered by whose order it is. `cancelById` calls back into `releaseForOrder`, which finds
-     * the hold already released — the two paths converge and neither can double-release.
+     * A hold that timed out takes its order with it — the units are already released by the
+     * time this fires; what `inventory` cannot do is cancel an order without importing this
+     * module. Admin scope because the shop is cancelling, not the customer: `cancelById` calls
+     * back into `releaseForOrder`, which finds the hold already released, so the two paths
+     * converge and neither can double-release.
      */
     subscribe: () => {
         onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => cancelById(orderId, { admin: true }));

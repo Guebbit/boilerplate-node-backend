@@ -1,13 +1,10 @@
 /**
  * @module
  * The queryable audit trail: who did what, kept for the retention window the TTL index enforces.
- *
- * Declares no router — the domain owns a collection, so by D5 it's a module, but the one endpoint
- * that reads it (`GET /observability/audit`) belongs to the dashboard, not here. Nothing imports
- * this module: the ~53 `emitAuditEvent` call sites talk to `@infrastructure/observability/audit`,
- * which only knows a sink may exist. This module installs that sink itself at import time —
- * fire-and-forget, no Mongo touched until an entry actually fires — which is what keeps `app.ts`
- * from naming this domain: delete the module and persistence just stops.
+ * Declares no router — the one endpoint that reads it (`GET /observability/audit`) belongs to the
+ * dashboard. Nothing imports this module: `emitAuditEvent` call sites talk to
+ * `@infrastructure/observability/audit`, and this module installs itself as that sink at import
+ * time — fire-and-forget, so deleting the module just stops persistence.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      nothing

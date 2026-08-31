@@ -1,13 +1,10 @@
 /**
  * @module
  * The one place a stored document becomes a wire payload: `_id` → `id`, `__v` dropped, and nothing
- * beyond what `openapi.yaml` declares — most of its schemas are `additionalProperties: false`, so a
- * stray `_id` fails the contract suite, not just looks untidy.
- *
- * Two callers need this, and only one gets help from Mongoose: `toJSON` already supplies `id` and
- * drops `__v` via schema options, needing just the `_id` deletion; `.lean()`/`.aggregate()` return
- * raw BSON with none of that applied, so they need all three steps by hand (see `normalize` in
- * `create-repository.ts`). One function serves both.
+ * beyond what `openapi.yaml` declares. Two callers need this and only one gets help from Mongoose
+ * — `toJSON` already supplies `id`/drops `__v`, while `.lean()`/`.aggregate()` return raw BSON
+ * needing all three steps by hand (see `normalize` in `create-repository.ts`) — so one function
+ * serves both.
  */
 
 import type { ToObjectOptions } from 'mongoose';
@@ -35,10 +32,9 @@ export interface SerializeOptions {
 /**
  * The one method this needs from a schema, named structurally.
  *
- * `Schema` cannot be spelled here as a parameter type: its generics carry the document type, so
- * `Schema<never>` rejects every real schema and `Schema<ProductDocument>` would only accept one
- * of the five. What the wiring actually touches is a single `set('toJSON', …)` call, so that is
- * what the signature asks for.
+ * `Schema` can't be spelled as a parameter type here — its generics carry the document type, and
+ * `Schema<ProductDocument>` would only accept one of five models — so this asks only for the
+ * single `set('toJSON', …)` call the wiring actually uses.
  */
 interface SerializableSchema {
     set: (key: 'toJSON', value: ToObjectOptions) => unknown;
@@ -76,10 +72,8 @@ export const applySerialization = (
         virtuals,
         versionKey: false,
         /*
-         * One `as`, not `as unknown as`. Mongoose types the copy it hands the transform from the
-         * raw document type — unnamed here, so it arrives as `{ _id, __v? }` and nothing more.
-         * That is a *narrower* type than the string-keyed bag the serializer works on, not an
-         * unrelated one, so widening it takes a single step.
+         * One `as`, not `as unknown as`: Mongoose hands the transform `{ _id, __v? }`, a
+         * *narrower* type than the serializer's string-keyed bag — widening it is a single step.
          */
         transform: (_document, serialized) => transform(serialized as Record<string, unknown>)
     });

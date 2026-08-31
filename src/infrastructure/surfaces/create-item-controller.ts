@@ -2,10 +2,8 @@
  * @module
  * The read-one controller: fetch by path id, 404 with the module's own key when nothing comes
  * back, the SAME 404 when Mongoose rejects the id as a CastError, `rejectDatabaseError` for
- * anything else.
- *
- * The CastError branch is why this is shared rather than left inline: "a malformed id is a 404,
- * not a 500" is a decision about the API's contract, and it should have one landing site.
+ * anything else. Shared rather than left inline because "a malformed id is a 404, not a 500" is
+ * a decision about the API's contract, and it should have one landing site.
  */
 
 import type { Request, Response } from 'express';
@@ -24,12 +22,9 @@ export interface ItemControllerSpec {
     entity: string;
     /**
      * Fetch the row. Takes the request too, because visibility is a property of the CALLER:
-     * `products` narrows by `callerScope` and reports the view, `users` sits behind `isAdmin` and
-     * needs neither.
-     *
-     * The row is `unknown` because this controller never looks inside it: a miss is whatever the
-     * service answers for one (`null`, `undefined`, and `void` where an empty id short-circuits),
-     * and everything else is serialized as it comes.
+     * `products` narrows by `callerScope`, `users` sits behind `isAdmin`. The row is `unknown`
+     * because this controller never looks inside it — a miss is whatever the service answers for
+     * one (`null`/`undefined`/`void`), and everything else is serialized as it comes.
      */
     fetch: (id: string, request: Request) => Promise<unknown>;
     /** The i18n key answered when the id matches nothing, or is not an id at all. */

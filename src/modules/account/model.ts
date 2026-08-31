@@ -1,15 +1,9 @@
 /**
  * @module
- * Address book Model
- *
- * One document per user, keyed by `userId` — the cart's pattern, chosen over an array on the
- * user document for the cart's reasons: a user response cannot leak a book it does not carry,
- * and editing an address reads and writes one small document instead of the whole account.
- * This makes `account` a module that owns a collection after all; its manifest says so.
- *
- * Unlike a cart line, an entry IS addressed by itself — two entries may hold identical fields
- * and still be "home" and "office" — so the subdocuments keep their `_id`, and that id is the
- * handle every endpoint takes.
+ * Address book model: one document per user, keyed by `userId` — the cart's pattern, chosen over
+ * an array on the user document so editing an address touches one small document, not the whole
+ * account. Unlike a cart line, an entry IS addressed by itself — two entries may hold identical
+ * fields and still be "home" and "office" — so subdocuments keep their own `_id`.
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -34,7 +28,7 @@ export interface AddressItem {
     default: boolean;
 }
 
-/** Address book Document interface. A book id never reaches the wire. */
+/** A book id never reaches the wire. */
 export interface AddressBookDocument extends Document {
     userId: Types.ObjectId;
     items: AddressItem[];
@@ -42,7 +36,7 @@ export interface AddressBookDocument extends Document {
     updatedAt?: Date;
 }
 
-/** Address book Document model type. Queries live in `./repository`. */
+/** Queries live in `./repository`. */
 export type AddressBookModel = Model<AddressBookDocument>;
 
 /** Mongoose subdocument schema for one address-book entry — keeps its own `_id`, see above. */
@@ -63,20 +57,15 @@ const addressItemSchema = new Schema(
 );
 
 /*
- * An entry serializes as the contract's `Address` — `_id` renamed to `id`, exactly as the product
- * snapshot embedded in an order line does.
- *
- * `./services/addresses` maps entries by hand for the wire and does not go through this, so nothing
- * in a request path changes. What does go through it is `scripts/export-demo-dataset.ts`, which publishes
- * stored rows via `toJSON()`: without this, the demo dataset would be the only place in the repo
- * where an addressable record announced itself as `_id`.
+ * An entry serializes as the contract's `Address` — `_id` renamed to `id`, like the product
+ * snapshot embedded in an order line. `./services/addresses` maps entries by hand instead, so no
+ * request path uses this; only `scripts/export-demo-dataset.ts`'s `toJSON()` publishes stored
+ * rows through it.
  */
 applySerialization(addressItemSchema);
 
 /**
- * Mongoose schema for persisted address books.
- *
- * `unique: true` on `userId` — one book per user is a database fact, and every mutation is a
+ * `unique: true` on `userId`: one book per user is a database fact, and every mutation is a
  * single `findOneAndUpdate({ userId }, …)`.
  */
 export const addressBookSchema = new Schema<AddressBookDocument>(

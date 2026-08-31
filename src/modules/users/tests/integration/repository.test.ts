@@ -285,12 +285,9 @@ describe('userRepository', () => {
         });
 
         it('tokenRemoveExpired rejects when the write fails, rather than inventing a status', async () => {
-            /*
-             * The double has to be a QUERY, not a promise: the repository calls
-             * `updateMany(...).exec()`, so a `mockRejectedValue` here would fail with
-             * "exec is not a function" — a different failure than the one under test, and one
-             * whose rejection then leaks into the next case.
-             */
+            // The double must be a QUERY, not a promise: the repository calls
+            // `updateMany(...).exec()`, so `mockRejectedValue` here would fail with
+            // "exec is not a function" instead of exercising the path under test.
             const updateManySpy = jest.spyOn(Users, 'updateMany').mockReturnValueOnce({
                 exec: () => Promise.reject(new Error('db failure'))
             } as never);
@@ -304,13 +301,9 @@ describe('userRepository', () => {
             updateManySpy.mockRestore();
         });
 
-        /*
-         * The two lookups the session layer runs, asserted here because that is where they now
-         * live. `account/session/jwt.ts` used to issue these queries itself — a `findOne` and a
-         * positional `updateOne` against this collection, from a file that is not a repository —
-         * and its unit spec asserted their SHAPE against a mock's call log. The shape is a
-         * persistence fact, so it is proven here instead, against a real document.
-         */
+        // These are the two lookups the session layer runs, asserted here because that's a
+        // persistence fact — `account/session/jwt.ts` used to issue them itself and assert
+        // their shape against a mock's call log instead of a real document.
         it('findByTokenValue finds the holder whatever kind the token is', async () => {
             const user = await createUser({
                 tokens: [
@@ -343,12 +336,8 @@ describe('userRepository', () => {
             const byValue = (value: string) =>
                 refreshed!.tokens.find(({ token }) => token === value);
 
-            /*
-             * This is what the positional `$` buys, and the reason it cannot be a
-             * read-modify-write: without it the stamp lands on `tokens.0` and every session in
-             * `GET /account/sessions` reports the last-used time of whichever one happens to be
-             * stored first.
-             */
+            // This is what the positional `$` buys: without it the stamp lands on `tokens.0` and
+            // every session in `GET /account/sessions` reports the wrong last-used time.
             expect(byValue('second-session')!.lastUsedAt).toBeInstanceOf(Date);
             expect(byValue('first-session')!.lastUsedAt).toBeUndefined();
         });

@@ -1,13 +1,9 @@
 /**
  * @module
  * Standard CRUD via the repository factory, plus the two lookups and the one guarded write payments
- * actually take.
- *
- * `unique` on `orderId` makes "one payment per order" a database fact, so the intent upsert is
- * a single `findOneAndUpdate({ orderId }, …, { upsert: true })` with no read in front of it.
- *
- * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
+ * actually take. `unique` on `orderId` makes "one payment per order" a database fact, so the intent
+ * upsert is a single `findOneAndUpdate` with no read in front of it. The return type is written out
+ * because Mongoose's generics are too large for TypeScript to infer at an export boundary (TS7056).
  */
 
 import { paymentModel, applyPaymentTransform } from './model';
@@ -47,12 +43,7 @@ export const paymentRepository: Repository<PaymentDocument> & {
     }),
 
     /**
-     * Restrict a query to one user's own payments.
-     *
-     * The counterpart of `orders`' `ownerScope`, and it lives here for the same reason: which
-     * *rows* exist for a given audience is a rule about the collection, not about a request.
-     * Callers spread it (`{ ...ownerScope(id) }`) and admins pass nothing, which is how they read
-     * anyone's.
+     * Restrict a query to one user's own payments — spread into a filter; admins pass nothing.
      *
      * @param userId - the caller's id
      * @returns the filter fragment restricting a query to their payments
@@ -62,9 +53,8 @@ export const paymentRepository: Repository<PaymentDocument> & {
     /**
      * One payment by its own id, optionally restricted to a caller's own rows.
      *
-     * Scoped in the FILTER rather than checked after the read — `orders/repository.ts` states why:
-     * checking ownership after the read is how a scoped find turns into an information leak, and
-     * it leaves a window between the check and whatever uses the document.
+     * Scoped in the FILTER, not checked after the read: checking ownership post-read turns a
+     * scoped find into an information leak, with a window between the check and the read's use.
      *
      * @param paymentId - the payment
      * @param scope - the caller's scope, or `undefined` for an admin
@@ -84,15 +74,13 @@ export const paymentRepository: Repository<PaymentDocument> & {
         paymentModel.findOne({ orderId: toObjectId(orderId), ...scope }).exec(),
 
     /**
-     * Create or refresh the intent for an order. Re-asking for an intent is the double-click
-     * case, not an error: the amount is re-frozen (the cart may have been edited through
-     * another order's lifecycle) and the status returns to `requires_confirmation` — but ONLY
-     * from a state where nobody has paid, which the `$in` guard enforces the same way the
-     * order's own status machine does.
+     * Create or refresh the intent for an order. Re-asking (the double-click case) re-freezes the
+     * amount and resets to `requires_confirmation`, but ONLY from a state where nobody has paid —
+     * the `$in` guard enforces that the same way the order's own status machine does.
      *
-     * When the payment exists in a state past confirmation (`succeeded`, `refunded`) the filter
-     * misses and the upsert collides with the unique index instead — that duplicate key IS the
-     * answer "this order's money already moved", surfaced as `null` rather than an exception.
+     * Past confirmation (`succeeded`, `refunded`) the filter misses and the upsert collides with
+     * the unique index instead: that duplicate key IS the answer "this order's money already
+     * moved", surfaced as `null` rather than an exception.
      */
     upsertIntent: (orderId, userId, data) =>
         paymentModel

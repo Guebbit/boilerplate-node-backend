@@ -1,15 +1,10 @@
 /**
  * @module
  * Contract tests for the self-service /account surface: profile update, password change,
- * single-session logout, the sessions listing and email verification.
- *
- * The older account flows (login, signup, reset, delete) are covered by the unit suites and the
- * contract-derived request sweep; these endpoints get scenario tests because their contract
- * branches hang on state no generated payload can set up — a second account holding the email, a
- * revoked cookie, a spent token, a session belonging to someone else.
- *
- * Where a listing is asserted, it is asserted on IDS, not lengths alone — a wrong-but-nonempty
- * answer must not pass.
+ * single-session logout, sessions listing and email verification. These get scenario coverage,
+ * unlike the unit suites' generated-payload sweep, because their contract branches hinge on state
+ * no random payload can set up — a second account holding the email, a revoked cookie, a spent
+ * token, someone else's session. Listing assertions check IDs, never just lengths.
  */
 
 import '@tests/contract';
@@ -262,13 +257,9 @@ describe('GET /account/sessions', () => {
     });
 
     /**
-     * `lastUsedAt` is what separates an idle device from an active one in the list, and it is only
-     * meaningful if it is ABSENT until the session is actually used — a field that appeared at
-     * issue time would read as "used just now" for a session nobody has touched since login.
-     *
-     * Both halves are asserted in one case on purpose: absent-then-present is the property, and
-     * splitting it into two tests would leave either half passing on its own while the field never
-     * changed at all.
+     * `lastUsedAt` must stay ABSENT until the session is actually used, not present from issue
+     * time (which would misread as "just used"). Both halves are asserted in one case on purpose
+     * — splitting them would let either regress alone while the field never actually changed.
      */
     it('reports lastUsedAt only once the session has been used', async () => {
         const { bearer, jwtCookie } = await loginWithCookie();

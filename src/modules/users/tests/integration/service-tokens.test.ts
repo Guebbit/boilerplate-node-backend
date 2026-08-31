@@ -1,14 +1,9 @@
 /**
  * @module
- * The two token-facing lookups on `service.ts` — `findByEmail` and `consumeToken`. A live
- * reset/delete/verify token is read through `accountService.findLiveToken` instead; this file
- * covers only what `service.ts` itself owns.
- *
- * `findByEmail` delegates to `findOneWithCredentials` rather than the ordinary finder, because
- * `select: false` on `tokens` would otherwise leave callers pushing onto `undefined` — a failure
- * that would surface later, not here. `consumeToken` is what makes a reset token one-time; the
- * concurrency suite (`tests/integration/concurrency/`) races two uses past it, and these cases
- * pin the serial behaviour that race is measured against.
+ * The two token-facing lookups on `service.ts` — `findByEmail` and `consumeToken`; a live
+ * reset/delete/verify token goes through `accountService.findLiveToken` instead. `findByEmail`
+ * uses `findOneWithCredentials` since `select: false` on `tokens` would leave callers pushing
+ * onto `undefined`; `consumeToken` pins the one-time-use behaviour the concurrency suite races.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/fixtures';

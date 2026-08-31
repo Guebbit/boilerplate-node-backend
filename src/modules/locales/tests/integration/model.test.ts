@@ -1,16 +1,11 @@
 /**
  * @module
- * Neither collection may leak `_id`/`__v`, on either response path — a hydrated document
- * (`toJSON`) or a `.lean()` list result mapped through the exported transform.
- *
- * Worth asserting per model rather than trusting `applySerialization`: 95 schemas in
- * `openapi.yaml` are `additionalProperties: false`, so a stray `_id` is a contract violation the
- * suite in `tests/contract/` fails on, and the lean path is the one that bypasses `toJSON`
- * entirely.
- *
- * The schema defaults are asserted here too. `db/demo/demo-data.json` is a record of what the
- * schema does rather than of what a fixture claimed, so a default that stopped applying would
- * quietly rewrite the file the paired frontend mocks from.
+ * Neither collection may leak `_id`/`__v`, on either response path: a hydrated document's
+ * `toJSON` or a `.lean()` list mapped through the exported transform. Worth asserting per model
+ * rather than trusting `applySerialization`, since 95 schemas in `openapi.yaml` are
+ * `additionalProperties: false` and the lean path is the one that bypasses `toJSON` entirely; the
+ * schema defaults are pinned here too, since `db/demo/demo-data.json` records what the schema
+ * does, not what a fixture claimed.
  */
 
 import { asStub } from '@tests/stub';
@@ -91,12 +86,9 @@ describe('entry serialization', () => {
 });
 
 /**
- * `baseLanguage` — the ISO 639-1 code at the front of the tag.
- *
- * Derived by a schema hook rather than by the one service that creates languages, because
- * "derived" has to hold for every write path: the seeds and the migration write documents
- * directly, and neither knows it owes the column a value. These pin that it is the SCHEMA doing
- * it, which is the only version of the guarantee that survives a new caller.
+ * `baseLanguage` — the ISO 639-1 code at the front of the tag. Derived by a schema hook, not by
+ * the creating service, because every write path (seeds, migrations) must get it for free; pinning
+ * it here confirms the SCHEMA does it, which is what survives a new caller.
  */
 describe('baseLanguage', () => {
     it.each([

@@ -1,29 +1,13 @@
 /**
  * @module
- * Contract tests for /observability.
- *
- * This module was the only routed one without a contract suite, and the gap was not cosmetic:
- * its three JSON endpoints answer shapes NOTHING else in the repo produces — a health snapshot
- * assembled by hand in a controller, a metrics overview read out of the Prometheus registry by
- * metric NAME, and an audit page over a sibling's collection. Every other module's response comes
- * out of a serializer that a dozen other assertions already constrain; these three are built
- * field by field, which is exactly the code that drifts from a spec without anyone noticing.
- *
- * `toSatisfyApiSpec` is the point of each case. The bodies are asserted on only where a value
- * proves something the shape cannot — that the health snapshot reports the REAL connection state,
- * that the overview survives modules whose counters have never been touched, that the audit page
- * honours its filters.
- *
- * Two routes are deliberately not here, for reasons that are about the transport rather than the
- * contract:
- *
- *   - `GET /observability/events` is an SSE stream that never completes. Supertest resolves on
- *     response END, so a request to it hangs until the suite times out; its payload shape is
- *     `asyncapi.yaml`'s to pin, and `stream.test.ts` in the infrastructure suite drives it.
- *   - `GET /observability/metrics` answers Prometheus text guarded by a static credential. The
- *     403-shaped branches are asserted below; the 200 needs `NODE_METRICS_TOKEN` set for the
- *     process, which is an environment fact rather than a request one.
+ * Contract tests for /observability. Its three JSON endpoints answer shapes built field by
+ * field (a hand-assembled health snapshot, a Prometheus-registry overview, an audit page) rather
+ * than through a serializer other assertions already constrain — exactly the code that drifts
+ * from a spec unnoticed. `GET /events` (an SSE stream Supertest can't resolve; see
+ * `stream.test.ts`) and `GET /metrics` (needs `NODE_METRICS_TOKEN` set for the process) aren't
+ * covered here for transport reasons, not contract ones.
  */
+
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

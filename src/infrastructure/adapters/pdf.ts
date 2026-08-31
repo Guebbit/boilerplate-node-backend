@@ -37,11 +37,9 @@ const launchOptions = () => ({
 
 /**
  * Render HTML content to a PDF buffer using headless Chromium.
- * Consolidates the duplicated Puppeteer launch/render/close pattern.
  *
- * Cost note: this launches a full browser process per call — hundreds of milliseconds and
- * significant memory. Fine for on-demand invoice generation; if it ever moves onto a hot path,
- * a pooled long-lived browser instance would be the next step.
+ * Launches a full browser process per call — hundreds of milliseconds and real memory. Fine for
+ * on-demand invoices; a pooled long-lived browser would be the next step if this ever hits a hot path.
  *
  * @param html - the already-rendered HTML to print (e.g. an EJS template's output)
  * @param pdfOptions - `page.pdf()` geometry options; defaults to A4 portrait

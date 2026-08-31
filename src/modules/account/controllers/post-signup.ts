@@ -24,11 +24,9 @@ export const postSignup = (
     response: Response
 ) => {
     /*
-     * Read, not parsed against `SignupBody` — and that is deliberate rather than the gap it looks
-     * like. `accountService.signup` validates every one of these fields through `zodUserSchema`,
-     * whose messages come from the dictionary; the generated schema would answer first, in Zod's
-     * own untranslated English, and `tests/integration/locale.test.ts` asserts it does not.
-     * Whichever validator a project keeps, one endpoint must not run both.
+     * Read, not parsed against `SignupBody` — deliberate, not a gap. `accountService.signup`
+     * validates via `zodUserSchema`, whose messages are translated; the generated schema would
+     * answer first in Zod's own English (`tests/integration/locale.test.ts` asserts it doesn't).
      */
     const { email, username, password, passwordConfirm } = request.body;
 
@@ -40,9 +38,6 @@ export const postSignup = (
         deleteUpload
     } = readUploadedImage(request);
 
-    /**
-     * Register
-     */
     return accountService
         .signup(
             email,

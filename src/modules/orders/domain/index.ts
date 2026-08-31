@@ -1,9 +1,8 @@
 /**
  * @module
- * Orders — domain layer. Pure rules, lint-guaranteed free of Express, Mongoose and every tier.
- *
- * What belongs here: anything testable without a database.
- * What does not: queries, transactions, HTTP envelopes, translated copy.
+ * Orders — domain layer: pure rules only, lint-guaranteed free of Express, Mongoose and every
+ * tier. Anything testable without a database belongs here; queries, transactions, HTTP envelopes
+ * and translated copy do not.
  *
  * See `docs/theory/domain-layer.md`.
  */

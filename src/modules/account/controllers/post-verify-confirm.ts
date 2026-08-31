@@ -15,15 +15,11 @@ import { rejectValidation } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/verify-confirm
- * Spend a one-time verification token and mark the account's email as verified.
- *
- * Public deliberately, like `reset-confirm` and `delete-confirm`: the link arrives by email and
- * the visitor following it is not necessarily logged in — the token in the body is the
- * credential. Find then spend, for the race: the find is a read that two simultaneous clicks both
- * pass, and only the atomic spend can say which of them was first. The loser gets the same "token
- * not found" an invented token gets, because from its point of view that is what happened — see
- * `services/tokens.ts`, which owns both halves.
+ * POST /account/verify-confirm — spends a one-time verification token, marks the email verified.
+ * Public deliberately (like `reset-confirm`/`delete-confirm`): the token in the body is the
+ * credential, not a login. Find then spend for the race — the find is a read two simultaneous
+ * clicks both pass; only the atomic spend picks a winner, and the loser gets the same "token not
+ * found" an invented token would. See `services/tokens.ts`, which owns both halves.
  */
 export const postVerifyConfirm = (
     request: Request<unknown, unknown, VerifyEmailConfirmRequest>,

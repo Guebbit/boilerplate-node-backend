@@ -1,12 +1,10 @@
 /**
  * @module
  * One payment document per order, made a database fact by `unique` on `orderId` — a retry after a
- * decline re-confirms the SAME document rather than minting a second one.
- *
- * The status vocabulary (`requires_confirmation`, `succeeded`, `declined` — retryable —,
- * `refunded` — terminal) is the provider-facing lifecycle, smaller than a real PSP's; the ORDER's
- * status is the customer-facing one. The words come from `PaymentStatus` in the contract, so the
- * `enum` and the wire cannot disagree — same move as `orders`' `OrderStatus`.
+ * decline re-confirms the SAME document rather than minting a second one. The status vocabulary
+ * (`requires_confirmation`, `succeeded`, `declined` retryable, `refunded` terminal) is the
+ * provider-facing lifecycle, distinct from the order's customer-facing status, and comes from
+ * `PaymentStatus` in the contract so the enum and the wire cannot disagree.
  */
 
 import { model, Schema, Types } from 'mongoose';

@@ -1,14 +1,10 @@
 /**
  * @module
- * Schema contract — the declarations themselves, not the transforms.
- *
- * The sibling specs in this folder cover behaviour; this covers what the SCHEMA says and nothing
- * else exercises: **defaults** (what a client gets for a field it never sent), **`required`**
- * (asserted per field, the only guard against a persisted row that later breaks every reader),
- * and **`select: false`** on credentials.
- *
- * Real Mongo, because these are Mongoose's behaviours rather than ours — a mocked model would
- * only assert the mock's opinion of what `default` means.
+ * Schema contract — the declarations themselves, not the transforms. The sibling specs in this
+ * folder cover behaviour; this covers what the schema says and nothing else exercises: defaults,
+ * `required` (asserted per field, the only guard against a persisted row that later breaks every
+ * reader), and `select: false` on credentials. Real Mongo, because these are Mongoose's
+ * behaviours rather than ours — a mock would only assert its own opinion of what `default` means.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -20,10 +16,9 @@ setupTestDb();
 
 /**
  * A complete, valid order payload: a real buyer and a real product snapshot.
- *
- * `items[].product` embeds the whole `productSchema`, not a reference — an order is a *snapshot*,
- * so a later price change must not rewrite past orders. That is why a bare ObjectId fails
- * validation here: title and price are required on the embedded copy.
+ * `items[].product` embeds the whole `productSchema`, not a reference, since an order is a
+ * snapshot — a bare ObjectId fails validation here because title and price are required on the
+ * embedded copy.
  */
 const makeOrderPayload = async () => {
     const user = await createUser({ email: 'buyer@example.com' });

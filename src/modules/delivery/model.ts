@@ -1,13 +1,9 @@
 /**
  * @module
- * Shipment model.
- *
- * One shipment per order, made a database fact by `unique` on `orderId` — the same discipline
- * as the payment's. A shipment exists because an order reached `shipped`; its two statuses
- * mirror the tail of the ORDER's lifecycle rather than replacing it, because the tracking code
- * and the delivery timestamp are courier facts the order has no field for.
- *
- * See: docs/modules/delivery.md
+ * Shipment model — one shipment per order, made a database fact by `unique` on `orderId`, the
+ * same discipline as the payment's. Its two statuses mirror the tail of the order's lifecycle
+ * rather than replacing it, since the tracking code and delivery timestamp are courier facts the
+ * order has no field for. See: docs/modules/delivery.md
  */
 
 import { model, Schema, Types } from 'mongoose';
@@ -15,9 +11,7 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { ShipmentStatus } from '@types';
 
-/**
- * Shipment Document interface.
- */
+/** A dispatched parcel, one per order. */
 export interface ShipmentDocument extends Document {
     orderId: Types.ObjectId;
     /** The courier's handle on the parcel — fake here, but shaped like the real thing. */
@@ -28,10 +22,10 @@ export interface ShipmentDocument extends Document {
     updatedAt?: Date;
 }
 
-/** Shipment Document model type. Queries live in `./repository`, rules in `./service`. */
+/** Queries live in `./repository`, rules in `./service`. */
 export type ShipmentModel = Model<ShipmentDocument>;
 
-/** Shipment collection schema. */
+/** One parcel per order — `orderId` is unique. */
 export const shipmentSchema = new Schema<ShipmentDocument>(
     {
         orderId: {
@@ -59,7 +53,7 @@ export const shipmentSchema = new Schema<ShipmentDocument>(
 );
 
 /**
- * Normalizes a serialized shipment: `_id` → `id`, drops `__v`. Owed to the repository factory for its
+ * Normalizes a serialized shipment: `_id` → `id`, drops `__v`. Owed to the repository factory's
  * lean reads (see `normalize` in @infrastructure/persistence/create-repository).
  */
 export const applyShipmentTransform = applySerialization(shipmentSchema);

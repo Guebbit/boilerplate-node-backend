@@ -1,25 +1,13 @@
 /**
  * @module
- * The observability route table, and the two inline handlers on it.
- *
- * ── THE GUARDS ──────────────────────────────────────────────────────────────────────────────────
- * Neither `/events` nor `/metrics` carries user data, and both are still authenticated, because
- * both are a map of how the service behaves — request volumes, error rates, latency percentiles,
- * login success/failure counters, uptime and heap. That is reconnaissance worth having if you
- * intend to attack it.
- *
- * They authenticate DIFFERENTLY because their callers can: the SSE stream is opened by a browser's
- * `EventSource`, which cannot set a header and must use the session cookie; the metrics endpoint
- * is scraped by Prometheus, which cannot log in and must use a static credential. Swapping either
- * guard for the ordinary `isAuth` chain would lock out the only client that route exists for — a
- * failure that looks like "monitoring is broken" rather than like an auth change.
- *
- * ── THE HANDLERS ────────────────────────────────────────────────────────────────────────────────
- * These two are written inline in `routes.ts` rather than in `controllers/`, so nothing else can
- * reach them: they are exercised here through the router's own stack. The error branch on
- * `/metrics` matters most — a scrape that fails must answer with a valid, empty exposition rather
- * than an error body, or Prometheus records the failure as a gap in every series at once.
+ * The observability route table and its two inline handlers. Neither `/events` nor `/metrics`
+ * carries user data, but both map how the service behaves (reconnaissance worth having), so both
+ * stay authenticated — DIFFERENTLY, since `/events` is opened by a browser's cookie-only
+ * `EventSource` and `/metrics` is scraped by Prometheus with a static credential. The handlers are
+ * inline in `routes.ts` (exercised only through the router's stack); `/metrics`'s error branch
+ * matters most — it must answer a valid empty exposition, not an error body.
  */
+
 import type { Request, Response } from 'express';
 import { routeSignatures, guardsOn, routeTable } from '@tests/routes';
 import { asStub } from '@tests/stub';

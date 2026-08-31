@@ -20,10 +20,8 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 /**
  * PUT /cart/:productId
  * Set the quantity of a specific cart item. Returns the updated cart.
- *
- * The product still has to be one the storefront would show — this route creates a line as
- * readily as `POST /cart` does, so it answers the same 404 for one that is not, and from the same
- * place: `cartItemSetById`.
+ * Creates a line as readily as `POST /cart` does, so it shares the same 404 for a product the
+ * storefront wouldn't show, from the same place: `cartItemSetById`.
  */
 export const putCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,

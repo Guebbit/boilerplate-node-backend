@@ -1,10 +1,9 @@
 /**
  * @module
- * Drains one queued email job: render the EJS template, send over SMTP.
- *
- * The consumer counterpart to `enqueueEmail` in `adapters/mailer.ts`, wired up by
- * `consumeFromQueue` when a broker is configured. No locale handling here — the producer already
- * resolved every string before publishing, so this file only interpolates and sends.
+ * Drains one queued email job: render the EJS template, send over SMTP. The consumer counterpart
+ * to `enqueueEmail` in `adapters/mailer.ts`, wired up by `consumeFromQueue` when a broker is
+ * configured. No locale handling here — the producer already resolved every string before
+ * publishing, so this file only interpolates and sends.
  *
  * See: docs/tools/email-and-rendering.md
  */
@@ -19,14 +18,10 @@ export { EMAIL_QUEUE } from '@infrastructure/adapters/queue';
 /**
  * Process a single email job from the queue.
  *
- * `false` is a PERMANENT refusal — the payload names no recipient or template, so it is
- * dead-lettered. Everything else is left to reject: an SMTP fault says nothing about the job, and
- * `consumeFromQueue` requeues a rejection.
- *
- * The parameter is the job type, not `unknown`: `consumeFromQueue` is generic, so the queue side
- * carries the shape here instead of handing over an opaque value for this function to assert about.
- * `Partial` is the honest half of that — the broker delivers whatever was published, possibly by an
- * older version of the producer, so every field is a claim until `isSendable` checks it.
+ * `false` is a PERMANENT refusal — no recipient or template, so it's dead-lettered. Anything else
+ * is left to reject, since an SMTP fault says nothing about the job and `consumeFromQueue`
+ * requeues a rejection. `Partial<EmailJob>`, not `unknown`: the broker delivers whatever was
+ * published, so every field is a claim until checked below.
  */
 export const handleEmailJob = (job: Partial<EmailJob>): Promise<boolean> => {
     // The optional chain does the narrowing on its own — past this point TypeScript knows both
@@ -38,13 +33,9 @@ export const handleEmailJob = (job: Partial<EmailJob>): Promise<boolean> => {
     }
 
     /*
-     * Render and send. No locale handling, and that is the design rather than an omission.
-     *
-     * The request that enqueued this job ended long ago, possibly in another process, so there is
-     * no locale store on this async chain and nothing to restore one from. Instead of rebuilding
-     * that context, the producer resolved every string before publishing — `job.data` is finished
-     * copy — so the only thing left to do here is interpolate it into a template and hand the
-     * result to SMTP.
+     * No locale handling here, by design: this job may run in another process long after the
+     * request ended, so there's no locale store to restore. The producer already resolved every
+     * string before publishing — `job.data` is finished copy — so this only interpolates and sends.
      */
     return nodemailer(job.request, job.templateName, job.data ?? {})
         .then(() => true)

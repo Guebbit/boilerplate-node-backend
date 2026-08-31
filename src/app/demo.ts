@@ -1,21 +1,10 @@
 /**
  * @module
  * The demo profile's control surface — mounted only when `NODE_DEMO=true` (see `npm run demo`).
- *
- * Two routes, both consumed by the paired frontend's e2e suite:
- *
- *   POST /__demo/reset    drop the in-memory database, reseed it from every enabled module's
- *                         demo fixtures, clear the email outbox — the deterministic
- *                         start-of-spec state, in-process and therefore fast enough to run
- *                         once per spec.
- *   GET  /__demo/emails   the emails the app "sent" since the last reset (see
- *                         `@infrastructure/adapters/demo-outbox`) — how a password-reset spec
- *                         reads its token.
- *
- * App-tier on purpose: reseeding walks `enabledModules`, and knowing every domain is exactly
- * what the app tier is for. The routes are unauthenticated because the profile only ever binds
- * beside an in-memory database that `npm run demo` created seconds earlier — there is nothing
- * to protect and no deployment that mounts them.
+ * Two routes for the paired frontend's e2e suite: `POST /__demo/reset` reseeds the in-memory
+ * database from every module's fixtures and clears the email outbox; `GET /__demo/emails` reads
+ * back what the app "sent" since. App-tier since reseeding walks `enabledModules`; unauthenticated
+ * since the profile only ever binds beside a database `npm run demo` just created.
  */
 
 import type { Express, Request, Response } from 'express';

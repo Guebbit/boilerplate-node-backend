@@ -13,29 +13,18 @@ import { authRefreshTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * GET /account/refresh
- * Refresh access token.
- * Given the refreshToken from the user's `jwt` cookie, create a new short-lived access token for
- * the following requests.
- *
- * The cookie is the only accepted source. A refresh token in the URL path lands in browser
- * history, proxy logs and `Referer` headers, readable by anything that can see the request line;
- * the `HttpOnly` cookie is not.
+ * GET /account/refresh — mints a new short-lived access token from the refresh cookie.
+ * Cookie-only by design: a refresh token in the URL would land in browser history, proxy logs
+ * and `Referer` headers; the `HttpOnly` cookie doesn't leak that way.
  */
 export const getRefreshToken = (request: Request, response: Response) => {
-    /**
-     * Get token
-     * (name of the cookie decided in the post-login.ts controller)
-     */
+    // Cookie name 'jwt' is decided in post-login.ts.
     const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
 
-    /**
-     * Create new access token using refresh token stored in the server
-     *
-     * Cleanup is skipped when there is no cookie. It is a collection-wide sweep, and a request that
-     * cannot succeed is the cheapest rejection this API has — running the sweep for it would let
-     * anonymous traffic schedule database work. The refusal itself is `refreshAccessToken`'s to
-     * make and to record: absence is one of the three outcomes it reports on.
+    /*
+     * Cleanup is skipped when there's no cookie: it's a collection-wide sweep, and running it for
+     * a request that can't succeed would let anonymous traffic schedule database work.
+     * `refreshAccessToken` records the absence itself as one of its three outcomes.
      */
     return (refreshToken ? runTokenCleanup() : Promise.resolve())
         .then(() =>

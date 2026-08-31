@@ -1,12 +1,9 @@
 /**
  * @module
- * How an address-book fixture is built.
- *
- * A book is addressed by its owner (`userId` is `unique`, no book id reaches the wire), so — like
- * cart and wishlist — this pins an `_id` it doesn't need, for `export-demo-dataset.ts` to commit a
- * stable id run over run. An ENTRY is the opposite case: two addresses can be identical in every
- * field and still be different entries, so `addressItemSchema` keeps its own `_id`, and entries
- * arrive as the contract's `Address` shape a client would read back.
+ * How an address-book fixture is built: a book is addressed by its owner (`userId` is `unique`,
+ * no book id reaches the wire), so this pins an `_id` it doesn't need so
+ * `export-demo-dataset.ts` can commit a stable one run over run. An ENTRY is the opposite: two
+ * addresses can be identical in every field and still be different entries, so it keeps its own.
  */
 
 import { Types } from 'mongoose';

@@ -18,12 +18,10 @@ import {
     type SentMessageInfo,
     type Transporter
 } from 'nodemailer';
-// OTel semantic-convention keys for messaging spans. Using the standard attribute names
-// means tracing backends can render this as a messaging operation instead of an opaque span.
-// The messaging conventions are still incubating, hence the `/incubating` subpath — that is
-// where the current `ATTR_*` names live. The older `SEMATTRS_*` aliases are deprecated, and
-// `SEMATTRS_MESSAGING_DESTINATION` is not merely renamed: the attribute key itself moved from
-// `messaging.destination` to `messaging.destination.name`.
+// OTel semantic-convention keys for messaging spans — using the standard names lets tracing
+// backends render this as a messaging operation instead of an opaque span. Still incubating,
+// hence the `/incubating` subpath: the older `SEMATTRS_*` aliases are deprecated, and
+// `SEMATTRS_MESSAGING_DESTINATION` moved from `messaging.destination` to `.destination.name`.
 import {
     ATTR_MESSAGING_SYSTEM,
     ATTR_MESSAGING_DESTINATION_NAME
@@ -40,14 +38,10 @@ import { isQueueEnabled, publishToQueue, EMAIL_QUEUE } from '@infrastructure/ada
 /**
  * Absolute path to the EJS email templates, overridable with `NODE_EMAIL_TEMPLATES_DIR`.
  *
- * Under `shared/` rather than in a module even though most templates belong to one: the template
- * NAME travels through RabbitMQ to a consumer that may be another process, so a bare filename
- * resolved against the consumer's own directory stays portable where a path into `src/modules`
- * would not. The owner lives in the filename prefix instead.
- *
- * A function, not a constant, for the reason {@link getTransporter} is lazy: a value read while
- * this module is being evaluated is fixed before `.env` has necessarily been loaded, and a test
- * that sets the variable then imports this file gets the value from whichever import came first.
+ * Under `shared/` rather than in a module: the template NAME travels through RabbitMQ to a
+ * consumer that may be another process, so a bare filename stays portable where a path into
+ * `src/modules` would not — the owner lives in the filename prefix instead. A function, not a
+ * constant, for the same lazy-env reason as {@link getTransporter}.
  *
  * See: docs/tools/email-and-rendering.md#templates-interpolate-they-do-not-translate
  */
@@ -84,15 +78,11 @@ export const resetTransporter = (): void => {
 const smtpPort = (): number => environmentNumber('NODE_SMTP_PORT', 587, 1);
 
 /**
- * The SMTP transport, built on first use and reused: nodemailer pools connections, so a per-email
- * transport would pay the TCP + TLS + AUTH handshake every time.
- *
- * LAZY rather than module-scope, so the environment is read when the transport is first needed
- * rather than frozen at import time — the same behaviour in production, and an ordinary function
- * call to test.
- *
- * Under `NODE_ENV=test` it is nodemailer's `jsonTransport`, which opens no socket. Without it the
- * suite picks up the real credentials from `.env` and delivers actual mail.
+ * The SMTP transport, built on first use and reused: nodemailer pools connections, so a
+ * per-email transport would pay the TCP + TLS + AUTH handshake every time. LAZY rather than
+ * module-scope, so the environment is read when first needed, not frozen at import. Under
+ * `NODE_ENV=test` it's nodemailer's `jsonTransport`, which opens no socket — without it the
+ * suite would deliver actual mail using real `.env` credentials.
  *
  * See: docs/tools/email-and-rendering.md#smtp-configuration
  */
@@ -132,14 +122,11 @@ const getTransporter = (): Transporter => {
 };
 
 /**
- * Send email to requested target
- * Retrieve the selected template and apply the requested options
+ * Send an email via SMTP for the requested template and options.
  *
- * If file already exists: it will be overwritten
- *
- * Sends synchronously over SMTP — the caller's promise does not settle until the mail server
- * accepts the message. Prefer `enqueueEmail` below on request paths, so a slow SMTP server
- * cannot stretch out an HTTP response.
+ * Sends synchronously — the caller's promise doesn't settle until the mail server accepts the
+ * message. Prefer `enqueueEmail` below on request paths, so a slow SMTP server can't stretch
+ * out an HTTP response.
  *
  * @param request - nodemailer envelope (to, subject, attachments, ...). `from` and `html`
  *                  are filled in here, but anything passed in overrides them.
@@ -174,7 +161,6 @@ export const nodemailer = (
         });
 
         return (
-            // Render the EJS template
             ejs
                 // `renderFile` reads the template from disk and returns the interpolated HTML.
                 // EJS caches compiled templates internally, so repeat sends skip recompilation.
@@ -186,9 +172,6 @@ export const nodemailer = (
                  * need to know what a locale is.
                  */
                 .renderFile(templateFile(templateName), { ...data })
-                /**
-                 * Send email (nodemailer returns a Promise when no callback is provided)
-                 */
                 .then((html) =>
                     getTransporter().sendMail({
                         // Default sender; spread below lets a caller override it.
@@ -215,47 +198,35 @@ export const nodemailer = (
 /**
  * The envelope an email job carries — the AsyncAPI contract's shape, not Nodemailer's.
  *
- * Every field here survives `JSON.stringify`, which is what makes the queued path and the inline
- * path the same call. Nodemailer's full `SendMailOptions` does not: `attachments: [{ content:
- * Buffer }]` arrives as `{"type":"Buffer","data":[…]}` and a `Readable` becomes `{}`, so a wider
- * type would let a caller write something that works in development — where the broker is off —
- * and corrupts the day it is switched on. A project that needs attachments should send a storage
- * key and let the worker fetch the bytes.
+ * Every field here survives `JSON.stringify`, which is what makes the queued and inline paths the
+ * same call. Nodemailer's full `SendMailOptions` does not: `attachments: [{ content: Buffer }]`
+ * arrives as `{"type":"Buffer","data":[…]}`, so a wider type would work in dev (broker off) and
+ * silently corrupt in production. A project needing attachments should send a storage key instead.
  */
 export type EmailRequest = EmailJobPayload['request'];
 
 /**
- * What one email job carries on the queue.
- *
- * It lives here, with the producer, for the reason `EMAIL_QUEUE` lives with the queue adapter: the
- * envelope is the second thing a producer and its consumer must agree on exactly, and a disagreement
- * is not an error anywhere — it is a job the worker quietly discards. The worker re-exports this
- * type rather than declaring its own, so there is one definition to change.
- *
- * It IS the generated contract type. `asyncapi.workers.yaml` declares `request` with
- * `additionalProperties: false`, so a local widening would be a field the type permits and the
- * contract forbids.
+ * What one email job carries on the queue — the second thing a producer and its consumer must
+ * agree on exactly. It lives here, with the producer, for the same reason `EMAIL_QUEUE` lives
+ * with the queue adapter; the worker re-exports this type rather than declaring its own, so
+ * there's one definition to change. It IS the generated contract type — `asyncapi.workers.yaml`
+ * declares `request` with `additionalProperties: false`, so a local widening would permit a field
+ * the contract forbids.
  */
 export type EmailJob = EmailJobPayload;
 
 /**
  * One email's finished content: which template, and every string it prints.
  *
- * This is what a module's `emails.ts` returns and what a controller hands to `enqueueEmail`. The
- * point of naming it is that the template and the copy it needs travel together — a template that
- * grows a paragraph grows a field here, in the one file that builds it, rather than in whichever
- * controllers happened to send that email.
+ * What a module's `emails.ts` returns and a controller hands to `enqueueEmail` — naming it keeps
+ * the template and the copy it needs travelling together, in the one file that builds it.
  */
 export interface EmailContent {
     /**
-     * The name of this mail, prefixed with the module that owns it — `orders.order-confirm`. The
-     * templates sit in one flat directory so this stays a bare name the queue can carry, and the
-     * prefix is what makes an orphan visible after its module is deleted.
-     *
-     * No extension: the demo outbox publishes this field and the paired frontend's e2e specs read
-     * it to say WHICH mail they are looking at, so it is an identifier shared with a backend that
-     * renders Blade and has never heard of EJS. {@link templateFile} adds the suffix at the one
-     * point the name becomes a path. Guarded by `tests/cross-cutting/outbox-names.test.ts`.
+     * The name of this mail, prefixed with the module that owns it — `orders.order-confirm`. No
+     * extension: the demo outbox publishes this field and the paired frontend's e2e specs read it
+     * to identify which mail they're looking at, so it's shared with a backend that's never heard
+     * of EJS. {@link templateFile} adds the suffix at the one point the name becomes a path.
      */
     template: string;
     /** Subject line, already translated. */
@@ -265,20 +236,13 @@ export interface EmailContent {
 }
 
 /**
- * Queue-aware email dispatch.
- * When RabbitMQ is available the job is published for async processing;
- * otherwise it falls back to sending the email directly (same as before).
+ * Queue-aware email dispatch — the function controllers should call. When RabbitMQ is reachable
+ * the job is published for async processing; when it's unconfigured, or momentarily unreachable,
+ * this falls back to sending inline, at the cost of request latency.
  *
- * This is the function controllers should call. Two fallbacks keep it safe: the queue being
- * unconfigured, and the queue being configured but momentarily unreachable. In both cases the
- * email is still sent — just inline, at the cost of request latency.
- *
- * Note the payload is only what the worker needs to reconstruct the call: rendering happens
- * on the consumer side, so the queue carries template *name* + data, not rendered HTML.
- *
- * This function adds nothing to `data` and resolves nothing in it. Everything the template prints
- * — down to the footer line and the `<html lang>` value — was produced by the `emails.ts` builder
- * that knows the template, so what goes on the queue is exactly what the caller assembled.
+ * The queue carries template *name* + data, not rendered HTML — rendering happens on the consumer
+ * side. Adds nothing to `data`: every string the template prints was already produced by the
+ * `emails.ts` builder that knows the template.
  */
 export const enqueueEmail = (
     request: EmailRequest,

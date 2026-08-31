@@ -182,13 +182,10 @@ const normalizeErrors = (
 };
 
 /**
- * Build the reject envelope. Counterpart to `generateSuccess` — separated from the send step
- * so it can be asserted on directly in tests.
- *
- * Defaults to 400: the most common client-error status, and a safer accidental default than 500.
- *
- * There is no `message` parameter on purpose — see {@link resolveErrorMessage}. `errors` is where
- * a caller says something specific, and it is the half the client is meant to read.
+ * Build the reject envelope. Counterpart to `generateSuccess`, separated from the send step so it
+ * can be asserted on directly in tests. Defaults to 400 — the most common client error, and a
+ * safer accidental default than 500. No `message` parameter on purpose (see
+ * {@link resolveErrorMessage}) — `errors` is the half the client is meant to read.
  */
 export const generateReject = (status = 400, errors: (string | ResponseErrorItem)[] = []) =>
     ({
@@ -216,19 +213,10 @@ export const rejectResponse = (
 /**
  * Turn a Zod failure into the contract's error list, keeping the field that failed.
  *
- * It lives beside `ResponseErrorItem` — the shape it builds — rather than in `./controller`, where
- * it used to sit. That file is named for a layer, and four SERVICES import this function to
- * validate with translated messages before they answer; a service reaching into a module called
- * `controller` reads as a layering mistake every time someone opens it, and it is not one. Nothing
- * here knows about a `Response`.
- *
- * `ResponseErrorItem.details` exists for *"the offending field, constraint, limit"* and validation
- * never filled it: every site mapped `issues` to bare messages and dropped `issue.path`. So a
- * client could not tell WHICH field a 422 was about without string-matching the copy, on the ~34
- * endpoints that validate.
- *
- * `path` is joined with dots so a nested failure reads `shippingAddress.zip`, and an issue with no
- * path at all — a whole-body refinement — carries no `details` rather than an empty one.
+ * Lives beside `ResponseErrorItem` rather than in `./controller`, because four SERVICES import it
+ * too and nothing here knows about a `Response`. `path` is joined with dots (`shippingAddress.zip`)
+ * so a client can tell WHICH field a 422 is about without string-matching the copy; an issue with
+ * no path — a whole-body refinement — carries no `details` rather than an empty one.
  *
  * @param error - the `ZodError` from a failed `safeParse`
  * @returns one error item per issue, each naming its field

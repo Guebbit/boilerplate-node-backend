@@ -1,14 +1,10 @@
 /**
  * @module
- * Delivery — shipments and the fake courier, downstream of the order's status machine.
- *
- * The module never moves an order to `shipped` itself: staff do that through the admin order
- * write, and this module ANSWERS the `ORDER_STATUS_CHANGED` announcement — creates the parcel,
- * mints its tracking code, sends the email. The other direction (`shipped → delivered`) is the
- * fake courier: a job function behind an admin endpoint, the same shape as the token cleanup,
- * because this repo deliberately has no scheduler — an operator (or a demo click) is the cron.
- *
- * See: docs/modules/delivery.md
+ * Delivery — shipments and the fake courier, downstream of the order's status machine. The
+ * module never moves an order to `shipped` itself: it answers `ORDER_STATUS_CHANGED`, creating
+ * the parcel, minting the tracking code, and sending the email. The reverse move (`shipped →
+ * delivered`) is the fake courier, a job function behind an admin endpoint since this repo has
+ * no scheduler. See: docs/modules/delivery.md
  */
 
 import { t, getDefaultLocale } from '@infrastructure/i18n';
@@ -44,11 +40,8 @@ const listMethods = (): ResponseSuccess<{ methods: readonly ShippingMethod[] }> 
     generateSuccess({ methods: SHIPPING_METHODS });
 
 /**
- * The shipment behind one of the caller's orders.
- *
- * Ownership is the ORDER's, read through the same scope every order read uses — a shipment has
- * no owner of its own, it belongs to whoever the parcel is going to.
- *
+ * The shipment behind one of the caller's orders. Ownership is the order's, scoped like every
+ * order read; a shipment has no owner of its own.
  * @param orderId - the order
  * @param authContext - the caller; sees only their own, admins see anyone's
  */
@@ -65,13 +58,9 @@ export const getForOrder = (
     });
 
 /**
- * `ORDER_STATUS_CHANGED`'s listener: an order reaching `shipped` gets its parcel.
- *
- * Idempotent end to end — the upsert re-finds the existing shipment, and the email only goes
- * out when the parcel is genuinely new, so an admin toggling a status cannot spam the customer.
- * The recipient's language comes from their user record when they still have one; the email
- * address is the ORDER's, which is authoritative for where this order talks.
- *
+ * `ORDER_STATUS_CHANGED`'s listener: creates the parcel once, idempotently — the upsert re-finds
+ * an existing shipment, so an admin toggling status cannot spam the customer with re-sends.
+ * Locale comes from the user record if one exists; the email address is always the order's.
  * @param orderId - the order that moved
  */
 export const shipOrder = async (orderId: string): Promise<void> => {
@@ -93,14 +82,11 @@ export const shipOrder = async (orderId: string): Promise<void> => {
 };
 
 /**
- * The fake courier's tick: every parcel on a truck arrives.
- *
- * A job function, not a schedule — see the module docblock. Per parcel, the ORDER moves first
- * through the conditional `shipped → delivered` (the primitive that makes a racing admin write
- * resolve to one winner), and only a moved order's shipment is stamped: the parcel record can
- * lag the order for a beat, never contradict it. For an unattended job the log line is the
- * contract, same as the token cleanup's.
- *
+ * The fake courier's tick: every parcel on a truck arrives. A job function, not a schedule (see
+ * module docblock). Per parcel, the ORDER moves first through the conditional `shipped →
+ * delivered`, resolving a racing admin write to one winner; only a moved order's shipment is then
+ * stamped, so the parcel record can lag the order for a beat but never contradict it. The log
+ * line is the contract, same as the token cleanup's.
  * @returns how many parcels arrived
  */
 export const runCourierAdvance = async (context: CallerContext): Promise<number> => {
@@ -117,17 +103,11 @@ export const runCourierAdvance = async (context: CallerContext): Promise<number>
         if (!order) continue;
 
         /*
-         * The parcel record catches up with the order — conditionally, for the same reason the
-         * order move above is conditional. `findAllShipped` read this document some time ago and
-         * a second courier tick may have been reading it at the same moment; a
-         * read-modify-write would let both stamp `deliveredAt`, and the timestamp would then say
-         * when the last tick finished rather than when the parcel arrived. The `shipped` guard
-         * rides in the filter, so exactly one tick stamps it.
-         *
-         * The answer is not checked, and the count stays on the ORDER: the conditional
-         * `shipped → delivered` above is what decided this parcel arrived, and a `null` here can
-         * only mean another tick already stamped the same delivery. Reporting that as "not
-         * advanced" would undercount a job that did exactly what it was asked to.
+         * Conditional for the same race-safety reason as the order move above: `findAllShipped`
+         * read this document earlier, and a second tick may be updating it right now, so an
+         * unconditional write could stamp `deliveredAt` twice and record the wrong finish time.
+         * The result is not checked — the count already comes from the ORDER's conditional move
+         * above; `null` here just means another tick already stamped this delivery, not a failure.
          */
         await shipmentRepository.updateStatusIfIn(
             String(shipment.orderId),
@@ -160,10 +140,8 @@ export const runCourierAdvance = async (context: CallerContext): Promise<number>
 };
 
 /**
- * The module's one service handle.
- *
- * `shipOrder` is on it like the rest: it is called by `orders`' status flow through this module's
- * own subscription, not from outside, and a member left off would be a member a caller has to know
+ * The module's one service handle. `shipOrder` sits on it like the rest — called through this
+ * module's own subscription, not from outside — so no member is left off for a caller to learn
  * to import differently.
  */
 export const deliveryService = {

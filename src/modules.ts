@@ -1,19 +1,11 @@
 /**
- * THE registry: which domains this build serves.
- *
- * Adding a domain is one folder under `src/modules/` plus one line here. Removing one is `rm -rf`
- * plus deleting its line — and if anything else breaks, that break is real coupling worth seeing
- * rather than a chore worth automating away.
- *
- * Order is not significant: routers mount under distinct base paths, imports are resolved by the
- * module system, and `subscribe` hooks all run before the first route does. Keep it alphabetical so
- * diffs stay boring.
- *
- * A module that also ships its own `openapi.yaml` or `analytics.ts` needs one more line, in
- * `MODULE_SECTIONS` (`scripts/contracts/openapi-bundle.ts`) or `SECTIONS`
- * (`scripts/contracts/analytics-events-bundle.ts`) respectively — those files check themselves
- * against this list and the filesystem on every import, so forgetting either now throws instead of
- * shipping the module with a silently missing contract or catalogue entry.
+ * @module
+ * THE registry: which domains this build serves. Adding one is a folder under `src/modules/` plus
+ * one line here; removing one is `rm -rf` plus deleting its line, and any resulting break is real
+ * coupling worth seeing. Order is alphabetical only to keep diffs boring — mount order, import
+ * resolution and `subscribe` timing don't depend on it. A module shipping its own `openapi.yaml`
+ * needs a matching line in `MODULE_SECTIONS` (`scripts/contracts/openapi-bundle.ts`), which checks
+ * itself against this list on every import.
  */
 
 import type { AppModule } from '@kernel/registry';

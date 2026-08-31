@@ -1,10 +1,9 @@
 /**
  * @module
  * The payment provider port — the seam a real PSP plugs into. Which implementation answers is a
- * deployment decision (`NODE_PAYMENT_PROVIDER`), not a code path. The boilerplate ships `fake`
- * (see `./fake`); a live project adds `stripe.ts` and one line to the registry below.
- *
- * Selection is read lazily and memoised, env-driven like the mailer's transport pick.
+ * deployment decision (`NODE_PAYMENT_PROVIDER`), not a code path; the boilerplate ships `fake`
+ * and a live project adds `stripe.ts` plus one line to the registry below. Selection is read
+ * lazily and memoised, env-driven like the mailer's transport pick.
  */
 
 import { fakePaymentProvider } from './fake';
@@ -24,8 +23,7 @@ export interface PaymentProvider {
      *
      * @param charge - the frozen amount and its currency
      * @param card - the customer's card
-     * @returns the outcome — a decline is an answer, not an error; only transport-level
-     *   failures throw
+     * @returns the outcome; a decline is an answer, not an error — only transport failures throw
      */
     charge(charge: { amount: number; currency: string }, card: CardDetails): Promise<ChargeOutcome>;
 

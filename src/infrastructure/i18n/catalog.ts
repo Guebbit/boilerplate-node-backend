@@ -1,11 +1,9 @@
 /**
  * @module
- * Where translations come from: discovery, the per-module merge, and the resources `i18next.init()`
- * is handed at boot.
- *
- * Files only. The database overlay is `./overrides`, which layers on top of what this produces —
- * one direction, never back. A project that changes where dictionaries live edits this file and
- * nothing else, and in particular does not touch the request-scoped `t` that 36 files import.
+ * Where translations come from: discovery, the per-module merge, and the resources
+ * `i18next.init()` is handed at boot. Files only — the database overlay in `./overrides` layers
+ * on top of what this produces, one direction, never back. A project that changes where
+ * dictionaries live edits this file and nothing else.
  *
  * See: docs/tools/i18n.md
  */
@@ -31,15 +29,11 @@ export const getFallbackLocale = (): string => process.env.NODE_FALLBACK_LOCALE 
 let supportedLocalesCache: string[] | undefined;
 
 /**
- * The locales this API can answer in — `NODE_SUPPORTED_LOCALES` when set, otherwise the directory
- * listing.
+ * The locales this API can answer in — `NODE_SUPPORTED_LOCALES` when set, otherwise the
+ * directory listing.
  *
- * READ ONCE, THEN CACHED, and that is load-bearing: `i18next.init()` registers its resources from
- * this list at boot and never revisits them, so a per-request read would let the middleware
- * negotiate a language i18next cannot resolve. A `Content-Language` header that lies is worse than
- * the language being unavailable.
- *
- * See: docs/tools/i18n.md#which-languages-exist
+ * Cached after the first call: `i18next.init()` reads this list once at boot, so a per-request
+ * refresh could offer a language i18next was never given.
  */
 export const listSupportedLocales = (): string[] => {
     if (supportedLocalesCache) return supportedLocalesCache;
@@ -72,10 +66,8 @@ export const resetSupportedLocales = (): void => {
 /**
  * Directories contributing dictionaries on top of the shared one, in registration order.
  *
- * A module owns its own copy — delete the folder and its strings go with it — but `infrastructure` sits below
- * every module and cannot import one to find them. So the paths are handed in at boot, the same
- * inversion `registerAuditSink` uses. Unregistered is a valid state: unit tests that read a
- * dictionary without booting the app get the shared keys and nothing else.
+ * A module owns its own copy — `infrastructure` sits below every module and cannot import one to
+ * find them, so paths are handed in at boot instead (same inversion as `registerAuditSink`).
  */
 let localeDirectories: string[] = [];
 

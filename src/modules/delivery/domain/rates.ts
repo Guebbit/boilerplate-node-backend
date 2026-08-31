@@ -1,24 +1,16 @@
 /**
  * @module
- * Shipping rates — the one piece of delivery that is a rule rather than a record.
- *
- * Pure functions over a static table, in `domain/` like `evaluateCheckout`: quotes must come
- * from exactly one place, and a table this small doesn't deserve a collection. Real carrier
- * rates would replace the table — checkout only ever sees `priceShipping`.
- *
- * `ShippingMethod` is `delivery`'s own `openapi.yaml` schema, imported rather than restated,
- * since `GET /delivery/methods` answers this table verbatim.
- *
+ * Shipping rates — pure functions over a static table, kept in `domain/` like `evaluateCheckout`
+ * so quotes come from exactly one place. `ShippingMethod` is this module's own `openapi.yaml`
+ * schema, since `GET /delivery/methods` answers this table verbatim.
  * See `docs/theory/domain-layer.md`.
  */
 
 import type { ShippingMethod } from '@types';
 
 /**
- * The methods this shop offers.
- *
- * Flat rates on purpose: weight/zone matrices are real-project concerns with no demo value.
- * `pickup` is the zero-cost proof that "cheapest method" and "no method" stay distinguishable.
+ * The methods this shop offers. Flat rates on purpose — weight/zone matrices are real-project
+ * concerns with no demo value. `pickup` proves "cheapest method" and "no method" stay distinct.
  */
 export const SHIPPING_METHODS: readonly ShippingMethod[] = [
     { id: 'standard', price: 5, freeAbove: 100 },
@@ -32,9 +24,8 @@ export const findShippingMethod = (methodId: string): ShippingMethod | undefined
 
 /**
  * What a method costs against a given items total.
- *
  * @param method - the chosen method
- * @param itemsTotal - the order's lines total, the number `freeAbove` compares against
+ * @param itemsTotal - the order's lines total, compared against `freeAbove`
  * @returns the cost — `0` once the threshold is met, the flat rate otherwise
  */
 export const priceShipping = (method: ShippingMethod, itemsTotal: number): number =>

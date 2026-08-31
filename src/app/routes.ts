@@ -1,12 +1,9 @@
 /**
  * @module
- * Route mounting.
- *
- * Modules mount themselves: each one declares its `basePath` and router in its manifest, and this
- * install walks `enabledModules` without knowing a single domain name. Every domain is a module,
- * so the walk is the whole of the domain mounting — the one explicit import is `system-routes`,
- * which is not a domain: it serves the contract, the docs and the root redirect, none of which
- * belong to anybody's business logic.
+ * Route mounting. Modules mount themselves: each declares its `basePath` and router in its
+ * manifest, and this install walks `enabledModules` without knowing a single domain name. The one
+ * explicit import is `system-routes`, which is not a domain — it serves the contract, the docs and
+ * the root redirect, none of which belong to anybody's business logic.
  */
 
 import type { Express, Request, Response } from 'express';

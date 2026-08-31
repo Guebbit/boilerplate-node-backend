@@ -1,14 +1,10 @@
 /**
  * @module
- * One home for validation copy: Zod's own refusals, answered in the caller's language.
- *
- * Generated schemas (`@api/schemas.zod`) carry no messages and used to fall back to Zod's English,
- * while hand-written schemas answered in the request's language — same 422, different language
- * depending on the endpoint. A global error map fixes every schema, generated included, without
- * touching codegen or overriding the specific copy a field already declares.
- *
- * Runs at PARSE time, not schema-construction time, so it reads the request-scoped `t`. Keys are
- * per CONSTRAINT, not per field: ~17 cover every generated schema.
+ * One home for validation copy: Zod's own refusals, answered in the caller's language. Generated
+ * schemas (`@api/schemas.zod`) carried no messages and fell back to Zod's English while
+ * hand-written ones answered in the request's language — this global error map fixes every schema
+ * without touching codegen. Runs at PARSE time, not construction time, so it reads the
+ * request-scoped `t`; keys are per CONSTRAINT, not per field (~17 cover every generated schema).
  */
 
 import { z } from 'zod';
@@ -90,5 +86,6 @@ const messageFor = (issue: $ZodIssue): string => {
  * request is parsed, and a side effect hidden in an import would leave that to chance.
  */
 export const registerValidationMessages = (): void => {
+    // `customError` is Zod's global message hook, used instead of overriding per schema.
     z.config({ customError: (issue) => messageFor(issue as $ZodIssue) });
 };

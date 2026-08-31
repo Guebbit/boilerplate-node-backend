@@ -1,13 +1,11 @@
 /**
  * @module
- * The orders route table.
- *
- * The whole router is authenticated at the top (`router.use(getAuth, isAuth)`), with the admin
- * guard applied per route — an `isAdmin` omitted from a write reads as "any authenticated user
- * may do this", easy to get wrong in the unsafe direction. `POST /:id/cancel` is deliberately NOT
- * admin-guarded, since a customer cancelling their own order is the one write they may make; its
- * safety comes from the service's scoped conditional write, not the router, so a test that
- * "helpfully" added `isAdmin` here would break the feature.
+ * The orders route table. The whole router is authenticated at the top (`router.use(getAuth,
+ * isAuth)`), with the admin guard applied per route — an `isAdmin` omitted from a write reads as
+ * "any authenticated user may do this", easy to get wrong in the unsafe direction. `POST
+ * /:id/cancel` is deliberately NOT admin-guarded, since a customer cancelling their own order is
+ * the one write they may make; its safety comes from the service's scoped conditional write, not
+ * the router.
  */
 import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 

@@ -19,12 +19,10 @@ const queryBoolean = z.preprocess(
 );
 
 /**
- * Built on the orval-generated SearchUsersBody (kept in sync with
- * openapi.yaml); page/pageSize and the three booleans are coerced from strings since GET
- * requests carry them as query-string text, not JSON numbers/booleans.
- *
- * `page`/`pageSize` come from `@infrastructure/http/schemas` so all four search endpoints agree on what a
- * legal one is; absent stays absent, because `normalizePagination` owns the defaults.
+ * Extends the orval-generated `SearchUsersBody`; page/pageSize and the three booleans are
+ * coerced from strings since GET carries them as query text, not JSON types.
+ * page/pageSize come from the shared http schemas so all search endpoints agree on what's
+ * legal; absent stays absent, since `normalizePagination` owns the defaults.
  */
 const searchUsersQuerySchema = SearchUsersBody.extend({
     page: pageSchema,
@@ -36,10 +34,8 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
 
 /**
  * Query parameters that change this endpoint's answer, and therefore its cache key.
- *
- * Derived from the schema rather than hand-listed, because the two must not drift: a parameter
- * the controller reads but the key omits would let two different requests share one cached
- * response. Anything outside this list is stripped by the validator and changes nothing.
+ * Derived from the schema rather than hand-listed: a parameter the controller reads but the
+ * key omits would let two different requests share one cached response.
  */
 export const searchUsersKeyParameters = Object.keys(searchUsersQuerySchema.shape);
 

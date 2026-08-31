@@ -1,12 +1,9 @@
 /**
  * @module
- * The analytics event names this module emits.
- *
- * The administrative half of "an account came into existence": `account`'s `USER_SIGNED_UP` is
- * self-signup, these two are an operator acting on somebody else's record, and the month's
- * account total sums both — which is why neither module can carry both names. Declared by
+ * The analytics event names this module emits: the admin-facing half of account creation,
+ * distinct from `account`'s self-signup `USER_SIGNED_UP` since an operator acting on someone
+ * else's record is a different event that the month's account total still sums. Declared by
  * augmenting the analytics port's name map, as `./audit.ts` does for audit actions.
- *
  * Naming rule: docs/tools/analytics.md#naming.
  */
 

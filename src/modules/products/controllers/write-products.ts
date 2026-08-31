@@ -24,12 +24,8 @@ import type {
 } from '@types';
 
 /**
- * POST /products — create a new product (admin).
- * PUT /products — update a product by id in the request body (admin).
- * PUT /products/:id — update a product by path id (admin).
- *
- * Behaviour: if an id is found (path param or body), the product is updated;
- * otherwise a new product is created (POST only — PUT without id returns 422).
+ * POST/PUT /products, and PUT /products/:id — admin create/update.
+ * Whichever path supplies an id determines create vs update; PUT without one returns 422.
  */
 export const writeProducts = (
     request: Request<
@@ -89,11 +85,10 @@ export const writeProducts = (
                 })
         );
 
-    // Past the guard above, these have been checked against zodProductSchema — the assertion
-    // records what the validator just established rather than assuming it. `thumbnailUrl` and
-    // `pendingImageKey` never went through the schema — they are server-derived, never
-    // client-supplied — `thumbnailUrl` is on `Product` itself (readOnly on the contract),
-    // `pendingImageKey` is not, so it joins via an intersection instead.
+    // Past the guard above, these were already checked against zodProductSchema — the assertion
+    // records that rather than assuming it. `thumbnailUrl` and `pendingImageKey` are
+    // server-derived, never client-supplied; `thumbnailUrl` lives on `Product` (readOnly),
+    // `pendingImageKey` doesn't, so it joins via an intersection instead.
     const validated = {
         imageUrl,
         active,
@@ -107,16 +102,12 @@ export const writeProducts = (
     };
 
     /*
-     * The opening count, and it is create-only — deliberately absent from `validated`, which both
-     * paths spread.
-     *
-     * A new product's `onHand` is the one place an absolute count is honest: there is no prior
-     * value to race with and no history to contradict, so "this product starts with 40" is a
-     * complete statement. On an EDIT the same number would be a blind overwrite of whatever
-     * sales and receipts have done since the form was opened, which is why the update contracts
-     * carry no counter field at all. Changing an existing product's stock is
-     * `POST /inventory/receipts` or `POST /inventory/adjustments` — both signed, both conditional,
-     * both leaving a ledger row saying what happened.
+     * The opening count — create-only, deliberately absent from `validated`, which both paths
+     * spread. A new product's `onHand` is the one honest absolute count: nothing prior to race
+     * with. On an EDIT the same number would blindly overwrite whatever sales and receipts have
+     * done since the form opened, which is why the update contracts carry no counter field at
+     * all — changing existing stock goes through `POST /inventory/receipts` or `/adjustments`,
+     * both signed and ledgered.
      */
     const openingCount = onHand as Product['onHand'];
 

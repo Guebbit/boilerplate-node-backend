@@ -1,10 +1,9 @@
 /**
  * @module
  * Domain events this module emits, added by augmenting the kernel's payload map rather than
- * editing it, so the catalogue grows with the modules that own the events.
- *
- * `orders` sits low in the dependency graph — payments and delivery depend on it, never the
- * reverse — so announcing is the only way it can tell them anything.
+ * editing it, so the catalogue grows with the modules that own the events. `orders` sits low in
+ * the dependency graph — payments and delivery depend on it, never the reverse — so announcing
+ * is the only way it can tell them anything.
  */
 
 import type { OrderStatus } from '@types';

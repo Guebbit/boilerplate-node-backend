@@ -1,16 +1,11 @@
 /**
  * @module
  * The soft/hard delete controller shared by every module with a `DELETE /x`, `DELETE /x/:id` and
- * `DELETE /x/:id/hard` triplet.
- *
- * Each module still owns a controller file — `controller-naming.test.ts` requires one — but it
- * becomes a short declaration of what makes this entity's delete different: its name, its service
- * call, its audit action and its not-found key.
- *
- * The returned function carries the entity's own name — `deleteOrder`, not a shared one — because
- * that name is what a stack trace prints and what the generated module-surface tables in
- * `docs/modules/` list per endpoint. A computed method name in an object literal is how a function
- * expression gets one.
+ * `DELETE /x/:id/hard` triplet. Each module still owns a controller file (required by
+ * `controller-naming.test.ts`), which becomes a short spec of what differs per entity — name,
+ * service call, audit action, not-found key. The handler carries the entity's own name (e.g.
+ * `deleteOrder`) via a computed property key, since that is what stack traces and the generated
+ * `docs/modules/` tables print.
  */
 
 import type { Request, Response } from 'express';
@@ -77,19 +72,11 @@ export const createDeleteController = ({
             const id = extractAndValidateId(request, response, 'delete');
             if (!id) return Promise.resolve();
 
-            // `hardDelete` arrives three ways — path segment (via `routeFlag`), query, or body.
-            //
-            // DISPOSITION — OR across the sources, not the surface's precedence:
-            //   any source true          → true   (`/users/:id/hard` + `{"hardDelete": false}` destroys)
-            //   all false, or none sent  → false  (the contract's default)
-            //   any undecodable value    → 422, never outvoted by a `true` elsewhere
-            //
-            // Why not precedence here: `false` is the default, so it is a value nobody normally
-            // types. A `false` that only means "unset" would then outrank a `true` a caller
-            // deliberately spelled, purely because it rode the better transport. OR has no such
-            // asymmetry — the only way to get a hard delete is for someone to have asked for one.
-            //
-            // Reads the `delete` surface's three sources and merges them into one input object.
+            // `hardDelete` arrives three ways (path segment via `routeFlag`, query, or body) and
+            // is OR'd across sources rather than following surface precedence: any true wins, all
+            // false/absent defaults to false, any undecodable value 422s. OR avoids `false`
+            // (the default, what nobody types) ever outvoting a `true` someone deliberately sent
+            // on a different transport.
             const input = readInput(request, { surface: 'delete', anyTrue: ['hardDelete'] });
             // Validates the merged `hardDelete` value against its schema; 422s and returns
             // undefined on failure.

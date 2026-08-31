@@ -1,15 +1,11 @@
 /**
  * @module
- * One optional connection's lifecycle, stated once.
- *
- * Redis and RabbitMQ are both *optional*: unconfigured is a supported deployment, unreachable is a
- * degraded one, and neither may turn a request into an error. That takes the same six pieces every
- * time — memoised handle, shared in-flight connect, warn-once flag, a getter resolving `undefined`
- * rather than rejecting, a `DependencyStatus` reader, and a close — so the rules live here and each
- * adapter supplies only what is genuinely its own (how to open, check, and close it).
- *
- * Deliberately does NOT retry on a timer: recovery is demand-driven, so an unreachable dependency
- * costs one log line rather than one per second.
+ * One optional connection's lifecycle, stated once. Redis and RabbitMQ are both *optional*:
+ * unconfigured is a supported deployment, unreachable is a degraded one, and neither may turn a
+ * request into an error. That takes the same six pieces every time — memoised handle, shared
+ * in-flight connect, warn-once flag, a getter resolving `undefined` instead of rejecting, a
+ * `DependencyStatus` reader, and a close — so the rules live here and each adapter supplies only
+ * what is genuinely its own. Deliberately does NOT retry on a timer: recovery is demand-driven.
  *
  * See: docs/tools/redis-cache.md, docs/tools/rabbitmq.md
  */
@@ -47,19 +43,17 @@ export interface ManagedConnectionOptions<THandle> {
      * Whether a handle already opened can still be used.
      *
      * Called before every reuse, so a dependency that died since the last call is reconnected
-     * rather than handed back dead. A handle whose own close event is supervised by the adapter
-     * (see `queue.ts`, which calls {@link ManagedConnection.forget}) answers `true`: there, a
-     * handle still held IS a live one.
+     * rather than handed back dead. A handle whose close is supervised (see `queue.ts`, which
+     * calls {@link ManagedConnection.forget}) answers `true` — there, a handle still held IS live.
      */
     isReady: (handle: THandle) => boolean;
 
     /**
      * Close it, from {@link ManagedConnection.stop}.
      *
-     * Called with whatever handle is live, or with `undefined` when none is — an adapter that
-     * opened MORE than the handle still has to close it. `queue.ts` is the case: its handle is a
-     * channel, the channel can die on its own while the TCP connection beneath it stays open, and
-     * closing that connection is the only thing that releases it.
+     * Called with whatever handle is live, or `undefined` when none is — an adapter that opened
+     * MORE than the handle still has to close it. `queue.ts`'s handle is a channel that can die
+     * while the TCP connection beneath it stays open; closing that connection is what releases it.
      */
     close: (handle: THandle | undefined) => Promise<void>;
 
@@ -75,10 +69,9 @@ export interface ManagedConnection<THandle> {
     /**
      * The live handle, or `undefined` when the dependency is off, unconfigured or unreachable.
      *
-     * NEVER rejects, and that is the property every fail-open adapter is built on: a caller
-     * treats `undefined` as "skip it", and cannot tell the three cases apart — nor does it need
-     * to. The one caller that does need to (`clearCache`, which must report whether the cache is
-     * now known to be clear) separates them with `isEnabled` instead.
+     * NEVER rejects — the property every fail-open adapter is built on. A caller treats
+     * `undefined` as "skip it" and can't (or needn't) tell the three cases apart; `clearCache` is
+     * the one exception, and separates them with `isEnabled` directly.
      */
     get: () => Promise<THandle | undefined>;
 
@@ -103,9 +96,8 @@ export interface ManagedConnection<THandle> {
      * Log one warning about this dependency being unreachable, then stay quiet until a connect
      * succeeds.
      *
-     * Exported because failures arrive outside `connect` too — an `error` event on a live handle,
-     * a command rejected mid-publish — and they are the same outage, so they share the latch
-     * rather than each flooding the log on their own.
+     * Exported because failures arrive outside `connect` too — an `error` event, a command
+     * rejected mid-publish — and share the same latch instead of each flooding the log.
      */
     reportUnavailable: (error: unknown) => void;
 

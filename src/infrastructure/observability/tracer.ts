@@ -1,19 +1,14 @@
 /**
  * @module
- * Tracer helper.
- *
- * Thin wrapper around the OpenTelemetry API.
- * Import getTracer() or withSpan() anywhere you want to create a custom span.
+ * Tracer helper — a thin wrapper around the OpenTelemetry API. Import `getTracer()` or
+ * `withSpan()` anywhere a custom span is needed.
  *
  * See: docs/tools/opentelemetry.md
  */
 
-// `@opentelemetry/api` is the *interface* package, deliberately separate from the SDK:
-//  - `trace`   — the global tracer registry; also `trace.getActiveSpan()`.
-//  - `SpanStatusCode` — the OK/ERROR/UNSET enum used to mark span outcome.
-//  - `Span` — one timed operation; `Attributes` — its key/value metadata.
-// Because this is only the API, importing it when no SDK is registered is harmless: every
-// call becomes a no-op. That is what lets tests run without booting OpenTelemetry.
+// `@opentelemetry/api` is the *interface* package, separate from the SDK — trace/SpanStatusCode/
+// Span/Attributes. Importing it when no SDK is registered is harmless: every call becomes a
+// no-op, which is what lets tests run without booting OpenTelemetry.
 import { trace, SpanStatusCode, type Span, type Attributes } from '@opentelemetry/api';
 
 /**
@@ -24,26 +19,15 @@ import { trace, SpanStatusCode, type Span, type Attributes } from '@opentelemetr
 const TRACER_NAME = 'boilerplate-node-backend';
 
 /**
- * Return the active OTel tracer.
- *
- * `trace.getTracer()` is cheap and cached by the global provider, so there is no reason to
- * hold the result in a module constant — and calling it lazily avoids grabbing a no-op tracer
- * at import time, before `startTracing()` has registered the real provider.
+ * Return the active OTel tracer. `trace.getTracer()` is cheap and cached by the global provider,
+ * so there's no reason to hold it in a module constant — and calling it lazily avoids grabbing a
+ * no-op tracer at import time, before `startTracing()` registers the real provider.
  */
 export const getTracer = () => trace.getTracer(TRACER_NAME);
 
 /**
- * Run an async function inside a named OTel span.
- *
- * - Opens a new child span under the active context.
- * - Records any thrown error on the span and re-throws.
- * - Ends the span whether the call succeeds or fails.
- *
- * @example
- * const result = await withSpan('users.login', async (span) => {
- *   span.setAttribute('user.email', email);
- *   return await userService.login(email, password);
- * });
+ * Run an async function inside a named OTel span: opens a child span under the active context,
+ * records any thrown error on it, and ends it whether the call succeeds or fails.
  */
 export const withSpan = <T>(
     spanName: string,
@@ -51,10 +35,9 @@ export const withSpan = <T>(
     attributes?: Attributes
 ): Promise<T> => {
     const tracer = getTracer();
-    // `startActiveSpan` (as opposed to `startSpan`) also makes the span *current* for the
-    // duration of the callback. That is what lets anything called inside — a Mongoose query, a
-    // Redis command, `getActiveSpanContext()` — attach itself as a child automatically, with no
-    // span passed down through the call stack.
+    // startActiveSpan (vs startSpan) makes the span *current* for the callback's duration, so
+    // anything called inside — a Mongoose query, `getActiveSpanContext()` — attaches as a child
+    // automatically, with no span threaded through the call stack.
     return tracer.startActiveSpan(spanName, (span) => {
         // Attributes known up front. The callback can add more via its `span` argument once it
         // has computed values worth recording.
@@ -72,9 +55,8 @@ export const withSpan = <T>(
                 return result;
             },
             (error: unknown) => {
-                // Record the error on the span before propagating.
-                // `setStatus(ERROR)` is what makes the span show up red / count toward error
-                // rates in the backend.
+                // `setStatus(ERROR)` records the failure before propagating — this is what
+                // makes the span show up red / count toward error rates in the backend.
                 span.setStatus({
                     code: SpanStatusCode.ERROR,
                     message: error instanceof Error ? error.message : String(error)
@@ -92,10 +74,9 @@ export const withSpan = <T>(
 };
 
 /**
- * OTel uses all-zeros trace/span IDs for no-op/invalid spans — treat these as absent.
- *
- * Without this check, log lines in an untraced context (tests, or before the SDK starts) would
- * carry a meaningless `trace_id: '00000000000000000000000000000000'` that looks like real data.
+ * OTel uses all-zeros trace/span IDs for no-op/invalid spans — treat these as absent. Without
+ * this check, log lines in an untraced context (tests, before the SDK starts) would carry a
+ * meaningless all-zeros id that looks like real data.
  */
 const isValidOtelId = (id: string) => Boolean(id) && !/^0+$/.test(id);
 
@@ -107,10 +88,9 @@ export const getActiveSpanContext = (): {
     traceId: string | undefined;
     spanId: string | undefined;
 } => {
-    // Reads from OTel's async context (AsyncLocalStorage under the hood), so it works anywhere
-    // inside a traced request without threading a span through every function signature.
-    // This is the glue for cross-signal correlation: audit events and analytics events stamp
-    // the same traceId, so a log line can be pivoted straight to its trace.
+    // Reads from OTel's async context (AsyncLocalStorage), so it works anywhere in a traced
+    // request without threading a span through every signature — the glue for cross-signal
+    // correlation, since audit/analytics events stamp the same traceId.
     const activeSpan = trace.getActiveSpan();
     if (!activeSpan) return { traceId: undefined, spanId: undefined };
     // `spanContext()` returns the wire-propagatable identity: traceId, spanId, trace flags.

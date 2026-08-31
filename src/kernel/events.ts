@@ -1,13 +1,10 @@
 /**
  * @module
- * Domain events — the sanctioned way two modules talk when neither can own the other.
- *
- * The import graph must stay acyclic — `no-circular` in `.dependency-cruiser.cjs` refuses one — but
- * some relationships are genuinely mutual: deleting a product empties it out of every cart, while
- * the cart needs the catalogue to price a line. As imports that is a cycle; as an event it is
- * products emitting and cart listening, and the arrow points one way.
- *
- * Not a substitute for the broker — no durability, no retry, no replay.
+ * Domain events — the sanctioned way two modules talk when neither can own the other. The import
+ * graph must stay acyclic (`no-circular` in `.dependency-cruiser.cjs`), but some relationships are
+ * genuinely mutual — a deleted product empties every cart, while cart needs the catalogue to
+ * price a line — so as an event, not an import, the arrow points one way. Not a substitute for the
+ * broker: no durability, no retry, no replay.
  *
  * See: docs/tools/events-and-logging.md#the-domain-event-bus-and-what-it-is-not
  */

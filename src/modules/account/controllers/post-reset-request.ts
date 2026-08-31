@@ -17,15 +17,11 @@ import { parseBody } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /*
- * The audit emit below stays at the controller, not moved into the service: it fires
- * UNCONDITIONALLY, whether or not the email belongs to a real account, which is what keeps the
- * response identical either way and prevents user enumeration. A service function reachable only
- * once a user is found cannot reproduce that — moving it would make the audit trail leak account
- * existence that the response deliberately does not.
- *
- * The mail itself moved the other way: `accountService.requestPasswordReset` mints the token and
- * publishes the job, and reports back only a boolean, which is all this handler needs to label a
- * metric. The token value never reaches this file.
+ * Audit emit stays at the controller: it fires UNCONDITIONALLY regardless of whether the email
+ * belongs to a real account, keeping the response identical either way and preventing user
+ * enumeration. A service function reachable only once a user is found couldn't reproduce that.
+ * The mail moved the other way — `requestPasswordReset` mints the token, publishes the job, and
+ * reports back only a boolean; the token value never reaches this file.
  */
 
 /**

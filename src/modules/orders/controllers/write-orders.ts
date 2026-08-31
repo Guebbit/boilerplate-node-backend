@@ -17,14 +17,10 @@ import { catchAs, refused, rejectValidation } from '@infrastructure/http/control
 
 /**
  * POST /orders — create a new order from an explicit payload (admin).
- * PUT /orders — update an order by id in the request body (admin).
- * PUT /orders/:id — update an order by path id (admin).
+ * PUT /orders(/:id) — update an order by body or path id (admin); PUT without an id is 422.
  *
- * Behaviour: if an id is found (path param or body), the order is updated;
- * otherwise a new order is created (POST only — PUT without id returns 422).
- *
- * Creation bypasses the user cart: items come straight from the request body, which is what
- * makes this an admin operation rather than the checkout path in `@modules/cart`.
+ * Creation bypasses the cart — items come straight from the body — which is what makes this
+ * admin rather than the checkout path in `@modules/cart`.
  */
 export const writeOrders = (
     request: Request<

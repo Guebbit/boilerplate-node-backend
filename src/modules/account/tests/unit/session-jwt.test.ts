@@ -1,27 +1,19 @@
 /**
  * @module
- * `account/session/jwt.ts` — the token layer, at the unit level.
- *
- * Where the integration suites exercise these functions against a real database, this asserts the
- * properties that make them SAFE and fail silently: the two secrets never cross-verify, a refresh
- * token is only valid while still stored, and `jwtid: randomUUID()` keeps two same-second logins
- * from producing identical, mutually-revoking tokens.
- *
- * `@modules/users` is REPLACED rather than driven — see `tests/support/ports.ts` for why a
- * namespace `jest.spyOn` is not used here.
+ * `account/session/jwt.ts` — the token layer, at the unit level. Asserts the properties that keep
+ * it SAFE: the two secrets never cross-verify, a refresh token is only valid while still stored,
+ * and `jwtid: randomUUID()` keeps two same-second logins from mutually revoking. `@modules/users`
+ * is REPLACED rather than driven — see `tests/support/ports.ts`.
  */
 
 import { sign, decode } from 'jsonwebtoken';
 import { asStub } from '@tests/stub';
 
 /*
- * The REPOSITORY, not the model. `session/jwt.ts` used to run `Users.findOne`,
- * `Users.findById().select('+tokens')` and a positional `Users.updateOne` itself — three raw
- * queries against another module's collection, from a file that is not a repository. They are now
- * `userRepository.findByTokenValue`, `.findByIdWithCredentials` and `.tokenTouch`, so this suite
- * doubles those instead. What the QUERIES look like — the `+tokens` projection, the positional
- * `tokens.$` — moved with them and is asserted in `users/tests/integration/repository.test.ts`,
- * against a real store rather than against a mock's call log.
+ * The REPOSITORY, not the model: `session/jwt.ts` used to run three raw `Users` queries itself;
+ * they are now `userRepository.findByTokenValue`, `.findByIdWithCredentials` and `.tokenTouch`,
+ * so this suite doubles those instead. What the QUERIES look like is asserted in
+ * `users/tests/integration/repository.test.ts`, against a real store.
  */
 jest.mock('@modules/users', () => ({
     ...jest.requireActual('@modules/users'),
@@ -287,11 +279,10 @@ describe('recordRefreshTokenUse', () => {
         await recordRefreshTokenUse('a-token');
 
         /*
-         * The positional `$` that makes this stamp the token that MATCHED — rather than the first
-         * in the array, which would show every session the last-used time of whichever one is
-         * stored first — is `userRepository.tokenTouch`'s, and
-         * `users/tests/integration/repository.test.ts` proves it against a real document. What
-         * this file owns is that the right value is handed over, exactly once.
+         * The positional `$` that stamps the token that MATCHED — not the first in the array — is
+         * `userRepository.tokenTouch`'s, proven against a real document in
+         * `users/tests/integration/repository.test.ts`. What this file owns is that the right
+         * value is handed over, exactly once.
          */
         expect(mockedUsers.tokenTouch).toHaveBeenCalledTimes(1);
         expect(mockedUsers.tokenTouch).toHaveBeenCalledWith('a-token');

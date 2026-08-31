@@ -1,11 +1,10 @@
 /**
  * @module
  * Authentication and the account lifecycle: signup, login, refresh, password reset, logout
- * everywhere, and the two-step account deletion.
- *
- * A second service over `users`' record rather than a merged one — `/account` and `/users` are
- * different mounts. The address book is the one collection this module owns outright; the User
- * record stays with `users`, kept replaceable for a future identity provider.
+ * everywhere, and the two-step account deletion. A second service over `users`' record rather
+ * than a merged one — `/account` and `/users` are different mounts. The address book is the one
+ * collection this module owns outright; the User record stays with `users`, kept replaceable for
+ * a future identity provider.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      users
@@ -28,12 +27,10 @@ import { exportSeededAddressBooks, seedAddressBooksCollection } from './demo';
 import { router } from './routes';
 
 /*
- * This module answers the kernel's "who is making this request".
- *
- * Registered at import time rather than in a boot step: it installs a function, touches no
- * connection, and every guard in the app depends on it being there before the first request. The
- * resolver rejects on a bad token and resolves `undefined` for a token whose user is gone — the
- * distinction `isAdminViaCookie` turns into 401 versus 403.
+ * This module answers the kernel's "who is making this request". Registered at import time
+ * (installs a function, touches no connection) since every guard in the app depends on it being
+ * there before the first request. The resolver rejects a bad token and resolves `undefined` for
+ * a token whose user is gone — the distinction `isAdminViaCookie` turns into 401 versus 403.
  */
 
 /** Builds a `fromAccessToken`/`fromRefreshToken` resolver from either verifier. */
@@ -64,19 +61,14 @@ export default {
     name: 'account',
     basePath: '/account',
     routes: router,
-    /*
-     * The one collection this module owns is the address book — the account lifecycle's own
-     * data, unlike the User record it administers through `users`. A destroyed account takes
-     * its book with it, by the same event the cart and wishlist listen for.
-     *
-     * `USER_SETUP_REQUESTED` is the other half of the shared-kernel edge, going the same direction:
-     * `users` creates a passwordless account and asks for a way in; this module owns the tokens and
-     * mail that provide one, the same way it owns password reset. A deleted user before the event
-     * fires (or the odd concurrent hard delete) resolves to `undefined` and the request is simply
-     * dropped — nobody is left to email.
-     */
     subscribe: () => {
+        // A destroyed account takes its address book with it — the same event cart and wishlist listen for.
         onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));
+        /*
+         * `users` creates a passwordless account and asks for a way in; this module owns the
+         * tokens and mail that provide one. A deleted user before the event fires resolves to
+         * `undefined` and the request is simply dropped — nobody is left to email.
+         */
         onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) =>
             userRepository.findById(userId).then((user) => user && requestAccountSetup(user))
         );

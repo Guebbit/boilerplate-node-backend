@@ -1,10 +1,9 @@
 /**
  * @module
- * Schema contract — the declarations themselves (defaults, `required`, `select: false`),
- * not the transforms the sibling specs in this folder cover.
- *
- * Real Mongo, because these are Mongoose's behaviours rather than ours: a mocked model would
- * assert the mock's opinion of what `default` means.
+ * Schema contract — the declarations themselves (defaults, `required`, `select: false`), not the
+ * transforms the sibling specs in this folder cover. Runs against real Mongo, since these are
+ * Mongoose's behaviours rather than ours: a mocked model would assert the mock's own opinion of
+ * what `default` means.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

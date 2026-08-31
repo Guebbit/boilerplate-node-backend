@@ -1,12 +1,10 @@
 /**
  * @module
  * The defensive branches in this module's serialization transform — the "cannot happen" halves
- * of guards, which matter here because the transform runs at the one point every response
- * passes through: a throw turns a successful read into a 500 for the whole collection.
- *
- * `applyOrderItems` and `applyOrderTotals` both guard on `Array.isArray(serialized.items)`
- * because a projected query (`.select('email createdAt')`) yields a document with no `items` at
- * all, and the transform still runs on it — delete the guard and the failure shows up only on
+ * of guards, which matter here because the transform runs at the one point every response passes
+ * through: a throw turns a successful read into a 500 for the whole collection. `applyOrderItems`
+ * and `applyOrderTotals` both guard on `Array.isArray(serialized.items)`, since a projected query
+ * yields a document with no `items` at all — delete the guard and the failure shows up only on
  * projections, the hardest place to notice it.
  */
 import { applyOrderTransform } from '@modules/orders/model';

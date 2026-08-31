@@ -1,11 +1,8 @@
 /**
  * @module
- * The product schema's contract, and the availability it derives from the two stock
- * counters `inventory` is the only writer of.
- *
- * The defaults are the interesting part: each decides what a product means when a field
- * was never set, and each is load-bearing somewhere downstream (e.g. `onHand: 100` keeps a
- * freshly created product sellable rather than invisible).
+ * The product schema's contract, and the availability it derives from the two stock counters
+ * `inventory` writes. Each default decides what a product means when a field was never set —
+ * e.g. `onHand: 100` keeps a freshly created product sellable rather than invisible.
  */
 
 import { productSchema, applyProductTransform } from '@modules/products/model';

@@ -1,14 +1,10 @@
 /**
  * @module
- * Order fixtures that touch the test database — `toOrderItem`, `makeOrder`, `createOrder`.
- *
- * The BUILDER lives one level up, in `src/modules/orders/fixtures.ts`, and takes a product snapshot
- * as DATA because the demo seeds build orders from catalogue fixtures that were never persisted. A
- * test has real documents instead, so this wrapper converts them rather than making every call site
- * spell out a snapshot it already holds.
- *
- * An order item embeds a full product SNAPSHOT, not a reference, so that repricing a product later
- * cannot rewrite what a customer was charged — why `toOrderItem` copies the document.
+ * Order fixtures that touch the test database — `toOrderItem`, `makeOrder`, `createOrder`. The
+ * builder in `../fixtures.ts` takes a product snapshot as data because seeds build orders from
+ * catalogue fixtures that were never persisted; this wrapper converts a real document instead. An
+ * order item embeds a full snapshot, not a reference, so repricing a product later can't rewrite
+ * what a customer was charged.
  */
 
 import type { OrderDocument } from '@modules/orders';
@@ -27,12 +23,8 @@ type OrderExtras = Omit<OrderOverrides, 'userId' | 'email' | 'items'>;
 
 /**
  * Convert a persisted product document into an order line ready to embed.
- *
- * The whole document goes in, minus the two keys that belong to Mongo rather than to the product.
- * It used to name eight fields explicitly, which made this a third place — after `openapi.yaml` and
- * the schema — that had an opinion about what a Product is, and the one most likely to quietly stop
- * copying a newly added column. `toObject()` keeps `Date`s as `Date`s, which is what the embedded
- * subdocument stores; `toJSON()` would hand over ISO strings.
+ * Copies the whole document, minus Mongo's `_id`/`__v`, so a newly added column isn't silently
+ * missed the way naming fields individually did. `toObject()` keeps `Date`s as `Date`s.
  */
 export const toOrderItem = (product: ProductDocument, quantity = 1): OrderLineInput => {
     const { _id, __v, ...snapshot } = product.toObject();
@@ -41,10 +33,9 @@ export const toOrderItem = (product: ProductDocument, quantity = 1): OrderLineIn
 
 /**
  * Build a valid order payload from a user and a list of order lines.
- *
- * `extras` is what an order carries beyond its lines — the shipping columns above all, which the
- * builder passes through rather than defaulting so that a test can tell "no method chosen" from
- * "chose a free one". A total that ignores shipping is only visible on an order that has some.
+ * `extras` — shipping columns above all — passes through rather than defaulting, so a test can
+ * tell "no method chosen" from "chose a free one"; a total that ignores shipping only shows on
+ * an order that has some.
  */
 export const makeOrder = (
     user: UserDocument,

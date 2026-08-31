@@ -14,10 +14,9 @@ import { getFallbackLocale, listSupportedLocales } from './catalog';
 /**
  * Picks the best supported locale for an `Accept-Language` header.
  *
- * Honours q-weights (`it;q=0.9,en;q=0.8`), matches a region tag against its base language
- * (`en-GB` → `en`), treats `*` as "anything, so give me the default", and falls back to
- * `NODE_FALLBACK_LOCALE` when nothing matches — never throwing on a malformed header, because the
- * header is client-supplied and an unparseable one is not worth a 400.
+ * Honours q-weights, matches a region tag against its base language (`en-GB` → `en`), treats `*`
+ * as "give me the default", and falls back to `NODE_FALLBACK_LOCALE` on no match — never throwing
+ * on a malformed header, since it's client-supplied and not worth a 400.
  */
 export const negotiateLocale = (
     acceptLanguage?: string,
@@ -38,10 +37,8 @@ export const negotiateLocale = (
             const declared = parameters
                 .map((parameter) => /^\s*q=(.*)$/i.exec(parameter))
                 .find(Boolean)?.[1];
-            // An unparseable weight is treated as no weight at all rather than as a rejection:
-            // the client still named a language, and a typo in the metadata is no reason to
-            // ignore it. `q=0` is different — that is the client explicitly refusing the tag,
-            // so it parses to 0 and gets filtered out below.
+            // Unparseable weight (a metadata typo) falls back to full weight rather than
+            // rejecting the tag; `q=0` is different — that's an explicit refusal, parsed as 0.
             const quality = declared === undefined ? 1 : Number.parseFloat(declared);
             return {
                 tag: tag.trim().toLowerCase(),

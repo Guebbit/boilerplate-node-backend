@@ -5,10 +5,9 @@
  * See: docs/tools/mongodb-mongoose.md
  */
 
-// Mongoose is the ODM (Object Document Mapper) over the official MongoDB driver: it adds
-// schemas, validation and middleware. Importing the default export gives the *singleton* —
-// `mongoose.connect()` mutates global state, which is why models elsewhere can just
-// `import mongoose from 'mongoose'` and find the same live connection.
+// Mongoose is the ODM over the MongoDB driver. Importing the default export gives the
+// *singleton* — `mongoose.connect()` mutates global state, so any file that
+// `import`s `mongoose` finds the same live connection.
 import mongoose from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 
@@ -30,21 +29,15 @@ const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Accept either a full Mongo URI or host/port/database fragments so local and hosted setups share one code path.
+ * Accept either a full Mongo URI or host/port/database fragments, URI taking precedence.
  *
- * Managed providers (Atlas, Railway, …) hand you a single credential-bearing URI, while
- * docker-compose setups are easier to express as separate host/port values. Precedence is
- * URI first, so a deployment can override a baked-in default with one variable.
+ * The truthiness check (not `!== undefined`) is load-bearing: an EMPTY `NODE_DB_URI` falls
+ * through to the fragments on purpose. That's how `npm run host` reaches a containerised
+ * database from the host — it blanks the URI and overrides only `NODE_MONGODB_HOST`, so the
+ * database name still comes from `.env` instead of drifting in `package.json`.
  *
- * Note the truthiness check rather than a `!== undefined` one: an EMPTY `NODE_DB_URI` falls
- * through to the fragments deliberately, and that is load-bearing. It is how the `npm run host`
- * wrapper reaches a containerised database from the host — it blanks the URI and overrides only
- * `NODE_MONGODB_HOST`, so the database NAME keeps coming from `.env` instead of being spelled
- * out a second time in `package.json`, where it can drift and seed the wrong database.
- *
- * Exported for `migrate-mongo-config.js`, which cannot import this module — it is CommonJS,
- * loaded by migrate-mongo's own resolver, and this file is TypeScript. It reimplements these
- * five lines, and `tests/unit/db/host-scripts.test.ts` asserts the two never disagree.
+ * `migrate-mongo-config.js` reimplements these lines (it's CommonJS and can't import this file);
+ * `tests/unit/db/host-scripts.test.ts` asserts the two never disagree.
  */
 export const getDatabaseUri = () => {
     // A full URI wins outright — it may carry credentials or options the fragments cannot express.
@@ -57,13 +50,10 @@ export const getDatabaseUri = () => {
 };
 
 /**
- * Connect to MongoDB with exponential-backoff retry.
- * Each failed attempt doubles the delay, capped at 30 seconds.
- * Throws if all attempts are exhausted.
+ * Connect to MongoDB with exponential-backoff retry, capped at 30s; throws once attempts run out.
  *
- * The retry loop exists for orchestrated environments: when the API container starts
- * alongside the database container, the first few connects legitimately fail while Mongo
- * is still initialising. Backing off (rather than crash-looping) keeps startup logs readable.
+ * Exists for orchestrated environments: when the API container starts alongside the database
+ * container, the first few connects legitimately fail while Mongo is still initialising.
  */
 export const start = () => {
     // Recursive rather than a `for` loop so each retry chains onto the previous promise
@@ -111,12 +101,10 @@ export const stopDatabase = () =>
     );
 
 /**
- * The active Mongoose connection.
- * Available after `start()` resolves.
+ * The active Mongoose connection. Available after `start()` resolves.
  *
- * Exported for readiness probes and diagnostics, which read `connection.readyState`
- * (0 disconnected / 1 connected / 2 connecting / 3 disconnecting). The object exists
- * immediately at import time and is populated by `connect()`, so grabbing the reference
- * before `start()` runs is safe.
+ * Exported for readiness probes and diagnostics, which read `connection.readyState` (0
+ * disconnected / 1 connected / 2 connecting / 3 disconnecting). The object exists at import
+ * time and is populated by `connect()`, so grabbing the reference before `start()` runs is safe.
  */
 export const { connection } = mongoose;

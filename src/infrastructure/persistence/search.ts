@@ -37,30 +37,21 @@ const FALLBACK_PAGE_SIZE = 10;
 /**
  * Upper bound for the deployment-configured page size.
  *
- * Mirrors `PageSize.maximum` in `openapi.yaml`, which `@infrastructure/http/schemas` enforces on caller
- * input. It is repeated here rather than imported because the two guard different things: a
- * caller's value is rejected with a 422 at the edge, while `NODE_SETTINGS_PAGINATION_PAGE_SIZE`
- * never passes through a request schema at all, so a typo in deployment config would otherwise
- * silently disable paging for every search.
+ * Mirrors `PageSize.maximum` in `openapi.yaml` but is repeated rather than imported: a caller's
+ * value is rejected with a 422 at the edge, while this env var never passes through a request
+ * schema, so a typo here would otherwise silently disable paging for every search.
  */
 const MAX_CONFIGURED_PAGE_SIZE = 100;
 
 /**
  * Apply pagination defaults and derive the skip.
  *
- * The single authority on what "page 1, ten per page" means. It runs on every search, so any
- * defaulting done earlier in the request path could only be overwritten here — which is why the
- * request layer leaves an unspecified page absent rather than filling it in.
- *
- * It does NOT bound the caller's own values, and deliberately so: `openapi.yaml` declares
- * `minimum: 1` / `maximum: 100`, `@infrastructure/http/schemas` enforces exactly that on every search
- * endpoint, and an out-of-range request is answered with a 422 rather than being quietly turned
- * into a different request. Clamping here as well would mean the API advertised a limit it never
- * actually applied. What remains are the structural guards — a page below 1, or a value that is
- * not a number at all, would produce a negative or `NaN` skip that Mongo cannot use.
- *
- * `NODE_SETTINGS_PAGINATION_PAGE_SIZE` makes the default deployment-tunable without touching
- * route code. It is a *default*, not a cap: an explicit `pageSize` from the caller still wins.
+ * The single authority on what "page 1, ten per page" means; it does NOT bound the caller's own
+ * out-of-range values — `@infrastructure/http/schemas` already rejects those with a 422 per
+ * `openapi.yaml`, and clamping here too would mean the API advertised a limit it never enforced.
+ * Only the structural guards remain (a page below 1, or a non-number, would produce a negative or
+ * `NaN` skip). `NODE_SETTINGS_PAGINATION_PAGE_SIZE` is a *default*, not a cap — an explicit
+ * `pageSize` from the caller still wins.
  */
 export const normalizePagination = (input: PaginationInput = {}): PaginationResult => {
     const page = Math.max(1, Number(input.page ?? 1) || 1);
@@ -102,14 +93,11 @@ export const escapeRegex = (value: string): string =>
 /**
  * C0 controls and DEL — everything a search box cannot produce and a pattern must not carry.
  *
- * A NUL is the one that actually breaks: MongoDB compiles `$regex` as a C string, so a pattern
- * containing `\u0000` is rejected by the server and surfaces as a **500 on a public endpoint**.
- * `escapeRegex` never covered it, because escaping is about metacharacters — a NUL is not one, it
- * is a byte the pattern language has no way to hold.
- *
- * The rest of the range goes with it rather than being special-cased: none of it is typeable into
- * a search box, none of it is meaningful to match on, and a rule with one exception is a rule
- * someone has to remember.
+ * A NUL is the one that actually breaks: MongoDB compiles `$regex` as a C string, so `\u0000`
+ * in a pattern is rejected server-side and surfaces as a **500 on a public endpoint**.
+ * `escapeRegex` doesn't cover it — escaping is about metacharacters, and a NUL isn't one.
+ * The rest of the C0/DEL range goes with it: none of it is typeable into a search box or
+ * meaningful to match on, and a rule with one exception is a rule someone forgets.
  */
 // eslint-disable-next-line no-control-regex -- stripping control characters is this regex's entire purpose
 const CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/g;
@@ -165,14 +153,9 @@ export const addRegexFilter = (
 /**
  * Newest first, with `_id` breaking ties.
  *
- * The tiebreaker is not cosmetic. `createdAt` is not unique — a seed, a bulk import, or two
- * concurrent creates land inside the same millisecond — and MongoDB does not guarantee any
- * particular order among documents whose sort keys are equal. Two identical queries can
- * therefore return tied documents in different orders, which was observed against the real API.
- *
- * That breaks pagination rather than merely shuffling a list: a repository's `search` issues its
- * count and its page as separate queries, so if the tie order changes between them a document can
- * be returned on page 1 AND page 2, or skipped by both. `_id` is unique and monotonic, so adding
- * it makes the sort total and the paging stable.
+ * Not cosmetic: `createdAt` isn't unique (concurrent creates can land in the same millisecond),
+ * and MongoDB doesn't order tied documents consistently between queries. Since `search()` issues
+ * its count and its page as separate queries, an unstable tie order can return a document on both
+ * pages or neither. `_id` is unique and monotonic, so adding it makes paging stable.
  */
 export const DEFAULT_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };

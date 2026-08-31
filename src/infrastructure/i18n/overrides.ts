@@ -1,14 +1,10 @@
 /**
  * @module
- * The database overlay: admin-edited copy applied on top of the deployed dictionaries.
- *
- * The files under `./catalog` are DEFAULTS; this tier overrides them. Three properties it keeps:
- * nothing here is awaited on the request path, a refresh restores the file baseline BEFORE
- * re-applying, and only a language with a file can be overridden.
- *
- * This is the tier a project is most likely to want gone. It imports `./catalog` and nothing
- * imports it back, so deleting this file and its two lines in the boot sequence removes the
- * feature — which is the point of it being a file rather than a section.
+ * The database overlay: admin-edited copy layered on top of the deployed dictionaries under
+ * `./catalog`. Nothing here is awaited on the request path, a refresh restores the file baseline
+ * before re-applying overrides, and only a language with a deployed file can be overridden.
+ * Deliberately isolated — nothing imports this back, so deleting the file and its two
+ * boot-sequence lines removes the whole feature.
  *
  * See: docs/tools/i18n.md#database-overrides
  */
@@ -21,12 +17,8 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
 /**
  * Supplies the current overrides, keyed by locale, already nested.
  *
- * Nested rather than flat because the rows are flat and only the `locales` module knows how to
- * expand a dotted key safely — that expansion refuses `__proto__` and reports a key that is both a
- * string and a group, neither of which `infrastructure` should be reimplementing.
- *
- * Registered from the composition root for the same reason `registerLocaleDirectories` is:
- * `infrastructure` sits below every module and may not import one.
+ * Nested rather than flat: only the `locales` module can expand a dotted key safely (it refuses
+ * `__proto__` and rejects an ambiguous string/group key), so `infrastructure` must not redo that.
  */
 export type LocaleOverrideProvider = () => Promise<Record<string, Record<string, unknown>>>;
 
@@ -68,13 +60,9 @@ export const applyLocaleOverrides = (
 ): void => {
     const supported = new Set(listSupportedLocales());
 
-    /*
-     * EVERY supported language is restored, not only the ones this call carries overrides for —
-     * otherwise deleting the last override of a language would restore nothing and change nothing.
-     *
-     * Synchronous to the end of the loop below, so nothing observes a language briefly back on its
-     * file.
-     */
+    // EVERY supported language is restored, not only the ones with overrides here — deleting a
+    // language's last override must restore it, not leave it unchanged. Synchronous so nothing
+    // observes the language briefly back on its file baseline.
     resetLocaleOverrides();
 
     const skipped: string[] = [];

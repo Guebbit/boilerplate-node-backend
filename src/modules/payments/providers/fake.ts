@@ -15,15 +15,10 @@ import type { PaymentProvider } from './index';
 export const FAKE_DECLINE_CARD = '4000000000000002';
 
 /**
- * Every call is logged, and that is the point of a stub rather than noise.
- *
- * A real PSP leaves a trail somewhere you can go and read — a dashboard, a webhook log, a
- * statement. This one leaves nothing, so a demo that "took" money and an integration that quietly
- * never called the provider at all look identical from the outside. The log line is the fake's
- * substitute for that trail: it is how you tell "charged, succeeded" from "never reached".
- *
- * The card number is NEVER logged, only its last four digits — the same rule the payment document
- * follows. A stub is exactly where that discipline is easiest to drop and worst to learn late.
+ * Every call is logged — the point of a stub rather than noise, since a real PSP leaves its own
+ * trail and this one otherwise looks identical to an integration that was never called. The card
+ * number is NEVER logged, only its last four digits, the same rule the payment document follows —
+ * a stub is exactly where that discipline is easiest to drop.
  */
 export const fakePaymentProvider: PaymentProvider = {
     name: 'fake',

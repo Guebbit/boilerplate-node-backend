@@ -1,14 +1,10 @@
 /**
  * @module
  * The product Mongoose schema, its Zod validation, and the serialization transform that derives
- * `available` from the two stock counters.
- *
- * `onHand` and `reserved` are declared here because this module owns the collection, but written
- * only by `@modules/inventory` — see that module's docblock and the schema fields' own comments.
- * `available` is never stored: `applyProductTransform` computes it at serialization time so no
- * writer can let it drift from the counters it derives from.
- *
- * See: docs/modules/products.md
+ * `available` from the two stock counters. `onHand` and `reserved` are declared here because this
+ * module owns the collection but are written only by `@modules/inventory` — see that module's
+ * docblock. `available` is never stored: `applyProductTransform` computes it at serialization
+ * time so no writer can let it drift. See docs/modules/products.md.
  */
 
 import { model, Schema } from 'mongoose';
@@ -20,23 +16,10 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { Product } from '@types';
 
 /**
- * A product's stored FIELDS, without the Mongoose document machinery.
- *
- * The contract owns the field list — this is `Product` from `openapi.yaml` with the three dates
- * swapped from ISO strings to real `Date`s, which is the one thing storage genuinely disagrees with
- * the wire about.
- *
- * `available` is omitted rather than inherited, for the reason `orders` omits its three totals: it
- * is required on the wire but never persisted — `applyProductTransform` derives it from `onHand`
- * and `reserved` at serialization time — so declaring it here would claim a stored column that
- * does not exist, and every producer of a snapshot would have to invent a value for it.
- *
- * It exists separately from `ProductDocument` because a product is stored in two places, and only
- * one of them is a document. `orders` EMBEDS a copy of this on every line item, and an embedded
- * subdocument has none of `Document`'s 54 methods. Typing that copy as `ProductDocument` was an
- * over-claim that nothing could satisfy, so every producer of one had to cast: the order service
- * twice, over a comment conceding that a `lean()` result is "compatible at runtime", and the order
- * factory once more on the way in.
+ * A product's stored fields, without Mongoose's document machinery — `Product` from
+ * `openapi.yaml` with its three dates as real `Date`s. `available` is omitted: it's derived at
+ * serialization, never persisted. Kept separate from `ProductDocument` because `orders` embeds
+ * this on line items, which aren't full documents and so can't satisfy that type.
  */
 export interface ProductSnapshot extends Omit<
     Product,
@@ -74,23 +57,15 @@ export type ProductMethods = unknown;
 export type ProductModel = Model<ProductDocument, unknown, ProductMethods>;
 
 /**
- * Zod Schema for product data validation.
- * Built on the orval-generated CreateProductBody (kept in sync with openapi.yaml), so only
- * fields needing custom i18n messages or stricter rules are overridden — every constraint the
- * contract declares and this file does not mention still applies.
- * Used by the service layer to validate incoming product data.
+ * Zod schema for product data, built on the generated `CreateProductBody` — only fields needing
+ * custom i18n messages or stricter rules are overridden; every other contract constraint applies.
  *
- * `.min(0)` restates `openapi.yaml`'s `minimum: 0` rather than relying on the generated schema
- * to carry it: `.extend()` REPLACES a field outright, so an override that forgets a constraint
- * silently drops it. That is exactly what happened here — the previous `price` override was a
- * bare `.number().refine(v => v != null)` (itself dead: `z.number()` already rejects null and
- * undefined), which meant a negative price was accepted despite the contract forbidding it.
- *
- * Every message is a THUNK — `error: () => t('…')`, never `error: t('…')`. See the same note on
- * `zodUserSchema` in `users/model.ts`: eager `t()` runs before `i18next.init()` and Zod discards
- * the resulting `undefined`; a thunk runs at parse time, in the request's locale.
+ * `.min(0)` restates the contract's `minimum: 0`: `.extend()` REPLACES a field outright, so an
+ * override that forgets a constraint silently drops it. A prior bare `.refine()` override did
+ * exactly that, letting a negative price through despite the contract forbidding it.
  */
 export const zodProductSchema = CreateProductBody.extend({
+    // Thunks, not eager calls: t() must run at parse time (post i18next.init()), see `users/model.ts`.
     title: z
         .string()
         .min(1, { error: () => t('products.field-title-required') })
@@ -115,18 +90,13 @@ export const productSchema = new Schema<ProductDocument, ProductModel, ProductMe
             required: true
         },
         /*
-         * The two counters. `onHand` is how many units exist; `reserved` is how many of them an
-         * open order has claimed. What a customer may buy is neither — it is the difference,
-         * derived at serialization below rather than stored, so it cannot drift from its inputs.
+         * `onHand` (units that exist) and `reserved` (units an open order has claimed) — not a
+         * single `stock` column, which would have to be decremented at order time and so remove
+         * unpaid units from the world rather than merely reserve them. `available` derives from
+         * both at serialization, never stored.
          *
-         * A single `stock` column could not tell those apart: it had to be decremented the instant
-         * an order was placed, so an unpaid order removed units from the world rather than merely
-         * spoken for them.
-         *
-         * NEITHER IS WRITTEN HERE, or by this module. Every change goes through
-         * `@modules/inventory`, which owns the transitions, writes them conditionally, and records
-         * each in its ledger. This module declares the columns because it owns the collection; it
-         * does not decide what they may become.
+         * NEITHER IS WRITTEN HERE: every change goes through `@modules/inventory`, which owns the
+         * transitions and ledger. This module only declares the columns, since it owns the collection.
          */
         onHand: {
             type: Number,
@@ -172,15 +142,10 @@ export const productSchema = new Schema<ProductDocument, ProductModel, ProductMe
             default: []
         },
         /*
-         * Independent of `deletedAt`, and deliberately so. A product can be active or not
-         * whether or not it has been soft-deleted; the two are separate facts about it. They
-         * share an effect rather than a value — `publicScope()` requires active AND not deleted,
-         * so from outside a soft-deleted product behaves exactly like an inactive one, while
-         * inside they remain distinct states.
-         *
-         * Defaults to `true`, and `openapi.yaml` says so on both create bodies — an undeclared
-         * default is one the paired frontend's mock has to guess at, and a guess that differs
-         * here is a disagreement no test on either side can see.
+         * Independent of `deletedAt`: a product can be active/inactive regardless of deletion.
+         * `publicScope()` requires both active AND not deleted, so a soft-deleted product looks
+         * inactive from outside while staying a distinct state internally. Defaults `true`,
+         * matching `openapi.yaml`, so the frontend mock doesn't have to guess.
          */
         active: {
             type: Boolean,
@@ -196,13 +161,9 @@ export const productSchema = new Schema<ProductDocument, ProductModel, ProductMe
 );
 
 /*
- * Indexes.
- *
- * Declared on the schema, which makes this the one place that decides what is indexed here.
- *
- * The names are given rather than derived: Mongo identifies an index by its name as much as by
- * its key, so asking for a key it already holds under a different name fails at startup instead
- * of doing nothing. These are the names the databases already carry.
+ * Declared here so this file is the one place deciding what's indexed. Named explicitly: Mongo
+ * matches an index by name as much as by key, so requesting an existing key under a different
+ * name fails at startup rather than silently doing nothing — these are the existing names.
  */
 /* Default listing sort. */
 productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
@@ -210,20 +171,12 @@ productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
 productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
 
 /**
- * Derives `available` — what a customer may actually buy — from the two stored counters.
+ * Derives `available` — what a customer may buy — from the two stored counters, at the single
+ * serialization point every product response passes through, so listing, detail, both write
+ * paths and an order's embedded snapshots all agree.
  *
- * Done at the single serialization point every product response passes through, exactly as
- * `orders` derives its three totals, so the listing, the detail read, both write paths and the
- * embedded snapshots on an order all agree. That agreement is what lets `openapi.yaml` declare
- * the field at all.
- *
- * Derived rather than stored on purpose. A third column would have to be kept correct by every
- * writer of the other two, which is precisely the class of drift this rework exists to remove:
- * a number that is computed cannot be stale, and `available` is only ever one subtraction away.
- *
- * Clamped at zero. `reserved > onHand` should be unreachable — every transition in
- * `@modules/inventory` is conditional on it staying false — but "should be unreachable" is not
- * a reason to serve a negative count to a storefront that will render it.
+ * Clamped at zero: `reserved > onHand` should be unreachable via `@modules/inventory`'s
+ * conditional transitions, but "should be unreachable" isn't a reason to serve a negative count.
  */
 const applyProductAvailability = (serialized: Record<string, unknown>) => {
     const onHand = typeof serialized.onHand === 'number' ? serialized.onHand : 0;
@@ -232,10 +185,9 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
 };
 
 /**
- * Normalizes a serialized product: the shared `_id` → `id` and `__v` removal, plus this
- * collection's own job — deriving `available` from `onHand` and `reserved`.
- * Exported so lean/aggregate results (which bypass `toJSON`) can be mapped
- * through the same logic — see `./service` `search()`.
+ * Normalizes a serialized product: shared `_id`→`id` and `__v` removal, plus deriving
+ * `available`. Exported so lean/aggregate results (which bypass `toJSON`) can reuse it —
+ * see `./service` `search()`.
  */
 export const applyProductTransform = applySerialization(productSchema, {
     after: applyProductAvailability

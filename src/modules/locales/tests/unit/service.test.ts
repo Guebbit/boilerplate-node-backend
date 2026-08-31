@@ -1,11 +1,10 @@
 /**
  * @module
  * The pure half of `localeService`: the tree builder, the collision rules and the manifest merge.
- *
- * All three are decisions rather than plumbing, and all three fail SILENTLY when they are wrong —
- * a dropped key, a language that claims a capability it does not have. None of them touches the
- * database, so they are asserted directly here; the write paths that call them are driven through
- * Mongo in `repository.test.ts` and over HTTP in the contract suite.
+ * All three are decisions rather than plumbing and fail SILENTLY when wrong — a dropped key, a
+ * language claiming a capability it lacks — so they're asserted directly here, since none touches
+ * the database; the write paths that call them are driven through Mongo in `repository.test.ts`
+ * and over HTTP in the contract suite.
  */
 
 import { LocaleDirection, LocaleSource } from '@types';
@@ -54,12 +53,10 @@ describe('buildMessageTree', () => {
     });
 
     /*
-     * The two throws are the point of this builder. A version that dropped a key instead would
-     * produce a dictionary missing a string, with WHICH string decided by insertion order — so the
-     * bug appears on one deployment and not another, and never in a test.
-     *
-     * Both directions are asserted because they are separate branches: reaching a leaf where a
-     * group already stands, and reaching a group where a leaf already stands.
+     * The two throws are the point of this builder: dropping a key instead would produce a
+     * dictionary missing a string, decided by insertion order, so the bug would appear on one
+     * deployment and never in a test. Both directions are asserted since they're separate
+     * branches — leaf-then-group and group-then-leaf.
      */
     it('throws when a key would have to be a string and a group at once', () => {
         expect(() =>

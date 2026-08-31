@@ -1,13 +1,11 @@
 /**
  * @module
  * Orders — public barrel, the only surface a sibling module may import. The schema and its
- * transform stay out — only tests reach `@modules/orders/model` directly. `cart` reaches the
+ * transform stay out; only tests reach `@modules/orders/model` directly. `cart` reaches the
  * repository rather than the service because checkout owns its own transaction and rolls it back
- * if clearing the cart fails.
- *
- * `sumLineItems`, `orderTotal`, `canTransition` and `statusesLeadingTo` are published because they
- * are rules with one owner: `cart` and `payments` must reuse this module's arithmetic and
- * lifecycle rather than keep a second opinion. `Money` and `ORDER_LIFECYCLE` stay inside.
+ * if clearing the cart fails. `sumLineItems`, `orderTotal`, `canTransition` and
+ * `statusesLeadingTo` are published since `cart`/`payments` must reuse this module's arithmetic
+ * and lifecycle rather than keep a second opinion; `Money` and `ORDER_LIFECYCLE` stay inside.
  */
 
 export { orderService } from './service';

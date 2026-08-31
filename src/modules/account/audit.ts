@@ -1,14 +1,10 @@
 /**
  * @module
- * Audit actions this module emits.
- *
- * Declared by augmenting infrastructure's action map rather than by editing it, so the vocabulary grows with
- * the modules that own it and no shared file enumerates domains. The augmentation is type-only —
- * `infrastructure` gains the union without importing anything upward.
- *
- * The `auth.` prefix rather than `account.`: these strings are queried by log tooling and alert
- * rules that predate the module layout, and a prefix rename is a change to every saved search
- * someone has built. The folder is free to be named for the domain; the wire format is not.
+ * Audit actions this module emits, declared by augmenting infrastructure's action map (type-only,
+ * so infrastructure gains the union without importing anything upward) rather than editing it, so
+ * the vocabulary grows with the modules that own it. The `auth.` prefix instead of `account.`:
+ * these strings are queried by log tooling and alert rules that predate the module layout, so the
+ * folder is free to be named for the domain while the wire format stays put.
  */
 
 /** The audit action strings this module fires, keyed by event. */

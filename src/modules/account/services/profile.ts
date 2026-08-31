@@ -1,14 +1,10 @@
 /**
  * @module
  * The account a person manages about themselves — their profile fields, and their password.
- *
- * Split from `./authentication` along the line between PROVING an identity and MAINTAINING one:
- * login and signup answer "who is this", everything here answers "change something about the
- * account I am already authenticated as". The password sits on this side of that line because
- * every flow that writes one — the reset link, the logged-in change — is a change to an existing
- * account rather than a way into it.
- *
- * See `./index` for why this module's service is a folder.
+ * Split from `./authentication` along the PROVING-vs-MAINTAINING line: login/signup answer "who
+ * is this", everything here answers "change something about the account I'm already
+ * authenticated as". The password belongs here since every flow that writes one is a change to
+ * an existing account, not a way into it. See `./index` for why this module's service is a folder.
  */
 
 import { z } from 'zod';
@@ -36,13 +32,9 @@ import { accountAuditActions } from '../audit';
 
 /**
  * Validate a new-password pair without touching the user.
- *
- * Split out of {@link passwordChange} so `reset-confirm` can check the body BEFORE it spends the
- * one-time token. The order matters: consuming the token is what resolves two simultaneous uses
- * of one reset link, so it has to happen before the password is written — but a link burned by a
- * typo'd confirmation would be a poor trade for that. Validating first means only a well-formed
- * request can spend the token.
- *
+ * Split out of {@link passwordChange} so `reset-confirm` can validate BEFORE spending the
+ * one-time token — consuming it is what resolves two simultaneous uses of one reset link, so
+ * only a well-formed request should get the chance to spend it.
  * @returns the UI-facing messages, empty when the pair is acceptable
  */
 export const validatePasswordChange = (
@@ -94,11 +86,9 @@ export const passwordChange = (
 
 /**
  * Read the caller's own profile.
- *
- * A wrapper rather than an emit inside `userService.getById` itself: that read is shared with
- * `users/controllers/get-user-item.ts` (an admin looking up someone else's account), and an
- * unconditional `user_profile_viewed` there would count every admin lookup as the user's own
- * profile view. This is the one caller for whom that event is actually true.
+ * A wrapper rather than an emit inside `userService.getById`: that read is shared with the
+ * admin's `get-user-item.ts` lookup, and an unconditional `user_profile_viewed` there would
+ * miscount admin lookups as the user's own profile view.
  */
 export const getOwnProfile = (userId: string, context: CallerContext) => {
     emitAnalyticsEvent({
@@ -109,16 +99,11 @@ export const getOwnProfile = (userId: string, context: CallerContext) => {
 };
 
 /**
- * Change the password from a reset link, record that it happened, and tell the account holder.
- *
- * A wrapper around {@link passwordChange} rather than an emit inside it: that function is also
- * `passwordChangeWithCurrent`'s last step, which reports its own `AUTH_PASSWORD_CHANGED` action —
- * an emit inside `passwordChange` itself would double up on that flow and misname this one's.
- *
- * The mail is published here rather than by the controller because "a password was reset" is a
- * fact about the account, not about the HTTP request that carried it: a second caller of this
- * function gets the notification without having to remember it. `context.locale` is what makes
- * that possible — see `CallerContext`.
+ * Change the password from a reset link, record it, and notify the account holder.
+ * Wraps {@link passwordChange} rather than emitting inside it, since that function is also
+ * `passwordChangeWithCurrent`'s last step (which reports its own `AUTH_PASSWORD_CHANGED`).
+ * The mail is sent here, not by the controller, since "a password was reset" is a fact about
+ * the account — any future caller gets the notification for free.
  */
 export const passwordResetChange = (
     user: UserDocument,
@@ -157,13 +142,11 @@ export const passwordResetChange = (
 
 /**
  * Hard-delete the caller's own account, confirmed by a one-time token.
- *
- * A wrapper around `userService.remove` rather than an emit inside it: `remove` is also
- * `removeById`'s last step, reached from the admin `DELETE /users/:id`, which already reports its
- * own `ADMIN_USER_DELETED` from `createDeleteController`. An emit inside `remove` itself would
- * fire on the admin path too, and — worse than a duplicate — would misattribute it: this event's
- * `actor_user_id`/`actor_role` are the deleted account's own, correct for a self-delete but
- * backwards for an admin's, where they would report the person removed as the one who acted.
+ * Wraps `userService.remove` rather than emitting inside it: `remove` is also `removeById`'s
+ * last step for the admin `DELETE /users/:id`, which already reports its own
+ * `ADMIN_USER_DELETED`. Emitting inside `remove` would double up there, and — worse — misattribute
+ * it: this event's `actor_user_id`/`actor_role` are the deleted account's own, correct for a
+ * self-delete but backwards for an admin's.
  */
 export const removeOwnAccount = (
     user: UserDocument,
@@ -206,13 +189,9 @@ export const removeOwnAccount = (
 
 /**
  * What `PUT /account` accepts, validated with this codebase's messages.
- *
- * `email` and `username` come from `zodUserSchema`, whose overrides carry the i18n thunks;
- * `locale`, `imageUrl`, `phone` and `website` come straight from the generated
- * `UpdateAccountBody`, because the contract's own constraints (the BCP 47 pattern, for `locale`)
- * are the whole rule and need no custom copy — `phone`/`website` carry none at all.
- * `.partial()` last: every field of a self-service update is optional, and an absent field means
- * "leave it alone".
+ * `email`/`username` come from `zodUserSchema` (carries the i18n thunks); `locale`, `imageUrl`,
+ * `phone`, `website` come straight from `UpdateAccountBody` — the contract's own constraints are
+ * the whole rule. `.partial()` last: every field is optional, and absence means "leave it alone".
  */
 const zodProfileSchema = zodUserSchema
     .pick({ email: true, username: true })
@@ -232,20 +211,12 @@ const zodProfileSchema = zodUserSchema
 
 /**
  * Update the caller's own profile — email, username, locale, image.
- *
- * Deliberately narrower than the admin `userService.update`: no `admin`, no `active`, no
- * `password`. Role and account state are the `/users` endpoints' to change, and the password has
- * its own flow ({@link passwordChangeWithCurrent}) because it must prove knowledge of the current
- * one.
- *
- * Changing the email UNVERIFIES the account before the write: the old confirmation vouched for
- * the old address, and carrying it over would let one verified mailbox launder any number of
- * addresses. The caller decides whether to start a fresh verification — the controller sends the
- * email so this function stays queue-free.
- *
- * A duplicate email surfaces as the unique index's E11000, which `rejectDatabaseEnvelope` already
- * answers as 409 — the same path signup takes, so the two flows cannot disagree about what "taken"
- * looks like.
+ * Narrower than the admin `userService.update`: no `admin`/`active`/`password` — those belong to
+ * `/users` and to {@link passwordChangeWithCurrent}, which proves the current password first.
+ * Changing the email UNVERIFIES the account before the write, so a verified mailbox can't be
+ * carried over to launder a new address; the caller decides whether to re-verify.
+ * A duplicate email surfaces as the unique index's E11000, mapped to 409 like signup's — the
+ * two flows can't disagree about what "taken" means.
  */
 export const updateProfile = (
     userId: string,
@@ -284,15 +255,10 @@ export const updateProfile = (
 
 /**
  * Change the password of a live session, gated on the current one.
- *
- * The email reset proves possession of the mailbox; this proves possession of the credential
- * being replaced. A wrong current password is a 422 with translated copy, NOT a 401 — a 401 from
- * an authenticated endpoint reads as "session expired" to every client interceptor, and would log
- * the user out of a session that is perfectly valid.
- *
- * The new pair is validated BEFORE the current password is checked. Both are pure reads so no
- * order is unsafe; this one means a mistyped confirmation costs one round-trip instead of one
- * bcrypt comparison plus one round-trip.
+ * A wrong current password is a 422 with translated copy, NOT a 401 — a 401 here reads as
+ * "session expired" to client interceptors and would log out a perfectly valid session.
+ * The new pair is validated BEFORE the current password is checked (both are pure reads): a
+ * mistyped confirmation then costs one round-trip instead of a round-trip plus a bcrypt compare.
  */
 export const passwordChangeWithCurrent = (
     userId: string,

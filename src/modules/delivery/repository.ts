@@ -1,12 +1,9 @@
 /**
  * @module
  * Shipment repository — standard CRUD via the repository factory, plus the lookups the courier
- * actually makes.
- *
- * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
- *
- * See: docs/modules/delivery.md
+ * actually makes. The return type is written out because Mongoose's generics are too large for
+ * TypeScript to serialize an inferred one at an export boundary (TS7056), the same reason
+ * `Repository` exists. See: docs/modules/delivery.md
  */
 
 import { shipmentModel, applyShipmentTransform } from './model';
@@ -56,21 +53,14 @@ export const shipmentRepository: Repository<ShipmentDocument> & {
     findAllShipped: () => shipmentModel.find({ status: 'shipped' }).exec(),
 
     /**
-     * Move a parcel between statuses, but only from one of the expected ones — atomically. The
-     * same primitive `orderRepository` and `paymentRepository` expose, over this collection.
-     *
-     * The condition rides IN THE FILTER rather than in a preceding read, which is what the
-     * courier's tick needs and a read-modify-write cannot give it. That tick is a job function
-     * behind an admin endpoint (see the service's docblock): nothing stops two of them running at
-     * once — an operator clicking twice, a demo script racing a manual advance — and both would
-     * load the SAME `shipped` parcel from `findAllShipped`, both stamp `deliveredAt = now`, and
-     * both save. The second write wins silently, so the delivery timestamp records whichever tick
-     * happened to finish last rather than when the parcel actually arrived. mongod evaluates the
-     * filter while holding the document, so exactly one tick matches; the loser gets `null` and
-     * has nothing left to say.
-     *
-     * Keyed on `orderId` rather than the shipment's own id, like `paymentRepository`'s: `unique`
-     * on `orderId` makes it a key, and every caller here is holding an order.
+     * Move a parcel between statuses, but only from one of the expected ones — atomically, the
+     * same primitive `orderRepository`/`paymentRepository` expose. The condition rides in the
+     * FILTER, not a preceding read: two courier ticks racing (a double click, a demo racing a
+     * manual advance) would otherwise both load the same `shipped` parcel and both stamp
+     * `deliveredAt`, the second write winning silently and the timestamp lying about when the
+     * parcel arrived. mongod evaluates the filter atomically, so exactly one tick matches; the
+     * loser gets `null`. Keyed on `orderId`, like `paymentRepository`'s, since `unique` on it
+     * makes it a key.
      */
     updateStatusIfIn: (orderId, from, to, extra = {}) =>
         shipmentModel

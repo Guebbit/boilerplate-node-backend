@@ -1,12 +1,10 @@
 /**
  * @module
- * The user directory's slice of the demo dataset.
- *
- * Two accounts, one of each kind: `root` is the admin every admin-only route needs a caller for,
- * `ginopinoshow` is the customer every scoping rule needs someone to be scoped against. Ids and
- * credentials come from `@kernel/seed-accounts`, since other modules seed rows belonging to these
- * two people. Cart lines are NOT here — `src/modules/cart/demo.ts` owns them, after the old
- * shared fixture put one module's records inside another's.
+ * The user directory's slice of the demo dataset: two accounts, one of each kind — `root` is the
+ * admin every admin-only route needs a caller for, `ginopinoshow` is the customer every scoping
+ * rule needs someone to be scoped against. Ids and credentials come from `@kernel/seed-accounts`,
+ * since other modules seed rows belonging to these two people. Cart lines live in
+ * `src/modules/cart/demo.ts`, not here.
  */
 
 import {
@@ -53,11 +51,9 @@ export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => upsertById(userRepository, user)));
 
 /**
- * Read the seeded accounts back as the API serves them — see `../products/demo`.
- *
- * No password comes out, and that is `applyUserTransform` doing its job rather than an omission
- * here: credentials never reach a response, so `scripts/export-demo-dataset.ts` publishes them separately
- * from `@kernel/seed-accounts`.
+ * Read the seeded accounts back as the API serves them — see `../products/demo`. No password
+ * comes out; that's `applyUserTransform`, not an omission — credentials never reach a response,
+ * so `scripts/export-demo-dataset.ts` publishes them separately from `@kernel/seed-accounts`.
  */
 export const exportSeededUsers = async (): Promise<Record<string, unknown[]>> => ({
     users: await exportCollection(userModel, { _id: 1 })

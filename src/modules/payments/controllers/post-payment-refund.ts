@@ -2,9 +2,8 @@
  * @module
  * POST /payments/order/:orderId/refund
  * Return an order's money without touching its status — the operator's standalone refund.
- *
- * Admin-only at the route. "Cancel and refund" is a client sending this and the order cancel;
- * keeping them separate is what lets an operator do either one alone.
+ * Admin-only at the route; "cancel and refund" is a client sending this and the order cancel,
+ * kept separate so an operator can do either one alone.
  */
 
 import type { Request, Response } from 'express';

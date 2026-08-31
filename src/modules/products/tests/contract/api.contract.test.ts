@@ -1,11 +1,9 @@
 /**
  * @module
- * Contract tests for /products.
- *
- * These assert the *shape of the wire response* against `openapi.yaml` — including
- * `additionalProperties: false`, which is what catches a field leaking into a payload.
- * Behavioural assertions (which products a role may see) live in the unit/service suites;
- * here they exist only to make sure each contract branch is actually exercised.
+ * Contract tests for /products: assert the *shape of the wire response* against `openapi.yaml`,
+ * including `additionalProperties: false`, which catches a field leaking into a payload.
+ * Behavioural assertions (which products a role may see) live in the unit/service suites — these
+ * exist only to make sure each contract branch is actually exercised.
  */
 
 import '@tests/contract';

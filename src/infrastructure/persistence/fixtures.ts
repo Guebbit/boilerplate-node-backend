@@ -1,15 +1,10 @@
 /**
  * @module
- * The bit of fixture-building every module's `fixtures.ts` would otherwise repeat: an `_id`, a pair
- * of timestamps, and the type of the overrides bag. In `infrastructure` for the same reason
- * `./seed` is — it knows a document has an `_id` and nothing about what the document means.
- *
- * TIMESTAMPS ARE PINNED, not left to Mongoose: the seed export commits what it reads back, so a
- * `createdAt` of "whenever the export ran" would make the artefact permanently stale. Fixtures
- * state their own dates and the seeder saves with `{ timestamps: false }`.
- *
- * It does NOT guarantee the three dates make sense together — a test that cares about ordering
- * states the dates it needs, and every factory takes them.
+ * The bit of fixture-building every module's `fixtures.ts` would otherwise repeat: an `_id`, a
+ * pair of timestamps, and the type of the overrides bag. Timestamps are pinned rather than left
+ * to Mongoose — the seed export commits what it reads back, so a `createdAt` of "whenever the
+ * export ran" would make the artefact permanently stale — but this module does not guarantee the
+ * three dates make sense together; a test that cares about ordering states the dates it needs.
  */
 
 import { Types } from 'mongoose';
@@ -18,22 +13,18 @@ import { Types } from 'mongoose';
 export interface FactoryIdentity {
     /** 24-char hex. Omitted outside the seed dataset, where a fresh id is what a test wants. */
     id?: string;
+    /** Wire-format date; defaults to the id's embedded timestamp when omitted. */
     createdAt?: Date | string;
+    /** Wire-format date; defaults to `createdAt` when omitted. */
     updatedAt?: Date | string;
 }
 
 /**
- * A factory's overrides bag, derived from the contract entity it builds.
+ * A factory's overrides bag, derived from the contract entity it builds rather than hand-written.
  *
- * This exists so a factory never restates a field list. `openapi.yaml` is the source of truth in
- * this repo, orval turns it into `api/models`, and those models already say what a Product or a
- * User has — so a hand-written `{ title?: string; price?: number; … }` beside them is a second
- * declaration that a contract change cannot reach. Deriving means a field renamed in the spec turns
- * every stale call site red at `tsc` time instead of at nobody's time.
- *
- * Three fields are replaced rather than inherited, and all for the same reason: the wire carries ISO
- * strings where Mongoose stores `Date`s. `id`, `createdAt` and `updatedAt` come from
- * `FactoryIdentity`; `deletedAt` is widened here to accept either.
+ * A field renamed in `openapi.yaml` (the source of truth) then turns every stale call site red at
+ * `tsc` time. `id`/`createdAt`/`updatedAt` come from {@link FactoryIdentity} and `deletedAt` is
+ * widened here, since the wire carries ISO strings where Mongoose stores `Date`s.
  */
 export type OverridesFor<TEntity> = FactoryIdentity &
     Partial<Omit<TEntity, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'>> & {
@@ -43,11 +34,9 @@ export type OverridesFor<TEntity> = FactoryIdentity &
 /**
  * Drop keys whose value is `undefined`.
  *
- * A factory spreads its caller's overrides over its own defaults, and `{ stock: undefined }` from a
- * caller that built the object conditionally would otherwise WIN — turning "I did not say" into an
- * explicit `undefined` that shadows the default. It also matters downstream: the whole point of a
- * factory that omits a field is to let the model's own `default:` fill it, so the export records
- * what the schema really does instead of what a fixture guessed it does.
+ * A factory spreads overrides over its own defaults, and `{ stock: undefined }` from a
+ * conditionally-built caller would otherwise WIN — shadowing the default with an explicit
+ * `undefined` instead of leaving the model's own `default:` to fill it.
  */
 export const compact = <T extends Record<string, unknown>>(source: T): T =>
     Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as T;
@@ -69,16 +58,10 @@ export const toObjectId = (id?: string): Types.ObjectId =>
 /**
  * Turn a factory's identity fields into the three columns a fixture pins.
  *
- * An unstated `createdAt` is read off the `_id`. An ObjectId's leading four bytes ARE a creation
- * timestamp, so a pinned fixture id already carries the date the record was made — `65dc8a99…` is
- * 2024-02-26 — and a fresh one carries now. That is one code path for both cases, it invents no
- * dates, and it needs no second constant maintained alongside the ids.
- *
- * `updatedAt` follows `createdAt` unless stated: a record that has never been edited should say so.
- *
- * Note the precision. `getTimestamp()` is second-granular, so fixtures built in the same tick share
- * a `createdAt` exactly. A test that sorts or paginates by it must pass its own dates; see the
- * header for why that is the caller's job rather than this file's.
+ * An unstated `createdAt` is read off the `_id` — an ObjectId's leading four bytes ARE a creation
+ * timestamp, so a pinned fixture id already carries its own date. `updatedAt` follows `createdAt`
+ * unless stated. Note `getTimestamp()` is second-granular, so fixtures built in the same tick
+ * share a `createdAt` exactly — a test that sorts/paginates by it must pass its own dates.
  */
 export const identityOf = ({
     id,

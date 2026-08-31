@@ -1,11 +1,9 @@
 /**
  * @module
- * The delivery route table.
- *
- * Three routes, three different audiences — and the guards are per route, so each one is its own
- * decision rather than an inherited default. That is the arrangement most likely to drift: adding
- * a fourth route here gets no guard at all unless someone remembers, which is what the sweep at
- * the end of this file is for.
+ * The delivery route table. Three routes, three different audiences — the guards are per route,
+ * so each one is its own decision rather than an inherited default. That's the arrangement most
+ * likely to drift: a fourth route added here gets no guard at all unless someone remembers, which
+ * is what the sweep at the end of this file is for.
  */
 
 import { routeSignatures, guardsOn } from '@tests/routes';

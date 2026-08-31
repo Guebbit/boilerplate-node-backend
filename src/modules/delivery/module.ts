@@ -1,16 +1,10 @@
 /**
  * @module
- * Delivery: shipping rates, shipments and the fake courier.
- *
- * Depends on orders because a shipment is ABOUT an order, and on users only to address the
- * shipped email in the recipient's language. The rates live in `./domain` as pure functions so
- * the cart's checkout can price a method without this module's HTTP surface — that import is
- * cart → delivery, the same direction as cart → orders, and deleting this module takes the
- * shipping selector, the parcel records and the costs with it: orders simply stop carrying a
- * `shippingCost`, which is the state the shop was in before.
- *
- * Shipping is specific to how this shop operates — its methods, its rates, its courier — but it is
- * not what anyone buys here. Worth its own rules in `domain/`; not worth an aggregate.
+ * Delivery: shipping rates, shipments and the fake courier. Depends on orders because a shipment
+ * is about an order, and on users only to address the shipped email in the recipient's language.
+ * The rates live in `./domain` as pure functions so the cart's checkout can price a method without
+ * this module's HTTP surface. Shipping is specific to how this shop operates but isn't what
+ * anyone buys here — worth its own rules in `domain/`, not worth an aggregate.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      orders, users

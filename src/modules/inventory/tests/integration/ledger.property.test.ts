@@ -1,14 +1,10 @@
 /**
  * @module
- * Property-based tests — replaying a product's ledger reproduces its counters exactly
- * (`sum(onHandDelta) == onHand - opening`, same for `reserved`), for EVERY sequence of
- * transitions, not just a table of examples. Guaranteed because a ledger row is written by the
- * same conditional write that moves the counter, so the two cannot diverge.
- *
- * Runs against real Mongo (`setupTestDb`), since the guarantee lives in the conditional writes —
- * mocking the repository would only re-test `counterDeltaFor`'s arithmetic, already covered more
- * cheaply by `transitions.test.ts`. The run is seeded for reproducibility; any counterexample
- * found gets written back as an ordinary `it()` with its seed.
+ * Property-based: replaying a product's ledger reproduces its counters exactly, for every
+ * sequence of transitions rather than a table of examples — guaranteed because a ledger row is
+ * written by the same conditional write that moves the counter. Runs against real Mongo, since
+ * mocking the repository would only re-test `counterDeltaFor`'s arithmetic; the run is seeded
+ * for reproducibility.
  */
 
 import fc from 'fast-check';
@@ -26,21 +22,17 @@ setupTestDb();
 const RUN = { seed: 20_260_817, numRuns: 40, endOnFailure: true } as const;
 
 /**
- * The opening count every case starts from.
- *
- * Large enough that a run of receipts and reserves has room to move without every second
- * transition being refused for lack of units — a sequence that is refused end to end would
- * satisfy the property trivially (no rows, no movement) and prove nothing.
+ * The opening count every case starts from — large enough that a run of receipts and reserves
+ * has room to move, since a sequence refused end to end would satisfy the property trivially
+ * (no rows, no movement) and prove nothing.
  */
 const OPENING_ON_HAND = 500;
 
 /**
- * One step a generated sequence can take, in the vocabulary a CALLER has.
- *
- * Deliberately not "call `applyTransition` with reason X": that would drive the private
- * chokepoint directly and prove only that it is self-consistent. These are the four things the
- * outside world can actually ask for, so the property is asserted against the module's real
- * surface — including the reservation lifecycle, which is where the interesting refusals live.
+ * One step a generated sequence can take, in the vocabulary a CALLER has — not "call
+ * `applyTransition` with reason X", which would drive the private chokepoint directly and prove
+ * only that it is self-consistent. These are the four things the outside world can actually ask
+ * for, including the reservation lifecycle, which is where the interesting refusals live.
  */
 type Step =
     | { kind: 'receive'; quantity: number }
@@ -71,13 +63,10 @@ const step = (): fc.Arbitrary<Step> =>
     );
 
 /**
- * Drive one generated sequence against a real product.
- *
- * Every hold is keyed by an order id, so the sequence carries its own counter of them: a
- * `reserve` opens the next one and `commit`/`release`/`expire` resolve whichever is currently
- * open. That mirrors how the shop actually works — one live hold per order — and it means the
- * generated refusals are the real ones (committing when nothing is held, reserving more than is
- * available) rather than invented.
+ * Drive one generated sequence against a real product. Each hold is keyed by an order id,
+ * tracked via a counter: `reserve` opens the next one, `commit`/`release`/`expire` resolve
+ * whichever is open — mirroring one live hold per order, so generated refusals are real rather
+ * than invented.
  */
 const play = async (productId: string, steps: readonly Step[]): Promise<void> => {
     let holdCounter = 0;

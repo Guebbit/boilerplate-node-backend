@@ -1,10 +1,8 @@
 /**
  * @module
- * Live metrics over Server-Sent Events (SSE).
- *
- * SSE rather than WebSockets: the data flows one way (server → dashboard), it is plain HTTP so
- * no protocol upgrade or extra dependency is needed, and browsers reconnect automatically via
- * the built-in `EventSource` client.
+ * Live metrics over Server-Sent Events (SSE), not WebSockets: the data flows one way (server →
+ * dashboard), it is plain HTTP so no protocol upgrade or extra dependency is needed, and
+ * browsers reconnect automatically via the built-in `EventSource` client.
  *
  * See: docs/tools/frontend-observability.md
  */
@@ -21,10 +19,9 @@ import { getHttpRequestCounters } from '@infrastructure/observability/metrics-ht
 import { processSnapshot } from '@infrastructure/observability/process-snapshot';
 
 /**
- * In-memory set of active SSE response objects — one entry per connected client.
- *
- * A `Set` so `delete(response)` on disconnect is O(1) and a response can never be added twice.
- * Per-process, like the audit buffer: under clustering each worker tracks only its own clients.
+ * In-memory set of active SSE response objects — one entry per connected client. A `Set` so
+ * `delete(response)` on disconnect is O(1) and a response can never be added twice. Per-process,
+ * like the audit buffer: under clustering each worker tracks only its own clients.
  */
 const sseClients = new Set<Response>();
 
@@ -33,20 +30,16 @@ const UPDATE_INTERVAL_MS = 5000;
 
 /**
  * Lightweight keep-alive ping to prevent proxies/load-balancers from closing idle SSE streams.
- *
  * Reverse proxies commonly drop connections after 30-60s of silence, and the client cannot tell
- * an idle stream from a dead one. 15s stays comfortably under the usual thresholds.
+ * an idle stream from a dead one; 15s stays comfortably under the usual thresholds.
  */
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
 /**
- * Writes a single SSE frame (event + data) to the response stream.
- *
- * The wire format is strict and whitespace-significant: `event:` names the channel the client
- * listens on, `data:` carries the payload, and the *blank line* (the trailing `\n\n`) is what
- * marks the end of a frame. Omit it and the client buffers indefinitely.
- * Payloads must be single-line, which JSON guarantees — a raw newline inside `data:` would be
- * parsed as a frame boundary.
+ * Writes a single SSE frame (event + data) to the response stream. The wire format is strict:
+ * `event:` names the channel, `data:` carries the payload, and the trailing `\n\n` marks the end
+ * of a frame — omit it and the client buffers indefinitely. Payloads must be single-line, which
+ * JSON guarantees.
  */
 const writeEvent = (
     response: Response,
@@ -92,10 +85,9 @@ export const buildObservabilityPayload = (): Promise<ObservabilityMetricsPayload
 
 /**
  * Fires-and-forgets a metrics event — errors are silently swallowed to avoid crashing the stream.
- *
- * Two failure modes are absorbed: a rejected metrics read, and a `write()` on a socket the
- * client has already dropped. Neither is worth tearing the stream down for, and an unhandled
- * rejection inside an interval callback would take the process with it.
+ * Two failure modes are absorbed: a rejected metrics read, and a `write()` on a socket the client
+ * already dropped. Neither is worth tearing the stream down for, and an unhandled rejection
+ * inside an interval callback would take the process with it.
  */
 const writeMetricsEvent = (response: Response, eventName: ObservabilityChannel) => {
     // `void` marks the floating promise as deliberate — the interval must not wait on it.

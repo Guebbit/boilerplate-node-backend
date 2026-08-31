@@ -1,12 +1,9 @@
 /**
  * @module
- * `makeOrder` — the order fixture builder, and the product SNAPSHOT it embeds.
- *
- * An order stores what was bought, not a reference to today's catalogue, so the builder's real
- * work is `toSnapshot`: it takes a product-shaped override and produces the frozen copy
- * `orderItemSchema` embeds. Two properties matter: the snapshot's id is `_id`, a real ObjectId,
- * not the `id` string the override carries (else `applyProductTransform` finds nothing to
- * rename); and `title`/`price` are always present, since the confirmation email and invoice
+ * `makeOrder` — the order fixture builder, and the product SNAPSHOT it embeds. An order stores
+ * what was bought, not a reference to today's catalogue, so the builder's real work is
+ * `toSnapshot`: the snapshot's id is `_id`, a real ObjectId, not the `id` string the override
+ * carries, and `title`/`price` are always present since the confirmation email and invoice
  * render them.
  */
 import { Types } from 'mongoose';

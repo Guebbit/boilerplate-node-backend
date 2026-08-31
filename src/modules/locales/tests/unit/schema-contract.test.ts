@@ -1,12 +1,10 @@
 /**
  * @module
- * The locale schemas' contracts, and the base-language derivation in front of them.
- *
- * Two unique indexes make the translation tier addressable at all: `locales_tag` gives one row
- * per language tag, and `localeMessages_locale_tenant_key` gives one value per (locale, tenant,
- * key) — the compound identity that lets a merge be an upsert rather than a read-modify-write. The
- * `lowercase: true` flags are part of the same guarantee: `EN-gb` and `en-GB` must not occupy two
- * rows under a unique index.
+ * The locale schemas' contracts, and the base-language derivation in front of them. Two unique
+ * indexes make the translation tier addressable: `locales_tag` gives one row per language tag,
+ * and `localeMessages_locale_tenant_key` gives one value per (locale, tenant, key) — letting a
+ * merge be an upsert. The `lowercase: true` flags guard the same index: `EN-gb` and `en-GB` must
+ * not occupy two rows.
  */
 
 import { localeSchema, localeMessageSchema, deriveBaseLanguage } from '@modules/locales/model';

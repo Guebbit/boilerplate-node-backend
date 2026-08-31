@@ -42,16 +42,12 @@ export const postResetConfirm = (
             }
 
             /*
-             * Validate BEFORE spending the token, then let spending it decide the race.
-             *
-             * The find above is a read, so two simultaneous confirms of one reset link both pass
-             * it — a one-time token used twice. Only the atomic `$pull` inside `spendLiveToken`
-             * can separate them: it reports whether THIS request removed the entry, and the loser
-             * is turned away with the same "token not found" an invented token gets.
-             *
-             * Validation comes first so a mistyped confirmation cannot burn the link — which is
-             * why finding and spending are two calls rather than one; see `services/tokens.ts`.
-             * Password writing comes last, so the request that loses the race changes nothing.
+             * Validate BEFORE spending the token, then let spending decide the race.
+             * The find above is a read: two simultaneous confirms of one link both pass it. Only
+             * the atomic `$pull` in `spendLiveToken` can separate them — it reports whether THIS
+             * request removed the entry, and the loser gets the same "token not found" an
+             * invented token would. Validating first means a mistype can't burn the link; writing
+             * the password last means the race's loser changes nothing.
              */
             const errors = accountService.validatePasswordChange(password, passwordConfirm);
             if (errors.length > 0) {

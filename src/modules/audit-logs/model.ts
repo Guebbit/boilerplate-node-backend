@@ -1,18 +1,10 @@
 /**
  * @module
- * Persisted audit trail — the durable half of `@infrastructure/observability/audit`.
- *
- * The audit *logger* remains the compliance record: it writes to a file (and to Loki when
- * configured) and is what an auditor is shown. This collection exists for a narrower job — letting
- * `GET /observability/audit` answer "what has actor X done" from the API, without a log backend
- * being wired up. It replaced a 200-entry in-process ring buffer that could not answer it: the
- * buffer held 200 entries *in total* across every actor, kept a different slice in each cluster
- * worker, and emptied on restart.
- *
- * snake_case field names, unlike the camelCase used by every other model here. They are not a
- * style slip: these documents are returned verbatim as `AuditEventItem` in `openapi.yaml`, whose
- * field names were chosen to match the log lines a SIEM ingests. Renaming them here would mean
- * mapping on every read, and would break the admin dashboard that already renders them.
+ * Persisted audit trail — the durable half of `@infrastructure/observability/audit`. The audit
+ * *logger* remains the compliance record; this collection exists so `GET /observability/audit`
+ * can answer "what has actor X done" from the API. snake_case fields, unlike every other model
+ * here: returned verbatim as `AuditEventItem` in `openapi.yaml`, matching the log lines a SIEM
+ * ingests — renaming would mean mapping on every read.
  *
  * See: docs/modules/audit-logs.md
  */

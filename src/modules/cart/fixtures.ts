@@ -1,13 +1,9 @@
 /**
  * @module
- * How a cart fixture is built.
- *
- * Pins an `_id` even though a cart is addressed by its owner (`userId` is unique) — because
- * `scripts/export-demo-dataset.ts` commits a hash-compared `demo-data.json`, and a generated id
- * differs on every run, permanently staling that artefact. No endpoint takes a cart id; this is a
- * fixture being deterministic, not a handle being published.
- *
- * Ids arrive as strings and leave as `ObjectId`s — a string would silently match nothing in Mongo.
+ * How a cart fixture is built. Pins an `_id` even though a cart is addressed by its owner
+ * (`userId` is unique) — `scripts/export-demo-dataset.ts` commits a hash-compared
+ * `demo-data.json`, and a generated id would stale that artefact on every run. Ids arrive as
+ * strings and leave as `ObjectId`s; a bare string would silently match nothing in Mongo.
  */
 
 import { Types } from 'mongoose';

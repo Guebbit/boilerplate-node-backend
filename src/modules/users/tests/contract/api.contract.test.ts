@@ -1,15 +1,8 @@
 /**
  * @module
- * Contract tests for /users and /account — the credential-leak guard.
- *
- * `GET /users` once returned `password` and `tokens`. That was fixed, and
- * `tests/unit/models/users.test.ts` guards it by asserting those two field names are absent.
- * This suite guards the *class* instead: `openapi.yaml`'s `User` schema declares
- * `additionalProperties: false`, so **any** undeclared field on a user response fails here —
- * including one nobody thought to write a name-based assertion for.
- *
- * The explicit credential assertions below are kept as a readable statement of intent; the
- * contract check is what makes them general.
+ * Contract tests for /users and /account — the credential-leak guard. `openapi.yaml`'s `User`
+ * schema declares `additionalProperties: false`, so any undeclared field on a user response
+ * (password, tokens, a bcrypt hash) fails here, not just the ones we thought to name.
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -18,6 +11,7 @@ import { createUser } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 
+// Serializes the payload and checks for credential fields/values that must never leave the API.
 const assertNoCredentials = (payload: unknown) => {
     const serialized = JSON.stringify(payload);
     expect(serialized).not.toContain('password');
@@ -36,17 +30,13 @@ describe('GET /users', () => {
     });
 });
 
+// Extracts usernames from a paginated /users response body.
 const usernames = (response: { body: { data: { items: { username: string }[] } } }) =>
     response.body.data.items.map((user) => user.username);
 
 describe('GET /users — the role filters', () => {
-    /*
-     * `admin` and `verified` were applied by the repository and named nowhere in the contract, so
-     * a generated client had no way to know they worked. Declared now, which makes these the first
-     * tests that a caller sending them gets what the schema promises.
-     *
-     * One case per value rather than a count, so a failure names which rule moved.
-     */
+    // `admin` and `verified` were applied by the repository but undeclared in the contract; these
+    // are the first tests asserting a caller gets what the schema now promises.
     it('narrows to admins, and to the unverified', async () => {
         // Asserted by membership, not by an exact list: the authenticated admin is a fixture this
         // test does not own, and pinning the whole page would break on any change to it.
@@ -119,8 +109,7 @@ describe('POST /account/signup', () => {
         assertNoCredentials(response.body);
     });
 
-    // 409, not 422: the request is well-formed, the address is taken. The implementation has
-    // always answered 409 here; the spec did not declare it until this test was written.
+    // 409, not 422: the request is well-formed, the address is already taken.
     it('matches the error contract for an email that is already registered', async () => {
         const payload = {
             username: 'duplicate',
@@ -137,10 +126,8 @@ describe('POST /account/signup', () => {
 });
 
 /**
- * `password` used to be required on every admin create — see `write-users.ts`'s docblock and
- * `HANDOFF.md` §2.22. These four cover the shape that replaced it: a password may be supplied
- * directly, deferred to `sendSetupEmail`, or — the one combination that leaves an account nobody
- * can ever reach — neither, which is a 422 rather than a silent create.
+ * These four cover password provisioning on admin create: supplied directly, deferred to
+ * `sendSetupEmail`, or neither — which must 422 rather than silently create an unreachable account.
  */
 describe('POST /users', () => {
     it('creates a user with a password supplied directly, and exposes no credentials', async () => {
@@ -194,12 +181,8 @@ describe('POST /users', () => {
 });
 
 describe('PUT /users/{id}', () => {
-    // The bug this guards: the controller called `validateData` with no second argument, so
-    // `requirePassword` defaulted to `true` on the update branch too, and an admin could not edit
-    // a user without also resubmitting that user's password. `email` and `username` are still sent
-    // — `validateData` runs the same schema an admin create does, which requires both regardless of
-    // `requirePassword`, and a form re-submitting its own fields is the realistic shape of an edit.
-    // Password is the one field this case deliberately leaves out.
+    // Regression guard: the controller once defaulted `requirePassword` to true on updates too,
+    // so an admin couldn't edit a user without resubmitting their password.
     it('updates a user without resubmitting a password', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser({

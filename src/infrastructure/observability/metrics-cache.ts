@@ -1,9 +1,8 @@
 /**
  * @module
- * Cache metrics (Prometheus).
- *
- * One counter, and it exists because a log line is not alertable. See `metrics-http.ts` for why
- * infrastructure registers its own metrics against the shared registry.
+ * Cache metrics (Prometheus). One counter, and it exists because a log line is not alertable.
+ * See `metrics-http.ts` for why infrastructure registers its own metrics against the shared
+ * registry.
  *
  * See: docs/tools/prometheus.md
  */
@@ -13,11 +12,9 @@ import { metricsRegistry } from './metrics-http';
 
 /**
  * Invalidations that could not reach Redis, by tag.
- *
- * The failure this makes visible: a write succeeds, its cached predecessor is NOT removed, and the
- * stale response is served for the endpoint's full TTL. The response has already been sent by the
- * time this is known, so observability is the only possible action — which is the point. A rate
- * above zero here means the catalogue is lying to somebody.
+ * Makes visible: a write succeeds, its cached predecessor is NOT removed, and the stale response
+ * is served for the endpoint's full TTL — already sent by the time this is known, so
+ * observability is the only possible action. A rate above zero means the catalogue is lying.
  */
 export const cacheInvalidationFailuresTotal = new Counter({
     name: 'cache_invalidation_failures_total',

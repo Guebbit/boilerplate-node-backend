@@ -1,14 +1,10 @@
 /**
  * @module
- * Account service — authentication, the profile a person manages, and their address book.
- *
- * A folder rather than one file because it passed ~300 lines (see `docs/theory/layers.md`); split
- * by what each operation DOES. The address book joined it for the same reason:
- * `addresses-service.ts` was the same layer under a different naming scheme, and callers had to
- * know which of two objects held the function they wanted.
- *
- * `../session/` is the layer below this one — JWT signing, the refresh cookie, and shared expiry
- * config. Nothing outside this module imports either; see `../index`.
+ * Account service — authentication, the profile a person manages, and their address book. A
+ * folder rather than one file because it passed ~300 lines (see `docs/theory/layers.md`), split
+ * by what each operation does; the address book joined for the same reason `addresses-service.ts`
+ * was retired. `../session/` sits below this layer (JWT signing, the refresh cookie, shared
+ * expiry) and nothing outside this module imports it directly; see `../index`.
  */
 
 import {
@@ -50,15 +46,10 @@ import { findLiveToken, spendLiveToken, sessionsList } from './tokens';
 import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
 
 /*
- * Published by name as well as through the namespace, because something reaches for the function
- * rather than for the service: controllers send the verification mail and trigger the cleanup job,
- * `post-verify-confirm` compares against the token type, `auth-surface.test.ts` pins
- * `addressForCheckout` to the binding `../index` republishes, and the unit suites drive the auth
- * and password flows straight off this module.
- *
- * What is NOT here is the address-book CRUD and `tokenRemoveAll`: nothing imports them by name, so
- * a second list carrying them said the same thing as `accountService` twice — and a name living in
- * two lists can fall out of one of them without a single caller noticing.
+ * Published by name as well as through the namespace: several callers reach for the function
+ * directly (controllers, `post-verify-confirm`, `auth-surface.test.ts`, the unit suites).
+ * Address-book CRUD and `tokenRemoveAll` stay out of this list — nothing imports them by name, so
+ * a second list would just be a name that could quietly drift from `accountService`.
  */
 export { tokenAdd, signup, login, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
 export { passwordChange, passwordChangeWithCurrent, updateProfile } from './profile';
@@ -67,18 +58,10 @@ export { sendVerificationEmail, EMAIL_VERIFY_TOKEN_TYPE } from './verification';
 export { runTokenCleanup } from './token-cleanup';
 
 /**
- * The one namespace this module's service is reached through.
- *
- * Named for the module, not for a slice of it. A name like `authService` describes one of the
- * things this folder does, and every other thing it does then has nowhere to belong. Every module
- * exports exactly one `<something>Service`; it is a convention the next module copies from the
- * last, not a rule anything enforces.
- *
- * It carries EVERY function this folder exports, including the two side-effecting jobs
- * (`sendVerificationEmail`, `runTokenCleanup`). "A job is not an operation on the account" is a
- * distinction the caller cannot see and the guard cannot check, so it is not one this namespace
- * makes. A namespace with a judgement call in it is a namespace that quietly loses
- * members.
+ * The one namespace this module's service is reached through — named for the module, not a
+ * slice of it, so every function has somewhere to belong. Carries EVERY exported function,
+ * including the side-effecting jobs (`sendVerificationEmail`, `runTokenCleanup`): a namespace
+ * with judgement calls in it is one that quietly loses members.
  */
 export const accountService = {
     tokenAdd,

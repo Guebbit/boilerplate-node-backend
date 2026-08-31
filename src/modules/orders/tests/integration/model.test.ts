@@ -1,11 +1,9 @@
 /**
  * @module
- * Orders must never leak `_id`/`__v`,
- * on any response path — a real document (`toJSON`) or an `.aggregate()` result
- * (mapped manually via `applyOrderTransform`, since aggregation output is plain
- * JS and bypasses `toJSON` just like `.lean()` does). The embedded product
- * snapshot must be normalized too (it reuses `productSchema` directly), and
- * embedded items must never carry their own `_id` (`orderItemSchema` sets
+ * Orders must never leak `_id`/`__v` on any response path — a real document (`toJSON`) or an
+ * `.aggregate()` result (mapped manually via `applyOrderTransform`, since aggregation output is
+ * plain JS and bypasses `toJSON` just like `.lean()` does). The embedded product snapshot must be
+ * normalized too, and embedded items never carry their own `_id` (`orderItemSchema` sets
  * `_id: false`, since OpenAPI's `OrderItem` is `{product, quantity}` only).
  */
 import { asStub } from '@tests/stub';
@@ -81,16 +79,10 @@ describe('order serialization', () => {
 describe('embedded product snapshot indexes', () => {
     it('does not let the embedded product schema smuggle its indexes into orders', () => {
         /*
-         * Mongoose copies a nested schema's indexes onto the schema that embeds it, under a
-         * prefixed path. `orderItemSchema` embeds `productSchema`, so an index declared for the
-         * catalogue silently becomes an index on `items.product.*` of every order — paid for on
-         * each insert, and matching no query anyone makes, because an order item is a frozen
-         * snapshot rather than a row of the catalogue. `excludeIndexes` on that path is what
-         * stops it; this is the assertion that notices when it is missing.
-         *
-         * It lives here rather than with the migration/index suite because it is a fact about
-         * THIS module's schema. That suite sweeps every model generically and should not have to
-         * name a domain to do it.
+         * Mongoose copies a nested schema's indexes onto the schema that embeds it. Without
+         * `excludeIndexes` on `items.product`, every order would silently gain an index over
+         * `productSchema`'s fields — paid for on each insert, matched by no query. This lives
+         * here because it is a fact about this module's schema, not the generic index suite.
          */
         const smuggled = orderSchema
             .indexes()

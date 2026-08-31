@@ -15,10 +15,8 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 /**
  * POST /cart
  * Add a product (with its quantity) to the cart — or replace the quantity of a line already there.
- *
- * Whether the product may be in a cart at all is the SERVICE's answer, not this file's: the same
- * rule has to hold for `PUT /cart/{productId}` and for the wishlist's move-to-cart, and a check
- * written here would only ever cover this route.
+ * Eligibility (can this product be in a cart at all) is decided by the service, not here — the
+ * same rule must hold for `PUT /cart/{productId}` and the wishlist's move-to-cart.
  */
 export const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,

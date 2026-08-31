@@ -1,15 +1,10 @@
 /**
  * @module
- * The search-controller shape shared by `products`, `users` and `orders`, each exposing the same
- * pair of endpoints — `GET /x` and `POST /x/search` — behind one controller:
- * `readInput(surface:'search')` → merge in whatever the module needs decoded → `parseBody` against
- * the module's own schema → run the search → `successResponse` → `catchAs`. Only two things differ
- * per module: which extra fields the query form needs before validation, and what actually runs
- * the search.
- *
- * `feedback`'s search controller is deliberately NOT built on this: it validates only pagination
- * and hand-lists its cache key rather than deriving one from a Zod schema (see `get-feedback.ts`),
- * so it has no `extendInput`/`schema` pair to hand this factory in the first place.
+ * The search-controller shape shared by `products`, `users` and `orders`, each exposing
+ * `GET /x` and `POST /x/search` behind one controller: `readInput(surface:'search')` → merge in
+ * whatever the module needs decoded → `parseBody` against its own schema → run the search →
+ * `successResponse` → `catchAs`. Only the extra query fields and the search itself differ per
+ * module. `feedback` is deliberately NOT built on this — see `get-feedback.ts`.
  */
 
 import type { Request, Response } from 'express';

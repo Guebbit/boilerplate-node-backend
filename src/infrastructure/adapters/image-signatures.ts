@@ -1,37 +1,31 @@
 /**
  * @module
- * Content-based image identification.
- *
- * `Content-Type` on an upload is whatever the client wrote there — `curl -F 'x=@shell.html;type=image/png'`
- * sets it to anything. So the type is decided by the leading bytes instead, which a format's
- * specification fixes and cannot be varied.
- *
- * It matters because of what reads the file later: a static server labelling by extension, an SVG
- * carrying `<script>`, or an image decoder handed attacker-controlled input.
- *
- * Deliberately not a dependency (`file-type` et al): three signatures, and a whitelist this short
- * is easier to audit inline than to trust.
+ * Content-based image identification. `Content-Type` on an upload is whatever the client wrote —
+ * trivially spoofable — so the type is decided by the leading bytes instead, which a format's
+ * spec fixes. It matters because of what reads the file later: a static server labelling by
+ * extension, an SVG carrying `<script>`, or a decoder handed attacker-controlled input.
+ * Deliberately not a dependency (`file-type` et al): three signatures is easier to audit inline
+ * than to trust.
  */
 
 import { open } from 'node:fs/promises';
 
 /**
- * One accepted format, in full: the MIME type it really is, any other spelling a client may
- * declare for it, the exact bytes it must begin with, and the extension it is stored under.
- *
- * The single source of truth for "what image formats does this API accept" — everything else in
- * this file (and `ACCEPTED_UPLOAD_MIMETYPES` in `storage.ts`) derives from this list, so adding a
- * format is one entry here rather than an edit in three places.
- *
- * `offset` exists because some formats do not start at byte 0 — WebP's marker sits at 8, after
- * the RIFF header — so it is modelled from the start rather than bolted on later.
+ * One accepted image format: its real MIME type, any alias spelling a client may declare, the
+ * exact bytes it must begin with, and the extension it's stored under. The single source of
+ * truth for "what formats does this API accept" — `ACCEPTED_UPLOAD_MIMETYPES` in `storage.ts`
+ * derives from this list too, so adding a format is one entry here, not three.
  */
 interface ImageFormat {
+    /** The real MIME type, e.g. `image/png`. */
     mime: string;
     /** Other `Content-Type` spellings clients send for this format (e.g. the non-IANA `image/jpg`). */
     aliases?: readonly string[];
+    /** Byte offset the signature starts at — 0 for most formats, but WebP's marker sits after the RIFF header. */
     offset: number;
+    /** The exact leading bytes this format's signature must match, starting at `offset`. */
     bytes: readonly number[];
+    /** The file extension this format is stored under. */
     extension: string;
 }
 
@@ -129,14 +123,11 @@ export const identifyImageFile = async (filePath: string): Promise<string | unde
 /**
  * The file extension an identified image should be stored under.
  *
- * Derived from the type, never from the client's filename. `originalname` is attacker-controlled
- * in full — and once the upload directory is served statically, the extension is what decides the
- * `Content-Type` a browser receives. A file stored as `.html` is served as `text/html`, and a PNG
- * may legally carry arbitrary bytes in its metadata chunks, so "valid PNG bytes under an .html
- * name" is stored XSS that passes every content check.
- *
- * Derived from {@link SUPPORTED_IMAGE_FORMATS}: the value can only ever be one of the extensions
- * declared there.
+ * Derived from the type, never the client's filename: `originalname` is attacker-controlled, and
+ * once the upload directory is served statically, the extension decides the `Content-Type` a
+ * browser gets. Valid PNG bytes stored as `.html` would be served as `text/html` — stored XSS
+ * that passes every content check. Can only ever be one of {@link SUPPORTED_IMAGE_FORMATS}'
+ * extensions.
  *
  * @param mime - A MIME type returned by {@link identifyImage}.
  * @returns The extension to store it under, or `undefined` for anything unrecognised.

@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Ambient augmentations to Express's `Request`/`Response` types, so every handler in the app sees
+ * the fields middleware actually attaches (auth context, request id, locale, uploaded urls)
+ * without an explicit import at each call site.
+ */
+
 import type { TFunction } from 'i18next';
 import type { AuthContext } from './types/auth-context';
 

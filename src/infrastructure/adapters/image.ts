@@ -22,23 +22,21 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
 export type ReencodableImageMime = 'image/png' | 'image/jpeg' | 'image/webp';
 
 /*
- * `registerWorkers()` runs in every cluster fork (src/app.ts), so without these two calls a
- * multi-core deployment runs N forks × sharp's own thread pool × libvips's own operation cache —
- * multiplying memory nobody asked for. `concurrency(1)` limits libvips to one thread per fork,
- * `cache(false)` disables its input/operation cache, which exists to speed up REPEATED operations
- * on the same image — a one-shot digest never benefits from it.
+ * `registerWorkers()` runs in every cluster fork, so without these two calls a multi-core
+ * deployment runs N forks × sharp's own thread pool × libvips's own cache. `concurrency(1)` caps
+ * libvips to one thread per fork; `cache(false)` disables its repeated-operation cache, which a
+ * one-shot digest never benefits from.
  */
 sharp.concurrency(1);
 sharp.cache(false);
 
 /**
- * Ceiling on decoded pixel count, checked before any resize runs. sharp's own default is 268
- * megapixels; a 5 MB PNG can legally decode to gigabytes of raw pixels, so without an explicit,
- * smaller cap the decode step itself is the decompression bomb this pipeline exists to prevent.
+ * Ceiling on decoded pixel count, checked before any resize runs. sharp's default is 268
+ * megapixels; a 5 MB PNG can legally decode to gigabytes of raw pixels, so without an explicit cap
+ * the decode step itself is the decompression bomb this pipeline exists to prevent.
  *
- * Read at call time, not frozen at import — every other adapter in this codebase reads its
- * environment lazily for the same reason (see `maxUploadBytes` in `storage.ts`): a value read
- * while this module is being evaluated can be fixed before `.env` has necessarily loaded.
+ * Read at call time, not frozen at import, like every other adapter's env reads — see
+ * `maxUploadBytes` in `storage.ts`.
  */
 const maxInputPixels = (): number =>
     environmentNumber('NODE_IMAGE_MAX_INPUT_PIXELS', 50_000_000, 1);
@@ -53,10 +51,9 @@ const maxThumbnailDimension = (): number =>
 /**
  * Decode a buffer under the shared safety limits, and auto-orient it from its own EXIF tag.
  *
- * `rotate()` with no argument reads the embedded orientation once, bakes it into the pixels, and
- * — same as every other tag — the orientation tag itself is then dropped on output. Doing this
- * before the metadata strip is what keeps a portrait phone photo upright once the strip has run;
- * doing it after would have nothing left to read.
+ * `rotate()` with no args reads the embedded orientation once, bakes it into the pixels, and
+ * drops the tag on output — done before the metadata strip runs, or there'd be nothing left to
+ * read, and a portrait phone photo would come out sideways.
  *
  * @param input - the raw, undecoded bytes (a quarantined upload)
  * @throws When `input` is not a decodable image, or decodes past {@link maxInputPixels}.
@@ -94,12 +91,11 @@ const reencode = (pipeline: Sharp, mime: ReencodableImageMime): Sharp => {
 /**
  * Turn a quarantined upload into the bytes that get promoted to `public/`.
  *
- * Three things happen, all irreversible and all the point: metadata (EXIF GPS/serial/timestamp,
- * ICC profiles, XMP) is dropped because sharp omits it on output unless `withMetadata()` asks
- * otherwise — which nothing here does; dimensions are capped so a full-resolution camera photo
- * does not sit behind a URL forever at 40 MB; and re-encoding through libvips is what a shallow
- * magic-byte check cannot do — a payload smuggled in an ancillary PNG chunk does not survive a
- * decode/encode round trip, because nothing about that round trip reads or copies it forward.
+ * Three things happen, all irreversible and all the point: EXIF/ICC/XMP metadata is dropped
+ * (sharp omits it on output unless `withMetadata()` asks otherwise); dimensions are capped so a
+ * full-resolution photo doesn't sit behind a URL at 40 MB; and re-encoding through libvips is
+ * what a shallow magic-byte check can't do — a payload smuggled in an ancillary PNG chunk doesn't
+ * survive a decode/encode round trip.
  *
  * @param input - the quarantined file's raw bytes
  * @param mime - the format declared at upload time; the output is re-encoded into the SAME one

@@ -1,12 +1,10 @@
 /**
  * @module
- * The order book's slice of the demo dataset.
- *
- * Every snapshot is an exact copy of the live catalogue row, built by LOOKUP
- * (`seedProductById`) rather than restated, so a fixture that needs to differ from today's
- * product must say so explicitly. The lookup throws rather than skipping a missing product. The
- * email is a SNAPSHOT too, from `@kernel/seed-accounts` — `orders` has no registry edge on
- * `users`.
+ * The order book's slice of the demo dataset. Every snapshot is an exact copy of the live
+ * catalogue row, built by LOOKUP (`seedProductById`) rather than restated, so a fixture that
+ * needs to differ from today's product must say so explicitly; the lookup throws rather than
+ * skipping a missing product. The email is a SNAPSHOT too, from `@kernel/seed-accounts` —
+ * `orders` has no registry edge on `users`.
  */
 
 import {
@@ -57,29 +55,20 @@ export const orderFixtures = [
         email: 'oldpsw@root.it',
         items: [line(SEED_PRODUCT_IDS.panino, 1), line(SEED_PRODUCT_IDS.micionaOutOfStock, 10)]
     }),
-    /*
-     * The SHIPPED order — the only fixture that carries the three shipping columns, and the reason
-     * it exists is that they were added to the schema long after these fixtures were written. Every
-     * seeded order was a pickup-shaped order with no address, so nothing in the demo dataset showed
-     * what an order that chose a method looks like, and `totalPrice` never once included a shipping
-     * cost.
-     *
-     * `standard` is priced 5 with `freeAbove: 100` (see `delivery/domain/rates`), and these lines
-     * total 1,540 — so the cost frozen here is 0, not 5. That is the interesting number: it is what
-     * `priceShipping` decided at checkout, and an order keeps the price it was charged rather than
-     * the method's rate card, which can change.
-     *
-     * The address restates `account/demo.ts`'s default entry rather than importing it: this module
-     * declares no edge on `account`, and a snapshot that COULD NOT differ from the live book would
-     * be demonstrating the opposite of the thing it is here to demonstrate.
-     */
+    /* The only fixture with shipping columns — added because the fixtures predate those columns
+     * and none demonstrated a chosen delivery method. */
     makeOrder({
         id: '661c795a9e22bcbef63a5832',
         userId: SEED_ADMIN_ID,
         email: SEED_ADMIN_EMAIL,
         items: [line(SEED_PRODUCT_IDS.pufettino, 20)],
+        /* `standard` costs 5 with `freeAbove: 100` (see `delivery/domain/rates`), and these lines
+         * total 1,540 — so 0, not 5, is what `priceShipping` decided at checkout. An order keeps
+         * the price it was charged, not the method's current rate card. */
         shippingMethod: 'standard',
         shippingCost: 0,
+        /* Restates `account/demo.ts`'s default address rather than importing it — this module
+         * declares no edge on `account`. */
         shippingAddress: {
             fullName: 'Root Rootsson',
             street: 'Via del Boilerplate 1',
@@ -99,32 +88,20 @@ export const orderFixtures = [
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         items: [line(SEED_PRODUCT_IDS.panino, 4)],
-        /* Earlier in the day than the `createdAt` this order's id encodes, i.e. deleted before it
-         * was placed. Left that way on purpose: the fixtures do not promise their three dates
-         * agree, and nothing reads them together — the soft-delete branches test for the field's
-         * PRESENCE. See `@infrastructure/persistence/fixtures` for why chasing that consistency
-         * costs more than it buys. */
+        /* Earlier than the `createdAt` this order's id encodes, i.e. deleted before it was
+         * placed — left that way on purpose. The fixtures don't promise their three dates agree;
+         * nothing reads them together, only the field's PRESENCE. See
+         * `@infrastructure/persistence/fixtures`. */
         deletedAt: '2024-08-07T09:12:03.114Z'
     })
 ];
 
 /*
- * ── Why no seeded reservation ────────────────────────────────────────────────────────────────
- *
- * A `pending` order placed through the shop holds its units, so it is tempting to open a matching
- * hold here. Two things say not to.
- *
- * The seeder runs every module CONCURRENTLY, and the invariant that makes that safe is stated in
- * `db/demo/index.ts`: no fixture is derived from another fixture's write. Reserving would break
- * it — `reserveForOrder` conditionally writes the PRODUCT document that `products/demo.ts` is
- * writing at the same moment, so whether the hold succeeded would depend on who won. It won
- * every time it was measured, which is the worst version of that bug rather than a defence.
- *
- * And it would be inventing a state the application cannot reach by this path. These fixtures are
- * written straight to the collection; none of them went through a checkout, so none of them ever
- * held anything. Every seeded product's `reserved` is 0 because that is the truth about a database
- * nobody has shopped in yet. A hold appears the moment someone checks out, which is also the only
- * way one is ever created in production.
+ * No seeded reservation: the seeder runs every module CONCURRENTLY (see `db/demo/index.ts`), and
+ * `reserveForOrder` would conditionally write the same PRODUCT document `products/demo.ts` is
+ * writing at that moment — a race it loses every time. It would also invent a state this path
+ * never reaches: these fixtures are written straight to the collection, none went through
+ * checkout, so every seeded product's `reserved` is honestly 0.
  */
 
 /** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */
