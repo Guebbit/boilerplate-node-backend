@@ -1,5 +1,33 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import type { Router } from 'express';
+import { effectiveRouteTable } from '@tests/routes';
+
+jest.mock('@infrastructure/http/middlewares/cache', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
+);
+jest.mock('@infrastructure/http/middlewares/route-flag', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').routeFlagMock()
+);
+jest.mock('@infrastructure/adapters/storage', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').storageMock()
+);
+jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
+);
+
+import { router as accountRouter } from '@modules/account/routes';
+import { router as cartRouter } from '@modules/cart/routes';
+import { router as deliveryRouter } from '@modules/delivery/routes';
+import { router as feedbackRouter } from '@modules/feedback/routes';
+import { router as inventoryRouter } from '@modules/inventory/routes';
+import { router as localesRouter } from '@modules/locales/routes';
+import { router as observabilityRouter } from '@modules/observability/routes';
+import { router as ordersRouter } from '@modules/orders/routes';
+import { router as paymentsRouter } from '@modules/payments/routes';
+import { router as productsRouter } from '@modules/products/routes';
+import { router as usersRouter } from '@modules/users/routes';
+import { router as wishlistRouter } from '@modules/wishlist/routes';
 
 /**
  * Guard: a controller that reads `authContextOf` is mounted behind `isAuth`.
@@ -12,13 +40,36 @@ import path from 'node:path';
  * controller that starts reading the caller and is mounted on a public route fails here rather
  * than answering `undefined.id` at runtime.
  *
- * It also catches the placement hazard a router can carry: `feedback` calls `router.use(isAuth)`
- * MID-FILE, so a route appended above that line is silently public. A controller counts as
- * authenticated only when its own mount is guarded, or when a `router.use` appears BEFORE it in
- * the file.
+ * The second half of that question — which routes are unauthenticated — used to be answered by
+ * reading `routes.ts` as text and regexing it line by line. That answered a weaker question than
+ * this one does: a guard written through a variable, a spread, or a multi-line `router.use` read
+ * as unguarded to the regex and does not to {@link effectiveRouteTable}, because by the time this
+ * runs Express has already resolved every spelling of a guard to the same stack.
  */
 
+/** Every module directory under `src/modules/`, router or not. */
 const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
+const moduleNames = (): string[] => readdirSync(MODULES_ROOT);
+
+/**
+ * Modules that mount a router, imported directly — the same twelve
+ * `tests/cross-cutting/write-routes-are-guarded.test.ts` imports, and for the same reason: this
+ * file needs the real mounted stack, not a re-parse of the source that produced it.
+ */
+const ROUTED_MODULES: Record<string, Router> = {
+    account: accountRouter,
+    cart: cartRouter,
+    delivery: deliveryRouter,
+    feedback: feedbackRouter,
+    inventory: inventoryRouter,
+    locales: localesRouter,
+    observability: observabilityRouter,
+    orders: ordersRouter,
+    payments: paymentsRouter,
+    products: productsRouter,
+    users: usersRouter,
+    wishlist: wishlistRouter
+};
 
 /** Controllers that read the caller through the accessor, by exported handler name. */
 const handlersReadingAuthContext = (moduleRoot: string): Set<string> => {
@@ -35,50 +86,28 @@ const handlersReadingAuthContext = (moduleRoot: string): Set<string> => {
 };
 
 /**
- * Every handler name the router mounts on a route that is NOT authenticated.
- *
- * Order matters, so the file is walked top to bottom: a `router.use(...isAuth...)` authenticates
- * everything BELOW it, and a route above that line is guarded only if it names `isAuth` itself.
+ * Every handler name mounted on a route that {@link effectiveRouteTable} does not report as
+ * carrying `isAuth` — router-level or per-route, in the same order a real request sees them.
  */
-const unauthenticatedMounts = (moduleRoot: string): string[] => {
-    const routes = path.join(moduleRoot, 'routes.ts');
-    if (!existsSync(routes)) return [];
-
-    let blanketFromHereDown = false;
-    const mounted: string[] = [];
-
-    for (const line of readFileSync(routes, 'utf8').split('\n')) {
-        if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue;
-
-        if (/router\.use\([^)]*\bisAuth\b/.test(line)) {
-            blanketFromHereDown = true;
-            continue;
-        }
-
-        const mount = /router\.(?:get|post|put|patch|delete)\((.*)$/.exec(line);
-        if (!mount) continue;
-        if (blanketFromHereDown || mount[1].includes('isAuth')) continue;
-
-        // The handler is the last identifier on the mount line.
-        const identifiers = [...mount[1].matchAll(/([$A-Z_a-z][\w$]*)/g)].map(([, name]) => name);
-        const handler = identifiers.at(-1);
-        if (handler) mounted.push(handler);
+const handlersMountedUnauthenticated = (router: Router): Set<string> => {
+    const mounted = new Set<string>();
+    for (const row of effectiveRouteTable(router)) {
+        if ([...row.applies, ...row.chain].includes('isAuth')) continue;
+        for (const handler of row.chain) mounted.add(handler);
     }
-
     return mounted;
 };
 
-const modules = (): string[] =>
-    readdirSync(MODULES_ROOT).map((name) => path.join(MODULES_ROOT, name));
-
 describe('every controller reading the caller is mounted behind isAuth', () => {
     it('finds no handler asserting an auth context its route does not guarantee', () => {
-        const offenders = modules().flatMap((moduleRoot) => {
-            const reading = handlersReadingAuthContext(moduleRoot);
-            if (reading.size === 0) return [];
-            return unauthenticatedMounts(moduleRoot)
+        const offenders = moduleNames().flatMap((name) => {
+            const reading = handlersReadingAuthContext(path.join(MODULES_ROOT, name));
+            const router = ROUTED_MODULES[name];
+            if (reading.size === 0 || router === undefined) return [];
+
+            return [...handlersMountedUnauthenticated(router)]
                 .filter((handler) => reading.has(handler))
-                .map((handler) => `${path.basename(moduleRoot)}: ${handler}`);
+                .map((handler) => `${name}: ${handler}`);
         });
 
         expect(offenders).toEqual([]);
@@ -86,8 +115,8 @@ describe('every controller reading the caller is mounted behind isAuth', () => {
 
     it('actually finds controllers to check', () => {
         // A canary: an empty result must mean "all guarded", never "nothing was read".
-        const total = modules().reduce(
-            (count, moduleRoot) => count + handlersReadingAuthContext(moduleRoot).size,
+        const total = moduleNames().reduce(
+            (count, name) => count + handlersReadingAuthContext(path.join(MODULES_ROOT, name)).size,
             0
         );
         expect(total).toBeGreaterThan(10);

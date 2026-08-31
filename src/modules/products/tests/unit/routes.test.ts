@@ -14,7 +14,7 @@
  * See `tests/support/routes.ts` for why the middleware factories are replaced: the arguments are
  * the substance here, and Express keeps only the closures.
  */
-import { routeTable, routerMiddleware, routeSignatures } from '@tests/routes';
+import { routeTable, routerMiddleware, routeSignatures, optionsOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -106,11 +106,13 @@ describe('product routes — caching', () => {
         const search = chainOf('POST /search').find((entry) => entry.startsWith('setCache'));
 
         expect(listing).toBe(search);
-        expect(listing).toContain(`tags=[${TAG}]`);
-        expect(listing).toContain(`keyAs=${TAG}:search`);
         expect(listing).toContain('setCache(3600');
+        expect(optionsOf(chainOf('GET /'), 'setCache')).toMatchObject({
+            tags: [TAG],
+            keyAs: `${TAG}:search`
+        });
         // A cached listing keyed on nothing serves page 1 to every caller.
-        expect(listing).not.toContain('keyParameters=[]');
+        expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
     it.each(['GET /categories', 'GET /:id'])(
@@ -119,7 +121,7 @@ describe('product routes — caching', () => {
             const entry = chainOf(signature).find((each) => each.startsWith('setCache'));
 
             expect(entry).toContain('setCache(3600');
-            expect(entry).toContain(`tags=[${TAG}]`);
+            expect(optionsOf(chainOf(signature), 'setCache')).toMatchObject({ tags: [TAG] });
         }
     );
 

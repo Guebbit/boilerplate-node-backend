@@ -15,7 +15,7 @@
  * The second choice is what makes this test worth its length: with no router-level gate, "is this
  * route admin-only" is a question about that route's own chain, and there are thirteen of them.
  */
-import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
+import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -103,7 +103,7 @@ describe('locale routes — caching', () => {
         const entry = chainOf(signature).find((each) => each.startsWith('setCache'));
 
         expect(entry).toContain('setCache(3600');
-        expect(entry).toContain('tags=[locales]');
+        expect(optionsOf(chainOf(signature), 'setCache')).toMatchObject({ tags: ['locales'] });
     });
 
     it('tells browsers to revalidate, so a translator sees their own save', () => {
@@ -111,9 +111,9 @@ describe('locale routes — caching', () => {
         // the editor's browser, so they reload and see the old string for up to an hour. That
         // reads as "saving is broken" to the one audience with no other way to tell.
         for (const signature of PUBLIC)
-            expect(chainOf(signature).find((each) => each.startsWith('setCache'))).toContain(
-                'browserRevalidate=true'
-            );
+            expect(optionsOf(chainOf(signature), 'setCache')).toMatchObject({
+                browserRevalidate: true
+            });
     });
 
     it('leaves the editing screen uncached', () => {

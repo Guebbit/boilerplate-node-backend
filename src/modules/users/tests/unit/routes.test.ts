@@ -11,7 +11,7 @@
  * would state the same fact, but it would keep passing if a route were later mounted above the
  * `use`, which is exactly the mistake `feedback` and `locales` are shaped to avoid.
  */
-import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
+import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -84,15 +84,15 @@ describe('user routes — caching and uploads', () => {
 
         expect(listing).toBe(search);
         expect(listing).toContain('setCache(3600');
-        expect(listing).toContain('tags=[users]');
-        expect(listing).toContain('keyAs=users:search');
-        expect(listing).not.toContain('keyParameters=[]');
+        expect(optionsOf(chainOf('GET /'), 'setCache')).toMatchObject({
+            tags: ['users'],
+            keyAs: 'users:search'
+        });
+        expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
     it('caches the single read under the users tag', () => {
-        expect(chainOf('GET /:id').find((each) => each.startsWith('setCache'))).toContain(
-            'tags=[users]'
-        );
+        expect(optionsOf(chainOf('GET /:id'), 'setCache')).toMatchObject({ tags: ['users'] });
     });
 
     it.each(['POST /', 'PUT /', 'DELETE /', 'PUT /:id', 'DELETE /:id', 'DELETE /:id/hard'])(

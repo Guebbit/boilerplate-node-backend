@@ -11,7 +11,7 @@
  * `tests/support/routes.ts`. Asserting the per-route middleware alone would report every route
  * here as unguarded and pass whatever happened.
  */
-import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
+import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -81,9 +81,11 @@ describe('feedback routes — caching', () => {
         expect(listing).toBe(search);
         // 600, not the 3600 the catalogue uses: an operator queue is read while it changes.
         expect(listing).toContain('setCache(600');
-        expect(listing).toContain('tags=[feedback]');
-        expect(listing).toContain('keyAs=feedback:search');
-        expect(listing).not.toContain('keyParameters=[]');
+        expect(optionsOf(chainOf('GET /'), 'setCache')).toMatchObject({
+            tags: ['feedback'],
+            keyAs: 'feedback:search'
+        });
+        expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
     it.each(['POST /contact', 'PUT /:id'])('%s invalidates the feedback tag', (signature) => {

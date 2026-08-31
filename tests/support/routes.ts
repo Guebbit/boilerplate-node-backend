@@ -38,8 +38,8 @@
 import type { Router } from 'express';
 import { asStub } from '@tests/stub';
 
-/** Where a mocked factory records the call that produced a middleware. */
-export const ROUTE_LABEL = Symbol.for('tests.routeLabel');
+/** Where a mocked factory records the call that produced a middleware. Internal: see finding 3. */
+const ROUTE_LABEL = Symbol.for('tests.routeLabel');
 
 /** A middleware carrying the label of the factory call that produced it. */
 interface LabelledMiddleware {
@@ -47,8 +47,8 @@ interface LabelledMiddleware {
     name?: string;
 }
 
-/** One mounted endpoint. */
-export interface RouteRow {
+/** One mounted endpoint. Internal: the walker's return type, not referenced outside this file. */
+interface RouteRow {
     /** Uppercased HTTP method — `GET`, `POST`, … */
     method: string;
     /** The path as Express holds it, so `/:id` rather than a filled-in example. */
@@ -89,6 +89,49 @@ const text = (value: unknown): string => {
 /** `['a','b']` → `a|b`, so an emptied array reads differently from a renamed one. */
 const list = (values: readonly unknown[] | undefined): string =>
     values === undefined ? '·' : values.map(String).join('|');
+
+/**
+ * The inverse of {@link text} and {@link list}: one rendered value, parsed back to what produced
+ * it. Used only by {@link optionsOf} — see the stopgap note there.
+ */
+const parseValue = (raw: string): unknown => {
+    if (raw === '·') return undefined;
+    if (raw.startsWith('[') && raw.endsWith(']')) {
+        const inner = raw.slice(1, -1);
+        return inner === '' ? [] : inner.split('|');
+    }
+    if (raw === 'true' || raw === 'false') return raw === 'true';
+    return raw !== '' && !Number.isNaN(Number(raw)) ? Number(raw) : raw;
+};
+
+/**
+ * The recorded options of one factory call on a chain, parsed back out of its rendered label.
+ *
+ * A stopgap over structured labels (see step 5a in `ROUTE_TABLE_TESTS.md`): it parses a string
+ * this same file just built, so the coupling to the rendered format lives here and nowhere else
+ * rather than in every module test's `toContain` calls. Only reliable for `key=value` pairs — a
+ * factory's leading positional argument (`setCache`'s `ttl`) has no key and is skipped.
+ *
+ * @param chain - one route's middleware chain, as returned by {@link routeTable}
+ * @param factory - the factory name the label was rendered from, e.g. `'setCache'`
+ * @returns every `key=value` pair recorded on that call, `[a|b]` parsed back into an array
+ * @throws {Error} when no entry on the chain starts with `factory(`
+ */
+export const optionsOf = (chain: readonly string[], factory: string): Record<string, unknown> => {
+    const entry = chain.find((each) => each.startsWith(`${factory}(`));
+    if (entry === undefined)
+        throw new Error(`No ${factory}(...) call on this chain. Chain: ${chain.join(', ')}`);
+
+    const body = entry.slice(factory.length + 1, -1);
+    const options: Record<string, unknown> = {};
+
+    for (const part of body.split(', ')) {
+        const equals = part.indexOf('=');
+        if (equals !== -1) options[part.slice(0, equals)] = parseValue(part.slice(equals + 1));
+    }
+
+    return options;
+};
 
 /**
  * Replacement for `@infrastructure/http/middlewares/cache`.
@@ -187,106 +230,55 @@ export const storageMock = () => {
     };
 };
 
-/** What one mounted handler is called: its recorded factory call, its name, or `(anonymous)`. */
-const handlerName = (handle: LabelledMiddleware): string =>
+/**
+ * What one mounted handler is called: its recorded factory call, its name, Express's own layer
+ * name, or `(anonymous)`.
+ *
+ * `layerName` is only meaningful for a `router.use(...)` layer — Express gives those a `.name`
+ * (`'<anonymous>'` for an inline arrow) that a route's own `route.stack` entries do not carry.
+ * Passing it there is more informative than falling straight to the literal `'(anonymous)'`.
+ */
+const handlerName = (handle: LabelledMiddleware, layerName?: string): string =>
     // `||`, not `??`: an inline arrow handler has a `name` of `''` rather than `undefined`, and
     // `??` would keep the empty string — turning every inline handler into a blank entry that
     // reads, in a failure diff, as if the route had no handler at all.
-    handle[ROUTE_LABEL] ?? (handle.name || '(anonymous)');
+    handle[ROUTE_LABEL] ?? (handle.name || layerName || '(anonymous)');
+
+/** One layer of `router.stack`, route or `use`, as far as the walker below needs it. */
+interface Layer {
+    route?: {
+        path: string;
+        methods: Record<string, boolean>;
+        stack: { handle: LabelledMiddleware }[];
+    };
+    handle: LabelledMiddleware;
+    name?: string;
+}
 
 /**
- * Every endpoint mounted on a router, in mount order.
+ * Walks a router's stack once, in mount order, and answers every question the exports below need.
  *
- * Mount order is preserved rather than sorted because it is load-bearing: `/search` and
- * `/categories` are only reachable while they are declared BEFORE `/:id`, which would otherwise
- * match them as an id. A sorted table would pass with that ordering reversed.
+ * The single place coupled to the undocumented Express internals `router.stack`,
+ * `layer.route.methods` and `route.stack[].handle` — see `tests/unit/infrastructure/http/router-
+ * internals.test.ts` for the pinned shape. Everything exported from this file is a projection of
+ * this one pass; there used to be three separate walkers here; and `handlerName`'s two callers
+ * used to disagree about the fallback below (a `router.use` layer's own Express name vs the
+ * literal `'(anonymous)'`) purely because the logic had been copied rather than shared.
  *
  * @param router - the module's exported Express router
- * @returns one row per method/path pair
+ * @returns `rows`, one per mounted endpoint with the `use` layers accumulated above it, in mount
+ * order; and `middleware`, every `use` layer on the router regardless of position
  */
-export const routeTable = (router: Router): RouteRow[] => {
-    interface Layer {
-        route?: {
-            path: string;
-            methods: Record<string, boolean>;
-            stack: { handle: LabelledMiddleware }[];
-        };
-    }
-
-    const layers = asStub<{ stack: Layer[] }>(router).stack;
-
-    return layers.flatMap(({ route }) =>
-        route === undefined
-            ? []
-            : Object.keys(route.methods)
-                  .filter((method) => route.methods[method])
-                  .map((method) => ({
-                      method: method.toUpperCase(),
-                      path: route.path,
-                      chain: route.stack.map(({ handle }) => handlerName(handle))
-                  }))
-    );
-};
-
-/**
- * The router-level middleware mounted with `router.use(...)`, in order.
- *
- * Separate from {@link routeTable} because it applies to every route rather than to one, and a
- * module that stops calling `router.use(getAuth)` loses admin visibility on all of them at once.
- */
-export const routerMiddleware = (router: Router): string[] => {
-    interface Layer {
-        route?: unknown;
-        handle: LabelledMiddleware;
-        name?: string;
-    }
-
-    const layers = asStub<{ stack: Layer[] }>(router).stack;
-
-    return layers
-        .filter(({ route }) => route === undefined)
-        .map(({ handle, name }) => handle[ROUTE_LABEL] ?? (handle.name || name || '(anonymous)'));
-};
-
-/** `GET /:id` — the compact spelling used in assertions. */
-export const routeSignatures = (router: Router): string[] =>
-    routeTable(router).map(({ method, path }) => `${method} ${path}`);
-
-/**
- * The router-level middleware that actually applies to each route, by POSITION.
- *
- * `router.use(...)` guards what is mounted BELOW it and nothing above. Two modules here rely on
- * that deliberately — `feedback` mounts its one public contact route above the admin gate, and
- * `locales` declares its public reads first — and both carry a comment saying so, because it is
- * also how a route appended into the wrong half becomes public without looking wrong.
- * {@link routerMiddleware} flattens that away: it reports the same list for every route, which is
- * exactly the mistake the arrangement invites.
- *
- * This walks the stack once, in mount order, accumulating `use` layers as it passes them, so each
- * route is paired with the guards that precede it. A test can then state the guard each endpoint
- * really has, and moving a route across the gate fails it.
- *
- * @param router - the module's exported Express router
- * @returns one row per endpoint, its `applies` listing the router-level middleware above it
- */
-export const effectiveRouteTable = (router: Router): (RouteRow & { applies: string[] })[] => {
-    interface Layer {
-        route?: {
-            path: string;
-            methods: Record<string, boolean>;
-            stack: { handle: LabelledMiddleware }[];
-        };
-        handle: LabelledMiddleware;
-        name?: string;
-    }
-
+const walk = (
+    router: Router
+): { rows: (RouteRow & { applies: string[] })[]; middleware: string[] } => {
     const layers = asStub<{ stack: Layer[] }>(router).stack;
     const applies: string[] = [];
     const rows: (RouteRow & { applies: string[] })[] = [];
 
     for (const layer of layers) {
         if (layer.route === undefined) {
-            applies.push(handlerName(layer.handle) || layer.name || '(anonymous)');
+            applies.push(handlerName(layer.handle, layer.name));
             continue;
         }
 
@@ -302,8 +294,51 @@ export const effectiveRouteTable = (router: Router): (RouteRow & { applies: stri
             });
     }
 
-    return rows;
+    // `applies` by now holds every `use` layer seen, route-adjacent or not — the full sweep
+    // `routerMiddleware` wants, including one mounted below the last route.
+    return { rows, middleware: applies };
 };
+
+/**
+ * Every endpoint mounted on a router, in mount order.
+ *
+ * Mount order is preserved rather than sorted because it is load-bearing: `/search` and
+ * `/categories` are only reachable while they are declared BEFORE `/:id`, which would otherwise
+ * match them as an id. A sorted table would pass with that ordering reversed.
+ *
+ * @param router - the module's exported Express router
+ * @returns one row per method/path pair
+ */
+export const routeTable = (router: Router): RouteRow[] =>
+    walk(router).rows.map(({ applies: _applies, ...row }) => row);
+
+/**
+ * The router-level middleware mounted with `router.use(...)`, in order.
+ *
+ * Separate from {@link routeTable} because it applies to every route rather than to one, and a
+ * module that stops calling `router.use(getAuth)` loses admin visibility on all of them at once.
+ */
+export const routerMiddleware = (router: Router): string[] => walk(router).middleware;
+
+/** `GET /:id` — the compact spelling used in assertions. */
+export const routeSignatures = (router: Router): string[] =>
+    walk(router).rows.map(({ method, path }) => `${method} ${path}`);
+
+/**
+ * The router-level middleware that actually applies to each route, by POSITION.
+ *
+ * `router.use(...)` guards what is mounted BELOW it and nothing above. Two modules here rely on
+ * that deliberately — `feedback` mounts its one public contact route above the admin gate, and
+ * `locales` declares its public reads first — and both carry a comment saying so, because it is
+ * also how a route appended into the wrong half becomes public without looking wrong.
+ * {@link routerMiddleware} flattens that away: it reports the same list for every route, which is
+ * exactly the mistake the arrangement invites.
+ *
+ * @param router - the module's exported Express router
+ * @returns one row per endpoint, its `applies` listing the router-level middleware above it
+ */
+export const effectiveRouteTable = (router: Router): (RouteRow & { applies: string[] })[] =>
+    walk(router).rows;
 
 /**
  * Every guard in force on one endpoint — router-level and per-route, in that order.

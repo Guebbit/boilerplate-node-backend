@@ -12,7 +12,7 @@
  * from the service's scoped conditional write, not from the router — so a test that "helpfully"
  * added `isAdmin` here would be breaking the feature, and the assertion below says so.
  */
-import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
+import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -103,16 +103,18 @@ describe('order routes — caching', () => {
 
         expect(listing).toBe(search);
         expect(listing).toContain('setCache(3600');
-        expect(listing).toContain('tags=[orders]');
-        expect(listing).toContain('keyAs=orders:search');
-        expect(listing).not.toContain('keyParameters=[]');
+        expect(optionsOf(chainOf('GET /'), 'setCache')).toMatchObject({
+            tags: ['orders'],
+            keyAs: 'orders:search'
+        });
+        expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
     it.each(['GET /:id', 'GET /:id/invoice'])('%s is cached under the orders tag', (signature) => {
         const entry = chainOf(signature).find((each) => each.startsWith('setCache'));
 
         expect(entry).toContain('setCache(3600');
-        expect(entry).toContain('tags=[orders]');
+        expect(optionsOf(chainOf(signature), 'setCache')).toMatchObject({ tags: ['orders'] });
     });
 
     it('invalidates products too wherever stock moves, and only there', () => {
