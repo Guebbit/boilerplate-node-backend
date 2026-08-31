@@ -64,7 +64,6 @@ flowchart LR
 | Module writeback registration                    | `src/kernel/registry.ts` → `ImageTarget`, `resolveImageTargets`       |
 | `products` writeback                             | `src/modules/products/repository.ts` → `writebackImage`               |
 | `users`/`account` writeback                      | `src/modules/users/repository.ts` → `writebackImage`                  |
-| Backfill for pre-pipeline images                 | `scripts/backfill-image-thumbnails.ts`                                |
 | Quarantine reaper                                | `scripts/reap-quarantine.ts`                                          |
 
 ## How it's used
@@ -122,9 +121,6 @@ apart.
 
 ## Maintenance
 
-- **`npm run backfill:image-thumbnails`** — one-shot, idempotent. Thumbnails every local image
-  (including the committed `public/images/seed/` fixtures) that predates the pipeline and has no
-  `thumbnailUrl` yet.
 - **`npm run reap:quarantine`** — deletes quarantine files older than
   `NODE_QUARANTINE_RETENTION_HOURS`. Meant to run periodically (cron, a scheduled container task);
   a normal run of the pipeline never leaves a file behind for it to find.

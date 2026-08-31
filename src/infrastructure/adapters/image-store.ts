@@ -89,17 +89,6 @@ export interface ImageStore {
      * @returns whether the main image was actually deleted
      */
     remove(imageUrl: string | undefined): Promise<boolean>;
-
-    /**
-     * Read the bytes an already-promoted `imageUrl` names.
-     *
-     * For one-off maintenance only (`scripts/backfill-image-thumbnails.ts`). Unlike {@link remove}'s
-     * guard, this allows any file under the images root, INCLUDING subdirectories — `images/seed/`'s
-     * committed fixtures are exactly what a backfill targets.
-     *
-     * @throws When `imageUrl` is remote, or does not resolve to a real file under this store's root.
-     */
-    readImage(imageUrl: string): Promise<Buffer>;
 }
 
 /**
@@ -225,20 +214,6 @@ export const filesystemImageStore: ImageStore = {
         return Promise.all([deleteFile(target), deleteFile(thumbnailPath)]).then(
             ([deleted]) => deleted
         );
-    },
-
-    readImage: (imageUrl) => {
-        if (isRemoteUrl(imageUrl))
-            return Promise.reject(new Error(`Not a local image: ${imageUrl}`));
-
-        const root = publicRoot();
-        const target = resolveUnderPublicRoot(imageUrl, root);
-        if (!target)
-            return Promise.reject(
-                new Error(`Refuses to read outside the public directory: ${imageUrl}`)
-            );
-
-        return readFile(target);
     }
 };
 

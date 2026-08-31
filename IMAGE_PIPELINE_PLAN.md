@@ -255,7 +255,6 @@ refactor.
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `src/infrastructure/adapters/image.ts`        | sharp wrapper — `digest()`, `thumbnail()`. The `pdf.ts` analogue, and the swap point if sharp ever needs replacing |
 | `src/infrastructure/adapters/image.worker.ts` | Mirrors `pdf.worker.ts`: `Partial` payload, `false` → dead-letter, throw → requeue                                 |
-| `scripts/backfill-image-thumbnails.ts`        | Idempotent; covers the committed `images/seed/` fixtures                                                           |
 | `scripts/reap-quarantine.ts`                  | Unlink quarantine files past retention                                                                             |
 | `public/images/system/pending.png`            | Blank placeholder, to be replaced                                                                                  |
 | `public/images/system/pending-thumb.webp`     | Blank placeholder thumbnail, to be replaced                                                                        |
