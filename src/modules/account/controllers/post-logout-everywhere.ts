@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `POST /account/logout-all` controller — thin HTTP adapter over `accountService.tokenRemoveAll`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { TokenType } from '@modules/users';

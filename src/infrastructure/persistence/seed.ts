@@ -1,4 +1,5 @@
 /**
+ * @module
  * The seeding primitive every module's `demo.ts` upserts through.
  *
  * Lives in `infrastructure` because it knows nothing about any domain: a repository shape and a fixture with

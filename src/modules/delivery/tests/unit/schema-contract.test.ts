@@ -1,4 +1,5 @@
 /**
+ * @module
  * The shipment schema's contract.
  *
  * `unique: true` on `orderId` is the same exactly-once device the payment schema uses: one parcel
@@ -6,6 +7,7 @@
  * a second tracking code for the same goods — which the customer would see as two parcels and the
  * courier as one.
  */
+
 import { shipmentSchema } from '@modules/delivery/model';
 import { ShipmentStatus } from '@types';
 import {

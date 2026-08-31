@@ -1,24 +1,14 @@
 /**
+ * @module
  * One home for validation copy: Zod's own refusals, answered in the caller's language.
  *
- * Two paths could refuse a request and they answered in different languages. The generated schemas
- * in `@api/schemas.zod` carry no messages, so `parseBody` served Zod's built-in English to an
- * Italian client; the hand-written `zodUserSchema` / `zodProductSchema` carry `t(...)` per field
- * and served Italian. Same 422, same client, different language, and which one you got depended on
- * the endpoint.
+ * Generated schemas (`@api/schemas.zod`) carry no messages and used to fall back to Zod's English,
+ * while hand-written schemas answered in the request's language — same 422, different language
+ * depending on the endpoint. A global error map fixes every schema, generated included, without
+ * touching codegen or overriding the specific copy a field already declares.
  *
- * Zod resolves a message in precedence order — the check's own `error`, then the schema's, then
- * this global map, then its English default. Registering here therefore translates every schema in
- * the process, generated ones included, WITHOUT touching the codegen and without overriding the
- * specific copy a field already declares: `users.field-email-invalid` still wins on the field that
- * declares it, and this answers everywhere nothing does.
- *
- * The map runs at PARSE time, not at schema-construction time, so it reads the request-scoped `t`
- * and two overlapping requests in different languages cannot answer each other's. That is the same
- * property `@infrastructure/i18n` exists to protect — see `i18n/context.ts`.
- *
- * The keys are per CONSTRAINT, not per field: ~17 of them cover every generated schema, where a
- * per-field key would mean one dictionary entry for each of the 511 generated shapes.
+ * Runs at PARSE time, not schema-construction time, so it reads the request-scoped `t`. Keys are
+ * per CONSTRAINT, not per field: ~17 cover every generated schema.
  */
 
 import { z } from 'zod';

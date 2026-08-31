@@ -1,4 +1,5 @@
 /**
+ * @module
  * HTML → PDF rendering (invoices, reports).
  *
  * See: docs/tools/email-and-rendering.md
@@ -41,6 +42,10 @@ const launchOptions = () => ({
  * Cost note: this launches a full browser process per call — hundreds of milliseconds and
  * significant memory. Fine for on-demand invoice generation; if it ever moves onto a hot path,
  * a pooled long-lived browser instance would be the next step.
+ *
+ * @param html - the already-rendered HTML to print (e.g. an EJS template's output)
+ * @param pdfOptions - `page.pdf()` geometry options; defaults to A4 portrait
+ * @returns the rendered PDF's bytes
  */
 export const renderHtmlToPdf = (
     html: string,

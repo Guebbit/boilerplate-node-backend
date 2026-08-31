@@ -1,3 +1,11 @@
+/**
+ * @module
+ * Rate limiting: a global burst brake across the whole surface, and a pair of tighter budgets for
+ * routes that accept a credential. Every limiter shares one Redis-or-memory store (see
+ * `rate-limit-store.ts`), fails open on a store error, and answers through the shared error
+ * envelope rather than express-rate-limit's own plain-text body.
+ */
+
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { rateLimit, type Store } from 'express-rate-limit';
@@ -14,25 +22,36 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * Default window and per-address budget, used when the `NODE_RATE_LIMIT_*` variables are unset:
- * 100 requests per MINUTE, sized for browsing rather than for guessing.
+ * Default window, in ms, used when `NODE_RATE_LIMIT_WINDOW_MS` is unset: one minute.
  *
  * The test suites raise it tenfold — see `tests/support/setup.ts`.
  *
  * See: docs/tools/security.md#the-two-rate-limit-budgets
  */
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+/**
+ * Default per-address budget, used when `NODE_RATE_LIMIT_MAX` is unset: 100 requests per window,
+ * sized for browsing rather than for guessing.
+ */
 export const DEFAULT_RATE_LIMIT_MAX = 100;
 
 /**
- * Failed credential attempts allowed per window, per ACCOUNT named and per ADDRESS calling.
+ * Failed credential attempts allowed per window, per ACCOUNT named.
  *
- * Two numbers because they are two budgets — see `credentialLimiters`. The per-account one is the
- * smaller: guessing at one account is the attack, and someone signing in on several devices is not.
+ * The smaller of the two credential budgets — see `credentialLimiters`: guessing at one account is
+ * the attack, and someone signing in on several devices is not.
  */
 export const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
+
+/**
+ * Failed credential attempts allowed per window, per ADDRESS calling.
+ *
+ * The larger of the two credential budgets — see `DEFAULT_AUTH_RATE_LIMIT_MAX`.
+ */
 export const DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX = 30;
 
+/** The configured window, in ms — falls back to {@link DEFAULT_RATE_LIMIT_WINDOW_MS}. */
 const windowMs = () =>
     environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1);
 
@@ -62,6 +81,13 @@ const refuse =
         ]);
     };
 
+/**
+ * The options every limiter shares, with the store and the audit choice as the only per-limiter
+ * variables.
+ *
+ * @param store - where this limiter's counters live — see `rate-limit-store.ts`
+ * @param audit - whether a refusal emits an audit event — see {@link refuse}
+ */
 const limiterOptions = (store: Store, audit: boolean) => ({
     store,
     windowMs: windowMs(),
@@ -79,7 +105,7 @@ const limiterOptions = (store: Store, audit: boolean) => ({
     handler: refuse(audit)
 });
 
-/*
+/**
  * The burst brake: requests per address per window, across the whole surface.
  *
  * Mounted globally in `app/security.ts` rather than per route, so a request that matches no route

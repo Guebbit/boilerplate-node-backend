@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `POST /cart/reorder/:orderId` controller — thin HTTP adapter over `cartService.reorderIntoCart`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { cartService } from '../services';

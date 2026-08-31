@@ -1,4 +1,5 @@
 /**
+ * @module
  * Who the two demo accounts are: their ids, and how to log in as them.
  *
  * In the kernel rather than in `users` because four modules need a handle on these people and only
@@ -11,13 +12,22 @@
  * See: docs/tools/demo-profile.md#the-two-seed-accounts
  */
 
-/** 24-char hex, and a real ObjectId: its leading bytes date the account to February 2024. */
+/** The demo admin's id — 24-char hex, and a real ObjectId: its leading bytes date it to February 2024. */
 export const SEED_ADMIN_ID = '65dd2bdb923652b7800fe180';
+
+/** The demo (non-admin) user's id — same format and vintage as {@link SEED_ADMIN_ID}. */
 export const SEED_USER_ID = '65de646a44f861fd83c13f13';
 
+/** The demo admin's login email. */
 export const SEED_ADMIN_EMAIL = 'root@root.it';
+
+/** The demo admin's login password — PLAINTEXT; see the file header for why. */
 export const SEED_ADMIN_PASSWORD = 'rootroot';
+
+/** The demo user's login email. */
 export const SEED_USER_EMAIL = 'gino@pino.it';
+
+/** The demo user's login password — PLAINTEXT; see the file header for why. */
 export const SEED_USER_PASSWORD = 'password';
 
 /** What `demo-data.json` publishes so the frontend can log in as either demo account. */

@@ -1,4 +1,5 @@
 /**
+ * @module
  * The analytics vocabulary this module emits — `src/modules/wishlist/analytics.ts`.
  *
  * Pinned string by string, the same reasoning `orders/tests/unit/audit.test.ts` pins its audit

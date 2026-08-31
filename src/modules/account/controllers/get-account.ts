@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `GET /account` controller — thin HTTP adapter over `accountService.getOwnProfile`.
+ */
+
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';

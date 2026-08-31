@@ -1,4 +1,5 @@
 /**
+ * @module
  * PostHog analytics provider.
  *
  * The alternative to the default `umami`, for projects whose funnels are identity-shaped:
@@ -18,18 +19,20 @@ import { PostHog } from 'posthog-node';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AnalyticsEvent, AnalyticsProvider } from './index';
 
-/*
+/**
  * Both key and host are required. The host is explicit because PostHog can be self-hosted or
  * EU/US cloud, and defaulting it would silently ship product data to the wrong region.
  */
 export const isPostHogConfigured = (): boolean =>
     Boolean(process.env.NODE_POSTHOG_API_KEY && process.env.NODE_POSTHOG_HOST);
 
-// Lazily created so the client is never instantiated when the credentials are absent.
-// Underscore-prefixed by convention: module-private mutable state.
+/**
+ * Lazily created so the client is never instantiated when the credentials are absent.
+ * Underscore-prefixed by convention: module-private mutable state.
+ */
 let _client: PostHog | undefined;
 
-/*
+/**
  * Returns the shared PostHog client, creating it on first call.
  * Only ever reached past the `isPostHogConfigured()` guard in `capture` — that is what makes
  * the non-null assertion on the API key below safe.
@@ -52,6 +55,7 @@ const getClient = (): PostHog => {
 /** Warn once, not per event: a misconfigured provider would otherwise fill the log with itself. */
 let warnedAboutConfiguration = false;
 
+/** The PostHog implementation of the analytics port — see `./index` for the contract. */
 export const posthogAnalyticsProvider: AnalyticsProvider = {
     name: 'posthog',
 

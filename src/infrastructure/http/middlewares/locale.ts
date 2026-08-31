@@ -1,3 +1,11 @@
+/**
+ * @module
+ * Locale negotiation middleware — resolves the request's language once, up front, and makes it
+ * available two ways: explicitly on `request.locale` / `request.t` for code that already holds the
+ * request, and ambiently through AsyncLocalStorage for code that does not (services, repositories,
+ * Zod thunks that import `t` directly from `@infrastructure/i18n`).
+ */
+
 import type { NextFunction, Request, Response } from 'express';
 import { createLocaleContext, negotiateLocale, runWithLocaleContext } from '@infrastructure/i18n';
 

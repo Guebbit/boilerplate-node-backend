@@ -1,4 +1,5 @@
 /**
+ * @module
  * `wishlistService` — the rules that make a wishlist safe to lean on:
  *
  *   - saving is idempotent (`$addToSet`), so no interleaving of double-clicks produces two lines;

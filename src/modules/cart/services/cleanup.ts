@@ -1,4 +1,5 @@
 /**
+ * @module
  * Cleanup entry points — what OTHER modules call when something they own disappears.
  *
  * Neither is reachable from a cart route. They exist because a cart holds references to two things

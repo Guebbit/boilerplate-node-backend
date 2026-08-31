@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract tests for /feedback.
  *
  * The only resource with a genuinely public write endpoint (`POST /feedback/contact`, `security: []`)

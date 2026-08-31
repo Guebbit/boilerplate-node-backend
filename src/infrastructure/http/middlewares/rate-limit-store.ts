@@ -1,40 +1,14 @@
 /**
+ * @module
  * Where the rate limiters keep their counters.
  *
- * ── Why this file exists at all ──────────────────────────────────────────────────────────────
- * `express-rate-limit`'s default store is an in-process `Map`. `src/cluster.ts` forks one worker
- * per CPU, and each worker would then hold its own counters — so a budget of 100 per minute is
- * really up to `100 × workers` per minute, and which bucket a request lands in depends on which
- * worker the OS handed the socket to. On a sixteen-core box that is a sixteenfold budget for
- * password guessing, and nothing in the configuration says so. Redis makes it one budget again,
- * across workers and across instances.
+ * `express-rate-limit`'s default store is an in-process `Map`, and `cluster.ts` forks one worker
+ * per CPU — so a single-process budget becomes `budget × workers`, split by whichever worker the
+ * OS handed the socket to. Redis makes it one budget again, across workers and instances.
  *
- * ── Failing open, and saying so ──────────────────────────────────────────────────────────────
- * The cache adapter fails open because a cache is an optimisation. A rate limiter is not, so the
- * choice here is real: fail closed and a Redis outage becomes an authentication outage — nobody can
- * sign in — while failing open removes the brakes for as long as it lasts. This fails open, which
- * is the same answer the rest of the stack gives about its optional dependencies, and it is made
- * explicit rather than accidental: `passOnStoreError` in `rate-limit.ts` is what lets a request
- * through when the store errors, and every outage is logged.
- *
- * The choice of store is made ONCE, at startup, from whether Redis is configured. A store that
- * flipped between Redis and memory mid-window would reset every counter each time it flipped,
- * which is an attacker's best case: make Redis flap, and the budget never fills.
- *
- * ── Lazy, and driven by traffic ──────────────────────────────────────────────────────────────
- * No socket is opened by importing this file — only by the first request that needs one. A process
- * that imports the limiters and never serves a request (a test file, `export-demo-dataset`, `sync-shared-files-to-frontend`)
- * must not be left holding a connection open, and one retrying a Redis that is not there would
- * never exit at all.
- *
- * Laziness takes a wrapper rather than falling out of the design, because `RedisStore.init()` loads
- * its Lua scripts eagerly — constructing one IS a round trip. `lazyRedisStore` holds the options
- * `express-rate-limit` hands it and builds the real store on the first `increment`, which is the
- * first moment a request is actually being counted.
- *
- * ── A separate connection from the cache ─────────────────────────────────────────────────────
- * One connection per concern. The cache may be switched off (`NODE_REDIS_CACHE_ENABLED=0`) while
- * the limiters must keep counting, and the two would otherwise share a kill switch.
+ * Fails open on a Redis error: failing closed would turn an outage into an authentication outage.
+ * `passOnStoreError` in `rate-limit.ts` is what lets requests through, and every outage is logged.
+ * A separate connection from the cache, so `NODE_REDIS_CACHE_ENABLED=0` never disables this too.
  */
 
 import { createClient, type RedisClientType } from 'redis';
@@ -76,6 +50,11 @@ const redisUrl = (): string | undefined => {
     return `redis://${host}:${process.env.NODE_REDIS_PORT}`;
 };
 
+/**
+ * Construct (but do not connect) the limiter's own Redis client.
+ *
+ * @param url - the limiter's Redis URL — see {@link redisUrl}
+ */
 const build = (url: string): RedisClientType => {
     const redisClient: RedisClientType = createClient({
         url,

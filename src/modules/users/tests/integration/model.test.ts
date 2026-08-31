@@ -1,17 +1,12 @@
 /**
+ * @module
  * Credentials must never reach a response body.
  *
- * Serialising a raw Mongoose user document would carry the bcrypt hash and every live refresh
- * token, so two independent mechanisms stand between it and `GET /users` / `GET /users/:id`:
- *
- *   1. `select: false` on the schema — the fields are not even loaded by the normal finders
- *   2. `applyUserTransform` (the schema's `toJSON` transform) — an allowlist of the OpenAPI
- *      `User` properties, applied both to real documents (via `.toJSON()`/`res.json`) and to
- *      `.lean()` list results (mapped manually in `userService.search`, since `.lean()` bypasses
- *      `toJSON` entirely).
- *
- * Both are asserted here, because either one alone would let the leak back in through a path
- * the other does not cover.
+ * A raw Mongoose user document carries the bcrypt hash and every live refresh token, so two
+ * independent mechanisms guard `GET /users` / `GET /users/:id`: `select: false` on the schema
+ * keeps them from being loaded, and `applyUserTransform`'s allowlist strips them again at
+ * serialization — including `.lean()` results, which bypass `toJSON` entirely. Both are asserted
+ * here, since either alone would let the leak back in through a path the other doesn't cover.
  */
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';

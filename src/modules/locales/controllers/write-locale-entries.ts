@@ -1,3 +1,12 @@
+/**
+ * @module
+ * The four write routes on a language's entries: one key at a time, and two bulk imports.
+ *
+ * The two bulk routes are two METHODS, not one route with a flag: PUT replaces — what is not sent
+ * is deleted — and PATCH merges — what is not sent is left alone. A client cannot ask for one and
+ * receive the other, and a mis-set boolean cannot silently empty a dictionary.
+ */
+
 import type { Request, Response } from 'express';
 import {
     CreateLocaleEntryBody,
@@ -19,23 +28,6 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
-
-/**
- * The four write routes on a language's entries: one key at a time, and two bulk imports.
- *
- * ## Why both bulk routes exist, and why they are two METHODS
- *
- * Nobody types five hundred keys into a form, so without an import this admin surface is a demo.
- * And "does an import delete the keys it did not mention" is the question every translation tool
- * gets wrong — so the answer is spelled in the method rather than in a flag:
- *
- *   PUT   replaces — what is not sent is deleted
- *   PATCH merges   — what is not sent is left alone
- *
- * A client cannot ask for one and receive the other, and a mis-set boolean cannot silently empty a
- * dictionary. `tests/contract/` asserts the pair together, because this is the semantic most
- * likely to be implemented backwards.
- */
 
 /**
  * Re-read the API's own overrides after a write that may have changed them.

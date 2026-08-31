@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `DELETE /account/addresses/:addressId` controller — thin HTTP adapter over
+ * `accountService.addressRemove`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';

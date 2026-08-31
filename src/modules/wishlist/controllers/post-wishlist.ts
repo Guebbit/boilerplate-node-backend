@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `POST /wishlist` controller — thin HTTP adapter over `wishlistService.wishlistAdd`.
+ */
+
 import type { Request, Response } from 'express';
 import { AddWishlistItemBody } from '@api/schemas.zod';
 import { t } from '@infrastructure/i18n';

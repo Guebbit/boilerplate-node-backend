@@ -1,22 +1,13 @@
 /**
- * How a product fixture is built — for the demo dataset in `./demo` and for any test that needs a
+ * @module
+ * Builds a product fixture — for the demo dataset in `./demo` and for any test needing a
  * catalogue row.
  *
- * ## What a factory deliberately does NOT do
- *
- * It does not restate the schema's defaults. `onHand`, `reserved`, `active`, `description`,
- * `imageUrl`, `categories` and `tags` all have a `default:` in `./model`, so a caller who says
- * nothing about them gets no key at all and Mongoose fills it in.
- *
- * That omission is the point. `scripts/export-demo-dataset.ts` reads the seeded rows back out through the
- * real serializer, so `demo-data.json` records what the schema actually does — and the paired
- * frontend's mock stops guessing. It used to guess: `mocks/register.ts` over there carried a
- * hand-written `active: true` with a comment admitting it was mirroring a backend default nobody
- * had checked. A factory that helpfully filled those in here would have preserved the guess and
- * moved it one file to the left.
- *
- * Only `title` and `price` get placeholder values, because the schema requires them and a test that
- * writes `makeProduct()` is saying it does not care what they are.
+ * Deliberately leaves the schema's own defaults (`onHand`, `reserved`, `active`, etc.)
+ * unset rather than restating them — only `title` and `price`, which the schema requires,
+ * get placeholders. That is what lets `scripts/export-demo-dataset.ts` read seeded rows back
+ * through the real serializer, so the exported demo dataset (and the paired frontend's mocks)
+ * reflect what the schema actually does instead of a guess.
  */
 
 import {
@@ -52,6 +43,13 @@ export type ProductOverrides = OverridesFor<Product>;
 export type ProductFixture = Partial<ProductDocument> &
     Pick<ProductSnapshot, '_id' | 'title' | 'price'>;
 
+/**
+ * Builds one product fixture, filling `title` and `price` with placeholders and leaving every
+ * other field to the schema's own `default:` unless the caller overrides it.
+ *
+ * @param overrides - fields to pin; anything omitted is left for Mongoose to default
+ * @returns a fixture ready for `productRepository.create`
+ */
 export const makeProduct = ({
     id,
     createdAt,

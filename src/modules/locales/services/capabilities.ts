@@ -1,4 +1,5 @@
 /**
+ * @module
  * The manifest — which languages this deployment offers, and what each of them can do.
  *
  * Two tiers answer that question: languages deployed as files, and languages registered as rows.
@@ -147,28 +148,25 @@ export const mergeCapabilities = (
  * Logged at warn rather than silently: a manifest quietly missing its dynamic languages looks
  * exactly like a deployment that has none.
  */
-export const readDynamicTier = async (
+export const readDynamicTier = (
     scope?: Record<string, unknown>
 ): Promise<{
     languages: LocaleDocument[];
     entryCounts: Map<string, number>;
-}> => {
-    // eslint-disable-next-line no-restricted-syntax -- a dead database serves the static tier, not a 500 — the catch is that degradation
-    try {
-        const [languages, entryCounts] = await Promise.all([
-            // `active` gates what a VISITOR may select and nothing else — the admin, who is the
-            // one toggling the flag, reads every row. Same rule as products and users.
-            localeRepository.list(scope),
-            localeMessageRepository.countEntriesByLocale()
-        ]);
-        return { languages, entryCounts };
-    } catch (error) {
-        logger.warn('listCapabilities - dynamic locale tier unavailable, serving static only', {
-            detail: error instanceof Error ? error.message : String(error)
+}> =>
+    Promise.all([
+        // `active` gates what a VISITOR may select and nothing else — the admin, who is the
+        // one toggling the flag, reads every row. Same rule as products and users.
+        localeRepository.list(scope),
+        localeMessageRepository.countEntriesByLocale()
+    ])
+        .then(([languages, entryCounts]) => ({ languages, entryCounts }))
+        .catch((error: unknown) => {
+            logger.warn('listCapabilities - dynamic locale tier unavailable, serving static only', {
+                detail: error instanceof Error ? error.message : String(error)
+            });
+            return { languages: [], entryCounts: new Map() };
         });
-        return { languages: [], entryCounts: new Map() };
-    }
-};
 
 /**
  * Which languages a caller is allowed to read.

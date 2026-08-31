@@ -1,42 +1,23 @@
 /**
- * Orders — public barrel.
+ * @module
+ * Orders — public barrel, the only surface a sibling module may import. The schema and its
+ * transform stay out — only tests reach `@modules/orders/model` directly. `cart` reaches the
+ * repository rather than the service because checkout owns its own transaction and rolls it back
+ * if clearing the cart fails.
  *
- * The only surface a sibling module may import. See `modules/products/index.ts` for the rule.
- *
- * The schema and its serialization transform are deliberately NOT here. Products exports its own
- * because an order embeds a product; nothing embeds an order, so the only callers are tests, and
- * they reach `@modules/orders/model` directly rather than widening a promise made to every module.
- *
- * `cart` reaches the repository rather than the service because a checkout writes the order row
- * itself and rolls it back if clearing the cart fails — that is one transaction the cart owns, not
- * an order the cart asks for. The service layer would give it a response envelope it would only
- * have to unwrap.
- *
- * `sumLineItems` and `orderTotal` are the exports that are rules rather than handles. Order money
- * is orders' arithmetic: a cart totalling its lines independently would show one number and bill
- * another, and `payments` composing the grand total itself charged the lines and forgot the
- * shipping for as long as both existed.
- *
- * `canTransition` and `statusesLeadingTo` are published for the same reason: `payments` moves an
- * order to `paid`, and deciding for itself which status means payable would be a second opinion on
- * a rule with one owner. `Money` and `ORDER_LIFECYCLE` stay inside — no sibling needs either.
+ * `sumLineItems`, `orderTotal`, `canTransition` and `statusesLeadingTo` are published because they
+ * are rules with one owner: `cart` and `payments` must reuse this module's arithmetic and
+ * lifecycle rather than keep a second opinion. `Money` and `ORDER_LIFECYCLE` stay inside.
  */
 
 export { orderService } from './service';
-// `cart` reports `order_created` from its own checkout the same way it sends the confirmation
-// mail: only the checkout knows the order stood, so it calls back into the module that owns the
-// event rather than this module reaching up for a `Request` it must never see. See
-// `orderService.recordCreated`'s docblock for why this is not folded into `create()` itself.
+// `cart` reports `order_created` from its own checkout, calling back into the owning module
+// rather than this one reaching up for a `Request` it must never see.
 export { orderRepository } from './repository';
 export { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
-// `cart` sends the customer's confirmation itself: only the checkout knows the order stood, and
-// only the service has the recipient's record in scope for the language it goes out in.
+// `cart` sends the confirmation itself: only the checkout has the recipient's locale in scope.
 export { orderConfirmEmail } from './emails';
-/*
- * `OrderDocumentItem` is deliberately not here. It was published so that tests could hand-build an
- * order line as `{ product, quantity } as unknown as OrderDocumentItem` — a cast that existed only
- * because the shape was wrong for what the caller had. `tests/fixtures.ts`'s `toOrderItem` derives
- * the line from a product document instead, so nothing outside this module names the type any more.
- */
+// `OrderDocumentItem` stays unpublished — tests derive order lines from a product fixture
+// (`tests/fixtures.ts`'s `toOrderItem`) instead of casting around the type.
 export type { OrderDocument } from './model';
 export { sumLineItems, orderTotal, canTransition, statusesLeadingTo } from './domain';

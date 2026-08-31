@@ -1,4 +1,5 @@
 /**
+ * @module
  * Live metrics over Server-Sent Events (SSE).
  *
  * SSE rather than WebSockets: the data flows one way (server → dashboard), it is plain HTTP so

@@ -1,4 +1,5 @@
 /**
+ * @module
  * The payments route table.
  *
  * Everything is authenticated at the router level — money is somebody's — and exactly one route
@@ -6,6 +7,7 @@
  * logged-in caller is a self-service withdrawal; an intent or a confirm locked to admins is a
  * checkout nobody can complete.
  */
+
 import { routeSignatures, guardsOn } from '@tests/routes';
 import { router } from '@modules/payments/routes';
 

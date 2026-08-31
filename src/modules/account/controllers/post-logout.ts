@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `POST /account/logout` controller — thin HTTP adapter over `accountService.logoutCurrentSession`.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';

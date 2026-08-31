@@ -1,3 +1,14 @@
+/**
+ * @module
+ * Shipment repository — standard CRUD via the repository factory, plus the lookups the courier
+ * actually makes.
+ *
+ * The type is written out because Mongoose's generics are too large for TypeScript to serialize
+ * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
+ *
+ * See: docs/modules/delivery.md
+ */
+
 import { shipmentModel, applyShipmentTransform } from './model';
 import type { ShipmentStatus } from '@types';
 import type { ShipmentDocument } from './model';
@@ -7,13 +18,7 @@ import {
     type Repository
 } from '@infrastructure/persistence/create-repository';
 
-/**
- * Shipment Repository
- * Standard CRUD via the repository factory, plus the lookups the courier actually makes.
- *
- * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
- */
+/** The shared repository factory's CRUD surface plus the courier's own lookups. */
 export const shipmentRepository: Repository<ShipmentDocument> & {
     findByOrderId: (orderId: string) => Promise<ShipmentDocument | null>;
     upsertForOrder: (orderId: string, trackingCode: string) => Promise<ShipmentDocument>;

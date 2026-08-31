@@ -1,4 +1,5 @@
 /**
+ * @module
  * Response envelope.
  *
  * Every endpoint answers with the same top-level shape, so clients can branch on `success`
@@ -19,6 +20,10 @@ export interface ResponseNeutral {
     message: string;
 }
 
+/**
+ * The envelope shape for a successful response — `success: true` with an optional payload and no
+ * errors.
+ */
 export interface ResponseSuccess<T> extends ResponseNeutral {
     // message: "ok"
     /** Generic payload — the endpoint's actual result. */
@@ -41,6 +46,10 @@ export interface ResponseErrorItem {
     details?: Record<string, unknown>;
 }
 
+/**
+ * The envelope shape for a failed response — `success: false` with no payload and at least one
+ * structured error.
+ */
 export interface ResponseReject extends ResponseNeutral {
     // explicit undefined keeps `result.data` union-safe
     // (the key is present, so `result.data` type-checks on both branches of the union

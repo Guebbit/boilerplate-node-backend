@@ -1,8 +1,5 @@
-import { model, Schema, Types } from 'mongoose';
-import type { Document, Model } from 'mongoose';
-import { applySerialization } from '@infrastructure/persistence/serialize';
-
 /**
+ * @module
  * Address book Model
  *
  * One document per user, keyed by `userId` — the cart's pattern, chosen over an array on the
@@ -14,6 +11,10 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  * and still be "home" and "office" — so the subdocuments keep their `_id`, and that id is the
  * handle every endpoint takes.
  */
+
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model } from 'mongoose';
+import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /** A stored address-book entry. */
 export interface AddressItem {
@@ -44,6 +45,7 @@ export interface AddressBookDocument extends Document {
 /** Address book Document model type. Queries live in `./repository`. */
 export type AddressBookModel = Model<AddressBookDocument>;
 
+/** Mongoose subdocument schema for one address-book entry — keeps its own `_id`, see above. */
 const addressItemSchema = new Schema(
     {
         label: { type: String },
@@ -101,9 +103,7 @@ export const addressBookSchema = new Schema<AddressBookDocument>(
  */
 export const applyAddressBookTransform = applySerialization(addressBookSchema);
 
-/**
- * Model
- */
+/** The compiled Mongoose model — what `./repository` queries against. */
 export const addressBookModel = model<AddressBookDocument, AddressBookModel>(
     'AddressBook',
     addressBookSchema

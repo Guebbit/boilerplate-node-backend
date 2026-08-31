@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract tests for /orders.
  *
  * This resource is why the contract suite exists. The list endpoint returned

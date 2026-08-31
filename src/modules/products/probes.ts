@@ -1,4 +1,5 @@
 /**
+ * @module
  * Requests the contract cannot describe, for the products module.
  *
  * `scripts/contracts/client-collections-bundle.ts` owns the rest: what a probe is for, where these
@@ -7,6 +8,7 @@
 
 import type { Probe } from '@guebbit/openapi-runnable-collections';
 
+/** The products module's probe collection — see the module header for what a probe is for. */
 export const probes: Probe[] = [
     {
         name: 'Probe: 422 on a body that violates the schema',

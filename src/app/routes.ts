@@ -1,4 +1,5 @@
 /**
+ * @module
  * Route mounting.
  *
  * Modules mount themselves: each one declares its `basePath` and router in its manifest, and this

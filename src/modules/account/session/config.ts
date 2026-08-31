@@ -1,21 +1,25 @@
-/*
+/**
+ * @module
  * Token configuration — parse and expose token expiry settings from env.
  *
  * `config.ts` rather than `tokens.ts`, which is what it was called at the module root: it holds no
  * token and issues none. It reads how long each tier of them lives, which `./jwt` signs against and
  * `./cookies` sets `maxAge` from — the one place the deployment's answer to "how long is a session"
  * is parsed.
+ *
+ * See: docs/modules/account-sessions.md
  */
 
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
+/** The "remember me" tiers a refresh token may be issued under — see the table in the doc above. */
 export enum RefreshTokenExpiryTime {
     SHORT = 'short',
     MEDIUM = 'medium',
     LONG = 'long'
 }
 
-/* Map each token tier to its corresponding env var name. */
+/** Maps each token tier to its corresponding env var name. */
 const TOKEN_EXPIRY_ENV: Record<RefreshTokenExpiryTime | 'default', string> = {
     [RefreshTokenExpiryTime.SHORT]: 'NODE_TOKEN_REFRESH_TIME_SHORT',
     [RefreshTokenExpiryTime.MEDIUM]: 'NODE_TOKEN_REFRESH_TIME_MEDIUM',
@@ -23,9 +27,10 @@ const TOKEN_EXPIRY_ENV: Record<RefreshTokenExpiryTime | 'default', string> = {
     default: 'NODE_TOKEN_ACCESS_TIME'
 };
 
-/*
- * Get expiry time in seconds for the given token duration tier.
- * Falls back to NODE_TOKEN_ACCESS_TIME when no tier is given.
+/**
+ * Expiry time in seconds for the given token duration tier.
+ * Falls back to `NODE_TOKEN_ACCESS_TIME` when no tier is given.
+ *
  * @param remember - optional tier (short/medium/long)
  * @returns seconds as integer, 0 if env var is unset
  */
@@ -34,22 +39,24 @@ export const getExpiryTime = (remember?: RefreshTokenExpiryTime) => {
     return environmentNumber(environmentKey, 0);
 };
 
-/*
- * Millisecond wrapper around getExpiryTime.
+/**
+ * Millisecond wrapper around {@link getExpiryTime}.
+ *
  * @param remember - optional tier
  * @returns expiry in ms
  */
 export const getExpiryTimeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
     getExpiryTime(remember) * 1000;
 
-/* Get the access token secret. */
+/** The secret access tokens are signed and verified with. */
 export const getAccessTokenSecret = () => process.env.NODE_TOKEN_ACCESS ?? '';
 
-/* Get the refresh token secret. */
+/** The secret refresh tokens are signed and verified with. */
 export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
 
-/*
- * Get access token TTL in seconds.
+/**
+ * Access token TTL in seconds.
+ *
  * @returns seconds as integer, 0 if env var is unset
  */
 export const getAccessTokenTTL = () => environmentNumber('NODE_TOKEN_ACCESS_TIME', 0);

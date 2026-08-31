@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Cart repository — the repository factory's standard CRUD, plus the six writes a cart actually
+ * takes: upsert a line, remove a line, clear all lines (plain and version-guarded for checkout),
+ * and the two cleanup writes owed to product and user deletion.
+ *
+ * See: docs/modules/cart.md
+ */
+
 import type { UpdateWriteOpResult } from 'mongoose';
 import { cartModel, applyCartTransform } from './model';
 import type { CartDocument } from './model';

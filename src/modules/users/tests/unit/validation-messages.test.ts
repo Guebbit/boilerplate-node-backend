@@ -1,4 +1,5 @@
 /**
+ * @module
  * This module's validation copy resolves against the ACTIVE locale, not the boot one.
  *
  * The failure this defends against is PROBLEM 01: `t()` called at module scope, before

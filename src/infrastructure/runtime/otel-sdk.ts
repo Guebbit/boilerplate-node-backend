@@ -1,4 +1,5 @@
 /**
+ * @module
  * OpenTelemetry SDK bootstrap.
  *
  * This module must be imported *before* any instrumented library (express, mongoose, redis)

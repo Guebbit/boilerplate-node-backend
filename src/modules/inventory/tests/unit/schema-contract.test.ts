@@ -1,22 +1,15 @@
 /**
+ * @module
  * The inventory schemas' contracts — the ledger and the hold.
  *
- * Both schemas encode rules that are enforced by the DATABASE rather than by any code path, and
- * that is precisely why they need asserting here: nothing in the service throws if they are
- * weakened, the guarantee simply stops existing.
+ * Both encode rules enforced by the DATABASE, not by any code path: unique `orderId` is what
+ * makes reserving exactly-once, the `status` enum's `held` default is what every lifecycle
+ * operation moves off of, and the ledger's two zero-defaulted deltas are what make it replayable.
+ * Weaken any of these and no code path fails — the guarantee just stops existing, silently.
  *
- *   - `orderId` is unique on a reservation, and that is what makes reserving exactly-once. A
- *     retried checkout needs no read-then-write to detect: the second insert fails and no counter
- *     moves. Remove `unique` and double-reservation becomes possible under retry, silently.
- *   - `status` is a three-value enum with a `held` default, and every lifecycle operation is a
- *     conditional move off `held`. Widen the enum or drop the default and the exactly-once gate
- *     stops closing.
- *   - the ledger stores BOTH deltas on every row, each defaulting to zero, which is what makes it
- *     replayable — summing a column over a product's rows reproduces the counter it describes.
- *
- * None of these changes what a valid document looks like, so the integration suites pass either
- * way. See `tests/support/schema.ts`.
+ * See `tests/support/schema.ts`.
  */
+
 import { stockMovementSchema, reservationSchema, MOVEMENT_REASONS } from '@modules/inventory/model';
 import { StockMovementReason } from '@types';
 import {

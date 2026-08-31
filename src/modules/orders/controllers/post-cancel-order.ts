@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Order cancellation controller — the one order write a customer can make; thin wiring onto
+ * `orderService.cancelById`, which carries the caller's scope down into the write itself.
+ */
+
 import type { Request, Response } from 'express';
 import { orderService } from '../service';
 import type { CancelOrderRequest } from '@types';

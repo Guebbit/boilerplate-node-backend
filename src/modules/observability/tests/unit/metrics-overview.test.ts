@@ -1,4 +1,5 @@
 /**
+ * @module
  * `GET /observability/metrics/overview` — that the domain rows carry real numbers.
  *
  * This exists because of how the endpoint reaches those numbers. The counters belong to `account`,
@@ -40,6 +41,7 @@ jest.mock('@infrastructure/http/response', () => ({
     rejectResponse: jest.fn()
 }));
 
+/** Shape of the payload the controller hands to `successResponse` — the subset this suite asserts on. */
 interface Overview {
     auth: { loginSuccess: number; loginFailure: number; signupSuccess: number };
     business: { checkoutSuccess: number; ordersCreated: number };

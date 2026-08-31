@@ -1,15 +1,10 @@
 /**
- * Order totals — what a list of priced lines adds up to, and what the customer owes on top of it.
+ * @module
+ * Order totals — what a list of priced lines adds up to, and what the customer owes on top.
  *
  * Owned by `orders`; `cart` and `payments` read it through the barrel, so a cart summary, the
- * order it previews and the intent that freezes it can never disagree. Same number, three names,
- * because `openapi.yaml` names it per resource:
- *
- * | here       | Order           | CartSummary     |
- * |------------|-----------------|-----------------|
- * | `count`    | `totalItems`    | `itemsCount`    |
- * | `quantity` | `totalQuantity` | `totalQuantity` |
- * | `price`    | `totalPrice`    | `total`         |
+ * order it previews and the intent that freezes it can never disagree — `openapi.yaml` just
+ * names the same numbers differently per resource (e.g. `count`/`totalItems`/`itemsCount`).
  *
  * The arithmetic runs in minor units and converts once on the way out — see `money.ts`. Nothing
  * here rounds, because there is nothing to round.
@@ -32,6 +27,7 @@ export interface LineItem {
     product?: { price?: unknown } | null;
 }
 
+/** What `sumLineItems` reports back: how many lines, how many units, and their combined price. */
 export interface LineItemTotals {
     /** Number of distinct line items. */
     count: number;

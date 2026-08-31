@@ -1,11 +1,5 @@
-import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
-import { onDomainEvent } from '@kernel/events';
-import { ORDER_STATUS_CHANGED } from '@modules/orders';
-import { router } from './routes';
-import { shipOrder } from './service';
-
 /**
+ * @module
  * Delivery: shipping rates, shipments and the fake courier.
  *
  * Depends on orders because a shipment is ABOUT an order, and on users only to address the
@@ -21,7 +15,18 @@ import { shipOrder } from './service';
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      orders, users
  * Reached by:   cart (prices a method at checkout through `./domain`)
+ *
+ * See: docs/modules/delivery.md
  */
+
+import path from 'node:path';
+import type { AppModule } from '@kernel/registry';
+import { onDomainEvent } from '@kernel/events';
+import { ORDER_STATUS_CHANGED } from '@modules/orders';
+import { router } from './routes';
+import { shipOrder } from './service';
+
+/** This module's manifest entry: routes, the `ORDER_STATUS_CHANGED` subscription, and its locales. */
 export default {
     name: 'delivery',
     basePath: '/delivery',

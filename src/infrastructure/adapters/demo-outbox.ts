@@ -1,4 +1,5 @@
 /**
+ * @module
  * The demo profile's email sink.
  *
  * Under `npm run demo` there is no SMTP server and no broker — but the e2e suite still needs to
@@ -10,14 +11,18 @@
  * the sink lives beside it and the router reads from it. Inert unless `NODE_DEMO=true` — nothing
  * in a real deployment ever writes or serves it.
  */
+
 import type { SendMailOptions } from 'nodemailer';
 import type { Data } from 'ejs';
 import { environmentFlag } from '@infrastructure/runtime/environment';
 
 /** One recorded send, shaped for the e2e suite's outbox reader. */
 export interface DemoOutboxEmail {
+    /** The recipient, as a plain string — a non-string `to` is stringified before recording. */
     to: string;
+    /** The subject line, already translated. */
     subject: string;
+    /** The outbox name that rendered this send — see {@link EmailContent.template} in `mailer.ts`. */
     template: string;
     /** The template's `token` variable when it carries one — the reset/verify flows' payload. */
     token?: string;
@@ -28,6 +33,7 @@ export interface DemoOutboxEmail {
 /** `npm run demo` sets this; nothing else does. */
 export const isDemoMode = (): boolean => environmentFlag('NODE_DEMO', false);
 
+/** Every send recorded this process. Module-level, not persisted: a restart clears it. */
 const outbox: DemoOutboxEmail[] = [];
 
 /** Records a send the mailer skipped. Newest first, matching an inbox's reading order. */
@@ -52,8 +58,10 @@ export const recordDemoEmail = (
     });
 };
 
+/** A snapshot of every recorded send — a copy, so a caller cannot mutate the live outbox. */
 export const readDemoOutbox = (): DemoOutboxEmail[] => [...outbox];
 
+/** Empty the outbox. Called between e2e specs so one test's emails do not leak into the next. */
 export const clearDemoOutbox = (): void => {
     outbox.length = 0;
 };

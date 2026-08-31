@@ -1,4 +1,5 @@
 /**
+ * @module
  * How a user fixture is built — for the demo accounts in `./demo` and for any test needing a
  * person.
  *
@@ -51,6 +52,7 @@ export type UserOverrides = OverridesFor<User> & {
 /** A user ready for `userRepository.create`. */
 export type UserFixture = Partial<UserDocument> & { _id: UserDocument['_id'] };
 
+/** Builds a user fixture. Anything not passed in `fields` is left for the schema to default. */
 export const makeUser = ({
     id,
     createdAt,

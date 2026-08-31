@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Product repository: standard CRUD via the repository factory, plus the catalogue's own query
+ * rules and the counter transitions that back inventory (`onHand`/`reserved`).
+ *
+ * The exported type is written out because Mongoose's generics are too large for TypeScript to
+ * serialize an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
+ */
+
 import type { FacetCount } from '@types';
 import { productModel, applyProductTransform } from './model';
 import type { ProductDocument } from './model';
@@ -8,13 +17,6 @@ import {
 } from '@infrastructure/persistence/create-repository';
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 
-/**
- * Product Repository
- * Standard CRUD via the repository factory, plus the catalogue's own query rules.
- *
- * The type is written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
- */
 /** One product's counters and the availability derived from them, as the stock board reads it. */
 export interface AvailabilityRow {
     productId: string;
@@ -37,6 +39,7 @@ const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
     deletedAt: { $exists: false }
 };
 
+/** The catalogue's repository: base CRUD from the factory, extended with scoping, facets, and the inventory counter transitions. */
 export const productRepository: Repository<ProductDocument> & {
     publicScope: () => Record<string, unknown>;
     findByIdScoped: (

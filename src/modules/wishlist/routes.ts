@@ -1,3 +1,12 @@
+/**
+ * @module
+ * The wishlist route table.
+ *
+ * A wishlist is somebody's, so the whole router is authenticated and none of it is admin. The one
+ * thing that can silently break is ORDER: `/:productId/move-to-cart` must be declared before the
+ * bare `/:productId` routes, or a move-to-cart is read as a product id called "move-to-cart".
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
 import { getWishlist } from './controllers/get-wishlist';

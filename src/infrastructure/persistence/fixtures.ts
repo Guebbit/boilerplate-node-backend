@@ -1,4 +1,5 @@
 /**
+ * @module
  * The bit of fixture-building every module's `fixtures.ts` would otherwise repeat: an `_id`, a pair
  * of timestamps, and the type of the overrides bag. In `infrastructure` for the same reason
  * `./seed` is — it knows a document has an `_id` and nothing about what the document means.

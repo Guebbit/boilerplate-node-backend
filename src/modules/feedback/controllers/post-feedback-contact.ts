@@ -1,3 +1,11 @@
+/**
+ * @module
+ * Controller for `POST /feedback/contact` — the one public write this module has, mounted above
+ * the admin gate in `../routes` rather than exempted from it.
+ *
+ * See: docs/modules/feedback.md
+ */
+
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateFeedbackRequestBody } from '@api/schemas.zod';

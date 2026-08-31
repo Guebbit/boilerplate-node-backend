@@ -1,10 +1,5 @@
-import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
-import { CreatePaymentIntentBody } from '@api/schemas.zod';
-import { paymentService } from '../service';
-import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
-
 /**
+ * @module
  * POST /payments/intent
  * Freeze an order's price into a payment intent, ready to confirm.
  *
@@ -12,6 +7,14 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
  * audit and no analytics here — an intent is a page load's preparation, not a business event;
  * the events fire on the confirm, where money actually moves.
  */
+
+import type { Request, Response } from 'express';
+import { successResponse } from '@infrastructure/http/response';
+import { CreatePaymentIntentBody } from '@api/schemas.zod';
+import { paymentService } from '../service';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
+
+/** Handles `POST /payments/intent`. */
 export const postPaymentIntent = (request: Request, response: Response) => {
     const body = parseBody(CreatePaymentIntentBody, request.body, response);
     if (!body) return;

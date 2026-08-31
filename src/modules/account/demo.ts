@@ -1,25 +1,14 @@
 /**
+ * @module
  * The address book's slice of the demo dataset.
  *
- * This module owned a collection for a while before it owned any demo data — the address book was
- * a late addition, and the seeder walks manifests rather than a list, so a module that declares no
- * `seeds` is skipped in silence. The visible cost was a storefront where the checkout's address
- * step had nothing to select, and `/account/addresses` answered `{ addresses: [] }` on a dataset
- * that is otherwise a complete shop.
+ * The admin keeps two entries because "exactly one default" is only observable with more than
+ * one; the ordinary customer keeps one, for the common single-address case. Nobody keeps zero —
+ * an empty book and no book read the same here, and every signup already has one.
  *
- * ## What these two books are FOR
- *
- * The admin keeps two entries because "exactly one default" is only observable with more than one:
- * one book here proves the invariant holds, and the second entry is what a "make this the default"
- * demo has to click on. The ordinary customer keeps one, so the frequent case — a person with a
- * single saved address, which checkout picks without asking — is also in the dataset.
- *
- * Nobody keeps zero. That state needs no fixture: absence and an empty book are the same thing
- * here (`addressesGet` answers an empty view for both), and every fresh signup is already in it.
- *
- * One seeded order freezes a matching copy of the admin's default entry as its `shippingAddress`,
+ * `orders/demo.ts` freezes a copy of the admin's default entry as one order's `shippingAddress`,
  * which is what makes "an order remembers where it was sent" checkable against a book that can
- * still change. See the note on that entry for why it is restated there rather than shared.
+ * still change.
  */
 
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
@@ -32,6 +21,7 @@ import { makeAddressBook } from './fixtures';
 import { addressBookModel } from './model';
 import { addressBookRepository } from './repository';
 
+/** The two seeded books: the admin's (two entries) and the ordinary customer's (one). */
 export const addressBookFixtures = [
     makeAddressBook({
         id: '65dd2ce31f5b3a9e04c7b210',

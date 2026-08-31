@@ -1,17 +1,12 @@
 /**
+ * @module
  * The user directory's slice of the demo dataset.
  *
- * Two accounts, one of each kind, because two levels of access is the whole model: `root` is the
- * admin every admin-only route needs a caller for, and `ginopinoshow` is the ordinary customer
- * every scoping rule needs someone to be scoped against.
- *
- * The ids and credentials come from `@kernel/seed-accounts` rather than being written here: three
- * other modules seed rows that belong to these two people, and none of them has a registry edge on
- * this one. See that file for why the kernel is where six shared literals cost the least.
- *
- * The cart lines are NOT here. They used to be — the old shared fixture file hung a `cart` array
- * off each user and the cart module read it back out, which put one module's records inside
- * another's. `src/modules/cart/demo.ts` owns them now.
+ * Two accounts, one of each kind: `root` is the admin every admin-only route needs a caller for,
+ * `ginopinoshow` is the customer every scoping rule needs someone to be scoped against. Ids and
+ * credentials come from `@kernel/seed-accounts`, since other modules seed rows belonging to these
+ * two people. Cart lines are NOT here — `src/modules/cart/demo.ts` owns them, after the old
+ * shared fixture put one module's records inside another's.
  */
 
 import {
@@ -27,6 +22,7 @@ import { userModel } from './model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { userRepository } from './repository';
 
+/** The two seeded accounts — one admin, one ordinary customer. */
 export const userFixtures = [
     makeUser({
         id: SEED_ADMIN_ID,

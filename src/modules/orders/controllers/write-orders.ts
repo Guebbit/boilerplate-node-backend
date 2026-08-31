@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Admin create/update controller for orders — a single POST/PUT handler that creates when no id
+ * is present and updates otherwise; see the exported controller's own JSDoc for the branching.
+ */
+
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';

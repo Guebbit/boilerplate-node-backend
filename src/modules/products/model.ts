@@ -1,3 +1,16 @@
+/**
+ * @module
+ * The product Mongoose schema, its Zod validation, and the serialization transform that derives
+ * `available` from the two stock counters.
+ *
+ * `onHand` and `reserved` are declared here because this module owns the collection, but written
+ * only by `@modules/inventory` — see that module's docblock and the schema fields' own comments.
+ * `available` is never stored: `applyProductTransform` computes it at serialization time so no
+ * writer can let it drift from the counters it derives from.
+ *
+ * See: docs/modules/products.md
+ */
+
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { z } from 'zod';

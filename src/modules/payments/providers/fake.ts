@@ -1,18 +1,10 @@
 /**
- * The fake PSP — a provider that never talks to the outside world.
- *
- * It answers the way the real ones do in their test modes, magic card numbers included, so the
- * demo (and every e2e) can walk the decline path as honestly as the happy one:
- *
- * | card                  | outcome     |
- * |-----------------------|-------------|
- * | `4000000000000002`    | `declined`  |
- * | anything else         | `succeeded` |
- *
- * `4242424242424242` is the conventional success card (Stripe's), but any other number succeeds
- * too — a visitor typing digits into a demo should reach the happy path, and the decline stays
- * one specific, documented number away. Refunds always succeed: there is no outside ledger to
- * disagree.
+ * @module
+ * The fake PSP — a provider that never talks to the outside world, but answers the way the real
+ * ones do in their test modes, magic card numbers included: `4000000000000002` comes back
+ * `declined`, anything else — including Stripe's conventional `4242424242424242` — `succeeded`.
+ * That lets the demo (and every e2e) walk the decline path as honestly as the happy one. Refunds
+ * always succeed: there is no outside ledger to disagree.
  */
 
 import { logger } from '@infrastructure/adapters/logger';

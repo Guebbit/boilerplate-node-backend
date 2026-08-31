@@ -1,3 +1,14 @@
+/**
+ * @module
+ * Drains one queued PDF job: render the EJS template to HTML, then rasterize it via
+ * `renderHtmlToPdf` and write the result to the requested path.
+ *
+ * Same split as `email.worker.ts` — a malformed payload dead-letters, a failed render is left to
+ * reject so `consumeFromQueue` requeues it.
+ *
+ * See: docs/tools/email-and-rendering.md
+ */
+
 import path from 'node:path';
 import ejs from 'ejs';
 import type { PdfJobPayload } from '@types';

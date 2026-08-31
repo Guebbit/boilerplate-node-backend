@@ -1,4 +1,5 @@
 /**
+ * @module
  * The cart projection — how a stored cart becomes something a caller can read.
  *
  * Internal to `services/`; the other three files share these helpers and none of them owns it.

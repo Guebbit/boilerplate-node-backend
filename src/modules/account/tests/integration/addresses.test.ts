@@ -1,8 +1,10 @@
 /**
+ * @module
  * The address book — one invariant carries every case: a non-empty book has EXACTLY ONE
  * default, no matter which write got it there. The rest is ownership (someone else's entry
  * answers like an invented one) and the checkout resolver's three-way answer.
  */
+
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/fixtures';

@@ -1,4 +1,5 @@
 /**
+ * @module
  * Umami analytics provider — the default.
  *
  * Umami is the self-hosted analytics the compose stack already starts for the paired frontend,
@@ -91,6 +92,7 @@ const buildEventData = (event: AnalyticsEvent): UmamiEventData => ({
     ...(event.traceId ? { trace_id: event.traceId } : {})
 });
 
+/** The Umami implementation of the analytics port — see `./index` for the contract. */
 export const umamiAnalyticsProvider: AnalyticsProvider = {
     name: 'umami',
 

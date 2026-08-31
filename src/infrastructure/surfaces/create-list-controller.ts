@@ -1,4 +1,5 @@
 /**
+ * @module
  * The paged-list controller, written once.
  *
  * A `list` route is a GET with no body-carrying sibling: the query string is the only place a

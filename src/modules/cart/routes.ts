@@ -1,3 +1,12 @@
+/**
+ * @module
+ * The cart route table.
+ *
+ * A cart is somebody's, so the whole router is authenticated. `POST /checkout` is the one route
+ * that also invalidates the `orders` and `products` response caches — the endpoints those caches
+ * serve read differently once a checkout has spent stock and created an order.
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
 import { getCart } from './controllers/get-cart';

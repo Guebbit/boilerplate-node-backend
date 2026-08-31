@@ -1,20 +1,12 @@
 /**
+ * @module
  * The user schema's contract, and the two token-bearing methods on it.
  *
- * This is the most security-sensitive schema in the codebase, and two of its declarations are the
- * whole of a defence rather than a convenience:
- *
- *   - `select: false` on `password` and on `tokens`. It means neither is loaded unless a query
- *     asks for it BY NAME, so even a `.lean()` read that bypasses `applyUserTransform` cannot
- *     carry a password hash or a set of live refresh tokens out of the database. Remove either
- *     flag and nothing breaks, nothing errors, and every endpoint that returns a user starts
- *     including it. A refresh token read out of a response is as good as the password.
- *   - `omit: ['password', 'tokens']` on the transform, which is the same guarantee applied again
- *     at serialization. Two independent layers, and a test for each: the point of defence in
- *     depth is that neither one is load-bearing alone.
- *
- * The `pre('save')` hook is the third: it hashes only when `password` is modified, which is what
- * stops an ordinary profile update from re-hashing an existing HASH into an unusable one.
+ * The most security-sensitive schema in the codebase: `select: false` on `password` and `tokens`
+ * keeps them out of ordinary reads, `omit` on the transform repeats the guarantee at
+ * serialization, and each is tested independently since neither is load-bearing alone. The
+ * `pre('save')` hook hashes only when `password` is modified, so an ordinary profile update
+ * cannot re-hash an existing hash into an unusable one.
  */
 import bcrypt from 'bcrypt';
 import { userSchema, applyUserTransform } from '@modules/users/model';

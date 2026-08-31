@@ -1,18 +1,12 @@
 /**
- * Payments service — `src/modules/payments/service.ts`.
+ * @module
+ * Payments service (`src/modules/payments/service.ts`) — pins the invariants: the intent freezes
+ * the ORDER's total (shipping included), a confirm moves the order `pending → paid` conditionally
+ * so the payment row only says `succeeded` when the order does, a decline is retryable rather than
+ * an error path, and a refund (the `ORDER_CANCELLED` listener) is at-most-once.
  *
- * The invariants worth pinning are the two orderings and the two guards:
- *
- *   - the intent freezes the ORDER's number (`orderTotal`), so intent and order can never
- *     quote different totals — shipping included, which is the half that was charged to nobody;
- *   - a confirm moves the order `pending → paid` conditionally — the payment row only says
- *     `succeeded` when the order says `paid`;
- *   - a decline is retryable state, not an error path that strands the document;
- *   - the refund is the `ORDER_CANCELLED` listener and the conditional `succeeded → refunded`
- *     move makes it at-most-once — a cancel of a never-paid order refunds nothing.
- *
- * Real Mongo throughout (`setupTestDb`), because the guarantees are the conditional writes.
- * The provider is the real `fake` one: its magic cards ARE its contract.
+ * Real Mongo throughout (`setupTestDb`), because the guarantees are the conditional writes. The
+ * provider is the real `fake` one: its magic cards ARE its contract.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

@@ -1,3 +1,14 @@
+/**
+ * @module
+ * Feedback request schema — one collection, a leaf in both directions (see `./module`).
+ *
+ * `respondedAt`/`createdAt`/`updatedAt` are overridden from the generated `FeedbackRequest` type
+ * (string → Date): Mongoose holds native dates, and serialization is what narrows them back to
+ * the wire's ISO strings.
+ *
+ * See: docs/modules/feedback.md
+ */
+
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { FeedbackRequestStatus } from '@types';
@@ -13,6 +24,7 @@ export interface FeedbackRequestDocument
     updatedAt?: Date;
 }
 
+/** Mongoose model type for {@link FeedbackRequestDocument}. */
 export type FeedbackRequestModel = Model<FeedbackRequestDocument>;
 
 /** Feedback collection schema. */

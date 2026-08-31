@@ -1,22 +1,16 @@
 /**
+ * @module
  * The analytics event names this module emits.
  *
- * Checkout is here rather than in `orders` because `POST /cart/checkout` is the endpoint that
- * reports it. A name belongs to the code that EMITS it: delete this module and the two checkout
- * outcomes leave the funnel with the endpoint that produced them.
+ * Checkout is here, not in `orders`, because `POST /cart/checkout` is the endpoint that reports
+ * it — a name belongs to the code that emits it. Declared by augmenting the analytics port's name
+ * map, same pattern as `./audit.ts` for audit actions, so the catalogue grows with the modules
+ * that own their names.
  *
  * Naming rule: docs/tools/analytics.md#naming.
- *
- * Declared by augmenting the analytics port's name map rather than by editing a shared file,
- * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
- * their names, and `infrastructure` keeps knowing no domain at all.
- *
- * These names stay HERE. Nothing publishes them: the controllers that fire them import this file
- * directly, so a copy would have no reader on either side of the repo boundary. Only
- * `shared/contracts/analytics.frontend.ts` — the moments this service never observes — is
- * published to the paired frontend, which is what keeps one event from being counted twice.
  */
 
+/** The event names this module fires, keyed by intent. */
 export const cartAnalyticsEvents = {
     // Cart
     CART_VIEWED: 'cart_viewed',
@@ -35,6 +29,7 @@ export const cartAnalyticsEvents = {
     CHECKOUT_FAILED: 'checkout_failed'
 } as const;
 
+/** Registers this module's event names into the analytics port's app-wide union. */
 declare module '@infrastructure/observability/analytics' {
     interface AnalyticsEventMap {
         cart: (typeof cartAnalyticsEvents)[keyof typeof cartAnalyticsEvents];

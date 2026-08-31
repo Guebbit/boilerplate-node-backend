@@ -1,3 +1,14 @@
+/**
+ * @module
+ * The two collections this module owns. Rules live in `./service`; the counters these coordinate
+ * with belong to `@modules/products`.
+ *
+ * Both types are written out because Mongoose's generics are too large for TypeScript to serialize
+ * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
+ *
+ * See: docs/modules/inventory.md
+ */
+
 import { Types } from 'mongoose';
 import {
     stockMovementModel,
@@ -13,14 +24,6 @@ import {
     toObjectId,
     type Repository
 } from '@infrastructure/persistence/create-repository';
-
-/**
- * The two collections this module owns. Rules live in `./service`; the counters these coordinate
- * with belong to `@modules/products`.
- *
- * Both types are written out because Mongoose's generics are too large for TypeScript to serialize
- * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
- */
 
 /**
  * Convert a hold's lines to storage shape.
@@ -56,6 +59,10 @@ export const stockMovementRepository: Repository<StockMovementDocument> =
         }
     });
 
+/**
+ * The hold. The generic CRUD surface plus the four lifecycle primitives the service drives every
+ * transition through — each documented at its own definition below.
+ */
 export const reservationRepository: Repository<ReservationDocument> & {
     insertHold: (
         orderId: string,

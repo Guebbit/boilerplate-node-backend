@@ -1,27 +1,14 @@
 /**
- * One reading of the process, in the units the process reports.
+ * @module
+ * One reading of the process, in the units it reports.
  *
- * Three payloads describe this process: the SSE frame built in `./stream.ts`, and the two REST
- * endpoints in `modules/observability/controllers/`. All three read from here, and the cost of
- * each calling `process.memoryUsage()` and `process.uptime()` for itself is larger than the
- * duplication suggests: three readings taken at three instants can disagree, and a rounding that
- * differs between them — `Math.round` against `Math.floor` — has the health endpoint and the live
- * stream reporting uptimes a second apart forever, with no bug behind it.
+ * Three payloads (the SSE stream and two REST endpoints) read from here rather than calling
+ * `process.memoryUsage()`/`process.uptime()` themselves — separate readings can disagree, and
+ * differing rounding would report drifting uptimes with no bug behind it. Units are bytes
+ * everywhere; megabytes is a presentation choice made by whoever renders the payload.
  *
- * The wire units are bytes everywhere. Megabytes is a
- * PRESENTATION decision and a lossy one: `heapUsedMb: 41` cannot tell a leak hunter whether the
- * heap moved by 400 KB between two polls, which is exactly what a dashboard differencing
- * consecutive frames is looking for. The API states the measurement; whoever renders it states the
- * formatting.
- *
- * ## The one reading that must NOT come from here
- *
- * `./metrics-http.ts` reads `process.uptime()` inside a prom-client `Gauge`, whose `collect()` runs
- * at scrape time. It is not composing a payload — it is answering someone else's contract at the
- * instant that contract asks. Folding it in here would make it report a value from the wrong
- * moment. `tests/cross-cutting/process-snapshot.test.ts` allows that one call by name and forbids
- * every other reading in `src/`, so the fourth copy has somewhere to go instead of somewhere to
- * appear.
+ * `metrics-http.ts` is the one exception: its prom-client `Gauge` reads `process.uptime()` itself
+ * because it must answer at scrape time, not compose a payload from here.
  */
 
 /** Process memory in bytes — the four fields every payload publishes, and no more. */

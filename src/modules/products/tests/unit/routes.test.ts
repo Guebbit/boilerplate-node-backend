@@ -1,19 +1,14 @@
 /**
+ * @module
  * The product catalogue's route table.
  *
- * `routes.ts` is where the catalogue decides who may write to it, and it decides by ORDER and by
- * ARGUMENT rather than by anything a type checker reads. The three failures this guards are all
- * silent:
+ * Guards against silent failures that no type checker catches: an admin guard dropped from a
+ * write route, a static path like `/search` declared after `/:id` and shadowed, or a cache
+ * tag renamed on the writer but not the reader.
  *
- *   1. an admin guard dropped from a write route — every mutation becomes public, nothing throws;
- *   2. `/search` or `/categories` declared after `/:id` — both become product lookups for a
- *      product called "search", and the endpoints 404 in a way that reads like missing data;
- *   3. a cache tag renamed on the writer but not the reader — writes stop invalidating the pages
- *      they change, and the catalogue serves stale rows until the TTL expires.
- *
- * See `tests/support/routes.ts` for why the middleware factories are replaced: the arguments are
- * the substance here, and Express keeps only the closures.
+ * See `tests/support/routes.ts` for why the middleware factories are replaced with mocks.
  */
+
 import { routeTable, routerMiddleware, routeSignatures, optionsOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>

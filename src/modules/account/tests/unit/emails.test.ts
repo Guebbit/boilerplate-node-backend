@@ -1,21 +1,14 @@
 /**
+ * @module
  * The account emails — the four that carry a link, and the two that confirm something happened.
  *
- * These builders look like data and fail like code. Every one of the six is the ONLY way a user
- * reaches the flow it belongs to, so each field is a single point of failure with no fallback and
- * no error path:
- *
- *   - a wrong `template` renders someone else's email, or none;
- *   - a wrong `linkUrl` path segment means every verification, reset and deletion link 404s, and
- *     the user's only recourse is to ask for another one that also 404s;
- *   - a missing `t()` slot renders as a blank line or a raw key in the user's inbox;
- *   - the wrong TOKEN in the wrong link hands a password reset to whoever asked to be deleted.
- *
- * None of that throws, and the integration tier asserts that mail was SENT rather than what it
- * said — which is why every one of these mutants survived. The assertions below therefore check
- * the built content, and the interpolation ones check that the copy actually used the value it was
- * given rather than merely being non-empty.
+ * These builders look like data and fail like code: a wrong `template` renders someone else's
+ * email, a wrong `linkUrl` 404s every reset/verify/delete link, a missing `t()` slot leaks a raw
+ * key, and a swapped token hands a password reset to the wrong flow. None of that throws, and the
+ * integration tier only asserts that mail was SENT — not what it said. So these assertions check
+ * the built content itself, including that interpolation actually used the value it was given.
  */
+
 import {
     verifyRequestEmail,
     resetRequestEmail,

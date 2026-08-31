@@ -1,4 +1,5 @@
 /**
+ * @module
  * The cart's slice of the demo dataset.
  *
  * Stated here, where the collection is owned. A `cart` array hanging off each seeded person would
@@ -22,6 +23,7 @@ import {
 } from '@infrastructure/persistence/seed';
 import { cartRepository } from './repository';
 
+/** The seeded carts: one per demo account with something in their basket. */
 export const cartFixtures = [
     makeCart({
         id: '65dd2c9e1b4a7f3c0d2e5a01',

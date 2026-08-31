@@ -1,19 +1,14 @@
 /**
+ * @module
  * JWT creation and verification — `src/modules/account/jwt.ts`.
  *
- * The security-critical distinction this module encodes is between the two token types:
+ * The security-critical distinction is between the two token types: the access token is
+ * stateless — signature and expiry only, no database round trip — while the refresh token is
+ * stateful, checked against the user document so logout (which removes the token row) actually
+ * ends the session. Several tests exist purely to keep that lookup mandatory.
  *
- *   access token  — stateless. Verified by signature and expiry alone, with no database round
- *                   trip, which is what makes it cheap enough to check on every request.
- *   refresh token — stateful. Signature *and* a revocation lookup against the user document, so
- *                   that logging out (which removes the token row) actually ends the session.
- *
- * If the refresh path ever stopped consulting the database, logout would become cosmetic and a
- * stolen refresh token would stay valid for its full lifetime. Several tests below exist purely
- * to keep that lookup mandatory.
- *
- * Secrets are set explicitly rather than inherited from `.env`: unit tests do not load dotenv,
- * and a test that silently depends on a developer's local environment is not a test.
+ * Secrets are set explicitly rather than inherited from `.env`, since unit tests don't load
+ * dotenv and a test depending silently on a developer's local environment isn't a test.
  */
 
 import { sign } from 'jsonwebtoken';

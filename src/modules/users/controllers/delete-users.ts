@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Controller for `DELETE /users` and `DELETE /users/:id` — admin soft/hard delete.
+ *
+ * See: docs/modules/users.md
+ */
+
 import { createDeleteController } from '@infrastructure/surfaces/create-delete-controller';
 import { userService } from '../service';
 import { usersAuditActions } from '../audit';

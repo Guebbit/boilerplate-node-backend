@@ -1,4 +1,5 @@
 /**
+ * @module
  * Who is making this request — a port the kernel declares and `account` supplies at boot.
  *
  * Two outcomes, and callers depend on the difference:
@@ -26,6 +27,7 @@ export interface AuthResolver {
     fromRefreshToken: (token: string) => Promise<AuthenticatedUser | undefined>;
 }
 
+/** The currently registered resolver, or `undefined` before `account` boots and installs one. */
 let resolver: AuthResolver | undefined;
 
 /**

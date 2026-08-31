@@ -1,19 +1,15 @@
 /**
+ * @module
  * `src/modules/account/service.ts` — the signup, login, token and password-change FLOWS.
  *
- * The sibling `service.test.ts` covers the security invariants of the same file: that the two
- * login failures are indistinguishable, that a soft-deleted account cannot log in, that a password
- * is never stored as it arrived. This file covers the ordinary paths those invariants sit on —
- * a signup that succeeds, a login that returns a user, a token that is added, a password that
- * changes — and the argument-level rejections in front of them.
+ * The sibling `service.test.ts` covers this file's security invariants; this covers the ordinary
+ * paths they sit on — a signup that succeeds, a login that returns a user, a token that is added,
+ * a password that changes — plus the argument-level rejections in front of them. Both drive a
+ * real database through `setupTestDb`.
  *
- * Both drive a real database through `setupTestDb`, because every one of these decisions is made
- * against a stored user rather than a mocked one.
- *
- * It lives here rather than with `users` because the code under test is `account`'s. The two were
- * one file while both domains shared a `services/` directory; the split is what made the mismatch
- * visible.
+ * Lives here rather than with `users` because the code under test is `account`'s.
  */
+
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';

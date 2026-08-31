@@ -1,3 +1,11 @@
+/**
+ * @module
+ * Audit log service — the persistence sink behind `@infrastructure/observability/audit`, and the read path
+ * behind `GET /observability/audit`.
+ *
+ * See: docs/modules/audit-logs.md
+ */
+
 import { auditLogRepository, AUDIT_SORT } from './repository';
 import type { AuditLogSearchFilters } from './repository';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
@@ -5,11 +13,6 @@ import type { AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from './model';
 import { logger } from '@infrastructure/adapters/logger';
 import { auditSinkFailuresTotal } from './metrics';
-
-/**
- * Audit log service — the persistence sink behind `@infrastructure/observability/audit`, and the read path
- * behind `GET /observability/audit`.
- */
 
 /**
  * Store an emitted audit entry. This is the {@link AuditSink} implementation that
@@ -54,6 +57,7 @@ export const search = (
 ): Promise<PaginatedResult<AuditLogDocument>> =>
     auditLogRepository.search(filters, auditLogRepository.sinceScope(filters.since), AUDIT_SORT);
 
+/** The module's barrel export — `record` is registered as the audit sink, `search` serves the dashboard. */
 export const auditLogService = {
     record,
     search

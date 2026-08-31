@@ -1,4 +1,5 @@
 /**
+ * @module
  * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
  * augmentation rather than in a shared enum.
  *
@@ -11,6 +12,7 @@
  * two different routes, not this audit trail's count of orders.
  */
 
+/** The audit action vocabulary this module owns. */
 export const ordersAuditActions = {
     ORDER_CREATED: 'order.created',
     ORDER_UPDATED: 'order.updated',
@@ -23,6 +25,7 @@ export const ordersAuditActions = {
     ORDER_CANCELLED: 'order.cancelled'
 } as const;
 
+/** Registers this module's actions into the app-wide `AuditActionMap` union. */
 declare module '@infrastructure/observability/audit' {
     interface AuditActionMap {
         orders: (typeof ordersAuditActions)[keyof typeof ordersAuditActions];

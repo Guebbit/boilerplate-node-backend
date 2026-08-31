@@ -1,4 +1,5 @@
 /**
+ * @module
  * Cart rules — `src/modules/cart/domain/rules.ts`.
  *
  * No mocks, no database. The verdict-to-status mapping is covered in `service.test.ts`.

@@ -5,6 +5,7 @@ import type { Language, LocaleEntry } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
+ * @module
  * The two collections behind the OVERRIDE tier — both dictionaries' runtime edits.
  *
  * Nothing here is AWAITED on the request path, which is the property to preserve when changing any
@@ -39,7 +40,10 @@ export interface LocaleMessageDocument
     updatedAt?: Date;
 }
 
+/** Mongoose model type for the languages collection. */
 export type LocaleModel = Model<LocaleDocument>;
+
+/** Mongoose model type for the entries collection. */
 export type LocaleMessageModel = Model<LocaleMessageDocument>;
 
 /** The languages. */

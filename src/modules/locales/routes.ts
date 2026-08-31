@@ -16,6 +16,7 @@ import {
 import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 
 /**
+ * @module
  * Express router for locale discovery and translation administration.
  *
  * ── The reads are public, and that is not an oversight ───────────────────────────────────────
@@ -43,9 +44,11 @@ import { deleteLocaleEntry } from './controllers/delete-locale-entry';
  * called "tenants". `/:locale/messages` before `/:locale` is readability only — a single-segment
  * pattern cannot match a two-segment path.
  */
+
+/** Express router mounted at `/locales` — see the module header for the ordering and guard rules. */
 export const router = Router();
 
-/*
+/**
  * The three public reads, all `browserRevalidate`.
  *
  * Redis still holds them for the hour and still drops them on any write below. What the flag

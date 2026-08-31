@@ -1,4 +1,5 @@
 /**
+ * @module
  * The two numbers a deployment tunes, read in one place.
  *
  * Both are read per call rather than captured at import: an operator changing an env var should
@@ -8,6 +9,8 @@
  * second transcription is how the admin board and the gauge end up disagreeing about what "low"
  * means. That is not hypothetical — `lowStockThreshold` was written out twice here before this
  * file existed.
+ *
+ * See: docs/modules/inventory.md
  */
 
 import { environmentNumber } from '@infrastructure/runtime/environment';

@@ -1,3 +1,13 @@
+/**
+ * @module
+ * Controller for `GET /observability/metrics/overview`. Resolves each domain counter by metric
+ * NAME off the shared prom-client registry rather than importing it — see `readCounter` below for
+ * why, and `module-coupling-observability` in `.dependency-cruiser.cjs`, which keeps this module
+ * from reaching any domain beyond `audit-logs`.
+ *
+ * See: docs/modules/observability.md
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';

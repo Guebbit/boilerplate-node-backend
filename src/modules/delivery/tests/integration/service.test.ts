@@ -1,4 +1,5 @@
 /**
+ * @module
  * Delivery — the rates rules, the shipment lifecycle, and the fake courier.
  *
  * What is worth pinning: the free-above rule prices against the items total and nothing else;

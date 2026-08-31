@@ -1,8 +1,10 @@
 /**
+ * @module
  * Products must never leak `_id`/`__v`,
  * on any response path — a real document (`toJSON`) or a `.lean()` list result
  * (mapped manually via `applyProductTransform`, since `.lean()` bypasses `toJSON`).
  */
+
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/fixtures';

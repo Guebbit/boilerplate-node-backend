@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Public controller for the catalogue's category/tag facet counts — a thin adapter from the
+ * service's `facets()` onto the standard success/error response shapes.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { productService } from '../service';

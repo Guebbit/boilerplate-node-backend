@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `DELETE /wishlist/:productId` controller — thin HTTP adapter over `wishlistService.wishlistRemove`.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';

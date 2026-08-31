@@ -1,4 +1,5 @@
 /**
+ * @module
  * The two reads that hand out stored copy — a frontend's downloadable overrides, and the API's
  * own overlay.
  *

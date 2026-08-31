@@ -1,4 +1,5 @@
 /**
+ * @module
  * The language rows — registering one, editing it, and removing it with everything under it.
  *
  * Also the home of the rules the other files share: a language nobody has registered, and BOTH

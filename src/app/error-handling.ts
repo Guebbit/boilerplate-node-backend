@@ -1,4 +1,5 @@
 /**
+ * @module
  * The global error handler, and the process-level handlers behind it.
  *
  * Grouped because both answer the same question — what happens to a failure nobody else handled —

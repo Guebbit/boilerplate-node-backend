@@ -1,14 +1,14 @@
 /**
+ * @module
  * Inventory — the only place stock changes.
  *
- * One rule holds the module together: a counter never moves without a ledger row, and a row is
- * never written for a counter that did not move. Both halves live in `applyTransition`, which
- * every function here goes through.
+ * One rule holds it together: a counter never moves without a ledger row, and never the reverse.
+ * Both halves live in `applyTransition`, which every function here goes through.
  *
- * There are no Mongo transactions, matching the rest of the repo. Two gaps follow, both noted at
- * the call site that owns them: a crash mid-reserve strands held lines (the sweep recovers them),
- * and a crash between claiming a hold's status and moving its counters strands the units. The
- * second is the safer ordering — the alternative lets two callers each move the counters.
+ * No Mongo transactions, matching the rest of the repo — the resulting gaps are noted at the call
+ * sites that own them.
+ *
+ * See: docs/modules/inventory.md
  */
 
 import { Types } from 'mongoose';

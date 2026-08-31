@@ -1,3 +1,14 @@
+/**
+ * @module
+ * The token-cleanup pre-flight step wired into `postLogin` and `getRefreshToken`.
+ *
+ * `runTokenCleanup` is a sweep across every user document, so it must not run on a request that
+ * cannot possibly succeed — a refresh call with no cookie at all — or every anonymous hit costs a
+ * full-table pass. Where it DOES run, it must run BEFORE the credential check, which is asserted
+ * through Jest's `invocationCallOrder` rather than call counts alone, since call counts cannot
+ * tell "ran first" from "ran after".
+ */
+
 import { asStub } from '@tests/stub';
 import { postLogin } from '@modules/account/controllers/post-login';
 import { getRefreshToken } from '@modules/account/controllers/get-refresh-token';

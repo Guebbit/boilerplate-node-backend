@@ -1,4 +1,5 @@
 /**
+ * @module
  * The rows themselves — one language's translated keys, read a page at a time and written one key
  * or one batch at a time.
  *

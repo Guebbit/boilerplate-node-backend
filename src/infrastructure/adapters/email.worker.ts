@@ -1,3 +1,14 @@
+/**
+ * @module
+ * Drains one queued email job: render the EJS template, send over SMTP.
+ *
+ * The consumer counterpart to `enqueueEmail` in `adapters/mailer.ts`, wired up by
+ * `consumeFromQueue` when a broker is configured. No locale handling here — the producer already
+ * resolved every string before publishing, so this file only interpolates and sends.
+ *
+ * See: docs/tools/email-and-rendering.md
+ */
+
 import type { EmailJob } from '@infrastructure/adapters/mailer';
 import { nodemailer } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';

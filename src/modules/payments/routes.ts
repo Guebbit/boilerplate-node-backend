@@ -1,3 +1,13 @@
+/**
+ * @module
+ * The payments route table.
+ *
+ * Everything is authenticated at the router level — money is somebody's — and exactly one route
+ * is additionally admin-only: the refund. That asymmetry is the whole file. A refund open to any
+ * logged-in caller is a self-service withdrawal; an intent or a confirm locked to admins is a
+ * checkout nobody can complete.
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { postPaymentIntent } from './controllers/post-payment-intent';

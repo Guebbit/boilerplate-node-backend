@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `POST /cart/checkout` controller — thin HTTP adapter over `cartService.orderConfirm`, plus the
+ * `cart_checkout_total` metric increment on both outcomes.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';

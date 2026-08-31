@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract tests for /products.
  *
  * These assert the *shape of the wire response* against `openapi.yaml` — including
@@ -6,6 +7,7 @@
  * Behavioural assertions (which products a role may see) live in the unit/service suites;
  * here they exist only to make sure each contract branch is actually exercised.
  */
+
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

@@ -1,4 +1,5 @@
 /**
+ * @module
  * Shipping rates — `src/modules/delivery/domain/rates.ts`.
  *
  * Pure functions over a static table: no mocks, no database. `service.test.ts` moved to

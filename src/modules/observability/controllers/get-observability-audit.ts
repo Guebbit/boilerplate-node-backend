@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Controller for `GET /observability/audit`. A filtered, paged read over `audit-logs`' collection —
+ * the one place this module reaches beyond its own process snapshot, and the reason it depends on
+ * `audit-logs` at all.
+ *
+ * See: docs/modules/observability.md
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { auditLogService } from '@modules/audit-logs';

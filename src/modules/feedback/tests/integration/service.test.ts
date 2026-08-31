@@ -1,20 +1,11 @@
 /**
- * Feedback request service — `src/modules/feedback/service.ts`.
+ * @module
+ * Integration tests for the feedback request service — `src/modules/feedback/service.ts`.
  *
- * Three things here are worth pinning:
- *
- *   **Normalisation on create.** Email is lowercased and every field trimmed, so the same person
- *   writing "  Ada@Example.COM " twice produces one searchable identity rather than two. An empty
- *   `name` collapses to `undefined` rather than `''`, which is what keeps the field genuinely
- *   optional instead of "present but blank".
- *
- *   **The status vocabulary.** `toFeedbackStatus` checks membership in the generated
- *   `FeedbackRequestStatus` values — lowercase-only, no uppercase aliases, since the contract does
- *   not allow them. An unknown status must map to `undefined`, and on the search path that has a
- *   consequence the tests below make explicit rather than assume.
- *
- *   **`respondedAt` is stamped once.** Re-resolving an already-resolved item must not move the
- *   timestamp, or "when did we answer this" becomes "when did an admin last click something".
+ * Pins three behaviours: create normalises (lowercased email, trimmed fields, blank `name`
+ * collapsing to `undefined`); `toFeedbackStatus` accepts only the generated
+ * `FeedbackRequestStatus` values, mapping anything else to `undefined`; and `respondedAt` is
+ * stamped once, so re-resolving an already-resolved item never moves it.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

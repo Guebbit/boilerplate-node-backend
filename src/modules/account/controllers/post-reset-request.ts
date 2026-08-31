@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `POST /account/reset-request` controller — thin HTTP adapter over
+ * `accountService.requestPasswordReset`, answering identically whether or not the email exists.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { RequestPasswordResetBody } from '@api/schemas.zod';

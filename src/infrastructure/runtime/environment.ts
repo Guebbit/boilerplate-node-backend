@@ -1,4 +1,5 @@
 /**
+ * @module
  * The two coercions every environment reader shares.
  *
  * Everything reads `process.env` where it is used, and lazily — a value set after import still
@@ -7,6 +8,9 @@
  * this app does with one it did not just use verbatim: read it as a number, or read it as a switch.
  * Both were written several ways, and two of the spellings answered `NaN`.
  */
+
+/** Whole-string, base-10 integers only — no leading/trailing junk, no hex, no unit suffix. */
+const INTEGER = /^[+-]?\d+$/;
 
 /**
  * An integer from the environment, or `fallback` when the variable is unusable.
@@ -19,8 +23,6 @@
  * @param min - reject a parsed value below this, falling back instead. For readers whose number is
  *   a size or an interval, where `0` and negatives are not smaller settings but broken ones.
  */
-const INTEGER = /^[+-]?\d+$/;
-
 export const environmentNumber = (key: string, fallback: number, min?: number): number => {
     const raw = process.env[key]?.trim();
     if (!raw || !INTEGER.test(raw)) return fallback;
@@ -29,8 +31,10 @@ export const environmentNumber = (key: string, fallback: number, min?: number): 
     return min !== undefined && parsed < min ? fallback : parsed;
 };
 
-/** The strings a deployment may write for "on" and "off", either case. */
+/** The strings a deployment may write for "on", either case. */
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
+
+/** The strings a deployment may write for "off", either case. */
 const FALSY = new Set(['0', 'false', 'no', 'off']);
 
 /**

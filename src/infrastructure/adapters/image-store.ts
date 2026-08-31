@@ -1,17 +1,15 @@
 /**
+ * @module
  * Image storage — the port every caller outside this module talks to.
  *
- * The rule that makes this worth having: **nothing outside this file may turn an `imageUrl` into a
- * filesystem path.** Spelling `deleteFile(NODE_PUBLIC_PATH + product.imageUrl)` in a service and
- * again in each write controller is what makes "move uploads to a bucket" a change to five files
- * instead of one. Here, the value persisted in `imageUrl` is an opaque handle: this module is the
- * only thing that knows
- * whether it names a file under `public/`, an object in a bucket, or something it does not own at
- * all.
+ * Nothing outside this file may turn an `imageUrl` into a filesystem path: spelling that
+ * construction in a service and again in each write controller is what makes "move uploads to a
+ * bucket" a change to five files instead of one. The value persisted in `imageUrl` is an opaque
+ * handle — only this module knows whether it names a file under `public/`, a bucket object, or
+ * something it does not own at all.
  *
- * One backend exists: the local one below. The file lands under `NODE_PUBLIC_PATH/images/` and the
- * stored value is the server-relative `/images/<name>` that `express.static` answers. A second
- * backend is a second object with these methods — see the TODO above {@link imageStore}.
+ * One backend exists today: local, under `NODE_PUBLIC_PATH/images/`. A second backend is a second
+ * object with these methods — see the TODO above {@link imageStore}.
  *
  * See: IMAGE_PIPELINE_PLAN.md, docs/tools/image-processing.md
  */
@@ -124,6 +122,7 @@ const IMAGES_SEGMENT = 'images';
  * day quality settings change: every url is `immutable, 1y` and cannot be revalidated. */
 const THUMBNAIL_VERSION = 'v1';
 
+/** The directory `express.static` serves at the site root — where a promoted image finally lands. */
 const publicRoot = () => path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public');
 
 /**

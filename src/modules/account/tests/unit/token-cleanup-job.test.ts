@@ -1,21 +1,14 @@
 /**
+ * @module
  * `runTokenCleanup` — the scheduled job that drops expired tokens from every user.
  *
- * ── Why this file is worth reading as an example ─────────────────────────────────────────────
- * The obvious test — call the job, assert the repository method ran — is true in BOTH branches,
- * so writing one per branch produces the same test twice: full line coverage, and a mutation
- * score near zero because nothing observes what the branches do DIFFERENTLY. `if (success)`
- * forced to `true` and forced to `false` both stay green.
- *
- * The logging IS the behaviour here. This job runs unattended on a schedule; nobody watches it
- * succeed. Its entire output is the log line an operator reads afterwards to find out whether
- * tokens are still being cleaned up — so "which line was logged, at which level, saying what" is
- * the contract, not incidental detail. A silent failure here means expired refresh tokens
- * accumulate indefinitely and nobody knows.
- *
- * So every case below asserts on the log, and the two branches are asserted to be mutually
- * exclusive — which is what makes a forced `true`/`false` fail.
+ * The obvious test — call the job, assert the repository method ran — passes in both branches, so
+ * it produces near-zero mutation coverage. The logging IS the behaviour here: this job runs
+ * unattended, and its log line is the only way an operator learns whether cleanup is still
+ * working. So every case asserts on the log, and the two branches are asserted mutually exclusive
+ * — which is what a forced `true`/`false` mutant fails.
  */
+
 import { userRepository } from '@modules/users';
 import { runTokenCleanup, accountService } from '@modules/account/services';
 import { logger } from '@infrastructure/adapters/logger';

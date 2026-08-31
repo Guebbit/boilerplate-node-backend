@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Express router for the product catalogue: public read, admin write, cached where the response
+ * does not depend on the caller. Route order matters where a static segment (`/search`,
+ * `/categories`) would otherwise be swallowed by `/:id`.
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/adapters/storage';
@@ -15,6 +22,7 @@ export const router = Router();
 // Apply getAuth to all routes so admins get extra visibility
 router.use(getAuth);
 
+/** Shared cache middleware for both search entry points, keyed on the query parameters that change the answer. */
 const cacheProductsSearch = searchCache('products', searchProductsKeyParameters);
 
 // POST /products/search — must come before /:id to avoid matching "search" as an id

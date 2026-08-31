@@ -1,4 +1,5 @@
 /**
+ * @module
  * Structured logging.
  *
  * See: docs/tools/winston.md

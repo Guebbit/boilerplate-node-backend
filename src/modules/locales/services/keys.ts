@@ -1,4 +1,5 @@
 /**
+ * @module
  * The key rules — everything that decides whether a translation key can be stored and rendered.
  *
  * Internal to `services/`; `entries.ts` and `messages.ts` share these and none of them owns it.
@@ -22,6 +23,7 @@ import type { EntryInput } from '../repository';
  */
 const UNSAFE_KEY_SEGMENTS = new Set(['__proto__', 'constructor', 'prototype']);
 
+/** Narrows to an ordinary object node — excludes arrays and `null`, which `typeof` alone would not. */
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 

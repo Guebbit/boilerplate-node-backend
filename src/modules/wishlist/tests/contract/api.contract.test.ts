@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract tests for /wishlist.
  *
  * Every route requires authentication and answers the same `WishlistResponseEnvelope`, the same

@@ -1,19 +1,12 @@
 /**
+ * @module
  * How an order fixture is built.
  *
- * An order item embeds a product SNAPSHOT — `orderItemSchema` declares `product: productSchema`
- * with no `ref` — because a real order has to remember what was bought and at what price, even
- * after the catalogue moves on. So this builder takes the snapshot as a value: a caller hands over
- * the product as it was, not an id to look up later.
- *
- * A snapshot deliberately carries NO `deletedAt`. The catalogue row's soft delete says the product
- * is no longer for sale; it says nothing about an order already placed, and copying it in would
- * make a historical line item look retracted.
- *
- * The totals are absent for the same class of reason: `totalItems`, `totalQuantity` and
- * `totalPrice` are required on the wire but never stored — `applyOrderTransform` derives them at
- * serialization time. A fixture stating them would be inventing a stored column, and
- * `scripts/export-demo-dataset.ts` would publish the invention as though the API had produced it.
+ * An order item embeds a product SNAPSHOT (`orderItemSchema` declares `product: productSchema`
+ * with no `ref`), so this builder takes the snapshot as a value rather than an id to look up
+ * later. It deliberately carries no `deletedAt` — a catalogue soft-delete says nothing about an
+ * order already placed — and no totals, since those are derived at serialization time by
+ * `applyOrderTransform` rather than stored.
  */
 
 import { Types } from 'mongoose';
@@ -88,6 +81,12 @@ const toSnapshot = ({
     })
 });
 
+/**
+ * Build an order ready for `orderRepository.create` from a caller's overrides.
+ *
+ * @param overrides - the fields to pin; see {@link OrderOverrides} for what may be stated
+ * @returns the fixture, with an identity and defaults filled in for whatever was left unstated
+ */
 export const makeOrder = ({
     id,
     createdAt,

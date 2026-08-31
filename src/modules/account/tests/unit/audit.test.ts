@@ -1,19 +1,14 @@
 /**
+ * @module
  * The audit vocabulary this module emits — `src/modules/account/audit.ts`.
  *
- * Pinned string by string, because an action is a WIRE CONTRACT and not an identifier. The
- * constant's NAME is this codebase's business and renaming it is a refactor; the STRING is read by
- * log queries, dashboards and alert rules that live outside this repo and are not refactored with
- * it. Change one and everything here type-checks, every other test passes, and someone's alert
- * quietly stops firing.
+ * Pinned string by string: an action is a WIRE CONTRACT, read by dashboards and alert rules
+ * outside this repo, not just an identifier — renaming the constant is a refactor, changing the
+ * string breaks something silently elsewhere.
  *
- * `tests/cross-cutting/audit-actions.test.ts` proves the SHAPE of every module's vocabulary —
- * present, unique across modules, spelled as dotted lower snake_case. It cannot assert the values
- * without naming every domain, which is the coupling the module layout removes. So the values are
- * asserted by their owner, and deleting this folder takes them with it.
- *
- * Whole-object equality rather than one assertion per key: it fails on a changed value AND on an
- * action added or removed without the decision being written down here.
+ * `tests/cross-cutting/audit-actions.test.ts` proves the SHAPE (present, unique, dotted lower
+ * snake_case) across every module; it can't assert values without naming every domain, so each
+ * owner asserts its own here, and deleting the module takes its vocabulary with it.
  */
 
 import type { AuditAction } from '@infrastructure/observability/audit';

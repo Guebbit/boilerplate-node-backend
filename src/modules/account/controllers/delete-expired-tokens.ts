@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `DELETE /account/tokens/expired` controller — thin HTTP adapter over
+ * `accountService.adminTokenCleanup`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';

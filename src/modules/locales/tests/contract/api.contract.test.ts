@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract tests for /locales — both tiers, and the boundary between them.
  *
  * The manifest exists so a client can ask what a DEPLOYMENT offers, which is runtime state and
@@ -11,6 +12,7 @@
  * serve two different keyspaces from two different stores, and the assertions below are written so
  * that a change collapsing them fails here rather than in a client.
  */
+
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

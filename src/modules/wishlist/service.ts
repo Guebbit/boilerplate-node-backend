@@ -1,3 +1,12 @@
+/**
+ * @module
+ * The view every endpoint answers with is `{ items: [{ productId }] }` — ids only, like the
+ * cart's: the client renders from its own product store, and shipping a product per line is
+ * over-serialization the contract suite fails on.
+ *
+ * See: docs/modules/wishlist.md
+ */
+
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -13,14 +22,6 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { wishlistAnalyticsEvents } from './analytics';
 import { wishlistRepository } from './repository';
 import type { WishlistDocument } from './model';
-
-/**
- * Wishlist Service
- *
- * The view every endpoint answers with is `{ items: [{ productId }] }` — ids only, like the
- * cart's: the client renders from its own product store, and shipping a product per line is
- * over-serialization the contract suite fails on.
- */
 
 /** The wishlist as `openapi.yaml` declares it: `WishlistResponse`, built rather than serialized. */
 export interface WishlistView {
@@ -131,6 +132,7 @@ export const wishlistDeleteByUserId = (userId: string): Promise<void> =>
 export const productRemoveFromWishlistsById = (productId: string): Promise<unknown> =>
     wishlistRepository.removeProductFromAll(productId);
 
+/** The module's barrel export — the controllers call through this, never the bare functions. */
 export const wishlistService = {
     wishlistGet,
     wishlistAdd,

@@ -1,26 +1,12 @@
 /**
- * User fixtures that touch the test database.
+ * @module
+ * User fixtures that touch the test database. The plain-payload builder lives in `../fixtures`;
+ * this file only persists what it returns — kept separate after two divergent `makeUser` copies
+ * once caused confusion.
  *
- * The BUILDER lives one level up, in `src/modules/users/fixtures.ts`, and this file only persists
- * what it returns. That split is deliberate and recent: there used to be a `makeUser` here and
- * another one beside the seeds, with different defaults, and no name to tell you which you were
- * looking at. One module, one `makeUser`.
- *
- *   makeUser(overrides?)     – a plain payload, no database write. Re-exported from `../fixtures`
- *                              so a test importing "the user factory" gets one thing.
- *   createUser(overrides?)   – inserts and returns the Mongoose document.
- *   createAdminUser(…)       – the same, with `admin: true`.
- *
- * Always pass PLAIN-TEXT passwords: the model's `pre('save')` hook hashes them. To authenticate a
- * fixture later, use `PLAIN_PASSWORD` rather than retyping the string.
- *
- *   const user = await createUser({ email: 'alice@example.com' });
- *   await userService.login(user.email, PLAIN_PASSWORD);
- *
- * A field the schema defaults — `admin`, `active`, `verified`, `locale`, `tokens` — is left unset
- * unless a test asks for it, so `createUser()` exercises the real default instead of pinning a copy
- * of it. Override any of them explicitly; `active` and `deletedAt` are independent, so all four
- * combinations are constructible.
+ * Passwords are always plain-text (the model hashes on save); authenticate with `PLAIN_PASSWORD`.
+ * Defaulted fields (`admin`, `active`, `verified`, `locale`, `tokens`) are left unset unless a test
+ * overrides them, so `createUser()` exercises the real schema default.
  */
 
 import type { UserDocument } from '@modules/users';

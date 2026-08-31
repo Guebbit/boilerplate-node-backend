@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Controller for `PUT /feedback/:id` — admin triage: status transitions and notes.
+ *
+ * See: docs/modules/feedback.md
+ */
+
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { UpdateFeedbackRequestStatusBody } from '@api/schemas.zod';

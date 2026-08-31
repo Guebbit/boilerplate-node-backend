@@ -1,8 +1,12 @@
 /**
- * Transport-safe auth context DTO.
- * Decouples HTTP/auth flow from Mongoose document internals.
- * Controllers and middleware should depend on this interface rather than UserDocument.
+ * @module
+ * Auth context types: what a resolved caller looks like on the wire ({@link AuthContext}), and
+ * what an authorization rule may safely read about one ({@link Caller}). Decouples HTTP/auth flow
+ * from Mongoose document internals — controllers and middleware depend on these, never on
+ * `UserDocument`.
  */
+
+/** Transport-safe auth context DTO. Controllers and middleware depend on this, not UserDocument. */
 export interface AuthContext {
     id: string;
     email: string;

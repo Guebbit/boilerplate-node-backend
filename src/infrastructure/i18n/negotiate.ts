@@ -1,4 +1,5 @@
 /**
+ * @module
  * Header negotiation: which of the languages this API answers in a client asked for.
  *
  * A pure function over a client-supplied string and the supported list. It reads the catalogue and

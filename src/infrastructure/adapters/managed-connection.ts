@@ -1,18 +1,15 @@
 /**
+ * @module
  * One optional connection's lifecycle, stated once.
  *
- * Redis and RabbitMQ are both *optional* dependencies: unconfigured is a supported deployment,
- * unreachable is a degraded one, and neither may turn a request into an error. Expressing that
- * takes the same six pieces every time — a memoised handle, an in-flight connect shared by
- * concurrent callers, a warn-once flag re-armed on success, a getter resolving `undefined` rather
- * than rejecting, a `DependencyStatus` reader and a close.
+ * Redis and RabbitMQ are both *optional*: unconfigured is a supported deployment, unreachable is a
+ * degraded one, and neither may turn a request into an error. That takes the same six pieces every
+ * time — memoised handle, shared in-flight connect, warn-once flag, a getter resolving `undefined`
+ * rather than rejecting, a `DependencyStatus` reader, and a close — so the rules live here and each
+ * adapter supplies only what is genuinely its own (how to open, check, and close it).
  *
- * So the rules live here and the adapters supply only what is genuinely theirs: how to open the
- * thing, how to tell it is still usable, and how to close it.
- *
- * What this deliberately does NOT do is retry on a timer. Recovery is driven by demand — the next
- * `get()` after a failure makes one clean attempt — which is why an unreachable dependency costs
- * one log line rather than one per second.
+ * Deliberately does NOT retry on a timer: recovery is demand-driven, so an unreachable dependency
+ * costs one log line rather than one per second.
  *
  * See: docs/tools/redis-cache.md, docs/tools/rabbitmq.md
  */
@@ -148,6 +145,7 @@ export const manageConnection = <THandle>({
      */
     let warningLogged = false;
 
+    /** Implements {@link ManagedConnection.reportUnavailable} — warn once, then latch quiet. */
     const reportUnavailable = (error: unknown) => {
         if (warningLogged) return;
 
@@ -198,12 +196,14 @@ export const manageConnection = <THandle>({
         return running;
     };
 
+    /** Implements {@link ManagedConnection.getOrThrow} — fail closed instead of resolving `undefined`. */
     const getOrThrow = (): Promise<THandle> => {
         if (!isEnabled()) return Promise.reject(new NotConfigured());
         if (handle && isReady(handle)) return Promise.resolve(handle);
         return attempt();
     };
 
+    /** Implements {@link ManagedConnection.get} — the fail-open getter every adapter calls. */
     const get = (): Promise<THandle | undefined> => {
         // Disabled → resolve with nothing. Every caller treats that as "skip this dependency".
         if (!isEnabled()) return Promise.resolve(undefined);

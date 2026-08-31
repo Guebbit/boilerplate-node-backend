@@ -1,21 +1,12 @@
 /**
+ * @module
  * The order book's slice of the demo dataset.
  *
- * Every snapshot here is currently an exact copy of the live catalogue row, so they are built by
- * LOOKUP rather than restated — `seedProductById` comes through `@modules/products/demo`, the
- * demo path this module's `conformist` edge already entitles it to. If a fixture ever needs an
- * order whose snapshot deliberately differs from today's product, to exercise the "price changed
- * since" case, it has to state that snapshot explicitly: deriving it would silently erase the
- * difference.
- *
- * The lookup throws rather than skipping. An order referencing a product that is not in the
- * catalogue is a corrupt fixture, and a seeder that quietly wrote an order with a missing product
- * would be worse than one that refuses to start. That check lives in `products` now, next to the
- * catalogue it validates, rather than being restated by every module that reads a fixture.
- *
- * The email is a SNAPSHOT too, which is why this module reads the demo addresses from
- * `@kernel/seed-accounts` and not from a user record: an order remembers where it was sent, and
- * `orders` has no registry edge on `users` precisely because it never needs the live account.
+ * Every snapshot is an exact copy of the live catalogue row, built by LOOKUP
+ * (`seedProductById`) rather than restated, so a fixture that needs to differ from today's
+ * product must say so explicitly. The lookup throws rather than skipping a missing product. The
+ * email is a SNAPSHOT too, from `@kernel/seed-accounts` — `orders` has no registry edge on
+ * `users`.
  */
 
 import {
@@ -49,11 +40,13 @@ const snapshotOf = (productId: string): OrderSnapshotInput => {
     };
 };
 
+/** One order line: a snapshot of the product plus how many were bought. */
 const line = (productId: string, quantity: number) => ({
     product: snapshotOf(productId),
     quantity
 });
 
+/** The seeded orders, each demonstrating a distinct case — see the comments on each fixture. */
 export const orderFixtures = [
     makeOrder({
         id: '65de73a69ca05739be2b5e85',

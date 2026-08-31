@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `POST /account/password` controller — thin HTTP adapter over
+ * `accountService.passwordChangeWithCurrent`.
+ */
+
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';

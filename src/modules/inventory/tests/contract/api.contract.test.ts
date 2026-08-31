@@ -1,10 +1,12 @@
 /**
+ * @module
  * Contract tests for /inventory.
  *
  * Every route is staff's; what these pin is each contract branch reached over HTTP — the two
  * reads, the two write transitions with their 200/404/409/422, the sweep, and the 401/403 that
  * keep the counters off a customer's screen. The transitions' rules live in the unit suite.
  */
+
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

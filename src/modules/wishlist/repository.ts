@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Wishlist repository — the repository factory's standard CRUD, plus the three writes a wishlist
+ * actually takes: add a line, remove a line, and the two cleanup writes owed to product and user
+ * deletion.
+ *
+ * See: docs/modules/wishlist.md
+ */
+
 import type { UpdateWriteOpResult } from 'mongoose';
 import { wishlistModel, applyWishlistTransform } from './model';
 import type { WishlistDocument } from './model';
@@ -8,9 +17,6 @@ import {
 } from '@infrastructure/persistence/create-repository';
 
 /**
- * Wishlist Repository
- * Standard CRUD via the repository factory, plus the three writes a wishlist actually takes.
- *
  * Every one of them is keyed by `userId` — `unique` on the schema makes that a complete address —
  * so no caller ever fetches a wishlist before changing it. Unlike the cart there is no retry
  * loop, and two independent facts are what excuse it — see {@link wishlistRepository.addLine},

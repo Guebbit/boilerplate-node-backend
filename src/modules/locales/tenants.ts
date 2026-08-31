@@ -1,6 +1,7 @@
 import { LocaleTenantKind, type LocaleTenant, type LocaleTenantDescriptor } from '@types';
 
 /**
+ * @module
  * The tenants this deployment holds words for — the keyspaces an entry can belong to.
  *
  * A tenant is one consumer of the translation service, authored by one team: this API is a tenant

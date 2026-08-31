@@ -1,3 +1,11 @@
+/**
+ * @module
+ * POST /inventory/adjustments
+ * A stocktake correction. THE audited endpoint of this module: an unexplained stock correction is
+ * precisely what shrinkage looks like from the outside, so the row records the admin, the signed
+ * delta and the reason they typed.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -6,12 +14,7 @@ import { AdjustStockBody } from '@api/schemas.zod';
 import { inventoryService } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
-/**
- * POST /inventory/adjustments
- * A stocktake correction. THE audited endpoint of this module: an unexplained stock correction is
- * precisely what shrinkage looks like from the outside, so the row records the admin, the signed
- * delta and the reason they typed.
- */
+/** Handles `POST /inventory/adjustments`. */
 export const postAdjustment = (request: Request, response: Response) => {
     const body = parseBody(AdjustStockBody, request.body, response);
     if (!body) return;

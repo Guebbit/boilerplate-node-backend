@@ -1,4 +1,5 @@
 /**
+ * @module
  * Reading a cart, and changing what is in it.
  *
  * Every operation here is one write plus the join that prices the answer. The three that name a

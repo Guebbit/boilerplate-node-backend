@@ -1,3 +1,24 @@
+/**
+ * @module
+ * Languages: which ones this deployment speaks, and the dictionaries a client downloads.
+ *
+ * Two tiers that never merge. TIER 1 is the API's own deployed files, loaded into i18next at
+ * boot — kept on disk so it can still render copy when no response arrives at all. TIER 2 is the
+ * overrides this module owns: rows editable at runtime, one per (language, tenant, key). Frontend
+ * rows merge over what a client bundles; backend rows layer over tier 1 for this API's own copy.
+ * Neither tier is ever awaited on the request path, so a database outage costs only a stale
+ * overlay — everything else still resolves from the files normally.
+ *
+ * No `index.ts`: nothing imports this module and nothing should — everything else the app needs
+ * from i18n comes from `@infrastructure/i18n` instead, which must stay below modules.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      nothing
+ * Reached by:   nothing, and nothing should — see above
+ *
+ * See: docs/modules/locales.md
+ */
+
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
@@ -5,66 +26,6 @@ import { router } from './routes';
 import { localeService } from './services';
 import { seedLocalesCollection, exportSeededLocales } from './demo';
 
-/**
- * Languages: which ones this deployment speaks, and the dictionaries a client downloads.
- *
- * ## Two tiers, and they never merge
- *
- * TIER 1 is the API's OWN copy — `src/locales/*.json` plus every module's `locales/` folder,
- * loaded into i18next at boot by `@infrastructure/i18n`. It is what `t()` resolves, what decides
- * `Content-Language`, and what `GET /locales/:locale` serves. It stays on the filesystem
- * permanently: it exists so a client can render copy WHEN NO RESPONSE ARRIVES, and putting it
- * behind a database would make it unavailable in exactly the outage it was created for. There is a
- * second reason in `i18n.ts`'s own words — the supported list is cached per worker because a
- * per-request read would let the negotiated locale and the resolvable one disagree, and a header
- * that lies is worse than a language being unavailable.
- *
- * TIER 2 is the OVERRIDES — the two collections this module owns, edited at runtime by people who
- * do not open a code editor. One row per (language, tenant, key), and `tenant` says whose
- * dictionary the row patches — see `./tenants` for what a tenant is and where the ids come from:
- *
- *   A FRONTEND tenant's rows (`demo-fe` in the demo) are served by
- *   `GET /locales/:locale/messages`. A frontend merges them over what it bundles, key by key, so
- *   an unedited key keeps its bundled text and a language the client does not ship at all falls
- *   back per key for whatever nobody has translated yet.
- *
- *   The BACKEND tenant's rows (`demo-be`) are layered over tier 1 by `@infrastructure/i18n`, which
- *   rebuilds its overlay at boot, on a timer and after every admin write. They never leave this
- *   API — a frontend that merged them would be adopting the backend's keyspace as its own.
- *
- * NOTHING here is awaited on the request path, which is what buys the guarantee this module is
- * arranged around: Mongo down, a language half-translated, a malformed key — the worst outcome is
- * one endpoint failing and the overlay going stale, while every other response still resolves its
- * own copy from the files normally.
- *
- * Both halves are OVERRIDES, never dictionaries. Neither side may introduce a key its files do not
- * already define and expect it to render — the files decide what exists, the rows decide what it
- * says.
- *
- * The trap the split avoids, stated plainly: a language existing in the database does NOT mean the
- * API can answer in it. `GET /locales` therefore reports `tenants` per language rather than a list
- * of tags, so "may I send `Accept-Language: es`" and "may I download a Spanish dictionary" stay
- * two questions.
- *
- * Spanish is that example on purpose and not by accident — the demo dataset registers `es` with no
- * `src/locales/es.json` behind it, so the answers really are `no` and `yes`. See `./demo.ts`, which
- * lays out which language covers which square of that grid.
- *
- * ## No `index.ts`
- *
- * Nothing imports this module and nothing should. Everything the rest of the app needs from i18n
- * comes from `@infrastructure/i18n`, which sits below modules and must stay there — a module that
- * `infrastructure` had to reach for its own translations would invert the one layering rule this
- * codebase enforces in two places.
- *
- * A translations admin is something every application grows and none of them differ about. The
- * interesting modelling is the tier split below — a decision about where data lives, not a domain to
- * build entities for.
- *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      nothing
- * Reached by:   nothing, and nothing should — see 'No `index.ts`' below
- */
 /*
  * The backend tenant's share of this module's collection, handed to `@infrastructure/i18n` so an
  * override typed into the admin screens reaches `t()`.
@@ -77,6 +38,7 @@ import { seedLocalesCollection, exportSeededLocales } from './demo';
  */
 registerLocaleOverrideProvider(() => localeService.readApiOverrides());
 
+/** This module's manifest entry: routes, demo seeding, and its own locales. */
 export default {
     name: 'locales',
     basePath: '/locales',

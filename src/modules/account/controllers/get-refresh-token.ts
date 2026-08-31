@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `GET /account/refresh` controller — thin HTTP adapter over `accountService.refreshAccessToken`,
+ * with a housekeeping token sweep run ahead of it.
+ */
+
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';

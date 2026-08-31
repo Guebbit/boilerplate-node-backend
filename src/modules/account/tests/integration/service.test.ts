@@ -1,22 +1,15 @@
 /**
+ * @module
  * `src/modules/account/service.ts` — the security invariants of signup, login, password change
  * and bulk token removal.
  *
- * This is the most agnostic file in the repository that had no test of its own. Nothing in it is
- * about selling products: every application built from this boilerplate registers users, logs
- * them in, and lets them change a password. Its 53% mutation score was incidental coverage from
- * the controller suites, which exercise the happy paths and none of the decisions below.
- *
- * The cases are grouped by the invariant they defend rather than by function, because three of
- * them are security properties that read as ordinary branches:
- *
- *   - the two login failures must be INDISTINGUISHABLE, or the endpoint enumerates accounts;
- *   - a soft-deleted account must not be able to log in, which is one filter key;
- *   - a password must never be stored as it arrived.
- *
- * Each of those survives a mutation that a happy-path test cannot see, and each is a real
- * incident if it regresses.
+ * Grouped by the invariant each defends, not by function: the two login failures must be
+ * INDISTINGUISHABLE (or the endpoint enumerates accounts), a soft-deleted account must not log
+ * in, and a password must never be stored as it arrived. Each survives a mutation a happy-path
+ * test cannot see, and each is a real incident if it regresses — the controller suites that
+ * covered this file before only exercised the happy paths.
  */
+
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/fixtures';

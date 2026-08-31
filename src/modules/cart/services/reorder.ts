@@ -1,4 +1,5 @@
 /**
+ * @module
  * Reorder — an old order refilling the cart.
  *
  * Lives in cart, not orders, because of what it WRITES: the order is only read, the cart is what

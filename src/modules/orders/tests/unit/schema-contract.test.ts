@@ -1,4 +1,5 @@
 /**
+ * @module
  * The order schema's contract — the declarations, not the documents.
  *
  * `tests/integration/model.test.ts` drives this schema through real saves and asserts what comes

@@ -1,3 +1,13 @@
+/**
+ * @module
+ * Route table for the operator dashboard. Guards are chosen per route rather than shared, because
+ * `/events` and `/metrics` are reached by callers that cannot carry the ordinary admin JWT — a
+ * browser's `EventSource` and a Prometheus scraper, respectively. The other three routes take the
+ * normal `getAuth`/`isAuth`/`isAdmin` chain.
+ *
+ * See: docs/modules/observability.md
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin, isAdminViaCookie } from '@kernel/middlewares/authorizations';
 import { isMetricsScraper } from '@infrastructure/http/middlewares/rate-limit';

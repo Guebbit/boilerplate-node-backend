@@ -1,4 +1,5 @@
 /**
+ * @module
  * Audit trail — the "who did what to which resource, and did it work" record.
  *
  * Deliberately separate from application logging: audit entries are a security/compliance
@@ -12,7 +13,7 @@ import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import type { CallerContext } from '@infrastructure/http/request';
 
-/*
+/**
  * Action constants — domain.resource.verb dot-notation.
  * The dotted convention lets a log backend filter by prefix: `auth.*` for all authentication
  * activity, `admin.product.*` for one resource. A closed vocabulary (not raw strings) is what
@@ -30,6 +31,7 @@ export const coreAuditActions = {
     SECURITY_RATE_LIMIT_HIT: 'security.rate_limit_hit'
 } as const;
 
+/** The three app-level action strings, derived from {@link coreAuditActions}'s values. */
 type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
 
 /**
@@ -49,7 +51,7 @@ export interface AuditActionMap {}
  */
 export type AuditAction = CoreAuditAction | AuditActionMap[keyof AuditActionMap];
 
-/*
+/**
  * See docs/tools/winston.md for field descriptions and examples.
  * snake_case field names (unlike the camelCase used elsewhere in the codebase) because these
  * are log *data*, consumed by SIEM/log tooling rather than by TypeScript callers.
@@ -78,7 +80,7 @@ export interface AuditEvent {
     metadata?: Record<string, unknown>;
 }
 
-/*
+/**
  * Emitted audit event — AuditEvent enriched with timestamp and log level.
  * The two extra fields are added at emit time rather than being the caller's responsibility.
  */
@@ -157,7 +159,7 @@ export const emitAuditEvent = (event: AuditEvent): void => {
     }
 };
 
-/*
+/**
  * Extract common caller-context fields (ip, user-agent, request-id, trace-id) for audit events.
  * @param context - the caller context built once in the controller, see `callerContextOf`
  * @returns partial AuditEvent with context fields
@@ -176,7 +178,7 @@ export const extractRequestContext = (
     trace_id: getActiveSpanContext().traceId
 });
 
-/*
+/**
  * Resolve actor role from the caller context.
  * Returns 'admin', 'user', or 'anonymous'.
  * @param context - the caller context built once in the controller
@@ -192,7 +194,7 @@ export const resolveActorRole = (context: CallerContext): AuditEvent['actor_role
     return 'anonymous';
 };
 
-/*
+/**
  * Build a complete audit event from caller context + action-specific fields.
  * Caller-provided actor_user_id / actor_role override the derived defaults.
  * @param context - the caller context built once in the controller, see `callerContextOf`

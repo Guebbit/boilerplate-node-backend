@@ -1,4 +1,5 @@
 /**
+ * @module
  * The feedback-request schema's contract.
  *
  * A contact form is the one place a stranger writes to the database, so what it requires is a

@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `GET /account/addresses` controller — thin HTTP adapter over `accountService.addressesGet`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';

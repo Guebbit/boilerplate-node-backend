@@ -1,4 +1,5 @@
 /**
+ * @module
  * The wishlist route table.
  *
  * A wishlist is somebody's, so the whole router is authenticated and none of it is admin. The one

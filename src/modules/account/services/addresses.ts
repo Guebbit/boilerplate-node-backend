@@ -1,15 +1,5 @@
-import { t } from '@infrastructure/i18n';
-import {
-    generateSuccess,
-    generateReject,
-    type ResponseSuccess,
-    type ResponseReject
-} from '@infrastructure/http/response';
-import type { Address, AddressInput, UpdateAddressRequest } from '@types';
-import { addressBookRepository } from '../repository';
-import type { AddressBookDocument, AddressItem } from '../model';
-
 /**
+ * @module
  * The address book — the one collection this module owns outright.
  *
  * Every endpoint answers the whole book (`{ addresses }`), never one entry: the invariant worth
@@ -22,11 +12,23 @@ import type { AddressBookDocument, AddressItem } from '../model';
  * arrive.
  */
 
+import { t } from '@infrastructure/i18n';
+import {
+    generateSuccess,
+    generateReject,
+    type ResponseSuccess,
+    type ResponseReject
+} from '@infrastructure/http/response';
+import type { Address, AddressInput, UpdateAddressRequest } from '@types';
+import { addressBookRepository } from '../repository';
+import type { AddressBookDocument, AddressItem } from '../model';
+
 /** The book as `openapi.yaml` declares it: `AddressesResponse`, built rather than serialized. */
 export interface AddressesView {
     addresses: Address[];
 }
 
+/** One stored entry, mapped to the contract's `Address` — `_id` becomes `id`, optionals omitted rather than `undefined`. */
 const toAddress = (item: AddressItem): Address => ({
     id: String(item._id),
     ...(item.label === undefined ? {} : { label: item.label }),
@@ -39,6 +41,7 @@ const toAddress = (item: AddressItem): Address => ({
     default: item.default
 });
 
+/** A whole book, mapped to the wire view — absence and an empty book both answer `{ addresses: [] }`. */
 const toView = (book: AddressBookDocument | null): AddressesView => ({
     addresses: (book?.items ?? []).map((item) => toAddress(item))
 });

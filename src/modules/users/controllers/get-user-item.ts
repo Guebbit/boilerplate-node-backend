@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Controller for `GET /users/:id` — a single user by path id, admin only.
+ *
+ * See: docs/modules/users.md
+ */
+
 import { userService } from '../service';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';
 

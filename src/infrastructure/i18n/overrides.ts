@@ -1,4 +1,5 @@
 /**
+ * @module
  * The database overlay: admin-edited copy applied on top of the deployed dictionaries.
  *
  * The files under `./catalog` are DEFAULTS; this tier overrides them. Three properties it keeps:
@@ -29,6 +30,7 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
  */
 export type LocaleOverrideProvider = () => Promise<Record<string, Record<string, unknown>>>;
 
+/** The registered provider, or `undefined` before the composition root has supplied one. */
 let overrideProvider: LocaleOverrideProvider | undefined;
 
 /**
@@ -121,6 +123,7 @@ export const refreshLocaleOverrides = (): Promise<void> => {
 export const getOverrideRefreshMs = (): number =>
     environmentNumber('NODE_LOCALE_OVERRIDE_REFRESH_MS', 60_000, 1);
 
+/** The interval handle from {@link startLocaleOverrideRefresh}, or `undefined` when stopped. */
 let refreshTimer: NodeJS.Timeout | undefined;
 
 /**

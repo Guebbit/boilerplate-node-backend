@@ -1,24 +1,18 @@
+/**
+ * @module
+ * One payment document per order, made a database fact by `unique` on `orderId` — a retry after a
+ * decline re-confirms the SAME document rather than minting a second one.
+ *
+ * The status vocabulary (`requires_confirmation`, `succeeded`, `declined` — retryable —,
+ * `refunded` — terminal) is the provider-facing lifecycle, smaller than a real PSP's; the ORDER's
+ * status is the customer-facing one. The words come from `PaymentStatus` in the contract, so the
+ * `enum` and the wire cannot disagree — same move as `orders`' `OrderStatus`.
+ */
+
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { PaymentStatus } from '@types';
-
-/**
- * Payment Model
- *
- * One payment document per order, made a database fact by `unique` on `orderId` — the same
- * discipline as the cart's and wishlist's one-per-user. A retry after a decline re-confirms the
- * SAME document rather than minting a second one, so "what happened to the money on this order"
- * is always one row with one status.
- *
- * The status vocabulary is the provider-facing lifecycle, deliberately smaller than a real
- * PSP's: `requires_confirmation` (intent created, nobody has paid), `succeeded`, `declined`
- * (retryable — the confirm endpoint accepts it again), `refunded` (terminal). The ORDER's
- * status is the customer-facing one; this document records how the money got there.
- *
- * The four words come from `PaymentStatus` in the contract — the schema `Payment.status` declares
- * — so the collection's `enum` and the wire cannot disagree. Same move as `orders`' `OrderStatus`.
- */
 
 /**
  * Payment Document interface.

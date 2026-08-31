@@ -1,21 +1,14 @@
 /**
- * Domain counters this module owns.
+ * @module
+ * Domain counters this module owns, registered on the shared `metricsRegistry` so one
+ * `/metrics` scrape carries these alongside the HTTP metrics.
  *
- * Registered on the shared `metricsRegistry` so one `/metrics` scrape carries these alongside the
- * HTTP metrics. Importing `infrastructure` downward is fine; what changed when the domains became modules is
- * that the counters no longer live in `infrastructure`, which had no business naming `auth` or `cart`.
+ * Nothing imports these to *read* them — `GET /observability/metrics/overview` resolves by
+ * metric name off the registry, so deleting this module just zeroes its counters.
  *
- * Nothing imports these to *read* them. `GET /observability/metrics/overview` resolves values by
- * metric name off the registry, so deleting this module removes its counters from the scrape and
- * leaves the overview reporting zero rather than failing to compile.
- *
- * Why counters at all, when the same events are audited and sent to analytics: each signal answers
- * a different question at a different cost. Analytics is for per-user product funnels, audit is the
- * per-event compliance record, and these are cheap always-on aggregates you can *alert* on —
- * "signup failure ratio above 20% for 5 minutes" needs a counter, not a query over an event store.
- *
- * The `status` label (typically 'success' / 'failure') is what makes each counter usable as both a
- * volume and a success-ratio signal.
+ * Distinct from audit and analytics: these are cheap always-on aggregates meant to be
+ * *alerted* on ("failure ratio above 20% for 5 minutes"), not queried per-user or per-event.
+ * The `status` label is what makes each counter usable as both a volume and success-ratio signal.
  */
 
 import { Counter } from 'prom-client';

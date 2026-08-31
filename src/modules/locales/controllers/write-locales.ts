@@ -1,13 +1,5 @@
-import type { Request, Response } from 'express';
-import { z } from 'zod';
-import { CreateLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
-import type { CreateLocaleRequest, UpdateLocaleRequest } from '@types';
-import { successResponse } from '@infrastructure/http/response';
-import { callerContextOf } from '@infrastructure/http/request';
-import { localeService } from '../services';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
-
 /**
+ * @module
  * POST /locales and PUT /locales/:locale (admin)
  * Register a language in the dynamic tier, and edit the one thing about it that changes.
  *
@@ -17,6 +9,15 @@ import { catchAs, refused, rejectValidation } from '@infrastructure/http/control
  * a `Content-Language` header that lies is worse than a language being unavailable. A row written
  * here is `app`-scoped until a file is deployed for it, and the manifest says so.
  */
+
+import type { Request, Response } from 'express';
+import { z } from 'zod';
+import { CreateLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
+import type { CreateLocaleRequest, UpdateLocaleRequest } from '@types';
+import { successResponse } from '@infrastructure/http/response';
+import { callerContextOf } from '@infrastructure/http/request';
+import { localeService } from '../services';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * A display name that survives being trimmed.

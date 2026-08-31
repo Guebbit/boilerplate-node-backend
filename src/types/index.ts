@@ -1,3 +1,10 @@
+/**
+ * @module
+ * The public type barrel: re-exports generated API models, generated AsyncAPI types, and the
+ * hand-written auth context DTO, so consumers import from one path (`@types`) regardless of which
+ * of the three a type actually comes from.
+ */
+
 export * from '@api/models';
 
 // Re-export generated AsyncAPI types so consumers use a single import path. The file is named

@@ -1,8 +1,22 @@
+/**
+ * @module
+ * Controller for `GET /users` and `POST /users/search` — admin listing/search via query
+ * parameters or body.
+ *
+ * See: docs/modules/users.md
+ */
+
 import { z } from 'zod';
 import { SearchUsersBody } from '@api/schemas.zod';
 import { userService } from '../service';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
+
+/** A boolean as a query string spells it. Named once: three filters here need the same coercion. */
+const queryBoolean = z.preprocess(
+    (value) => (typeof value === 'string' ? value === 'true' : value),
+    z.boolean().optional()
+);
 
 /**
  * Built on the orval-generated SearchUsersBody (kept in sync with
@@ -12,12 +26,6 @@ import { createSearchController } from '@infrastructure/surfaces/create-search-c
  * `page`/`pageSize` come from `@infrastructure/http/schemas` so all four search endpoints agree on what a
  * legal one is; absent stays absent, because `normalizePagination` owns the defaults.
  */
-/** A boolean as a query string spells it. Named once: three filters here need the same coercion. */
-const queryBoolean = z.preprocess(
-    (value) => (typeof value === 'string' ? value === 'true' : value),
-    z.boolean().optional()
-);
-
 const searchUsersQuerySchema = SearchUsersBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,

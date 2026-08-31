@@ -1,3 +1,18 @@
+/**
+ * @module
+ * The generic repository factory every module's `repository.ts` builds on: CRUD plus search,
+ * built once against a Mongoose model and a declared {@link SearchSpec}, so no module hand-rolls
+ * `$regex`/`$elemMatch`/`ObjectId` conversion or the lean→normalized mapping.
+ *
+ * Three pieces of Mongo-specific knowledge live here and nowhere else: id coercion, filter-bag →
+ * query (`buildWhere`, driven by each collection's declared `SearchSpec`), and the lean/aggregate
+ * → transformed-document mapping (`normalize`). A module spreads the factory's result into its own
+ * repository object — no `extends`, no protected hook — so a module that cannot honour part of the
+ * contract narrows its own type instead of inheriting a method it has to break.
+ *
+ * See: docs/tools/mongodb-mongoose.md
+ */
+
 import { Types } from 'mongoose';
 import type { Model, Document, QueryFilter, SaveOptions } from 'mongoose';
 import {
@@ -148,6 +163,7 @@ export interface PaginatedResult<TDocument> {
     meta: PaginatedMeta;
 }
 
+/** Configuration passed to {@link createRepository}: the model's transform and its optional search spec. */
 export interface RepositoryOptions {
     /** The model's wire-shape serializer, applied by `normalize` — and so by `search`. */
     transform: Transform;

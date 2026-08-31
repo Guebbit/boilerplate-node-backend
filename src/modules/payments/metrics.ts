@@ -1,4 +1,5 @@
 /**
+ * @module
  * Domain counters this module owns. See `modules/account/metrics.ts` for why they live in the
  * module rather than in `infrastructure`, and how the overview endpoint reads them without importing here.
  */

@@ -1,4 +1,5 @@
 /**
+ * @module
  * Property-based tests — `src/modules/orders/domain/money.ts`.
  *
  * `Money` claims that no monetary arithmetic here can produce `NaN`, `Infinity` or a fraction of a

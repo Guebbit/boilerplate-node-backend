@@ -1,4 +1,5 @@
 /**
+ * @module
  * Prometheus HTTP metrics.
  *
  * Mounted before the routes so the timer wraps the handler rather than following it. The route

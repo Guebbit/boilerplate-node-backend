@@ -1,3 +1,14 @@
+/**
+ * @module
+ * JWT creation and verification. Secrets and TTLs come from `./config`, which owns the policy.
+ *
+ * This was app-level middleware until the domains became modules, and it never belonged there:
+ * issuing and verifying this application's tokens is what `account` IS. It reaches `users` for the
+ * stored refresh tokens, which is exactly the dependency the manifest already declares.
+ *
+ * See: docs/modules/account-sessions.md
+ */
+
 import { randomUUID } from 'node:crypto';
 import { sign, verify } from 'jsonwebtoken';
 import { userRepository, TokenType } from '@modules/users';
@@ -11,25 +22,20 @@ import {
 } from './config';
 import type { RefreshTokenExpiryTime } from './config';
 
-/*
- * JWT creation and verification. Secrets and TTLs come from `./tokens`, which owns the policy.
- *
- * This was app-level middleware until the domains became modules, and it never belonged there:
- * issuing and verifying this application's tokens is what `account` IS. It reaches `users` for the
- * stored refresh tokens, which is exactly the dependency the manifest already declares.
- */
-
+/** The claims this app puts in every access/refresh JWT — just the subject's id. */
 export interface TokenData {
     id: string;
 }
 
-/*
+/**
  * Verify an access token (stateless JWT check only).
+ *
  * @param token - signed JWT string
  * @returns decoded payload
  */
 export const verifyAccessToken = (token: string): Promise<TokenData> =>
     new Promise((resolve, reject) => {
+        // jsonwebtoken: callback-style verify — signature and expiry only, no DB round trip.
         verify(token, getAccessTokenSecret(), (error, data) => {
             if (error) {
                 reject(error);
@@ -39,9 +45,10 @@ export const verifyAccessToken = (token: string): Promise<TokenData> =>
         });
     });
 
-/*
+/**
  * Verify a refresh token — JWT check + DB revocation lookup.
  * Rejects with 'Forbidden' if the token is not in the user document.
+ *
  * @param token - refresh JWT string
  * @returns decoded payload
  */
@@ -65,8 +72,9 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
         });
     });
 
-/*
+/**
  * Create a refresh token, sign it, and persist it on the user document.
+ *
  * @param id - user ID
  * @param remember - optional expiry tier
  * @returns updated user document
@@ -99,7 +107,7 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
             return user.tokenAdd(TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 
-/*
+/**
  * Stamp a refresh token as used, so `GET /account/sessions` can show which device is idle.
  *
  * Called from the REFRESH route only, never from `createAccessToken` — which login also uses, to
@@ -122,14 +130,16 @@ export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
         .then(() => undefined)
         .catch(() => undefined);
 
-/*
+/**
  * Exchange a valid refresh token for a short-lived access token.
+ *
  * @param refreshToken - previously issued refresh JWT
  * @returns signed access JWT string
  */
 export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id }) =>
         sign({ id } as TokenData, getAccessTokenSecret(), {
+            // Seconds, not ms — this app's own TTL config, not a jsonwebtoken magic number.
             expiresIn: getAccessTokenTTL(),
             algorithm: 'HS256'
         })

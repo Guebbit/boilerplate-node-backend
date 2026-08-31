@@ -1,52 +1,18 @@
 /**
+ * @module
  * The dynamic locale tier's slice of the demo dataset.
  *
- * Chosen to cover the branches this module actually has, on the principle every other seeder here
- * follows — a branch with no fixture is a branch nothing exercises. The four languages are picked
- * so that between them they occupy every square of the grid this module's design draws: deployed
- * file or not, rows or not, active or not.
+ * Four languages, picked to cover every square of this module's grid: Spanish is active with rows
+ * but deliberately no deployed file — the honest fixture for a language a client downloads rather
+ * than bundles. Italian is both a deployed file and overridden rows, so it exercises the merge.
+ * French is translated but inactive, proving an inactive language stays hidden. Japanese is
+ * registered with no entries at all, the state every language passes through before its first
+ * translation. English is left unseeded on purpose, as the static-only row nothing merges into.
  *
- *   es, active, ten app rows  THE POINT OF THE FEATURE, and DELIBERATELY NOT A DEPLOYED FILE.
- *                             Spanish exists in this repository only as rows, which is what makes
- *                             it the honest fixture for a language a client downloads rather than
- *                             bundles: nothing about it can be answered from the filesystem, so a
- *                             regression that quietly started serving files would show up here.
- *   es, two backend rows      STORED AND INERT, on purpose. They name the API's own keyspace for a
- *                             language the API has no dictionary file for, so
- *                             `applyLocaleOverrides` skips them and logs — the exact warning branch
- *                             that fires when someone translates the backend half of a language
- *                             nobody has deployed yet. It is also the sharpest available proof
- *                             that two tenants are separate keyspaces rather than one collection
- *                             with a label: `generic.*` exists in both, and only the frontend
- *                             tenant's half reaches a frontend.
- *   it, active, two be rows   The MERGE, and the overlay that actually applies. Italian is a
- *                             deployed file, so this row merges with the static tier into one
- *                             manifest entry carrying both tenants and `source: 'both'`, and its
- *                             two backend rows override keys `src/locales/it.json` really defines —
- *                             so `t('generic.error-unauthorized')` under `Accept-Language: it`
- *                             answers the row, not the file. No frontend rows, and that is a fact
- *                             rather than an omission: a client that already bundles Italian has
- *                             nothing to download, which is why `entryCount` is 0 for a language
- *                             the manifest nonetheless reports as fully supported.
- *   keys three levels deep    The tree builder gets a real specimen rather than a flat list, and
- *                             the frontend's mocks get a dictionary shaped like a dictionary.
- *   fr, inactive, two rows    The visibility branch. An inactive language must be absent from the
- *                             manifest and 404 on its dictionary, and neither is checkable against
- *                             a dataset where every language is active.
- *   ja, inactive, no rows     The EMPTY language — registered, nothing translated yet. It is the
- *                             state every language passes through between `POST /locales` and the
- *                             first entry, and it is inactive because that is the only responsible
- *                             thing to be: publishing it would offer a dictionary with no words
- *                             in it. Its `revision` is left unstated so the exported dataset
- *                             records the schema's `0` rather than a fixture's guess.
- *   en                        NOT SEEDED, deliberately. The merge needs a static-ONLY row to merge
- *                             nothing into, and `en` is it.
- *
- * `revision` is stated rather than left at the schema's 0 for every language that has entries.
- * These rows are written straight to Mongo, so they bypass the repository call that bumps — one
- * import's worth of writes produced these dictionaries, and `1` is what that would have left
- * behind.
+ * `revision` is stated explicitly rather than left at the schema's default: these rows are written
+ * straight to Mongo, bypassing the repository call that normally bumps it.
  */
+
 import { backendTenant, frontendTenant } from './tenants';
 import { makeLocale, makeLocaleEntry } from './fixtures';
 import { localeModel, localeMessageModel } from './model';
@@ -65,6 +31,7 @@ export const SEED_LOCALE_TAGS = {
     empty: 'ja'
 } as const;
 
+/** The seeded languages themselves — see `SEED_LOCALE_TAGS` for what each one demonstrates. */
 export const localeFixtures = [
     makeLocale({
         id: '65e01f3c9a7d4b2e1c0f0001',
@@ -111,7 +78,7 @@ export const localeFixtures = [
     })
 ];
 
-/*
+/**
  * Ten Spanish strings across four namespaces and up to three levels, so the tree the builder
  * produces has actual shape. `products.list.filters.*` is the deep one: a flat fixture set would
  * let a builder that only ever nests once pass.

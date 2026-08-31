@@ -1,4 +1,5 @@
 /**
+ * @module
  * `makeUser` — the account fixture builder.
  *
  * `PLAIN_PASSWORD` is the interesting export: the fixture stores the password in PLAINTEXT and

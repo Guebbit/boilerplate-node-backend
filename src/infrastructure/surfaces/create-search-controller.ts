@@ -1,4 +1,5 @@
 /**
+ * @module
  * The search-controller shape shared by `products`, `users` and `orders`, each exposing the same
  * pair of endpoints — `GET /x` and `POST /x/search` — behind one controller:
  * `readInput(surface:'search')` → merge in whatever the module needs decoded → `parseBody` against

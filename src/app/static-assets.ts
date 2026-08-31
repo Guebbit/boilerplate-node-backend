@@ -1,4 +1,5 @@
 /**
+ * @module
  * Static file serving for uploads and other public assets.
  */
 

@@ -1,4 +1,5 @@
 /**
+ * @module
  * The contact-request notification — the email an OPERATOR receives, not a customer.
  *
  * That audience is what shapes it. Two decisions in the builder exist so an operator can work

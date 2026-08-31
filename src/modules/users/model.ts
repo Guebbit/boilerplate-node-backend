@@ -1,3 +1,15 @@
+/**
+ * @module
+ * The user record's Mongoose schema, its Zod wire-validation twin, and the token subdocument
+ * methods.
+ *
+ * Long, and deliberately one file: everything here describes the user record. The Zod wire schema
+ * and the token methods sit beside the schema because splitting would separate the password hash
+ * hook from the `select: false` that keeps the hash off every read.
+ *
+ * See: docs/modules/users.md
+ */
+
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import bcrypt from 'bcrypt';
@@ -6,12 +18,6 @@ import { t } from '@infrastructure/i18n';
 import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
 import { type User } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-
-/*
- * Long, and deliberately one file: everything here describes the user record. The Zod wire schema
- * and the token methods sit beside the schema because splitting would separate the password hash
- * hook from the `select: false` that keeps the hash off every read.
- */
 
 /**
  * Token types used in jwt-auth
@@ -334,6 +340,8 @@ userSchema.index({ 'tokens.token': 1 }, { name: 'users_tokens_token' });
 userSchema.pre('save', function () {
     if (!this.isModified('password')) return;
 
+    // bcrypt cost factor — 12 rounds. Higher is slower to brute-force and slower to hash; 12 is
+    // the library's own recommended floor for a production login path.
     return bcrypt.hash(this.password, 12).then((hashedPassword) => {
         this.password = hashedPassword;
     });

@@ -1,4 +1,5 @@
 /**
+ * @module
  * Email verification — issuing the token and sending the mail, in one place.
  *
  * Three flows start a verification and they must not drift: signup (the first send), a profile

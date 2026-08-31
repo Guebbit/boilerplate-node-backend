@@ -1,4 +1,5 @@
 /**
+ * @module
  * Tracer helper.
  *
  * Thin wrapper around the OpenTelemetry API.
@@ -15,9 +16,11 @@
 // call becomes a no-op. That is what lets tests run without booting OpenTelemetry.
 import { trace, SpanStatusCode, type Span, type Attributes } from '@opentelemetry/api';
 
-// Single tracer scoped to this service.
-// The tracer name identifies the *instrumentation source* and shows up on every span, letting
-// you tell hand-written spans apart from those the auto-instrumentations produced.
+/**
+ * Single tracer scoped to this service.
+ * The tracer name identifies the *instrumentation source* and shows up on every span, letting
+ * you tell hand-written spans apart from those the auto-instrumentations produced.
+ */
 const TRACER_NAME = 'boilerplate-node-backend';
 
 /**

@@ -1,14 +1,14 @@
 /**
+ * @module
  * Redis cache adapter — a byte store with tags, and nothing above that.
  *
  * Every function here *fails open*: if Redis is unreachable the app keeps serving requests
  * without a cache rather than returning errors. A cache is an optimisation, never a dependency.
  *
- * What it stores is an opaque `string`. The one thing cached today is an HTTP response, and the
- * envelope that makes a response replayable — status, body, the size a response may reach, the
- * TTL a route may declare — belongs to the middleware that caches responses, not here. So a
- * project that wants to cache a computed aggregate or a rendered fragment writes its own bytes
- * through the same four functions instead of abusing a response shape.
+ * What it stores is an opaque `string`. The one thing cached today is an HTTP response, but the
+ * envelope that makes a response replayable belongs to the middleware that caches responses, not
+ * here — a project that wants to cache something else writes its own bytes through the same four
+ * functions instead of abusing a response shape.
  *
  * See: docs/tools/redis-cache.md
  */
@@ -312,6 +312,35 @@ export interface ClearCacheResult {
 }
 
 /**
+ * Delete every key matching a glob pattern, one `DEL` per `SCAN` batch.
+ *
+ * Split out of `clearCache` so the `for await` loop — and the `if` that skips an empty batch —
+ * sit at their own nesting level instead of piling up inside an async function that was itself
+ * nested inside the connection's `.then` callback. Same move as `handleDelivery` in `queue.ts`.
+ *
+ * @param redisClient - live Redis client to scan and delete on
+ * @param pattern - glob pattern passed to Redis `SCAN` (`MATCH`)
+ * @returns total number of keys deleted across every batch
+ */
+const drainMatchingKeys = async (
+    redisClient: RedisClientType,
+    pattern: string
+): Promise<number> => {
+    let deleted = 0;
+
+    // `scanIterator` yields batches of keys (node-redis v5), so one DEL per batch.
+    for await (const keys of redisClient.scanIterator({
+        MATCH: pattern,
+        COUNT: 100
+    })) {
+        if (keys.length === 0) continue;
+        deleted += await redisClient.del(keys);
+    }
+
+    return deleted;
+};
+
+/**
  * Delete every cached entry and tag set belonging to this app — the escape hatch for writes
  * that never ran `invalidateCache`.
  *
@@ -338,22 +367,10 @@ export const clearCache = (): Promise<ClearCacheResult> =>
                 return { deleted: 0, reachable: !isCacheEnabled() };
             }
 
-            const pattern = prefix('*');
-            let deleted = 0;
-
-            // `scanIterator` yields batches of keys (node-redis v5), so one DEL per batch.
-            const drain = async () => {
-                for await (const keys of redisClient.scanIterator({
-                    MATCH: pattern,
-                    COUNT: 100
-                })) {
-                    if (keys.length === 0) continue;
-                    deleted += await redisClient.del(keys);
-                }
-                return { deleted, reachable: true };
-            };
-
-            return drain();
+            return drainMatchingKeys(redisClient, prefix('*')).then((deleted) => ({
+                deleted,
+                reachable: true
+            }));
         })
         .catch((error) => {
             // Reached when SCAN or DEL fails mid-drain — the socket died partway through, say.

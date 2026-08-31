@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `POST /account/verify-request` controller — thin HTTP adapter over
+ * `accountService.requestEmailVerificationFor`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';

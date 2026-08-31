@@ -1,3 +1,10 @@
+/**
+ * @module
+ * `productService` — validation, the caller-scoped `search`/`getById` visibility rules, and the
+ * create/update/remove flows, including their side effects on the image store and, on hard
+ * delete, on every cart holding the product.
+ */
+
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';

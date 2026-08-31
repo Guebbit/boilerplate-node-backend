@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Order service: all business logic for the Order entity. Delegates raw database access to the
+ * order repository, and stays the one place a controller may call into.
+ */
+
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { orderConfirmEmail } from './emails';
@@ -33,12 +39,6 @@ import type { OrderActor } from './domain';
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-
-/**
- * Order Service
- * Handles all business logic for the Order entity.
- * Delegates raw database access to Order Repository.
- */
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI.
@@ -128,7 +128,13 @@ export const recordCreated = (
  * @param items - Array of { productId, quantity }
  * @param context - caller context for the `order_created` analytics/audit emit
  */
-export const create = (
+// `async`, so `toObjectId(userId)` below rejects rather than throws: a malformed id must reach
+// the caller the same way every other failure in this function does, as a rejected promise, not
+// a synchronous exception one level up. Written as a flat sequence of `await`s — write order,
+// hold its units, roll the order back on failure — rather than nested `.then()`s, for the same
+// reason `@modules/cart`'s `runCheckout` is: each step depends on the last step's resolved value,
+// so chaining nested a callback per step. Same order of operations, same rejection paths.
+export const create = async (
     userId: string,
     email: string,
     items: CartItem[],
@@ -137,81 +143,79 @@ export const create = (
     // One rule call, two outcomes. `Promise.all([])` settles without a query, so an empty basket
     // still costs no round trip. The rule is in `domain/rules.ts`; mapping it to a status code
     // and translated copy is this layer's job.
-    return Promise.all(
+    const resolvedItems = await Promise.all(
         items.map((item) =>
             productRepository.findByIdRaw(item.productId).then((product) => ({ item, product }))
         )
-    ).then(async (resolvedItems) => {
-        const verdict = checkOrderLines(
-            resolvedItems.map(({ item, product }) => ({ quantity: item.quantity, product }))
-        );
-        if (!verdict.ok)
-            return verdict.reason === 'no-lines'
-                ? generateReject(422, [t('generic.error-missing-data')])
-                : generateReject(404, [t('products.not-found')]);
+    );
 
-        const orderItems: OrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
-            product: product!,
-            quantity: item.quantity
-        }));
+    const verdict = checkOrderLines(
+        resolvedItems.map(({ item, product }) => ({ quantity: item.quantity, product }))
+    );
+    if (!verdict.ok)
+        return verdict.reason === 'no-lines'
+            ? generateReject(422, [t('generic.error-missing-data')])
+            : generateReject(404, [t('products.not-found')]);
 
-        /*
-         * Write the order, then hold its units — the same order of operations the storefront
-         * checkout uses, and forced by the same thing: a hold is keyed by the order it belongs
-         * to, so the order has to exist first.
-         *
-         * The admin path sells the same shelf the storefront does. Skipping the hold here is how
-         * a manually entered order oversells everything the checkout was carefully guarding, so
-         * this goes through exactly the same `reserveForOrder` — one conditional write per line,
-         * all-or-nothing, rolled back by `inventory` if any line cannot be covered.
-         */
-        return orderRepository
-            .create({
-                userId: toObjectId(userId),
-                email,
-                items: orderItems
-            })
-            .then(async (order) => {
-                const outcome = await inventoryService.reserveForOrder(
-                    String(order._id),
-                    resolvedItems.map(({ item }) => ({
-                        productId: item.productId,
-                        quantity: item.quantity
-                    }))
-                );
-                if (!outcome.held) {
-                    // Nothing is held, so the only thing to retract is the order.
-                    await orderRepository.deleteOne(order);
-                    return generateReject(409, [
-                        {
-                            code: 'ORDER_INSUFFICIENT_STOCK',
-                            message: t('orders.insufficient-stock'),
-                            // Which line blocked it, and what is actually on the shelf.
-                            details: { lines: outcome.shortfalls }
-                        }
-                    ]);
-                }
+    const orderItems: OrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
+        product: product!,
+        quantity: item.quantity
+    }));
 
-                recordCreated(order, context);
-
-                /*
-                 * The confirmation mail for THIS path only — `recordCreated` is shared with
-                 * `@modules/cart`'s checkout, which sends its own, so putting it there would mail
-                 * every storefront order twice.
-                 *
-                 * `context.locale` is the whole language chain here, unlike every other mail in
-                 * this codebase, and the reason is that an admin-created order has no recipient
-                 * record: only an address was supplied, so there is no stored preference to
-                 * prefer over the request's. That is also why this used to sit in the controller
-                 * — the request was the only source of a language, and until `CallerContext`
-                 * carried one there was no way to reach it from here.
-                 */
-                const mail = orderConfirmEmail(context.locale ?? getDefaultLocale(), email, order);
-                void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
-
-                return generateSuccess(order, 201, t('orders.creation-success'));
-            });
+    /*
+     * Write the order, then hold its units — the same order of operations the storefront
+     * checkout uses, and forced by the same thing: a hold is keyed by the order it belongs
+     * to, so the order has to exist first.
+     *
+     * The admin path sells the same shelf the storefront does. Skipping the hold here is how
+     * a manually entered order oversells everything the checkout was carefully guarding, so
+     * this goes through exactly the same `reserveForOrder` — one conditional write per line,
+     * all-or-nothing, rolled back by `inventory` if any line cannot be covered.
+     */
+    const order = await orderRepository.create({
+        userId: toObjectId(userId),
+        email,
+        items: orderItems
     });
+
+    const outcome = await inventoryService.reserveForOrder(
+        String(order._id),
+        resolvedItems.map(({ item }) => ({
+            productId: item.productId,
+            quantity: item.quantity
+        }))
+    );
+    if (!outcome.held) {
+        // Nothing is held, so the only thing to retract is the order.
+        await orderRepository.deleteOne(order);
+        return generateReject(409, [
+            {
+                code: 'ORDER_INSUFFICIENT_STOCK',
+                message: t('orders.insufficient-stock'),
+                // Which line blocked it, and what is actually on the shelf.
+                details: { lines: outcome.shortfalls }
+            }
+        ]);
+    }
+
+    recordCreated(order, context);
+
+    /*
+     * The confirmation mail for THIS path only — `recordCreated` is shared with
+     * `@modules/cart`'s checkout, which sends its own, so putting it there would mail
+     * every storefront order twice.
+     *
+     * `context.locale` is the whole language chain here, unlike every other mail in
+     * this codebase, and the reason is that an admin-created order has no recipient
+     * record: only an address was supplied, so there is no stored preference to
+     * prefer over the request's. That is also why this used to sit in the controller
+     * — the request was the only source of a language, and until `CallerContext`
+     * carried one there was no way to reach it from here.
+     */
+    const mail = orderConfirmEmail(context.locale ?? getDefaultLocale(), email, order);
+    void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
+
+    return generateSuccess(order, 201, t('orders.creation-success'));
 };
 
 /**
@@ -570,6 +574,7 @@ export const cancelById = (
         });
 };
 
+/** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {
     search,
     getById,

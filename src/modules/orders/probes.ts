@@ -1,4 +1,5 @@
 /**
+ * @module
  * Requests the contract cannot describe, for the orders module.
  *
  * `scripts/contracts/client-collections-bundle.ts` owns the rest: what a probe is for, where these
@@ -7,6 +8,7 @@
 
 import type { Probe } from '@guebbit/openapi-runnable-collections';
 
+/** The scoping cases the OpenAPI contract cannot express on its own. */
 export const probes: Probe[] = [
     {
         name: 'Probe: the owner asking for their own soft-deleted order',

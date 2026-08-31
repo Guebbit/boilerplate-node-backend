@@ -1,4 +1,5 @@
 /**
+ * @module
  * The wishlist's slice of the demo dataset.
  *
  * Only PUBLICLY VISIBLE products are saved, and the named ids are what makes that checkable rather
@@ -18,6 +19,7 @@ import {
 } from '@infrastructure/persistence/seed';
 import { wishlistRepository } from './repository';
 
+/** The seeded wishlists: one per demo account, holding only publicly visible products. */
 export const wishlistFixtures = [
     /* root — one saved product, enough for the admin account to show a non-empty page. */
     makeWishlist({

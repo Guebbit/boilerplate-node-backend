@@ -1,20 +1,14 @@
 /**
+ * @module
  * The copy of every email this module sends, resolved into finished strings.
  *
- * Templates do not translate. They interpolate — `<%= greeting %>`, never `<%= t('…') %>` — and
- * these builders are what produces the values. The reason is the queue: an email is rendered by
- * `adapters/email.worker.ts`, possibly in another process, hours after the request that asked for
- * it ended. Anything left unresolved at that point has no request, no `Accept-Language` and no
- * locale store to resolve against.
+ * Templates only interpolate, never translate — an email renders in `adapters/email.worker.ts`,
+ * possibly hours later with no request or locale store to resolve against. So language is an
+ * explicit argument: a builder binds its own `t` to the locale it's handed, since these go out in
+ * the *recipient's* language, not the requester's.
  *
- * The language is an argument, not an ambient scope. A builder binds its own `t` to the locale it
- * was handed, so a caller sending to someone else — the common case here, since these go out in
- * the *recipient's* language rather than the requester's — states that in the call rather than
- * wrapping it in a locale scope and hoping everything inside reads the same store.
- *
- * Each builder returns the whole `EmailContent`: the template name, the subject and the complete
- * render context, down to the `locale` the markup puts in `<html lang>` and the footer line the
- * shared partial prints. Template and copy therefore change together, in this file.
+ * Each builder returns the whole `EmailContent` — template, subject and render context — so
+ * template and copy change together, in this file.
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';

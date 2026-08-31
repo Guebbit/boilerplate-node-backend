@@ -1,4 +1,5 @@
 /**
+ * @module
  * Adding an entry to the address book, and editing one — the two shipping addresses a caller
  * writes.
  *
@@ -11,6 +12,7 @@
  * The read lives in `./get-addresses.ts` and the removal in `./delete-address.ts`, because neither
  * parses a body and so neither shares the shape this file is named for.
  */
+
 import type { Request, Response } from 'express';
 import { AddAddressBody, UpdateAddressBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';

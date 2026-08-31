@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `GET /wishlist` controller — thin HTTP adapter over `wishlistService.wishlistGet`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';

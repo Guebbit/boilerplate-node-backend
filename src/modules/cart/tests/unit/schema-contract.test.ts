@@ -1,4 +1,5 @@
 /**
+ * @module
  * The cart schema's contract.
  *
  * The cart and the wishlist are the same shape for the same reasons, and they differ in exactly
@@ -11,6 +12,7 @@
  * true })` with no read in front of it. Without it a concurrent first-add creates two carts and
  * one of them silently stops being the cart.
  */
+
 import { cartSchema } from '@modules/cart/model';
 import {
     defaultOf,

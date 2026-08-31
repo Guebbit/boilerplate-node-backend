@@ -1,26 +1,14 @@
 /**
- * Order fixtures that touch the test database.
+ * @module
+ * Order fixtures that touch the test database — `toOrderItem`, `makeOrder`, `createOrder`.
  *
- * The BUILDER lives one level up, in `src/modules/orders/fixtures.ts` — the same file the demo order
- * book is built from — and this file adapts it to what an integration test has in hand.
- *
- *   toOrderItem(product, qty?)  – a persisted product document → the line an order embeds.
- *   makeOrder(user, items)      – a plain payload, no database write.
- *   createOrder(user, items)    – inserts and returns the Mongoose document.
- *
- *   const user    = await createUser();
- *   const product = await createProduct({ price: 19.99 });
- *   const order   = await createOrder(user, [toOrderItem(product, 2)]);
- *
- * ## Why this one keeps its own signature
- *
- * `../fixtures`'s `makeOrder` takes a snapshot as DATA — `{ id, title, price, … }` — because the
- * seeds build orders from catalogue fixtures that were never persisted. A test has real documents,
- * so this wrapper takes them and does the conversion, rather than making every call site spell out
- * a snapshot it already holds.
+ * The BUILDER lives one level up, in `src/modules/orders/fixtures.ts`, and takes a product snapshot
+ * as DATA because the demo seeds build orders from catalogue fixtures that were never persisted. A
+ * test has real documents instead, so this wrapper converts them rather than making every call site
+ * spell out a snapshot it already holds.
  *
  * An order item embeds a full product SNAPSHOT, not a reference, so that repricing a product later
- * cannot rewrite what a customer was charged. That is why `toOrderItem` copies the document.
+ * cannot rewrite what a customer was charged — why `toOrderItem` copies the document.
  */
 
 import type { OrderDocument } from '@modules/orders';

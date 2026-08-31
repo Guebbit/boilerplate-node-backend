@@ -1,3 +1,13 @@
+/**
+ * @module
+ * Feedback request service — creation (with the operator notification), search, and status
+ * triage. `toFeedbackStatus` is the one piece of domain logic worth naming: a filter value outside
+ * the closed status enum narrows a READ to nothing, but is unreachable on a WRITE, which the
+ * generated Zod enum already rejects with a 422.
+ *
+ * See: docs/modules/feedback.md
+ */
+
 import {
     FeedbackRequestStatus,
     type SearchFeedbackRequestsRequest,
@@ -21,6 +31,7 @@ import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from './audit';
 
+/** Every value the generated `FeedbackRequestStatus` enum declares, for the membership check below. */
 const FEEDBACK_STATUS_VALUES = Object.values(FeedbackRequestStatus) as string[];
 
 /**
@@ -104,6 +115,13 @@ export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestD
             return created;
         });
 
+/**
+ * Search feedback tickets by status, email fragment or free text, paginated.
+ *
+ * Emits `feedbackAuditActions.ADMIN_FEEDBACK_VIEWED` when a `context` is given — an omitted
+ * context means "not an HTTP request" (a test, or future internal reuse as a plain query helper),
+ * so no event is emitted for those.
+ */
 export const search = (
     // `page`/`pageSize` are widened to accept strings: they arrive from a query string, and
     // `normalizePagination` is what coerces and bounds them. `status` stays a raw string until
@@ -136,6 +154,12 @@ export const search = (
             return result;
         });
 
+/**
+ * Applies a status/notes patch to an already-loaded feedback ticket and persists it.
+ *
+ * `respondedAt` is stamped once, the first time a ticket reaches `resolved` — re-resolving an
+ * already-resolved ticket must not move the timestamp.
+ */
 export const updateStatus = (
     feedback: FeedbackRequestDocument,
     payload: UpdateFeedbackRequestStatusRequest
@@ -148,6 +172,12 @@ export const updateStatus = (
     return feedbackRequestRepository.save(feedback).then((saved) => generateSuccess(saved));
 };
 
+/**
+ * Loads a ticket by id, applies {@link updateStatus}, and — on success — emits
+ * `feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED`.
+ *
+ * @returns A 404 `ResponseReject` when the id names no ticket, otherwise the save result.
+ */
 export const updateStatusById = (
     id: string,
     payload: UpdateFeedbackRequestStatusRequest,
@@ -170,6 +200,7 @@ export const updateStatusById = (
         });
     });
 
+/** The module's barrel export — used by the controllers in `./controllers`. */
 export const feedbackRequestService = {
     create,
     search,

@@ -1,21 +1,24 @@
-import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
-import { router } from './routes';
-
 /**
+ * @module
  * Contact requests: anyone may file one, admins read and triage them.
  *
- * A leaf in both directions. It records an email address rather than referencing a user, because
- * the form is open to people who have no account — which is also why deleting an account leaves
- * their feedback standing, and why this module needs nothing from `users`.
- *
- * Every application grows a contact form with a triage state, none of them differ, and this one is a
- * leaf in both directions — so the cheapest thing that works is also the correct one.
+ * Records an email address rather than referencing a user, since the form is open to people
+ * with no account — which is also why deleting an account leaves their feedback standing, and
+ * why this module needs nothing from `users`. A leaf in both directions, so the cheapest thing
+ * that works is also the correct one.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      nothing
  * Reached by:   nothing — delete it and only this module goes
+ *
+ * See: docs/modules/feedback.md
  */
+
+import path from 'node:path';
+import type { AppModule } from '@kernel/registry';
+import { router } from './routes';
+
+/** This module's manifest entry: public contact form, admin-only triage. */
 export default {
     name: 'feedback',
     basePath: '/feedback',

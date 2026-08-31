@@ -1,10 +1,12 @@
 /**
+ * @module
  * Contract tests for /delivery.
  *
  * Three routes, three audiences: the methods list is public, the shipment read is the owner's,
  * the courier tick is staff's. These pin that each contract branch is reached over HTTP; the
  * courier's ordering rules live in the unit suite.
  */
+
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

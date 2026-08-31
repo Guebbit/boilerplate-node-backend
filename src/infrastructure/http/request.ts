@@ -1,4 +1,5 @@
 /**
+ * @module
  * Request input.
  *
  * A value an endpoint needs may arrive as a route param, a query string or a JSON body field, and
@@ -326,9 +327,13 @@ export const authContextOf = (request: { authContext?: AuthContext }): AuthConte
 export interface CallerContext {
     /** The authenticated caller, or `{}` for anonymous — same shape authorization rules use. */
     caller: Caller;
+    /** The caller's address, as Express resolved it (trust-proxy aware). */
     ip?: string;
+    /** The `User-Agent` the caller sent, if any. */
     userAgent?: string;
+    /** The `Host` header the caller sent, if any. */
     host?: string;
+    /** The request id assigned by the request-id middleware, for correlating with the access log. */
     requestId?: string;
     /**
      * The language this request was made in, negotiated from `Accept-Language` by the locale

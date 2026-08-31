@@ -1,19 +1,10 @@
 /**
+ * @module
  * Product fixtures that touch the test database.
  *
- * The BUILDER lives one level up, in `src/modules/products/fixtures.ts` — the same file the demo
- * catalogue is built from — and this file only persists what it returns. See
- * `../../users/tests/fixtures` for why there is exactly one `makeProduct`.
- *
- *   makeProduct(overrides?)   – a plain payload, no database write.
- *   createProduct(overrides?) – inserts and returns the Mongoose document.
- *
- *   const product = await createProduct({ title: 'Gadget', price: 49.99 });
- *
- * Only `title` and `price` have builder defaults, because only those two are required by the
- * schema. `description`, `imageUrl`, `stock`, `categories`, `tags` and `active` are left unset so a
- * fixture exercises the model's real defaults rather than a restatement of them — which is what
- * lets the exported dataset record what the schema actually does.
+ * The BUILDER lives one level up in `../fixtures.ts` — the same file the demo catalogue is
+ * built from — this file only persists what it returns. See `../../users/tests/fixtures` for
+ * why there is exactly one `makeProduct`.
  */
 
 import type { ProductDocument } from '@modules/products';

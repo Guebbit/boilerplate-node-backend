@@ -1,26 +1,14 @@
 /**
- * Cart service — `src/modules/cart/service.ts`.
+ * @module
+ * Cart service tests — `src/modules/cart/service.ts`.
  *
- * The distinction that carries the most risk here is `set` vs `add`: `cartItemSetById` replaces a
- * line's quantity, `cartItemAddById` increments it. They share one private `upsertCartItem`
- * implementation, and the whole difference between them is `$set` against `$inc` on one line of
- * the repository — so a mutation that collapses them is invisible in review and produces a cart
- * that silently multiplies (or loses) what a user asked for. Several tests below exist only to
- * keep those two apart.
+ * Highest-risk seam: `set` vs `add` share one private `upsertCartItem`, differing only in `$set`
+ * vs `$inc` on one repository line — a collapsed mutation is invisible in review and silently
+ * multiplies or drops a user's quantity. Also pins the over-serialization guard on the cart view
+ * and that a cart is its own per-user document with no per-line `_id`.
  *
- * The second is the over-serialization guard on the cart view. `CartItem` in `openapi.yaml` is
- * `additionalProperties: false` over `{ productId, quantity }`, so the populated `product` used to
- * price the cart must be dropped before the response leaves. Asserted here as well as in the
- * contract suite, because the contract suite only sees it when a route happens to be exercised.
- *
- * The third is storage: a cart is its own document keyed by `userId`, absent until the first write
- * and never carrying a per-line `_id`. Those are the facts the whole design rests on, so each has
- * an assertion of its own rather than being left to whatever a behavioural test happens to notice.
- *
- * Real Mongo throughout (`setupTestDb`), because most of this module's behaviour is what Mongo does
- * with the guarded writes behind `cartRepository.upsertLine` — including the two race tests, which
- * only mean anything against a server that actually serializes writes to one document. Mocking the
- * repository would assert the mock.
+ * Real Mongo throughout (`setupTestDb`) — the behaviour lives in `cartRepository.upsertLine`'s
+ * guarded writes, which a mock can't exercise.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -70,6 +58,7 @@ const MISSING_ID = '507f1f77bcf86cd799439011';
 /** What every read answers for a user with nothing in their cart. */
 const EMPTY_CART = { items: [], summary: { itemsCount: 0, totalQuantity: 0, total: 0 } };
 
+/** Narrows a service result to its reject shape, for a case already known to have failed. */
 const asReject = (result: unknown) => result as ResponseReject;
 
 /** Reads the persisted quantity for a product, so assertions survive the round trip to Mongo. */

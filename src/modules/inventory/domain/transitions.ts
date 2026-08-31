@@ -1,6 +1,7 @@
 /**
+ * @module
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database.
- * See `docs/theory/domain-layer.md`.
+ * See: docs/theory/domain-layer.md
  *
  * A product carries two counters: `onHand` (units that exist) and `reserved` (units an open order
  * has claimed). What a customer may buy is the difference, and `availabilityOf` is the only

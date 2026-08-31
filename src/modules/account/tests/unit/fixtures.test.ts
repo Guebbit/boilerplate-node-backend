@@ -1,10 +1,12 @@
 /**
+ * @module
  * `makeAddressBook` — the address-book fixture builder.
  *
  * Unlike the cart and wishlist builders, this one gives every entry an `_id`: an address book
  * line is addressed by its own id — `PUT /account/addresses/:addressId` names it — so a fixture
  * without one seeds a book whose entries cannot be edited or deleted.
  */
+
 import { Types } from 'mongoose';
 import { makeAddressBook } from '@modules/account/fixtures';
 

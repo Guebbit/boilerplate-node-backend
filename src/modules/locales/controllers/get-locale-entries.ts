@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `GET /locales/:locale/entries` controller — thin HTTP adapter over `localeService.searchEntries`.
+ */
+
 import type { Request, Response } from 'express';
 import { readInput } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';

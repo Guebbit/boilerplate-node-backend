@@ -1,22 +1,15 @@
 /**
- * The analytics event names this module emits.
+ * @module
+ * The analytics event names this module emits — the order record's own lifecycle. `CHECKOUT_*`
+ * is NOT here: the cart module owns it, since `POST /cart/checkout` reports it.
  *
- * The order record's own lifecycle. Note that `CHECKOUT_*` is NOT here: the cart module owns it,
- * because `POST /cart/checkout` is what reports it. The paired frontend emits `ORDER_*` from its
- * orders store, which is why ownership is a per-repo mapping while the NAMES are shared.
+ * Declared by augmenting the analytics port's name map, as `./audit.ts` does for audit actions,
+ * rather than editing a shared file.
  *
  * Naming rule: docs/tools/analytics.md#naming.
- *
- * Declared by augmenting the analytics port's name map rather than by editing a shared file,
- * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
- * their names, and `infrastructure` keeps knowing no domain at all.
- *
- * These names stay HERE. Nothing publishes them: the controllers that fire them import this file
- * directly, so a copy would have no reader on either side of the repo boundary. Only
- * `shared/contracts/analytics.frontend.ts` — the moments this service never observes — is
- * published to the paired frontend, which is what keeps one event from being counted twice.
  */
 
+/** The event names this module fires, keyed by intent. */
 export const ordersAnalyticsEvents = {
     // Orders
     ORDER_CREATED: 'order_created',
@@ -31,6 +24,7 @@ export const ordersAnalyticsEvents = {
     ORDERS_VIEWED: 'orders_viewed'
 } as const;
 
+/** Registers this module's event names into the analytics port's app-wide union. */
 declare module '@infrastructure/observability/analytics' {
     interface AnalyticsEventMap {
         orders: (typeof ordersAnalyticsEvents)[keyof typeof ordersAnalyticsEvents];

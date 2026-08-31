@@ -1,27 +1,16 @@
 /**
+ * @module
  * Stock across the whole order lifecycle — the reservation model's behavioural suite.
  *
- * The invariant these cases exist to pin is no longer "stock moved if and only if the order
- * stands". It is stronger, and it is the reason the model was rebuilt:
+ * The invariant under test: units leave the shop only once PAID for. Between checkout and
+ * payment they are held — unavailable to other buyers, still on the shelf, recoverable by
+ * cancel or expiry sweep. Every case asserts both `onHand` and `reserved` together, since either
+ * alone can pass for a shop that never reserved, or one that destroyed units at checkout.
  *
- *   Units leave the shop if and only if they were PAID for.
- *   Between checkout and payment they are held: unavailable to other buyers, still on the shelf,
- *   and recoverable by a cancel or by the expiry sweep.
- *
- * So every case asserts on the PAIR of counters, never on one. Asserting only `onHand` would pass
- * for a shop that never reserved anything, and asserting only `available` would pass for one that
- * destroyed units at checkout — which is exactly what the previous model did and what these tests
- * previously could not tell apart.
- *
- * The half of that sentence about PAYMENT lives in `payments/tests/unit/service.test.ts`, because
- * committing a hold is something the payments service does and reaching its internals from here
- * would cross a module boundary `eslint-plugin-boundaries` forbids. What
- * is here is everything a cart, an order and the sweep can do on their own.
- *
- * Real Mongo throughout (`setupTestDb`), because every guarantee here is a conditional write: the
- * `$expr` guard on reserve, the two-counter guard on commit, and the reservation's own status
- * claim. None of them exist in a mocked repository.
+ * The payment half of this lives in `payments/tests/unit/service.test.ts` (module boundary).
+ * Real Mongo throughout (`setupTestDb`) — the guarantees are conditional writes a mock can't show.
  */
+
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { testCallerContext } from '@tests/caller-context';
@@ -74,7 +63,7 @@ const countersOf = async (productId: unknown) => {
     };
 };
 
-/*
+/**
  * Run `body` with the reservation window closed, so every hold it opens is already stale by the
  * time the sweep reads it. Scoped rather than set globally: the TTL is read lazily on each reserve
  * precisely so a test can vary it, and leaving it at zero would make every case above expire

@@ -1,4 +1,5 @@
 /**
+ * @module
  * How a wishlist fixture is built.
  *
  * Like carts, a wishlist is addressed by its owner — `wishlists.userId` is unique and no wishlist id
@@ -31,6 +32,13 @@ export interface WishlistOverrides extends FactoryIdentity {
 /** A wishlist ready for `wishlistRepository.create` — `userId` required, see `../cart/fixtures`. */
 export type WishlistFixture = Partial<WishlistDocument> & Pick<WishlistDocument, 'userId'>;
 
+/**
+ * Build a wishlist fixture from bare product ids, wrapping each into the `{ productId }` line
+ * shape the schema stores.
+ *
+ * @param overrides - the owner, optional product ids, and the identity fields `identityOf` reads
+ * @returns a fixture ready for `wishlistRepository.create`
+ */
 export const makeWishlist = ({
     userId,
     productIds,

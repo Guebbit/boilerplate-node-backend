@@ -1,3 +1,20 @@
+/**
+ * @module
+ * The product catalogue: public read, admin write, soft delete with restore.
+ *
+ * Depends on nothing — a leaf module. Everything downstream (cart, orders, stock) is a
+ * statement about a product, which is what makes this the one model other contexts conform
+ * to. It stays a leaf by emitting `product.deleted` rather than importing the cart directly.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      nothing
+ * Reached by:   cart, inventory, orders, wishlist — the most-depended-on module here
+ * Not imports:  `onHand` and `reserved` are declared on this document and written ONLY by
+ *               `inventory`. This module never moves them. See that module's docblock.
+ *
+ * See: docs/modules/products.md
+ */
+
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
@@ -5,23 +22,7 @@ import { seedProductsCollection, exportSeededProducts } from './demo';
 import { productRepository } from './repository';
 import './events';
 
-/**
- * The product catalogue: public read, admin write, soft delete with restore.
- *
- * Depends on nothing. The cart needs products to price a line, and the products service needs the
- * cart emptied when an item disappears — the second half of that goes through `product.deleted`
- * precisely so this module stays a leaf.
- *
- * What a shop sells is the shop. Everything downstream — a cart line, an order item, a stock movement
- * — is a statement about a product, which makes this the one model other contexts conform to rather
- * than translate. It is also why it is a leaf: it must not know who is conforming to it.
- *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      nothing
- * Reached by:   cart, inventory, orders, wishlist — the most-depended-on module here
- * Not imports:  `onHand` and `reserved` are declared on this document and written ONLY by
- *               `inventory`. This module never moves them. See that module's docblock.
- */
+/** This module's manifest entry: routes, demo seeding, locales, and the inventory image target. */
 export default {
     name: 'products',
     basePath: '/products',

@@ -1,4 +1,5 @@
 /**
+ * @module
  * The feedback route table — and the positional guard it is built around.
  *
  * `routes.ts` mounts ONE public route, the visitor contact form, and then calls

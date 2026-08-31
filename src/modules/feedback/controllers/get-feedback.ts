@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Controller for `GET /feedback` and `POST /feedback/search` — the admin triage queue, in its two
+ * cacheable/DTO spellings. See the JSDoc on `getFeedback` below for the query/body split and
+ * `searchFeedbackKeyParameters` for why the cache key is hand-listed.
+ *
+ * See: docs/modules/feedback.md
+ */
+
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import type { SearchFeedbackRequestsRequest } from '@types';
@@ -7,6 +16,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { feedbackRequestService } from '../service';
 import { catchAs, rejectValidation } from '@infrastructure/http/controller';
 
+/** The filters this endpoint accepts, all as raw query-string values. */
 type FeedbackQuery = Partial<Record<keyof SearchFeedbackRequestsRequest, string>>;
 
 /**

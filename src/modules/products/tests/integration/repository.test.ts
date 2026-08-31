@@ -1,3 +1,10 @@
+/**
+ * @module
+ * `productRepository` — CRUD and the aggregate reads (`facets`, `sumReserved`,
+ * `availabilityPage`) against a real Mongo instance, including their answers over an empty
+ * catalogue, where a `$group`/`$facet` pipeline returns no row at all rather than a zeroed one.
+ */
+
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeProduct, createProduct } from '@modules/products/tests/fixtures';

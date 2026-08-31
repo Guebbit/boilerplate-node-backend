@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `PUT /account` controller — thin HTTP adapter over `accountService.updateProfile`, plus the
+ * uploaded-image cleanup and re-verification trigger that ride along with a self-service edit.
+ */
+
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';

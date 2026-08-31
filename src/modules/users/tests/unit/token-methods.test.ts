@@ -1,25 +1,12 @@
 /**
+ * @module
  * `tokenAdd`, `tokenRemoveAll` and `tokenRemoveExpired` — the three places a session is created
- * or destroyed.
+ * or destroyed, tested here because both instance methods write to `select: false` fields: the
+ * schema's types claim `this.tokens` is always an array, and `select: false` makes that a lie.
  *
- * All three are written against `select: false` fields, which is what makes them worth unit
- * testing rather than trusting: the schema's TYPES claim `this.tokens` is always an array, and
- * `select: false` makes that a lie. Both instance methods therefore write to the DATABASE first
- * and update the in-memory copy only if one was loaded — and both carry an eslint disable saying
- * so. Get that order wrong and a logout throws AFTER the tokens were already revoked, so the
- * caller reports a failed logout for a session that no longer exists.
- *
- * Two more properties, each invisible from a passing flow:
- *
- *   - `{ timestamps: false }` on both writes. Adding or revoking a session is not a change to the
- *     USER, and without this every login and logout bumps `updatedAt` — which is what "recently
- *     changed accounts" screens and any change-driven sync would then be reporting.
- *   - `tokenRemoveExpired` never throws. It is the scheduled cleanup job's only call; a rejection
- *     there takes down the job rather than being reported, and the trail of what happened is the
- *     `{ status, success }` pair it resolves with instead.
- *
- * The model is a double, so none of this needs a database and each property is a property of this
- * file alone.
+ * Both methods therefore write to the DATABASE first and update the in-memory copy only if one
+ * was loaded — get that order wrong and a logout throws AFTER the tokens were already revoked.
+ * The model is a double, so none of this needs a database.
  */
 import { userSchema, type Token } from '@modules/users/model';
 import { TokenType } from '@modules/users';

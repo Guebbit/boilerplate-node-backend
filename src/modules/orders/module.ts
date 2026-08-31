@@ -1,3 +1,20 @@
+/**
+ * @module
+ * Placed orders: admin write and soft delete, plus each account reading back its own. See
+ * `TACTICAL_DDD_PLAN.md` §5 for the invariants — totals, legal status transitions, what
+ * cancelling restores.
+ *
+ * Depends on products (an order embeds the catalogue row at purchase time) and inventory (an
+ * order is a claim on units, released on cancel or `RESERVATION_EXPIRED`); cart depends on this
+ * module in turn, keeping the import graph acyclic.
+ *
+ * ── Position ───────────────────────────────────────────────────────────────────────────────
+ * Reaches:      inventory, products
+ * Reached by:   cart, delivery, payments
+ * Not imports:  an order EMBEDS `productSchema` rather than referencing it, so a change to the
+ *               catalogue's shape is a change to this collection's stored history.
+ */
+
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
@@ -8,31 +25,7 @@ import { cancelById } from './service';
 // Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import './events';
 
-/**
- * Placed orders: admin write and soft delete, plus each account reading back its own.
- *
- * Depends on products because an order embeds the catalogue row as it stood at purchase time — the
- * schema itself, not a reference, so a later edit to the product cannot rewrite the history of an
- * order. Nothing in products reaches back, so this stays a plain import rather than an event.
- *
- * Depends on inventory because an order is a claim on units: creating one holds them, cancelling
- * one gives them back. Inventory reaches back exactly once, when a hold times out, and that
- * arrives as `RESERVATION_EXPIRED` — so the import graph stays acyclic even though the two
- * domains are mutually aware.
- *
- * The cart depends on this module in turn: a checkout is the one place an order is created outside
- * the admin routes. That arrow points cart → orders and does not come back.
- *
- * The module with the real invariants: what an order totals, which status transitions are legal, and
- * what cancelling restores. Three other modules are downstream of its status changes. If any one
- * module here ever grows an aggregate, it is this one — see `TACTICAL_DDD_PLAN.md` §5.
- *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      inventory, products
- * Reached by:   cart, delivery, payments
- * Not imports:  an order EMBEDS `productSchema` rather than referencing it, so a change to the
- *               catalogue's shape is a change to this collection's stored history.
- */
+/** This module's manifest entry: routes, event subscriptions, demo seeding, and locales. */
 export default {
     name: 'orders',
     basePath: '/orders',

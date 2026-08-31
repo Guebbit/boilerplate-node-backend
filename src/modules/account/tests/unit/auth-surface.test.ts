@@ -1,21 +1,13 @@
 /**
+ * @module
  * `index.ts` is this module's front door, and it is one function wide.
  *
- * A barrel's only failure mode is a missing or misrouted name. A dropped line is a compile error in
- * a dozen files that TypeScript catches — but a line that re-exports the *wrong* binding, or a name
- * silently resolving to `undefined` after a refactor of the underlying file, is not caught by
- * anything. Both cases are covered here: the surface is pinned by name, and the function is checked
- * to be the same object `./services/addresses` exports rather than merely to exist.
+ * A barrel's only failure mode is a missing or misrouted name — a re-export resolving to the WRONG
+ * binding compiles fine and is caught by nothing else. This suite pins the surface by name and
+ * checks each export is the same object its source module exports, not merely that it exists.
  *
- * The token surface is deliberately not part of that front door: the kernel's auth port is what
- * every request goes through, and this module fills it from `module.ts` with relative imports, so
- * no sibling needs a token. The second case below is what stops such an export being added on the
- * theory that one might.
- *
- * Nothing here asserts that outsiders stay off this module's internals. That is a graph question
- * about all thirteen modules rather than about this one, and `module-internals-are-private` in
- * `.dependency-cruiser.cjs` answers it — including for `src/app/`, which every ESLint rule allows
- * to reach past a barrel.
+ * The token surface is deliberately absent: the kernel's auth port is what every request goes
+ * through, filled from `module.ts` directly, so no sibling needs a token.
  */
 
 import * as account from '@modules/account';

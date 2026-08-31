@@ -1,18 +1,12 @@
 /**
+ * @module
  * The order confirmation email and the invoice document.
  *
- * Both render MONEY and both render a line per item, which makes them the two places in the app
- * where a formatting slip is read as a billing error by the person least able to check it. The
- * failures the assertions below are shaped around:
+ * Both render MONEY and a line per item, making them the two places where a formatting slip is
+ * read as a billing error by the person least able to check it — so assertions target a wrong
+ * item field, a total that ignores shipping, and `lines` built off anything but `order.items`.
  *
- *   - a line built from the wrong item field — the customer is told they bought something else,
- *     or paid a different price;
- *   - a total that ignores shipping — the email says one number and the card statement says
- *     another, which is a support ticket at best;
- *   - `lines` built off anything but `order.items` — an order with three items confirms one, and
- *     no assertion on "was an email sent" would notice.
- *
- * `orderTotal` itself is covered by `totals.property.test.ts`; what is asserted here is that this
+ * `orderTotal` itself is covered by `totals.property.test.ts`; here it's only asserted that this
  * builder USES it rather than recomputing a second, drifting answer.
  */
 import { orderConfirmEmail, invoiceDocument, type OrderLines } from '@modules/orders/emails';

@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `DELETE /account/delete-confirm` controller — spends the one-time deletion token and hard-deletes
+ * the account.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { ConfirmAccountDeleteBody } from '@api/schemas.zod';

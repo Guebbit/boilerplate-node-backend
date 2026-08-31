@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract tests for the self-service /account surface: profile update, password change,
  * single-session logout, the sessions listing and email verification.
  *
@@ -10,6 +11,7 @@
  * Where a listing is asserted, it is asserted on IDS, not lengths alone — a wrong-but-nonempty
  * answer must not pass.
  */
+
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

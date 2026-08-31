@@ -1,28 +1,21 @@
-import type { ToObjectOptions } from 'mongoose';
-
 /**
- * The one place a stored document becomes a wire payload.
+ * @module
+ * The one place a stored document becomes a wire payload: `_id` → `id`, `__v` dropped, and nothing
+ * beyond what `openapi.yaml` declares — most of its schemas are `additionalProperties: false`, so a
+ * stray `_id` fails the contract suite, not just looks untidy.
  *
- * Every collection here owes the API the same three things: `_id` renamed to `id`, `__v` gone, and
- * nothing on the response that `openapi.yaml` does not declare — 95 of its schemas are
- * `additionalProperties: false`, so a stray `_id` is a contract violation the suite in
- * `tests/contract/` fails on, not a cosmetic detail.
- *
- * Two callers need that, and only one of them gets any help from Mongoose:
- *
- *   - `toJSON`, where `virtuals: true` already supplies `id` and `versionKey: false` already drops
- *     `__v`, leaving only the `_id` deletion to do;
- *   - `.lean()` and `.aggregate()`, which return raw BSON with no virtuals and no `toJSON` options
- *     applied, and so need all three steps performed by hand — see `normalize` in
- *     `@infrastructure/persistence/create-repository`.
- *
- * One function serves both, which is why it still writes `id` and deletes `__v` even though the
- * `toJSON` path does not need either.
+ * Two callers need this, and only one gets help from Mongoose: `toJSON` already supplies `id` and
+ * drops `__v` via schema options, needing just the `_id` deletion; `.lean()`/`.aggregate()` return
+ * raw BSON with none of that applied, so they need all three steps by hand (see `normalize` in
+ * `create-repository.ts`). One function serves both.
  */
+
+import type { ToObjectOptions } from 'mongoose';
 
 /** A model's serializer: mutates a plain object into its wire shape and returns it. */
 export type SerializeTransform = (serialized: Record<string, unknown>) => Record<string, unknown>;
 
+/** What a model may customize about its own wire-shape transform, passed to {@link applySerialization}. */
 export interface SerializeOptions {
     /**
      * Delete `_id` instead of renaming it to `id`.
@@ -62,6 +55,7 @@ export const applySerialization = (
     schema: SerializableSchema,
     { dropId = false, omit = [], after, virtuals = true }: SerializeOptions = {}
 ): SerializeTransform => {
+    /** The wire-shape transform itself — shared by both the `toJSON` path and the lean/aggregate path. */
     const transform: SerializeTransform = (serialized) => {
         if (dropId) delete serialized._id;
         else if (serialized._id) {

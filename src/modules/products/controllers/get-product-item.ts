@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Single-product read controller — thin wiring onto the shared `createItemController` factory,
+ * scoped through the caller's own visibility.
+ */
+
 import { productService } from '../service';
 import { callerContextOf } from '@infrastructure/http/request';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';

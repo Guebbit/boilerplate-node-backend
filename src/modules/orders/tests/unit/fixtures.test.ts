@@ -1,16 +1,13 @@
 /**
+ * @module
  * `makeOrder` — the order fixture builder, and the product SNAPSHOT it embeds.
  *
- * An order stores what was bought, not a reference to what the catalogue says today, so this
- * builder's real work is `toSnapshot`: it takes a product-shaped override and produces the frozen
- * copy `orderItemSchema` embeds. Two properties matter and neither is visible from a saved
- * document:
- *
- *   - the snapshot's id is `_id`, a real ObjectId, not the `id` string the override carries. An
- *     embedded snapshot keyed by `id` would serialize as a product with no id at all, because
- *     `applyProductTransform` renames `_id` and finds nothing.
- *   - `title` and `price` are always present, because they are what the confirmation email and
- *     the invoice render. Everything else is compacted away and left to the schema.
+ * An order stores what was bought, not a reference to today's catalogue, so the builder's real
+ * work is `toSnapshot`: it takes a product-shaped override and produces the frozen copy
+ * `orderItemSchema` embeds. Two properties matter: the snapshot's id is `_id`, a real ObjectId,
+ * not the `id` string the override carries (else `applyProductTransform` finds nothing to
+ * rename); and `title`/`price` are always present, since the confirmation email and invoice
+ * render them.
  */
 import { Types } from 'mongoose';
 import { makeOrder } from '@modules/orders/fixtures';

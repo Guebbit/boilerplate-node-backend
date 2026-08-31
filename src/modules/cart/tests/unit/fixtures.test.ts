@@ -1,4 +1,5 @@
 /**
+ * @module
  * `makeCart` — the cart fixture builder.
  *
  * Its one job beyond identity is turning the string product ids a seed file writes into real
@@ -6,6 +7,7 @@
  * the cart back and joins against the catalogue, so the fixture produces a cart that looks
  * populated and behaves as if it were empty.
  */
+
 import { Types } from 'mongoose';
 import { makeCart } from '@modules/cart/fixtures';
 

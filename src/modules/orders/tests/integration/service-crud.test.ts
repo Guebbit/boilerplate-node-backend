@@ -1,21 +1,14 @@
 /**
- * Order CRUD — the write half of `src/modules/orders/service.ts`.
+ * @module
+ * Order CRUD — the write half of `src/modules/orders/service.ts` (`getById`, `create`, `update`,
+ * `updateById`, `remove`, `removeById`). `orders.test.ts` covers the read/aggregation half
+ * (`search`); these had no unit test at all before this file.
  *
- * `orders.test.ts` covers the read/aggregation half (`search`). Everything below it —
- * `getById`, `create`, `update`, `updateById`, `remove`, `removeById` — had no unit test at all,
- * which the mutation report showed as a block of uncovered mutants rather than as a low score.
- *
- * Two behaviours here carry real weight:
- *
- *   **Orders embed a product snapshot, not a reference.** `create` looks each product up and
- *   stores a full copy, so that repricing an item later cannot rewrite what a customer was
- *   charged. That is the difference between an order history and a lie, and it is only visible
- *   by mutating the product after the order exists — which is what the snapshot tests do.
- *
- *   **`getById`'s `scope` argument is an authorization boundary.** Without it the lookup is a
- *   plain findById; with it, the order must also match the caller's scope. Passing a scope that
- *   does not match must yield `undefined`, not the order — this is what stops one user reading
- *   another's order by id.
+ * Two behaviours carry real weight: `create` stores a full product snapshot, not a reference, so
+ * repricing an item later cannot rewrite what a customer was charged — only visible by mutating
+ * the product after the order exists. And `getById`'s `scope` argument is an authorization
+ * boundary: a scope that doesn't match must yield `undefined`, not the order, which is what stops
+ * one user reading another's order by id.
  */
 
 import { asStub } from '@tests/stub';

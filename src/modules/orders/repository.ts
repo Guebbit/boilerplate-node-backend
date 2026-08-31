@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Order repository.
+ *
+ * Unlike the other collections, orders are read through the aggregation framework: an order
+ * embeds a product snapshot, and filtering on `items.product._id` is a pipeline concern. The
+ * repository factory still supplies plain CRUD; search is overridden below.
+ */
+
 import { orderModel, applyOrderTransform } from './model';
 import type { OrderDocument } from './model';
 import type { PipelineStage } from 'mongoose';
@@ -14,13 +23,7 @@ import {
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 
-/**
- * Order Repository
- *
- * Unlike the other collections, orders are read through the aggregation framework: an order
- * embeds a product snapshot, and filtering on `items.product._id` is a pipeline concern. The
- * repository factory still supplies plain CRUD; search is overridden below.
- */
+/** Plain CRUD from the repository factory; `search` below overrides its aggregation-free default. */
 const base = createRepository<OrderDocument>(orderModel, {
     transform: applyOrderTransform,
     searchable: {

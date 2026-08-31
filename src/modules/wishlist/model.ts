@@ -1,10 +1,5 @@
-import { model, Schema, Types } from 'mongoose';
-import type { Document, Model } from 'mongoose';
-import { applySerialization } from '@infrastructure/persistence/serialize';
-
 /**
- * Wishlist Model
- *
+ * @module
  * A wishlist is its own collection keyed by `userId`, exactly like the cart and for the same two
  * reasons: a user response cannot leak a list it does not carry, and touching a wishlist reads
  * and writes one small document instead of the whole user.
@@ -13,7 +8,13 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  * "do I want this", not "how many": the moment an amount matters the line belongs in the cart,
  * which is what `POST /wishlist/{productId}/move-to-cart` is for. One field fewer is also what
  * makes `$addToSet` the whole idempotence story below.
+ *
+ * See: docs/modules/wishlist.md
  */
+
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model } from 'mongoose';
+import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
  * A stored wishlist line.
@@ -97,7 +98,5 @@ wishlistSchema.index({ 'items.productId': 1 });
  */
 export const applyWishlistTransform = applySerialization(wishlistSchema);
 
-/**
- * Model
- */
+/** Wishlist model entrypoint. */
 export const wishlistModel = model<WishlistDocument, WishlistModel>('Wishlist', wishlistSchema);

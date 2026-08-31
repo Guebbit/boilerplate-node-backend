@@ -1,19 +1,13 @@
 /**
+ * @module
  * Payments — how an order's money moves, behind the provider port.
  *
- * The service owns three rules and delegates everything else:
- *
- * 1. Only a `pending` order can start paying, and only its owner can pay it.
- * 2. The order's move to `paid` is the gate, not the charge: the charge happens first (that is
- *    how PSPs work — the money is taken before your database hears about it), and if the order
- *    slipped away in between (cancelled, already paid by a racing tab) the charge is refunded
- *    on the spot. Money moved if and only if the order says `paid`.
- *
- *    That same gate is what commits the order's held stock. Units are held from checkout and
- *    only actually leave when the money lands, so an unpaid order costs the shop availability
- *    for the length of its reservation window and nothing more.
- * 3. A refund answers a fact, never a plan: `ORDER_CANCELLED` arrives after the cancel is on
- *    disk, and the conditional `succeeded → refunded` move makes the refund at-most-once.
+ * Three rules, everything else delegated: only a `pending` order's owner can start paying; the
+ * order's move to `paid` is the gate, not the charge — the charge happens first, and if the order
+ * slipped away in between it is refunded on the spot, so money moved if and only if the order
+ * says `paid` (the same gate commits the order's held stock); a refund answers a fact, never a
+ * plan — it is the `ORDER_CANCELLED` listener, made at-most-once by the conditional
+ * `succeeded → refunded` move.
  */
 
 import { t } from '@infrastructure/i18n';

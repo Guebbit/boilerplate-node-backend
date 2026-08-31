@@ -1,16 +1,19 @@
-import { model, Schema, Types } from 'mongoose';
-import type { Document, Model } from 'mongoose';
-import { StockMovementReason } from '@types';
-import type { StockMovement } from '@types';
-import { applySerialization } from '@infrastructure/persistence/serialize';
-
 /**
+ * @module
  * The two collections this module owns: the ledger and the hold.
  *
  * Neither stores a stock LEVEL — the levels live on the product document, which this module is
  * the only writer of. A catalogue read is the most common query in the shop and must not need a
  * join, while the rules for changing a count are nobody's business but this module's.
+ *
+ * See: docs/modules/inventory.md
  */
+
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model } from 'mongoose';
+import { StockMovementReason } from '@types';
+import type { StockMovement } from '@types';
+import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
  * Every reason the contract declares, in the array shape Mongoose's `enum:` wants. Read off the
@@ -35,6 +38,7 @@ export interface StockMovementDocument
 /** Stock Movement model type. Queries live in `./repository`, rules in `./service`. */
 export type StockMovementModel = Model<StockMovementDocument>;
 
+/** Mongoose Schema for the ledger. Append-only — see `./repository` for why. */
 export const stockMovementSchema = new Schema<StockMovementDocument>(
     {
         productId: {
@@ -96,6 +100,7 @@ stockMovementSchema.index({ createdAt: -1 }, { name: 'stockmovements_createdAt' 
  */
 export const applyStockMovementTransform = applySerialization(stockMovementSchema);
 
+/** Mongoose model for the ledger. */
 export const stockMovementModel = model<StockMovementDocument, StockMovementModel>(
     'StockMovement',
     stockMovementSchema
@@ -128,8 +133,10 @@ export interface ReservationDocument extends Document {
     updatedAt?: Date;
 }
 
+/** Reservation model type. Queries live in `./repository`, rules in `./service`. */
 export type ReservationModel = Model<ReservationDocument>;
 
+/** Sub-schema for one claimed line, embedded on the hold rather than referenced. */
 const reservationItemSchema = new Schema<ReservationItem>(
     {
         productId: {
@@ -146,6 +153,7 @@ const reservationItemSchema = new Schema<ReservationItem>(
     { _id: false }
 );
 
+/** Mongoose Schema for a hold. One document per order — see `orderId`'s unique index below. */
 export const reservationSchema = new Schema<ReservationDocument>(
     {
         /*

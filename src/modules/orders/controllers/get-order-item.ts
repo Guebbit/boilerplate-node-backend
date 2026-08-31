@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Single-order read controller, scoped by caller role; see the exported controller's own JSDoc
+ * for the 404-vs-422 distinction this file enforces before the query runs.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { orderService } from '../service';

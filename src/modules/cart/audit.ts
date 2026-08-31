@@ -1,4 +1,5 @@
 /**
+ * @module
  * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
  * augmentation rather than in a shared enum.
  *
@@ -7,6 +8,7 @@
  * the customer says they added it, and this is the record that settles whether they did.
  */
 
+/** The audit action names this module fires, keyed by intent. */
 export const cartAuditActions = {
     USER_CART_ITEM_REMOVED: 'user.cart.item_removed',
     /* A whole order's lines re-entering the cart at once — the support question this answers is
@@ -14,6 +16,7 @@ export const cartAuditActions = {
     USER_CART_REORDERED: 'user.cart.reordered'
 } as const;
 
+/** Registers this module's action names into the audit port's app-wide union. */
 declare module '@infrastructure/observability/audit' {
     interface AuditActionMap {
         cart: (typeof cartAuditActions)[keyof typeof cartAuditActions];

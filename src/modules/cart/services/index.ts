@@ -1,4 +1,5 @@
 /**
+ * @module
  * Cart service — shopping cart operations, identified by userId.
  *
  * A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
@@ -47,6 +48,7 @@ export {
 export { orderConfirm } from './checkout';
 export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
 
+/** The module's barrel export — controllers and siblings call through this, never the bare functions. */
 export const cartService = {
     cartGet,
     cartGetForBadge,

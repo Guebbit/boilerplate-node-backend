@@ -1,4 +1,5 @@
 /**
+ * @module
  * `src/modules/audit-logs/service.ts` — the persistence sink behind `@infrastructure/observability/audit`.
  *
  * The two functions in this module are deliberately asymmetric about failure, and that asymmetry
@@ -18,6 +19,7 @@
  * The repository is mocked rather than driven against the in-memory Mongo, because what is under
  * test is the error contract, and a real repository cannot be made to fail on demand.
  */
+
 import { auditLogService } from '@modules/audit-logs';
 import { auditLogRepository } from '@modules/audit-logs/repository';
 import { logger } from '@infrastructure/adapters/logger';

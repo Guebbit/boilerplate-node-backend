@@ -1,4 +1,5 @@
 /**
+ * @module
  * Shared pagination/filter helpers.
  * Extracts common search logic to satisfy OCP — new filter conventions
  * require changes in one place instead of every service.
@@ -6,6 +7,7 @@
 
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
+/** Raw page/size as they arrive off a request, before {@link normalizePagination} coerces them. */
 export interface PaginationInput {
     // `unknown` rather than `number | string | null`: these values come straight off a request,
     // where a repeated query key arrives as an array and a JSON body can hold anything. The
@@ -14,12 +16,14 @@ export interface PaginationInput {
     pageSize?: unknown;
 }
 
+/** {@link normalizePagination}'s output: defaulted, numeric, and with the derived Mongo `skip`. */
 export interface PaginationResult {
     page: number;
     pageSize: number;
     skip: number;
 }
 
+/** What {@link buildPaginatedMeta} returns alongside a page of results. */
 export interface PaginatedMeta {
     page: number;
     pageSize: number;

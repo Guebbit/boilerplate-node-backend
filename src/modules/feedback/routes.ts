@@ -1,3 +1,13 @@
+/**
+ * @module
+ * Route table for feedback/contact. One public route — the visitor contact form — mounted above a
+ * single `router.use(getAuth, isAuth, isAdmin)` gate; everything below it is the operator's view of
+ * what visitors sent. The gate is positional: a route appended in the wrong half is public or
+ * admin-only purely by where it was typed.
+ *
+ * See: docs/modules/feedback.md
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { postFeedbackContact } from './controllers/post-feedback-contact';
@@ -15,25 +25,19 @@ export const router = Router();
 router.post('/contact', invalidateCache(['feedback']), postFeedbackContact);
 
 /*
- * Everything from here down is the operator's view of what visitors sent, so it is admin-only.
- *
- * POSITIONAL, and that is the hazard worth naming: this guards the routes BELOW it and nothing
- * above. A route appended in the wrong half is public without looking wrong, which is why the one
- * public route sits alone at the top with its own comment rather than anywhere convenient.
- * `tests/cross-cutting/authenticated-controllers.test.ts` catches the case where such a route also
- * reads the caller.
+ * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why
+ * the one public route sits alone at the top. `tests/cross-cutting/authenticated-controllers.test.ts`
+ * catches a misplaced route that also reads the caller.
  */
 router.use(getAuth, isAuth, isAdmin);
 
-/*
- * The DTO form of `GET /`, and the reason that route declares no body: a GET body has no defined
- * semantics and `setCache` keys only on query parameters, so filters sent that way were invisible
- * to the key. Mounted ABOVE `/:id`-shaped routes for the same reason products does it — there is
- * none here today, but the ordering is what stops one added later from matching "search" as an id.
+/**
+ * The DTO form of `GET /` — a GET body has no defined semantics and `setCache` keys only on
+ * query parameters, so this exists to carry filters. Mounted ABOVE any future `/:id` route so
+ * "search" can't later match as an id.
  *
- * Cached, and on the SAME key as the GET above — `keyAs: 'feedback:search'` — so whichever
- * spelling asks first warms the other. The wire still says `no-store`: this is a Redis
- * arrangement, not a browser-cacheable POST.
+ * Shares its cache key with the GET above (`keyAs: 'feedback:search'`), so either warms the
+ * other. Wire response stays `no-store` — this is a Redis-side cache, not a browser-cacheable POST.
  */
 const cacheFeedbackSearch = searchCache('feedback', searchFeedbackKeyParameters, 600);
 

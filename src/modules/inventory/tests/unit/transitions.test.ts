@@ -1,16 +1,13 @@
 /**
+ * @module
  * The transition table — `src/modules/inventory/domain/transitions.ts`.
  *
- * No mocks, no database: this is the model itself, and it is pure. What is asserted here is not
- * "the function returns what it returns" but the three INVARIANTS the table encodes, each of
- * which is a sentence about how a shop works:
- *
- *   1. Only a receipt or an adjustment can change how many units exist.
- *   2. A commit moves both columns by the same amount, so a sale does not change availability.
- *   3. Reserve and release/expire are exact inverses.
- *
- * A test that merely restated the table row by row would pass against a table that had been
- * copied wrong, because the copy and the expectation would be the same mistake twice.
+ * No mocks, no database: this is the model itself, pure. What is asserted is not "the function
+ * returns what it returns" but three INVARIANTS the table encodes — only a receipt or adjustment
+ * changes how many units exist, a commit moves both counters equally so a sale doesn't change
+ * availability, and reserve/release-expire are exact inverses. A test that merely restated the
+ * table would pass against a table copied wrong, since the copy and the expectation would be the
+ * same mistake twice.
  */
 
 import { StockMovementReason } from '@types';

@@ -1,15 +1,12 @@
 /**
+ * @module
  * The order lifecycle — which status may follow which, and who may make the move.
  *
- * The SET of statuses belongs to the contract: `OrderStatus` is generated from `openapi.yaml`, so
- * re-declaring the six values here would create a second source of truth. This file adds the edges
- * between them, and the actor each edge belongs to.
- *
- * The actor rides on the edge rather than in a second table, because "what may follow `paid`"
- * depends on who is asking and two tables would drift.
- *
- * Deciding and enforcing stay separate: `updateStatusIfIn` in `../repository.ts` is what makes one
- * racing writer win, and this table only decides which `from` set it is handed.
+ * The SET of statuses belongs to the contract (`OrderStatus` is generated from `openapi.yaml`);
+ * this file adds the edges between them and the actor each edge belongs to, on the edge itself
+ * rather than a second table that could drift. Deciding and enforcing stay separate:
+ * `updateStatusIfIn` in `../repository.ts` makes one racing writer win, and this table only
+ * decides which `from` set it is handed.
  *
  * See `docs/theory/tactical-ddd.md` §1.
  */

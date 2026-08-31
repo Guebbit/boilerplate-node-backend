@@ -1,3 +1,11 @@
+/**
+ * @module
+ * User Admin Service — single responsibility: admin-facing user CRUD and search.
+ * For auth — signup, login, password reset, tokens — see the `account` module.
+ *
+ * See: docs/modules/users.md
+ */
+
 import { randomBytes } from 'node:crypto';
 import { t } from '@infrastructure/i18n';
 import {
@@ -21,12 +29,6 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-
-/**
- * User Admin Service
- * Single responsibility: admin-facing user CRUD and search.
- * For auth — signup, login, password reset, tokens — see the `account` module.
- */
 
 /**
  * Validate user data for admin create/edit forms.
@@ -73,6 +75,25 @@ export const getById = (id?: string) => {
 };
 
 /**
+ * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
+ *
+ * Fire-and-forget, like every other post-write dispatch in this codebase (`enqueueEmail`): a
+ * `pendingImageKey` here only ever means a broker accepted the upload at request time (the
+ * no-broker path resolves everything inline before the record is ever saved — see
+ * `readUploadedImage`), so this is a queue publish, not a CPU-bound digest, and the caller must
+ * not wait on it. Shared by the admin write path here and `account`'s signup/profile-update, since
+ * both persist through this same `userRepository`.
+ */
+export const enqueueIfPending = (user: UserDocument): UserDocument => {
+    if (user.pendingImageKey)
+        void enqueueImageDigest(
+            { collection: 'users', documentId: String(user._id), key: user.pendingImageKey },
+            userRepository.writebackImage
+        );
+    return user;
+};
+
+/**
  * Create a new user document, with no email confirmation step.
  *
  * The self-service path is `accountService.signup`, which sends a verification email and leaves
@@ -93,25 +114,6 @@ export const getById = (id?: string) => {
  * `Pick<UserRecord, ...>`. `products/service.ts`'s `update`/`updateById` do the same off `Product`;
  * a hand-copied field list is what silently dropped `active` from this module's `update()` below.
  */
-/**
- * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
- *
- * Fire-and-forget, like every other post-write dispatch in this codebase (`enqueueEmail`): a
- * `pendingImageKey` here only ever means a broker accepted the upload at request time (the
- * no-broker path resolves everything inline before the record is ever saved — see
- * `readUploadedImage`), so this is a queue publish, not a CPU-bound digest, and the caller must
- * not wait on it. Shared by the admin write path here and `account`'s signup/profile-update, since
- * both persist through this same `userRepository`.
- */
-export const enqueueIfPending = (user: UserDocument): UserDocument => {
-    if (user.pendingImageKey)
-        void enqueueImageDigest(
-            { collection: 'users', documentId: String(user._id), key: user.pendingImageKey },
-            userRepository.writebackImage
-        );
-    return user;
-};
-
 export const create = (
     data: CreateUserRequest & {
         /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
@@ -322,6 +324,7 @@ export const removeById = (
             user ? remove(user, hardDelete) : generateReject(404, [t('users.not-found')])
         );
 
+/** The module's barrel export — the controllers call through this, never the bare functions. */
 export const userService = {
     validateData,
     search,

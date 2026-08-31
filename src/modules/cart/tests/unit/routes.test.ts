@@ -1,4 +1,5 @@
 /**
+ * @module
  * The cart route table.
  *
  * A cart is per-caller state, so every route is authenticated at the router level and none is
@@ -8,6 +9,7 @@
  * `GET /cart/summary` becomes a lookup for a product with the id "summary", and `POST
  * /cart/checkout` silently stops being checkout.
  */
+
 import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>

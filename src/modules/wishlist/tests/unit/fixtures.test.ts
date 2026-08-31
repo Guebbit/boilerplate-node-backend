@@ -1,4 +1,5 @@
 /**
+ * @module
  * `makeWishlist` — the wishlist fixture builder.
  *
  * It takes bare product ids rather than `{ productId }` objects, because a wishlist line IS a

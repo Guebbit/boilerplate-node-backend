@@ -1,4 +1,5 @@
 /**
+ * @module
  * The copy of the emails this module sends, resolved into finished strings.
  *
  * Same rule as `@modules/account/emails`: the language is an argument, the output is finished

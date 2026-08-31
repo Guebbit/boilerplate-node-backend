@@ -1,14 +1,17 @@
-import { auditLogModel, applyAuditLogTransform } from './model';
-import type { AuditLogDocument } from './model';
-import { createRepository } from '@infrastructure/persistence/create-repository';
-
 /**
- * Audit Log Repository
+ * @module
+ * Audit log repository.
  *
  * Two entry points only — append one entry, read a filtered page. There is deliberately no
  * update or delete: an audit trail that can be edited from the application is not an audit trail,
  * and expiry is Mongo's job via the TTL index on the model.
+ *
+ * See: docs/modules/audit-logs.md
  */
+
+import { auditLogModel, applyAuditLogTransform } from './model';
+import type { AuditLogDocument } from './model';
+import { createRepository } from '@infrastructure/persistence/create-repository';
 
 /** What `search` accepts, mirroring the query parameters `GET /observability/audit` declares. */
 export interface AuditLogSearchFilters {
@@ -21,6 +24,7 @@ export interface AuditLogSearchFilters {
     pageSize?: unknown;
 }
 
+/** The shared repository factory's create/search pair, scoped to the audit collection. */
 const base = createRepository<AuditLogDocument>(auditLogModel, {
     transform: applyAuditLogTransform,
     searchable: {

@@ -1,4 +1,5 @@
 /**
+ * @module
  * The four steps every controller repeats, written once.
  *
  * A controller in this codebase reads input, validates it, calls one service method, branches on

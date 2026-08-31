@@ -1,4 +1,5 @@
 /**
+ * @module
  * The account a person manages about themselves — their profile fields, and their password.
  *
  * Split from `./authentication` along the line between PROVING an identity and MAINTAINING one:

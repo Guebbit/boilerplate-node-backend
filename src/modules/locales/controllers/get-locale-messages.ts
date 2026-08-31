@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `GET /locales/:locale/messages` controller — thin HTTP adapter over `localeService.readMessages`.
+ */
+
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { localeService } from '../services';

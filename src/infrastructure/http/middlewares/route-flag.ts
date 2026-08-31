@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Turns a route-level detail spelled in the URL (e.g. a `/hard` suffix) into a value `readInput`
+ * can read like any other param, so a second spelling of an operation does not need a second
+ * controller entry point.
+ */
+
 import type { RequestHandler } from 'express';
 
 /**

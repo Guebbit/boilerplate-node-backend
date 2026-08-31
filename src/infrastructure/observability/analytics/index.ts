@@ -1,4 +1,5 @@
 /**
+ * @module
  * Product analytics — the port, and the registry of implementations behind it.
  *
  * Distinct from metrics and tracing: this answers PRODUCT questions ("how many users abandon

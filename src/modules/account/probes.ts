@@ -1,4 +1,5 @@
 /**
+ * @module
  * Requests the contract cannot describe, for the account module.
  *
  * `scripts/contracts/client-collections-bundle.ts` owns the rest: what a probe is for, where these
@@ -7,6 +8,7 @@
 
 import type { Probe } from '@guebbit/openapi-runnable-collections';
 
+/** The four requests the OpenAPI contract cannot itself express — see the header above. */
 export const probes: Probe[] = [
     {
         name: 'Probe: log in as the non-admin',

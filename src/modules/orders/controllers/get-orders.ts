@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Search/list controller for orders — thin wiring onto the shared `createSearchController`
+ * factory, scoped through the caller's own visibility.
+ */
+
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '../service';
 import { callerContextOf } from '@infrastructure/http/request';

@@ -1,19 +1,11 @@
 /**
+ * @module
  * Schema contract — the declarations themselves, not the transforms.
  *
- * The sibling specs in this folder cover behaviour; this covers what the SCHEMA says, which is
- * equally part of the API and is not exercised anywhere else:
- *
- *   **Defaults** decide what a client gets for a field it never sent. A row created without a
- *   flag is visible or invisible depending on one word in the schema, and nothing else pins which.
- *
- *   **`required`** is the only thing standing between a malformed write and a persisted row that
- *   later breaks every reader. Asserted per field, since each is an independent one-line flag.
- *
- *   **`select: false`** on credentials is why they do not leak from an ordinary read.
- *
- * Real Mongo, because these are Mongoose's behaviours rather than ours: a mocked model would
- * assert the mock's opinion of what `default` means.
+ * The sibling specs in this folder cover behaviour; this covers what the SCHEMA says — defaults,
+ * `required`, and `select: false` on credentials — which is equally part of the API and not
+ * exercised anywhere else. Runs against real Mongo, since these are Mongoose's behaviours rather
+ * than ours: a mocked model would only assert the mock's opinion of what `default` means.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

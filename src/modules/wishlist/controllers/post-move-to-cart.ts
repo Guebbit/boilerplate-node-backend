@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `POST /wishlist/:productId/move-to-cart` controller — thin HTTP adapter over
+ * `wishlistService.wishlistMoveToCart`.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';

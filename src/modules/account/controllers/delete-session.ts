@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `DELETE /account/sessions/:sessionId` controller — thin HTTP adapter over
+ * `accountService.sessionRevoke`.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';

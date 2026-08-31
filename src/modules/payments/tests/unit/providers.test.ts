@@ -1,4 +1,5 @@
 /**
+ * @module
  * The payment provider port and its `fake` implementation — `src/modules/payments/providers/`.
  *
  * No mocks, no database. `service.test.ts` moved to `tests/integration/` because it persists a

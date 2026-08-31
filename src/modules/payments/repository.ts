@@ -1,14 +1,5 @@
-import { paymentModel, applyPaymentTransform } from './model';
-import type { PaymentStatus } from '@types';
-import type { PaymentDocument } from './model';
-import {
-    createRepository,
-    toObjectId,
-    type Repository
-} from '@infrastructure/persistence/create-repository';
-
 /**
- * Payment Repository
+ * @module
  * Standard CRUD via the repository factory, plus the two lookups and the one guarded write payments
  * actually take.
  *
@@ -18,6 +9,17 @@ import {
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
+
+import { paymentModel, applyPaymentTransform } from './model';
+import type { PaymentStatus } from '@types';
+import type { PaymentDocument } from './model';
+import {
+    createRepository,
+    toObjectId,
+    type Repository
+} from '@infrastructure/persistence/create-repository';
+
+/** Payment CRUD, ownership scoping, and the intent/status writes the service depends on. */
 export const paymentRepository: Repository<PaymentDocument> & {
     ownerScope: (userId: string) => Record<string, unknown>;
     findByIdScoped: (

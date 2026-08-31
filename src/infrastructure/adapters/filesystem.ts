@@ -1,5 +1,8 @@
 /**
- * Filesystem helpers.
+ * @module
+ * Filesystem helpers: a move that works across mounts, and a delete that never throws.
+ * Kept small and dependency-light so every other adapter that touches disk builds on these two
+ * instead of re-deriving the EXDEV fallback or the log-and-swallow pattern on its own.
  */
 
 import { copyFile, rename, unlink } from 'node:fs/promises';

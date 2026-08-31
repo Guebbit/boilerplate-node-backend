@@ -1,4 +1,5 @@
 /**
+ * @module
  * Cart rules. Pure: data in, verdict out — no status codes, no i18n; `services/` maps verdicts.
  * See `docs/theory/domain-layer.md`.
  */

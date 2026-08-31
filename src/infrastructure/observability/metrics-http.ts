@@ -1,14 +1,10 @@
 /**
+ * @module
  * HTTP and process metrics (Prometheus).
  *
  * Metrics are *aggregates* — cheap, always-on, and the right signal for dashboards and alerts.
  * Traces (see `observability/tracer`) are per-request and answer "why was this one slow";
  * metrics answer "how is the service doing overall".
- *
- * The three prom-client metric types used here:
- *  - `Counter`   — monotonically increasing total (requests, errors)
- *  - `Histogram` — distribution via cumulative buckets (latency percentiles)
- *  - `Gauge`     — a value that goes up and down (in-flight requests, uptime)
  *
  * See: docs/tools/opentelemetry.md
  */
@@ -35,9 +31,11 @@ export const metricsRegistry = register;
 // `nodejs_eventloop_lag_seconds`, which is the single best indicator of a blocked event loop.
 collectDefaultMetrics({ register: metricsRegistry });
 
-// prom-client omits process_uptime_seconds; add it so dashboards can show uptime.
-// Assigned to an unused underscore-prefixed variable purely to satisfy lint rules: the
-// constructor's side effect (registering itself) is the whole point, not the reference.
+/**
+ * prom-client omits process_uptime_seconds; add it so dashboards can show uptime.
+ * Assigned to an unused underscore-prefixed variable purely to satisfy lint rules: the
+ * constructor's side effect (registering itself) is the whole point, not the reference.
+ */
 const _processUptimeGauge = new Gauge({
     // Metric name. Prometheus convention: snake_case, unit-suffixed (`_seconds`).
     name: 'process_uptime_seconds',
@@ -219,7 +217,7 @@ interface LatencyBucket {
     cumulativeCount: number;
 }
 
-/*
+/**
  * Collapse histogram values into per-boundary bucket totals.
  * prom-client histogram get() mixes _sum/_count rows (metricName set) with bucket rows — skip the former.
  * The +Inf bucket gives the total request count.

@@ -1,27 +1,16 @@
 /**
+ * @module
  * `account/session/jwt.ts` — the token layer, at the unit level.
  *
- * The integration suites exercise these functions against a real database and assert the flows
- * work. What they cannot assert cheaply is the set of properties that make the flows SAFE, each of
- * which fails silently rather than throwing:
+ * Where the integration suites exercise these functions against a real database, this asserts the
+ * properties that make them SAFE and fail silently: the two secrets never cross-verify, a refresh
+ * token is only valid while still stored, and `jwtid: randomUUID()` keeps two same-second logins
+ * from producing identical, mutually-revoking tokens.
  *
- *   1. THE TWO SECRETS ARE DIFFERENT SECRETS. An access token must not verify as a refresh token
- *      and vice versa. Collapse them — or mix up which getter each function calls — and a
- *      short-lived access token becomes a session that outlives every revocation, because
- *      revocation only ever touched the refresh list.
- *   2. A REFRESH TOKEN IS ONLY VALID WHILE IT IS STILL STORED. `verifyRefreshToken` checks the
- *      signature AND that the token is still in the user's `tokens`. Drop the second half and
- *      logout, logout-everywhere and session revocation all stop having any effect: the JWT is
- *      still cryptographically valid until it expires.
- *   3. `createAccessToken` GOES THROUGH THAT CHECK. It is the one place a revoked session could
- *      otherwise mint fresh access tokens indefinitely.
- *   4. TOKENS ARE UNIQUE PER ISSUE. `jwtid: randomUUID()` is what stops two logins by the same
- *      user in the same second from producing byte-identical tokens — which would make revoking
- *      one revoke the other.
- *
- * `@modules/users` is REPLACED rather than driven, so each of these is a property of this file
- * alone. See `tests/support/ports.ts` for why a namespace `jest.spyOn` is not used anywhere here.
+ * `@modules/users` is REPLACED rather than driven — see `tests/support/ports.ts` for why a
+ * namespace `jest.spyOn` is not used here.
  */
+
 import { sign, decode } from 'jsonwebtoken';
 import { asStub } from '@tests/stub';
 

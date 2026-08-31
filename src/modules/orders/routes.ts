@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Express router for order management — authenticated throughout; non-admin callers see only
+ * their own orders. Route order matters where a static segment (`/search`) or a longer path
+ * (`/:id/invoice`, `/:id/hard`) would otherwise be swallowed by `/:id`.
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { getOrders, searchOrdersKeyParameters } from './controllers/get-orders';
@@ -15,6 +22,7 @@ export const router = Router();
 // All order routes require authentication
 router.use(getAuth, isAuth);
 
+/** Shared cache middleware for both search entry points, keyed on the query parameters that change the answer. */
 const cacheOrdersSearch = searchCache('orders', searchOrdersKeyParameters);
 
 // POST /orders/search — must come before /:id

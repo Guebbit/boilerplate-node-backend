@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `GET /account/sessions` controller — thin HTTP adapter over `accountService.sessionsList`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';

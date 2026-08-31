@@ -1,4 +1,5 @@
 /**
+ * @module
  * The wishlist schema's contract.
  *
  * Two declarations carry the whole design here, and both are invisible from a document:

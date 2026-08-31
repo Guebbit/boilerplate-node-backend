@@ -1,10 +1,5 @@
-import { model, Schema } from 'mongoose';
-import type { Document, Model } from 'mongoose';
-import { applySerialization } from '@infrastructure/persistence/serialize';
-import { environmentNumber } from '@infrastructure/runtime/environment';
-import type { AuditEntry } from '@infrastructure/observability/audit';
-
 /**
+ * @module
  * Persisted audit trail — the durable half of `@infrastructure/observability/audit`.
  *
  * The audit *logger* remains the compliance record: it writes to a file (and to Loki when
@@ -18,7 +13,15 @@ import type { AuditEntry } from '@infrastructure/observability/audit';
  * style slip: these documents are returned verbatim as `AuditEventItem` in `openapi.yaml`, whose
  * field names were chosen to match the log lines a SIEM ingests. Renaming them here would mean
  * mapping on every read, and would break the admin dashboard that already renders them.
+ *
+ * See: docs/modules/audit-logs.md
  */
+
+import { model, Schema } from 'mongoose';
+import type { Document, Model } from 'mongoose';
+import { applySerialization } from '@infrastructure/persistence/serialize';
+import { environmentNumber } from '@infrastructure/runtime/environment';
+import type { AuditEntry } from '@infrastructure/observability/audit';
 
 /**
  * A stored audit entry — `AuditEntry` from `@infrastructure/observability/audit`, as a document.
@@ -40,6 +43,7 @@ export interface AuditLogDocument extends Document, Omit<AuditEntry, 'action'> {
     action: string;
 }
 
+/** Mongoose model type for {@link AuditLogDocument}. */
 export type AuditLogModel = Model<AuditLogDocument>;
 
 /**

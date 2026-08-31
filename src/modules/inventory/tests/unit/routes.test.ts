@@ -1,4 +1,5 @@
 /**
+ * @module
  * The inventory route table.
  *
  * Every route here is staff's, guarded by one `router.use(getAuth, isAuth, isAdmin)` at the top.
@@ -10,6 +11,7 @@
  * says why that matters — it tells competitors what sells and tells customers how close they are
  * to missing out, which is a dark pattern when true and a lie when not.
  */
+
 import { routeSignatures, guardsOn } from '@tests/routes';
 import { router } from '@modules/inventory/routes';
 

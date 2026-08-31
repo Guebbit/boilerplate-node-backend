@@ -1,3 +1,13 @@
+/**
+ * @module
+ * Route table for inventory. One `router.use(getAuth, isAuth, isAdmin)` gate covers every route,
+ * because every route here is staff's — the customer-facing half of this module is deliberately
+ * not a route at all: a shopper learns about stock from `available` on the product they are
+ * looking at.
+ *
+ * See: docs/modules/inventory.md
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { getInventoryLevels } from './controllers/get-inventory-levels';

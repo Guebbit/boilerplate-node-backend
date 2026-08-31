@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract tests for /users and /account — the credential-leak guard.
  *
  * `GET /users` once returned `password` and `tokens`. That was fixed, and

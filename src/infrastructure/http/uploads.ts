@@ -1,4 +1,5 @@
 /**
+ * @module
  * Upload helpers — read side.
  *
  * The write side (where files land, how they are named) lives in `@infrastructure/adapters/storage`.

@@ -1,4 +1,5 @@
 /**
+ * @module
  * The write paths, driven against a real database.
  *
  * These are unit tests in the sense the rest of this repo uses the word — no HTTP, no auth — but

@@ -1,10 +1,12 @@
 /**
+ * @module
  * `productRepository.facets` — the storefront's filter chips.
  *
  * One property matters: counts follow PUBLIC visibility. A category held only by hidden or
  * soft-deleted products must not appear at all, because a chip that finds nothing is worse
  * than no chip — and this is exactly the class of drift a green listing cannot show.
  */
+
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/fixtures';
 import { productRepository } from '@modules/products';

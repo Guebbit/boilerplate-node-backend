@@ -1,4 +1,5 @@
 /**
+ * @module
  * Email adapter: EJS template rendering + SMTP delivery, optionally via the queue.
  *
  * See: docs/tools/email-and-rendering.md

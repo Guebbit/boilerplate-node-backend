@@ -1,16 +1,10 @@
 /**
- * The payment provider port — the seam a real PSP plugs into.
+ * @module
+ * The payment provider port — the seam a real PSP plugs into. Which implementation answers is a
+ * deployment decision (`NODE_PAYMENT_PROVIDER`), not a code path. The boilerplate ships `fake`
+ * (see `./fake`); a live project adds `stripe.ts` and one line to the registry below.
  *
- * The module's service talks to this interface and nothing else: amounts, cards and refunds go
- * through it, and which implementation answers is a deployment decision (`NODE_PAYMENT_PROVIDER`),
- * not a code path. The boilerplate ships `fake` (see `./fake`); a project that goes live writes
- * `stripe.ts` beside it, adds one line to the registry below, and changes one env var — the
- * contract, the service and the frontend never hear about it.
- *
- * Same shape as `ImageStore` in `@infrastructure/adapters/image-store`, with the selection made
- * env-driven the way the mailer picks its transport: read lazily inside the function (tests vary
- * the environment per case) and memoised. No `reset` seam, unlike the mailer's: one build ships one
- * provider, so nothing has ever needed to swap it mid-run.
+ * Selection is read lazily and memoised, env-driven like the mailer's transport pick.
  */
 
 import { fakePaymentProvider } from './fake';
@@ -47,13 +41,14 @@ const PROVIDERS: Record<string, PaymentProvider> = {
     fake: fakePaymentProvider
 };
 
+/** Memoised on first call by {@link resolvePaymentProvider}; `undefined` until then. */
 let provider: PaymentProvider | undefined;
 
 /**
  * The configured provider, memoised on first use.
  *
  * A typo'd `NODE_PAYMENT_PROVIDER` resolves to `undefined` and the first `.charge()` throws on it —
- * loud, at the first payment, without a bespoke message saying the same thing.
+ * loud, without a bespoke message saying the same thing.
  *
  * @returns the implementation `NODE_PAYMENT_PROVIDER` names (default `fake`)
  */

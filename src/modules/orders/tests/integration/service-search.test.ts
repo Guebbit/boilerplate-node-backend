@@ -1,3 +1,10 @@
+/**
+ * @module
+ * `orderService.search` — filtering, pagination, and the three computed totals
+ * (`totalItems`/`totalQuantity`/`totalPrice`) that exist only because the aggregate pipeline
+ * derives them; nothing stores them on the document. `service-crud.test.ts` covers the write
+ * half of this service (`create`, `update`, `remove`, …).
+ */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/fixtures';
 import { createProduct } from '@modules/products/tests/fixtures';

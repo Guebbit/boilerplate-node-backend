@@ -1,4 +1,5 @@
 /**
+ * @module
  * The one authorization rule four domains share: *an admin reads everything, everyone else reads
  * a narrowed slice*.
  *

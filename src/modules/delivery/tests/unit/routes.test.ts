@@ -1,4 +1,5 @@
 /**
+ * @module
  * The delivery route table.
  *
  * Three routes, three different audiences — and the guards are per route, so each one is its own
@@ -6,6 +7,7 @@
  * a fourth route here gets no guard at all unless someone remembers, which is what the sweep at
  * the end of this file is for.
  */
+
 import { routeSignatures, guardsOn } from '@tests/routes';
 import { router } from '@modules/delivery/routes';
 

@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `POST /account/reset-confirm` controller — spends the one-time reset token and sets the new
+ * password.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { ConfirmPasswordResetBody } from '@api/schemas.zod';

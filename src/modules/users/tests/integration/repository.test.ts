@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Integration coverage for `userRepository`, against the in-memory Mongo `setupTestDb` wires up.
+ * Covers the CRUD surface from the repository factory plus the token-facing methods this module
+ * adds on top of it.
+ */
+
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser } from '@modules/users/tests/fixtures';

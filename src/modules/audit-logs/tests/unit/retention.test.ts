@@ -1,4 +1,5 @@
 /**
+ * @module
  * The TTL retention this module's collection is configured with.
  *
  * Read from the environment at import time, which is unusual enough to be worth a case: a TTL

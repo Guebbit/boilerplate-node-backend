@@ -1,4 +1,5 @@
 /**
+ * @module
  * RabbitMQ (AMQP 0-9-1) adapter.
  *
  * Like the cache adapter, every function degrades to a no-op when the broker is not
@@ -318,10 +319,87 @@ export interface ConsumeOptions<TPayload = unknown> {
 }
 
 /**
+ * Parse a delivered message's JSON body.
+ *
+ * Split out of `handleDelivery` purely to keep the `try`/`catch` JSON.parse forces from adding
+ * its own level to that function's nesting — same one-assertion-at-the-boundary story as before,
+ * just named. `undefined` is a safe failure sentinel: valid JSON never parses to it.
+ *
+ * @param incoming - the raw delivered message
+ * @returns the parsed value, or `undefined` when the body is not valid JSON
+ */
+const parseMessageBody = (incoming: ConsumeMessage): unknown => {
+    // eslint-disable-next-line no-restricted-syntax -- JSON.parse has no non-throwing form; a malformed message is dropped, not a crash
+    try {
+        // `.content` is a Buffer; `toString()` assumes UTF-8 JSON, matching
+        // what `publishToQueue` writes.
+        return JSON.parse(incoming.content.toString());
+    } catch {
+        return undefined;
+    }
+};
+
+/**
+ * Handle one delivered message: parse it, run the caller's handler, and translate the outcome
+ * into ack/nack.
+ *
+ * Split out of `consumeFromQueue` because this is the genuinely nested half of that function —
+ * amqplib's `consume` callback fires once per delivery for the life of the process, not once as
+ * part of the connect/prefetch chain that registers it — so this holds the ack-decision logic at
+ * its own ≤3-level depth instead of piling it inside that callback inside that chain.
+ *
+ * @param ch - channel to ack/nack on
+ * @param queue - queue name, for the parse-failure log line
+ * @param handler - caller's per-message handler
+ * @param incoming - the raw delivered message
+ */
+const handleDelivery = <TPayload>(
+    ch: Channel,
+    queue: string,
+    handler: ConsumeOptions<TPayload>['handler'],
+    incoming: ConsumeMessage
+): void => {
+    const parsed = parseMessageBody(incoming);
+    if (parsed === undefined) {
+        // Malformed message — reject without requeue.
+        // `nack(message, allUpTo, requeue)`: allUpTo=false rejects only this
+        // delivery, requeue=false discards it. Requeuing would loop forever
+        // since the bytes will never become valid JSON.
+        logger.warn({ message: 'Queue message parse failed, nacking.', queue });
+        ch.nack(incoming, false, false);
+        return;
+    }
+
+    /*
+     * The one assertion in this pipeline, and the only place it belongs: this
+     * is where bytes become a value, so it is the only line that can lie about
+     * the shape. `JSON.parse` cannot know `TPayload`, and no generic makes it
+     * know — the handler is still responsible for checking the fields it needs
+     * before using them, which is why the workers narrow with a predicate and
+     * declare their payload `Partial<…>` rather than fully-formed.
+     *
+     * Keeping it here means it happens once, at the boundary, instead of once
+     * per worker in code that has no idea where the value came from.
+     */
+    // The handler's boolean *is* the ack decision — see the policy above.
+    handler(parsed as TPayload, incoming)
+        .then((ack) => {
+            // `ack` removes the message from the queue permanently.
+            if (ack) ch.ack(incoming);
+            // Handled but refused: drop it (requeue=false).
+            else ch.nack(incoming, false, false);
+        })
+        // Thrown error = presumed transient (DB down, SMTP timeout), so
+        // requeue=true puts it back for another attempt.
+        .catch(() => ch.nack(incoming, false, true));
+};
+
+/**
  * Register a consumer on a queue.
  * No-op when RabbitMQ is not configured.
  *
- * Acknowledgement policy, which is the important part of this function:
+ * Acknowledgement policy, which is the important part of this function (enforced by
+ * {@link handleDelivery}):
  *  - handler resolves `true`  → `ack`  — done, broker deletes the message
  *  - handler resolves `false` → `nack` without requeue — permanent business rejection
  *  - handler *throws*         → `nack` with requeue — assumed transient, try again
@@ -335,7 +413,8 @@ export interface ConsumeOptions<TPayload = unknown> {
  *
  * `TPayload` is inferred from the handler, which is how a worker gets to declare its own job type
  * (`handleEmailJob(job: Partial<EmailJob>)`) instead of taking `unknown` and asserting its way
- * back to it. The type is a *claim about the wire*, never a check — see the assertion below.
+ * back to it. The type is a *claim about the wire*, never a check — see the assertion in
+ * {@link handleDelivery}.
  */
 export const consumeFromQueue = <TPayload = unknown>(
     options: ConsumeOptions<TPayload>
@@ -360,44 +439,7 @@ export const consumeFromQueue = <TPayload = unknown>(
                         // (queue deleted, channel closing) — nothing to ack.
                         if (!incoming) return;
 
-                        let parsed: unknown;
-                        // eslint-disable-next-line no-restricted-syntax -- JSON.parse has no non-throwing form; a malformed message is dropped, not a crash
-                        try {
-                            // `.content` is a Buffer; `toString()` assumes UTF-8 JSON, matching
-                            // what `publishToQueue` writes.
-                            parsed = JSON.parse(incoming.content.toString());
-                        } catch {
-                            // Malformed message — reject without requeue.
-                            // `nack(message, allUpTo, requeue)`: allUpTo=false rejects only this
-                            // delivery, requeue=false discards it. Requeuing would loop forever
-                            // since the bytes will never become valid JSON.
-                            logger.warn({ message: 'Queue message parse failed, nacking.', queue });
-                            ch.nack(incoming, false, false);
-                            return;
-                        }
-
-                        /*
-                         * The one assertion in this pipeline, and the only place it belongs: this
-                         * is where bytes become a value, so it is the only line that can lie about
-                         * the shape. `JSON.parse` cannot know `TPayload`, and no generic makes it
-                         * know — the handler is still responsible for checking the fields it needs
-                         * before using them, which is why the workers narrow with a predicate and
-                         * declare their payload `Partial<…>` rather than fully-formed.
-                         *
-                         * Keeping it here means it happens once, at the boundary, instead of once
-                         * per worker in code that has no idea where the value came from.
-                         */
-                        // The handler's boolean *is* the ack decision — see the policy above.
-                        handler(parsed as TPayload, incoming)
-                            .then((ack) => {
-                                // `ack` removes the message from the queue permanently.
-                                if (ack) ch.ack(incoming);
-                                // Handled but refused: drop it (requeue=false).
-                                else ch.nack(incoming, false, false);
-                            })
-                            // Thrown error = presumed transient (DB down, SMTP timeout), so
-                            // requeue=true puts it back for another attempt.
-                            .catch(() => ch.nack(incoming, false, true));
+                        handleDelivery(ch, queue, handler, incoming);
                     })
                 )
                 // Discard the consumerTag reply; callers only need "consumer registered".

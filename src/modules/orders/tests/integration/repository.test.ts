@@ -1,3 +1,17 @@
+/**
+ * @module
+ * `orderRepository` — inserts through the fixture builder, the raw `.aggregate()` passthrough
+ * `orderService.search` is built on, and `findByIdScoped`'s two branches (unscoped/admin vs
+ * scoped/owner).
+ *
+ * The aggregate cases exist because the repository does not reshape Mongo's pipeline stages in
+ * any way — `$match`/`$count`/`$addFields`/pagination are asserted directly here so that stays a
+ * deliberate design rather than an untested assumption.
+ *
+ * `findByIdScoped` gets its own block: the two branches resolve structurally different values (a
+ * hydrated document vs a plain aggregated object), and `id` is the only field both agree on. See
+ * that describe block's own comment for what specifically is pinned and why.
+ */
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/fixtures';

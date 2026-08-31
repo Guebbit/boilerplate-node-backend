@@ -1,3 +1,10 @@
+/**
+ * @module
+ * `POST /account/login` controller — checks credentials, then mints the session: a refresh token,
+ * its cookies, and a short-lived access token. Success/failure metrics, audit and analytics are
+ * emitted here rather than in the service — see the note below on why.
+ */
+
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { accountService } from '../services';

@@ -1,3 +1,14 @@
+/**
+ * @module
+ * Express guards built on `kernel/authentication.ts`'s resolver: `getAuth` populates
+ * `request.authContext` when a token is present, `isAuth`/`isAdmin` reject when it is missing or
+ * insufficient, and `isAdminViaCookie` is the SSE-only variant that authenticates by refresh
+ * cookie instead of an `Authorization` header. Every rejection is audited before the response is
+ * sent, so a denied request always leaves a trail.
+ *
+ * See: docs/tools/security.md
+ */
+
 import type { Request, Response, NextFunction } from 'express';
 import { resolveAccessToken, resolveRefreshToken } from '@kernel/authentication';
 import { t } from '@infrastructure/i18n';
@@ -10,17 +21,23 @@ import {
 } from '@infrastructure/observability/audit';
 
 /**
- * Get token (and strip it from "Bearer" prefix)
- * @param request
+ * Pull the bearer token out of the `Authorization` header, if any.
+ *
+ * @param request - the incoming request
+ * @returns the token, or `undefined` when the header is absent or has no second segment
  */
 export const getTokenBearer = (request: Request) => request.header('Authorization')?.split(' ')[1];
 
 /**
- * Get user data (if authenticated, otherwise go on)
+ * Resolve `request.authContext` from a bearer token when one is present, then always continue.
  *
- * @param request
- * @param response
- * @param next
+ * Never rejects: an absent or invalid token just leaves `authContext` unset, so this can sit in
+ * front of routes that work for both anonymous and authenticated callers — `isAuth`/`isAdmin`
+ * are what actually gate a route.
+ *
+ * @param request - populated with `authContext` on success
+ * @param response - unused; kept for the Express middleware signature
+ * @param next - always called, whether or not a user was resolved
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
@@ -49,11 +66,11 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
 };
 
 /**
- * Unauthorized: Don't know who you are
+ * Reject with 401 unless `getAuth` already resolved a caller onto the request.
  *
- * @param request
- * @param response
- * @param next
+ * @param request - must already carry `authContext`, set upstream by `getAuth`
+ * @param response - answered 401 when no caller was resolved
+ * @param next - called only once a caller is confirmed present
  */
 export const isAuth = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
@@ -77,11 +94,11 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
 };
 
 /**
- * Always AFTER isAuth
+ * Reject with 403 unless the resolved caller is an admin. MUST run after `isAuth`.
  *
- * @param request
- * @param response
- * @param next
+ * @param request - must already carry `authContext`, set upstream by `getAuth`/`isAuth`
+ * @param response - answered 401 with no caller at all, 403 for a non-admin caller
+ * @param next - called only once an admin caller is confirmed
  */
 export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
     /*

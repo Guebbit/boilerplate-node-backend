@@ -1,4 +1,5 @@
 /**
+ * @module
  * The soft/hard delete controller shared by every module with a `DELETE /x`, `DELETE /x/:id` and
  * `DELETE /x/:id/hard` triplet.
  *

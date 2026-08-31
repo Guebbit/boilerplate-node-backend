@@ -1,27 +1,21 @@
+/**
+ * @module
+ * The invoice PDF comes out in the language its producer resolved. The code under test is the
+ * generic PDF worker, but the scenario is this module's, so it lives here rather than in a
+ * worker test asserting against strings that vanish once `orders` is deleted.
+ *
+ * `invoiceDocument` resolves the copy up front and the worker only interpolates — an ambient `t`
+ * resolving against the boot language would fail silently instead. The second half covers the
+ * upload chain, which still re-enters the locale by hand because multer consumes the stream
+ * mid-request.
+ */
+
 import { asStub } from '@tests/stub';
 import type { NextFunction, Request, Response } from 'express';
 import { runWithLocale, getLocaleContext } from '@infrastructure/i18n';
 import enOrders from '@modules/orders/locales/en.json';
 import itOrders from '@modules/orders/locales/it.json';
 import { invoiceDocument } from '../../emails';
-
-/**
- * The invoice PDF comes out in the language its producer resolved.
- *
- * The code under test is the generic PDF worker, but the scenario is this module's: the order
- * invoice is the only document the app renders, and the copy it must come out in is this module's
- * dictionary. It lives here so that deleting `orders` takes the template, the copy and this spec
- * together, rather than leaving a worker test asserting against strings that no longer exist.
- *
- * `invoiceDocument` resolves the copy up front and the worker only interpolates, so the guard
- * runs in that direction: prove the worker cannot re-colour a document it was handed. An ambient
- * `t` resolving against the boot language instead would fail silently — nothing throws, and
- * nothing looks wrong in a test written in English.
- *
- * The second half of this file covers the upload chain, which still re-enters the locale by hand
- * because multer consumes the stream mid-request — the one place an in-request store must be
- * restored rather than avoided.
- */
 
 /**
  * EJS `<%= %>` escapes its output — deliberately, since these templates interpolate

@@ -1,3 +1,17 @@
+/**
+ * @module
+ * The order Mongoose schema and the serialization transform that derives its wire-only totals.
+ *
+ * An order embeds the product SNAPSHOT it was bought against (`productSchema`, no `ref`) rather
+ * than referencing the live catalogue row, because a later edit to a product must not rewrite the
+ * history of what was purchased. `totalItems`, `totalQuantity` and `totalPrice` are never stored —
+ * `applyOrderTransform` derives them from `items` at the single serialization point every order
+ * response passes through, which is what lets the contract mark the three fields required without
+ * a writer ever needing to keep them in sync.
+ *
+ * See: docs/modules/orders.md
+ */
+
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { productSchema, applyProductTransform } from '@modules/products';

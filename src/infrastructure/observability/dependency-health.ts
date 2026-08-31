@@ -1,38 +1,14 @@
 /**
- * What every backing service this process needs is doing, right now.
+ * @module
+ * What every backing service this process needs is doing, right now — readiness, not liveness.
+ * `GET /` answers liveness and drives the orchestrator's restart decision; this module answers
+ * `GET /observability/health` and must never feed that decision, so a degraded Redis stays
+ * degraded instead of killing a healthy container.
  *
- * ── WHY THIS IS READINESS AND `GET /` IS LIVENESS ────────────────────────────────────────────────
- * Two questions, two answers, and conflating them is the classic health-check mistake:
+ * No I/O: each dependency already tracks its own connection state, so this is a memory read. One
+ * shared vocabulary — `ready`/`connecting`/`unavailable`/`disabled` — covers three unlike backends.
  *
- *   liveness   is the PROCESS alive?              `GET /` — answered by `app/system-routes.ts`,
- *                                                 and what `.docker/Dockerfile.production`'s
- *                                                 HEALTHCHECK probes.
- *   readiness  can it SERVE, and how well?        this module, published by
- *                                                 `GET /observability/health`.
- *
- * They must stay separate because the orchestrator ACTS on liveness: a liveness probe that failed
- * whenever Redis blinked would restart a perfectly healthy container, and restarting it does not
- * bring Redis back. So nothing here feeds the container probe — a degraded service keeps running
- * and says so.
- *
- * ── WHY NO PING, NO TIMEOUT BUDGET ───────────────────────────────────────────────────────────────
- * Not one function below performs I/O. Every dependency already maintains its own live connection
- * state for its own reasons — Mongoose's `readyState`, and the memoised handle each optional
- * dependency keeps through `adapters/managed-connection.ts` — so readiness is a memory read, and
- * this endpoint cannot be the thing that hangs.
- *
- * That is deliberate, not a shortcut taken to avoid the work. A health endpoint that opens sockets
- * is a denial-of-service amplifier pointed at your own infrastructure: it is polled every few
- * seconds, by every replica, forever. The connection state is what the adapters act on anyway —
- * `getCacheValue` skips the cache on exactly the state reported as `unavailable` here — so this
- * reports the truth the application itself runs on rather than a second opinion about it.
- *
- * ── WHY ONE VOCABULARY FOR THREE UNLIKE THINGS ───────────────────────────────────────────────────
- * A document store, a cache and a message broker have nothing in common technically, and each
- * describing itself in its own words is a payload that needs a legend. One enum makes it readable
- * as it stands, and makes `overallStatus` a fold rather than three special cases. `connecting` is kept as its own value rather than folded into `unavailable` because the
- * production HEALTHCHECK allows a start period: during it, "not yet" and "broken" look
- * identical on the wire and mean opposite things to whoever is watching a deploy.
+ * See: docs/tools/observability-layer.md
  */
 
 import { connection } from '@infrastructure/runtime/database';

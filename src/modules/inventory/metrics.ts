@@ -1,10 +1,13 @@
 /**
+ * @module
  * Domain gauges this module owns. See `modules/account/metrics.ts` for why they live in the
  * module rather than in `infrastructure`, and how the overview endpoint reads them without
  * importing here.
  *
  * Both are bound to unused underscore-prefixed variables, the same way `metrics-http.ts` does it:
  * registering themselves is the constructor's whole job, and nothing reads the handles.
+ *
+ * See: docs/modules/inventory.md
  */
 
 import { Gauge } from 'prom-client';

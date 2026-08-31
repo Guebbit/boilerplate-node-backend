@@ -1,16 +1,19 @@
-import { model, Schema, Types } from 'mongoose';
-import type { Document, Model } from 'mongoose';
-import { applySerialization } from '@infrastructure/persistence/serialize';
-import { ShipmentStatus } from '@types';
-
 /**
- * Shipment Model
+ * @module
+ * Shipment model.
  *
  * One shipment per order, made a database fact by `unique` on `orderId` — the same discipline
  * as the payment's. A shipment exists because an order reached `shipped`; its two statuses
  * mirror the tail of the ORDER's lifecycle rather than replacing it, because the tracking code
  * and the delivery timestamp are courier facts the order has no field for.
+ *
+ * See: docs/modules/delivery.md
  */
+
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model } from 'mongoose';
+import { applySerialization } from '@infrastructure/persistence/serialize';
+import { ShipmentStatus } from '@types';
 
 /**
  * Shipment Document interface.
@@ -28,6 +31,7 @@ export interface ShipmentDocument extends Document {
 /** Shipment Document model type. Queries live in `./repository`, rules in `./service`. */
 export type ShipmentModel = Model<ShipmentDocument>;
 
+/** Shipment collection schema. */
 export const shipmentSchema = new Schema<ShipmentDocument>(
     {
         orderId: {
@@ -60,7 +64,5 @@ export const shipmentSchema = new Schema<ShipmentDocument>(
  */
 export const applyShipmentTransform = applySerialization(shipmentSchema);
 
-/**
- * Model
- */
+/** The compiled shipment model, registered as `Shipment`. */
 export const shipmentModel = model<ShipmentDocument, ShipmentModel>('Shipment', shipmentSchema);

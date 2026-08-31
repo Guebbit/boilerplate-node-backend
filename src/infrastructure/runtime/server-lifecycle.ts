@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Graceful shutdown orchestration — closing the server and tearing down infra in a fixed order,
+ * with a deadline so a stuck teardown cannot hang the process forever.
+ *
+ * Decoupled from Express middleware and route mounting: this file only sequences the stop calls
+ * each adapter already exposes, it does not know how any one of them stops.
+ */
+
 import type { Server } from 'node:http';
 import { logger } from '@infrastructure/adapters/logger';
 import { shutdownAnalytics } from '@infrastructure/observability/analytics';
@@ -7,12 +16,6 @@ import { stopCache } from '@infrastructure/adapters/cache';
 import { stopRateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
-
-/**
- * Server Lifecycle
- * Single responsibility: graceful startup sequencing and shutdown orchestration.
- * Decoupled from Express middleware and route mounting.
- */
 
 /** Upper bound on graceful shutdown before we stop being polite and kill the process. */
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;

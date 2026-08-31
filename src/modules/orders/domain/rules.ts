@@ -1,4 +1,5 @@
 /**
+ * @module
  * Order rules. Pure: data in, verdict out — no status codes, no i18n; `service.ts` maps verdicts.
  * See `docs/theory/domain-layer.md`.
  */
@@ -9,6 +10,7 @@ export interface OrderLineCandidate {
     product?: unknown;
 }
 
+/** The verdict `checkOrderLines` returns: accepted, or refused with the specific reason why. */
 export type OrderLinesVerdict =
     | { ok: true }
     | { ok: false; reason: 'no-lines' }

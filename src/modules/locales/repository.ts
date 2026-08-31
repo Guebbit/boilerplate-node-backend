@@ -10,6 +10,7 @@ import type { LocaleTenant } from '@types';
 import { frontendTenantIds } from './tenants';
 
 /**
+ * @module
  * The two collections' queries, and the one invariant that could not be left to a caller.
  *
  * ## Why the revision bump lives here
@@ -43,6 +44,7 @@ export interface ImportCounts {
     removed: number;
 }
 
+/** Base CRUD/search repository over the languages collection. */
 const localeBase = createRepository<LocaleDocument>(localeModel, {
     transform: applyLocaleTransform,
     searchable: {
@@ -51,6 +53,7 @@ const localeBase = createRepository<LocaleDocument>(localeModel, {
     }
 });
 
+/** Base CRUD/search repository over the entries collection. */
 const entryBase = createRepository<LocaleMessageDocument>(localeMessageModel, {
     transform: applyLocaleMessageTransform,
     searchable: {

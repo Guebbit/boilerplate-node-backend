@@ -1,18 +1,14 @@
 /**
+ * @module
  * The locale schemas' contracts, and the base-language derivation in front of them.
  *
- * Two unique indexes here are what make the translation tier addressable at all:
- *
- *   - `locales_tag` — one row per language tag. Without it two `en-GB` rows can exist, and which
- *     one a dictionary read returns is whichever Mongo reaches first.
- *   - `localeMessages_locale_tenant_key` — one value per (locale, tenant, key). This is the
- *     compound identity of a translation, and it is what lets a merge be an upsert rather than a
- *     read-modify-write. Lose it and re-saving a string silently appends a duplicate that shadows
- *     the original.
- *
- * The `lowercase: true` flags are part of the same guarantee: `EN-gb` and `en-GB` must not be able
- * to occupy two rows under a unique index on `tag`.
+ * Two unique indexes make the translation tier addressable at all: `locales_tag` gives one row
+ * per language tag, and `localeMessages_locale_tenant_key` gives one value per (locale, tenant,
+ * key) — the compound identity that lets a merge be an upsert rather than a read-modify-write. The
+ * `lowercase: true` flags are part of the same guarantee: `EN-gb` and `en-GB` must not occupy two
+ * rows under a unique index.
  */
+
 import { localeSchema, localeMessageSchema, deriveBaseLanguage } from '@modules/locales/model';
 import { LocaleDirection } from '@types';
 import {

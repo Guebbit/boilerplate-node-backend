@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Access-log middleware — one line per request, timed with `hrtime` for sub-millisecond precision,
+ * with a severity derived from the response's own status so a 5xx surfaces as loud as the failure
+ * it is.
+ */
+
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from '@infrastructure/adapters/logger';
 import { getRouteLabel } from '@infrastructure/observability/metrics-http';

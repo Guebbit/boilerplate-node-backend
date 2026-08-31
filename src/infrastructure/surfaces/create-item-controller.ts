@@ -1,4 +1,5 @@
 /**
+ * @module
  * The read-one controller: fetch by path id, 404 with the module's own key when nothing comes
  * back, the SAME 404 when Mongoose rejects the id as a CastError, `rejectDatabaseError` for
  * anything else.

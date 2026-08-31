@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Admin delete controller for the catalogue — thin wiring onto the shared
+ * `createDeleteController` factory; see the exported controller's own JSDoc for behavior.
+ */
+
 import { createDeleteController } from '@infrastructure/surfaces/create-delete-controller';
 import { productService } from '../service';
 import { productsAuditActions } from '../audit';

@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `PUT /cart/:productId` controller — thin HTTP adapter over `cartService.cartItemUpdateQuantity`.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';

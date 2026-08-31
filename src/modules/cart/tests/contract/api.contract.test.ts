@@ -1,17 +1,16 @@
 /**
+ * @module
  * Contract tests for /cart.
  *
- * Every cart route requires authentication and every one of them answers with the same
- * `CartResponseEnvelope`, which makes this resource the easiest place for a serialization drift
- * to hide: six endpoints, one shape, and until now not one of them crossed HTTP in a test.
+ * Every route requires authentication and answers the same `CartResponseEnvelope` — six
+ * endpoints sharing one shape is the easiest place for serialization drift to hide.
  *
- * The cart is built through the API rather than through a fixture builder on purpose. `CartResponse` is a
- * view computed from the stored lines and the products they price, not a serialization of the cart
- * document, so a hand-written fixture would be asserting on a shape the application never produces.
- *
- * Behavioural rules (whose cart, which products) belong to the service suites; the assertions
- * here exist to make sure each contract branch is actually reached.
+ * The cart is built through the API, not a fixture builder: `CartResponse` is a view computed
+ * from stored lines and priced products, not a serialization of the document, so a hand-written
+ * fixture would assert a shape the application never produces. Behavioural rules belong to the
+ * service suites; these assertions exist to make sure each contract branch is reached.
  */
+
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';

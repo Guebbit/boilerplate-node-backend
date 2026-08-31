@@ -1,3 +1,10 @@
+/**
+ * @module
+ * List/search controller for the catalogue — builds the query schema both `GET /products` and
+ * `POST /products/search` validate against, and the cache key that schema implies, then wires
+ * both onto the shared `createSearchController` factory.
+ */
+
 import { z } from 'zod';
 import { coerceStringArray } from '@guebbit/js-toolkit';
 import {

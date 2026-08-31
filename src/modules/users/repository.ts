@@ -1,3 +1,11 @@
+/**
+ * @module
+ * The user collection's persistence layer: standard CRUD from the repository factory, plus the
+ * credential and token operations `account` needs from the other side of the shared-kernel edge.
+ *
+ * See: docs/modules/users.md
+ */
+
 import { userModel, applyUserTransform, TokenType } from './model';
 import type { UserDocument, Token } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';

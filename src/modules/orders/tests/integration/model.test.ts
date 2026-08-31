@@ -1,4 +1,5 @@
 /**
+ * @module
  * Orders must never leak `_id`/`__v`,
  * on any response path — a real document (`toJSON`) or an `.aggregate()` result
  * (mapped manually via `applyOrderTransform`, since aggregation output is plain

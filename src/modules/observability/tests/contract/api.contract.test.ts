@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract tests for /observability.
  *
  * This module was the only routed one without a contract suite, and the gap was not cosmetic:

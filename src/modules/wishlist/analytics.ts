@@ -1,20 +1,15 @@
 /**
- * The analytics event names this module emits.
- *
- * A save funnel with one exit into the purchase funnel, which is the event worth watching.
- *
+ * @module
+ * Analytics event names this module emits — a save funnel with one exit into the purchase funnel.
  * Naming rule: docs/tools/analytics.md#naming.
  *
- * Declared by augmenting the analytics port's name map rather than by editing a shared file,
- * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
- * their names, and `infrastructure` keeps knowing no domain at all.
- *
- * These names stay HERE. Nothing publishes them: the controllers that fire them import this file
- * directly, so a copy would have no reader on either side of the repo boundary. Only
- * `shared/contracts/analytics.frontend.ts` — the moments this service never observes — is
- * published to the paired frontend, which is what keeps one event from being counted twice.
+ * Declared by augmenting the analytics port's name map, same pattern as `./audit.ts` for audit
+ * actions. These names stay here rather than being published to the frontend — only the moments
+ * this service never observes go through `shared/contracts/analytics.frontend.ts`, which keeps one
+ * event from being counted twice.
  */
 
+/** The event names this module fires, keyed by intent. */
 export const wishlistAnalyticsEvents = {
     // Wishlist
     WISHLIST_ITEM_ADDED: 'wishlist_item_added',
@@ -23,6 +18,7 @@ export const wishlistAnalyticsEvents = {
     WISHLIST_MOVED_TO_CART: 'wishlist_moved_to_cart'
 } as const;
 
+/** Registers this module's event names into the analytics port's app-wide union. */
 declare module '@infrastructure/observability/analytics' {
     interface AnalyticsEventMap {
         wishlist: (typeof wishlistAnalyticsEvents)[keyof typeof wishlistAnalyticsEvents];

@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `DELETE /account` controller — the authenticated user requests account deletion; sends a
+ * confirmation email carrying a one-time token.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
@@ -5,11 +11,6 @@ import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { authAccountDeleteTotal } from '../metrics';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
-
-/**
- * DELETE /account
- * Authenticated user requests account deletion — sends a confirmation email with a one-time token.
- */
 
 /**
  * Request handler — resolves with 200 after sending the confirmation email.

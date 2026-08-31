@@ -1,4 +1,5 @@
 /**
+ * @module
  * The demo profile's control surface — mounted only when `NODE_DEMO=true` (see `npm run demo`).
  *
  * Two routes, both consumed by the paired frontend's e2e suite:
@@ -16,6 +17,7 @@
  * beside an in-memory database that `npm run demo` created seconds earlier — there is nothing
  * to protect and no deployment that mounts them.
  */
+
 import type { Express, Request, Response } from 'express';
 import { connection } from '@infrastructure/runtime/database';
 import { clearDemoOutbox, readDemoOutbox } from '@infrastructure/adapters/demo-outbox';
@@ -42,6 +44,7 @@ export const runDemoSeed = (reset: boolean): Promise<void> =>
             clearDemoOutbox();
         });
 
+/** Mount the demo profile's two routes. Only ever called when `NODE_DEMO=true`. */
 export const installDemo = (app: Express): void => {
     app.post('/__demo/reset', (_request: Request, response: Response) => {
         runDemoSeed(true)

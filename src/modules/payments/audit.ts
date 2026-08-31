@@ -1,4 +1,5 @@
 /**
+ * @module
  * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
  * augmentation rather than in a shared enum.
  *

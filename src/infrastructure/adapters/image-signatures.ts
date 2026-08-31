@@ -1,6 +1,5 @@
-import { open } from 'node:fs/promises';
-
 /**
+ * @module
  * Content-based image identification.
  *
  * `Content-Type` on an upload is whatever the client wrote there — `curl -F 'x=@shell.html;type=image/png'`
@@ -13,6 +12,8 @@ import { open } from 'node:fs/promises';
  * Deliberately not a dependency (`file-type` et al): three signatures, and a whitelist this short
  * is easier to audit inline than to trust.
  */
+
+import { open } from 'node:fs/promises';
 
 /**
  * One accepted format, in full: the MIME type it really is, any other spelling a client may

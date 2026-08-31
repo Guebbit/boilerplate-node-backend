@@ -1,20 +1,12 @@
 /**
+ * @module
  * How an address-book fixture is built.
  *
- * A book is addressed by its owner — `addressBooks.userId` is `unique` and no book id reaches the
- * wire — so, like the cart and the wishlist, this pins an `_id` it does not need as a handle. The
- * reason is the same one `../cart/fixtures` gives at length: `scripts/export-demo-dataset.ts` commits what
- * it reads back, and a generated id is 24 different characters on every run.
- *
- * ## Why an ENTRY pins its id too, unlike a cart line
- *
- * A cart line is addressed by its product and carries `_id: false`. An address entry is the
- * opposite case — two entries may hold identical fields and still be "home" and "office", so
- * `addressItemSchema` keeps its `_id` and every endpoint takes that id as its handle. Which means
- * a fixture that let mongod assign them would publish two unstable ids per book instead of one.
- *
- * Entries arrive as the contract's `Address`, the shape `GET /account/addresses` answers with, so
- * a fixture states an entry the way a client would read it back.
+ * A book is addressed by its owner (`userId` is `unique`, no book id reaches the wire), so — like
+ * cart and wishlist — this pins an `_id` it doesn't need, for `export-demo-dataset.ts` to commit a
+ * stable id run over run. An ENTRY is the opposite case: two addresses can be identical in every
+ * field and still be different entries, so `addressItemSchema` keeps its own `_id`, and entries
+ * arrive as the contract's `Address` shape a client would read back.
  */
 
 import { Types } from 'mongoose';
@@ -45,6 +37,7 @@ const toEntry = ({ id, label, phone, ...fields }: Address): AddressItem => ({
     ...compact({ label, phone })
 });
 
+/** A book fixture ready for `addressBookRepository.create`, from a caller's overrides. */
 export const makeAddressBook = ({
     userId,
     items,

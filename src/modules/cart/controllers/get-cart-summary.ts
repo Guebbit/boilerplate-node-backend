@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `GET /cart/summary` controller — thin HTTP adapter over `cartService.cartGetForBadge`.
+ */
+
 import type { Request, Response } from 'express';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';

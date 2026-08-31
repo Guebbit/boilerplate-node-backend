@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `DELETE /cart/:productId` controller — thin HTTP adapter over
+ * `cartService.cartItemRemoveById`.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';

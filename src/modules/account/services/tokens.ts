@@ -1,44 +1,12 @@
 /**
- * The user's `tokens` array, owned in one place.
+ * @module
+ * The user's `tokens` array, owned in one place: every non-password flow (reset, verification,
+ * delete confirmation, refresh sessions) is an entry in it, and "live" — exists, right type, not
+ * expired — is defined once here instead of copied per controller.
  *
- * Every account flow that is not a password — the reset link, the verification link, the delete
- * confirmation, and the refresh tokens that back a session list — is an entry in that array, and
- * for a long time each of them read it for itself. Three controllers held byte-identical copies of
- *
- *     const entry = user.tokens.find((tk) => tk.token === token && tk.type === '<one type>');
- *     if (!entry || (entry.expiration && entry.expiration < new Date())) → 422
- *
- * differing only in the type literal, and a fourth read the array directly to decide which entries
- * were sessions. Nothing was wrong with any single copy. What was wrong is that "a token is live if
- * it exists, matches its type, and has not expired" had no owner, so the fifth flow to be written
- * would have had to rediscover it — and a flow that forgets the expiry comparison does not fail
- * loudly, it ships a link that works forever.
- *
- * So the rule lives here, once, and the flows above ask for it by name.
- *
- * ── Why find and spend are two functions ──────────────────────────────────────────────────────
- *
- * They look like one operation and are deliberately not, because `post-reset-confirm` has to put
- * something between them: it validates the new password BEFORE spending the token, so a mistyped
- * confirmation cannot burn a link the user then has to request again. A single `findAndSpend`
- * would either force that validation to happen after the burn, or grow a callback parameter to
- * let the caller inject work into the middle — which is the same two functions with more
- * ceremony.
- *
- * The split is also where the concurrency answer lives. {@link findLiveToken} is a READ: two
- * simultaneous clicks on one link both find the entry and both pass it. Only
- * {@link spendLiveToken} can separate them, because only its `$pull` is atomic — see
- * `userRepository.tokenRemove`. A caller that must be certain it was first calls both; a caller
- * whose success already destroys the token (deleting the account takes its tokens with it) calls
- * only the first.
- *
- * ── Why a refusal carries no reason ──────────────────────────────────────────────────────────
- *
- * {@link findLiveToken} answers `undefined` for a token that never existed, one of the wrong type,
- * one that expired, and one already spent. That is not laziness about error reporting — it is the
- * rule. All four are answered to the client identically, so that following a dead link cannot be
- * told apart from inventing one, and so that the answer never confirms an account exists. Encoding
- * the four cases as one absence is what stops a future caller helpfully distinguishing them.
+ * {@link findLiveToken} and {@link spendLiveToken} stay separate because only the spend's `$pull`
+ * is atomic and `post-reset-confirm` must validate the new password before spending; a refusal
+ * never says why, so a dead link can't be told apart from an invented one.
  */
 
 import type { Session } from '@types';

@@ -1,19 +1,14 @@
 /**
- * The two token-facing lookups on `src/modules/users/service.ts` — `findByEmail` and
- * `consumeToken`. A live reset/delete/verify token is read through `accountService.findLiveToken`
- * instead, which also checks expiration; this file covers only what `service.ts` itself owns.
+ * @module
+ * The two token-facing lookups on `service.ts` — `findByEmail` and `consumeToken`. A live
+ * reset/delete/verify token is read through `accountService.findLiveToken` instead; this file
+ * covers only what `service.ts` itself owns.
  *
- * `findByEmail` is a one-liner, and that is precisely why it had no test and why it needs one: it
- * delegates to `findOneWithCredentials` rather than the ordinary finder, and the reason is a
- * comment. `password` and `tokens` carry `select: false` on the schema, so the ordinary finder
- * returns a document whose `tokens` array is `undefined`. Both its callers (reset-request,
- * delete-request) immediately push a token onto that array, so swapping in the plain finder does
- * not fail here — it fails later, as a `TypeError` on `undefined`.
- *
- * `consumeToken` is what makes a reset token one-time; the concurrency suite races two uses of
- * one token past it (`tests/integration/concurrency/`), and these cases pin the serial behaviour
- * that race is measured against. The fixture still plants two token types on one user so
- * "consuming one leaves the other alone" is a real assertion rather than a vacuous one.
+ * `findByEmail` delegates to `findOneWithCredentials` rather than the ordinary finder, because
+ * `select: false` on `tokens` would otherwise leave callers pushing onto `undefined` — a failure
+ * that would surface later, not here. `consumeToken` is what makes a reset token one-time; the
+ * concurrency suite (`tests/integration/concurrency/`) races two uses past it, and these cases
+ * pin the serial behaviour that race is measured against.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/fixtures';

@@ -1,4 +1,5 @@
 /**
+ * @module
  * Per-request context: the correlation id, the access log, the observability handle, the locale.
  *
  * Everything here attaches something the rest of the request reads, which is why it is one group

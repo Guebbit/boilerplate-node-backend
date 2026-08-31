@@ -1,26 +1,19 @@
+/**
+ * @module
+ * Cart model — one document per user, not a subdocument of the user, so a user response can't
+ * leak a cart it doesn't carry and touching a cart never touches the whole user. Field names
+ * match `openapi.yaml`'s `CartItem` so stored and wire shapes are identical — no mapper to keep
+ * in sync.
+ *
+ * Mongo, not Redis: Redis here is cache-only, no persistence, fails open — the wrong properties
+ * for the only durable copy of what's in someone's cart.
+ *
+ * See: docs/modules/cart.md
+ */
+
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-
-/**
- * Cart Model
- *
- * A cart is its own collection keyed by `userId`, not a subdocument of the user. Two things follow
- * from that, and both are the point:
- *
- *   - a user response cannot leak a cart it does not carry, so the serializer has nothing to omit;
- *   - touching a cart reads and writes one small document instead of the whole user.
- *
- * Field names match `openapi.yaml`'s `CartItem` (`{ productId, quantity }`) so a stored line and a
- * wire line are the same shape — there is no mapper between them to keep in sync.
- *
- * Mongo and not Redis because Redis here is CACHE-ONLY: no persistence, `allkeys-lru` eviction, and
- * an adapter that fails open (`@infrastructure/adapters/cache`). If Redis were made a primary store, a cart
- * could live at `cart:{token}` with the key's TTL as abandoned-cart expiry and `HINCRBY` making
- * concurrent writes race-free for nothing — paid for in durability, and in
- * `productRemoveFromCartsById`, which is one indexed query here and a hand-maintained secondary
- * index there.
- */
 
 /**
  * A stored cart line.
@@ -128,7 +121,5 @@ cartSchema.index({ 'items.productId': 1 });
  */
 export const applyCartTransform = applySerialization(cartSchema);
 
-/**
- * Model
- */
+/** Cart model entrypoint. */
 export const cartModel = model<CartDocument, CartModel>('Cart', cartSchema);

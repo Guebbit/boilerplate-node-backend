@@ -1,18 +1,15 @@
 /**
+ * @module
  * The address-book schema's contract.
  *
- * The address book is the one collection in `account` shaped like the cart and the wishlist — one
- * document per user, `unique: true` on `userId`, mutated by upsert — with one deliberate
- * difference: its lines DO keep an `_id`. That is not an oversight and not a copy-paste slip. A
- * cart line is addressed by its product and a wishlist line by its product, but two addresses can
- * be identical in every field a human types and still be different entries, so a line needs an
- * identity of its own for `PUT /account/addresses/:addressId` to name.
- *
- * Because that difference is the kind of thing a later "consistency" cleanup removes, it is stated
- * as an explicit, commented expectation rather than left implicit. It is asserted here rather than
- * against `cartSchema` directly: reaching into a sibling module's `model.ts` is exactly the import
- * the boundaries rule forbids, and the cart's own suite states the other half.
+ * The one collection in `account` shaped like the cart and the wishlist — one document per user,
+ * `unique: true` on `userId`, mutated by upsert — with one deliberate difference: its lines keep
+ * an `_id`, because two addresses can be identical in every typed field and still be different
+ * entries. Stated explicitly here since it's the kind of thing a later "consistency" cleanup
+ * removes, and asserted here rather than against `cartSchema` directly, since reaching into a
+ * sibling module's `model.ts` is the import the boundaries rule forbids.
  */
+
 import { addressBookSchema } from '@modules/account/model';
 import {
     defaultOf,

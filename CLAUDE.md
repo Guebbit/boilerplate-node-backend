@@ -53,10 +53,10 @@ See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`
 
 - Exported functions: JSDoc REQUIRED (`@param`, `@returns`, `@throws` as needed).
 - Exported interfaces/types: JSDoc REQUIRED — purpose plus what each field means.
-- Every file: a JSDoc `@module` header at the top explaining the **logic or pattern** the file
-  follows — what it is and how it works, not what it is for in the product. Keep it short: a few
-  lines, enough to orient someone opening the file cold. If it grows into prose, it belongs in
-  `docs/`.
+- Every `.ts` file: a JSDoc `@module` header at the top explaining the **logic or pattern** the
+  file follows — what it is and how it works, not what it is for in the product. Keep it short: a
+  few lines, enough to orient someone opening the file cold. If it grows into prose, it belongs in
+  `docs/`. Doesn't apply to non-`.ts` files (`.md`, `.json`, `.yaml`, etc.).
 - Non-trivial internal helpers: a concise inline or JSDoc explanation.
 - Comments MUST be brief theory-level notes on what the code does and its role — ADHD friendly,
   not line-by-line narration.
@@ -75,9 +75,10 @@ Orderly, scannable files. Two rules, always:
   and also the outermost body of whatever construct owns most of the file (a composable, a store
   definition, a factory, a class body, a `setup()`). Constants, types, helpers, refs, computeds,
   actions, exported and internal alike: each one carries its own JSDoc block.
-- **Two blank lines between them.** Every top-level declaration is separated from its neighbours by
-  two empty lines, so the JSDoc block visually belongs to the thing below it. Inside a
-  declaration, single blank lines are fine.
+- **One blank line between them.** Every top-level declaration is separated from its neighbours by
+  a single empty line — Prettier's formatting has no way to preserve more than one, so this is the
+  enforced ceiling, not just the floor — so the JSDoc block visually belongs to the thing below it.
+  Inside a declaration, blank lines are fine as needed.
 
 ```ts
 /**

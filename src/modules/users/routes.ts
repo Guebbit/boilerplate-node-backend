@@ -1,3 +1,11 @@
+/**
+ * @module
+ * The admin-only `/users` router: search, item read, write and delete, wired to the shared
+ * response cache and the route-flag middleware the hard-delete endpoint uses.
+ *
+ * See: docs/modules/users.md
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/adapters/storage';
@@ -14,6 +22,7 @@ export const router = Router();
 // All routes require authentication + admin role
 router.use(getAuth, isAuth, isAdmin);
 
+/** Cache reader keyed on the same query parameters `getUsers`'s schema accepts. */
 const cacheUsersSearch = searchCache('users', searchUsersKeyParameters);
 
 // POST /users/search — must come before /:id to avoid matching "search" as an id

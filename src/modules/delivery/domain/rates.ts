@@ -1,14 +1,15 @@
 /**
+ * @module
  * Shipping rates — the one piece of delivery that is a rule rather than a record.
  *
- * Pure functions over a static table, in `domain/` for the same reason `evaluateCheckout` and
- * `sumLineItems` live there: the numbers a shop quotes must come from exactly one place, and a
- * table this small does not deserve a collection. A project with negotiated carrier rates
- * replaces the table (or the whole module) — the checkout only ever sees `priceShipping`.
+ * Pure functions over a static table, in `domain/` like `evaluateCheckout`: quotes must come
+ * from exactly one place, and a table this small doesn't deserve a collection. Real carrier
+ * rates would replace the table — checkout only ever sees `priceShipping`.
  *
- * `ShippingMethod` is `delivery`'s own schema in `openapi.yaml`, imported rather than restated:
- * `GET /delivery/methods` answers this table verbatim, so a second declaration here would be the
- * same shape written twice with nothing keeping the two in step.
+ * `ShippingMethod` is `delivery`'s own `openapi.yaml` schema, imported rather than restated,
+ * since `GET /delivery/methods` answers this table verbatim.
+ *
+ * See `docs/theory/domain-layer.md`.
  */
 
 import type { ShippingMethod } from '@types';

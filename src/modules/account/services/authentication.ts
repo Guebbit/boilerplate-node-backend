@@ -1,4 +1,5 @@
 /**
+ * @module
  * Authentication — proving who is asking, and the tokens that keep proving it.
  *
  * Signup and login establish an identity; `tokenAdd` and `tokenRemoveAll` are the two writes
@@ -95,14 +96,15 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
     });
 
 /**
- * The `tokens.type` a password-reset link carries, and how long it works.
+ * The `tokens.type` a password-reset link carries.
  *
- * Named here rather than spelled at each call site because they are policy, not detail: "a reset
- * link lasts an hour" is a decision about how long a stolen mailbox stays useful, and it used to
- * live as a bare `3_600_000` in a controller where nothing connected it to the type it belonged
- * to. `./verification` states its own pair the same way.
+ * Named here rather than spelled at each call site because it is policy, not detail: it used to
+ * live as a bare string in a controller where nothing connected it to the TTL it belonged to.
+ * `./verification` states its own pair the same way.
  */
 export const PASSWORD_RESET_TOKEN_TYPE = 'password';
+
+/** How long a reset link works: an hour, in milliseconds — how long a stolen mailbox stays useful. */
 export const PASSWORD_RESET_TOKEN_TTL_MS = 3_600_000;
 
 /**

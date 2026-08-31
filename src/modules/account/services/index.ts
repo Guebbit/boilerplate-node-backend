@@ -1,23 +1,14 @@
 /**
+ * @module
  * Account service — authentication, the profile a person manages, and their address book.
  *
- * A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`. The
- * split is by what the operations DO, which is why the address book joined it rather than staying
- * a second service beside it: `addresses-service.ts` at the module root was the same layer under a
- * different naming scheme, and a caller had to know which of two objects held the function it
- * wanted.
+ * A folder rather than one file because it passed ~300 lines (see `docs/theory/layers.md`); split
+ * by what each operation DOES. The address book joined it for the same reason:
+ * `addresses-service.ts` was the same layer under a different naming scheme, and callers had to
+ * know which of two objects held the function they wanted.
  *
- * | file               | what is in it                                                    |
- * | ------------------ | ---------------------------------------------------------------- |
- * | `authentication.ts`| signup, login, and the token writes every session flow goes through |
- * | `profile.ts`       | the caller's own fields, and every path that writes a password   |
- * | `addresses.ts`     | the address book — the one collection this module owns           |
- * | `verification.ts`  | issuing an email-verification token and the mail that carries it |
- * | `tokens.ts`        | the `tokens` array: what makes one live, spending it, listing sessions |
- * | `token-cleanup.ts` | dropping expired tokens; housekeeping two controllers trigger    |
- *
- * `../session/` is the layer below this one: JWT signing, the refresh cookie, and the expiry
- * config they both read. Nothing outside this module imports either — see `../index`.
+ * `../session/` is the layer below this one — JWT signing, the refresh cookie, and shared expiry
+ * config. Nothing outside this module imports either; see `../index`.
  */
 
 import {

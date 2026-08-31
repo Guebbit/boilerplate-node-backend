@@ -1,4 +1,5 @@
 /**
+ * @module
  * HTTP response caching: the envelope, the TTL policy and the size gate.
  *
  * Everything here is about caching a RESPONSE. The adapter underneath stores opaque bytes under a
@@ -237,13 +238,53 @@ const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], k
 };
 
 /**
+ * Make a cache-MISS response write itself to Redis as it is sent.
+ *
+ * Split out of `setCache` so the override — and the two `if`s that decide whether the response is
+ * worth storing — sit at their own nesting level instead of piling up inside a callback nested
+ * inside the `getCacheValue().then()` callback. Same move as `drainMatchingKeys` in
+ * `adapters/cache.ts`.
+ *
+ * Wraps `response.json` rather than hooking `finish`: `json` is the one place that already has the
+ * parsed body in hand, so it is the only point that can serialize it without re-deriving it from
+ * the wire bytes later.
+ *
+ * @param response - the response whose `json` method is being overridden
+ * @param cacheKey - key this response will be stored under, on success
+ * @param ttl - TTL to pass to `setCacheValue`
+ * @param tags - invalidation tags to pass to `setCacheValue`
+ */
+const armCacheWrite = (
+    response: Response,
+    cacheKey: string,
+    ttl: number,
+    tags?: string[]
+): void => {
+    const responseJson = response.json.bind(response);
+    response.json = ((body: unknown) => {
+        // Save only successful responses, so errors do not become sticky in cache.
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+            const payload = serializeCachedResponse(cacheKey, {
+                status: response.statusCode,
+                body
+            });
+            if (payload !== undefined) void setCacheValue(cacheKey, payload, ttl, tags);
+        }
+
+        return responseJson(body);
+    }) as Response['json'];
+};
+
+/**
  * Cache GET responses in Redis.
  * Quick flow:
  * 1) try Redis
  * 2) if HIT, return cached JSON
  * 3) if MISS, run controller and save the fresh response
  *
- * @param seconds
+ * @param seconds - TTL for this route's entries; 0 (the default) disables caching entirely
+ * @param options - the route's key parameters, tags and cache identity — see {@link CacheOptions}
+ * @returns an Express middleware that serves a cached response or falls through to the controller
  */
 export const setCache = (seconds = 0, options: CacheOptions) => {
     // Sorted once, at route-registration time rather than per request: the declaration is static,
@@ -350,21 +391,7 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
             }
 
             response.set('x-cache', 'MISS');
-
-            const responseJson = response.json.bind(response);
-            response.json = ((body: unknown) => {
-                // Save only successful responses, so errors do not become sticky in cache.
-                if (response.statusCode >= 200 && response.statusCode < 300) {
-                    const payload = serializeCachedResponse(cacheKey, {
-                        status: response.statusCode,
-                        body
-                    });
-                    if (payload !== undefined)
-                        void setCacheValue(cacheKey, payload, ttl, options.tags);
-                }
-
-                return responseJson(body);
-            }) as Response['json'];
+            armCacheWrite(response, cacheKey, ttl, options.tags);
 
             // No cache hit, so continue to the controller and let it generate a fresh response.
             next();
@@ -392,6 +419,9 @@ export const searchCache = (entity: string, keyParameters: readonly string[], se
  * One call covers every app instance: the cached responses and the tag sets live in shared
  * Redis, so deleting them here is immediately visible to every other worker. No cross-instance
  * broadcast is involved — there is no process-local cache tier for one to invalidate.
+ *
+ * @param tags - the cache tags to clear, e.g. `['products']`
+ * @returns an Express middleware to mount after the write it invalidates
  */
 export const invalidateCache =
     (tags: string[]) => (_request: Request, response: Response, next: NextFunction) => {

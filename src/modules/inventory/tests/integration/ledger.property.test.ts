@@ -1,31 +1,16 @@
 /**
- * Property-based tests — the ledger is a faithful account of the counters.
+ * @module
+ * Property-based tests — replaying a product's ledger reproduces its counters exactly
+ * (`sum(onHandDelta) == onHand - opening`, same for `reserved`), for EVERY sequence of
+ * transitions, not just a table of examples. Guaranteed because a ledger row is written by the
+ * same conditional write that moves the counter, so the two cannot diverge.
  *
- * ── The property, and why it is the one worth having ─────────────────────────────────────────
- *
- * Replaying a product's ledger reproduces its counters exactly:
- *
- *     sum(onHandDelta)   over its rows  ==  onHand   - (whatever it opened with)
- *     sum(reservedDelta) over its rows  ==  reserved - (whatever it opened with)
- *
- * That is a claim about EVERY sequence of transitions, which is what makes it a property rather
- * than a table of examples. It is also the claim the previous design could not make at all: rows
- * were written by an event listener the movers had to remember to notify, and they did not on the
- * failure paths, so the ledger was known to have gaps and the module's own docs said so.
- *
- * Because a ledger row is written by the same call that moves the counter — and only when the
- * conditional write reports it matched — the two cannot diverge. This file is what turns that
- * sentence into something that fails when it stops being true.
- *
- * Real Mongo (`setupTestDb`), because the guarantee lives in the conditional writes. Mocking the
- * repository here would test the arithmetic of `counterDeltaFor`, which `transitions.test.ts`
- * already does far more cheaply, and would assert nothing about the thing this file is for.
- *
- * Determinism, both halves:
- *   - the run is SEEDED, so a failure is reproducible and a passing run is not luck;
- *   - any counterexample this finds gets written back as an ordinary `it()` with its seed in a
- *     comment. The property states the rule; the example remembers the bug.
+ * Runs against real Mongo (`setupTestDb`), since the guarantee lives in the conditional writes —
+ * mocking the repository would only re-test `counterDeltaFor`'s arithmetic, already covered more
+ * cheaply by `transitions.test.ts`. The run is seeded for reproducibility; any counterexample
+ * found gets written back as an ordinary `it()` with its seed.
  */
+
 import fc from 'fast-check';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/fixtures';

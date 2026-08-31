@@ -1,18 +1,15 @@
 /**
+ * @module
  * The self-service account surface — profile update, authenticated password change, session
  * revocation and email verification — at the service/repository layer.
  *
- * Grouped by the invariant each defends rather than by function, like `service.test.ts`:
- *
- *   - a profile update must not be able to touch role, account state or password;
- *   - changing the email must unverify the account, or one confirmed mailbox launders any
- *     number of addresses;
- *   - a wrong current password must be a 422, never a 401 — a 401 logs the user out of a
- *     session that is perfectly valid;
- *   - a session handle must revoke REFRESH tokens only, or the id from a sessions listing
- *     cancels a pending reset/delete/verify token it was never meant to reach;
- *   - at most one verification link may work at a time, and it must be the newest.
+ * Grouped by the invariant each defends, like `service.test.ts`: a profile update can't touch
+ * role, account state or password; changing email must unverify the account; a wrong current
+ * password must be a 422 never a 401, which would log out a valid session; a session handle must
+ * revoke REFRESH tokens only; and at most one verification link may work, and it must be the
+ * newest.
  */
+
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';

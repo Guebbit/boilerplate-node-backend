@@ -1,4 +1,5 @@
 /**
+ * @module
  * How a language fixture and an entry fixture are built.
  *
  * Two factories, because the two collections are addressed differently: a language is a record
@@ -18,6 +19,7 @@ import type { Language, LocaleEntry } from '@types';
 import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleMessageDocument } from './model';
 
+/** The fields `makeLocale` accepts, overriding what the schema would otherwise default. */
 export type LocaleOverrides = OverridesFor<Language> & {
     /** BCP 47. Lowercased by the schema on write, so a fixture may state it either way. */
     tag: string;
@@ -35,6 +37,7 @@ export type LocaleFixture = Partial<LocaleDocument> & {
     tag: string;
 };
 
+/** Builds a language fixture, deriving `baseLanguage` the same way `createLanguage` does. */
 export const makeLocale = ({
     id,
     createdAt,
@@ -50,6 +53,7 @@ export const makeLocale = ({
     ...compact({ ...fields })
 });
 
+/** The fields `makeLocaleEntry` accepts, overriding what the schema would otherwise default. */
 export type LocaleEntryOverrides = OverridesFor<LocaleEntry> & {
     locale: string;
     key: string;
@@ -62,6 +66,7 @@ export type LocaleEntryFixture = Partial<LocaleMessageDocument> & {
     key: string;
 };
 
+/** Builds one translated-string fixture. */
 export const makeLocaleEntry = ({
     id,
     createdAt,

@@ -1,19 +1,13 @@
 /**
- * The analytics event names this module emits.
+ * @module
+ * The analytics event names this module emits — the funnel's last gate: succeeded over
+ * (succeeded + declined) is the conversion number a payment provider change would move.
  *
- * The funnel's last gate: succeeded over (succeeded + declined) is the conversion number a payment
- * provider change would move.
+ * Declared by augmenting the analytics port's name map, as `./audit.ts` does for audit actions,
+ * so the catalogue grows with the modules that own their names. These names stay HERE: the
+ * controllers that fire them import this file directly, so nothing needs to publish a copy.
  *
  * Naming rule: docs/tools/analytics.md#naming.
- *
- * Declared by augmenting the analytics port's name map rather than by editing a shared file,
- * exactly as `./audit.ts` does for audit actions: the catalogue grows with the modules that own
- * their names, and `infrastructure` keeps knowing no domain at all.
- *
- * These names stay HERE. Nothing publishes them: the controllers that fire them import this file
- * directly, so a copy would have no reader on either side of the repo boundary. Only
- * `shared/contracts/analytics.frontend.ts` — the moments this service never observes — is
- * published to the paired frontend, which is what keeps one event from being counted twice.
  */
 
 export const paymentsAnalyticsEvents = {

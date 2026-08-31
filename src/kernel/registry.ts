@@ -1,4 +1,5 @@
 /**
+ * @module
  * The module registry: what turns the list in `src/modules.ts` into a running application.
  *
  * A module is a typed value, not a folder convention — everything it needs the application to do

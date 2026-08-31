@@ -1,23 +1,17 @@
 /**
+ * @module
  * Audit actions this module emits. See `modules/account/audit.ts` for why they are declared by
  * augmentation rather than in a shared enum.
  *
- * Every one of these is a write that changes WHAT USERS READ. A translation edited on a Friday
- * afternoon is indistinguishable from a copy change nobody approved unless something recorded who
- * made it, and these rows are the only record: the dictionary itself keeps no history, and the
- * git log that used to answer this question stopped applying the moment the copy left the
- * repository.
- *
- * The reads are deliberately NOT audited, in either tier. `GET /locales/{locale}/messages` is
- * public and anonymous, and `GET /locales/{locale}/entries` returns text written to be published
- * — contrast `feedback`, which audits its reads because its rows carry an email address and free
- * text from the public.
+ * Every one of these is a write that changes what users read, and these rows are the only record —
+ * the dictionary itself keeps no history. Reads are deliberately not audited: the messages endpoint
+ * is public, anonymous text written to be published.
  *
  * Segments are snake_case, not hyphenated: `tests/cross-cutting/audit-actions.test.ts` requires
- * `noun.noun.verb` in lower snake_case, so `locale_entry` is the spelling and `locale-entry` would
- * fail the sweep.
+ * `noun.noun.verb` in lower snake_case.
  */
 
+/** Every audit action this module emits, keyed by the constant name call sites use. */
 export const localeAuditActions = {
     ADMIN_LOCALE_CREATED: 'admin.locale.created',
     ADMIN_LOCALE_UPDATED: 'admin.locale.updated',
@@ -33,6 +27,7 @@ export const localeAuditActions = {
     ADMIN_LOCALE_ENTRY_IMPORTED: 'admin.locale_entry.imported'
 } as const;
 
+/** Merges this module's actions into the app-wide `AuditActionMap` union. */
 declare module '@infrastructure/observability/audit' {
     interface AuditActionMap {
         locales: (typeof localeAuditActions)[keyof typeof localeAuditActions];

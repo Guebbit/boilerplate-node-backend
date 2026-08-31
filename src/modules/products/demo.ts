@@ -1,4 +1,5 @@
 /**
+ * @module
  * The catalogue's slice of the demo dataset.
  *
  * The records are stated HERE, in the module that owns them, so `rm -rf src/modules/products` takes
@@ -35,7 +36,7 @@ export const SEED_PRODUCT_IDS = {
     barebones: '67f0a1c2d3e4b5a6c7d8e9f0'
 } as const;
 
-/*
+/**
  * Six products, chosen to cover the branches the storefront and the repositories actually have
  * rather than to look like a shop.
  *

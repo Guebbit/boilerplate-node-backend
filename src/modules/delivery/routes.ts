@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Route table for delivery. Guards are chosen per route, because the three routes have three
+ * different audiences: the methods list is pre-purchase information and stays public, the
+ * shipment read needs a caller to scope ownership to, and the courier tick is staff's button.
+ *
+ * See: docs/modules/delivery.md
+ */
+
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { getShippingMethods } from './controllers/get-shipping-methods';

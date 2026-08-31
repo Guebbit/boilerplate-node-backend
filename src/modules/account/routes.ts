@@ -1,3 +1,12 @@
+/**
+ * @module
+ * Express router for the account module: auth (login, signup, refresh, logout), password reset,
+ * email verification, sessions, and the address book. See `./module.ts` for the mount point and
+ * `docs/modules/account.md` for the story.
+ *
+ * See: docs/modules/account.md
+ */
+
 import { Router } from 'express';
 import { credentialLimiters } from '@infrastructure/http/middlewares/rate-limit';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';

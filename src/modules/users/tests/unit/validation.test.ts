@@ -1,24 +1,12 @@
 /**
- * `zodUserSchema` in `src/modules/users/model.ts` — its six message thunks.
+ * @module
+ * `zodUserSchema`'s six message thunks — exercised here because import-time coverage lies about
+ * them: the schema is a declaration, so it reports 100% covered whether or not a thunk ever runs.
  *
- * The schema is a declaration, so there is nothing to call and it reports 100% of statements
- * covered by anything that merely imports it. What that number does not say is whether the
- * thunks ever *run*: half of them had never been invoked, because the suites that parse a bad
- * user only ever supplied one kind of bad input.
- *
- * A thunk that never runs is a message nobody has read. Two failures hide there:
- *
- *   - **A thunk evaluated eagerly.** `error: t('…')` instead of `error: () => t('…')` resolves
- *     at import time, before `i18next.init()`, yielding `undefined` — which Zod reads as "no
- *     custom message" and silently replaces with its own English. The module header describes
- *     this as PROBLEM 01; these cases are what would catch a regression of it, because an
- *     eagerly-resolved thunk produces Zod's wording rather than ours.
- *   - **A message attached to the wrong rule.** `min(1)` and `min(3)` on `username` are
- *     different failures with different copy. Swap them and every "does it reject?" test stays
- *     green while the user is told the wrong thing.
- *
- * So each case drives exactly one rule and asserts on the *key's* copy, not on prose written
- * here — `en.json` stays the single source of the wording.
+ * A thunk that never runs is a message nobody has read. The case that matters most: `error: t('…')`
+ * instead of `error: () => t('…')` resolves at import time, before `i18next.init()`, so Zod silently
+ * falls back to its own English wording — these cases catch that regression, and a message attached
+ * to the wrong validation rule, by asserting on `en.json`'s own copy rather than prose written here.
  */
 import { zodUserSchema } from '@modules/users';
 import { createUserBodyPasswordMin } from '@api/schemas.zod';

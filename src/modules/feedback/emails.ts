@@ -1,20 +1,19 @@
 /**
+ * @module
  * The copy of every email this module sends, resolved into finished strings.
  *
  * Same rule as `@modules/account/emails`: the language is an argument, the output is finished
- * text, and the worker that sends it resolves nothing. See that file for why.
+ * text, the worker resolves nothing — see that file for why. This notification goes to the
+ * support mailbox, so it renders in `NODE_DEFAULT_LOCALE` while the customer's own words stay
+ * untranslated; it also has no `footer`, the one template that skips the shared partial.
  *
- * One difference worth naming: this notification goes to the support mailbox, not to the person
- * who filled in the form, so its caller passes `NODE_DEFAULT_LOCALE` — the operator's language.
- * The customer's own words pass through untranslated, as they must.
- *
- * No `footer`: this template is the one that does not include the shared footer partial, and a
- * builder returns what its template prints — nothing more.
+ * See: docs/tools/email-and-rendering.md
  */
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 
+/** The fields the contact form collects, plus the timestamp stamped on create. */
 export interface ContactRequest {
     name?: string;
     email: string;

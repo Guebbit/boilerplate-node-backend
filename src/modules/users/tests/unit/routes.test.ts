@@ -1,4 +1,5 @@
 /**
+ * @module
  * The user-administration route table.
  *
  * Every route here is admin-only, and it is admin-only by ONE line — `router.use(getAuth, isAuth,

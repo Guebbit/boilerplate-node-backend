@@ -1,11 +1,8 @@
 /**
- * Products — public barrel.
- *
- * The only surface a sibling module may import. Everything not re-exported here is internal, and
- * lint enforces that: reaching `@modules/products/service` from outside is an error, not a shortcut.
- *
- * Keep the surface narrow. Each export here is a promise to every other module that this shape will
- * not move, so add one only when a sibling genuinely needs it.
+ * @module
+ * Products — public barrel, the only surface a sibling module may import. Lint enforces it:
+ * reaching `@modules/products/service` from outside is an error. Keep the surface narrow — each
+ * export here is a promise not to move.
  */
 
 export { productService } from './service';
@@ -29,13 +26,8 @@ export { productSchema, applyProductTransform } from './model';
 export { PRODUCT_DELETED } from './events';
 
 /*
- * The demo catalogue is NOT re-exported here. It lives behind this module's second public path,
- * `@modules/products/demo`, which `cart`, `wishlist` and `orders` take for their own seeders.
- *
- * It used to come through this barrel, and the cost was that "what may a sibling import" and "what
- * is the production API" stopped being the same question — a domain's public surface included
- * test-and-demo data, and the deletability figures could not tell a runtime edge from a demo one.
- * Two named doors separate them without hiding either: the coupling is as declared as it ever was,
- * and `eslint-plugin-boundaries` now asserts that only a seeder walks
- * through the second one.
+ * The demo catalogue is NOT re-exported here — it lives behind a second public path,
+ * `@modules/products/demo`, used only by seeders in `cart`, `wishlist` and `orders`. That keeps
+ * this barrel's surface production-only; `eslint-plugin-boundaries` enforces that only a seeder
+ * imports the demo path.
  */

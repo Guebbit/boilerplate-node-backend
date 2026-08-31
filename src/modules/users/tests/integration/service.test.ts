@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Integration coverage for `userService` — validation, search, and the admin create/update/delete
+ * flows — against the in-memory Mongo `setupTestDb` wires up.
+ */
+
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';

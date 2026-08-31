@@ -1,4 +1,5 @@
 /**
+ * @module
  * Neither collection may leak `_id`/`__v`, on either response path — a hydrated document
  * (`toJSON`) or a `.lean()` list result mapped through the exported transform.
  *

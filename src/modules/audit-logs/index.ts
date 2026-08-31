@@ -1,18 +1,13 @@
 /**
- * Audit logs — public barrel.
+ * @module
+ * Audit logs — public barrel; the only surface a sibling may import (see
+ * `modules/products/index.ts` for the rule). Owns a collection and no URL: `module.ts` registers
+ * the write path itself at import time, and `observability` reads through this barrel to serve
+ * `GET /observability/audit`.
  *
- * The only surface a sibling module may import. See `modules/products/index.ts` for the rule.
- *
- * This module owns a collection and no URL. The write path is registered by `module.ts` itself, at
- * import time, as the sink behind `@infrastructure/observability/audit` — deliberately not by
- * `app.ts`, which would have to name a domain to do it; the reasoning is beside the call. The read
- * path is served by `observability`, which owns `GET /observability/audit` and reaches the service
- * through this barrel.
+ * See: docs/modules/audit-logs.md
  */
 
-/*
- * One export, because `observability` needs one thing: a service to read the trail with. The
- * repository, the model and their types are how that reading is done, which is this module's
- * business and not the dashboard's.
- */
+// One export — the repository, model and their types are how `observability` reads the trail,
+// which is this module's business, not the dashboard's.
 export { auditLogService } from './service';

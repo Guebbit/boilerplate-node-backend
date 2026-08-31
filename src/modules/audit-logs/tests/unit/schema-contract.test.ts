@@ -1,4 +1,5 @@
 /**
+ * @module
  * The audit-log schema's contract.
  *
  * This is the one collection in the system whose schema is a compliance artifact rather than a
@@ -16,6 +17,7 @@
  *     deleted by the database, and it is the retention policy — so it is asserted against the
  *     configured window rather than against a hardcoded number.
  */
+
 import { auditLogSchema } from '@modules/audit-logs/model';
 import { enumOf, indexOptionSpecs, indexSpecs, optionsOf, requiredPaths } from '@tests/schema';
 

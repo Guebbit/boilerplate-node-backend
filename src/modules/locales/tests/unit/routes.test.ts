@@ -1,20 +1,14 @@
 /**
+ * @module
  * The locales route table.
  *
- * This module makes two deliberate choices that look like mistakes, and both are asserted here so
- * that "fixing" either one fails loudly:
- *
- *   1. THE READS ARE PUBLIC. A client that has just failed to reach the API is exactly who needs a
- *      dictionary, so requiring a token would withhold the copy in the one case it exists for.
- *      There is nothing to protect — it is text written to be published.
- *   2. EVERY ADMIN ROUTE SPELLS ITS OWN GUARD. The public reads must be declared first (Express
- *      takes the first match, and `/tenants` would otherwise be read as a language code), so a
- *      single `router.use` gate could only sit mid-file, guarding by line number. Spelled per
- *      mount, a route carries its own policy and a new one cannot inherit the wrong half.
- *
- * The second choice is what makes this test worth its length: with no router-level gate, "is this
- * route admin-only" is a question about that route's own chain, and there are thirteen of them.
+ * Two deliberate choices, asserted here so "fixing" either one fails loudly: the reads are
+ * public — a client that just failed to reach the API is exactly who needs a dictionary — and
+ * every admin route spells its own guard rather than a single router-level gate, since the public
+ * reads must be declared first (Express takes the first match, and `/tenants` would otherwise read
+ * as a language code) and a mid-file gate would guard by line number instead of by route.
  */
+
 import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>

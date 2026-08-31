@@ -1,4 +1,5 @@
 /**
+ * @module
  * The persisted `locale` on the user document.
  *
  * `Accept-Language` answers "what language is this request in", which is the right source for a

@@ -1,4 +1,5 @@
 /**
+ * @module
  * Orders — domain layer. Pure rules, lint-guaranteed free of Express, Mongoose and every tier.
  *
  * What belongs here: anything testable without a database.

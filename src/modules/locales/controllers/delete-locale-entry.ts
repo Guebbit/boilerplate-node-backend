@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `DELETE /locales/:locale/entries/:entryId` controller — thin HTTP adapter over
+ * `localeService.deleteEntry`.
+ */
+
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';

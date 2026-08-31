@@ -1,3 +1,13 @@
+/**
+ * @module
+ * Controller for `GET /observability/health`. Assembles the readiness snapshot by hand, off
+ * `infrastructure/observability`: dependency state, telemetry sinks, process resources. See the
+ * JSDoc on `getObservabilityHealth` below for what each field means and why liveness lives
+ * elsewhere.
+ *
+ * See: docs/modules/observability.md
+ */
+
 import type { Request, Response } from 'express';
 import os from 'node:os';
 import { successResponse } from '@infrastructure/http/response';

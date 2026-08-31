@@ -1,16 +1,15 @@
 /**
+ * @module
  * Request-scoped translation: the ambient `t`, and the storage that carries it.
  *
- * The concurrency-critical part of i18n, and the reason it is fifty lines on its own. `i18next`'s
- * default export is one global instance with one active language, so two overlapping requests in
- * different languages interleave and one is answered in the other's — a bug that only appears
- * under concurrency, so never in a test and always in production. `getFixedT(locale)` binds a `t`
- * to one language and touches no global; an `AsyncLocalStorage` carries it down the request's
- * async chain.
+ * `i18next`'s default export is one global instance with one active language, so two overlapping
+ * requests in different languages would interleave and one gets answered in the other's — a bug
+ * that only appears under concurrency. `getFixedT(locale)` binds a `t` to one language with no
+ * global touched; an `AsyncLocalStorage` carries it down the request's async chain.
  *
- * ALS is scoped to an async CALL CHAIN. Queued work, boot-time callbacks and scripts all run
- * outside the store and fall back to the boot locale — out-of-band work must carry its locale in
- * the payload and bind with {@link runWithLocale}.
+ * ALS is scoped to an async CALL CHAIN: queued work, boot-time callbacks and scripts run outside
+ * it and fall back to the boot locale — out-of-band work must carry its locale and bind with
+ * {@link runWithLocale}.
  *
  * See: docs/tools/i18n.md
  */
@@ -28,6 +27,7 @@ export interface LocaleContext {
     t: TFunction;
 }
 
+/** The ambient store: whichever {@link LocaleContext} is bound to the current async call chain. */
 const localeStorage = new AsyncLocalStorage<LocaleContext>();
 
 /**

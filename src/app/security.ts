@@ -1,4 +1,5 @@
 /**
+ * @module
  * Transport-level protections and body parsing.
  *
  * Grouped because the order matters and is not obvious: `trust proxy` before the rate limiter,

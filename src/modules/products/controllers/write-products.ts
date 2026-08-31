@@ -1,3 +1,10 @@
+/**
+ * @module
+ * Admin create/update controller for the catalogue. One handler for POST/PUT because the two
+ * bodies overlap almost entirely — presence of an id is what tells create from update apart — and
+ * both must run the same validation, image bookkeeping, and upload cleanup on failure.
+ */
+
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';

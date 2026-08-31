@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `POST /account/signup` controller — thin HTTP adapter over `accountService.signup`, plus the
+ * uploaded-image cleanup that has to run on both its success and failure paths.
+ */
+
 import type { Request, Response } from 'express';
 import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';

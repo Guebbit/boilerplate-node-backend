@@ -1,4 +1,5 @@
 /**
+ * @module
  * Delivery — shipments and the fake courier, downstream of the order's status machine.
  *
  * The module never moves an order to `shipped` itself: staff do that through the admin order
@@ -6,6 +7,8 @@
  * mints its tracking code, sends the email. The other direction (`shipped → delivered`) is the
  * fake courier: a job function behind an admin endpoint, the same shape as the token cleanup,
  * because this repo deliberately has no scheduler — an operator (or a demo click) is the cron.
+ *
+ * See: docs/modules/delivery.md
  */
 
 import { t, getDefaultLocale } from '@infrastructure/i18n';

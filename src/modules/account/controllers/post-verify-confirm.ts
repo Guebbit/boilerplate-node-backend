@@ -1,3 +1,9 @@
+/**
+ * @module
+ * `POST /account/verify-confirm` controller — spends a one-time verification token and marks the
+ * account's email verified.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { ConfirmEmailVerificationBody } from '@api/schemas.zod';

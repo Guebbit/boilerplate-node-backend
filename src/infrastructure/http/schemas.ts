@@ -1,4 +1,5 @@
 /**
+ * @module
  * Contract scalars, as they arrive over HTTP.
  *
  * `readInput` decodes a transport; it deliberately does not validate, so a value it could not
@@ -13,22 +14,30 @@
 
 import { z } from 'zod';
 
-/*
- * The bounds, declared here rather than imported from the generated client.
+/**
+ * Largest `pageSize` a caller may request, declared here rather than imported from the generated
+ * client.
  *
- * `PageSize` and `hardDelete` are single shared components in `openapi.yaml`, so every operation
- * referencing them carries the same numbers — but orval flattens a shared component into one
- * constant PER OPERATION. There is no shared constant to import, only forty identical ones named
- * after whichever endpoint they were emitted for. Importing one of those pairs — the `products`
- * one, say — would put a domain's name in `infrastructure` and break outright the day that
- * module's contract fragment is deleted.
+ * `PageSize` is a single shared component in `openapi.yaml`, so every operation referencing it
+ * carries the same number — but orval flattens a shared component into one constant PER OPERATION.
+ * There is no shared constant to import, only forty identical ones named after whichever endpoint
+ * they were emitted for. Importing one of those — the `products` one, say — would put a domain's
+ * name in `infrastructure` and break outright the day that module's contract fragment is deleted.
  *
- * So infrastructure owns the scalar and `tests/cross-cutting/contract-scalars.test.ts` proves it still
- * matches every operation orval generated. The dependency is inverted, not dropped: change the
- * component in `openapi.yaml` without changing these and the build fails, which is the property
+ * So infrastructure owns the scalar and `tests/cross-cutting/contract-scalars.test.ts` proves it
+ * still matches every operation orval generated. The dependency is inverted, not dropped: change
+ * the component in `openapi.yaml` without changing this and the build fails, which is the property
  * the import was there for.
  */
 const PAGE_SIZE_MAX = 100;
+
+/**
+ * Default for `hardDelete` when a caller sends nothing: soft delete.
+ *
+ * Same shared-component situation as {@link PAGE_SIZE_MAX} — `hardDelete` is one shared `openapi.yaml`
+ * component flattened into forty per-operation constants by orval, so this is declared here rather
+ * than imported from any one of them.
+ */
 const HARD_DELETE_DEFAULT = false;
 
 /**
@@ -61,19 +70,24 @@ export const hardDeleteSchema = z.preprocess(
 );
 
 /**
- * `page` / `pageSize` as a caller sends them.
+ * `page` as a caller sends it.
  *
- * Coerced because a query string carries numbers as text, bounded because `openapi.yaml` declares
- * `minimum: 1` and `maximum: 100` and an endpoint that ignores its own declared bounds is not
- * honouring its contract. Integer-only for the same reason — `?page=1.5` produced a fractional
- * `skip`, which is not a page.
+ * Coerced because a query string carries numbers as text, integer-only because `?page=1.5` produced
+ * a fractional `skip`, which is not a page.
  *
- * Absent stays absent: `normalizePagination` (`@infrastructure/persistence/search`) is the single authority on
- * what "page 1, ten per page" means, and it runs on every search. Defaulting here as well would
- * only add a second set of numbers that the later one always overwrites.
+ * Absent stays absent: `normalizePagination` (`@infrastructure/persistence/search`) is the single
+ * authority on what "page 1, ten per page" means, and it runs on every search. Defaulting here as
+ * well would only add a second set of numbers that the later one always overwrites.
  */
 export const pageSchema = z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional());
 
+/**
+ * `pageSize` as a caller sends it.
+ *
+ * Same coercion as {@link pageSchema}, bounded because `openapi.yaml` declares `maximum: 100`
+ * ({@link PAGE_SIZE_MAX}) and an endpoint that ignores its own declared bound is not honouring its
+ * contract.
+ */
 export const pageSizeSchema = z.preprocess(
     blankToUndefined,
     z.coerce.number().int().min(1).max(PAGE_SIZE_MAX).optional()

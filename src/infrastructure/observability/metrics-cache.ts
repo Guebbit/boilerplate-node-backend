@@ -1,8 +1,11 @@
 /**
+ * @module
  * Cache metrics (Prometheus).
  *
  * One counter, and it exists because a log line is not alertable. See `metrics-http.ts` for why
  * infrastructure registers its own metrics against the shared registry.
+ *
+ * See: docs/tools/prometheus.md
  */
 
 import { Counter } from 'prom-client';

@@ -1,16 +1,13 @@
 /**
+ * @module
  * The orders route table.
  *
- * Orders differ from the catalogue in one structural way that this file exists to pin down: the
- * whole router is authenticated at the top (`router.use(getAuth, isAuth)`), and the admin guard is
- * then applied per route. That split is easy to get wrong in the safe-looking direction — an
- * `isAdmin` omitted from a write reads as "authenticated users may do this", which for
- * `PUT /orders/:id` means any logged-in customer editing anyone's order.
- *
- * The other invariant here is `POST /:id/cancel`: it is deliberately NOT admin-guarded, because a
- * customer cancelling their own order is the one order write a customer may make. Its safety comes
- * from the service's scoped conditional write, not from the router — so a test that "helpfully"
- * added `isAdmin` here would be breaking the feature, and the assertion below says so.
+ * The whole router is authenticated at the top (`router.use(getAuth, isAuth)`), with the admin
+ * guard applied per route — an `isAdmin` omitted from a write reads as "any authenticated user
+ * may do this", easy to get wrong in the unsafe direction. `POST /:id/cancel` is deliberately NOT
+ * admin-guarded, since a customer cancelling their own order is the one write they may make; its
+ * safety comes from the service's scoped conditional write, not the router, so a test that
+ * "helpfully" added `isAdmin` here would break the feature.
  */
 import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
 

@@ -1,22 +1,15 @@
 /**
+ * @module
  * The account route table — the module where getting the router wrong is an account takeover.
  *
- * Three arrangements here are load-bearing and none of them is visible to a type checker:
- *
- *   1. `router.use(noStore)` covers EVERY route, including `GET /account`. That route once also
- *      mounted `setCache`, whose `Cache-Control` header replaced this one's, and a browser stored
- *      the caller's own profile for an hour. `setCache` now refuses to run on a response marked
- *      `noStore`, but the mounting is still what makes the guarantee, so it is asserted per route.
- *   2. THE CREDENTIAL ROUTES ARE RATE-LIMITED IN PAIRS. Login, signup, reset, password change and
- *      verification each carry both budgets — one keyed by identity, one by address. Half the pair
- *      leaves the other attack unbudgeted, and neither half is visible in the stack without the
- *      labels `securityMock` adds.
- *   3. THE TOKEN-BEARING ROUTES ARE DELIBERATELY PUBLIC. `POST /account/reset-confirm`,
- *      `/verify-confirm`, `/delete-confirm`, `GET /refresh` and `POST /logout` take no `isAuth`,
- *      because the emailed token or the cookie IS the credential — the caller cannot have an
- *      access token yet, or is destroying the one they have. Adding `isAuth` to any of them breaks
- *      the flow it belongs to, so each is asserted as public on purpose.
+ * Three arrangements here are load-bearing and invisible to a type checker, so each is asserted
+ * per route: `router.use(noStore)` must cover every route (a past regression let `setCache`
+ * override it on `GET /account`); the credential routes must carry BOTH rate-limit budgets —
+ * identity and address — or one attack goes unbudgeted; and the token-bearing routes
+ * (`reset-confirm`, `verify-confirm`, `delete-confirm`, `refresh`, `logout`) are deliberately
+ * public, since the emailed token or cookie IS the credential.
  */
+
 import { routeTable, routeSignatures, routerMiddleware, guardsOn } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>

@@ -1,4 +1,5 @@
 /**
+ * @module
  * Where translations come from: discovery, the per-module merge, and the resources `i18next.init()`
  * is handed at boot.
  *
@@ -26,6 +27,7 @@ const LOCALES_DIRECTORY = path.join(__dirname, '..', '..', 'locales');
 export const getDefaultLocale = (): string => process.env.NODE_DEFAULT_LOCALE ?? 'en';
 export const getFallbackLocale = (): string => process.env.NODE_FALLBACK_LOCALE ?? 'en';
 
+/** Memoised result of {@link listSupportedLocales}; `undefined` until the first call. */
 let supportedLocalesCache: string[] | undefined;
 
 /**
@@ -121,6 +123,7 @@ const deepMerge = (
     return target;
 };
 
+/** True for a plain object node `deepMerge` should recurse into, false for any leaf value. */
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 

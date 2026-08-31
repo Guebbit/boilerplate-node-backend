@@ -1,18 +1,13 @@
 /**
- * The product schema's contract, and the availability it derives.
+ * @module
+ * The product schema's contract, and the availability it derives from the two stock
+ * counters `inventory` is the only writer of.
  *
- * The catalogue schema carries the two stock counters that `inventory` is the only writer of, and
- * the derived `available` that every shopper actually sees. The defaults are the interesting part:
- * each one decides what a product means when a field was never set, and each is load-bearing
- * somewhere downstream.
- *
- *   - `onHand: 100` — a product created without stock is sellable. That is a demo-friendly
- *     default and a deliberate one; zero would make every newly created product invisible.
- *   - `reserved: 0` — the subtrahend in `available`. Absent rather than zero and the arithmetic
- *     yields `NaN`, which serializes as `null` and renders as "out of stock" for everything.
- *   - `active: true` — a new product is published. `false` would create a catalogue nobody can
- *     see and no error explains.
+ * The defaults are the interesting part: each decides what a product means when a field
+ * was never set, and each is load-bearing somewhere downstream (e.g. `onHand: 100` keeps a
+ * freshly created product sellable rather than invisible).
  */
+
 import { productSchema, applyProductTransform } from '@modules/products/model';
 import { defaultOf, indexSpecs, optionsOf, pathOptions, requiredPaths } from '@tests/schema';
 

@@ -1,4 +1,5 @@
 /**
+ * @module
  * MongoDB connection lifecycle.
  *
  * See: docs/tools/mongodb-mongoose.md

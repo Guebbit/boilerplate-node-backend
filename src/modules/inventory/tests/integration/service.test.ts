@@ -1,4 +1,5 @@
 /**
+ * @module
  * Inventory service — `src/modules/inventory/service.ts`.
  *
  * The lifecycle across modules is covered by `cart/tests/unit/stock.test.ts`, and the replay
@@ -7,6 +8,7 @@
  *
  * Real Mongo (`setupTestDb`) throughout, because every guarantee here is a conditional write.
  */
+
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/fixtures';

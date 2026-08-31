@@ -1,3 +1,13 @@
+/**
+ * @module
+ * Housekeeping for the `tokens` array: sweeping out entries that have expired.
+ *
+ * Two triggers, two functions. `runTokenCleanup` is a fire-and-forget pre-flight step login and
+ * refresh run on every request, and must never fail the request that triggered it. `adminTokenCleanup`
+ * is the deliberate admin action behind `DELETE /account/tokens/expired`, which needs an outcome to
+ * answer the request with and is worth its own audit record.
+ */
+
 import { userRepository } from '@modules/users';
 import { logger } from '@infrastructure/adapters/logger';
 import {

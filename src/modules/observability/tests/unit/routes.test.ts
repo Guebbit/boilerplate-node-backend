@@ -1,4 +1,5 @@
 /**
+ * @module
  * The observability route table, and the two inline handlers on it.
  *
  * ── THE GUARDS ──────────────────────────────────────────────────────────────────────────────────

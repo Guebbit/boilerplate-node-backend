@@ -1,4 +1,5 @@
 /**
+ * @module
  * The pure half of `localeService`: the tree builder, the collision rules and the manifest merge.
  *
  * All three are decisions rather than plumbing, and all three fail SILENTLY when they are wrong —

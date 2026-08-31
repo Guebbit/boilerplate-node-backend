@@ -1,3 +1,8 @@
+/**
+ * @module
+ * `POST /cart` controller — thin HTTP adapter over `cartService.cartItemAdd`.
+ */
+
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { UpsertCartItemBody } from '@api/schemas.zod';

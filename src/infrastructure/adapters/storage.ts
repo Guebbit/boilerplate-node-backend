@@ -1,4 +1,5 @@
 /**
+ * @module
  * File upload storage (multer).
  *
  * Defines *where* uploads land, *what* they are renamed to, and *which* MIME types are
@@ -97,8 +98,8 @@ export const resolveUploadDestination = (
  * cleanly. The extension comes from the declared type instead, which `fileFilter` has already
  * constrained to a closed set, and `validateUploadedImages` then confirms the bytes agree.
  *
- * @param request
- * @param file
+ * @param request - the in-flight Express request (available for per-user paths, unused here)
+ * @param file - multer's descriptor: fieldname, originalname, mimetype, size
  * @param callback - node-style `(error, filename)`
  */
 export const resolveUploadFilename = (
@@ -136,8 +137,8 @@ export const fileStorage = multer.diskStorage({
  * with no `request.file`, so the handler must treat a missing file as a validation failure.
  * Passing an Error instead would surface it as a request error.
  *
- * @param request
- * @param file
+ * @param request - the in-flight Express request (unused here)
+ * @param file - multer's descriptor: fieldname, originalname, mimetype, size
  * @param callback - `(error, acceptFile)`
  */
 export const fileFilter = (
@@ -179,6 +180,7 @@ export const maxUploadBytes = (): number =>
  */
 let configuredUpload: Multer | undefined;
 
+/** Build (once) and return the shared multer instance — see {@link configuredUpload}. */
 const rawUpload = (): Multer =>
     (configuredUpload ??= multer({
         // Where/how files are written (see `fileStorage` above).
@@ -393,6 +395,12 @@ const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
     quarantineUploadedImages
 ];
 
+/**
+ * The public surface this module exposes to routes.
+ *
+ * `upload.single(fieldName)` returns the full middleware chain for one route: multer's own
+ * upload (locale-restored), the content check, and quarantine/digest — see {@link wrapUpload}.
+ */
 export const upload = {
     single: (fieldName: string) => wrapUpload(rawUpload().single(fieldName))
 };

@@ -1,4 +1,5 @@
 /**
+ * @module
  * This module's validation copy resolves against the active locale.
  *
  * The sibling case in `modules/users` documents the failure being defended against in full; this

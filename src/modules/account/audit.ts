@@ -1,4 +1,5 @@
 /**
+ * @module
  * Audit actions this module emits.
  *
  * Declared by augmenting infrastructure's action map rather than by editing it, so the vocabulary grows with
@@ -10,6 +11,7 @@
  * someone has built. The folder is free to be named for the domain; the wire format is not.
  */
 
+/** The audit action strings this module fires, keyed by event. */
 export const accountAuditActions = {
     AUTH_LOGIN: 'auth.login',
     AUTH_SIGNED_UP: 'auth.signup',
@@ -28,6 +30,7 @@ export const accountAuditActions = {
     AUTH_TOKEN_EXPIRED_CLEANUP: 'auth.token.expired_cleanup'
 } as const;
 
+/** Augments infrastructure's audit action map with this module's own action strings. */
 declare module '@infrastructure/observability/audit' {
     interface AuditActionMap {
         account: (typeof accountAuditActions)[keyof typeof accountAuditActions];

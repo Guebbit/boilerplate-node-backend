@@ -1,4 +1,5 @@
 /**
+ * @module
  * Database query counters (Prometheus), read by name from `GET /observability/metrics/overview`
  * the same way the domain counters in `modules/*\/metrics.ts` are — see `readCounter` there.
  */

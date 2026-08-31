@@ -1,4 +1,5 @@
 /**
+ * @module
  * `orderService.cancelById` — the customer's one order write, and the invariants that make it
  * safe to expose:
  *

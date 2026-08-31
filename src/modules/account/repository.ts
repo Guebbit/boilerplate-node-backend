@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Queries for the address book — a read-modify-write repository, not a `$set`/`$pull` one. See
+ * the export's own JSDoc below for why.
+ */
+
 import { addressBookModel, applyAddressBookTransform } from './model';
 import type { AddressBookDocument } from './model';
 import type { AddressInput, UpdateAddressRequest } from '@types';

@@ -1,3 +1,9 @@
+/**
+ * @module
+ * PDF invoice controller — renders the order through the shared EJS template and
+ * `renderHtmlToPdf`, the same render `adapters/pdf.worker.ts` reuses outside a request.
+ */
+
 import path from 'node:path';
 import type { Request, Response } from 'express';
 import { getDefaultLocale, t } from '@infrastructure/i18n';

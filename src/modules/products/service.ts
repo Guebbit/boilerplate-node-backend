@@ -1,3 +1,9 @@
+/**
+ * @module
+ * Product service: all business logic for the catalogue entity. Delegates raw database access to
+ * the repository and stays the one place a controller may call into.
+ */
+
 import { t } from '@infrastructure/i18n';
 import type { SearchProductsRequest, Product } from '@types';
 import {
@@ -25,12 +31,6 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { createVisibilityScope } from '@kernel/authorization';
 
 /**
- * Product Service
- * Handles all business logic for the Product entity.
- * Delegates raw database access to Product Repository.
- */
-
-/**
  * Validate product data using the Zod schema.
  * Returns an array of UI-friendly error messages (empty array means valid).
  *
@@ -46,6 +46,7 @@ export const validateData = (productData: unknown): ResponseErrorItem[] => {
     return [];
 };
 
+/** Trim, drop blanks, and de-duplicate a category/tag list; `null`/non-array input becomes empty. */
 const sanitizeStringArray = (values?: string[] | null): string[] => {
     if (!Array.isArray(values)) return [];
     return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
@@ -342,6 +343,7 @@ export const removeById = (
 const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
     productRepository.facets();
 
+/** The service's public surface — every controller and cross-module caller goes through this. */
 export const productService = {
     validateData,
     callerScope,

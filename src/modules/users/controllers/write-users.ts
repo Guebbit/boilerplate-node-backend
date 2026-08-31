@@ -1,3 +1,11 @@
+/**
+ * @module
+ * Controller for `POST /users`, `PUT /users` and `PUT /users/:id` — admin create/update, with
+ * the create-vs-update branch decided by whether an id is present.
+ *
+ * See: docs/modules/users.md
+ */
+
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';

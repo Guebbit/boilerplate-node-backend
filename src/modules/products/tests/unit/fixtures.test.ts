@@ -1,4 +1,5 @@
 /**
+ * @module
  * `makeProduct` — the catalogue fixture builder.
  *
  * This is not test-only code: `demo.ts` seeds the shipped demo dataset through it, and
@@ -10,6 +11,7 @@
  * absent from the object, because a key present with `undefined` is "set to nothing" to Mongoose
  * and the schema default never applies.
  */
+
 import { Types } from 'mongoose';
 import { makeProduct } from '@modules/products/fixtures';
 

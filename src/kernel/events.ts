@@ -1,4 +1,5 @@
 /**
+ * @module
  * Domain events — the sanctioned way two modules talk when neither can own the other.
  *
  * The import graph must stay acyclic — `no-circular` in `.dependency-cruiser.cjs` refuses one — but
@@ -22,12 +23,15 @@ import { logger } from '@infrastructure/adapters/logger';
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- a declaration-merging seam: each module augments this map with its own events
 export interface DomainEventMap {}
 
+/** The literal event names {@link DomainEventMap} declares, as a string union. */
 type DomainEventName = Extract<keyof DomainEventMap, string>;
 
+/** A subscriber for one event name, narrowed to that event's own payload type. */
 type DomainEventHandler<TEventName extends DomainEventName> = (
     payload: DomainEventMap[TEventName]
 ) => unknown;
 
+/** Event name → its subscribed handlers, in subscription order. */
 const handlers = new Map<string, ((payload: never) => unknown)[]>();
 
 /**

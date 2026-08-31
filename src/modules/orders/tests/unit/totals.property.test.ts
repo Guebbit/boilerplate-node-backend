@@ -1,18 +1,14 @@
 /**
+ * @module
  * Property-based tests — `src/modules/orders/domain/totals.ts`.
  *
- * `sumLineItems` is the arithmetic behind every order total and every cart summary. It is total by
- * construction — a line whose product failed to populate contributes nothing rather than turning
- * the total into `NaN`, which reaches the customer as a blank price.
+ * `sumLineItems` is the arithmetic behind every order total and cart summary: total by
+ * construction, a line whose product failed to populate contributes nothing rather than NaN.
+ * Additivity and scaling are asserted EXACTLY in cents — what the minor-unit arithmetic buys,
+ * since a float accumulator only satisfies that to a tolerance.
  *
- * Additivity and scaling are asserted EXACTLY, in cents. That is what the minor-unit arithmetic
- * buys, and a float accumulator satisfies them only up to a tolerance — so an implementation that
- * went back to summing decimals fails here.
- *
- * Determinism, both halves:
- *   - the run is SEEDED, so a failure is reproducible and a passing run is not luck;
- *   - any counterexample this finds gets written back as an ordinary `it()` with its seed in a
- *     comment. The property states the rule; the example remembers the bug.
+ * The run is SEEDED for reproducibility; any counterexample found is written back as an ordinary
+ * `it()` with its seed.
  */
 import fc from 'fast-check';
 import { sumLineItems, orderTotal, type LineItem } from '../../domain/totals';

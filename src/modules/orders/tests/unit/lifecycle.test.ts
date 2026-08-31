@@ -1,4 +1,5 @@
 /**
+ * @module
  * The order lifecycle — `src/modules/orders/domain/lifecycle.ts`. Pure: no mocks, no database.
  *
  * Asserts the SENTENCES the table encodes, not the rows. A test restating it row by row passes

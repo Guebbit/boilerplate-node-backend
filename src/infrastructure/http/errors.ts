@@ -1,5 +1,11 @@
 /**
+ * @module
  * Error types for the HTTP layer.
+ *
+ * Two pieces: `ExtendedError`, thrown for the central error middleware to translate into a
+ * response; and the database-error interpreter, the single place a Mongo/Mongoose driver failure
+ * is mapped to an HTTP status, so all twelve models answer a duplicate key or a bad ObjectId the
+ * same way.
  */
 
 import { logger } from '@infrastructure/adapters/logger';

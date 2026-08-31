@@ -1,3 +1,18 @@
+/**
+ * @module
+ * `deleteAccountRequest` and `deleteAccountConfirm` — the two-step account-deletion controllers,
+ * at the wiring level rather than the service's own unit tests.
+ *
+ * The property worth pinning at THIS layer is enumeration prevention: an unknown email must
+ * answer 200 exactly like a known one, so a caller cannot use the delete-request endpoint to
+ * learn which addresses have accounts. The confirm side pins the opposite kind of ambiguity —
+ * an already-spent token and a never-live one both refuse with the same 422, so neither leaks
+ * which case actually happened.
+ *
+ * Every collaborator is mocked; what content the request/confirm mails carry is asserted where
+ * they are built, not here — see `self-service.test.ts` and `emails.test.ts`.
+ */
+
 import { deleteAccountRequest } from '@modules/account/controllers/delete-account-request';
 import { deleteAccountConfirm } from '@modules/account/controllers/delete-account-confirm';
 import { userService } from '@modules/users';
