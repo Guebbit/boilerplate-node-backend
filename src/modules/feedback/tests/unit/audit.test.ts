@@ -13,7 +13,8 @@ describe('the feedback audit vocabulary', () => {
     it('spells every action exactly as the log tooling expects', () => {
         expect(feedbackAuditActions).toEqual({
             ADMIN_FEEDBACK_VIEWED: 'admin.feedback.viewed',
-            ADMIN_FEEDBACK_STATUS_UPDATED: 'admin.feedback.status_updated'
+            ADMIN_FEEDBACK_STATUS_UPDATED: 'admin.feedback.status_updated',
+            ADMIN_FEEDBACK_DELETED: 'admin.feedback.deleted'
         });
     });
 

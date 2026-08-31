@@ -63,24 +63,33 @@ const notifyMailbox = (): string =>
     process.env.NODE_CONTACT_NOTIFY_EMAIL ?? process.env.NODE_SMTP_SENDER ?? '';
 
 /**
- * Record a contact request and tell the support mailbox about it.
+ * Record a contact request and tell the support mailbox about it — unless the honeypot caught it.
  *
  * Both halves are here because "a customer asked us something" is one event, not a write plus a
  * thing the HTTP layer remembers to do afterwards: the notification used to live in
  * `post-feedback-contact.ts`, which meant a second caller of `create` filed a ticket nobody was
  * told about, and made this module the one that published its queue job from a controller while
  * its sibling `delivery` published from the service.
+ *
+ * `payload.website` is the honeypot: a field a real browser always submits empty and a bot
+ * reliably fills, declared in the contract but never persisted (see `FeedbackRequestDocument`) or
+ * read back. A non-empty value writes the row as `spam` and skips the notification — the bot still
+ * gets its `201`, so it learns nothing, but nobody's inbox hears about it.
  */
-export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> =>
-    feedbackRequestRepository
+export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> => {
+    const suspectedSpam = Boolean(payload.website?.trim());
+
+    return feedbackRequestRepository
         .create({
             name: payload.name?.trim() || undefined,
             email: payload.email.trim().toLowerCase(),
             subject: payload.subject.trim(),
             message: payload.message.trim(),
-            status: FeedbackRequestStatus.new
+            status: suspectedSpam ? FeedbackRequestStatus.spam : FeedbackRequestStatus.new
         })
         .then((created) => {
+            if (suspectedSpam) return created;
+
             const notifyEmail = notifyMailbox();
             if (!notifyEmail) return created;
 
@@ -114,6 +123,7 @@ export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestD
 
             return created;
         });
+};
 
 /**
  * Search feedback tickets by status, email fragment or free text, paginated.
@@ -200,10 +210,40 @@ export const updateStatusById = (
         });
     });
 
+/**
+ * Loads a ticket by id and permanently removes it, then — on success — emits
+ * `feedbackAuditActions.ADMIN_FEEDBACK_DELETED`.
+ *
+ * No soft-delete tier: this module has none, so unlike `orders`' `removeById` there is no
+ * `hardDelete` flag to thread through.
+ *
+ * @returns A 404 `ResponseReject` when the id names no ticket, otherwise the removal result.
+ */
+export const remove = (
+    id: string,
+    context?: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    feedbackRequestRepository.findById(id).then((feedback) => {
+        if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
+        return feedbackRequestRepository.deleteOne(feedback).then(() => {
+            if (context)
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: feedbackAuditActions.ADMIN_FEEDBACK_DELETED,
+                        outcome: 'success',
+                        target_type: 'feedback',
+                        target_id: id
+                    })
+                );
+            return generateSuccess(undefined);
+        });
+    });
+
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const feedbackRequestService = {
     create,
     search,
     updateStatus,
-    updateStatusById
+    updateStatusById,
+    remove
 };

@@ -1,9 +1,10 @@
 /**
  * @module
- * Rate limiting: a global burst brake across the whole surface, and a pair of tighter budgets for
- * routes that accept a credential. Every limiter shares one Redis-or-memory store (see
- * `rate-limit-store.ts`), fails open on a store error, and answers through the shared error
- * envelope rather than express-rate-limit's own plain-text body.
+ * Rate limiting: a global burst brake across the whole surface, a pair of tighter budgets for
+ * routes that accept a credential, and one more for the public submission that emails an operator.
+ * Every limiter shares one Redis-or-memory store (see `rate-limit-store.ts`), fails open on a
+ * store error, and answers through the shared error envelope rather than express-rate-limit's own
+ * plain-text body.
  */
 
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -50,6 +51,15 @@ export const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
  * The larger of the two credential budgets — see `DEFAULT_AUTH_RATE_LIMIT_MAX`.
  */
 export const DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX = 30;
+
+/**
+ * Contact-form submissions allowed per window, per ADDRESS.
+ *
+ * A person files a contact request once; five a minute from one address is already generous,
+ * against a global brake of {@link DEFAULT_RATE_LIMIT_MAX}. See `submissionLimiter` for why this
+ * budget is spent by success rather than failure.
+ */
+export const DEFAULT_SUBMISSION_RATE_LIMIT_MAX = 5;
 
 /** The configured window, in ms — falls back to {@link DEFAULT_RATE_LIMIT_WINDOW_MS}. */
 const windowMs = () =>
@@ -164,6 +174,22 @@ export const credentialLimiters: RequestHandler[] = [
         skipSuccessfulRequests: true
     })
 ];
+
+/**
+ * The budget for public submissions that cause an outbound email.
+ *
+ * Unlike `credentialLimiters`, a SUCCESSFUL request spends it: the abuse here is a well-formed
+ * submission repeated, not a failed one — every abusive contact-form post gets a 201, so
+ * `skipSuccessfulRequests` would change nothing about the amplifier this exists to bound. Keyed on
+ * the caller's address (the default `keyGenerator`), since the only identity a contact form
+ * carries beyond that is free text a spammer varies for free.
+ *
+ * See: docs/tools/security.md#the-two-rate-limit-budgets
+ */
+export const submissionLimiter: RequestHandler = rateLimit({
+    ...limiterOptions(rateLimitStore('submissions'), true),
+    limit: environmentNumber('NODE_SUBMISSION_RATE_LIMIT_MAX', DEFAULT_SUBMISSION_RATE_LIMIT_MAX, 1)
+});
 
 /**
  * Guards the Prometheus scrape endpoint with a static bearer credential — Prometheus cannot hold a

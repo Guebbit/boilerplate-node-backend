@@ -239,3 +239,68 @@ describe('PUT /feedback/{id}', () => {
         expect(response).toSatisfyApiSpec();
     });
 });
+
+describe('POST /feedback/contact — honeypot', () => {
+    it('writes suspected spam as status "spam", answers 201 either way, and drops the field', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, website: 'https://spammer.example' });
+
+        // The bot must learn nothing from the response — same 201 a real submission gets.
+        expect(response.status).toBe(201);
+        expect(response).toSatisfyApiSpec();
+        expect(response.body.data).not.toHaveProperty('website');
+
+        const listed = await api().get('/feedback').set('Authorization', bearer);
+        expect(listed.body.data.items[0].status).toBe('spam');
+    });
+});
+
+describe('DELETE /feedback/{id}', () => {
+    it('matches the contract for an admin caller', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createFeedbackRequest();
+
+        const response = await api().delete(`/feedback/${id}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+
+        const listed = await api().get('/feedback').set('Authorization', bearer);
+        expect(listed.body.data.items).toHaveLength(0);
+    });
+
+    it('matches the error contract for a request that does not exist', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api().delete(`/feedback/${MISSING_ID}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 404, not 500, for a malformed id', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api()
+            .delete('/feedback/not-an-object-id')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract when unauthenticated', async () => {
+        const response = await api().delete(`/feedback/${MISSING_ID}`);
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a non-admin caller', async () => {
+        const { bearer } = await authenticateAs('user');
+        const response = await api().delete(`/feedback/${MISSING_ID}`).set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+});

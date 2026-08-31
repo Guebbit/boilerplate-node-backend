@@ -121,6 +121,22 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Feedback]
+            summary: Delete feedback request
+            description: Permanently removes the feedback request identified by `{id}`.
+            operationId: deleteFeedbackRequest
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
     schemas:
@@ -209,6 +225,14 @@ components:
                     type: string
                 message:
                     type: string
+                website:
+                    type: string
+                    maxLength: 200
+                    description: >
+                        Honeypot. Hidden in the form and always submitted empty by a real client; a
+                        non-empty value marks the submission as spam. Named for what a scraper
+                        expects to find. Never persisted and never returned — see
+                        `FeedbackRequest`, which does not declare it.
 
         SearchFeedbackRequestsRequest:
             type: object

@@ -3,17 +3,53 @@
  * Integration tests for the feedback request service. Pins three behaviours: create normalises
  * (lowercased email, trimmed fields, blank `name` → `undefined`); `toFeedbackStatus` accepts only
  * generated `FeedbackRequestStatus` values; and `respondedAt` stamps once, so re-resolving an
- * already-resolved item never moves it.
+ * already-resolved item never moves it. Also covers the honeypot disposition and `remove`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { create, search, updateStatus, updateStatusById } from '@modules/feedback/service';
+import { testCallerContext } from '@tests/caller-context';
+import { observePort } from '@tests/ports';
+import { create, search, updateStatus, updateStatusById, remove } from '@modules/feedback/service';
 import { feedbackRequestRepository } from '@modules/feedback/repository';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import * as auditPort from '@infrastructure/observability/audit';
+import { feedbackAuditActions } from '@modules/feedback/audit';
 import { FeedbackRequestStatus } from '@types';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
 import type { FeedbackRequestDocument } from '@modules/feedback/model';
 
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    __esModule: true,
+    enqueueEmail: jest.fn().mockResolvedValue(undefined)
+}));
+const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
+
+/* Replaced for the same reason `orders/tests/integration/cancel.test.ts` replaces it — see
+ * `tests/support/ports.ts`. */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
+
 setupTestDb();
+
+/*
+ * `notifyMailbox()` reads `NODE_CONTACT_NOTIFY_EMAIL` from the environment at call time. `.env`
+ * supplies it via `dotenv/config` in `src/app.ts`, which a service-level suite never imports — so
+ * without this the honeypot tests below would pass for the wrong reason (nothing configured to
+ * notify, rather than the honeypot suppressing the notification).
+ */
+const originalNotifyEmail = process.env.NODE_CONTACT_NOTIFY_EMAIL;
+beforeAll(() => {
+    process.env.NODE_CONTACT_NOTIFY_EMAIL = 'admin@example.com';
+});
+afterAll(() => {
+    if (originalNotifyEmail === undefined) delete process.env.NODE_CONTACT_NOTIFY_EMAIL;
+    else process.env.NODE_CONTACT_NOTIFY_EMAIL = originalNotifyEmail;
+});
+
+afterEach(() => jest.clearAllMocks());
 
 const MISSING_ID = '507f1f77bcf86cd799439011';
 
@@ -73,6 +109,38 @@ describe('create', () => {
         const feedback = await create(makePayload({ name: ' A ' }));
 
         expect(feedback.name).toBe('A');
+    });
+});
+
+describe('create — honeypot', () => {
+    it('sends the operator notification when the honeypot is empty', async () => {
+        await create(makePayload());
+
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes a suspected-spam submission as status "spam" and sends no notification', async () => {
+        const feedback = await create(makePayload({ website: 'https://spammer.example' }));
+
+        expect(feedback.status).toBe(FeedbackRequestStatus.spam);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('treats a whitespace-only honeypot as empty, same as a real client leaves it', async () => {
+        const feedback = await create(makePayload({ website: '   ' }));
+
+        expect(feedback.status).toBe(FeedbackRequestStatus.new);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('never persists or returns the honeypot field itself', async () => {
+        const feedback = await create(makePayload({ website: 'https://spammer.example' }));
+
+        const serialized = feedback.toJSON() as Record<string, unknown>;
+        expect(serialized).not.toHaveProperty('website');
+
+        const reloaded = await feedbackRequestRepository.findByIdRaw(String(feedback._id));
+        expect(reloaded).not.toHaveProperty('website');
     });
 });
 
@@ -255,5 +323,48 @@ describe('updateStatusById', () => {
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(404);
+    });
+});
+
+describe('remove', () => {
+    it('permanently deletes an existing request', async () => {
+        const feedback = await create(makePayload());
+
+        const result = await remove(String(feedback._id));
+
+        expect(result.success).toBe(true);
+        expect(await feedbackRequestRepository.findById(String(feedback._id))).toBeNull();
+    });
+
+    it('rejects with 404 for an id that does not exist', async () => {
+        const result = await remove(MISSING_ID);
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(404);
+    });
+
+    it('emits admin.feedback.deleted with the target id when a context is given', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const feedback = await create(makePayload());
+
+        await remove(String(feedback._id), testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: feedbackAuditActions.ADMIN_FEEDBACK_DELETED,
+                outcome: 'success',
+                target_type: 'feedback',
+                target_id: String(feedback._id)
+            })
+        );
+    });
+
+    it('emits no audit event when no context is given', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const feedback = await create(makePayload());
+
+        await remove(String(feedback._id));
+
+        expect(auditSpy).not.toHaveBeenCalled();
     });
 });

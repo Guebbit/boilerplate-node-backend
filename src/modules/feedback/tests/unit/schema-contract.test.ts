@@ -7,7 +7,17 @@
  */
 import { feedbackRequestSchema } from '@modules/feedback/model';
 import { FeedbackRequestStatus } from '@types';
-import { defaultOf, enumOf, indexSpecs, optionsOf, requiredPaths } from '@tests/schema';
+import {
+    defaultOf,
+    enumOf,
+    indexOptionSpecs,
+    indexSpecs,
+    optionsOf,
+    requiredPaths
+} from '@tests/schema';
+
+/** The retention window the schema was built with, in seconds. Mirrors the model's own default. */
+const RETENTION_SECONDS = Number(process.env.NODE_FEEDBACK_RETENTION_DAYS ?? 730) * 24 * 60 * 60;
 
 describe('feedbackRequestSchema', () => {
     it('requires an address to reply to, a subject and a message', () => {
@@ -34,15 +44,32 @@ describe('feedbackRequestSchema', () => {
         expect(defaultOf(feedbackRequestSchema, 'status')).toBe(FeedbackRequestStatus.new);
     });
 
-    it('indexes the operator queue: by status, newest first', () => {
-        // The only query this collection serves — "what is still open, most recent first". The
-        // `-1` is what keeps that from sorting the whole match in memory.
+    it('indexes the operator queue and the retention sweep', () => {
+        // The queue — "what is still open, most recent first" — plus the TTL index below.
         expect(indexSpecs(feedbackRequestSchema)).toEqual([
+            'createdAt_1: createdAt+1',
             'status_1_createdAt_-1: status+1, createdAt-1'
         ]);
     });
 
     it('keeps timestamps, which the queue is ordered by', () => {
         expect(optionsOf(feedbackRequestSchema).timestamps).toBe(true);
+    });
+
+    it('expires tickets at the configured retention window, and only those', () => {
+        // Asserted against the configured window rather than a literal, so changing
+        // `NODE_FEEDBACK_RETENTION_DAYS` moves the policy and the test together — and so a TTL
+        // appearing on a different index fails here.
+        expect(indexOptionSpecs(feedbackRequestSchema)).toEqual([
+            `createdAt_1: expireAfterSeconds=${RETENTION_SECONDS}`,
+            'status_1_createdAt_-1: (none)'
+        ]);
+    });
+
+    it('expires ascending by createdAt, which is the direction a TTL index needs', () => {
+        // Mongo only honours `expireAfterSeconds` on a single-field ascending index. The same
+        // field appears descending in the compound queue index above; getting these confused
+        // produces an index that silently never deletes anything.
+        expect(indexSpecs(feedbackRequestSchema)).toContain('createdAt_1: createdAt+1');
     });
 });

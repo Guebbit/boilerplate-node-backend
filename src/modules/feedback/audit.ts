@@ -9,7 +9,8 @@
 /** The audit action vocabulary this module owns. */
 export const feedbackAuditActions = {
     ADMIN_FEEDBACK_VIEWED: 'admin.feedback.viewed',
-    ADMIN_FEEDBACK_STATUS_UPDATED: 'admin.feedback.status_updated'
+    ADMIN_FEEDBACK_STATUS_UPDATED: 'admin.feedback.status_updated',
+    ADMIN_FEEDBACK_DELETED: 'admin.feedback.deleted'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

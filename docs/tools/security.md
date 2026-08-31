@@ -89,6 +89,16 @@ which is exactly the signal worth limiting.
 
 The test suites raise the budget tenfold — see `tests/support/setup.ts`.
 
+**A third budget, the same shape as neither.** `submissionLimiter` guards `feedback`'s
+`POST /contact` — the one public write that causes an outbound email — and it inverts the rule
+above: `skipSuccessfulRequests` is deliberately **off**. A credential attempt is abusive when it
+FAILS (a wrong guess); a contact-form submission is abusive when it SUCCEEDS (a bot posts a
+well-formed body, gets a `201`, and an operator gets an email). Mounting `credentialLimiters` on
+`/contact` would therefore change nothing at all — it would count zero of the requests that matter.
+`submissionLimiter` spends its budget on every request, success or failure, keyed on the caller's
+address like the global limiter, at a much smaller default (`NODE_SUBMISSION_RATE_LIMIT_MAX=5`) —
+a person files a contact request once.
+
 ## Why the metrics endpoint has its own credential
 
 `/observability/metrics` cannot use the admin JWT the other observability routes use: it is scraped

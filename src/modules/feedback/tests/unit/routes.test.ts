@@ -12,6 +12,9 @@ import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes'
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
 );
+jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
+);
 
 import { router } from '@modules/feedback/routes';
 
@@ -25,7 +28,8 @@ describe('feedback routes — what is mounted', () => {
             'POST /contact',
             'POST /search',
             'GET /',
-            'PUT /:id'
+            'PUT /:id',
+            'DELETE /:id'
         ]);
     });
 });
@@ -40,7 +44,7 @@ describe('feedback routes — the positional guard', () => {
         expect(guards).not.toContain('isAdmin');
     });
 
-    it.each(['POST /search', 'GET /', 'PUT /:id'])(
+    it.each(['POST /search', 'GET /', 'PUT /:id', 'DELETE /:id'])(
         '%s sits below the gate and is admin-only',
         (signature) => {
             const guards = guardsOn(router, signature);
@@ -84,9 +88,37 @@ describe('feedback routes — caching', () => {
         expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
-    it.each(['POST /contact', 'PUT /:id'])('%s invalidates the feedback tag', (signature) => {
-        // Both ends write: a visitor submitting adds a row to the operator's queue, and an
-        // operator changing a status changes what that queue shows.
-        expect(chainOf(signature)).toContain('invalidateCache([feedback])');
+    it.each(['POST /contact', 'PUT /:id', 'DELETE /:id'])(
+        '%s invalidates the feedback tag',
+        (signature) => {
+            // Every write invalidates: a visitor submitting adds a row to the operator's queue, an
+            // operator changing a status changes what that queue shows, and deleting a row removes
+            // one from it.
+            expect(chainOf(signature)).toContain('invalidateCache([feedback])');
+        }
+    );
+});
+
+describe('feedback routes — submission rate limiting', () => {
+    it('rate-limits the contact form before it can invalidate the cache or write anything', () => {
+        // The whole point is that a spent budget costs no cache invalidation and no database
+        // write — see `submissionLimiter`'s own docs for why this is a DIFFERENT limiter from
+        // `credentialLimiters`.
+        const chain = chainOf('POST /contact');
+
+        expect(chain).toContain('submissionLimiter');
+        expect(chain.indexOf('submissionLimiter')).toBeLessThan(
+            chain.indexOf('invalidateCache([feedback])')
+        );
+    });
+
+    it('leaves every other route unbudgeted by the submission limiter', () => {
+        // Only the public write needs this budget — the admin routes sit behind their own gate.
+        const unexpected = routeSignatures(router).filter(
+            (signature) =>
+                signature !== 'POST /contact' && chainOf(signature).includes('submissionLimiter')
+        );
+
+        expect(unexpected).toEqual([]);
     });
 });
