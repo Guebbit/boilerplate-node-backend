@@ -6,6 +6,38 @@
 **Breaks if you change** — nothing outside this folder. No module depends on it.
 :::
 
+## Its neighbourhood
+
+<!-- module-graph:wishlist:start -->
+
+_Solid arrows are imports. Dotted arrows are domain events — the return path an import
+graph cannot see._
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
+flowchart LR
+    wishlist["wishlist<br/><i>this module</i>"]
+    cart["cart"]
+    products["products"]
+    users["users"]
+
+    wishlist --> cart
+    wishlist --> products
+    wishlist --> users
+    products -. "product.deleted" .-> wishlist
+    users -. "user.deleted" .-> wishlist
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class cart,products core;
+    class users generic;
+    class wishlist centre;
+```
+
+<!-- module-graph:wishlist:end -->
+
 ## The story
 
 The smallest domain in the repo, and a useful one to read first: it has the same shape as
@@ -25,6 +57,25 @@ here first.
 Products and users reach back the same way they reach the cart: a deleted product must leave every
 wishlist, and a destroyed account must take its wishlist with it. Both arrive as domain events, so
 the import graph stays acyclic even though the domains are mutually aware.
+
+## The pipeline
+
+The whole module. Three arrows out, two events in — and nothing at all pointing back at it.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    A["save a product"] --> W["wishlist<br/><i>one document per user</i>"]
+    W -->|"move-to-cart"| C["cart line<br/><i>qty 1, or incremented</i>"]
+    C --> X["and it leaves the wishlist"]
+    P["products"] -. "product.deleted" .-> W
+    U["users"] -. "user.deleted" .-> W
+
+    classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class A,W,X own;
+    class C,P,U peer;
+```
 
 ## Related pages
 

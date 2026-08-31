@@ -6,6 +6,31 @@
 **Breaks if you change** — the three authentication styles in `routes.ts`. They are not interchangeable.
 :::
 
+## Its neighbourhood
+
+<!-- module-graph:observability:start -->
+
+_Solid arrows are imports. Dotted arrows are domain events — the return path an import
+graph cannot see._
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
+flowchart LR
+    observability["observability<br/><i>this module</i>"]
+    audit_logs["audit-logs"]
+
+    observability --> audit_logs
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class audit_logs generic;
+    class observability centre;
+```
+
+<!-- module-graph:observability:end -->
+
 ## The story
 
 This module owns **URLs, not data**. Everything it serves beyond the audit read comes from
@@ -29,6 +54,33 @@ nothing serves them.
 
 Its two frontend counterparts are the clearest asymmetry in the pairing table: `admin` renders the
 health and metrics reads, `realtime` consumes the stream. One backend module, two frontend ones.
+
+## The pipeline
+
+Five routes, three authentication styles, two frontend consumers — and one route that is the only
+one reading a collection at all.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 28, 'rankSpacing': 60}}}%%
+flowchart LR
+    H["/health<br/><i>normal guard</i>"] --> K["infrastructure/observability<br/><i>measures the process, not a domain</i>"]
+    MO["/metrics overview<br/><i>normal guard</i>"] --> K
+    SC["/metrics scrape<br/><i>static credential — a scraper has no session</i>"] --> K
+    EV["/events · SSE<br/><i>cookie — EventSource cannot send a header</i>"] --> K
+    AU["/audit<br/><i>normal guard</i>"] --> AL["audit-logs<br/><i>the one collection behind a route here</i>"]
+    K --> AD["frontend admin"]
+    AU --> AD
+    EV --> RT["frontend realtime"]
+
+    classDef route fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef infra fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef peer fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef ui fill:#fce7f3,stroke:#db2777,color:#111827;
+    class H,MO,SC,EV,AU route;
+    class K infra;
+    class AL peer;
+    class AD,RT ui;
+```
 
 ## Related pages
 

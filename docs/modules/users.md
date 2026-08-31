@@ -6,6 +6,45 @@
 **Breaks if you change** — the `tokens` subdocument. `account` reads and writes it, and it is the repo's only shared-kernel edge.
 :::
 
+## Its neighbourhood
+
+<!-- module-graph:users:start -->
+
+_Solid arrows are imports. Dotted arrows are domain events — the return path an import
+graph cannot see._
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
+flowchart LR
+    users["users<br/><i>this module</i>"]
+    account["account"]
+    cart["cart"]
+    delivery["delivery"]
+    payments["payments"]
+    wishlist["wishlist"]
+
+    account --> users
+    cart --> users
+    delivery --> users
+    payments --> users
+    wishlist --> users
+    users -. "user.deleted" .-> account
+    users -. "user.setup-requested" .-> account
+    users -. "user.deleted" .-> cart
+    users -. "user.deleted" .-> wishlist
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class cart core;
+    class delivery,payments,wishlist supporting;
+    class account generic;
+    class users centre;
+```
+
+<!-- module-graph:users:end -->
+
 ## The story
 
 A user record with an email, a password hash and an admin flag is the same problem in every
@@ -26,6 +65,29 @@ visible on the map as a `shared-kernel` arrow rather than hidden inside a barrel
 Five modules depend on this one and it depends on none, so it sits at the bottom of the graph.
 Deleting an account has to empty that user's cart and wishlist, and that travels as `user.deleted`
 for the same reason products uses an event: it keeps this module a leaf.
+
+## The pipeline
+
+One collection, two services over it — and a deletion that has to reach three modules this one may
+not import.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    A["admin<br/><i>/users</i>"] --> R["the user record<br/><i>email · hash · admin flag · tokens</i>"]
+    AC["account<br/><i>/account — signup · login · reset</i>"] --> R
+    R -. "user.deleted" .-> C["cart emptied"]
+    R -. "user.deleted" .-> W["wishlist emptied"]
+    R -. "user.deleted" .-> AB["address book emptied<br/><i>account</i>"]
+    R -. "user.setup-requested" .-> SU["account sends a setup link"]
+
+    classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class R own;
+    class A,AC peer;
+    class C,W,AB,SU done;
+```
 
 ## Related pages
 

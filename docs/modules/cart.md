@@ -6,6 +6,47 @@
 **Breaks if you change** — `clearLinesIfUnchanged`. It is what stops two parallel checkouts becoming two orders.
 :::
 
+## Its neighbourhood
+
+<!-- module-graph:cart:start -->
+
+_Solid arrows are imports. Dotted arrows are domain events — the return path an import
+graph cannot see._
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
+flowchart LR
+    cart["cart<br/><i>this module</i>"]
+    account["account"]
+    delivery["delivery"]
+    inventory["inventory"]
+    orders["orders"]
+    products["products"]
+    users["users"]
+    wishlist["wishlist"]
+
+    wishlist --> cart
+    cart --> account
+    cart --> delivery
+    cart --> inventory
+    cart --> orders
+    cart --> products
+    cart --> users
+    products -. "product.deleted" .-> cart
+    users -. "user.deleted" .-> cart
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class orders,products core;
+    class delivery,inventory,wishlist supporting;
+    class account,users generic;
+    class cart centre;
+```
+
+<!-- module-graph:cart:end -->
+
 ## The story
 
 Checkout is the one place price, stock, address, shipping and order creation must all agree at
@@ -33,6 +74,34 @@ wire line are the same shape, and there is no mapper between them to keep in syn
 Mongo and not Redis, deliberately: Redis here is cache-only, with no persistence and `allkeys-lru`
 eviction. A cart in Redis would make concurrent writes race-free for nothing, paid for in
 durability — and would turn one indexed query into a hand-maintained secondary index.
+
+## The pipeline
+
+The six arrows, in the order checkout walks them. [Checkout](./cart-checkout.md) draws the same
+flow at step-by-step resolution, including the retract.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
+flowchart LR
+    A["POST /cart/checkout"] --> B["price the lines<br/><i>products</i>"]
+    B --> C["resolve the address<br/><i>account</i>"]
+    C --> D["price the shipping<br/><i>delivery</i>"]
+    D --> E["reserve the units<br/><i>inventory</i>"]
+    E -.->|"any line short"| R["refused<br/><i>every short line at once</i>"]
+    E --> F["create the order<br/><i>orders</i>"]
+    F --> G{"clearLinesIfUnchanged<br/><i>still the version we read?</i>"}
+    G -->|yes| H["cart emptied · 201"]
+    G -.->|no| I["lost the race<br/><i>retract · 409</i>"]
+
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef guard fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
+    class A,B,C,D,E,F step;
+    class G guard;
+    class H done;
+    class R,I bad;
+```
 
 ## Related pages
 

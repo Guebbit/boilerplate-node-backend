@@ -6,6 +6,43 @@
 **Breaks if you change** — the `status` enum. Three other modules react to transitions in it.
 :::
 
+## Its neighbourhood
+
+<!-- module-graph:orders:start -->
+
+_Solid arrows are imports. Dotted arrows are domain events — the return path an import
+graph cannot see._
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
+flowchart LR
+    orders["orders<br/><i>this module</i>"]
+    cart["cart"]
+    delivery["delivery"]
+    inventory["inventory"]
+    payments["payments"]
+    products["products"]
+
+    cart --> orders
+    delivery --> orders
+    payments --> orders
+    orders --> inventory
+    orders --> products
+    inventory -. "inventory.reservation_expired" .-> orders
+    orders -. "order.status_changed" .-> delivery
+    orders -. "order.cancelled" .-> payments
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class cart,products core;
+    class delivery,inventory,payments supporting;
+    class orders centre;
+```
+
+<!-- module-graph:orders:end -->
+
 ## The story
 
 This is the module with the real invariants: what an order totals, which status transitions are
@@ -34,6 +71,33 @@ import, which is what keeps a mutually-aware pair acyclic.
 
 Each account reads back only its own orders; writing and soft-deleting is admin-only. The
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
+
+## The pipeline
+
+The status enum above, drawn. Every solid edge is someone deciding; the dotted ones are this
+module announcing and a sibling reacting.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    P["pending<br/><i>created · units held</i>"] -->|"payments confirms"| PA["paid<br/><i>units committed</i>"]
+    PA -->|admin| PR["processing"]
+    PR -->|admin| SH["shipped"]
+    SH -->|"delivery advances"| DE["delivered"]
+    P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
+    PA -.->|"admin · refund due"| CA
+    SH -. "order.status_changed" .-> DL["delivery<br/><i>creates the parcel</i>"]
+    CA -. "order.cancelled" .-> PM["payments<br/><i>refunds if one was due</i>"]
+
+    classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
+    classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class P,PR,SH open;
+    class PA,DE done;
+    class CA bad;
+    class DL,PM peer;
+```
 
 ## Related pages
 

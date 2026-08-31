@@ -6,6 +6,38 @@
 **Breaks if you change** — the confirm path. It is the single moment held units become a sale.
 :::
 
+## Its neighbourhood
+
+<!-- module-graph:payments:start -->
+
+_Solid arrows are imports. Dotted arrows are domain events — the return path an import
+graph cannot see._
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
+flowchart LR
+    payments["payments<br/><i>this module</i>"]
+    inventory["inventory"]
+    orders["orders"]
+    users["users"]
+
+    payments --> inventory
+    payments --> orders
+    payments --> users
+    orders -. "order.cancelled" .-> payments
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class orders core;
+    class inventory supporting;
+    class users generic;
+    class payments centre;
+```
+
+<!-- module-graph:payments:end -->
+
 ## The story
 
 A payment is _about_ an order: the intent freezes its total, the confirm moves its status to
@@ -33,6 +65,32 @@ database fact, not a check somebody has to remember.
 
 Delete this module and cancelling an order still releases its stock but returns no money — which is
 exactly the sentence `CANCELLABLE_ORDER_STATUSES` documents.
+
+## The pipeline
+
+The confirm is the whole module: one step that moves the order and commits the hold, because that
+instant is the only moment a hold becomes a sale.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    A["create intent"] --> B["total frozen<br/><i>unique on orderId — one payment per order</i>"]
+    B --> C["confirm"]
+    C --> D{"the provider port<br/><i>fake · stripe</i>"}
+    D -.->|declined| E["order stays pending<br/><i>units still held</i>"]
+    D -->|approved| F["order → paid<br/><i>orders</i>"]
+    F --> G["commit the hold<br/><i>inventory</i>"]
+    OC["orders"] -. "order.cancelled" .-> R["refund<br/><i>if one was due</i>"]
+
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef port fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
+    class A,B,C,OC step;
+    class D port;
+    class F,G,R done;
+    class E bad;
+```
 
 ## Related pages
 
