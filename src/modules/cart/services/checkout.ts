@@ -21,6 +21,7 @@ import {
     orderRepository,
     orderService,
     orderConfirmEmail,
+    retractOrder,
     sumLineItems,
     type OrderDocument
 } from '@modules/orders';
@@ -188,8 +189,8 @@ const runCheckout = async (
      */
     const outcome = await inventoryService.reserveForOrder(String(order._id), toStockLines(joined));
     if (!outcome.held) {
-        // Nothing is held, so the only thing to retract is the order.
-        await orderRepository.deleteOne(order);
+        // Nothing is held — the reserve rolled its own lines back — so only the order goes.
+        await retractOrder(order, false);
         return generateReject(409, [
             {
                 code: 'CART_INSUFFICIENT_STOCK',
@@ -213,11 +214,9 @@ const runCheckout = async (
         return generateSuccess<OrderDocument>(order);
     }
 
-    // Lost the race: give the hold back and retract the order
-    // this request wrote, so the cart's contents end up on
-    // exactly one of them and the shelf agrees.
-    await inventoryService.releaseForOrder(String(order._id));
-    await orderRepository.deleteOne(order);
+    // Lost the race: hand the units back and retract the order this request
+    // wrote, so the cart's contents end up on exactly one of the two.
+    await retractOrder(order, true);
     return generateReject(409, [{ code: 'CART_CHANGED', message: t('cart.changed') }]);
 };
 
