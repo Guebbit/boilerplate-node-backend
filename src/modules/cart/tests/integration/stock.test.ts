@@ -16,6 +16,8 @@ import { cartService } from '@modules/cart';
 import { productRepository } from '@modules/products';
 import { orderService, orderRepository } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
+import { cartRepository } from '@modules/cart/repository';
+import { logger } from '@infrastructure/adapters/logger';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import inventoryModule from '@modules/inventory/module';
@@ -209,6 +211,94 @@ describe('checkout holds units without selling them', () => {
                 lines: [{ productId: String(lastOne._id), requested: 1, available: 0 }]
             }
         });
+    });
+});
+
+describe('a rollback that itself fails', () => {
+    /*
+     * `clearMocks` empties the call log between tests but leaves implementations in place, so
+     * the forced failures below have to be undone by hand.
+     */
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('answers the refusal, not a 500, when the order cannot be deleted', async () => {
+        const user = await createUser();
+        const product = await createProduct({ onHand: 5 });
+        await cartService.cartItemAddById(user.id, String(product._id), 2);
+        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        // Refused by the RESERVE, not the pre-flight — the only path that writes an order and
+        // then has to take it back. Forced rather than raced, so the branch is reached every run.
+        jest.spyOn(inventoryService, 'reserveForOrder').mockResolvedValue({
+            held: false,
+            shortfalls: [
+                {
+                    productId: String(product._id),
+                    title: product.title,
+                    requested: 2,
+                    available: 0
+                }
+            ]
+        });
+        jest.spyOn(orderRepository, 'deleteOne').mockRejectedValue(new Error('mongo is down'));
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
+
+        // The checkout failed on stock; a broken cleanup must not relabel that as a server
+        // error, or the customer is told to retry something that cannot succeed.
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(409);
+        expect(!result.success && result.errors[0]?.code).toBe('CART_INSUFFICIENT_STOCK');
+        // The reserve already deleted the hold row, so no sweep can find the order left
+        // behind — this log is the only trace it ever existed.
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'Rollback: order not deleted' })
+        );
+    });
+
+    it('still retracts the order when the hold refuses to release', async () => {
+        const user = await createUser();
+        const product = await createProduct({ onHand: 5 });
+        await cartService.cartItemAddById(user.id, String(product._id), 2);
+        jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        // The cart moved under this checkout: the one branch with both an order and a hold to undo.
+        jest.spyOn(cartRepository, 'clearLinesIfUnchanged').mockResolvedValue(null);
+        jest.spyOn(inventoryService, 'releaseForOrder').mockRejectedValue(
+            new Error('mongo is down')
+        );
+        const deleted = jest.spyOn(orderRepository, 'deleteOne');
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext);
+
+        expect(result.success).toBe(false);
+        expect(!result.success && result.errors[0]?.code).toBe('CART_CHANGED');
+        // The guard's whole point: a failed release used to abort the delete that followed it,
+        // leaving the loser holding an order the customer never bought.
+        expect(deleted).toHaveBeenCalledTimes(1);
+    });
+
+    it('answers the admin create refusal too when the order cannot be deleted', async () => {
+        const user = await createUser();
+        const scarce = await createProduct({ onHand: 1 });
+        const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        jest.spyOn(orderRepository, 'deleteOne').mockRejectedValue(new Error('mongo is down'));
+
+        const result = await orderService.create(
+            user.id,
+            user.email,
+            [{ productId: String(scarce._id), quantity: 5 }],
+            testCallerContext
+        );
+
+        // Same compensation as checkout, so the same rule: the stock refusal is the honest
+        // answer, and a broken cleanup does not get to overwrite it with a 500.
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(409);
+        expect(!result.success && result.errors[0]?.code).toBe('ORDER_INSUFFICIENT_STOCK');
+        expect(logged).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'Rollback: order not deleted' })
+        );
     });
 });
 

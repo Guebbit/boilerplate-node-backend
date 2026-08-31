@@ -6,6 +6,7 @@
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { logger } from '@infrastructure/adapters/logger';
 import { orderConfirmEmail } from './emails';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, Caller, UpdateOrderByIdRequest } from '@types';
@@ -106,6 +107,40 @@ export const recordCreated = (
 };
 
 /**
+ * Undo an order the request that wrote it cannot keep — the compensation both this module's
+ * `create` and `@modules/cart`'s checkout run when a later step refuses.
+ *
+ * Never rejects: the refusal it precedes is already the right answer, and a failed cleanup must
+ * not report it as a 500. Each step is guarded alone so neither aborts the other; the release
+ * goes first, so it still names a live order. A refused reserve deletes the hold row outright,
+ * so no sweep can find what is left behind — these logs are the only signal a human gets.
+ *
+ * @param order - the order being retracted
+ * @param releaseHold - whether units are still held against it
+ */
+export const retractOrder = (order: OrderDocument, releaseHold: boolean): Promise<void> => {
+    const orderId = String(order._id);
+
+    // `error.message`, not the Error: the logger serializes as JSON and an Error has no
+    // enumerable properties, so the object alone would print `"error":{}`.
+    const report = (message: string) => (error: unknown) => {
+        logger.error({
+            message,
+            orderId,
+            error: error instanceof Error ? error.message : String(error)
+        });
+    };
+
+    return (
+        releaseHold
+            ? inventoryService.releaseForOrder(orderId).catch(report('Rollback: hold not released'))
+            : Promise.resolve()
+    )
+        .then(() => orderRepository.deleteOne(order))
+        .catch(report('Rollback: order not deleted'));
+};
+
+/**
  * Create a new order from `{ productId, quantity }` items — looks up each product and stores a
  * full snapshot.
  * @param items - `{ productId, quantity }` pairs
@@ -164,8 +199,8 @@ export const create = async (
         }))
     );
     if (!outcome.held) {
-        // Nothing is held, so the only thing to retract is the order.
-        await orderRepository.deleteOne(order);
+        // Nothing is held — the reserve rolled its own lines back — so only the order goes.
+        await retractOrder(order, false);
         return generateReject(409, [
             {
                 code: 'ORDER_INSUFFICIENT_STOCK',

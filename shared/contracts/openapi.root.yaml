@@ -800,6 +800,8 @@ paths:
     # ---------- cart ----------
     /cart:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart'
+    /cart/all:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1all'
     /cart/{productId}:
         $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1{productId}'
     /cart/summary:

@@ -4,7 +4,10 @@
  *
  * A cart is somebody's, so the whole router is authenticated. `POST /checkout` is the one route
  * that also invalidates the `orders` and `products` response caches — the endpoints those caches
- * serve read differently once a checkout has spent stock and created an order.
+ * serve read differently once a checkout has spent stock and created an order. `/all` is mounted
+ * ABOVE `/:productId`: Express matches in mount order, so a `/:productId`-shaped route registered
+ * first would match the literal string `all` as a product id (see CONTRACT_PLAN_POLYMORPHISM.md,
+ * "Mount `/search` before `/:id`" — the same rule, a different static segment).
  */
 
 import { Router } from 'express';
@@ -13,7 +16,7 @@ import { getCart } from './controllers/get-cart';
 import { getCartSummary } from './controllers/get-cart-summary';
 import { postCart } from './controllers/post-cart';
 import { putCartItem } from './controllers/put-cart-item';
-import { deleteCart } from './controllers/delete-cart';
+import { clearCart } from './controllers/delete-cart-all';
 import { deleteCartItem } from './controllers/delete-cart-item';
 import { postCheckout } from './controllers/post-checkout';
 import { postReorder } from './controllers/post-reorder';
@@ -40,11 +43,14 @@ router.get('/', getCart);
 // POST /cart — add/set item
 router.post('/', postCart);
 
-// DELETE /cart — clear entire cart
-router.delete('/', deleteCart);
+// DELETE /cart/all — clear entire cart. Mounted before /:productId — see the module comment.
+router.delete('/all', clearCart);
+
+// DELETE /cart — remove single item, productId in the body. x-alias-of removeCartItem.
+router.delete('/', deleteCartItem);
 
 // PUT /cart/:productId — set quantity
 router.put('/:productId', putCartItem);
 
-// DELETE /cart/:productId — remove single item
+// DELETE /cart/:productId — remove single item, canonical spelling
 router.delete('/:productId', deleteCartItem);

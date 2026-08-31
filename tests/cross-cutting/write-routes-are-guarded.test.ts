@@ -172,7 +172,11 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         reason: "copying one of the caller's own orders back into their own cart"
     },
     'cart POST /': { requiresAuth: true, reason: "adding an item to the caller's own cart" },
-    'cart DELETE /': { requiresAuth: true, reason: "clearing the caller's own cart" },
+    'cart DELETE /all': { requiresAuth: true, reason: "clearing the caller's own cart" },
+    'cart DELETE /': {
+        requiresAuth: true,
+        reason: "removing one item from the caller's own cart, productId in the body"
+    },
     'cart PUT /:productId': {
         requiresAuth: true,
         reason: "setting a quantity in the caller's own cart"

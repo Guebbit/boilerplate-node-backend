@@ -12,6 +12,9 @@ export { orderService } from './service';
 // `cart` reports `order_created` from its own checkout, calling back into the owning module
 // rather than this one reaching up for a `Request` it must never see.
 export { orderRepository } from './repository';
+// `cart`'s checkout runs the same compensation as this module's own `create`: an order written
+// and then refused by a later step. Shared rather than copied — the two failure paths are one.
+export { retractOrder } from './service';
 export { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 // `cart` sends the confirmation itself: only the checkout has the recipient's locale in scope.
 export { orderConfirmEmail } from './emails';

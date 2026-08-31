@@ -123,21 +123,59 @@ describe('POST /cart', () => {
 });
 
 describe('DELETE /cart', () => {
-    it('matches the contract when clearing the whole cart', async () => {
-        const { bearer } = await authenticateWithCart();
-        const response = await api().delete('/cart').set('Authorization', bearer);
-
-        expect(response.status).toBe(200);
-        expect(response.body.data.items).toHaveLength(0);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the contract when removing one product through the body', async () => {
+    it('matches the contract when removing one product through the body, leaving the rest', async () => {
+        // Two lines, so "removed that one" and "cleared everything" produce different lengths —
+        // `authenticateWithCart` alone seeds one line, which can't tell the two apart.
         const { bearer, product } = await authenticateWithCart();
+        const second = await createProduct();
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(second._id), quantity: 1 });
+
         const response = await api()
             .delete('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(product._id) });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a missing body', async () => {
+        // `x-alias-of: removeCartItem` — the required `productId` is what makes this route a
+        // single-item remove rather than the clear-all `DELETE /cart/all` now is.
+        const { bearer } = await authenticateWithCart();
+        const response = await api().delete('/cart').set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a product that is not in the cart', async () => {
+        const { bearer } = await authenticateWithCart();
+        const response = await api()
+            .delete('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: MISSING_ID });
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract when unauthenticated', async () => {
+        const response = await api().delete('/cart').send({ productId: MISSING_ID });
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('DELETE /cart/all', () => {
+    it('matches the contract when clearing the whole cart', async () => {
+        const { bearer } = await authenticateWithCart();
+        const response = await api().delete('/cart/all').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
@@ -145,7 +183,7 @@ describe('DELETE /cart', () => {
     });
 
     it('matches the error contract when unauthenticated', async () => {
-        const response = await api().delete('/cart');
+        const response = await api().delete('/cart/all');
 
         expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();

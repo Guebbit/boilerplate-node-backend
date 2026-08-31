@@ -1,9 +1,9 @@
 /**
  * @module
  * The cart route table. Every route is authenticated at the router level and none is admin —
- * there is no operator view of someone else's cart. Mostly guards ORDER: `/summary`, `/checkout`
- * and `/reorder/:orderId` compete with `/:productId`, and Express takes the first match —
- * declared the other way round, `GET /cart/summary` becomes a product lookup for id "summary".
+ * there is no operator view of someone else's cart. Mostly guards ORDER: `/summary`, `/checkout`,
+ * `/reorder/:orderId` and `/all` compete with `/:productId`, and Express takes the first match —
+ * declared the other way round, `DELETE /cart/all` becomes a product lookup for id "all".
  */
 
 import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
@@ -24,6 +24,7 @@ const ALL = [
     'POST /reorder/:orderId',
     'GET /',
     'POST /',
+    'DELETE /all',
     'DELETE /',
     'PUT /:productId',
     'DELETE /:productId'
@@ -39,6 +40,7 @@ describe('cart routes — what is mounted', () => {
 
         expect(paths.indexOf('/summary')).toBeLessThan(paths.indexOf('/:productId'));
         expect(paths.indexOf('/checkout')).toBeLessThan(paths.indexOf('/:productId'));
+        expect(paths.indexOf('/all')).toBeLessThan(paths.indexOf('/:productId'));
     });
 });
 
