@@ -4,17 +4,18 @@
 any domain. It is the bottom tier — it never knows modules exist, and `eslint.config.ts` stops it
 finding out.
 
-Six subdirectories, each a different kind of "outside the app".
+Seven subdirectories, each a different kind of "outside the app".
 
 ---
 
-## The six groups
+## The seven groups
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart LR
     Runtime["runtime/<br/><i>boot & shutdown</i>"] --> Adapters["adapters/<br/><i>the outside world</i>"]
-    Http["http/<br/><i>request in, response out</i>"] --> Persist["persistence/<br/><i>document ↔ payload</i>"]
+    Surfaces["surfaces/<br/><i>the shape a route repeats</i>"] --> Http["http/<br/><i>request in, response out</i>"]
+    Http --> Persist["persistence/<br/><i>document ↔ payload</i>"]
     Obs["observability/<br/><i>logs, metrics, traces</i>"]
     I18n["i18n/<br/><i>one language per request</i>"]
 
@@ -22,7 +23,7 @@ flowchart LR
     classDef b fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef c fill:#ede9fe,stroke:#7c3aed,color:#111827;
     class Runtime,Adapters a;
-    class Http,Persist b;
+    class Http,Persist,Surfaces b;
     class Obs,I18n c;
 ```
 
@@ -70,6 +71,20 @@ answering, with the feature that needed it off.
 | `src/infrastructure/http/middlewares/cache.ts`          | HTTP response caching: the cache key (built from the query parameters an endpoint's answer actually depends on), the stored envelope, the development TTL clamp and the per-entry size limit. | [Redis Cache](../tools/redis-cache.md)                                                     |
 | `src/infrastructure/http/middlewares/request-logger.ts` | One access-log entry per request, timed with `hrtime`; WARN for 4xx, ERROR for 5xx.                                                                                                           | [Winston & Audit Logs](../tools/winston.md)                                                |
 | `src/infrastructure/http/middlewares/route-flag.ts`     | Lets a route state its own meaning as a param the controller reads like any other — so a hard-delete path and a hard-delete query reach one handler.                                          | [Endpoints](../api/endpoints.md)                                                           |
+
+## `surfaces/` — the shape a route repeats
+
+Split out of `http/` on 2026-08-30. These are the only files under `src/infrastructure/` that know
+a service envelope, an audit action or a not-found key — which is why they are not in `http/`,
+whose stated job stops at the protocol. A module's own controller becomes a short spec of what
+differs per entity; the surface holds everything the entity does not change.
+
+| File                                                      | What it is                                                                                                                                                                       | Read next                                   |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `src/infrastructure/surfaces/create-delete-controller.ts` | The soft/hard delete triplet — `DELETE /x`, `DELETE /x/:id`, `DELETE /x/:id/hard` — including the audit event each one emits.                                                    | [Endpoints](../api/endpoints.md)            |
+| `src/infrastructure/surfaces/create-item-controller.ts`   | The read-one: fetch by path id, and the decision that a malformed id is the module's own 404 rather than a 500.                                                                  | [Request Flow](../theory/request-flow.md)   |
+| `src/infrastructure/surfaces/create-list-controller.ts`   | The paged list. Separate from search because a list has no body to read, and folding them would put a `surface` knob on a factory whose whole subject is where input comes from. | [Request Input](../theory/request-input.md) |
+| `src/infrastructure/surfaces/create-search-controller.ts` | `GET /x` and `POST /x/search` behind one controller, with a per-module overlay for query fields a plain field list cannot express.                                               | [Request Input](../theory/request-input.md) |
 
 ## `persistence/` — document ↔ payload
 
