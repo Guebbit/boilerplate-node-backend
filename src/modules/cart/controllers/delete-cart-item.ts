@@ -1,7 +1,9 @@
 /**
  * @module
- * `DELETE /cart/:productId` controller — thin HTTP adapter over
- * `cartService.cartItemRemoveById`.
+ * `DELETE /cart/:productId` and `DELETE /cart` controller — thin HTTP adapter over
+ * `cartService.cartItemRemoveById`. One controller for both spellings: `productId` arrives as a
+ * path segment on the canonical route, or as a required body field on the alias
+ * (`x-alias-of: removeCartItem`). See docs/theory/request-input.md.
  */
 
 import type { Request, Response } from 'express';
@@ -18,7 +20,8 @@ import {
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
- * DELETE /cart/:productId
+ * DELETE /cart/:productId — canonical, path segment.
+ * DELETE /cart — alias, `productId` required in the body.
  * Remove a specific product from the cart. Returns the updated cart.
  * Service returns 404 if the item is not in the cart.
  */
@@ -27,11 +30,10 @@ export const deleteCartItem = (
     response: Response
 ) => {
     const userId = authContextOf(request).id;
-    // Path param only. `DELETE /cart/{productId}` declares no request body, and it could not use
-    // one anyway: the route cannot match without the segment, so the param always wins the
-    // precedence chain and a body `productId` was unreachable rather than merely undocumented.
-    // (`PUT /cart/{productId}` keeps `body` because `UpdateCartItemByIdRequest` does declare it.)
-    const { productId } = readInput(request, { surface: 'path', ids: ['productId'] });
+    // `write` reads params before body, no query — neither route declares one. The path segment
+    // wins on the canonical route; the alias has no path segment, so the body is the only source
+    // that can ever supply one.
+    const { productId } = readInput(request, { surface: 'write', ids: ['productId'] });
 
     if (!isValidObjectId(productId)) {
         rejectResponse(response, 422, [t('generic.error-missing-data')]);

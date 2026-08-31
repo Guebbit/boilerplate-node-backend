@@ -81,7 +81,7 @@ Symmetry is not a reason. "This resource has a `/search` and that one does not" 
 if the second one's filters have outgrown a query string.
 
 **Rough threshold: ~8 filters, or any filter that is an array or a nested object.** `GET /products`
-sits at 8 and has a sibling. `GET /inventory/levels` sits at 3 and does not need one.
+crossed it (now at 10) and has a sibling. `GET /inventory/levels` sits at 3 and does not need one.
 
 ---
 
@@ -174,16 +174,32 @@ Counts are the query parameters each list endpoint declares, pagination included
 
 | Resource | Query form      | Body form               | Filters |
 | -------- | --------------- | ----------------------- | ------- |
-| products | `GET /products` | `POST /products/search` | 8       |
-| users    | `GET /users`    | `POST /users/search`    | 7       |
-| orders   | `GET /orders`   | `POST /orders/search`   | 6       |
+| products | `GET /products` | `POST /products/search` | 10      |
+| users    | `GET /users`    | `POST /users/search`    | 9       |
+| orders   | `GET /orders`   | `POST /orders/search`   | 8       |
 | feedback | `GET /feedback` | `POST /feedback/search` | 5       |
+
+Counts as of 2026-08-31 — they drift as filters are added; re-derive from `openapi.yaml`'s query
+parameters rather than trusting this table blindly.
 
 All four now share one cache entry per resource (`keyAs`), so the alternate spelling costs no
 extra Mongo work.
 
 `cart` also has both spellings of its two mutations already — `POST /cart` ↔ `PUT /cart/{productId}`
-for add/edit, `DELETE /cart` ↔ `DELETE /cart/{productId}` for remove.
+for add/edit, `DELETE /cart` ↔ `DELETE /cart/{productId}` for remove (`x-alias-of: removeCartItem`,
+`productId` required in the body).
+
+**`DELETE /cart/all` is a third, separate URL, added 2026-08-31 — not a fourth spelling of remove.**
+Until then, a bodyless `DELETE /cart` cleared everything; `DELETE /cart {productId}` removed one
+line. Same URL, same method, two different outcomes, and the field that picked between them —
+`productId` — is the one thing a DELETE body is least reliable at carrying (RFC 9110 §9.3.5: a
+client _SHOULD NOT_ send content on a DELETE, and proxies drop it accordingly). The failure
+direction was the wrong one: a body that vanished in transit silently answered with the _bigger_
+destruction, still 200. That is the asymmetry Disposition 1 exists to prevent, inverted. The fix
+gives the destructive spelling its own URL and makes the body required, so an absent or malformed
+`productId` now 422s instead of falling back to clearing everything — "one door into two rooms" is
+not a form of polymorphism this file endorses; every other pair above is one operation reachable
+two ways, not one URL meaning two different things depending on what did or didn't arrive.
 
 ### Query-only lists — candidates, ranked
 
@@ -279,9 +295,9 @@ and return the unfiltered list. They do not, and nothing needs changing.
 
 `search` sets the scope key whenever `filters.status` is truthy, so a bogus value produces
 `{ status: undefined }` — which matches no document. The filter narrows to nothing, which is the
-direction that is safe. `src/modules/feedback/tests/unit/service.test.ts` has asserted exactly this
-all along, in two cases: an unknown status and the removed uppercase aliases both return zero
-items.
+direction that is safe. `src/modules/feedback/tests/integration/service.test.ts` has asserted
+exactly this all along, in two cases: an unknown status and the removed uppercase aliases both
+return zero items.
 
 So `?status=bogus` is not a filter that looks like it worked; it is a filter that worked and
 matched nothing. That is Disposition 2 above, and it is why a read here does **not** answer `422`

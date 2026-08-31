@@ -48,16 +48,40 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Cart]
-            summary: Empty cart or, if productId is set, remove target cart item
-            description: Clear cart or, ir productId is set, removes a specific product from the authenticated user's cart. Returns the updated cart (can be empty)
-            operationId: clearCart
+            summary: Remove item from cart
+            description: Removes the cart line for the product identified by `productId` in the body from the authenticated user's cart. Alternate spelling of `DELETE /cart/{productId}`, for a caller that would rather carry the id in the body. To empty the cart entirely, use `DELETE /cart/all` instead — a stripped or malformed body here 422s rather than falling back to clearing everything. Returns the updated cart.
+            operationId: removeCartItemByBody
+            x-alias-of: removeCartItem
             security:
                 - bearerAuth: []
             requestBody:
+                required: true
                 content:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/RemoveCartItemRequest'
+            responses:
+                '200':
+                    description: Updated cart
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed product id that matches no cart line. 422 covers the malformed case.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # A missing or malformed `productId` in the body — the controller answers before querying.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /cart/all:
+        delete:
+            tags: [Cart]
+            summary: Clear cart
+            description: Empties the authenticated user's cart entirely. Bodyless on purpose — the destructive spelling gets its own URL instead of being what `DELETE /cart` falls back to when a body goes missing, so a body stripped in transit 422s there instead of silently landing here.
+            operationId: clearCart
+            security:
+                - bearerAuth: []
             responses:
                 '200':
                     description: Cart cleared
@@ -270,6 +294,7 @@ components:
         RemoveCartItemRequest:
             type: object
             additionalProperties: false
+            required: [productId]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
