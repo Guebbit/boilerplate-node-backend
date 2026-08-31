@@ -51,11 +51,10 @@ interface BundleIdentity {
 /**
  * A document produced from AUTHORED SOURCE FILES in this repo.
  *
- * Three of the four: `openapi.yaml` joined by `redocly bundle`, the two AsyncAPI documents merged
- * through the YAML AST, and the frontend analytics catalogue spliced out of each module's
- * `analytics.ts`. How is each bundle's own business — what this kind declares is that its inputs
- * are hand-written, which is why it runs in the FIRST phase of a full run and the collections
- * downstream read a current contract.
+ * Three of them: `openapi.yaml` joined by `redocly bundle`, and the two AsyncAPI documents merged
+ * through the YAML AST. How is each bundle's own business — what this kind declares is that its
+ * inputs are hand-written, which is why it runs in the FIRST phase of a full run and the
+ * collections downstream read a current contract.
  */
 export interface CompiledBundle extends BundleIdentity {
     content: () => string;

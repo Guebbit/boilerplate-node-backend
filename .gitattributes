@@ -29,9 +29,8 @@ asyncapi.public.yaml                                           linguist-generate
 # ── The demo dataset, as the API actually serves it ──────────────────────────────────────────
 db/demo/demo-data.json                                         linguist-generated=true
 
-# ── Types and names published to the paired frontend ─────────────────────────────────────────
+# ── Realtime types, generated from the async contract ────────────────────────────────────────
 src/types/asyncapi.generated.ts                                linguist-generated=true
-src/infrastructure/observability/analytics-events.frontend.ts  linguist-generated=true
 
 # ── The orval client, generated from openapi.yaml ────────────────────────────────────────────
 api/**                                                         linguist-generated=true

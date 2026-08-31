@@ -143,13 +143,12 @@ jobs:
     spec-identity:
         # The cross-repo contract gate. Mirrors the job of the same name in the frontend.
         #
-        # Eleven files exist in BOTH repos, byte-identical — the two specs and the spectral
-        # ruleset, the seed identities, the generated realtime types, the analytics event names,
-        # the three API client collections, and two shared scripts. `scripts/spec-identity.ts`
-        # holds the list and says, per entry, what a fork of it would break.
+        # Two files exist in BOTH repos, byte-identical — the REST contract and the shared half
+        # of the async contract. `scripts/spec-identity.ts` holds the list and says, per entry,
+        # what a fork of it would break.
         #
-        # Seven of them are ASSEMBLED HERE from per-module fragments and copied to the frontend,
-        # so for those this job asks whether the copy over there is still the bundle built here.
+        # Both are ASSEMBLED HERE from per-module fragments and copied to the frontend, so this
+        # job asks whether the copies over there are still the bundles built here.
         # `tests/cross-cutting/contract-bundles.test.ts` asks the other half of the question —
         # whether the bundle here still matches the fragments it is built from — and runs in the
         # test job, so a fragment edited without re-bundling fails before this job is reached.
