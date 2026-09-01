@@ -20,6 +20,13 @@ export const accountAuditActions = {
     AUTH_EMAIL_VERIFY_REQUESTED: 'auth.email_verify.requested',
     AUTH_EMAIL_VERIFY_COMPLETED: 'auth.email_verify.completed',
     AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
+    /*
+     * BETTER_SECURITY.md wave 3.2: a refresh token was presented AFTER it was already rotated
+     * away, and outside the grace window a benign two-tabs race would fall inside — the signal
+     * that the token value itself has leaked. `rotateRefreshToken` fires this and revokes the
+     * whole refresh set in the same breath.
+     */
+    AUTH_REFRESH_TOKEN_REUSE_DETECTED: 'auth.refresh_token.reuse_detected',
     AUTH_LOGGED_OUT: 'auth.logout',
     AUTH_LOGGED_OUT_EVERYWHERE: 'auth.logout_all',
     AUTH_SESSION_REVOKED: 'auth.session.revoked',

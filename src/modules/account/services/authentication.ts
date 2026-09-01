@@ -35,7 +35,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
-import { createAccessToken, recordRefreshTokenUse } from '../session/jwt';
+import { rotateRefreshToken, TokenReuseError } from '../session/jwt';
 
 /**
  * Add a token to the user (e.g. password reset).
@@ -236,44 +236,58 @@ class MissingRefreshTokenError extends Error {
 }
 
 /**
- * Exchange a refresh token for a fresh access token, recording the attempt either way.
- * Takes the cookie as found, absence included, so all three outcomes — missing, invalid, valid —
- * are decided and recorded here. The two failures stay apart in `metadata.reason`: same 401 to
- * the caller, different facts in the audit trail.
+ * Exchange a refresh token for a fresh access token, ROTATING the refresh token in the same
+ * breath (BETTER_SECURITY.md wave 3.2), and recording the attempt either way. Takes the cookie as
+ * found, absence included, so all three ordinary outcomes — missing, invalid, valid — are decided
+ * and recorded here; a fourth, reuse of an already-rotated token, gets its own audit action and
+ * `metadata.reason` rather than being folded into `invalid_token`, since it is a materially
+ * different fact for whoever reads the trail: not a caller with a stale cookie, but a token value
+ * that outlived the session it belonged to.
+ * @returns the new access/refresh tokens and the refresh cookie's new `maxAge`, for the
+ *   controller to set alongside the response
  */
 export const refreshAccessToken = (
     refreshToken: string | undefined,
     context: CallerContext
-): Promise<string> =>
+): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
     (refreshToken
-        ? createAccessToken(refreshToken)
-              // This route IS the session making a request, and the only place that is true: login
-              // issues a session rather than using one. See `recordRefreshTokenUse`.
-              .then((token) => recordRefreshTokenUse(refreshToken).then(() => token))
-        : Promise.reject<string>(new MissingRefreshTokenError())
+        ? rotateRefreshToken(refreshToken)
+        : Promise.reject(new MissingRefreshTokenError())
     )
-        .then((token) => {
+        .then((result) => {
             emitAuditEvent(
                 buildAuditEvent(context, {
                     action: accountAuditActions.AUTH_TOKEN_REFRESHED,
                     outcome: 'success'
                 })
             );
-            return token;
+            return result;
         })
         .catch((error: unknown) => {
+            const reuseDetected = error instanceof TokenReuseError;
+
             emitAuditEvent(
                 buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_TOKEN_REFRESHED,
-                    actor_user_id: 'anonymous',
-                    actor_role: 'anonymous',
+                    action: reuseDetected
+                        ? accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED
+                        : accountAuditActions.AUTH_TOKEN_REFRESHED,
+                    // The reuse case DOES know whose account this was — carry the id, unlike the
+                    // ordinary failures below, which never got far enough to find out. `actor_role`
+                    // is left to its default (`anonymous`): this request never carried a verified
+                    // access token, so admin status isn't cheaply known, and getting it wrong would
+                    // misreport a fact the id alone already establishes precisely.
+                    actor_user_id: reuseDetected ? error.userId : 'anonymous',
                     outcome: 'failure',
-                    metadata: {
-                        reason:
-                            error instanceof MissingRefreshTokenError
-                                ? 'missing_token'
-                                : 'invalid_token'
-                    }
+                    ...(reuseDetected
+                        ? {}
+                        : {
+                              metadata: {
+                                  reason:
+                                      error instanceof MissingRefreshTokenError
+                                          ? 'missing_token'
+                                          : 'invalid_token'
+                              }
+                          })
                 })
             );
             throw error;

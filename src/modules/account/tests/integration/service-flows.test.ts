@@ -248,7 +248,8 @@ describe('accountService.refreshAccessToken', () => {
         'NODE_TOKEN_ACCESS',
         'NODE_TOKEN_REFRESH',
         'NODE_TOKEN_ACCESS_TIME',
-        'NODE_TOKEN_REFRESH_TIME_SHORT'
+        'NODE_TOKEN_REFRESH_TIME_SHORT',
+        'NODE_TOKEN_ROTATION_GRACE_MS'
     ] as const;
     const originalEnvironment: Record<string, string | undefined> = {};
 
@@ -272,15 +273,75 @@ describe('accountService.refreshAccessToken', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const refreshToken = await issueRefreshToken();
 
-        const accessToken = await account.refreshAccessToken(refreshToken, testCallerContext);
+        const result = await account.refreshAccessToken(refreshToken, testCallerContext);
 
-        expect(typeof accessToken).toBe('string');
+        expect(typeof result.accessToken).toBe('string');
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_TOKEN_REFRESHED,
                 outcome: 'success'
             })
         );
+    });
+
+    // BETTER_SECURITY.md wave 3.2 — the whole point: the refresh token's VALUE changes on every
+    // exchange, so a stolen cookie stops being silently reusable for as long as it has left to live.
+    it('rotates the refresh token — the new value replaces the old one, which stops working', async () => {
+        const refreshToken = await issueRefreshToken();
+
+        const result = await account.refreshAccessToken(refreshToken, testCallerContext);
+
+        expect(result.refreshToken).not.toBe(refreshToken);
+        // The new token works…
+        await expect(
+            account.refreshAccessToken(result.refreshToken, testCallerContext)
+        ).resolves.toBeDefined();
+    });
+
+    it('reissues rather than rejects a token replayed within the rotation grace window', async () => {
+        // Two tabs racing to refresh with the SAME cookie: both requests present `refreshToken`,
+        // and both must succeed — this is what stops a benign race from reading as theft.
+        const refreshToken = await issueRefreshToken();
+
+        const [first, second] = await Promise.all([
+            account.refreshAccessToken(refreshToken, testCallerContext),
+            account.refreshAccessToken(refreshToken, testCallerContext)
+        ]);
+
+        expect(typeof first.accessToken).toBe('string');
+        expect(typeof second.accessToken).toBe('string');
+        // Both got a working, DIFFERENT refresh token — not the same one twice.
+        expect(first.refreshToken).not.toBe(second.refreshToken);
+    });
+
+    it('treats a token replayed after its rotation grace window as reuse, and revokes every session', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ email: 'reuse@example.com' });
+        // A second, unrelated live session — this is what proves the revoke is account-wide, not
+        // just the one token.
+        const other = await createRefreshToken(user.id);
+        const refreshToken = await createRefreshToken(user.id);
+
+        await account.refreshAccessToken(refreshToken, testCallerContext);
+
+        // A zero-length grace window: by the time this next call re-reads the entry, ANY elapsed
+        // time counts as outside it — the same test technique `jwt.test.ts` would use, without
+        // reaching into `users`' storage to back-date a timestamp by hand.
+        process.env.NODE_TOKEN_ROTATION_GRACE_MS = '0';
+
+        await expect(account.refreshAccessToken(refreshToken, testCallerContext)).rejects.toThrow(
+            'reuse'
+        );
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED,
+                actor_user_id: user.id,
+                outcome: 'failure'
+            })
+        );
+
+        // The unrelated session from before is gone too — the WHOLE refresh set, not just the one.
+        await expect(account.refreshAccessToken(other, testCallerContext)).rejects.toThrow();
     });
 
     it('records a token that does not verify as an invalid_token failure', async () => {

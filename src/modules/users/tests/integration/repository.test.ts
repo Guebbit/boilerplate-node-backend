@@ -276,7 +276,7 @@ describe('userRepository', () => {
                 ]
             });
 
-            const removed = await userRepository.tokenRemoveExpired();
+            const removed = await userRepository.tokenRemoveExpired(10_000);
             const refreshed = await userRepository.findByIdWithCredentials(user._id.toString());
 
             // A count, not a status code: what a failed sweep means to a client is the service's
@@ -285,6 +285,47 @@ describe('userRepository', () => {
             expect(refreshed).not.toBeNull();
             expect(refreshed!.tokens).toHaveLength(1);
             expect(refreshed!.tokens[0].token).toBe(hashToken('valid-token'));
+        });
+
+        // BETTER_SECURITY.md wave 3.2: a rotated-away token keeps its ORIGINAL `expiration` (up
+        // to a year, for `remember: long`), so without this half of the sweep it would sit in
+        // `tokens` until then instead of clearing out once its grace window has passed.
+        it('tokenRemoveExpired also sweeps tokens superseded past the grace window, but not within it', async () => {
+            const longUnexpired = new Date(Date.now() + 60_000);
+            const supersededLongAgo = new Date(Date.now() - 60_000);
+            const supersededJustNow = new Date();
+
+            const user = await createUser({
+                tokens: [
+                    {
+                        type: TokenType.REFRESH,
+                        token: hashToken('stale-rotated'),
+                        expiration: longUnexpired,
+                        supersededAt: supersededLongAgo
+                    },
+                    {
+                        type: TokenType.REFRESH,
+                        token: hashToken('freshly-rotated'),
+                        expiration: longUnexpired,
+                        supersededAt: supersededJustNow
+                    },
+                    {
+                        type: TokenType.REFRESH,
+                        token: hashToken('live'),
+                        expiration: longUnexpired
+                    }
+                ]
+            });
+
+            // A 10s grace window: the token superseded a minute ago is well past it, the one
+            // superseded just now is well within it.
+            const removed = await userRepository.tokenRemoveExpired(10_000);
+            const refreshed = await userRepository.findByIdWithCredentials(user._id.toString());
+
+            expect(removed).toBe(1);
+            expect(refreshed!.tokens.map(({ token }) => token).toSorted()).toEqual(
+                [hashToken('freshly-rotated'), hashToken('live')].toSorted()
+            );
         });
 
         it('tokenRemoveExpired rejects when the write fails, rather than inventing a status', async () => {
@@ -300,7 +341,7 @@ describe('userRepository', () => {
              * HTTP status code. Rejecting is what lets `adminTokenCleanup` decide that, and what
              * stops a caller mistaking a failed sweep for an empty one.
              */
-            await expect(userRepository.tokenRemoveExpired()).rejects.toThrow('db failure');
+            await expect(userRepository.tokenRemoveExpired(10_000)).rejects.toThrow('db failure');
             updateManySpy.mockRestore();
         });
 

@@ -46,9 +46,10 @@ export const userRepository: Repository<UserDocument> & {
     findAuthenticatableById: (id: string) => Promise<UserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
-    tokenRemoveExpired: () => Promise<number>;
+    tokenRemoveExpired: (supersededGraceMs: number) => Promise<number>;
     findByTokenValue: (token: string) => Promise<UserDocument | null>;
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
+    tokenSupersede: (token: string) => Promise<boolean>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
     writebackImage: ImageWriteback;
 } = {
@@ -157,17 +158,29 @@ export const userRepository: Repository<UserDocument> & {
     },
 
     /**
-     * Drop every expired token from every document — the housekeeping sweep. Returns a plain
-     * count rather than an HTTP status: a model shouldn't decide what a failed sweep means to a
-     * client, that's the service's job. `timestamps: false` — expiring a token isn't a change to
-     * the account.
+     * Drop every expired token from every document, PLUS every token superseded (wave 3.2's
+     * rotation) further back than `supersededGraceMs` — a rotated-away entry is only kept for its
+     * short reuse-detection window, and without this sweep it would sit in `tokens` until its
+     * original `expiration`, which for a `remember: long` session is up to a year away. A user
+     * who refreshes routinely would otherwise accumulate one dead entry per exchange.
+     *
+     * Returns a plain count rather than an HTTP status: a model shouldn't decide what a failed
+     * sweep means to a client, that's the service's job. `timestamps: false` — expiring a token
+     * isn't a change to the account.
+     *
+     * @param supersededGraceMs - `getRotationGraceMilliseconds()`, passed in rather than read
+     *   here: that config belongs to `account` (session policy), and this module may not import it.
      */
-    tokenRemoveExpired: () => {
+    tokenRemoveExpired: (supersededGraceMs: number) => {
         const now = new Date();
+        const supersededCutoff = new Date(now.getTime() - supersededGraceMs);
+        const isDue = {
+            $or: [{ expiration: { $lt: now } }, { supersededAt: { $lt: supersededCutoff } }]
+        };
         return userModel
             .updateMany(
-                { 'tokens.expiration': { $lt: now } },
-                { $pull: { tokens: { expiration: { $lt: now } } } },
+                { tokens: { $elemMatch: isDue } },
+                { $pull: { tokens: isDue } },
                 { timestamps: false }
             )
             .exec()
@@ -180,10 +193,15 @@ export const userRepository: Repository<UserDocument> & {
      * credential still exists — narrowing by type would depend on a field the JWT itself doesn't
      * carry. Carries `AUTHENTICATABLE_FILTER` too, so a refresh cookie that survives a
      * deactivation or soft delete stops working on its very next exchange, same clause as `login`.
-     * `token` is hashed before the query — wave 3.1.
+     * `token` is hashed before the query — wave 3.1. Selects `tokens` (`select: false` on the
+     * schema) so wave 3.2's rotation can read the matched entry's `supersededAt` back off it,
+     * not just this method's original callers, who only ever cared that a document came back.
      */
     findByTokenValue: (token: string) =>
-        userModel.findOne({ 'tokens.token': hashToken(token), ...AUTHENTICATABLE_FILTER }).exec(),
+        userModel
+            .findOne({ 'tokens.token': hashToken(token), ...AUTHENTICATABLE_FILTER })
+            .select('+tokens')
+            .exec(),
 
     /**
      * Stamp a token as used, so `GET /account/sessions` can show which device is idle. A
@@ -199,6 +217,36 @@ export const userRepository: Repository<UserDocument> & {
                 { timestamps: false }
             )
             .exec(),
+
+    /**
+     * Claim a refresh token for rotation — BETTER_SECURITY.md wave 3.2. Atomically stamps
+     * `supersededAt` on the matched entry, but ONLY if it doesn't already carry one: `$elemMatch`
+     * requires both conditions on the SAME array element, so of two concurrent callers presenting
+     * the identical token, exactly one sees `modifiedCount: 1` — mongod serializes the two writes
+     * against one document, and the loser's filter no longer matches once the winner's write has
+     * landed. That race is `accountService.rotateRefreshToken`'s whole reason for existing; this
+     * method is only the primitive that makes it possible to tell winner from loser at all.
+     *
+     * Deliberately does NOT `$pull` the old entry — the entry stays, timestamped, so a
+     * short-grace-window re-presentation of it (the loser's race, or a retried request) can still
+     * be told apart from genuine reuse of a long-dead token. See `findByTokenValue` for reading
+     * it back.
+     *
+     * @returns whether THIS call is the one that superseded the token
+     */
+    tokenSupersede: (token: string) =>
+        userModel
+            .updateOne(
+                {
+                    tokens: {
+                        $elemMatch: { token: hashToken(token), supersededAt: { $exists: false } }
+                    }
+                },
+                { $set: { 'tokens.$.supersededAt': new Date() } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * Revoke one refresh token by its SUBDOCUMENT id — "log out that device". The id filter

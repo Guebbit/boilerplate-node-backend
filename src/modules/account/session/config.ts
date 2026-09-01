@@ -56,3 +56,15 @@ export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
  * @returns seconds as integer, 0 if env var is unset
  */
 export const getAccessTokenTTL = () => environmentNumber('NODE_TOKEN_ACCESS_TIME', 0);
+
+/**
+ * How long a just-rotated refresh token is still honoured — BETTER_SECURITY.md wave 3.2. Long
+ * enough that two requests firing within the same page-load race (two tabs waking together, an
+ * interceptor retrying) both land inside it; short enough that a token replayed well after its
+ * rotation reads as what it is. Milliseconds, since it is compared against a `Date` difference,
+ * never signed into a token.
+ *
+ * @returns milliseconds, 10000 (10s) if `NODE_TOKEN_ROTATION_GRACE_MS` is unset
+ */
+export const getRotationGraceMilliseconds = () =>
+    environmentNumber('NODE_TOKEN_ROTATION_GRACE_MS', 10_000);

@@ -96,6 +96,42 @@ The refresh tokens hang off the user document in [`users`](./users.md)' `tokens`
 is what makes "log me out of every device" a single write rather than a token blocklist. It is also
 the concrete reason the `account → users` edge is `shared-kernel`: this module writes that array.
 
+## Refresh rotation
+
+`GET /account/refresh` doesn't just re-sign an access token — it REPLACES the refresh token too,
+every time. A stolen cookie used to stay valid, silently, for as long as it had left to live (up to
+a year, `remember: long`); rotation turns "a value that never changes" into "a value that changes on
+every use", so a copy presented after the original has moved is detectable.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 46}}}%%
+flowchart TD
+    C["client presents old token"] --> S{"tokenSupersede<br/><i>atomic claim</i>"}
+    S -->|"won"| N["mint new token<br/>same absolute expiry"]
+    S -->|"lost"| R{"re-read the entry"}
+    R -->|"absent"| F["401 — an ordinary<br/>dead credential"]
+    R -->|"superseded, WITHIN grace"| N
+    R -->|"superseded, OUTSIDE grace"| X["reuse detected:<br/>revoke the WHOLE refresh set"]
+
+    classDef ok fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class N ok;
+    class F,X bad;
+```
+
+The grace window (`NODE_TOKEN_ROTATION_GRACE_MS`, default 10s) exists for one reason: two requests
+racing on the SAME cookie — two tabs waking together, an interceptor retrying — both present the
+identical old token, and only one can win the atomic claim. Without the grace window the loser's
+retry would look exactly like theft. Within it, the loser is reissued its own sibling token instead
+of rejected — proven under real concurrent load in
+`tests/integration/concurrency/auth-races.test.ts` (R5), not just asserted here.
+
+A superseded entry stays in `tokens` — never `$pull`ed immediately — so a later presentation of it
+can still be told apart from noise. `GET /account/sessions` filters these out; they aren't a device
+the account holder should see or be able to revoke on their own. The housekeeping sweep
+(`runTokenCleanup`) removes them once the grace window has long passed, alongside ordinarily
+expired tokens — see `tokenRemoveExpired` in [`users`](./users.md)'s repository.
+
 ## Related pages
 
 - [`account`](./account.md) — the module this belongs to

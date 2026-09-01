@@ -9,14 +9,15 @@
 
 import { randomUUID } from 'node:crypto';
 import { sign, verify } from 'jsonwebtoken';
-import { userRepository, TokenType } from '@modules/users';
+import { userRepository, TokenType, hashToken } from '@modules/users';
 import type { CastError } from 'mongoose';
 import {
     getAccessTokenSecret,
     getRefreshTokenSecret,
     getAccessTokenTTL,
     getExpiryTime,
-    getExpiryTimeMilliseconds
+    getExpiryTimeMilliseconds,
+    getRotationGraceMilliseconds
 } from './config';
 import type { RefreshTokenExpiryTime } from './config';
 
@@ -134,3 +135,134 @@ export const createAccessToken = (refreshToken: string) =>
             algorithm: 'HS256'
         })
     );
+
+/**
+ * A refresh token was presented that this document does not currently hold LIVE — genuinely
+ * unknown, or superseded outside the grace window — BETTER_SECURITY.md wave 3.2. Carries the
+ * owning user's id so the caller can decide what to do about it without a second lookup; this
+ * module has already revoked every refresh token on the account by the time it throws.
+ */
+export class TokenReuseError extends Error {
+    constructor(public readonly userId: string) {
+        super('Refresh token reuse detected');
+        this.name = 'TokenReuseError';
+    }
+}
+
+/** Every refresh token this account currently holds, gone — the reuse-detected response. */
+const revokeAllRefreshTokens = (userId: string): Promise<void> =>
+    userRepository
+        .findByIdWithCredentials(userId)
+        .then((user) => (user ? user.tokenRemoveAll(TokenType.REFRESH) : undefined));
+
+/**
+ * Sign and persist the winning half of a rotation: a new refresh token carrying the SAME absolute
+ * expiry as the one it replaces (`remainingMs`), plus a fresh access token. `lastUsedAt` is
+ * stamped immediately rather than left absent, the way a brand-new login's token is: from the
+ * account holder's side this is a continuation of the same session, not a new one, and
+ * `GET /account/sessions` should read it that way.
+ */
+const reissueRotated = (
+    id: string,
+    remainingMs: number
+): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
+    userRepository.findByIdWithCredentials(id).then((user) => {
+        if (!user) throw new Error('User not found');
+
+        const newRefreshToken = sign({ id } as TokenData, getRefreshTokenSecret(), {
+            expiresIn: Math.ceil(remainingMs / 1000),
+            algorithm: 'HS256',
+            jwtid: randomUUID()
+        });
+
+        return user
+            .tokenAdd(TokenType.REFRESH, remainingMs, newRefreshToken)
+            .then((refreshToken) => recordRefreshTokenUse(refreshToken).then(() => refreshToken))
+            .then((refreshToken) => ({
+                accessToken: sign({ id } as TokenData, getAccessTokenSecret(), {
+                    expiresIn: getAccessTokenTTL(),
+                    algorithm: 'HS256'
+                }),
+                refreshToken,
+                refreshMaxAgeMs: remainingMs
+            }));
+    });
+
+/**
+ * Exchange a refresh token for a NEW refresh token and a fresh access token, ROTATING the
+ * refresh token's value — BETTER_SECURITY.md wave 3.2. Unlike `createAccessToken`, which re-signs
+ * an access token off a refresh token that stays valid indefinitely, this REPLACES it on every
+ * exchange: a stolen cookie becomes detectable (a later presentation of the spent value) rather
+ * than silently reusable for as long as it has left to live.
+ *
+ * The new token's absolute expiry is COPIED from the old one's `exp` claim, not reset to a fresh
+ * full window — rotation changes the token's VALUE for theft detection, it does not extend how
+ * long the session may live past what it was granted at login. See docs/modules/account-sessions.md.
+ *
+ * Concurrency: exactly one of two requests racing with the identical token WINS the atomic
+ * `tokenSupersede` claim (see that method's doc) and rotates normally. The loser re-reads the
+ * entry: if it was superseded moments ago (within `getRotationGraceMilliseconds()`), that is the
+ * race, not theft, and the loser is reissued its own sibling token rather than rejected. A token
+ * absent ENTIRELY is an ordinary dead credential (logout, password change, deactivation) and is
+ * rejected same as ever — not reuse, and there is nothing to revoke that isn't already gone. Only
+ * a token this account demonstrably rotated away, replayed well outside its grace window, is
+ * treated as reuse — and that revokes the account's ENTIRE refresh set, not just the one token,
+ * since the value itself is what leaked.
+ *
+ * @param oldToken - the refresh JWT the caller presented
+ * @returns the new access/refresh tokens and the refresh cookie's new `maxAge`
+ * @throws when the JWT itself doesn't verify, or {@link TokenReuseError} on detected reuse
+ */
+export const rotateRefreshToken = (
+    oldToken: string
+): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
+    new Promise<TokenData & { exp: number }>((resolve, reject) => {
+        // Signature/expiry only, no DB round trip yet — same as `verifyAccessToken`.
+        verify(oldToken, getRefreshTokenSecret(), { algorithms: ['HS256'] }, (error, data) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolve(data as TokenData & { exp: number });
+        });
+    }).then(({ id, exp }) => {
+        // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
+        // verified with almost no time left still signs rather than producing `expiresIn: 0`,
+        // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
+        const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
+
+        return userRepository.tokenSupersede(oldToken).then((won) => {
+            if (won) return reissueRotated(id, remainingMs);
+
+            return userRepository.findByTokenValue(oldToken).then((user) => {
+                const digest = hashToken(oldToken);
+                const entry = user?.tokens.find((tk) => tk.token === digest);
+
+                // Genuinely absent — revoked by logout/password-change/deactivation while this
+                // JWT's signature still verified, or already cleaned up. An ordinary dead
+                // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
+                // already gone. `verifyRefreshToken` answers this identically for the non-rotating
+                // callers that still use it.
+                if (!entry) throw new Error('Forbidden');
+
+                // Still live (no `supersededAt`) despite losing the claim: only reachable through
+                // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
+                // credential is exactly as valid as the caller believes it is.
+                if (!entry.supersededAt) return reissueRotated(id, remainingMs);
+
+                const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
+                if (supersededMsAgo <= getRotationGraceMilliseconds())
+                    // The benign race: someone else's rotation of this SAME token already won,
+                    // moments ago. Reissue rather than reject — see the module doc above.
+                    return reissueRotated(id, remainingMs);
+
+                // Superseded well outside the grace window: THIS is the signal that distinguishes
+                // reuse from an ordinary dead credential — a token this account rotated away, on
+                // purpose, being replayed long after. Revoke first, so the throw below is never a
+                // lie about what state the account is left in.
+                return revokeAllRefreshTokens(id).then(() => {
+                    throw new TokenReuseError(id);
+                });
+            });
+        });
+    });

@@ -21,6 +21,14 @@
  *        successful login followed by an unauthenticated next request. Closed by `$push`/`$pull`
  *        against mongod rather than against a stale in-memory copy.
  *
+ * R5 is not a bug fix — it PROVES a design decision BETTER_SECURITY.md 3.2 makes explicitly:
+ * refresh-token rotation must not turn "two tabs woke up and refreshed within the same instant"
+ * into "this looks like theft". `tokenSupersede` (`users/repository.ts`) lets exactly one
+ * concurrent exchange of one token WIN atomically; every other exchange within
+ * `NODE_TOKEN_ROTATION_GRACE_MS` of that win is reissued its own sibling token rather than
+ * rejected. This is the suite the plan's own "Things that will bite" names as where that has to
+ * be proven, not just asserted in a docblock.
+ *
  * Observed hit rates, N=10, 20 consecutive runs on 2026-08-08 (recorded because a race test that
  * never actually races is a green test measuring nothing):
  *   - signup:  20/20 runs saw at least one 409, i.e. the race was contended every time.
@@ -32,7 +40,7 @@
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
-import { userRepository } from '@modules/users';
+import { userRepository, hashToken } from '@modules/users';
 import { TokenType } from '@modules/users';
 // Not on the barrel — see `users/index.ts`. A spec may reach the model; runtime code may not.
 import { userModel } from '@modules/users/model';
@@ -176,6 +184,62 @@ describe('R4 — concurrent logins for one account', () => {
     });
 });
 
+/** A user with one live session, and the refresh cookie value it minted. */
+const issueSession = async () => {
+    const user = await createUser({ email: 'rotation-race@example.com' });
+    const login = await api()
+        .post('/account/login')
+        .send({ email: user.email, password: PLAIN_PASSWORD });
+    const jwtCookie = (login.get('Set-Cookie') ?? []).find((cookie) => cookie.startsWith('jwt='))!;
+    return { user, jwtCookie };
+};
+
+describe('R5 — concurrent refresh-token rotation, same cookie', () => {
+    it('answers every simultaneous exchange with a working access token, none rejected', async () => {
+        // Two tabs waking together, an interceptor retrying — all present the SAME cookie, and
+        // under naive rotation the losers of the atomic claim would 401 as "theft".
+        const { jwtCookie } = await issueSession();
+
+        const results = await raceN(RACE_SIZE, () =>
+            api().get('/account/refresh').set('Cookie', jwtCookie)
+        );
+
+        expectNoServerErrors(results);
+        expect(countStatus(results, 200)).toBe(RACE_SIZE);
+    });
+
+    it('mints a DISTINCT refresh token for every racer, not N copies of one', async () => {
+        const { jwtCookie } = await issueSession();
+
+        const results = await raceN(RACE_SIZE, () =>
+            api().get('/account/refresh').set('Cookie', jwtCookie)
+        );
+
+        const rotatedCookies = results
+            .map((result) => (result.status === 'fulfilled' ? result.value : undefined))
+            .flatMap((response) => response?.get('Set-Cookie') ?? [])
+            .filter((cookie) => cookie.startsWith('jwt='));
+
+        expect(rotatedCookies).toHaveLength(RACE_SIZE);
+        expect(new Set(rotatedCookies).size).toBe(RACE_SIZE);
+    });
+
+    it('leaves exactly ONE superseded ancestor behind — the original, claimed once', async () => {
+        // Every racer reissues its own sibling token (RACE_SIZE new, live entries — proven above),
+        // but they all raced to supersede the SAME starting token, and `tokenSupersede`'s atomic
+        // claim means only the FIRST write can ever flip it. There is exactly one ancestor to mark,
+        // and it gets marked exactly once, however many racers tried.
+        const { user, jwtCookie } = await issueSession();
+
+        await raceN(RACE_SIZE, () => api().get('/account/refresh').set('Cookie', jwtCookie));
+
+        const stored = await userRepository.findOneWithCredentials({ email: user.email });
+        const refreshTokens = stored?.tokens?.filter((entry) => entry.type === 'refresh') ?? [];
+        expect(refreshTokens.filter((entry) => !entry.supersededAt)).toHaveLength(RACE_SIZE);
+        expect(refreshTokens.filter((entry) => entry.supersededAt)).toHaveLength(1);
+    });
+});
+
 describe('one-time tokens under contention', () => {
     it('lets exactly one of two simultaneous reset-confirms through', async () => {
         // A reset token is one-time. Two uses of it must not both change the password, and the
@@ -196,7 +260,12 @@ describe('one-time tokens under contention', () => {
 
         // And the token is spent, whichever request spent it.
         const stored = await userRepository.findOneWithCredentials({ email: user.email });
-        expect(stored?.tokens?.some((entry) => entry.token === 'one-time-reset-token')).toBe(false);
+        // `tokens[].token` is a `hashToken` digest at rest (BETTER_SECURITY.md wave 3.1) — the
+        // stored value is never the literal token, so the comparison has to hash it too, or this
+        // assertion is vacuously true regardless of whether the token was actually spent.
+        expect(
+            stored?.tokens?.some((entry) => entry.token === hashToken('one-time-reset-token'))
+        ).toBe(false);
     });
 });
 

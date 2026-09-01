@@ -9,13 +9,16 @@ import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
 import { accountService, runTokenCleanup } from '../services';
+import { createRefreshCookie, createLoggedCookie } from '../session/cookies';
 import { authRefreshTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * GET /account/refresh — mints a new short-lived access token from the refresh cookie.
- * Cookie-only by design: a refresh token in the URL would land in browser history, proxy logs
- * and `Referer` headers; the `HttpOnly` cookie doesn't leak that way.
+ * GET /account/refresh — mints a new short-lived access token from the refresh cookie, and, since
+ * BETTER_SECURITY.md wave 3.2, ROTATES the refresh cookie too: every exchange replaces the
+ * refresh token's value, so `refreshAccessToken`'s result carries the new cookie's `maxAge`
+ * alongside the tokens. Cookie-only by design: a refresh token in the URL would land in browser
+ * history, proxy logs and `Referer` headers; the `HttpOnly` cookie doesn't leak that way.
  */
 export const getRefreshToken = (request: Request, response: Response) => {
     // Cookie name 'jwt' is decided in post-login.ts.
@@ -30,9 +33,14 @@ export const getRefreshToken = (request: Request, response: Response) => {
         .then(() =>
             accountService
                 .refreshAccessToken(refreshToken, callerContextOf(request))
-                .then((token) => {
+                .then(({ accessToken, refreshToken: rotated, refreshMaxAgeMs }) => {
+                    // The rotated value replaces the client's cookie in the SAME response —
+                    // without this the client keeps presenting the now-superseded token, which
+                    // its next refresh has to survive via the grace window rather than needing to.
+                    createRefreshCookie(response, rotated, refreshMaxAgeMs);
+                    createLoggedCookie(response, refreshMaxAgeMs);
                     authRefreshTotal.inc({ status: 'success' });
-                    successResponse(response, { token });
+                    successResponse(response, { token: accessToken });
                 })
                 .catch(() => {
                     authRefreshTotal.inc({ status: 'failure' });

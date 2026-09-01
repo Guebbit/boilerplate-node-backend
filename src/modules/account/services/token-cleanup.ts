@@ -18,14 +18,16 @@ import {
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
+import { getRotationGraceMilliseconds } from '../session/config';
 
 /**
- * Run one cleanup cycle: remove every expired token from every user document.
+ * Run one cleanup cycle: remove every expired token, plus every rotated-away one whose grace
+ * window (wave 3.2) has long since passed, from every user document.
  */
 export const runTokenCleanup = (): Promise<void> => {
     logger.info('Token cleanup: starting expired-token removal');
     return userRepository
-        .tokenRemoveExpired()
+        .tokenRemoveExpired(getRotationGraceMilliseconds())
         .then((removed) => {
             logger.info(`Token cleanup: completed, ${removed} document(s) pruned`);
         })
@@ -54,7 +56,7 @@ export const adminTokenCleanup = (
     context: CallerContext
 ): Promise<ResponseSuccess<{ removed: number }> | ResponseReject> =>
     userRepository
-        .tokenRemoveExpired()
+        .tokenRemoveExpired(getRotationGraceMilliseconds())
         .then((removed) => {
             emitAuditEvent(
                 buildAuditEvent(context, {

@@ -60,6 +60,13 @@ export interface Token {
      * verification link) stay absent.
      */
     lastUsedAt?: Date;
+    /**
+     * When rotation (BETTER_SECURITY.md wave 3.2) replaced this refresh token with a new one.
+     * The entry stays in `tokens` rather than being removed immediately — see `tokenSupersede`
+     * in `../users/repository.ts` for why: a short grace window is what stops two tabs racing to
+     * refresh at once from looking like theft. Absent means this token is still live.
+     */
+    supersededAt?: Date;
 }
 
 /**
@@ -245,6 +252,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
                         required: false
                     },
                     lastUsedAt: {
+                        type: Date,
+                        required: false
+                    },
+                    supersededAt: {
                         type: Date,
                         required: false
                     }

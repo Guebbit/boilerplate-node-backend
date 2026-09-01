@@ -83,7 +83,11 @@ describe('Auth controllers token cleanup trigger', () => {
     });
 
     it('runs cleanup before refresh-token access token creation', async () => {
-        mockRefreshAccessToken.mockResolvedValue('new-access-token');
+        mockRefreshAccessToken.mockResolvedValue({
+            accessToken: 'new-access-token',
+            refreshToken: 'new-refresh-token',
+            refreshMaxAgeMs: 3_600_000
+        });
 
         const request = {
             params: {},
