@@ -9,6 +9,7 @@
 // to every log record) with *transports* (where the record is written). Everything below is
 // built out of those two concepts.
 import winston from 'winston';
+import { createHash } from 'node:crypto';
 
 /**
  * Field names that must never be logged in clear text.
@@ -47,6 +48,57 @@ export const SENSITIVE_FIELDS = new Set([
 const REDACTED = '[REDACTED]';
 
 /**
+ * Personal-data field names — GDPR_FIX.md gap G6. A DIFFERENT policy from
+ * {@link SENSITIVE_FIELDS}: these are not credentials, so hashing rather than dropping them is
+ * the right default — data minimisation applies to logs the same as to collections, but a log
+ * line that can no longer be correlated to a user is a log line nobody can debug with either.
+ * Kept as a SEPARATE set on purpose: a credential must never be hashed-and-kept, only ever
+ * replaced, and merging the two lists would blur that line the day someone adds a field to one
+ * without thinking about which policy it needs.
+ */
+export const PERSONAL_FIELDS = new Set(['email', 'ip', 'phone', 'street', 'zip', 'fullname']);
+
+/**
+ * How {@link PERSONAL_FIELDS} are treated on the way to a transport, from
+ * `NODE_LOG_PERSONAL_FIELDS`. `hash` is the default: a local dev log is a different risk from a
+ * shipped one, but a boilerplate's DEFAULT config is the one most deployments never revisit, so
+ * the private setting has to be the one that ships.
+ *
+ * - `hash` — replaced with a short, stable digest. The SAME input always produces the SAME
+ *   digest, so a trace stays followable ("did this user's requests all fail the same way")
+ *   without the log line being readable on its own.
+ * - `redact` — replaced with {@link REDACTED}, same as a credential. No correlation at all.
+ * - `plain` — left untouched. For local development, where the log never leaves the machine.
+ */
+type PersonalFieldMode = 'hash' | 'redact' | 'plain';
+
+/** Reads `NODE_LOG_PERSONAL_FIELDS`, falling back to `hash` for anything unrecognised or unset. */
+const resolvePersonalFieldMode = (): PersonalFieldMode => {
+    const raw = process.env.NODE_LOG_PERSONAL_FIELDS?.trim().toLowerCase();
+    return raw === 'redact' || raw === 'plain' ? raw : 'hash';
+};
+
+/**
+ * A short, stable digest of a personal-data value — correlatable, not readable.
+ *
+ * Truncated to 12 hex characters (48 bits): this is a LOG CORRELATION aid, not a security
+ * boundary the way a password hash is — nobody needs 256 bits of collision resistance to notice
+ * "this is the same user across three log lines", and a shorter digest keeps log lines scannable.
+ * `sha256:` prefixed so a reader (or a downstream parser) can tell a digest from a value that
+ * merely happens to look like one.
+ */
+const hashPersonalValue = (value: string): string =>
+    `sha256:${createHash('sha256').update(value).digest('hex').slice(0, 12)}`;
+
+/** Applies the resolved {@link PersonalFieldMode} to one personal-data value. */
+const applyPersonalFieldMode = (value: string): string => {
+    const mode = resolvePersonalFieldMode();
+    if (mode === 'plain') return value;
+    if (mode === 'redact') return REDACTED;
+    return hashPersonalValue(value);
+};
+
+/**
  * Recursively redact sensitive fields from objects and arrays.
  * Any key present in SENSITIVE_FIELDS is replaced with the literal `[REDACTED]`.
  *
@@ -62,11 +114,17 @@ export const redactSensitiveFields = (input: unknown): unknown => {
     if (input !== null && typeof input === 'object') {
         const result: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-            // Redact on key match; otherwise recurse so nested secrets
-            // (`{ user: { credentials: { password } } }`) are caught too.
-            result[key] = SENSITIVE_FIELDS.has(key.toLowerCase())
-                ? REDACTED
-                : redactSensitiveFields(value);
+            const lowerKey = key.toLowerCase();
+            // Credential first — SENSITIVE_FIELDS always wins if a name were ever on both lists.
+            // Personal-data fields only get the mode treatment when the value is itself a string;
+            // a nested object under a personal-sounding key (unlikely, but not impossible) still
+            // gets walked normally rather than silently skipped.
+            if (SENSITIVE_FIELDS.has(lowerKey)) result[key] = REDACTED;
+            else if (PERSONAL_FIELDS.has(lowerKey) && typeof value === 'string')
+                result[key] = applyPersonalFieldMode(value);
+            // Otherwise recurse so nested secrets (`{ user: { credentials: { password } } }`) and
+            // nested personal data are caught too.
+            else result[key] = redactSensitiveFields(value);
         }
         return result;
     }

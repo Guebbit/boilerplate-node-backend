@@ -16,6 +16,7 @@ import {
     redactSensitiveFields,
     serializeError,
     SENSITIVE_FIELDS,
+    PERSONAL_FIELDS,
     redactFormat,
     resolveLogLevel,
     resolveConsoleFormat
@@ -58,9 +59,11 @@ describe('redactSensitiveFields', () => {
     });
 
     it('redacts nested sensitive fields', () => {
-        const input = { user: { email: 'a@b.com', password: 'secret' } };
+        // `username`, not `email` — `email` is a PERSONAL field since G6 and gets hashed, not
+        // left plain; this case is about SENSITIVE_FIELDS nesting specifically.
+        const input = { user: { username: 'carol', password: 'secret' } };
         expect(redactSensitiveFields(input)).toEqual({
-            user: { email: 'a@b.com', password: '[REDACTED]' }
+            user: { username: 'carol', password: '[REDACTED]' }
         });
     });
 
@@ -291,6 +294,113 @@ describe('the sensitive-field policy, entry by entry', () => {
 
         expect(redacted.passwordPolicy).toBe('strong');
         expect(redacted.tokenCount).toBe(3);
+    });
+});
+
+describe('the personal-data policy — GDPR_FIX.md G6', () => {
+    const originalMode = process.env.NODE_LOG_PERSONAL_FIELDS;
+
+    afterEach(() => {
+        if (originalMode === undefined) delete process.env.NODE_LOG_PERSONAL_FIELDS;
+        else process.env.NODE_LOG_PERSONAL_FIELDS = originalMode;
+    });
+
+    // Table-driven over the REAL set, same reasoning as the sensitive-field policy above: a field
+    // added to PERSONAL_FIELDS is covered automatically, and one removed makes its case vanish.
+    it.each([...PERSONAL_FIELDS])('hashes %s by default — correlatable, not readable', (field) => {
+        delete process.env.NODE_LOG_PERSONAL_FIELDS;
+        const redacted = redactSensitiveFields({ [field]: 'the-value' }) as Record<string, unknown>;
+
+        expect(redacted[field]).toMatch(/^sha256:[\da-f]{12}$/);
+        expect(redacted[field]).not.toBe('the-value');
+    });
+
+    it('hashes the SAME input to the SAME digest twice, so a trace stays followable', () => {
+        const first = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+            string,
+            unknown
+        >;
+        const second = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+            string,
+            unknown
+        >;
+
+        expect(first.email).toBe(second.email);
+    });
+
+    it('hashes two DIFFERENT inputs to two different digests', () => {
+        const first = redactSensitiveFields({ email: 'alice@example.com' }) as Record<
+            string,
+            unknown
+        >;
+        const second = redactSensitiveFields({ email: 'bob@example.com' }) as Record<
+            string,
+            unknown
+        >;
+
+        expect(first.email).not.toBe(second.email);
+    });
+
+    it('drops personal fields entirely under NODE_LOG_PERSONAL_FIELDS=redact', () => {
+        process.env.NODE_LOG_PERSONAL_FIELDS = 'redact';
+
+        const redacted = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+            string,
+            unknown
+        >;
+
+        expect(redacted.email).toBe('[REDACTED]');
+    });
+
+    it('leaves personal fields untouched under NODE_LOG_PERSONAL_FIELDS=plain', () => {
+        process.env.NODE_LOG_PERSONAL_FIELDS = 'plain';
+
+        const redacted = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+            string,
+            unknown
+        >;
+
+        expect(redacted.email).toBe('user@example.com');
+    });
+
+    it('treats an unrecognised value the same as unset — hash, the private default', () => {
+        process.env.NODE_LOG_PERSONAL_FIELDS = 'not-a-real-mode';
+
+        const redacted = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+            string,
+            unknown
+        >;
+
+        expect(redacted.email).toMatch(/^sha256:[\da-f]{12}$/);
+    });
+
+    it('is case-insensitive for personal field names, like the sensitive-field policy', () => {
+        const redacted = redactSensitiveFields({ EMAIL: 'user@example.com' }) as Record<
+            string,
+            unknown
+        >;
+
+        expect(redacted.EMAIL).toMatch(/^sha256:[\da-f]{12}$/);
+    });
+
+    it('never hashes a credential — SENSITIVE_FIELDS wins on any name overlap', () => {
+        // No real overlap today; this pins the PRIORITY the code gives should one ever be added.
+        for (const personalField of PERSONAL_FIELDS)
+            expect(SENSITIVE_FIELDS.has(personalField)).toBe(false);
+    });
+
+    it('still recurses past a personal-field key whose value is not a string', () => {
+        // A nested object under a personal-sounding key is not hashed itself; it's walked, so a
+        // credential nested one level deeper is still caught.
+        const redacted = redactSensitiveFields({
+            email: { password: 'nested-secret' }
+        }) as Record<string, unknown>;
+
+        expect(redacted.email).toEqual({ password: '[REDACTED]' });
+    });
+
+    it('covers the whole policy, so a shrinking list cannot pass unnoticed', () => {
+        expect(PERSONAL_FIELDS.size).toBeGreaterThanOrEqual(6);
     });
 });
 

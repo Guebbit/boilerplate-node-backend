@@ -104,14 +104,23 @@ the index, changing `NODE_AUDIT_RETENTION_DAYS` does nothing until a `collMod` m
 
 ## Configuration
 
-| Env var             | Effect                                                                                                   |
-| ------------------- | -------------------------------------------------------------------------------------------------------- |
-| `NODE_LOG_LEVEL`    | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere. |
-| `NODE_SERVICE_NAME` | tag on every log entry. Useful when several services ship logs to the same aggregator.                   |
+| Env var                    | Effect                                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `NODE_LOG_LEVEL`           | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere. |
+| `NODE_SERVICE_NAME`        | tag on every log entry. Useful when several services ship logs to the same aggregator.                   |
+| `NODE_LOG_PERSONAL_FIELDS` | `hash` (default), `redact`, or `plain` — see [Personal data](#personal-data) below.                      |
 
 ## Redaction
 
 `redactSensitiveFields` replaces values of well-known sensitive keys (`password`, `token`, `cookie`, `authorization`, …) with `[REDACTED]` before logging. It runs on every log entry and on every audit event.
+
+## Personal data
+
+A second, separate list — `PERSONAL_FIELDS` (`email`, `ip`, `phone`, `street`, `zip`, `fullName`) — covers fields that are personal data without being credentials. Data minimisation applies to logs the same as it applies to collections, and these flow into Winston, and from there into [Loki](./loki.md), same as everything else.
+
+Kept apart from `SENSITIVE_FIELDS` on purpose: a credential is always replaced outright, never kept in any form. A personal field defaults to **hashed** instead (`NODE_LOG_PERSONAL_FIELDS=hash`, sha256, truncated to 12 hex characters, `sha256:`-prefixed) — the same input always produces the same digest, so a trace stays followable ("did this user's requests all fail the same way") without the log line being readable on its own. `redact` drops it entirely, like a credential; `plain` leaves it untouched, for local development where the log never leaves the machine.
+
+The private setting (`hash`) is the default deliberately: a boilerplate's default config is the one most deployments never revisit.
 
 ## Works with
 
