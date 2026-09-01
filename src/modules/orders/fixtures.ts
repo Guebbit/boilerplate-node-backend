@@ -10,7 +10,7 @@
 import { Types } from 'mongoose';
 import {
     identityOf,
-    compact,
+    stripUndefined,
     toDate,
     type OverridesFor
 } from '@infrastructure/persistence/fixtures';
@@ -61,7 +61,7 @@ const toSnapshot = ({
     _id: new Types.ObjectId(id),
     title,
     price,
-    ...compact({
+    ...stripUndefined({
         ...fields,
         createdAt: toDate(createdAt),
         updatedAt: toDate(updatedAt),
@@ -101,11 +101,11 @@ export const makeOrder = ({
      * builder-supplied default would erase the difference between "not chosen" and "free" — which
      * is the distinction `pickup` (a real method, priced 0) exists to keep visible.
      *
-     * `compact` is what makes "pass through" mean absent-stays-absent. `OrderOverrides` derives
-     * from the contract's `Order`, so accepting a column and then not writing it type-checks
-     * perfectly and leaves the dataset quietly missing whatever it described.
+     * `stripUndefined` is what makes "pass through" mean absent-stays-absent. `OrderOverrides`
+     * derives from the contract's `Order`, so accepting a column and then not writing it
+     * type-checks perfectly and leaves the dataset quietly missing whatever it described.
      */
-    ...compact({
+    ...stripUndefined({
         shippingMethod,
         shippingCost,
         shippingAddress,

@@ -7,7 +7,11 @@
  */
 
 import { Types } from 'mongoose';
-import { compact, identityOf, type FactoryIdentity } from '@infrastructure/persistence/fixtures';
+import {
+    stripUndefined,
+    identityOf,
+    type FactoryIdentity
+} from '@infrastructure/persistence/fixtures';
 import type { Address, Id } from '@types';
 import type { AddressBookDocument, AddressItem } from './model';
 
@@ -31,7 +35,7 @@ export type AddressBookFixture = Partial<AddressBookDocument> & Pick<AddressBook
 const toEntry = ({ id, label, phone, ...fields }: Address): AddressItem => ({
     _id: new Types.ObjectId(id),
     ...fields,
-    ...compact({ label, phone })
+    ...stripUndefined({ label, phone })
 });
 
 /** A book fixture ready for `addressBookRepository.create`, from a caller's overrides. */

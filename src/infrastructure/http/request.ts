@@ -19,6 +19,7 @@ import { t } from '@infrastructure/i18n';
 import { Types } from 'mongoose';
 import { coerceStringArray } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
+import { stripUndefined } from '@infrastructure/persistence/fixtures';
 
 /**
  * Read `request.body` as a plain object.
@@ -208,10 +209,9 @@ export const readInput = <TId extends string = never>(
     );
 
     // Assigned lowest-precedence first, so higher ones overwrite. `Object.assign` copies keys
-    // the same way a spread would — including `undefined` ones, removed by the pass below.
+    // the same way a spread would — including `undefined` ones, removed by `stripUndefined`.
     const merged = Object.assign({}, ...sources.toReversed()) as Record<string, unknown>;
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(merged)) if (value !== undefined) result[key] = value;
+    const result: Record<string, unknown> = stripUndefined(merged);
 
     // A `||` chain across the sources: the first non-empty value wins, and a source carrying an
     // empty string is only used if nothing better follows.

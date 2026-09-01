@@ -34,19 +34,24 @@ export type OverridesFor<TEntity> = FactoryIdentity &
 /**
  * Drop keys whose value is `undefined`.
  *
+ * Not named `compact` — that's lodash's own (array-only, falsy-dropping) function, and reusing
+ * the name for this one invites the wrong assumption. Shared with `readInput`
+ * (`@infrastructure/http/request`), which needs the identical idiom to keep a `||`-merged
+ * request from carrying explicit `undefined`s through to a Mongoose filter.
+ *
  * A factory spreads overrides over its own defaults, and `{ stock: undefined }` from a
  * conditionally-built caller would otherwise WIN — shadowing the default with an explicit
  * `undefined` instead of leaving the model's own `default:` to fill it.
  */
-export const compact = <T extends Record<string, unknown>>(source: T): T =>
+export const stripUndefined = <T extends Record<string, unknown>>(source: T): T =>
     Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined)) as T;
 
 /**
  * A wire date as the document stores it, `undefined` passing straight through.
  *
  * The contract carries ISO strings and Mongoose stores `Date`s, so every factory has one of these
- * on every date field. Paired with `compact`, an absent date leaves no key behind — which is what
- * keeps `deletedAt` a field that is either present or missing, never present-and-undefined.
+ * on every date field. Paired with `stripUndefined`, an absent date leaves no key behind — which
+ * is what keeps `deletedAt` a field that is either present or missing, never present-and-undefined.
  */
 export const toDate = (value: Date | string | undefined): Date | undefined =>
     value === undefined ? undefined : new Date(value);

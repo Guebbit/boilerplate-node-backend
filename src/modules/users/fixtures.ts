@@ -9,7 +9,7 @@
 
 import {
     identityOf,
-    compact,
+    stripUndefined,
     toDate,
     type OverridesFor
 } from '@infrastructure/persistence/fixtures';
@@ -50,5 +50,5 @@ export const makeUser = ({
     username: 'testuser',
     email: 'user@example.com',
     password: PLAIN_PASSWORD,
-    ...compact({ ...fields, deletedAt: toDate(deletedAt) })
+    ...stripUndefined({ ...fields, deletedAt: toDate(deletedAt) })
 });

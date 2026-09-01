@@ -7,7 +7,7 @@
  *   - `toObjectId` turns a hex string into a real BSON id. A string that stayed a string matches
  *     nothing inside an aggregation `$match` — the same failure `orderService.callerScope` guards
  *     at the other end — and reads as "no such record" rather than as an error.
- *   - `compact` drops `undefined` entries so an unspecified override falls through to the
+ *   - `stripUndefined` drops `undefined` entries so an unspecified override falls through to the
  *     schema's `default:`. Kept instead, the key exists with `undefined` as its value, which
  *     Mongoose treats as "set to nothing" and the default never applies.
  *   - `toDate` accepts what the seed files actually write — ISO strings — while passing a `Date`
@@ -17,7 +17,12 @@
  *     sharing the instant the seeder ran.
  */
 import { Types } from 'mongoose';
-import { compact, toDate, toObjectId, identityOf } from '@infrastructure/persistence/fixtures';
+import {
+    stripUndefined,
+    toDate,
+    toObjectId,
+    identityOf
+} from '@infrastructure/persistence/fixtures';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 
@@ -47,15 +52,15 @@ describe('toObjectId', () => {
     });
 });
 
-describe('compact', () => {
+describe('stripUndefined', () => {
     it('drops keys whose value is undefined', () => {
-        expect(compact({ a: 1, b: undefined, c: 'x' })).toEqual({ a: 1, c: 'x' });
+        expect(stripUndefined({ a: 1, b: undefined, c: 'x' })).toEqual({ a: 1, c: 'x' });
     });
 
     it('keeps null, zero, empty string and false', () => {
         // Each of these is a VALUE a fixture may deliberately state — `shippingCost: 0` and
         // `active: false` both mean something. Only `undefined` means "not specified".
-        expect(compact({ n: null, z: 0, s: '', f: false })).toEqual({
+        expect(stripUndefined({ n: null, z: 0, s: '', f: false })).toEqual({
             n: null,
             z: 0,
             s: '',
@@ -64,13 +69,13 @@ describe('compact', () => {
     });
 
     it('returns an empty object when everything was unspecified', () => {
-        expect(compact({ a: undefined, b: undefined })).toEqual({});
+        expect(stripUndefined({ a: undefined, b: undefined })).toEqual({});
     });
 
     it('does not mutate its input', () => {
         const source = { a: 1, b: undefined };
 
-        compact(source);
+        stripUndefined(source);
 
         expect(Object.keys(source)).toEqual(['a', 'b']);
     });
@@ -90,7 +95,7 @@ describe('toDate', () => {
         expect(toDate(original)!.getTime()).toBe(original.getTime());
     });
 
-    it('leaves undefined undefined, so compact can drop it', () => {
+    it('leaves undefined undefined, so stripUndefined can drop it', () => {
         // `new Date(undefined)` is an Invalid Date, which persists as `null` and reads as a
         // record with an explicitly unknown timestamp. The early return is what prevents that.
         expect(toDate(undefined)).toBeUndefined();
