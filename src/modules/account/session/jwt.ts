@@ -21,9 +21,27 @@ import {
 } from './config';
 import type { RefreshTokenExpiryTime } from './config';
 
-/** The claims this app puts in every access/refresh JWT — just the subject's id. */
+/**
+ * The claims this app puts in every access/refresh JWT. Wire names are OIDC's
+ * (BETTER_SECURITY.md wave 4), so a future external identity provider's tokens would satisfy the
+ * same guards unchanged.
+ */
 export interface TokenData {
     id: string;
+    /**
+     * Epoch seconds at which the user last actually proved themselves — stamped once, at login
+     * (`createRefreshToken`), then COPIED FORWARD on every access-token mint and every rotation,
+     * never re-stamped from the clock. Optional, honestly: a token signed before this claim
+     * existed carries none at all. Every reader treats an absent value as `0` (infinitely old)
+     * rather than trusting it, so a pre-existing session is asked to re-authenticate at its first
+     * sensitive action instead of reading as freshly authenticated.
+     */
+    auth_time?: number;
+    /**
+     * How the `auth_time` proof was made — RFC 8176 values. `['pwd']` today; a second factor
+     * would add `'otp'`. Copied forward exactly like `auth_time`, same optionality, same reason.
+     */
+    amr?: string[];
 }
 
 /**
@@ -98,11 +116,20 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
              * `tokens.token` is now queried as though it addressed one session, because it does;
              * `verify` carries `jti` through without checking it.
              */
-            const token = sign({ id } as TokenData, getRefreshTokenSecret(), {
-                expiresIn: getExpiryTime(remember),
-                algorithm: 'HS256',
-                jwtid: randomUUID()
-            });
+            const token = sign(
+                {
+                    id,
+                    // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
+                    auth_time: Math.floor(Date.now() / 1000),
+                    amr: ['pwd']
+                } as TokenData,
+                getRefreshTokenSecret(),
+                {
+                    expiresIn: getExpiryTime(remember),
+                    algorithm: 'HS256',
+                    jwtid: randomUUID()
+                }
+            );
             return user.tokenAdd(TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 
@@ -124,12 +151,18 @@ export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
 /**
  * Exchange a valid refresh token for a short-lived access token.
  *
+ * `auth_time`/`amr` are COPIED from the refresh token's own claims, never read from the clock —
+ * this is the single most likely way BETTER_SECURITY.md wave 4 breaks: get it wrong and
+ * everything still works, every test but one still passes, and the freshness gate quietly stops
+ * firing, because a client refreshing every ten minutes is never more than ten minutes from
+ * "fresh". See `TokenData`'s doc.
+ *
  * @param refreshToken - previously issued refresh JWT
  * @returns signed access JWT string
  */
 export const createAccessToken = (refreshToken: string) =>
-    verifyRefreshToken(refreshToken).then(({ id }) =>
-        sign({ id } as TokenData, getAccessTokenSecret(), {
+    verifyRefreshToken(refreshToken).then(({ id, auth_time: authTime, amr }) =>
+        sign({ id, auth_time: authTime, amr } as TokenData, getAccessTokenSecret(), {
             // Seconds, not ms — this app's own TTL config, not a jsonwebtoken magic number.
             expiresIn: getAccessTokenTTL(),
             algorithm: 'HS256'
@@ -161,15 +194,22 @@ const revokeAllRefreshTokens = (userId: string): Promise<void> =>
  * stamped immediately rather than left absent, the way a brand-new login's token is: from the
  * account holder's side this is a continuation of the same session, not a new one, and
  * `GET /account/sessions` should read it that way.
+ *
+ * `authTime`/`amr` are the OLD token's claims, copied forward — same rule as `createAccessToken`,
+ * and for the same reason: rotation mints a new token, and stamping the clock is what minting
+ * normally does, which is exactly the trap here.
  */
 const reissueRotated = (
     id: string,
-    remainingMs: number
+    remainingMs: number,
+    authTime: number,
+    amr: string[]
 ): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
     userRepository.findByIdWithCredentials(id).then((user) => {
         if (!user) throw new Error('User not found');
 
-        const newRefreshToken = sign({ id } as TokenData, getRefreshTokenSecret(), {
+        const claims = { id, auth_time: authTime, amr } as TokenData;
+        const newRefreshToken = sign(claims, getRefreshTokenSecret(), {
             expiresIn: Math.ceil(remainingMs / 1000),
             algorithm: 'HS256',
             jwtid: randomUUID()
@@ -179,7 +219,7 @@ const reissueRotated = (
             .tokenAdd(TokenType.REFRESH, remainingMs, newRefreshToken)
             .then((refreshToken) => recordRefreshTokenUse(refreshToken).then(() => refreshToken))
             .then((refreshToken) => ({
-                accessToken: sign({ id } as TokenData, getAccessTokenSecret(), {
+                accessToken: sign(claims, getAccessTokenSecret(), {
                     expiresIn: getAccessTokenTTL(),
                     algorithm: 'HS256'
                 }),
@@ -225,14 +265,19 @@ export const rotateRefreshToken = (
             }
             resolve(data as TokenData & { exp: number });
         });
-    }).then(({ id, exp }) => {
+    }).then(({ id, exp, auth_time: rawAuthTime, amr }) => {
         // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
         // verified with almost no time left still signs rather than producing `expiresIn: 0`,
         // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
         const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
+        // Copied forward through rotation too, same rule `createAccessToken` follows. A
+        // pre-wave-4 token with no `auth_time`/`amr` at all falls back the same way `resolve()`
+        // does elsewhere — infinitely old, `pwd` as the only method it could possibly have used.
+        const authTime = rawAuthTime ?? 0;
+        const carriedAmr = amr ?? ['pwd'];
 
         return userRepository.tokenSupersede(oldToken).then((won) => {
-            if (won) return reissueRotated(id, remainingMs);
+            if (won) return reissueRotated(id, remainingMs, authTime, carriedAmr);
 
             return userRepository.findByTokenValue(oldToken).then((user) => {
                 const digest = hashToken(oldToken);
@@ -248,13 +293,14 @@ export const rotateRefreshToken = (
                 // Still live (no `supersededAt`) despite losing the claim: only reachable through
                 // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
                 // credential is exactly as valid as the caller believes it is.
-                if (!entry.supersededAt) return reissueRotated(id, remainingMs);
+                if (!entry.supersededAt)
+                    return reissueRotated(id, remainingMs, authTime, carriedAmr);
 
                 const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
                 if (supersededMsAgo <= getRotationGraceMilliseconds())
                     // The benign race: someone else's rotation of this SAME token already won,
                     // moments ago. Reissue rather than reject — see the module doc above.
-                    return reissueRotated(id, remainingMs);
+                    return reissueRotated(id, remainingMs, authTime, carriedAmr);
 
                 // Superseded well outside the grace window: THIS is the signal that distinguishes
                 // reuse from an ordinary dead credential — a token this account rotated away, on

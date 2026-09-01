@@ -20,7 +20,7 @@ import type { AppModule } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
 import { onDomainEvent } from '@kernel/events';
 import { userRepository, USER_DELETED, USER_SETUP_REQUESTED } from '@modules/users';
-import { verifyAccessToken, verifyRefreshToken } from './session/jwt';
+import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session/jwt';
 import { addressesDeleteByUserId } from './services/addresses';
 import { requestAccountSetup } from './services/authentication';
 import { exportSeededAddressBooks, seedAddressBooksCollection } from './demo';
@@ -33,21 +33,34 @@ import { router } from './routes';
  * a token whose user is gone — the distinction `isAdminViaCookie` turns into 401 versus 403.
  */
 
-/** Builds a `fromAccessToken`/`fromRefreshToken` resolver from either verifier. */
-const resolve = (verify: (token: string) => Promise<{ id: string }>) => (token: string) =>
+/**
+ * Builds a `fromAccessToken`/`fromRefreshToken` resolver from either verifier.
+ *
+ * Keeps the verified `auth_time`/`amr` CLAIMS, not just `id` — BETTER_SECURITY.md wave 4. This is
+ * the same function 1.2 edits to call `findAuthenticatableById`; the two land together or the
+ * second one silently drops what the first one carries.
+ */
+const resolve = (verify: (token: string) => Promise<TokenData>) => (token: string) =>
     verify(token)
         // Scoped, not `findById`: a deactivated or soft-deleted account must stop authenticating
         // on its very next request, not merely at its next login. See `findAuthenticatableById`.
-        .then(({ id }) => userRepository.findAuthenticatableById(id))
+        .then((claims) =>
+            userRepository.findAuthenticatableById(claims.id).then((user) => ({ user, claims }))
+        )
         /* Only the fields the port declares: the kernel must not learn the document shape. */
-        .then((user) =>
+        .then(({ user, claims }) =>
             user
                 ? {
                       id: user.id,
                       email: user.email,
                       username: user.username,
                       admin: user.admin ?? false,
-                      imageUrl: user.imageUrl
+                      imageUrl: user.imageUrl,
+                      // Absent (a token minted before wave 4 shipped) reads as infinitely old —
+                      // fail closed, so a pre-existing session is asked to re-authenticate at its
+                      // first sensitive action rather than being treated as freshly authenticated.
+                      authTime: claims.auth_time ?? 0,
+                      amr: claims.amr ?? []
                   }
                 : undefined
         );

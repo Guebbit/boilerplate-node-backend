@@ -7,7 +7,8 @@
         "error-unauthorized": "Non hai effettuato l’accesso, oppure la sessione è scaduta.",
         "error-forbidden": "Non hai i permessi per farlo.",
         "error-not-found": "Questo elemento non esiste più.",
-        "error-rate-limited": "Troppe richieste. Riprova tra poco."
+        "error-rate-limited": "Troppe richieste. Riprova tra poco.",
+        "error-reauth-required": "Conferma che sei tu prima di continuare."
     },
     "validation": {
         "required": "Questo campo è obbligatorio.",

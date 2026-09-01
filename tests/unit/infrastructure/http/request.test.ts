@@ -632,13 +632,27 @@ describe('callerContextOf', () => {
             makeCallerRequest({
                 ip: '10.0.0.1',
                 headers: { 'user-agent': 'Mozilla/5.0', host: 'shop.example.com' },
-                authContext: { id: 'user-1', email: 'a@b.c', username: 'a', admin: false },
+                authContext: {
+                    id: 'user-1',
+                    email: 'a@b.c',
+                    username: 'a',
+                    admin: false,
+                    authTime: 0,
+                    amr: []
+                },
                 requestId: 'req-111'
             })
         );
 
         expect(context).toEqual({
-            caller: { id: 'user-1', email: 'a@b.c', username: 'a', admin: false },
+            caller: {
+                id: 'user-1',
+                email: 'a@b.c',
+                username: 'a',
+                admin: false,
+                authTime: 0,
+                amr: []
+            },
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
             host: 'shop.example.com',

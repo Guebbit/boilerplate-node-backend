@@ -15,6 +15,15 @@ export interface AuthenticatedUser {
     username: string;
     admin?: boolean;
     imageUrl?: string;
+    /**
+     * Epoch seconds this session last actually proved itself — carried from the token's own
+     * `auth_time` claim, never derived here. `0` means "unknown/never" (a pre-wave-4 token),
+     * which reads as infinitely old — see `TokenData` in `account/session/jwt.ts`.
+     * BETTER_SECURITY.md wave 4.
+     */
+    authTime: number;
+    /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. Wave 4, same reasoning. */
+    amr: readonly string[];
 }
 
 /** Turns a signed token into the user it names. Implemented by `account`. */

@@ -15,7 +15,7 @@ import * as accountService from '@modules/account/services';
 // service object rather than as a bare name — so it is reached through the object, not the barrel.
 import { accountService as account } from '@modules/account/services';
 import * as auditPort from '@infrastructure/observability/audit';
-import { createRefreshToken } from '@modules/account/session/jwt';
+import { createRefreshToken, verifyAccessToken } from '@modules/account/session/jwt';
 import { accountAuditActions } from '../../audit';
 import { userRepository } from '@modules/users';
 import type { UserDocument } from '@modules/users';
@@ -296,6 +296,27 @@ describe('accountService.refreshAccessToken', () => {
         await expect(
             account.refreshAccessToken(result.refreshToken, testCallerContext)
         ).resolves.toBeDefined();
+    });
+
+    // BETTER_SECURITY.md wave 4.7 — the property this wave's freshness gate depends on. Ten
+    // rotations in a row, and `auth_time` on the access token stays byte-identical to the one the
+    // very first login stamped: a client that refreshes on every 401 must never be "freshened" by
+    // that alone.
+    it('does not move auth_time across ten consecutive refreshes', async () => {
+        const refreshToken = await issueRefreshToken();
+        const first = await account.refreshAccessToken(refreshToken, testCallerContext);
+        const { auth_time: mintedAt } = await verifyAccessToken(first.accessToken);
+
+        // Chained from `first.refreshToken`, not the original: each iteration presents the
+        // PREVIOUS iteration's newly-rotated token, so this is ten genuine sequential rotations,
+        // not one rotation plus nine grace-window reissues of the same already-spent token.
+        let current = first.refreshToken;
+        for (let i = 0; i < 10; i++) {
+            const result = await account.refreshAccessToken(current, testCallerContext);
+            const { auth_time: authTime } = await verifyAccessToken(result.accessToken);
+            expect(authTime).toBe(mintedAt);
+            current = result.refreshToken;
+        }
     });
 
     it('reissues rather than rejects a token replayed within the rotation grace window', async () => {

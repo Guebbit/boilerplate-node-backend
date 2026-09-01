@@ -7,7 +7,8 @@
         "error-unauthorized": "You are not signed in, or your session has expired.",
         "error-forbidden": "You do not have permission to do that.",
         "error-not-found": "That item no longer exists.",
-        "error-rate-limited": "Too many requests. Try again shortly."
+        "error-rate-limited": "Too many requests. Try again shortly.",
+        "error-reauth-required": "Please confirm it's you before continuing."
     },
     "validation": {
         "required": "This field is required.",

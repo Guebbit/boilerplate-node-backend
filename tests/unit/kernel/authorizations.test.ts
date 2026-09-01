@@ -22,7 +22,9 @@ import {
     getAuth,
     isAuth,
     isAdmin,
-    isAdminViaCookie
+    isAdminViaCookie,
+    requireFreshAuth,
+    requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
 import { registerAuthResolver } from '@kernel/authentication';
 import { emitAuditEvent, coreAuditActions } from '@infrastructure/observability/audit';
@@ -78,6 +80,21 @@ const makeCookieRequest = (jwt?: string) =>
         method: 'GET',
         headers: {}
     });
+
+/** `makeResponseStub` doesn't stub `setHeader` — the one extra call `requireFreshAuth` makes. */
+const makeStepUpResponseStub = () =>
+    asStub<Response & { status: jest.Mock; json: jest.Mock; setHeader: jest.Mock }>({
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn().mockReturnThis(),
+        setHeader: jest.fn()
+    });
+
+/** `authTime` as `requireFreshAuth` reads it: epoch SECONDS, matching the JWT `auth_time` claim. */
+const nowSeconds = () => Math.floor(Date.now() / 1000);
+
+/** A request whose session authenticated well outside any tier's window. */
+const staleRequest = () =>
+    makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 999 } });
 
 /** Response stub with a chainable status().json(), capturing the real envelope. */
 
@@ -558,5 +575,154 @@ describe('isAdminViaCookie', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(response.status).toHaveBeenCalledWith(401);
+    });
+});
+
+/**
+ * `requireFreshAuth`/`requireFreshAuthWhen` — BETTER_SECURITY.md wave 4's step-up gate. MUST run
+ * after `isAuth`, so every case here starts from an already-authenticated `authContext` carrying
+ * `authTime`.
+ */
+describe('requireFreshAuth', () => {
+    it('passes a session authenticated well within the window', () => {
+        const next = jest.fn();
+        const response = makeStepUpResponseStub();
+
+        requireFreshAuth(300)(
+            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() } }),
+            response,
+            next
+        );
+
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(response.status).not.toHaveBeenCalled();
+    });
+
+    it('rejects a session authenticated just outside the window, with 401', () => {
+        const next = jest.fn();
+        const response = makeStepUpResponseStub();
+
+        requireFreshAuth(300)(
+            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 301 } }),
+            response,
+            next
+        );
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
+    });
+
+    it('passes a session authenticated exactly at the boundary — inclusive, not exclusive', () => {
+        const next = jest.fn();
+        const response = makeStepUpResponseStub();
+
+        requireFreshAuth(300)(
+            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 300 } }),
+            response,
+            next
+        );
+
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a token with no auth_time at all as infinitely old — fails closed', () => {
+        // A token minted before wave 4 shipped. `resolve()` in account/module.ts normalizes an
+        // absent claim to `0`; this is what that `0` has to mean once it reaches the guard.
+        const next = jest.fn();
+        const response = makeStepUpResponseStub();
+
+        requireFreshAuth(300)(
+            makeRequest({ authContext: { id: 'user-1', authTime: 0 } }),
+            response,
+            next
+        );
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
+    });
+
+    it('carries REAUTH_REQUIRED and the tier in the error envelope', () => {
+        const response = makeStepUpResponseStub();
+
+        requireFreshAuth(300)(
+            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 999 } }),
+            response,
+            jest.fn()
+        );
+
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [
+                    expect.objectContaining({
+                        code: 'REAUTH_REQUIRED',
+                        details: { maxAge: 300 }
+                    })
+                ]
+            })
+        );
+    });
+
+    it('sets WWW-Authenticate for anything that speaks OAuth', () => {
+        const response = makeStepUpResponseStub();
+
+        requireFreshAuth(300)(
+            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 999 } }),
+            response,
+            jest.fn()
+        );
+
+        expect(response.setHeader).toHaveBeenCalledWith(
+            'WWW-Authenticate',
+            'Bearer error="insufficient_user_authentication", max_age=300'
+        );
+    });
+
+    it('answers 401 defensively when mounted without isAuth first, rather than throwing', () => {
+        // The expected path always has isAuth upstream; this is what stops a route that forgets
+        // it from crashing instead of merely misbehaving.
+        const next = jest.fn();
+        const response = makeStepUpResponseStub();
+
+        requireFreshAuth(300)(makeRequest(), response, next);
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
+    });
+});
+
+describe('requireFreshAuthWhen', () => {
+    it("skips the gate entirely when the predicate says this request doesn't need it", () => {
+        // PUT /account uploading a new avatar: the predicate reads the body and says "no email
+        // change", so a stale session must not be asked for a password it wasn't going to need.
+        const next = jest.fn();
+        const response = makeResponseStub();
+
+        requireFreshAuthWhen(() => false, 900)(staleRequest(), response, next);
+
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(response.status).not.toHaveBeenCalled();
+    });
+
+    it('applies requireFreshAuth when the predicate says this request needs it', () => {
+        const next = jest.fn();
+        const response = makeStepUpResponseStub();
+
+        requireFreshAuthWhen(() => true, 900)(staleRequest(), response, next);
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
+    });
+
+    it('passes a fresh session through even when the predicate says it needs checking', () => {
+        const next = jest.fn();
+        const response = makeResponseStub();
+
+        requireFreshAuthWhen(() => true, 900)(
+            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() } }),
+            response,
+            next
+        );
+
+        expect(next).toHaveBeenCalledTimes(1);
     });
 });

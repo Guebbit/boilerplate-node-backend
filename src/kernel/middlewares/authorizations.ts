@@ -2,9 +2,11 @@
  * @module
  * Express guards built on `kernel/authentication.ts`'s resolver: `getAuth` populates
  * `request.authContext` when a token is present, `isAuth`/`isAdmin` reject when it is missing or
- * insufficient, and `isAdminViaCookie` is the SSE-only variant that authenticates by refresh
- * cookie instead of an `Authorization` header. Every rejection is audited before the response is
- * sent, so a denied request always leaves a trail.
+ * insufficient, `isAdminViaCookie` is the SSE-only variant that authenticates by refresh cookie
+ * instead of an `Authorization` header, and `requireFreshAuth`/`requireFreshAuthWhen` (wave 4)
+ * gate an already-authenticated caller on HOW RECENTLY they proved it. Every rejection from the
+ * identity guards is audited before the response is sent, so a denied request always leaves a
+ * trail.
  *
  * See: docs/tools/security.md
  */
@@ -14,6 +16,7 @@ import { resolveAccessToken, resolveRefreshToken } from '@kernel/authentication'
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 import {
     emitAuditEvent,
     coreAuditActions,
@@ -55,7 +58,9 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                     email: user.email,
                     username: user.username,
                     admin: user.admin ?? false,
-                    imageUrl: user.imageUrl
+                    imageUrl: user.imageUrl,
+                    authTime: user.authTime,
+                    amr: user.amr
                 };
             }
         })
@@ -182,7 +187,9 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
                 email: user.email,
                 username: user.username,
                 admin: true,
-                imageUrl: user.imageUrl
+                imageUrl: user.imageUrl,
+                authTime: user.authTime,
+                amr: user.amr
             };
             next();
         })
@@ -192,3 +199,80 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
             ])
         );
 };
+
+/**
+ * The two step-up tiers BETTER_SECURITY.md wave 4 defines, read through `environmentNumber`
+ * exactly like the token TTLs are. Kernel-level, not `account`'s: `requireFreshAuth` is mounted
+ * by any module with a money or identity route — `cart`, `payments`, `account` itself — and none
+ * of them may reach into a sibling's config to get at it.
+ */
+export const REAUTH_TIME_CRITICAL = environmentNumber('NODE_REAUTH_TIME_CRITICAL', 300);
+
+/** Identity changes, session management — the lighter of the two tiers. */
+export const REAUTH_TIME_SENSITIVE = environmentNumber('NODE_REAUTH_TIME_SENSITIVE', 900);
+
+/**
+ * Reject with a step-up challenge unless the caller proved themselves within `maxAgeSeconds`.
+ * MUST run after `isAuth`.
+ *
+ * **401, not 403** — this repository's own rule (docs/tools/security.md), not just RFC 9470's:
+ * the status names the client's next move, and 401 means "authenticate and try again", which is
+ * the literal definition of step-up. The rejection carries both dialects: `WWW-Authenticate` for
+ * anything that speaks OAuth, this app's own `errors[].code` envelope for its own clients, which
+ * read `errors[].code` and never the header.
+ *
+ * @param maxAgeSeconds - how recently `authContext.authTime` must have been set —
+ *   {@link REAUTH_TIME_CRITICAL} or {@link REAUTH_TIME_SENSITIVE}
+ */
+export const requireFreshAuth =
+    (maxAgeSeconds: number) => (request: Request, response: Response, next: NextFunction) => {
+        // Defensive, not the expected path: a route mounting this without `isAuth` first would
+        // otherwise read `undefined.authTime` and throw. Same shape as `isAdmin`'s guard above.
+        if (!request.authContext) {
+            rejectResponse(response, 401);
+            return;
+        }
+
+        const ageSeconds = Math.floor(Date.now() / 1000) - request.authContext.authTime;
+        if (ageSeconds <= maxAgeSeconds) {
+            next();
+            return;
+        }
+
+        response.setHeader(
+            'WWW-Authenticate',
+            `Bearer error="insufficient_user_authentication", max_age=${maxAgeSeconds}`
+        );
+        rejectResponse(response, 401, [
+            {
+                code: 'REAUTH_REQUIRED',
+                message: t('generic.error-reauth-required'),
+                details: { maxAge: maxAgeSeconds }
+            }
+        ]);
+    };
+
+/**
+ * `requireFreshAuth`, but only when `predicate` says this particular request needs it — for a
+ * route where freshness depends on WHAT changed, not just who's asking. `PUT /account` is why
+ * this exists: it only needs a fresh session when the email is changing, and an unconditional
+ * gate would prompt for a password on every avatar upload — a prompt people learn to dismiss is a
+ * prompt that protects nothing.
+ *
+ * **Mount order matters when `predicate` reads `request.body`.** `PUT /account` accepts
+ * `multipart/form-data`, so `request.body` does not exist until `upload.single(...)` has run — a
+ * predicate guard mounted before it reads an empty object and gates nothing. Mount this AFTER
+ * whatever populates the body the predicate reads.
+ *
+ * @param predicate - reads the request and decides whether THIS one needs a fresh session
+ * @param maxAgeSeconds - passed through to {@link requireFreshAuth} when the predicate is true
+ */
+export const requireFreshAuthWhen =
+    (predicate: (request: Request) => boolean, maxAgeSeconds: number) =>
+    (request: Request, response: Response, next: NextFunction) => {
+        if (!predicate(request)) {
+            next();
+            return;
+        }
+        requireFreshAuth(maxAgeSeconds)(request, response, next);
+    };

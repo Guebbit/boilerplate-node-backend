@@ -13,6 +13,14 @@ export interface AuthContext {
     username: string;
     admin: boolean;
     imageUrl?: string;
+    /**
+     * Epoch seconds this session last actually proved itself — BETTER_SECURITY.md wave 4, carried
+     * from `AuthenticatedUser`. `requireFreshAuth` is what reads this; nothing else should need
+     * to.
+     */
+    authTime: number;
+    /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. Wave 4, same source. */
+    amr: readonly string[];
 }
 
 /**
