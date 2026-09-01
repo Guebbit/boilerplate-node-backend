@@ -208,3 +208,5 @@ That is why auth, headers, origin checks, and rate limiting stay near routes and
 - [Request Flow](../theory/request-flow.md)
 - [Winston & Audit Logs](./winston.md)
 - [API overview](../api/#rest-patterns-used-here)
+- [Data Protection](../theory/data-protection.md) — what personal data this stores, under what
+  lawful basis, and the subject-request and breach runbooks

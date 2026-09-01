@@ -98,6 +98,9 @@ Log lines are Loki's retention, not Mongo's: `.docker/observability/loki.config.
 `retention_period: 168h` (7 days) for the local stack. A production deployment tunes this
 independently — it is the one retention window this repo does not read from `.env`.
 
+The lawful basis behind each of these windows, and the subject-request and breach runbooks that
+sit on top of them, are in [Data Protection](../theory/data-protection.md).
+
 ## CI
 
 | File                              | What it is                                                                                                                                                             | Read next                                                |

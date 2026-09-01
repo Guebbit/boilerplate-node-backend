@@ -128,17 +128,18 @@ the point.
 
 ## Where each topic lives
 
-| Need                                     | Go to                                                                       |
-| ---------------------------------------- | --------------------------------------------------------------------------- |
-| **Open the code for the first time**     | **[Reading Path](./reading-path.md)**                                       |
-| Understand the big blocks and boundaries | [Architecture](./architecture.md)                                           |
-| Understand how domains stay separable    | [Modules](./modules.md)                                                     |
-| Actually add or remove a domain          | [Adding & Removing a Module](./module-lifecycle.md)                         |
-| Understand the domain-modelling stance   | [Strategic DDD](./strategic-ddd.md), then [Tactical DDD](./tactical-ddd.md) |
-| Read the folder-by-folder explanation    | [Layers](./layers.md)                                                       |
-| Follow one request end-to-end            | [Request Flow](./request-flow.md)                                           |
-| Know which sources an endpoint reads     | [Request Input](./request-input.md)                                         |
-| Understand process model & shutdown      | [Clustering & Shutdown](./clustering.md)                                    |
-| Know every attack a site can receive     | [Web Attack Catalog](./web-attack-catalog.md)                               |
-| Understand dependency choices            | [Tools](../tools/)                                                          |
-| Change contract, types, or mocks         | [API](../api/)                                                              |
+| Need                                                       | Go to                                                                       |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Open the code for the first time**                       | **[Reading Path](./reading-path.md)**                                       |
+| Understand the big blocks and boundaries                   | [Architecture](./architecture.md)                                           |
+| Understand how domains stay separable                      | [Modules](./modules.md)                                                     |
+| Actually add or remove a domain                            | [Adding & Removing a Module](./module-lifecycle.md)                         |
+| Understand the domain-modelling stance                     | [Strategic DDD](./strategic-ddd.md), then [Tactical DDD](./tactical-ddd.md) |
+| Read the folder-by-folder explanation                      | [Layers](./layers.md)                                                       |
+| Follow one request end-to-end                              | [Request Flow](./request-flow.md)                                           |
+| Know which sources an endpoint reads                       | [Request Input](./request-input.md)                                         |
+| Understand process model & shutdown                        | [Clustering & Shutdown](./clustering.md)                                    |
+| Know every attack a site can receive                       | [Web Attack Catalog](./web-attack-catalog.md)                               |
+| Know what personal data is processed, and under what basis | [Data Protection](./data-protection.md)                                     |
+| Understand dependency choices                              | [Tools](../tools/)                                                          |
+| Change contract, types, or mocks                           | [API](../api/)                                                              |

@@ -53,7 +53,8 @@ export default withMermaid(
                             { text: 'Request Flow', link: '/theory/request-flow' },
                             { text: 'Request Input', link: '/theory/request-input' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' },
-                            { text: 'Web Attack Catalog', link: '/theory/web-attack-catalog' }
+                            { text: 'Web Attack Catalog', link: '/theory/web-attack-catalog' },
+                            { text: 'Data Protection', link: '/theory/data-protection' }
                         ]
                     }
                 ],
