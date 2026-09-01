@@ -14,6 +14,12 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { orderRepository } from '@modules/orders';
 
+// No real Chromium in the test environment — same stub `invoice-locale.test.ts` uses. Only the
+// invoice route's scope is under test here, not the render itself.
+jest.mock('@infrastructure/adapters/pdf', () => ({
+    renderHtmlToPdf: () => Promise.resolve(Buffer.from('pdf'))
+}));
+
 setupTestDb();
 
 const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
@@ -146,6 +152,39 @@ describe('GET /orders/{id}', () => {
             expect(response).toSatisfyApiSpec();
         }
     );
+
+    it("a non-admin cannot download another customer's invoice — absence, not refusal", async () => {
+        // `getOrderInvoice` scopes through `orderService.callerScope`, the same rule `GET
+        // /orders/:id` enforces. The malformed-id case above 404s before any scope is consulted,
+        // so it cannot prove this — this is the one request that names a REAL order owned by
+        // someone else.
+        const { user: owner } = await authenticateAs('user');
+        const order = await seedOrderFor(owner);
+
+        const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
+        const login = await api()
+            .post('/account/login')
+            .send({ email: stranger.email, password: PLAIN_PASSWORD });
+
+        const response = await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', `Bearer ${login.body.data.token as string}`);
+
+        expect(response.status).toBe(404);
+    });
+
+    it("an admin CAN download another customer's invoice — the scope narrows, the route isn't broken", async () => {
+        const { user: owner } = await authenticateAs('user');
+        const order = await seedOrderFor(owner);
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toBe('application/pdf');
+    });
 });
 
 describe('POST /orders/{id}/cancel', () => {

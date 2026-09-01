@@ -388,6 +388,26 @@ describe('listLevels', () => {
         delete process.env.NODE_LOW_STOCK_THRESHOLD;
     });
 
+    it('deliberately disagrees with the metrics gauge over an inactive product', async () => {
+        // docs/modules/inventory-reservations.md §"The threshold, and its two readers": this
+        // reader (the stock board) counts the WHOLE catalogue, an admin restocking needs to see
+        // an inactive product too. `products_low_stock_total` (`productRepository
+        // .countLowAvailability`, see repository.test.ts) counts PUBLIC products only. "The two
+        // numbers will not match, and should not."
+        process.env.NODE_LOW_STOCK_THRESHOLD = '5';
+        await createProduct({ active: true, onHand: 2, reserved: 0 });
+        await createProduct({ active: true, onHand: 40, reserved: 40 });
+        const hidden = await createProduct({ active: false, onHand: 1, reserved: 0 });
+
+        const board = await listLevels({ lowOnly: true });
+        const gauge = await productRepository.countLowAvailability(5);
+
+        expect(board.data?.meta.totalItems).toBe(3);
+        expect(gauge).toBe(2);
+        expect(board.data?.items.map((level) => level.productId)).toContain(String(hidden._id));
+        delete process.env.NODE_LOW_STOCK_THRESHOLD;
+    });
+
     it('pages rather than reading the whole catalogue', async () => {
         for (let index = 0; index < 5; index += 1)
             await createProduct({ title: `P${index}`, onHand: index });

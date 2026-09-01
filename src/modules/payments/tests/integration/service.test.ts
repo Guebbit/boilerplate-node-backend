@@ -23,7 +23,7 @@ import {
     refundByOrder
 } from '@modules/payments/service';
 import { paymentRepository } from '@modules/payments/repository';
-import { FAKE_DECLINE_CARD } from '@modules/payments/providers/fake';
+import { FAKE_DECLINE_CARD, fakePaymentProvider } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
@@ -224,6 +224,37 @@ describe('confirmPayment', () => {
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+    });
+
+    it('refunds a charge whose order slipped away between opening the intent and confirming', async () => {
+        // The order is cancelled in the window between opening the intent and submitting the
+        // card — module docblock rule 2: the charge lands, the conditional `paid` move loses to
+        // the order no longer being cancellable-into, and the charge is refunded on the spot.
+        const { user, order } = await orderFor();
+        const intent = await createIntent(String(order._id), auth(user));
+        const paymentId = String((intent as { data?: { _id?: unknown } }).data?._id);
+        await orderService.cancelById(String(order._id), auth(user));
+
+        const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
+        const result = await confirmPayment(
+            paymentId,
+            { cardNumber: GOOD_CARD },
+            auth(user),
+            testCallerContext
+        );
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+        expect(refundSpy).toHaveBeenCalledTimes(1);
+        expect(refundSpy).toHaveBeenCalledWith({
+            amount: (intent as { data?: { amount?: number } }).data?.amount,
+            currency: (intent as { data?: { currency?: string } }).data?.currency
+        });
+        refundSpy.mockRestore();
+
+        // The row never claims money that was handed straight back.
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('requires_confirmation');
     });
 });
 
