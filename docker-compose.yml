@@ -47,6 +47,12 @@ services:
             NODE_REDIS_URL: 'redis://redis:6379'
             NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
+            # 0 = one worker per CPU core (see `.env-example`). On a many-core dev machine that is
+            # a lot of Node processes for one person's traffic — `NODE_CLUSTER_WORKERS=1 npm run
+            # compose:restart` trims it for a live E2E run without editing `.env`, same escape
+            # hatch as the rate limits below. The default matches `.env`, so an ordinary `up` is
+            # unchanged.
+            NODE_CLUSTER_WORKERS: '${NODE_CLUSTER_WORKERS:-0}'
             # Per-IP rate limits, sized for one person browsing. A live E2E run drives the whole
             # frontend suite from a single address and exceeds both budgets, at which point the API
             # answers 429 and the failures read as "login is broken" rather than "out of allowance".
