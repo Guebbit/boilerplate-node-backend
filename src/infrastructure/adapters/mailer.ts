@@ -33,7 +33,12 @@ import { isDemoMode, recordDemoEmail } from '@infrastructure/adapters/demo-outbo
 import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
 // consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
-import { isQueueEnabled, publishToQueue, EMAIL_QUEUE } from '@infrastructure/adapters/queue';
+import {
+    isQueueEnabled,
+    publishToQueue,
+    EMAIL_QUEUE,
+    type JobPriority
+} from '@infrastructure/adapters/queue';
 
 /**
  * Absolute path to the EJS email templates, overridable with `NODE_EMAIL_TEMPLATES_DIR`.
@@ -243,11 +248,17 @@ export interface EmailContent {
  * The queue carries template *name* + data, not rendered HTML — rendering happens on the consumer
  * side. Adds nothing to `data`: every string the template prints was already produced by the
  * `emails.ts` builder that knows the template.
+ *
+ * @param priority - `'high'` for a mail someone is actively blocked on (a token-bearing link with
+ *   a TTL); left at the `'normal'` default for everything informational. See `queue.ts`'s
+ *   `JobPriority` for why there are only two levels. Meaningless on the inline fallback — priority
+ *   only affects ordering among messages waiting on the broker.
  */
 export const enqueueEmail = (
     request: EmailRequest,
     templateName: string,
-    data: Data
+    data: Data,
+    priority: JobPriority = 'normal'
 ): Promise<void> => {
     // No broker configured → send inline. `.then(() => undefined)` discards SentMessageInfo so both
     // branches share the same `Promise<void>` return type.
@@ -259,7 +270,8 @@ export const enqueueEmail = (
         queue: EMAIL_QUEUE,
         // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
         // (streams, Buffers, functions) in `request` would not survive the round trip.
-        payload: { request, templateName, data }
+        payload: { request, templateName, data },
+        priority
     }).then((published) => {
         if (!published) {
             // Fallback: queue publish failed, send directly.

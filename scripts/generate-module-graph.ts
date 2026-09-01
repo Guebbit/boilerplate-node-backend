@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 /**
- * The module graph in `docs/modules/index.md`, generated from the imports it describes.
+ * The module graph in `docs/modules/index.md`, plus one neighbourhood diagram per module page,
+ * generated from the imports and subscriptions they describe.
  *
  * The diagram used to be hand-drawn, and a hand-drawn graph of thirteen modules is a published
  * number with no guard behind it — correct on the day it is written and quietly wrong after the
@@ -16,13 +17,17 @@
  *   - `src/modules.ts` is dropped: the registry imports every manifest by definition, so its
  *     thirteen edges are a fact about the registry and would draw a star over the real shape.
  *
- * The generated block sits between markers in the page; the prose around it is written by hand and
+ * The index map stays imports-only, because the prose around it argues about exactly that. The
+ * per-module neighbourhoods add the event edges on top, which is the return path an import graph
+ * cannot see — see `readEventEdges`.
+ *
+ * Each generated block sits between markers in its page; the prose around it is written by hand and
  * is never touched. Run `--check` to fail when the two have diverged — that is what runs in
  * `complete`.
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { format, resolveConfig } from 'prettier';
 
@@ -32,6 +37,21 @@ const ROOT = path.join(__dirname, '..');
 const PAGE = path.join(ROOT, 'docs', 'modules', 'index.md');
 const START = '<!-- module-graph:start -->';
 const END = '<!-- module-graph:end -->';
+
+/** One module announcing a domain event that another module subscribes to. */
+interface EventEdge {
+    owner: string;
+    subscriber: string;
+    event: string;
+}
+
+/** A generated block and the page it belongs in, resolved before anything is written. */
+interface Target {
+    file: string;
+    start: string;
+    end: string;
+    body: string;
+}
 
 /** How each module is coloured, by the subdomain table in docs/theory/strategic-ddd.md. */
 const SUBDOMAIN: Readonly<Record<string, 'core' | 'supporting' | 'generic'>> = {
@@ -89,6 +109,108 @@ const readEdges = (): [from: string, to: string][] => {
 /** Mermaid needs an identifier; `audit-logs` is not one. */
 const nodeId = (name: string): string => name.replaceAll('-', '_');
 
+/** The wire name behind an event constant, read from the events file of the module that owns it. */
+const eventName = (owner: string, constant: string): string => {
+    const file = path.join(ROOT, 'src', 'modules', owner, 'events.ts');
+    if (!existsSync(file)) return constant;
+    const declared = new RegExp(String.raw`export const ${constant}\s*=\s*'([^']+)'`).exec(
+        readFileSync(file, 'utf8')
+    );
+    return declared ? declared[1] : constant;
+};
+
+/**
+ * Every `onDomainEvent` subscription, as an owner -> subscriber edge carrying the event name.
+ *
+ * These are the edges `readEdges` reports backwards: a subscriber imports the constant, so the
+ * import points at the owner while the message travels the other way. Resolvable because the shape
+ * never varies — `onDomainEvent(CONST, …)` with `CONST` imported from a sibling's barrel.
+ */
+const readEventEdges = (): EventEdge[] => {
+    const edges: EventEdge[] = [];
+
+    for (const subscriber of Object.keys(SUBDOMAIN)) {
+        const manifest = path.join(ROOT, 'src', 'modules', subscriber, 'module.ts');
+        if (!existsSync(manifest)) continue;
+        const source = readFileSync(manifest, 'utf8');
+
+        // Which sibling each imported symbol came from, so a subscription can name its owner.
+        const owners = new Map<string, string>();
+        for (const line of source.matchAll(/import\s*{([^}]+)}\s*from\s*'@modules\/([^']+)'/g))
+            for (const symbol of line[1].split(',')) owners.set(symbol.trim(), line[2]);
+
+        for (const call of source.matchAll(/onDomainEvent\(\s*([A-Z][\dA-Z_]*)/g)) {
+            const owner = owners.get(call[1]);
+            // A module listening to itself is a local concern, not a cross-module edge.
+            if (!owner || owner === subscriber) continue;
+            edges.push({ owner, subscriber, event: eventName(owner, call[1]) });
+        }
+    }
+
+    return edges.toSorted(
+        (a, b) =>
+            a.owner.localeCompare(b.owner) ||
+            a.subscriber.localeCompare(b.subscriber) ||
+            a.event.localeCompare(b.event)
+    );
+};
+
+/** How one module is drawn among its neighbours: solid for imports, dotted for events. */
+const renderNeighbourhood = (
+    name: string,
+    edges: [string, string][],
+    events: EventEdge[]
+): string => {
+    const reaches = edges.filter(([from]) => from === name).map(([, to]) => to);
+    const reached = edges.filter(([, to]) => to === name).map(([from]) => from);
+    const announces = events.filter((e) => e.owner === name);
+    const listens = events.filter((e) => e.subscriber === name);
+
+    const neighbours = [
+        ...new Set([
+            ...reaches,
+            ...reached,
+            ...announces.map((e) => e.subscriber),
+            ...listens.map((e) => e.owner)
+        ])
+    ].toSorted();
+
+    // A diagram of one node says less than the sentence it would need anyway.
+    if (neighbours.length === 0)
+        return `_Nothing reaches \`${name}\` and it reaches nothing — no imports either way, no events either way. Deleting it takes one folder and this page, and no other page changes._`;
+
+    const byKind = (kind: string) =>
+        neighbours.filter((n) => SUBDOMAIN[n] === kind).map((n) => nodeId(n));
+    const classOf = (kind: string) =>
+        byKind(kind).length > 0 ? [`    class ${byKind(kind).join(',')} ${kind};`] : [];
+
+    return [
+        '_Solid arrows are imports. Dotted arrows are domain events — the return path an import',
+        'graph cannot see._',
+        '',
+        '```mermaid',
+        "%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%",
+        'flowchart LR',
+        `    ${nodeId(name)}["${name}<br/><i>this module</i>"]`,
+        ...neighbours.map((n) => `    ${nodeId(n)}["${n}"]`),
+        '',
+        ...reached.map((from) => `    ${nodeId(from)} --> ${nodeId(name)}`),
+        ...reaches.map((to) => `    ${nodeId(name)} --> ${nodeId(to)}`),
+        ...listens.map((e) => `    ${nodeId(e.owner)} -. "${e.event}" .-> ${nodeId(name)}`),
+        ...announces.map((e) => `    ${nodeId(name)} -. "${e.event}" .-> ${nodeId(e.subscriber)}`),
+        '',
+        '    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;',
+        '    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;',
+        '    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;',
+        '    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;',
+        ...classOf('core'),
+        ...classOf('supporting'),
+        ...classOf('generic'),
+        `    class ${nodeId(name)} centre;`,
+        '```'
+    ].join('\n');
+};
+
 const render = (edges: [string, string][]): string => {
     const names = Object.keys(SUBDOMAIN).toSorted();
     const connected = new Set(edges.flat());
@@ -135,44 +257,67 @@ const render = (edges: [string, string][]): string => {
     ].join('\n');
 };
 
-const run = async (): Promise<number> => {
-    const page = readFileSync(PAGE, 'utf8');
-    const start = page.indexOf(START);
-    const end = page.indexOf(END);
-    if (start === -1 || end === -1) {
-        console.error(
-            `[module-graph] markers ${START} / ${END} not found in docs/modules/index.md`
-        );
+/** Writes one generated block into its page, or reports that it drifted. Returns the exit code. */
+const applyTarget = async ({ file, start, end, body }: Target): Promise<number> => {
+    const label = path.relative(ROOT, file);
+    const page = readFileSync(file, 'utf8');
+    const from = page.indexOf(start);
+    const to = page.indexOf(end);
+    if (from === -1 || to === -1) {
+        console.error(`[module-graph] markers ${start} / ${end} not found in ${label}`);
         return 1;
     }
 
-    const generated = render(readEdges());
     /*
      * Formatted before it is compared or written. `prettier --check` runs over `docs/` in
      * `complete` too, so an unformatted block would leave the two checks demanding different
      * bytes from the same file — each one undoing the other.
      */
     const next = await format(
-        `${page.slice(0, start + START.length)}\n\n${generated}\n\n${page.slice(end)}`,
-        { ...(await resolveConfig(PAGE)), filepath: PAGE }
+        `${page.slice(0, from + start.length)}\n\n${body}\n\n${page.slice(to)}`,
+        { ...(await resolveConfig(file)), filepath: file }
     );
 
-    if (next === page) {
-        console.log('[module-graph] docs/modules/index.md matches the import graph.');
-        return 0;
-    }
+    if (next === page) return 0;
 
     if (checkOnly) {
         console.error(
-            '[module-graph] docs/modules/index.md is out of date with the import graph.\n' +
+            `[module-graph] ${label} is out of date with the module graph.\n` +
                 '               Run `npm run docs:graph` and commit the result.'
         );
         return 1;
     }
 
-    writeFileSync(PAGE, next);
-    console.log('[module-graph] docs/modules/index.md updated from the import graph.');
+    writeFileSync(file, next);
+    console.log(`[module-graph] ${label} updated.`);
     return 0;
+};
+
+/** Every block this script owns: the index map, then one neighbourhood per module page. */
+const targets = (): Target[] => {
+    const edges = readEdges();
+    const events = readEventEdges();
+
+    return [
+        { file: PAGE, start: START, end: END, body: render(edges) },
+        ...Object.keys(SUBDOMAIN)
+            .toSorted()
+            .map((name) => ({
+                file: path.join(ROOT, 'docs', 'modules', `${name}.md`),
+                start: `<!-- module-graph:${name}:start -->`,
+                end: `<!-- module-graph:${name}:end -->`,
+                body: renderNeighbourhood(name, edges, events)
+            }))
+    ];
+};
+
+const run = async (): Promise<number> => {
+    let code = 0;
+    // Sequential so the log reads in page order, and so one missing marker does not hide the rest.
+    for (const target of targets()) code = (await applyTarget(target)) || code;
+
+    if (code === 0) console.log('[module-graph] docs/modules matches the module graph.');
+    return code;
 };
 
 void run().then((code) => {

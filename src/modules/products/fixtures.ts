@@ -8,7 +8,7 @@
 
 import {
     identityOf,
-    compact,
+    stripUndefined,
     toDate,
     type OverridesFor
 } from '@infrastructure/persistence/fixtures';
@@ -46,5 +46,5 @@ export const makeProduct = ({
     ...identityOf({ id, createdAt, updatedAt }),
     title: 'Test Product',
     price: 9.99,
-    ...compact({ ...fields, deletedAt: toDate(deletedAt) })
+    ...stripUndefined({ ...fields, deletedAt: toDate(deletedAt) })
 });

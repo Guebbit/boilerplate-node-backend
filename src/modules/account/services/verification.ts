@@ -51,10 +51,12 @@ export const sendVerificationEmail = (user: UserDocument, context: CallerContext
                 user.username,
                 token
             );
+            // High priority: a token-bearing link the user is actively waiting on, not a notification.
             return enqueueEmail(
                 { to: user.email, subject: mail.subject },
                 mail.template,
-                mail.data
+                mail.data,
+                'high'
             );
         });
 

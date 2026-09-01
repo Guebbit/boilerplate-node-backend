@@ -10,6 +10,7 @@ import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/fixtures';
 import { accountService } from '@modules/account/services';
 import { cartService } from '@modules/cart';
+import { orderRepository } from '@modules/orders';
 import { productRepository } from '@modules/products';
 import { createProduct } from '@modules/products/tests/fixtures';
 
@@ -171,12 +172,37 @@ describe('checkout and the address', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
+        expect(result.success === false && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
         // Nothing moved — the address check runs before anything is held.
         const stored = await productRepository.findById(String(product._id));
         expect(stored?.onHand).toBe(10);
         expect(stored?.reserved).toBe(0);
         const cart = await cartService.cartGetForBadge(user.id);
         expect(cart.items).toHaveLength(1);
+    });
+
+    it("naming another user's real entry is refused the same way — not silently shipped nowhere", async () => {
+        // `addressForCheckout` resolves the id against the CALLER's own book, so a stranger's
+        // real entry and an invented id take the same branch — but the invariant this proves is
+        // ownership, not merely existence, and the doc's split return type exists for exactly
+        // this case: collapsing it would let a stale/foreign id silently downgrade to "no address".
+        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        await accountService.addressAdd(owner.id, HOME);
+        const ownerView = await accountService.addressesGet(owner.id);
+        const ownersEntryId = ownerView.addresses[0].id;
+
+        const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
+        const product = await cartWith(stranger.id);
+
+        const result = await cartService.orderConfirm(stranger.id, testCallerContext, ownersEntryId);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+        expect(result.success === false && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
+        await expect(orderRepository.count({ userId: stranger._id })).resolves.toBe(0);
+        const stored = await productRepository.findById(String(product._id));
+        expect(stored?.onHand).toBe(10);
+        expect(stored?.reserved).toBe(0);
     });
 
     it('an empty book is not an obstacle — the order simply carries no address', async () => {

@@ -104,7 +104,8 @@ describe('publishToQueue()', () => {
         const result = await publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
         expect(result).toBe(true);
         expect(mockSendToQueue).toHaveBeenCalledWith('emails', expect.any(Buffer), {
-            persistent: true
+            persistent: true,
+            priority: 0
         });
     });
 
@@ -132,7 +133,8 @@ describe('publishToQueue()', () => {
         expect(mockAssertQueue).toHaveBeenCalledWith('emails', {
             durable: true,
             deadLetterExchange: DEAD_LETTER_EXCHANGE,
-            deadLetterRoutingKey: deadLetterQueueOf('emails')
+            deadLetterRoutingKey: deadLetterQueueOf('emails'),
+            arguments: { 'x-max-priority': 1 }
         });
     });
 
@@ -194,7 +196,8 @@ describe('consumeFromQueue()', () => {
         expect(mockAssertQueue).toHaveBeenCalledWith('pdfs', {
             durable: true,
             deadLetterExchange: DEAD_LETTER_EXCHANGE,
-            deadLetterRoutingKey: deadLetterQueueOf('pdfs')
+            deadLetterRoutingKey: deadLetterQueueOf('pdfs'),
+            arguments: { 'x-max-priority': 1 }
         });
         expect(mockPrefetch).toHaveBeenCalledWith(1);
         expect(mockConsume).toHaveBeenCalled();

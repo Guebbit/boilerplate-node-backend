@@ -195,7 +195,11 @@ export const securityMock = () => {
         __esModule: true,
         credentialLimiters: actual.credentialLimiters.map((_limiter, index) =>
             labelled(`credentialLimiters[${index}]`)
-        )
+        ),
+        // Same reasoning, singular: `submissionLimiter` (`feedback` `POST /contact`) is a single
+        // `express-rate-limit` closure rather than a pair, so it gets one label instead of an
+        // indexed one.
+        submissionLimiter: labelled('submissionLimiter')
     };
 };
 

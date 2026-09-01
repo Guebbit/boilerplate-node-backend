@@ -3,8 +3,9 @@
  * `makeProduct` — the catalogue fixture builder. Not test-only: `demo.ts` seeds the shipped demo
  * dataset through it, and `scripts/export-demo-dataset.ts` publishes the result as
  * `db/demo/demo-data.json`, so a defect here reaches a published artifact. The rule it holds:
- * anything a record doesn't state is left to the SCHEMA's `default:` — `compact` drops unset
- * overrides entirely, since a key present as `undefined` blocks Mongoose's default from applying.
+ * anything a record doesn't state is left to the SCHEMA's `default:` — `stripUndefined` drops
+ * unset overrides entirely, since a key present as `undefined` blocks Mongoose's default from
+ * applying.
  */
 
 import { Types } from 'mongoose';
@@ -35,7 +36,7 @@ describe('makeProduct', () => {
     });
 
     it('omits unspecified fields entirely, leaving them to the schema', () => {
-        // The whole point of `compact`. `active: undefined` present as a key would store nothing
+        // The whole point of `stripUndefined`. `active: undefined` present as a key would store nothing
         // and bypass the schema's `default: true`, producing an unpublished product no test asked
         // for — and, through the seed export, a demo catalogue nobody can see.
         const product = makeProduct();

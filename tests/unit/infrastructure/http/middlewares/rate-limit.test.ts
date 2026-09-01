@@ -27,6 +27,7 @@ import {
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_RATE_LIMIT_WINDOW_MS,
     DEFAULT_AUTH_RATE_LIMIT_MAX,
+    DEFAULT_SUBMISSION_RATE_LIMIT_MAX,
     isMetricsScraper
 } from '@infrastructure/http/middlewares/rate-limit';
 import { makeResponseStub } from '@tests/express';
@@ -60,7 +61,19 @@ describe('rate limit defaults', () => {
         // module still works — it just stops doing the thing it was added for.
         expect(DEFAULT_AUTH_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
     });
+
+    it('keeps the submission budget a small fraction of the browsing budget', () => {
+        // Same reasoning as the credential budget: a contact form filed once by a person must not
+        // share a bucket with ordinary browsing.
+        expect(DEFAULT_SUBMISSION_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
+    });
 });
+
+/*
+ * The behavioural property — a SUCCESSFUL request spending the budget — sends a real request
+ * through `express-rate-limit`'s middleware, which `no-restricted-imports` treats as an
+ * integration concern: see `tests/integration/submission-rate-limit.test.ts`.
+ */
 
 describe('isMetricsScraper', () => {
     it('refuses every request when no token is configured', () => {

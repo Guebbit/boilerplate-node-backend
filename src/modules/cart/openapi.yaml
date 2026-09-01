@@ -187,8 +187,11 @@ paths:
                 # An `addressId` that names none of the caller's saved addresses — the checkout
                 # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Checking out an empty cart. The implementation has always answered 409;
-                # the spec simply never declared it.
+                # Checking out an empty cart (`CART_EMPTY`), insufficient stock
+                # (`CART_INSUFFICIENT_STOCK`), a race with another checkout (`CART_CHANGED`), or a
+                # `shippingMethodId` sent for a cart made entirely of `requiresShipping: false`
+                # products (`CART_SHIPPING_NOT_APPLICABLE`) — shipping does not apply, so naming a
+                # method is a client error, not a lookup that might resolve.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }

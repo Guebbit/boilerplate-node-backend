@@ -9,6 +9,9 @@ hero:
           text: Get Started
           link: /getting-started
         - theme: alt
+          text: See the shop
+          link: /demo-ecommerce/
+        - theme: alt
           text: Read Theory
           link: /theory/
         - theme: alt
@@ -73,7 +76,13 @@ flowchart TD
 - **Contracts**: [`openapi.yaml`](./api/openapi-workflow.md#openapi-is-the-source-of-truth) + [`asyncapi.yaml`](./api/asyncapi-workflow.md#asyncapi-is-the-async-contract-source-of-truth).
 - **Shape**: layered code explained in [Theory](./theory/) and the dedicated [Layers](./theory/layers.md) page.
 
-## Five sections, five jobs
+## Six sections, six jobs
+
+### [Demo Shop](./demo-ecommerce/)
+
+What the demo application actually does, in plain language, with no code on any page.
+Start here if you are not going to read the codebase — or if you need to explain it to someone who
+never will.
 
 ### [Theory](./theory/)
 
@@ -138,6 +147,7 @@ flowchart LR
 ## Good starting points
 
 - Never run this repo before? Start at [Getting Started](./getting-started.md) — four commands to a browsable API.
+- Not a developer, or explaining this to someone who is not? [Demo Shop](./demo-ecommerce/) — the whole application in five short pages.
 - Want to know what one domain does, end to end? [Modules](./modules/) — one page each, same nine blocks every time.
 - Found a file and have no idea what it is? [File Glossary](./reference/) — one hop to an answer.
 - Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./api/regenerating.md).

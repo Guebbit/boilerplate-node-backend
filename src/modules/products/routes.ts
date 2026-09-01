@@ -7,6 +7,7 @@
 
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
+import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/adapters/storage';
 import { getProducts, searchProductsKeyParameters } from './controllers/get-products';
 import { writeProducts } from './controllers/write-products';
@@ -34,6 +35,7 @@ router.get('/', cacheProductsSearch, getProducts);
 // POST /products — admin only (create)
 router.post(
     '/',
+    uploadLimiter,
     isAuth,
     isAdmin,
     invalidateCache(['products']),
@@ -44,6 +46,7 @@ router.post(
 // PUT /products — admin only, id in body (update)
 router.put(
     '/',
+    uploadLimiter,
     isAuth,
     isAdmin,
     invalidateCache(['products']),
@@ -68,6 +71,7 @@ router.get('/:id', setCache(3600, { tags: ['products'], keyParameters: [] }), ge
 // PUT /products/:id — admin only (update)
 router.put(
     '/:id',
+    uploadLimiter,
     isAuth,
     isAdmin,
     invalidateCache(['products']),

@@ -20,9 +20,11 @@
  * broken one — the failure mode the repository comment names is "a cart with one product on two
  * lines", which a single-product race cannot tell apart from correct behaviour.
  */
+import type { Response } from 'supertest';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/fixtures';
+import { productRepository } from '@modules/products';
 import { cartModel } from '@modules/cart/model';
 import { orderModel } from '@modules/orders/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
@@ -195,6 +197,38 @@ describe('R2 — concurrent checkouts of one cart', () => {
         expect(orders[0]?.items[0]?.quantity).toBe(3);
     });
 
+    it('gives the loser its hold back rather than leaking it on the product', async () => {
+        // `retractOrder(order, true)` releases the hold before deleting the order. Without it,
+        // each loser has already called `reserveForOrder` and the product accumulates a
+        // permanent hold per loser that no sweep can ever find, since it is keyed to an order
+        // that no longer exists.
+        const { bearer } = await authenticateAs();
+        const product = await createProduct({ price: 10 });
+
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(product._id), quantity: 3 });
+
+        const results = await raceN(RACE_SIZE, () =>
+            api().post('/cart/checkout').set('Authorization', bearer)
+        );
+
+        expectNoServerErrors(results);
+        const losers = results
+            .filter(
+                (result): result is PromiseFulfilledResult<Response> => result.status === 'fulfilled'
+            )
+            .map((result) => result.value)
+            .filter((response) => response.status === 409);
+        expect(losers).toHaveLength(RACE_SIZE - 1);
+        for (const loser of losers) expect(loser.body.errors[0].code).toBe('CART_CHANGED');
+
+        // The winner's hold and nothing else — every loser's reserve was given back.
+        const stored = await productRepository.findByIdRaw(String(product._id));
+        expect(stored?.reserved).toBe(3);
+    });
+
     it('still checks out normally when nothing is competing', async () => {
         // The conditional write must not make the ordinary, uncontended checkout fail.
         const { bearer } = await authenticateAs();
@@ -207,7 +241,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
 
         const response = await api().post('/cart/checkout').set('Authorization', bearer);
 
-        expect(response.status).toBeLessThan(300);
+        expect(response.status).toBe(201);
     });
 });
 

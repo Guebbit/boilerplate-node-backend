@@ -8,7 +8,11 @@
  */
 
 import type { Types } from 'mongoose';
-import { identityOf, compact, type OverridesFor } from '@infrastructure/persistence/fixtures';
+import {
+    identityOf,
+    stripUndefined,
+    type OverridesFor
+} from '@infrastructure/persistence/fixtures';
 import type { Language, LocaleEntry } from '@types';
 import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleMessageDocument } from './model';
@@ -41,7 +45,7 @@ export const makeLocale = ({
     // Derived, exactly as `createLanguage` derives it: a fixture that stated its own could
     // publish a dataset the API can never produce.
     baseLanguage: deriveBaseLanguage(fields.tag),
-    ...compact({ ...fields })
+    ...stripUndefined({ ...fields })
 });
 
 /** The fields `makeLocaleEntry` accepts, overriding what the schema would otherwise default. */
@@ -65,5 +69,5 @@ export const makeLocaleEntry = ({
     ...fields
 }: LocaleEntryOverrides): LocaleEntryFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
-    ...compact({ ...fields })
+    ...stripUndefined({ ...fields })
 });

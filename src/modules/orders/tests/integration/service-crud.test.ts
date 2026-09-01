@@ -303,6 +303,22 @@ describe('update', () => {
         expect(asReject(result).status).toBe(409);
     });
 
+    it('refuses an admin echo-writing `paid` onto an order already paid', async () => {
+        // The bug `canTransition`'s identity short-circuit used to hide: writing the SAME
+        // status back is normally a no-op, but `paid` belongs to `system` alone, even as an echo.
+        const { order } = await seedOrder();
+        order.status = 'paid';
+        await order.save();
+
+        const result = await update(await reload(order), { status: 'paid' });
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('ORDER_TRANSITION_NOT_ALLOWED');
+        const reloaded = await reload(order);
+        expect(reloaded.status).toBe('paid');
+    });
+
     it('refuses to reopen a cancelled order', async () => {
         // The path that made this worth fixing: a reopened order is cancellable again, and the
         // refund listener sees a payment that is still `succeeded`.

@@ -56,11 +56,11 @@ describe('orderSchema — status', () => {
 });
 
 describe('orderSchema — money', () => {
-    it('defaults shipping cost to zero rather than leaving it absent', () => {
-        // What the customer owes for shipping is always a number; an order that chose no method
-        // owes nothing. This is what makes `orderTotal`'s tolerance of an absent value a defence
-        // against a malformed document rather than a live contract with the schema.
-        expect(defaultOf(orderSchema, 'shippingCost')).toBe(0);
+    it('leaves shipping cost absent rather than defaulting it, matching `shippingMethod`', () => {
+        // Both absent together when no method was chosen — `openapi.yaml`'s stated contract.
+        // `orderTotal`'s `asMoney` already turns an absent value into 0 for the total, so this
+        // schema does not need to invent one to keep the total correct.
+        expect(defaultOf(orderSchema, 'shippingCost')).toBeUndefined();
     });
 
     it('refuses a negative shipping cost', () => {

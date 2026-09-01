@@ -131,6 +131,22 @@ describe('enqueueEmail — path 2: broker configured, publish succeeds', () => {
         expect(sendMailMock).not.toHaveBeenCalled();
     });
 
+    it('defaults to normal priority', async () => {
+        await enqueueEmail(REQUEST, TEMPLATE, DATA);
+
+        const { priority } = publishToQueueMock.mock.calls[0][0] as { priority: string };
+        expect(priority).toBe('normal');
+    });
+
+    it('passes an explicit priority through to the queue', async () => {
+        // Auth flows (password reset, account deletion/setup, email verification) pass 'high' —
+        // a person is actively waiting on a short-TTL link, not an FYI.
+        await enqueueEmail(REQUEST, TEMPLATE, DATA, 'high');
+
+        const { priority } = publishToQueueMock.mock.calls[0][0] as { priority: string };
+        expect(priority).toBe('high');
+    });
+
     it('carries the template NAME and data, not rendered HTML', async () => {
         // Rendering happens on the consumer side, so the payload must stay small and
         // JSON-serializable. A payload carrying HTML would work and quietly bloat the broker.

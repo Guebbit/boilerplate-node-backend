@@ -6,6 +6,7 @@ this site is the horizontal one.
 ::: tip Which section answers which question
 | You want | Read |
 | --- | --- |
+| What this domain does for the _business_, without the code | [Demo Shop](../demo-ecommerce/) |
 | What a module _is_, and the rules every one obeys | [Theory](../theory/) |
 | What **this** domain does, end to end | a page in this section |
 | How a mechanism works, in general | [Tools](../tools/) |

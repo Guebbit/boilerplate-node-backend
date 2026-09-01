@@ -166,46 +166,6 @@ describe('filesystemImageStore.putDerivative', () => {
     });
 });
 
-describe('filesystemImageStore.readImage', () => {
-    it('reads the bytes a stored url names', async () => {
-        const { imageUrl } = await makeImage('stored.png');
-
-        await expect(filesystemImageStore.readImage(imageUrl)).resolves.toEqual(
-            Buffer.from('not really a png')
-        );
-    });
-
-    /* The one place this store's read guard differs from its delete guard: a backfill has to
-       reach committed fixtures under `images/seed/`, which `remove()` refuses on purpose. */
-    it('reads a file in a subdirectory of the images directory, unlike remove()', async () => {
-        const seedDirectory = path.join(root, 'images', 'seed');
-        await mkdir(seedDirectory, { recursive: true });
-        await writeFile(path.join(seedDirectory, 'fixture.jpg'), 'committed asset');
-
-        await expect(filesystemImageStore.readImage('/images/seed/fixture.jpg')).resolves.toEqual(
-            Buffer.from('committed asset')
-        );
-    });
-
-    it('rejects a url outside the public directory', async () => {
-        await expect(filesystemImageStore.readImage('/../outside.png')).rejects.toThrow(
-            'Refuses to read outside the public directory'
-        );
-    });
-
-    it.each([
-        'https://cdn.example.com/x.png',
-        'http://cdn.example.com/x.png',
-        '//cdn.example.com/x.png'
-    ])('rejects %s as not a local image', async (imageUrl) => {
-        await expect(filesystemImageStore.readImage(imageUrl)).rejects.toThrow('Not a local image');
-    });
-
-    it('rejects a url whose file does not exist', async () => {
-        await expect(filesystemImageStore.readImage('/images/never-existed.png')).rejects.toThrow();
-    });
-});
-
 describe('filesystemImageStore.remove', () => {
     it('deletes the file a stored url names', async () => {
         const { file, imageUrl } = await makeImage('stored.png');

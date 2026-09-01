@@ -65,6 +65,25 @@ One config per service in the chain. Each is mounted into its container by the c
 | `.docker/observability/grafana/dashboards/api-traces.json` | The provisioned dashboard itself: request rates, latencies and the trace links into Tempo.                                 | [Grafana](../tools/grafana.md)                   |
 | `.docker/observability/umami-init.sh`                      | Initialises the Umami analytics database on first start.                                                                   | [Product Analytics](../tools/analytics.md)       |
 
+## Data retention
+
+Two collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
+job — this repo has no scheduler, so a TTL index is the one form of cleanup that costs nothing to
+run.
+
+| Collection         | Window                         | Default | Read next                                   |
+| ------------------ | ------------------------------ | ------- | ------------------------------------------- |
+| `auditlogs`        | `NODE_AUDIT_RETENTION_DAYS`    | 90      | [Winston & Audit Logs](../tools/winston.md) |
+| `feedbackrequests` | `NODE_FEEDBACK_RETENTION_DAYS` | 730     | [feedback](../modules/feedback.md)          |
+
+Both windows share one caveat, worth stating once rather than twice: **Mongo will not modify an
+existing TTL index's `expireAfterSeconds` when the value changes.** Raising or lowering either
+variable on a database that already holds the index does nothing until the index is dropped and
+recreated — a migration under `db/migrations/` (`collMod`), not a restart. `feedback`'s window is
+the longer of the two on purpose: a contact request can be evidence in a commercial dispute, and 24
+months sits inside the common limitation periods, while an audit entry is an operational signal
+with a much shorter useful life.
+
 ## CI
 
 | File                              | What it is                                                                                                                                                             | Read next                                                |

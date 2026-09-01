@@ -205,6 +205,21 @@ export const DEAD_LETTER_EXCHANGE = 'dead-letter';
 export const deadLetterQueueOf = (queue: string): string => `${queue}.dead`;
 
 /**
+ * The two job-priority levels every work queue supports, named rather than passed as raw numbers
+ * so a publish call reads as intent (`'high'`) instead of a magic 0/1 whose meaning lives only
+ * here. Kept to two on purpose: RabbitMQ's priority ordering is approximate under load — it
+ * reorders within whatever is currently buffered, not a strict global heap — so more levels would
+ * invite a false sense of a real scheduler. The idea is one gap, between "most things" and "the
+ * few things a person is actively blocked on," not a fine-grained priority system.
+ *
+ * See: docs/tools/rabbitmq.md#priority
+ */
+export type JobPriority = 'normal' | 'high';
+
+/** `JobPriority` as the number RabbitMQ's `priority` publish option and `x-max-priority` expect. */
+const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
+
+/**
  * Declare a work queue, its dead-letter queue, and the binding between them.
  *
  * Idempotent, called on both publish and consume paths so producer and consumer may start in any
@@ -229,7 +244,12 @@ const assertJobQueue = (ch: Channel, queue: string, durable: boolean): Promise<v
                 // `durable` = the queue definition survives a broker restart.
                 durable,
                 deadLetterExchange: DEAD_LETTER_EXCHANGE,
-                deadLetterRoutingKey: deadLetterQueueOf(queue)
+                deadLetterRoutingKey: deadLetterQueueOf(queue),
+                // `x-max-priority`: the ceiling `JOB_PRIORITY_VALUES` publishes against. Every
+                // queue gets it, so any producer may opt into `priority: 'high'` without a
+                // separate per-queue declaration.
+                // https://www.rabbitmq.com/docs/priority
+                arguments: { 'x-max-priority': Math.max(...Object.values(JOB_PRIORITY_VALUES)) }
             })
         )
         .then(() => undefined);
@@ -245,6 +265,8 @@ export interface PublishOptions<TPayload = unknown> {
     durable?: boolean;
     /** Make message persistent. Default: true. */
     persistent?: boolean;
+    /** How eagerly the broker should deliver this ahead of others waiting on the same queue. Default: `'normal'`. */
+    priority?: JobPriority;
 }
 
 /**
@@ -266,7 +288,7 @@ export const publishToQueue = <TPayload = unknown>(
 
         // Destructure with defaults here (rather than in the interface) so both call paths —
         // explicit options and omitted options — go through the same durable-by-default choice.
-        const { queue, payload, durable = true, persistent = true } = options;
+        const { queue, payload, durable = true, persistent = true, priority = 'normal' } = options;
 
         return (
             assertJobQueue(ch, queue, durable)
@@ -277,7 +299,8 @@ export const publishToQueue = <TPayload = unknown>(
                         // `persistent` = the *message* is written to disk. Both this and a
                         // `durable` queue are required to survive a restart: a durable queue
                         // with transient messages comes back empty.
-                        persistent
+                        persistent,
+                        priority: JOB_PRIORITY_VALUES[priority]
                     })
                 )
                 // `sendToQueue` returns a boolean: false means amqplib's internal write buffer is

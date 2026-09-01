@@ -60,7 +60,6 @@
         "db:seed:reset": "tsx db/demo/index.ts --reset",
         "db:cache:clear": "tsx db/cache-clear.ts",
         "db:bootstrap": "npm run db:migrate:up && npm run db:seed",
-        "backfill:image-thumbnails": "tsx scripts/backfill-image-thumbnails.ts",
         "reap:quarantine": "tsx scripts/reap-quarantine.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",

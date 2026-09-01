@@ -79,7 +79,9 @@ describe('updateProfile', () => {
         expect(response.status).toBe(422);
     });
 
-    it('answers 404 for an account that no longer exists', async () => {
+    it('answers 401, not 404, for an account that no longer exists', async () => {
+        // A verified token for a deleted account is unauthenticated, not missing — `openapi.yaml`
+        // declares no 404 on `PUT /account`, and `isAuth` treats this exact case as 401 everywhere else.
         const user = await createUser();
         await userRepository.deleteOne(user);
 
@@ -87,7 +89,7 @@ describe('updateProfile', () => {
             await updateProfile(user.id, { username: 'ghost' }, testCallerContext)
         );
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(401);
     });
 
     it('cannot escalate: admin, active and password do not pass through', async () => {

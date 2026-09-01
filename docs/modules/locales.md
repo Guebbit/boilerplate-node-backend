@@ -6,6 +6,14 @@
 **Breaks if you change** — the `scope` field. It decides which of two dictionaries a row patches.
 :::
 
+## Its neighbourhood
+
+<!-- module-graph:locales:start -->
+
+_Nothing reaches `locales` and it reaches nothing — no imports either way, no events either way. Deleting it takes one folder and this page, and no other page changes._
+
+<!-- module-graph:locales:end -->
+
 ## The story
 
 This is the subtlest module in the repo, and almost all of the subtlety is one distinction.
@@ -41,6 +49,33 @@ _no_ and _yes_.
 Nothing here is awaited on the request path. Mongo down, a language half-translated, a malformed
 key — the worst outcome is one endpoint failing and the overlay going stale, while every other
 response still resolves its copy from the files.
+
+## The pipeline
+
+The two tiers, and the two sinks they never share. Follow `scope` and the whole module falls out.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 28, 'rankSpacing': 60}}}%%
+flowchart LR
+    F["src/locales/*.json<br/><i>+ every module's locales/ — the files decide what EXISTS</i>"] --> I["i18next at boot<br/><i>tier 1 · what t() resolves</i>"]
+    AD["admin<br/><i>never opens a code editor</i>"] --> DB[("override rows<br/><i>tier 2 · one per locale·scope·key</i>")]
+    DB -->|"scope: api<br/><i>re-layered at boot · on a timer · after every write</i>"| I
+    DB -->|"scope: app"| HT["GET /locales/:locale/messages"]
+    HT --> FE["the frontend<br/><i>merges over what it bundles</i>"]
+    I --> RS["every response<br/><i>copy · Content-Language</i>"]
+
+    classDef files fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    classDef rows fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef sink fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef ui fill:#fce7f3,stroke:#db2777,color:#111827;
+    class F,I files;
+    class AD,DB rows;
+    class HT,RS sink;
+    class FE ui;
+```
+
+Nothing on that diagram is awaited on the request path. Mongo down and the overlay goes stale while
+every response still resolves its copy from the files.
 
 ## Related pages
 

@@ -81,11 +81,9 @@ This backend and its frontend share a set of files byte-for-byte. These four kee
 
 Not part of any gate. Reach for these when a run misbehaves.
 
-| File                               | What it is                                                                                                                                                    | Read next                                          |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `scripts/report-test-results.ts`   | Turns a runner's JSON report into which **module** a failure belongs to and where the time went — `npm run test:report`.                                      | [Testing (overview)](../tools/testing-and-docs.md) |
-| `scripts/report-heap-summary.ts`   | Summarises a V8 heap snapshot by object kind. The first tool to reach for when a worker dies of memory rather than of a failing assertion.                    | [Mutation Testing](../tools/mutation-testing.md)   |
-| `scripts/report-heap-retainers.ts` | Answers "who is holding these?" for one kind of object — the question the summary cannot, because it aggregates nodes and never reads the edges between them. | [Mutation Testing](../tools/mutation-testing.md)   |
+| File                             | What it is                                                                                                               | Read next                                          |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| `scripts/report-test-results.ts` | Turns a runner's JSON report into which **module** a failure belongs to and where the time went — `npm run test:report`. | [Testing (overview)](../tools/testing-and-docs.md) |
 
 ## The repo's own lint rules
 
