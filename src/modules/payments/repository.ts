@@ -28,9 +28,10 @@ export const paymentRepository: Repository<PaymentDocument> & {
     ) => Promise<PaymentDocument | null>;
     upsertIntent: (
         orderId: string,
-        userId: string,
+        userId: string | undefined,
         data: { amount: number; currency: string; provider: string }
     ) => Promise<PaymentDocument | null>;
+    detachUserId: (userId: string) => Promise<number>;
     updateStatusIfIn: (
         orderId: string,
         from: readonly PaymentStatus[],
@@ -91,7 +92,9 @@ export const paymentRepository: Repository<PaymentDocument> & {
                 },
                 {
                     $set: { ...data, status: 'requires_confirmation' },
-                    $setOnInsert: { userId: toObjectId(userId) }
+                    // Absent rather than `toObjectId(undefined)`: an intent against an order
+                    // whose account is already erased pays for real, with no payer to record.
+                    $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
                 },
                 { upsert: true, returnDocument: 'after' }
             )
@@ -112,5 +115,22 @@ export const paymentRepository: Repository<PaymentDocument> & {
                 { $set: { status: to, ...extra } },
                 { returnDocument: 'after' }
             )
+            .exec(),
+
+    /**
+     * Unset `userId` on every payment this account made. No `anonymizeAfter`
+     * scheduling needed, unlike `orders`: nothing else on a payment is personal data.
+     *
+     * @param userId - the erased account's id
+     * @returns how many payments were detached
+     */
+    detachUserId: (userId: string) =>
+        paymentModel
+            .updateMany(
+                { userId: toObjectId(userId) },
+                { $unset: { userId: 1 } },
+                { timestamps: false }
+            )
             .exec()
+            .then(({ modifiedCount }) => modifiedCount)
 };

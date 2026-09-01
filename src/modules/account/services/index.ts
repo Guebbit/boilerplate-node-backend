@@ -17,7 +17,8 @@ import {
     requestAccountSetup,
     sessionRevoke,
     logoutCurrentSession,
-    refreshAccessToken
+    refreshAccessToken,
+    reauth
 } from './authentication';
 import {
     validatePasswordChange,
@@ -44,6 +45,7 @@ import {
 } from './verification';
 import { findLiveToken, spendLiveToken, sessionsList } from './tokens';
 import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
+import { exportOwnData } from './export';
 
 /*
  * Published by name as well as through the namespace: several callers reach for the function
@@ -74,6 +76,7 @@ export const accountService = {
     sessionRevoke,
     logoutCurrentSession,
     refreshAccessToken,
+    reauth,
     validatePasswordChange,
     passwordChange,
     passwordChangeWithCurrent,
@@ -95,5 +98,6 @@ export const accountService = {
     spendLiveToken,
     sessionsList,
     runTokenCleanup,
-    adminTokenCleanup
+    adminTokenCleanup,
+    exportOwnData
 };

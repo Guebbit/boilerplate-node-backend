@@ -18,6 +18,7 @@ import {
 /** The shared repository factory's CRUD surface plus the courier's own lookups. */
 export const shipmentRepository: Repository<ShipmentDocument> & {
     findByOrderId: (orderId: string) => Promise<ShipmentDocument | null>;
+    findByOrderIds: (orderIds: string[]) => Promise<ShipmentDocument[]>;
     upsertForOrder: (orderId: string, trackingCode: string) => Promise<ShipmentDocument>;
     findAllShipped: () => Promise<ShipmentDocument[]>;
     updateStatusIfIn: (
@@ -34,6 +35,14 @@ export const shipmentRepository: Repository<ShipmentDocument> & {
     /** The shipment behind an order, or `null` while nothing has left the warehouse. */
     findByOrderId: (orderId: string) =>
         shipmentModel.findOne({ orderId: toObjectId(orderId) }).exec(),
+
+    /**
+     * Every shipment behind a set of orders, in one query — for the account data export, joining
+     * shipments onto the caller's own orders. A loop of {@link findByOrderId} would work too, but
+     * one query per order for what is meant to be a single export request is the wrong shape.
+     */
+    findByOrderIds: (orderIds: string[]) =>
+        shipmentModel.find({ orderId: { $in: orderIds.map((id) => toObjectId(id)) } }).exec(),
 
     /**
      * Create the shipment for an order, idempotently: `unique` on `orderId` plus the upsert

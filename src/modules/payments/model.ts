@@ -17,7 +17,12 @@ import { PaymentStatus } from '@types';
  */
 export interface PaymentDocument extends Document {
     orderId: Types.ObjectId;
-    userId: Types.ObjectId;
+    /**
+     * Absent once the account that made this payment has been erased — the same unset-not-delete
+     * treatment as `orders`' `userId`. No PII to scrub beyond it: `cardLast4` is not a PAN, and
+     * `amount`/`currency`/`provider` were never personal data.
+     */
+    userId?: Types.ObjectId;
     /** What the intent froze the price at — the order's total when the intent was created. */
     amount: number;
     /** ISO-4217, from `NODE_DEFAULT_CURRENCY`. Carried per document: config can change. */
@@ -42,10 +47,10 @@ export const paymentSchema = new Schema<PaymentDocument>(
             required: true,
             unique: true
         },
+        // Not `required` — erasure unsets it rather than deleting the payment.
         userId: {
             type: Schema.Types.ObjectId,
-            ref: 'User',
-            required: true
+            ref: 'User'
         },
         amount: {
             type: Number,

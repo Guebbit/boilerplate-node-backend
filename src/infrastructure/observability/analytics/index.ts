@@ -9,6 +9,7 @@
  */
 
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
+import { environmentFlag } from '@infrastructure/runtime/environment';
 import type { CallerContext } from '@infrastructure/http/request';
 import { umamiAnalyticsProvider } from './umami';
 import { posthogAnalyticsProvider } from './posthog';
@@ -59,6 +60,13 @@ export interface AnalyticsEvent {
     userAgent?: string;
     /** Host the request was addressed to, so events can be split per deployment. */
     hostname?: string;
+    /**
+     * The caller's consent choice. Read here, not passed separately, so
+     * `emitAnalyticsEvent`'s own gate can decide without every call site changing: each one
+     * already spreads {@link buildAnalyticsBase}'s return into this object. STRIPPED before an
+     * event reaches a provider — see `emitAnalyticsEvent`; `AnalyticsProvider.capture` never sees it.
+     */
+    analyticsConsent?: 'granted' | 'denied';
 }
 
 // ─── The port ────────────────────────────────────────────────────────────────
@@ -131,7 +139,10 @@ export const resetAnalyticsProvider = (): void => {
  */
 export const buildAnalyticsBase = (
     context: CallerContext
-): Pick<AnalyticsEvent, 'distinctId' | 'traceId' | 'clientIp' | 'userAgent' | 'hostname'> => ({
+): Pick<
+    AnalyticsEvent,
+    'distinctId' | 'traceId' | 'clientIp' | 'userAgent' | 'hostname' | 'analyticsConsent'
+> => ({
     // CAVEAT: unauthenticated traffic all collapses onto the literal 'anonymous' id, so
     // pre-login events cannot be told apart per visitor *by this field*. Under Umami the
     // IP + user-agent hash below still separates them; under PostHog they do not separate.
@@ -142,17 +153,50 @@ export const buildAnalyticsBase = (
     traceId: getActiveSpanContext().traceId,
     clientIp: context.ip,
     userAgent: context.userAgent,
-    hostname: context.host
+    hostname: context.host,
+    // Carried through so `emitAnalyticsEvent` can gate on it without every call site (this
+    // function's ~20 callers) changing.
+    analyticsConsent: context.analyticsConsent
 });
+
+/**
+ * Whether a caller's consent is required before capturing them in full.
+ * Defaults `true`: Art. 25(2) says the PRIVATE setting is the default one, so a boilerplate that
+ * shipped the permissive default would ship it into every project built on it. A deployment that
+ * has taken its own legal advice about server-side, non-cookie analytics can opt out.
+ */
+const requireAnalyticsConsent = (): boolean =>
+    environmentFlag('NODE_ANALYTICS_REQUIRE_CONSENT', true);
 
 /**
  * Send one product analytics event to the configured provider.
  *
  * Returns `void` (fire-and-forget): analytics must never delay or fail a user request, so there
  * is nothing to await and nothing to handle.
+ *
+ * The consent gate lives here, the one choke point every module's event already passes through —
+ * `analyticsConsent` is destructured off and never reaches a provider.
+ * `denied` drops the event outright; `granted` (or the gate turned off) captures it in full;
+ * anything else — unset, or no account to ask (pre-login traffic with no header either) —
+ * captures a COARSENED copy: no `clientIp`, `distinctId` forced to `'anonymous'`. Dropping it
+ * entirely would lose aggregate counts a deployment may have a real reason to keep; keeping it
+ * identified would be exactly the profile Art. 6/7 withheld consent for.
  */
 export const emitAnalyticsEvent = (event: AnalyticsEvent): void => {
-    resolveAnalyticsProvider().capture(event);
+    const { analyticsConsent, ...capturable } = event;
+
+    if (!requireAnalyticsConsent() || analyticsConsent === 'granted') {
+        resolveAnalyticsProvider().capture(capturable);
+        return;
+    }
+
+    if (analyticsConsent === 'denied') return;
+
+    resolveAnalyticsProvider().capture({
+        ...capturable,
+        clientIp: undefined,
+        distinctId: 'anonymous'
+    });
 };
 
 /**

@@ -71,7 +71,11 @@ export const shipOrder = async (orderId: string): Promise<void> => {
     const shipment = await shipmentRepository.upsertForOrder(orderId, trackingCodeFor(orderId));
     if (existing) return;
 
-    const user = await userRepository.findById(String(order.userId)).catch(() => null);
+    // `order.userId` is absent once a detach has erased the account — nothing to
+    // look up, same as the pre-existing "id points at nobody" case just below.
+    const user = order.userId
+        ? await userRepository.findById(String(order.userId)).catch(() => null)
+        : null;
     const mail = shipmentShippedEmail(
         user?.locale ?? getDefaultLocale(),
         user?.username ?? order.email,
@@ -138,6 +142,16 @@ export const runCourierAdvance = async (context: CallerContext): Promise<number>
 
     return advanced;
 };
+
+/**
+ * Every shipment behind a set of orders — for the account data export, called with the caller's
+ * own order ids. Not on `deliveryService`: that handle is for this module's own subscription and
+ * admin surface, and this is the one narrow read a sibling may make instead.
+ *
+ * @param orderIds - the caller's own order ids
+ */
+export const findShipmentsForOrders = (orderIds: string[]): Promise<ShipmentDocument[]> =>
+    orderIds.length === 0 ? Promise.resolve([]) : shipmentRepository.findByOrderIds(orderIds);
 
 /**
  * The module's one service handle. `shipOrder` sits on it like the rest — called through this

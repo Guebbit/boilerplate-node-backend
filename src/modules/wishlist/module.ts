@@ -8,7 +8,7 @@
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      cart, products, users
- * Reached by:   nothing
+ * Reached by:   account (the data export reads the caller's own wishlist)
  *
  * See: docs/modules/wishlist.md
  */

@@ -17,15 +17,17 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     audit_logs["audit-logs<br/><i>this module</i>"]
+    account["account"]
     observability["observability"]
 
+    account --> audit_logs
     observability --> audit_logs
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class observability generic;
+    class account,observability generic;
     class audit_logs centre;
 ```
 

@@ -7,19 +7,22 @@
  * this module in turn, keeping the import graph acyclic.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      inventory, products
- * Reached by:   cart, delivery, payments
+ * Reaches:      inventory, products, users
+ * Reached by:   cart, delivery, payments, account (the data export reads the caller's own orders)
  * Not imports:  an order EMBEDS `productSchema` rather than referencing it, so a change to the
- *               catalogue's shape is a change to this collection's stored history.
+ *               catalogue's shape is a change to this collection's stored history. `users` is
+ *               reached for exactly one thing — `USER_DELETED` below — not for resolving a live
+ *               account, which stays `delivery`'s and `payments`' job.
  */
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
+import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { seedOrdersCollection, exportSeededOrders } from './demo';
-import { cancelById } from './service';
+import { cancelById, detachUserId } from './service';
 // Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import './events';
 
@@ -37,6 +40,8 @@ export default {
      */
     subscribe: () => {
         onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => cancelById(orderId, { admin: true }));
+        // Detach, never delete: the order survives the account.
+        onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
     },
     seeds: seedOrdersCollection,
     seedExport: exportSeededOrders,

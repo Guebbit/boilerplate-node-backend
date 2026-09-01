@@ -55,12 +55,21 @@
  * can also be written down. A rule reconciled against imports could never hold one of those.
  */
 const MODULE_EDGES = {
-    account: ['users'],
+    account: [
+        'users',
+        'orders',
+        'payments',
+        'delivery',
+        'cart',
+        'wishlist',
+        'audit-logs',
+        'feedback'
+    ],
     cart: ['account', 'delivery', 'inventory', 'orders', 'products', 'users'],
     delivery: ['orders', 'users'],
     inventory: ['products'],
     observability: ['audit-logs'],
-    orders: ['inventory', 'products'],
+    orders: ['inventory', 'products', 'users'],
     payments: ['inventory', 'orders', 'users'],
     wishlist: ['cart', 'products', 'users']
 };

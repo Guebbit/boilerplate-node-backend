@@ -239,11 +239,24 @@ export const remove = (
         });
     });
 
+/**
+ * A caller's own tickets, matched EXACTLY on `email` — for the account's own data export, behind
+ * `NODE_EXPORT_INCLUDE_FEEDBACK` (the caller decides whether to include this; this function just
+ * answers the question correctly once asked). Deliberately `findAll` with a raw filter, not
+ * `search`'s `email` spec: that spec is a REGEX for staff free-text search, and a substring match
+ * here would hand one person another's ticket whose address happens to contain theirs as a
+ * substring. An account and a ticket sharing an address are still only a guess at being the same
+ * person — the caller of this function is what decides whether that guess is worth taking.
+ */
+export const findOwnTickets = (email: string): Promise<FeedbackRequestDocument[]> =>
+    feedbackRequestRepository.findAll({ email }, { limit: 100_000 });
+
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const feedbackRequestService = {
     create,
     search,
     updateStatus,
     updateStatusById,
-    remove
+    remove,
+    findOwnTickets
 };

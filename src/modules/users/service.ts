@@ -145,6 +145,14 @@ export const update = (
         thumbnailUrl?: string;
         /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
         pendingImageKey?: string;
+        /**
+         * Not on `UpdateUserByIdRequest` either — consent is `account`'s own self-service field
+         * (`UpdateAccountRequest`), deliberately absent from the ADMIN `/users/:id` contract:
+         * consent is the data subject's to give, never an operator's to set on their behalf.
+         * Rides along the same way `thumbnailUrl` does, from the one caller (`account`'s
+         * `updateProfile`) that actually has one to pass.
+         */
+        analyticsConsent?: 'granted' | 'denied';
     }
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
@@ -162,12 +170,15 @@ export const update = (
     if (data.locale !== undefined) user.locale = data.locale;
     if (data.phone !== undefined) user.phone = data.phone;
     if (data.website !== undefined) user.website = data.website;
+    // A tri-state write: absent leaves the stored choice alone, same as every field above; only
+    // an explicit 'granted'/'denied' changes it.
+    if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
     if (data.password && data.password.trim().length > 0) user.password = data.password;
 
     return userRepository.save(user).then((savedUser) => {
         /*
          * Deactivation ends every live session. Defense in depth on top of
-         * `findAuthenticatableById` (BETTER_SECURITY.md wave 1.2), which already blocks a
+         * `findAuthenticatableById`, which already blocks a
          * deactivated account's next request — this also makes `GET /account/sessions` honest
          * and drops credentials with no live account behind them. Chained after the save, not
          * blocking it: a revoke failure here must not turn a successful deactivation into a

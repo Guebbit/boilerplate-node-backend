@@ -54,7 +54,14 @@ flowchart TD
     users
     wishlist
 
+    account --> audit_logs
+    account --> cart
+    account --> delivery
+    account --> feedback
+    account --> orders
+    account --> payments
     account --> users
+    account --> wishlist
     cart --> account
     cart --> delivery
     cart --> inventory
@@ -67,6 +74,7 @@ flowchart TD
     observability --> audit_logs
     orders --> inventory
     orders --> products
+    orders --> users
     payments --> inventory
     payments --> orders
     payments --> users
@@ -80,25 +88,25 @@ flowchart TD
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
     class delivery,inventory,payments,wishlist supporting;
-    class account,audit_logs,observability,users generic;
-    class feedback,locales isolated;
+    class account,audit_logs,feedback,observability,users generic;
+    class locales isolated;
 ```
 
-|                 | Reaches                                               | Reached by                                  |
-| --------------- | ----------------------------------------------------- | ------------------------------------------- |
-| `cart`          | account, delivery, inventory, orders, products, users | wishlist                                    |
-| `orders`        | inventory, products                                   | cart, delivery, payments                    |
-| `users`         | —                                                     | account, cart, delivery, payments, wishlist |
-| `inventory`     | products                                              | cart, orders, payments                      |
-| `products`      | —                                                     | cart, inventory, orders, wishlist           |
-| `delivery`      | orders, users                                         | cart                                        |
-| `payments`      | inventory, orders, users                              | —                                           |
-| `wishlist`      | cart, products, users                                 | —                                           |
-| `account`       | users                                                 | cart                                        |
-| `audit-logs`    | —                                                     | observability                               |
-| `observability` | audit-logs                                            | —                                           |
-| `feedback`      | —                                                     | —                                           |
-| `locales`       | —                                                     | —                                           |
+|                 | Reaches                                                                 | Reached by                                          |
+| --------------- | ----------------------------------------------------------------------- | --------------------------------------------------- |
+| `account`       | audit-logs, cart, delivery, feedback, orders, payments, users, wishlist | cart                                                |
+| `cart`          | account, delivery, inventory, orders, products, users                   | account, wishlist                                   |
+| `orders`        | inventory, products, users                                              | account, cart, delivery, payments                   |
+| `users`         | —                                                                       | account, cart, delivery, orders, payments, wishlist |
+| `delivery`      | orders, users                                                           | account, cart                                       |
+| `inventory`     | products                                                                | cart, orders, payments                              |
+| `payments`      | inventory, orders, users                                                | account                                             |
+| `products`      | —                                                                       | cart, inventory, orders, wishlist                   |
+| `wishlist`      | cart, products, users                                                   | account                                             |
+| `audit-logs`    | —                                                                       | account, observability                              |
+| `feedback`      | —                                                                       | account                                             |
+| `observability` | audit-logs                                                              | —                                                   |
+| `locales`       | —                                                                       | —                                                   |
 
 <!-- module-graph:end -->
 

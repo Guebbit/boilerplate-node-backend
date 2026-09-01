@@ -6,7 +6,9 @@
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      nothing
- * Reached by:   nothing — delete it and only this module goes
+ * Reached by:   account (the data export, `findOwnTickets` — behind
+ *               `NODE_EXPORT_INCLUDE_FEEDBACK`, default off; the guess that a ticket and an
+ *               account are the same person is the caller's to make, not this module's)
  *
  * See: docs/modules/feedback.md
  */

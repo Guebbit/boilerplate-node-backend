@@ -25,7 +25,7 @@ export enum TokenType {
 }
 
 /**
- * Digest a token value for storage/lookup — BETTER_SECURITY.md wave 3.1. `users.tokens[].token`
+ * Digest a token value for storage/lookup. `users.tokens[].token`
  * holds live refresh JWTs, password-reset tokens and delete-confirmation tokens; a plain sha256
  * digest is enough because every value here already carries 128 bits of entropy from
  * `randomBytes(16)` or a signed JWT — there is no low-entropy secret to stretch, and bcrypt would
@@ -61,7 +61,7 @@ export interface Token {
      */
     lastUsedAt?: Date;
     /**
-     * When rotation (BETTER_SECURITY.md wave 3.2) replaced this refresh token with a new one.
+     * When rotation replaced this refresh token with a new one.
      * The entry stays in `tokens` rather than being removed immediately — see `tokenSupersede`
      * in `../users/repository.ts` for why: a short grace window is what stops two tabs racing to
      * refresh at once from looking like theft. Absent means this token is still live.
@@ -81,7 +81,7 @@ export interface UserRecord extends Omit<User, 'createdAt' | 'updatedAt' | 'dele
     deletedAt?: Date;
 
     /**
-     * Stamped by `scripts/reap-inactive-accounts.ts` (GDPR_FIX.md G5) the first time it warns
+     * Stamped by `scripts/reap-inactive-accounts.ts` the first time it warns
      * this account about impending removal — never set anywhere else. Absent means "never
      * warned"; it is also how the script tells its OWN soft-deletes apart from an admin's when
      * deciding what is safe to hard-delete next, since `deletedAt` alone doesn't say who set it.
@@ -216,6 +216,15 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         },
         website: {
             type: String
+        },
+        /*
+         * A tri-state, and no `default`: absent IS "never asked", the third state.
+         * `emitAnalyticsEvent`'s consent gate reads this off `AuthContext` (threaded through
+         * `resolve()` in `account/module.ts`), never the document directly.
+         */
+        analyticsConsent: {
+            type: String,
+            enum: ['granted', 'denied']
         },
         admin: {
             type: Boolean,
@@ -385,7 +394,7 @@ userSchema.methods.tokenRemoveAll = function (type: Token['type']) {
 export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
-    // `inactivityWarnedAt` is the reaper's own bookkeeping (GDPR_FIX.md G5), same treatment.
+    // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment.
     omit: ['password', 'tokens', 'pendingImageKey', 'inactivityWarnedAt']
 });
 

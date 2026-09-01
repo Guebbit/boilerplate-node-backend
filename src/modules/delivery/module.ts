@@ -8,7 +8,8 @@
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      orders, users
- * Reached by:   cart (prices a method at checkout through `./domain`)
+ * Reached by:   cart (prices a method at checkout through `./domain`); account (the data export
+ *               joins shipments onto the caller's own orders)
  *
  * See: docs/modules/delivery.md
  */

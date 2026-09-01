@@ -17,18 +17,23 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     orders["orders<br/><i>this module</i>"]
+    account["account"]
     cart["cart"]
     delivery["delivery"]
     inventory["inventory"]
     payments["payments"]
     products["products"]
+    users["users"]
 
+    account --> orders
     cart --> orders
     delivery --> orders
     payments --> orders
     orders --> inventory
     orders --> products
+    orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
+    users -. "user.deleted" .-> orders
     orders -. "order.status_changed" .-> delivery
     orders -. "order.cancelled" .-> payments
 
@@ -38,6 +43,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
     class delivery,inventory,payments supporting;
+    class account,users generic;
     class orders centre;
 ```
 

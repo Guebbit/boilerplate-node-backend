@@ -8,7 +8,8 @@
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      nothing
- * Reached by:   observability (for `GET /observability/audit`)
+ * Reached by:   observability (for `GET /observability/audit`); account (the data export reads
+ *               the caller's own audit trail)
  * Not imports:  retention is a TTL index on the collection, not code — see `./model`. Change the
  *               window and nothing in TypeScript moves.
  *

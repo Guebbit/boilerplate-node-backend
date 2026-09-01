@@ -1,13 +1,24 @@
 /**
  * @module
  * Express router for the account module: auth (login, signup, refresh, logout), password reset,
- * email verification, sessions, and the address book. See `./module.ts` for the mount point and
- * `docs/modules/account.md` for the story.
+ * email verification, sessions, and the address book. Destructive and session-eviction routes
+ * (`DELETE /`, `POST /logout-all`, `DELETE /sessions/:sessionId`) and an email change on `PUT /`
+ * additionally require a fresh session (`requireFreshAuth`/`requireFreshAuthWhen`).
+ * See `./module.ts` for the mount point and `docs/modules/account.md` for the story.
  */
 
+import type { Request } from 'express';
 import { Router } from 'express';
 import { credentialLimiters, uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
-import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
+import {
+    getAuth,
+    isAuth,
+    isAdmin,
+    requireFreshAuth,
+    requireFreshAuthWhen,
+    REAUTH_TIME_CRITICAL,
+    REAUTH_TIME_SENSITIVE
+} from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/adapters/storage';
 import { getAccount } from './controllers/get-account';
 import { putAccount } from './controllers/put-account';
@@ -16,6 +27,7 @@ import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';
 import { postResetConfirm } from './controllers/post-reset-confirm';
 import { postPasswordChange } from './controllers/post-password-change';
+import { postReauth } from './controllers/post-reauth';
 import { getRefreshToken } from './controllers/get-refresh-token';
 import { postLogout } from './controllers/post-logout';
 import { postLogoutEverywhere } from './controllers/post-logout-everywhere';
@@ -24,12 +36,28 @@ import { deleteSession } from './controllers/delete-session';
 import { postVerifyRequest } from './controllers/post-verify-request';
 import { postVerifyConfirm } from './controllers/post-verify-confirm';
 import { deleteExpiredTokens } from './controllers/delete-expired-tokens';
+import { postAccountExport } from './controllers/post-account-export';
 import { getAddresses } from './controllers/get-addresses';
 import { postAddress, putAddress } from './controllers/write-addresses';
 import { deleteAddress } from './controllers/delete-address';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
 import { invalidateCache, noStore } from '@infrastructure/http/middlewares/cache';
+
+/**
+ * Whether THIS `PUT /account` request is changing the caller's email — the one field
+ * `requireFreshAuthWhen` gates on `PUT /`. Mirrors the exact comparison `putAccount` itself makes
+ * (`email !== undefined && email !== currentEmail`), so the guard and the controller can never
+ * disagree about what counts as an email change.
+ *
+ * MUST run after `upload.single('imageUpload')`: `PUT /account` accepts `multipart/form-data`,
+ * so `request.body` does not exist until multer has parsed it — a predicate mounted earlier reads
+ * an empty object, concludes "no email change", and gates nothing.
+ */
+const isChangingEmail = (request: Request): boolean => {
+    const email = (request.body as { email?: string } | undefined)?.email;
+    return email !== undefined && email !== request.authContext?.email;
+};
 
 /** Express router for account/auth endpoints (login, signup, password reset, token refresh). */
 export const router = Router();
@@ -51,17 +79,22 @@ router.use(noStore);
 router.get('/', isAuth, getAccount);
 
 // PUT /account — update own profile (requires auth). The upload mirrors signup's.
+// requireFreshAuthWhen AFTER upload.single: see isChangingEmail's own doc for why the order is
+// load-bearing. Sensitive tier, not critical: an unconditional gate here would ask for a
+// password on every avatar upload — this route is the takeover path specifically BECAUSE of
+// the email field, not the write in general.
 router.put(
     '/',
     uploadLimiter,
     isAuth,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
+    requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
     putAccount
 );
 
-// DELETE /account — request account deletion (requires auth)
-router.delete('/', isAuth, deleteAccountRequest);
+// DELETE /account — request account deletion (requires auth). Critical: destruction.
+router.delete('/', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), deleteAccountRequest);
 
 // DELETE /account/delete-confirm — confirm account deletion with token
 router.delete('/delete-confirm', invalidateCache(['users', 'account']), deleteAccountConfirm);
@@ -93,20 +126,36 @@ router.post(
 // POST /account/password — change password by proving the current one (requires auth)
 router.post('/password', credentialLimiters, isAuth, postPasswordChange);
 
+// POST /account/reauth — step-up: re-prove the password, refresh auth_time (requires auth)
+router.post('/reauth', credentialLimiters, isAuth, postReauth);
+
 // GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);
 
 // POST /account/logout — revoke THIS session's refresh token (cookie is the credential)
 router.post('/logout', postLogout);
 
-// POST /account/logout-all — revoke all refresh tokens (requires auth)
-router.post('/logout-all', isAuth, invalidateCache(['account']), postLogoutEverywhere);
+// POST /account/logout-all — revoke all refresh tokens (requires auth). Sensitive: evicting the
+// owner is an attack, not just an action, if a stolen-but-unfresh session could do it.
+router.post(
+    '/logout-all',
+    isAuth,
+    requireFreshAuth(REAUTH_TIME_SENSITIVE),
+    invalidateCache(['account']),
+    postLogoutEverywhere
+);
 
 // GET /account/sessions — list live refresh tokens as sessions (requires auth)
 router.get('/sessions', isAuth, getSessions);
 
-// DELETE /account/sessions/:sessionId — revoke one session (requires auth)
-router.delete('/sessions/:sessionId', isAuth, deleteSession);
+// DELETE /account/sessions/:sessionId — revoke one session (requires auth). Sensitive, same
+// reasoning as logout-all.
+router.delete(
+    '/sessions/:sessionId',
+    isAuth,
+    requireFreshAuth(REAUTH_TIME_SENSITIVE),
+    deleteSession
+);
 
 // GET /account/addresses — the caller's address book (requires auth)
 router.get('/addresses', isAuth, getAddresses);
@@ -139,3 +188,7 @@ router.delete(
     invalidateCache(['users', 'account']),
     deleteExpiredTokens
 );
+
+// POST /account/export — the caller's full data export. Sensitive tier: requireFreshAuth is the
+// identity proof here, not a bespoke password check in the body.
+router.post('/export', isAuth, requireFreshAuth(REAUTH_TIME_SENSITIVE), postAccountExport);

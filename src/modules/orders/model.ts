@@ -56,12 +56,23 @@ export interface OrderDocument
             | 'deletedAt'
         >,
         Document {
-    userId: Types.ObjectId;
+    /**
+     * Absent on an order whose account was erased. The invoice survives erasure
+     * (Art. 17(3)(b)/(e)); the account it belonged to does not, and unlike every other document
+     * here that IS the dangling foreign key, not a bug in it. See `anonymizeAfter`.
+     */
+    userId?: Types.ObjectId;
     status: OrderStatus;
     notes?: string;
     items: OrderDocumentItem[];
     createdAt?: Date;
     updatedAt?: Date;
+    /**
+     * Set alongside `userId` being unset, to `now + NODE_ORDER_PII_RETENTION_DAYS`.
+     * `scripts/reap-orders.ts` scrubs the order's remaining PII (email, shipping name/phone/
+     * street) once this elapses; the order row itself is never deleted.
+     */
+    anonymizeAfter?: Date;
     deletedAt?: Date;
 }
 
@@ -97,9 +108,10 @@ const orderItemSchema = new Schema(
  */
 export const orderSchema = new Schema<OrderDocument>(
     {
+        // Not `required`, unlike everywhere else this repository stores a foreign key — erasure
+        // unsets it deliberately, rather than deleting the invoice.
         userId: {
-            type: Schema.Types.ObjectId,
-            required: true
+            type: Schema.Types.ObjectId
         },
         email: {
             type: String,
@@ -154,6 +166,9 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         deletedAt: {
             type: Date
+        },
+        anonymizeAfter: {
+            type: Date
         }
     },
     {
@@ -174,6 +189,11 @@ orderSchema.index({ userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt
 orderSchema.index({ email: 1 }, { name: 'orders_email' });
 /* Non-admin reads exclude soft-deleted rows (`visibleScope` in `./repository`). */
 orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt' });
+/*
+ * `scripts/reap-orders.ts`'s own sweep — NOT a TTL index: the row must survive, only its PII
+ * gets scrubbed, so nothing here may carry `expireAfterSeconds`.
+ */
+orderSchema.index({ anonymizeAfter: 1 }, { name: 'orders_anonymizeAfter', sparse: true });
 
 /**
  * Strips any leftover `_id` on embedded items (pre-existing documents saved before
@@ -214,6 +234,9 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
  * through the same logic — see `normalize` in @infrastructure/persistence/create-repository.
  */
 export const applyOrderTransform = applySerialization(orderSchema, {
+    // `anonymizeAfter` is the reaper's own bookkeeping, never part of the `Order` contract —
+    // same reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
+    omit: ['anonymizeAfter'],
     after: (serialized) => {
         applyOrderItems(serialized);
         applyOrderTotals(serialized);

@@ -25,10 +25,12 @@ describe('the account audit vocabulary', () => {
             AUTH_EMAIL_VERIFY_COMPLETED: 'auth.email_verify.completed',
             AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
             AUTH_REFRESH_TOKEN_REUSE_DETECTED: 'auth.refresh_token.reuse_detected',
+            AUTH_REAUTHENTICATED: 'auth.reauth',
             AUTH_LOGGED_OUT: 'auth.logout',
             AUTH_LOGGED_OUT_EVERYWHERE: 'auth.logout_all',
             AUTH_SESSION_REVOKED: 'auth.session.revoked',
-            AUTH_TOKEN_EXPIRED_CLEANUP: 'auth.token.expired_cleanup'
+            AUTH_TOKEN_EXPIRED_CLEANUP: 'auth.token.expired_cleanup',
+            AUTH_DATA_EXPORTED: 'auth.data_export.completed'
         });
     });
 

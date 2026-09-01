@@ -76,6 +76,10 @@ const clearAnalyticsEnvironment = () => {
     delete process.env.NODE_UMAMI_WEBSITE_ID;
     delete process.env.NODE_POSTHOG_API_KEY;
     delete process.env.NODE_POSTHOG_HOST;
+    // Set, not deleted: the real default is `true`, and every case in this file except the
+    // "consent gate" describe block below is testing what a provider DOES with an event once
+    // `emitAnalyticsEvent` has decided to capture it in full — not the gate itself.
+    process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'false';
 };
 
 /**
@@ -474,6 +478,82 @@ describe('buildAnalyticsBase', () => {
 
         expect(base.clientIp).toBeUndefined();
         expect(base.userAgent).toBeUndefined();
+    });
+
+    it('carries the consent choice through', () => {
+        expect(
+            buildAnalyticsBase({ caller: {}, analyticsConsent: 'granted' }).analyticsConsent
+        ).toBe('granted');
+        expect(
+            buildAnalyticsBase({ caller: {}, analyticsConsent: 'denied' }).analyticsConsent
+        ).toBe('denied');
+        expect(buildAnalyticsBase({ caller: {} }).analyticsConsent).toBeUndefined();
+    });
+});
+
+// ─── emitAnalyticsEvent's consent gate ─────────────────────────────────────────
+
+describe('emitAnalyticsEvent — consent gate', () => {
+    const baseEvent: AnalyticsEvent = {
+        distinctId: 'user-42',
+        event: productsAnalyticsEvents.PRODUCT_VIEWED,
+        clientIp: '203.0.113.9'
+    };
+
+    it('captures in full when the gate is off, regardless of consent', () => {
+        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'false';
+        configureUmami();
+
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'denied' });
+
+        expect(sentRequest().body.payload.data.user_id).toBe('user-42');
+    });
+
+    it('captures in full when consent is granted', () => {
+        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
+        configureUmami();
+
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'granted' });
+
+        expect(sentRequest().headers['X-Forwarded-For']).toBe('203.0.113.9');
+        expect(sentRequest().body.payload.data.user_id).toBe('user-42');
+    });
+
+    it('drops the event outright when consent is denied', () => {
+        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
+        configureUmami();
+
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'denied' });
+
+        expect(globalThis.fetch).not.toHaveBeenCalled();
+    });
+
+    it('coarsens rather than drops when consent is unasked — no clientIp, distinctId anonymised', () => {
+        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
+        configureUmami();
+
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: undefined });
+
+        expect('X-Forwarded-For' in sentRequest().headers).toBe(false);
+        expect(sentRequest().body.payload.data.user_id).toBe('anonymous');
+    });
+
+    it('never lets the internal consent field itself reach the provider', () => {
+        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
+        configureUmami();
+
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'granted' });
+
+        expect('analyticsConsent' in sentRequest().body.payload.data).toBe(false);
+    });
+
+    it('defaults to required when the variable is unset — Art. 25(2), the private setting first', () => {
+        delete process.env.NODE_ANALYTICS_REQUIRE_CONSENT;
+        configureUmami();
+
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'denied' });
+
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 });
 

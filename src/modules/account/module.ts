@@ -7,10 +7,16 @@
  * a future identity provider.
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      users
+ * Reaches:      users, orders, payments, delivery, cart, wishlist, audit-logs, feedback
  * Reached by:   cart
  * Not imports:  shares the User document with `users` — the one shared kernel in the repo. Both
  *               read and write it, so a schema change there has to be agreed twice.
+ *
+ * `POST /account/export` is why this module reaches nearly everything: a data export is
+ * inherently cross-cutting, and the alternative — an event asking every module to publish its
+ * own slice — would turn one synchronous read into an async fan-out with nothing to wait on it.
+ * Every one of those reads goes through the OWNING module's own function, scoped to the
+ * caller's id; see `services/export.ts`.
  *
  * See: docs/modules/account.md
  */
@@ -36,9 +42,9 @@ import { router } from './routes';
 /**
  * Builds a `fromAccessToken`/`fromRefreshToken` resolver from either verifier.
  *
- * Keeps the verified `auth_time`/`amr` CLAIMS, not just `id` — BETTER_SECURITY.md wave 4. This is
- * the same function 1.2 edits to call `findAuthenticatableById`; the two land together or the
- * second one silently drops what the first one carries.
+ * Keeps the verified `auth_time`/`amr` CLAIMS, not just `id`: this is the function that calls
+ * `findAuthenticatableById`, and the two travel together — dropping the claims here would
+ * silently discard what the caller worked to prove.
  */
 const resolve = (verify: (token: string) => Promise<TokenData>) => (token: string) =>
     verify(token)
@@ -56,11 +62,16 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       username: user.username,
                       admin: user.admin ?? false,
                       imageUrl: user.imageUrl,
-                      // Absent (a token minted before wave 4 shipped) reads as infinitely old —
-                      // fail closed, so a pre-existing session is asked to re-authenticate at its
-                      // first sensitive action rather than being treated as freshly authenticated.
+                      // Absent (a token minted before this claim existed) reads as infinitely
+                      // old — fail closed, so a pre-existing session is asked to re-authenticate
+                      // at its first sensitive action rather than being treated as freshly
+                      // authenticated.
                       authTime: claims.auth_time ?? 0,
-                      amr: claims.amr ?? []
+                      amr: claims.amr ?? [],
+                      // Read fresh off the document every request, unlike `authTime`/`amr`: a
+                      // consent WITHDRAWAL has to apply to the very next event, not wait for the
+                      // caller to log in again.
+                      analyticsConsent: user.analyticsConsent
                   }
                 : undefined
         );
@@ -77,11 +88,11 @@ export default {
     basePath: '/account',
     routes: router,
     /*
-     * BETTER_SECURITY.md wave 2.1: `.env-example` ships both as literal placeholders that sign
-     * and verify perfectly — `getAccessTokenSecret`/`getRefreshTokenSecret` (`session/config.ts`)
-     * read `process.env.X ?? ''` with no validation of their own. 16 rather than a stricter
-     * minimum: this rejects empty and drastically truncated values without pretending to assess
-     * real secret strength, which is an operator's job, not a boot-time character count.
+     * `.env-example` ships both as literal placeholders that sign and verify perfectly —
+     * `getAccessTokenSecret`/`getRefreshTokenSecret` (`session/config.ts`) read
+     * `process.env.X ?? ''` with no validation of their own. 16 rather than a stricter minimum:
+     * this rejects empty and drastically truncated values without pretending to assess real
+     * secret strength, which is an operator's job, not a boot-time character count.
      */
     requiredConfig: [
         { key: 'NODE_TOKEN_ACCESS', minLength: 16, placeholder: 'your-access-token-secret-here' },

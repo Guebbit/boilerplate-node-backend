@@ -134,6 +134,14 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "changing the caller's own password, proving the current one"
     },
+    'account POST /reauth': {
+        requiresAuth: true,
+        reason: "re-proving the caller's own password to refresh their session's freshness"
+    },
+    'account POST /export': {
+        requiresAuth: true,
+        reason: "exporting the caller's own data — a read wearing a POST, since requireFreshAuth needs a body-free request"
+    },
     'account POST /logout': {
         requiresAuth: false,
         reason: 'revoking THIS session — the refresh-token cookie is the credential, not a login'

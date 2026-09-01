@@ -41,6 +41,7 @@ const RATE_LIMITED = [
     'POST /reset',
     'POST /reset-confirm',
     'POST /password',
+    'POST /reauth',
     'POST /verify-request',
     'POST /verify-confirm'
 ];
@@ -51,6 +52,7 @@ const AUTHENTICATED = [
     'PUT /',
     'DELETE /',
     'POST /password',
+    'POST /reauth',
     'POST /logout-all',
     'GET /sessions',
     'DELETE /sessions/:sessionId',
@@ -59,7 +61,8 @@ const AUTHENTICATED = [
     'PUT /addresses/:addressId',
     'DELETE /addresses/:addressId',
     'POST /verify-request',
-    'DELETE /tokens/expired'
+    'DELETE /tokens/expired',
+    'POST /export'
 ];
 
 describe('account routes — what is mounted', () => {
@@ -74,6 +77,7 @@ describe('account routes — what is mounted', () => {
             'POST /reset',
             'POST /reset-confirm',
             'POST /password',
+            'POST /reauth',
             'GET /refresh',
             'POST /logout',
             'POST /logout-all',
@@ -85,7 +89,8 @@ describe('account routes — what is mounted', () => {
             'DELETE /addresses/:addressId',
             'POST /verify-request',
             'POST /verify-confirm',
-            'DELETE /tokens/expired'
+            'DELETE /tokens/expired',
+            'POST /export'
         ]);
     });
 
@@ -150,9 +155,10 @@ describe('account routes — credential rate limiting', () => {
     });
 
     it('rate-limits before authenticating, so a spent budget costs no lookup', () => {
-        // On `POST /password` and `/verify-request` the limiters precede `isAuth`. Reversed, a
-        // flood of unauthenticated requests would each do the session work before being refused.
-        for (const signature of ['POST /password', 'POST /verify-request']) {
+        // On `POST /password`, `/reauth` and `/verify-request` the limiters precede `isAuth`.
+        // Reversed, a flood of unauthenticated requests would each do the session work before
+        // being refused.
+        for (const signature of ['POST /password', 'POST /reauth', 'POST /verify-request']) {
             const chain = chainOf(signature);
 
             expect(chain.indexOf('credentialLimiters[0]')).toBeLessThan(chain.indexOf('isAuth'));

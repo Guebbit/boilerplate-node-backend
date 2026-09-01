@@ -154,6 +154,81 @@ const updateStatusIfIn = (
         .exec();
 
 /**
+ * Unset `userId` on every order this account placed, and mark them for `scripts/reap-orders.ts`
+ * to scrub later — `users`' `USER_DELETED` listener. The order row is never touched otherwise:
+ * it is the invoice, kept whole until `anonymizeAfter`.
+ *
+ * @param userId - the erased account's id
+ * @param anonymizeAfter - when the reaper may scrub this order's remaining PII
+ * @returns how many orders were detached
+ */
+const detachUserId = (userId: string, anonymizeAfter: Date): Promise<number> =>
+    orderModel
+        .updateMany(
+            { userId: toObjectId(userId) },
+            { $unset: { userId: 1 }, $set: { anonymizeAfter } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount);
+
+/** The scrubbed-in-place values `scrubDueForAnonymization` replaces required PII with. */
+const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
+
+/** Same placeholder for `shippingAddress.fullName` and `.street` — both required on the schema. */
+const ANONYMIZED_TEXT = 'Anonymized';
+
+/**
+ * `scripts/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has
+ * elapsed gets its remaining PII scrubbed: `email` and the required `shippingAddress` fields
+ * (`fullName`, `street`) are REPLACED, since the schema requires them; the optional
+ * `shippingAddress.phone` is unset outright. City, country, zip, amounts, line items and dates
+ * survive — they are no longer personal data once the name and street are gone.
+ *
+ * Two writes, not one: an order placed by an account that kept no address book (pickup, or a
+ * guest with none) has no `shippingAddress` at all, and a single `$set` on its sub-fields would
+ * CREATE a partial one — present but missing the required `city`/`zip`/`country` no validator
+ * runs on a bulk update to catch. The second write is scoped to orders that actually have one.
+ *
+ * `anonymizeAfter` is unset in the same write, which is what stops a later run rescrubbing an
+ * already-scrubbed row: the sparse index this field carries no longer holds it, so the next
+ * sweep's `$lte` filter cannot match it again.
+ *
+ * @param cutoff - orders whose `anonymizeAfter` is at or before this instant are due
+ * @returns how many orders were scrubbed
+ */
+const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
+    const due = { anonymizeAfter: { $lte: cutoff } };
+
+    // Shipping address FIRST, filtered on `due` while `anonymizeAfter` still carries it — the
+    // second write below unsets that field, which would make this filter match nothing run
+    // the other way around.
+    return orderModel
+        .updateMany(
+            { ...due, shippingAddress: { $exists: true } },
+            {
+                $set: {
+                    'shippingAddress.fullName': ANONYMIZED_TEXT,
+                    'shippingAddress.street': ANONYMIZED_TEXT
+                },
+                $unset: { 'shippingAddress.phone': 1 }
+            },
+            { timestamps: false }
+        )
+        .exec()
+        .then(() =>
+            orderModel
+                .updateMany(
+                    due,
+                    { $set: { email: ANONYMIZED_EMAIL }, $unset: { anonymizeAfter: 1 } },
+                    { timestamps: false }
+                )
+                .exec()
+                .then(({ modifiedCount }) => modifiedCount)
+        );
+};
+
+/**
  * `search` is narrower than the base signature (no caller-supplied sort — the pipeline fixes it),
  * so it is omitted from the base contract rather than intersected with it.
  *
@@ -178,6 +253,8 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
         to: string,
         scope?: Record<string, unknown>
     ) => Promise<OrderDocument | null>;
+    detachUserId: (userId: string, anonymizeAfter: Date) => Promise<number>;
+    scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
 } = {
     ...base,
     aggregate,
@@ -185,5 +262,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     findByIdScoped,
     ownerScope,
     visibleScope,
-    updateStatusIfIn
+    updateStatusIfIn,
+    detachUserId,
+    scrubDueForAnonymization
 };

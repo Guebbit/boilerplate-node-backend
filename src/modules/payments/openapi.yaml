@@ -136,12 +136,13 @@ components:
         Payment:
             type: object
             additionalProperties: false
-            required: [id, orderId, userId, amount, currency, status, provider]
+            required: [id, orderId, amount, currency, status, provider]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                # Absent once the account that made this payment has been erased.
                 userId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 amount:

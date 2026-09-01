@@ -27,7 +27,7 @@ describe('orderRepository', () => {
 
             expect(order._id).toBeDefined();
             expect(order.email).toBe(user.email);
-            expect(order.userId.toString()).toBe(user._id.toString());
+            expect(String(order.userId)).toBe(user._id.toString());
         });
 
         it('stores the correct quantity for each order line', async () => {

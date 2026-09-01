@@ -21,11 +21,13 @@ import {
 } from '@tests/schema';
 
 describe('orderSchema — what an order must carry', () => {
-    it('requires exactly the owner and the contact address', () => {
+    it('requires the contact address, and nothing else', () => {
         // A set, not a list of individual checks: this fails if a `required` is REMOVED (rows
-        // start persisting without an owner) and equally if one is ADDED (writes a client was
+        // start persisting with no address) and equally if one is ADDED (writes a client was
         // allowed to make start being rejected). Both are breaking, in opposite directions.
-        expect(requiredPaths(orderSchema)).toEqual(['email', 'userId']);
+        // `userId` is deliberately absent — account erasure unsets it, so the schema cannot
+        // claim it is always there.
+        expect(requiredPaths(orderSchema)).toEqual(['email']);
     });
 
     it('stores the owner as an ObjectId, not a string', () => {
@@ -101,21 +103,25 @@ describe('orderSchema — the embedded snapshots', () => {
 });
 
 describe('orderSchema — indexes', () => {
-    it('declares exactly the three documented indexes, named and directed', () => {
+    it('declares exactly the four documented indexes, named and directed', () => {
         // Names are given rather than derived, since Mongo identifies an index by name — a rename
         // leaves the old index in production. The `createdAt` DIRECTION serves "newest first"
         // from the index rather than an in-memory sort; getting it wrong is a latency incident.
         expect(indexSpecs(orderSchema)).toEqual([
+            'orders_anonymizeAfter: anonymizeAfter+1',
             'orders_email: email+1',
             'orders_userId_createdAt: userId+1, createdAt-1',
             'orders_userId_deletedAt: userId+1, deletedAt+1'
         ]);
     });
 
-    it('declares none of them unique or sparse', () => {
+    it('declares none of them unique, and only the reaper sweep sparse', () => {
         // A unique index here would reject a customer's second order. Stated explicitly because
         // "no options" is the kind of fact that is never written down and quietly acquires one.
+        // `orders_anonymizeAfter` IS sparse on purpose: most orders never carry the field at
+        // all, and a dense index would hold every row's absence forever.
         expect(indexOptionSpecs(orderSchema)).toEqual([
+            'orders_anonymizeAfter: sparse=true',
             'orders_email: (none)',
             'orders_userId_createdAt: (none)',
             'orders_userId_deletedAt: (none)'

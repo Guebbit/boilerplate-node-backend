@@ -20,24 +20,28 @@ flowchart LR
     account["account"]
     cart["cart"]
     delivery["delivery"]
+    orders["orders"]
     payments["payments"]
     wishlist["wishlist"]
 
     account --> users
     cart --> users
     delivery --> users
+    orders --> users
     payments --> users
     wishlist --> users
     users -. "user.deleted" .-> account
     users -. "user.setup-requested" .-> account
     users -. "user.deleted" .-> cart
+    users -. "user.deleted" .-> orders
+    users -. "user.deleted" .-> payments
     users -. "user.deleted" .-> wishlist
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class cart core;
+    class cart,orders core;
     class delivery,payments,wishlist supporting;
     class account generic;
     class users centre;
@@ -95,7 +99,7 @@ flowchart LR
 second `DELETE` restores it. `?hardDelete=true` is the one that fires `user.deleted` (the cascade
 above) and actually removes the row.
 
-Only the hard path **discharges an Art. 17 erasure request** (GDPR_FIX.md G3). The audit trail says
+Only the hard path **discharges an Art. 17 erasure request**. The audit trail says
 so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.user.erased` — two
 actions rather than one `admin.user.deleted`, so "was this request actually closed out" is
 answerable from the log alone, not from remembering which flag an admin clicked.

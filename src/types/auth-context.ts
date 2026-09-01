@@ -14,13 +14,18 @@ export interface AuthContext {
     admin: boolean;
     imageUrl?: string;
     /**
-     * Epoch seconds this session last actually proved itself — BETTER_SECURITY.md wave 4, carried
-     * from `AuthenticatedUser`. `requireFreshAuth` is what reads this; nothing else should need
-     * to.
+     * Epoch seconds this session last actually proved itself, carried from `AuthenticatedUser`.
+     * `requireFreshAuth` is what reads this; nothing else should need to.
      */
     authTime: number;
-    /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. Wave 4, same source. */
+    /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. Same source as `authTime`. */
     amr: readonly string[];
+    /**
+     * The account's analytics consent choice, read fresh on every request. `undefined` means
+     * "never asked", carried through to `CallerContext` for `emitAnalyticsEvent`'s own gate;
+     * nothing else should need to read it.
+     */
+    analyticsConsent?: 'granted' | 'denied';
 }
 
 /**

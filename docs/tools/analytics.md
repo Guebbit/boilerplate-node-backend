@@ -61,6 +61,33 @@ silently — the exact failure mode this file's naming discipline and the checkl
 both exist to remove. Threading a plain parameter instead means a missing context is a compile
 error, not a row attributed to nobody.
 
+## Consent
+
+Every event carries the caller's IP and a distinct id, which under PostHog is a directly
+identified behavioural profile. `emitAnalyticsEvent` is the one choke point every module's event
+already passes through, so the consent gate lives there rather than at each call site:
+
+```mermaid
+flowchart LR
+    A[Module emits] --> B[emitAnalyticsEvent]
+    B --> C{"NODE_ANALYTICS_REQUIRE_CONSENT"}
+    C -->|false| G[capture in full]
+    C -->|true| D{"caller's analyticsConsent"}
+    D -->|granted| G
+    D -->|denied| H[drop]
+    D -->|unset| E["capture, coarsened:<br/>no clientIp, distinctId = 'anonymous'"]
+```
+
+Consent travels through `CallerContext` the same way `ip`/`userAgent` do. For a logged-in caller
+it is the stored `users.analyticsConsent` (tri-state: `granted` / `denied` / unset — read fresh
+from the account on every request, via `AuthContext`), settable through `PUT /account`. For
+anonymous traffic there is no account to read, so the frontend forwards the visitor's own choice
+on the `X-Analytics-Consent` request header instead.
+
+`NODE_ANALYTICS_REQUIRE_CONSENT` defaults `true` — Art. 25(2) says the private setting is the
+default one. Set it `false` only after taking your own legal advice about server-side, non-cookie
+analytics.
+
 ## Choosing a provider
 
 |                                     | `umami` (default)                            | `posthog`            | `none` |

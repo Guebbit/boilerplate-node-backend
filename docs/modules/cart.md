@@ -25,6 +25,7 @@ flowchart LR
     users["users"]
     wishlist["wishlist"]
 
+    account --> cart
     wishlist --> cart
     cart --> account
     cart --> delivery

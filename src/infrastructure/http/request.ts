@@ -294,7 +294,18 @@ export interface CallerContext {
      * wherever one exists.
      */
     locale?: string;
+    /**
+     * The caller's analytics consent choice. For an authenticated caller this is
+     * the stored, just-read `AuthContext.analyticsConsent`; for anonymous traffic it is whatever
+     * `X-Analytics-Consent` header the frontend forwarded from a pre-login visitor's own choice.
+     * `undefined` means "never asked", read by `emitAnalyticsEvent`'s own gate, nowhere else.
+     */
+    analyticsConsent?: 'granted' | 'denied';
 }
+
+/** The only two values `X-Analytics-Consent` may carry — anything else is treated as absent. */
+const isConsentValue = (value: unknown): value is 'granted' | 'denied' =>
+    value === 'granted' || value === 'denied';
 
 /**
  * Build the `CallerContext` for the current request. Call once per controller, at the top, and
@@ -304,13 +315,19 @@ export interface CallerContext {
  * for more than the minimum a helper reads is what breaks Express' contravariant handler typing.
  */
 export const callerContextOf = (request: {
-    authContext?: Caller;
+    authContext?: Caller & { analyticsConsent?: 'granted' | 'denied' };
     ip?: string;
-    headers?: { 'user-agent'?: string | string[]; host?: string };
+    headers?: {
+        'user-agent'?: string | string[];
+        host?: string;
+        'x-analytics-consent'?: string | string[];
+    };
     requestId?: string;
     locale?: string;
 }): CallerContext => {
     const rawUserAgent = request.headers?.['user-agent'];
+    const rawConsentHeader = request.headers?.['x-analytics-consent'];
+    const consentHeader = Array.isArray(rawConsentHeader) ? rawConsentHeader[0] : rawConsentHeader;
     return {
         caller: request.authContext ?? {},
         ip: request.ip,
@@ -322,7 +339,12 @@ export const callerContextOf = (request: {
         // Absent until the locale middleware has run. Left absent rather than defaulted here: the
         // default belongs at the point of use, where `getDefaultLocale()` is the last term of a
         // precedence chain whose first term is the recipient's own stored preference.
-        locale: request.locale
+        locale: request.locale,
+        // The stored account preference wins when there is one; a pre-login visitor has none to
+        // read, only whatever they told the frontend this specific request.
+        analyticsConsent:
+            request.authContext?.analyticsConsent ??
+            (isConsentValue(consentHeader) ? consentHeader : undefined)
     };
 };
 

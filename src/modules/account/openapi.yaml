@@ -89,6 +89,34 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/reauth:
+        post:
+            tags: [Auth]
+            summary: Re-authenticate (step-up)
+            description: Re-proves the caller's password to refresh how recently they authenticated, without ending the session — the answer to a `401 REAUTH_REQUIRED` challenge from a route gated by freshness (checkout, payments, deleting the account, changing the email, session management). Re-mints the session and returns a fresh access token, same as `POST /account/password`.
+            operationId: reauth
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReauthRequest'
+            responses:
+                '200':
+                    description: Re-authenticated; a fresh access token for this session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # A wrong password is a 422 with a translated message, NOT a 401 — same reasoning
+                # as changePassword above: a 401 here would read as "your session expired" to
+                # every client interceptor and log out a session that is, in fact, still valid.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /account/logout:
         post:
             tags: [Auth]
@@ -425,6 +453,24 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/export:
+        post:
+            tags: [Auth]
+            summary: Export the caller's own data
+            description: One JSON answer to "give me my data" (Art. 15, 20), assembled from every collection that holds something of the caller's — profile, address book, orders, payments, shipments, cart, wishlist, live sessions (metadata only, never a token value), and their own audit trail. Requires a FRESH session (`requireFreshAuth`) rather than a request body — a full personal-data dump is worth re-proving identity for, and this repository already has the mechanism.
+            operationId: exportAccountData
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The caller's own data
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountExportEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
 components:
     schemas:
         # ---------- account — the schemas only this module's paths reference. ----------
@@ -591,6 +637,11 @@ components:
                     type: string
                 website:
                     type: string
+                # Absent means "leave it alone" like every other field here — a client withdraws
+                # consent by sending `denied` explicitly, never by omission.
+                analyticsConsent:
+                    type: string
+                    enum: [granted, denied]
 
         UpdateAccountRequestMultipart:
             type: object
@@ -612,6 +663,9 @@ components:
                     type: string
                 website:
                     type: string
+                analyticsConsent:
+                    type: string
+                    enum: [granted, denied]
 
         ChangePasswordRequest:
             type: object
@@ -623,6 +677,14 @@ components:
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
                 passwordConfirm:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+
+        ReauthRequest:
+            type: object
+            additionalProperties: false
+            required: [password]
+            properties:
+                password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
 
         VerifyEmailConfirmRequest:
@@ -684,6 +746,238 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/SessionsResponse'
+
+        # ---------- POST /account/export ----------
+        # Payment/Shipment/AuditEntry are declared INLINE here rather than $ref'd from
+        # `payments`/`delivery`/`observability` — this repo's fragments never reference a
+        # SIBLING module's fragment, only the shared root (see `docs/api/contract-
+        # fragmentation.md`), and none of these three schemas live there. Mirrors each
+        # module's own real response shape as of this writing; a field added to one of those
+        # does not automatically appear here.
+
+        ExportSession:
+            type: object
+            additionalProperties: false
+            required: [id, type]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                type:
+                    type: string
+                    enum: [refresh]
+                expiration:
+                    type: string
+                    format: date-time
+                lastUsedAt:
+                    type: string
+                    format: date-time
+
+        # Mirrors payments/openapi.yaml's Payment, minus `userId` and `actions` — `userId` is
+        # redundant (an export already scopes every payment to the caller) and `actions` is
+        # computed PER CALLER by `paymentService`'s own read path, which this endpoint's bulk
+        # read (`paymentService.findOwnPayments`) deliberately bypasses.
+        ExportPayment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, amount, currency, status, provider]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                currency:
+                    type: string
+                status:
+                    type: string
+                    enum: [requires_confirmation, succeeded, declined, refunded]
+                provider:
+                    type: string
+                cardLast4:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        # Mirrors delivery/openapi.yaml's shipment response exactly — every field there is
+        # already the caller's own (a shipment carries no other account's data to strip).
+        ExportShipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, trackingCode, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                trackingCode:
+                    type: string
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                deliveredAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        # Mirrors observability/openapi.yaml's AuditEventItem exactly, scoped to `actor_user_id`
+        # matching the caller — see `services/export.ts`. `ip`/`user_agent` here are RAW, same as
+        # `GET /observability/audit` already answers with: the hashing applied elsewhere in this
+        # codebase's logging is for Winston log LINES (`adapters/logger.ts`), not this queryable
+        # collection.
+        ExportAuditEntry:
+            type: object
+            additionalProperties: false
+            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            properties:
+                actor_user_id:
+                    type: string
+                actor_role:
+                    type: string
+                    enum: [admin, user, anonymous]
+                action:
+                    type: string
+                    description: Dotted action name, e.g. `order.created`.
+                outcome:
+                    type: string
+                    enum: [success, failure]
+                ip:
+                    type: string
+                user_agent:
+                    type: string
+                request_id:
+                    type: string
+                trace_id:
+                    type: string
+                target_type:
+                    type: string
+                target_id:
+                    type: string
+                metadata:
+                    type: object
+                    additionalProperties: true
+                timestamp:
+                    type: string
+                    format: date-time
+                level:
+                    type: string
+                    enum: [info, warn]
+
+        # The one place this module describes a feedback ticket — `adminNotes` is deliberately
+        # absent; see `services/export.ts`'s `toExportFeedback` for why.
+        ExportFeedbackTicket:
+            type: object
+            additionalProperties: false
+            required: [id, email, subject, message, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                status:
+                    type: string
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+
+        AccountExportResponse:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    exportedAt,
+                    profile,
+                    addresses,
+                    orders,
+                    payments,
+                    shipments,
+                    cart,
+                    wishlist,
+                    sessions,
+                    auditLog
+                ]
+            properties:
+                exportedAt:
+                    type: string
+                    format: date-time
+                profile:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                addresses:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Address'
+                orders:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                payments:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportPayment'
+                shipments:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportShipment'
+                cart:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
+                wishlist:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId]
+                        properties:
+                            productId:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                sessions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportSession'
+                auditLog:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportAuditEntry'
+                feedback:
+                    type: array
+                    description: Present only when `NODE_EXPORT_INCLUDE_FEEDBACK=true`.
+                    items:
+                        $ref: '#/components/schemas/ExportFeedbackTicket'
+
+        AccountExportEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AccountExportResponse'
 
         # A saved address — `OrderAddress` (the shared snapshot an order embeds) plus the two
         # facts that belong to the BOOK entry rather than to any shipment: its handle and

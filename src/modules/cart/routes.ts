@@ -4,14 +4,21 @@
  *
  * A cart is somebody's, so the whole router is authenticated. `POST /checkout` is the one route
  * that also invalidates the `orders` and `products` response caches — the endpoints those caches
- * serve read differently once a checkout has spent stock and created an order. `/all` is mounted
- * ABOVE `/:productId`: Express matches in mount order, so a `/:productId`-shaped route registered
- * first would match the literal string `all` as a product id (see CONTRACT_PLAN_POLYMORPHISM.md,
- * "Mount `/search` before `/:id`" — the same rule, a different static segment).
+ * serve read differently once a checkout has spent stock and created an order — and requires a
+ * FRESH session on top of `isAuth` (`requireFreshAuth`): it is where
+ * this app's money actually moves. `/all` is mounted ABOVE `/:productId`: Express matches in mount
+ * order, so a `/:productId`-shaped route registered first would match the literal string `all` as
+ * a product id (see CONTRACT_PLAN_POLYMORPHISM.md, "Mount `/search` before `/:id`" — the same
+ * rule, a different static segment).
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth } from '@kernel/middlewares/authorizations';
+import {
+    getAuth,
+    isAuth,
+    requireFreshAuth,
+    REAUTH_TIME_CRITICAL
+} from '@kernel/middlewares/authorizations';
 import { getCart } from './controllers/get-cart';
 import { getCartSummary } from './controllers/get-cart-summary';
 import { postCart } from './controllers/post-cart';
@@ -31,8 +38,13 @@ router.use(getAuth, isAuth);
 // GET /cart/summary
 router.get('/summary', getCartSummary);
 
-// POST /cart/checkout
-router.post('/checkout', invalidateCache(['orders', 'products']), postCheckout);
+// POST /cart/checkout — money out.
+router.post(
+    '/checkout',
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    invalidateCache(['orders', 'products']),
+    postCheckout
+);
 
 // POST /cart/reorder/:orderId — copy one of the caller's own orders back into the cart
 router.post('/reorder/:orderId', postReorder);

@@ -20,16 +20,12 @@ import {
 } from '@tests/schema';
 
 describe('paymentSchema', () => {
-    it('requires everything needed to say who paid what, for which order', () => {
+    it('requires everything needed to say what was paid, for which order', () => {
         // `cardLast4` is absent: not every provider has a card, and the fake one has no digits to
         // report. `status` carries a default instead, which is why it is not required either.
-        expect(requiredPaths(paymentSchema)).toEqual([
-            'amount',
-            'currency',
-            'orderId',
-            'provider',
-            'userId'
-        ]);
+        // `userId` is deliberately absent too — account erasure unsets it, the same treatment
+        // as `orders`'.
+        expect(requiredPaths(paymentSchema)).toEqual(['amount', 'currency', 'orderId', 'provider']);
     });
 
     it('allows at most one payment per order, in the database', () => {

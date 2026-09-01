@@ -17,14 +17,17 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     payments["payments<br/><i>this module</i>"]
+    account["account"]
     inventory["inventory"]
     orders["orders"]
     users["users"]
 
+    account --> payments
     payments --> inventory
     payments --> orders
     payments --> users
     orders -. "order.cancelled" .-> payments
+    users -. "user.deleted" .-> payments
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -32,7 +35,7 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
     class inventory supporting;
-    class users generic;
+    class account,users generic;
     class payments centre;
 ```
 

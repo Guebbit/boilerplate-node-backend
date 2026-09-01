@@ -10,7 +10,24 @@
 
 <!-- module-graph:feedback:start -->
 
-_Nothing reaches `feedback` and it reaches nothing — no imports either way, no events either way. Deleting it takes one folder and this page, and no other page changes._
+_Solid arrows are imports. Dotted arrows are domain events — the return path an import
+graph cannot see._
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
+flowchart LR
+    feedback["feedback<br/><i>this module</i>"]
+    account["account"]
+
+    account --> feedback
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class account generic;
+    class feedback centre;
+```
 
 <!-- module-graph:feedback:end -->
 

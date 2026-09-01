@@ -210,6 +210,29 @@ export const routeFlagMock = () => ({
 });
 
 /**
+ * Replacement for `@kernel/middlewares/authorizations`'s two step-up factories.
+ *
+ * `isAuth`/`isAdmin`/`getAuth` pass through unchanged from the actual module — they are declared
+ * functions and already arrive named. Only `requireFreshAuth`/`requireFreshAuthWhen` are
+ * factories, and the tier (`maxAgeSeconds`) each call closes over is exactly the argument a
+ * step-up-auth assertion needs to see: which routes are gated is only half the property, the
+ * other half is gated at the RIGHT tier.
+ */
+export const authGuardsMock = () => {
+    const actual = jest.requireActual<typeof import('@kernel/middlewares/authorizations')>(
+        '@kernel/middlewares/authorizations'
+    );
+
+    return {
+        ...actual,
+        __esModule: true,
+        requireFreshAuth: (maxAgeSeconds: number) => labelled(`requireFreshAuth(${maxAgeSeconds})`),
+        requireFreshAuthWhen: (_predicate: unknown, maxAgeSeconds: number) =>
+            labelled(`requireFreshAuthWhen(${maxAgeSeconds})`)
+    };
+};
+
+/**
  * Replacement for `@infrastructure/adapters/storage`'s `upload`.
  *
  * Calls THROUGH to the real `upload.single` and prepends the label, so the field name becomes

@@ -415,6 +415,13 @@ components:
                     type: string
                 website:
                     type: string
+                # A tri-state, and absent IS the third one: `granted`/`denied` are the only two a
+                # client may ever WRITE, and "never asked" is not a value anyone sends, it is what
+                # an account looks like before they have. Read by `emitAnalyticsEvent`'s own
+                # consent gate (`observability/analytics/index.ts`), nowhere else.
+                analyticsConsent:
+                    type: string
+                    enum: [granted, denied]
                 createdAt:
                     type: string
                     format: date-time
@@ -587,10 +594,13 @@ components:
         Order:
             type: object
             additionalProperties: false
-            required: [id, userId, email, items, totalItems, totalQuantity, totalPrice, status]
+            required: [id, email, items, totalItems, totalQuantity, totalPrice, status]
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
+                # Absent once the account that placed this order has been erased. The order
+                # survives (it is the invoice); the foreign key does not, because the account it
+                # named no longer exists.
                 userId:
                     $ref: '#/components/schemas/Id'
                 email:
@@ -740,6 +750,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account'
     /account/password:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password'
+    /account/reauth:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reauth'
     /account/logout:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1logout'
     /account/sessions:
@@ -770,6 +782,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1logout-all'
     /account/tokens/expired:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1tokens~1expired'
+    /account/export:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1export'
 
     # ---------- users ----------
     /users:

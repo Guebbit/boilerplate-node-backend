@@ -12,6 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { createProduct } from '@modules/products/tests/fixtures';
+import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import { userRepository } from '@modules/users';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
 import * as mailerPort from '@infrastructure/adapters/mailer';
@@ -21,9 +22,9 @@ setupTestDb();
 /*
  * The mailer is REPLACED, not spied on — same reasoning as the audit/analytics ports elsewhere
  * (`jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes
- * under swc). Needed here because `tokens[].token` is a digest at rest (BETTER_SECURITY.md wave
- * 3.1): the plaintext verify token this suite submits to `/account/verify-confirm` only ever
- * exists in the emailed link, never in storage — see `verifyTokenFromMail` below.
+ * under swc). Needed here because `tokens[].token` is a digest at rest: the plaintext verify
+ * token this suite submits to `/account/verify-confirm` only ever exists in the emailed link,
+ * never in storage — see `verifyTokenFromMail` below.
  */
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -70,9 +71,9 @@ const readVerifyToken = async (userId: string) => {
 
 /**
  * The PLAINTEXT verify token from the most recently queued mail — what the link in the email
- * actually carries. `tokens[].token` is a `hashToken` digest at rest (BETTER_SECURITY.md wave
- * 3.1), so this suite cannot read the usable token back from storage; it has to observe it the
- * same way the account holder would, via `verifyRequestEmail`'s `linkUrl` (`.../verify/<token>`).
+ * actually carries. `tokens[].token` is a `hashToken` digest at rest, so this suite cannot read
+ * the usable token back from storage; it has to observe it the same way the account holder
+ * would, via `verifyRequestEmail`'s `linkUrl` (`.../verify/<token>`).
  *
  * Reads `mailerPort.enqueueEmail` directly rather than through `observePort` (`@tests/ports`):
  * that helper CLEARS the mock's history on hand-out, which would erase the very call this reads.
@@ -235,6 +236,100 @@ describe('POST /account/password', () => {
             password: 'brand-new-secret',
             passwordConfirm: 'brand-new-secret'
         });
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /account/reauth', () => {
+    it('re-mints the session with a fresh access token', async () => {
+        const { bearer } = await loginWithCookie();
+
+        const response = await api()
+            .post('/account/reauth')
+            .set('Authorization', bearer)
+            .send({ password: PLAIN_PASSWORD });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        expect(typeof response.body.data.token).toBe('string');
+    });
+
+    it('matches the error contract for a wrong password — 422, never 401', async () => {
+        // Same reasoning POST /account/password already established: a 401 here reads as
+        // "session expired" to a client interceptor and would log out a session that is, in
+        // fact, still perfectly valid — the opposite of what re-authentication exists to do.
+        const { bearer } = await loginWithCookie();
+
+        const response = await api()
+            .post('/account/reauth')
+            .set('Authorization', bearer)
+            .send({ password: 'wrong-guess' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract when unauthenticated', async () => {
+        const response = await api().post('/account/reauth').send({ password: PLAIN_PASSWORD });
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('sets a fresh refresh cookie too, same as POST /account/password', async () => {
+        const { bearer } = await loginWithCookie();
+
+        const response = await api()
+            .post('/account/reauth')
+            .set('Authorization', bearer)
+            .send({ password: PLAIN_PASSWORD });
+
+        const setCookie = response.headers['set-cookie'] ?? [];
+        const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
+        expect(cookies.some((cookie: string) => cookie.startsWith('jwt='))).toBe(true);
+    });
+});
+
+describe('POST /account/export', () => {
+    it("returns the caller's own data across collections, and satisfies the contract", async () => {
+        const { user, bearer } = await loginWithCookie();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 2)]);
+
+        const response = await api().post('/account/export').set('Authorization', bearer).send();
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const { data } = response.body as {
+            data: {
+                profile: { email: string };
+                orders: { id: string }[];
+                cart: unknown[];
+                wishlist: unknown[];
+                sessions: { id: string; type: string }[];
+            };
+        };
+        expect(data.profile.email).toBe(user.email);
+        expect(data.orders.map((each) => each.id)).toContain(String(order._id));
+        expect(data.sessions.some((session) => session.type === 'refresh')).toBe(true);
+    });
+
+    it("never includes another account's orders", async () => {
+        const { bearer } = await loginWithCookie();
+        const stranger = await createUser({ email: 'export-stranger@example.com' });
+        const product = await createProduct();
+        const strangerOrder = await createOrder(stranger, [toOrderItem(product, 1)]);
+
+        const response = await api().post('/account/export').set('Authorization', bearer).send();
+
+        const { data } = response.body as { data: { orders: { id: string }[] } };
+        expect(data.orders.map((each) => each.id)).not.toContain(String(strangerOrder._id));
+    });
+
+    it('matches the error contract when unauthenticated', async () => {
+        const response = await api().post('/account/export').send();
 
         expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();

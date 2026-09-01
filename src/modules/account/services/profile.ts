@@ -73,8 +73,8 @@ export const validatePasswordChange = (
 
 /**
  * Change user password with validation, then revoke every refresh token on the account.
- * BETTER_SECURITY.md wave 1.1: the funnel both `passwordResetChange` and
- * `passwordChangeWithCurrent` end at, so a future third caller gets the revoke for free. Order
+ * The funnel both `passwordResetChange` and `passwordChangeWithCurrent` end at, so a future
+ * third caller gets the revoke for free. Order
  * matters — save first, revoke second: a revoke landing against a password write that then fails
  * would log everyone out for nothing. The revoke's own failure is swallowed rather than turned
  * into a rejection: the password write already succeeded, and a lost revoke is defense in depth
@@ -220,6 +220,9 @@ const zodProfileSchema = zodUserSchema
         imageUrl: UpdateAccountBody.shape.imageUrl,
         phone: UpdateAccountBody.shape.phone,
         website: UpdateAccountBody.shape.website,
+        // The tri-state write; absence still means "leave it alone", same as every other field
+        // here, not "withdraw consent".
+        analyticsConsent: UpdateAccountBody.shape.analyticsConsent,
         // Not on `UpdateAccountBody` — both are `readOnly`/absent from the contract because the
         // server, not the client, produces them. They ride along here only because the controller
         // passes them from its own `readUploadedImage` call, the same way `imageUrl` does when an

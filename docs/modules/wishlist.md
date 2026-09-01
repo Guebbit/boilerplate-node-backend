@@ -17,10 +17,12 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     wishlist["wishlist<br/><i>this module</i>"]
+    account["account"]
     cart["cart"]
     products["products"]
     users["users"]
 
+    account --> wishlist
     wishlist --> cart
     wishlist --> products
     wishlist --> users
@@ -32,7 +34,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class users generic;
+    class account,users generic;
     class wishlist centre;
 ```
 

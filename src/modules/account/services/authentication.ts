@@ -91,9 +91,9 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
 
 /**
  * A bcrypt hash of no real password, computed once at import time (a one-time boot cost, not a
- * per-request one). BETTER_SECURITY.md 3.3b: `login` compares against this on an unknown email,
- * so "no such account" costs the same as "wrong password" — without it, bcrypt's own cost is
- * exactly what makes the fast path a timing oracle for enumerating registered addresses.
+ * per-request one). `login` compares against this on an unknown email, so "no such account"
+ * costs the same as "wrong password" — without it, bcrypt's own cost is exactly what makes the
+ * fast path a timing oracle for enumerating registered addresses.
  */
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12);
 
@@ -237,7 +237,7 @@ class MissingRefreshTokenError extends Error {
 
 /**
  * Exchange a refresh token for a fresh access token, ROTATING the refresh token in the same
- * breath (BETTER_SECURITY.md wave 3.2), and recording the attempt either way. Takes the cookie as
+ * breath, and recording the attempt either way. Takes the cookie as
  * found, absence included, so all three ordinary outcomes — missing, invalid, valid — are decided
  * and recorded here; a fourth, reuse of an already-rotated token, gets its own audit action and
  * `metadata.reason` rather than being folded into `invalid_token`, since it is a materially
@@ -408,7 +408,7 @@ export const login = (
             // blocks a deactivated account at the front door, same clause `findAuthenticatableById` uses.
             .findOneWithCredentials({ email, active: { $ne: false }, deletedAt: undefined })
             .then((user) => {
-                // BETTER_SECURITY.md 3.3b: compare against DUMMY_PASSWORD_HASH on a miss, so an
+                // Compare against DUMMY_PASSWORD_HASH on a miss, so an
                 // unknown email costs the same as a wrong password — an unconditional `return`
                 // here would answer 401 before bcrypt's own cost, the timing gap that lets an
                 // attacker tell "no such account" from "wrong password" by response time alone.
@@ -472,3 +472,56 @@ export const tokenRemoveAll = (
             });
             return result;
         });
+
+/**
+ * Re-authenticate an already-signed-in caller by password — the verification half of
+ * `POST /account/reauth`. Re-minting the session (a fresh `auth_time`) is
+ * the CONTROLLER's job via `issueSession`, mirroring how `passwordChange` itself stays separate
+ * from `postPasswordChange`'s re-mint — this function only proves the password and audits the
+ * attempt.
+ *
+ * Proves identity the way `passwordChangeWithCurrent` does — bcrypt against the caller's own
+ * stored hash, 422 on a mismatch rather than 401. NOT `login`'s path, deliberately: `login`'s 401
+ * and its 3.3b dummy-compare exist to stop an ANONYMOUS caller from telling "no such account"
+ * apart from "wrong password" by timing, and there is no such caller here — the access token
+ * already names exactly who is asking, so there is nothing left to protect by hiding the failure
+ * behind the same status code login uses. A 401 here would actively hurt: it reads as "session
+ * expired" to a client interceptor and would log out a session that is, in fact, still perfectly
+ * valid — the opposite of what a re-authentication endpoint exists to do. The active/deletedAt
+ * gate `isAuth` already ran for this very request is not re-checked either, for the same reason
+ * `passwordChangeWithCurrent` and `updateProfile` don't re-check it.
+ *
+ * @param userId - the caller's own id, from their already-verified access token
+ * @param password - the password to confirm against the stored hash
+ * @param context - for the audit record
+ */
+export const reauth = (
+    userId: string,
+    password: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = userRepository
+        // `password` is select:false — proving identity is this flow's whole point.
+        .findByIdWithCredentials(userId)
+        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+            // Gone-but-verified is 401 — same rule `updateProfile`/`passwordChangeWithCurrent`
+            // follow, and `openapi.yaml` declares no 404 here either.
+            if (!user) return generateReject(401, []);
+
+            return bcrypt.compare(password, user.password).then((doMatch) => {
+                if (!doMatch) return generateReject(422, [t('account.reauth.wrong-password')]);
+                return generateSuccess<UserDocument>(user);
+            });
+        })
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+
+    return outcome.then((result) => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: accountAuditActions.AUTH_REAUTHENTICATED,
+                outcome: result.success ? 'success' : 'failure'
+            })
+        );
+        return result;
+    });
+};

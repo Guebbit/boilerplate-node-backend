@@ -73,6 +73,19 @@ export const authPasswordChangeTotal = new Counter({
 });
 
 /**
+ * Step-up re-authentication attempts.
+ * The failure series here is a sharper signal than a login failure: it means someone HOLDING a
+ * live, valid session cannot produce the password behind it — a stolen-session probe, not a
+ * mistyped credential from someone who was never signed in.
+ */
+export const authReauthTotal = new Counter({
+    name: 'auth_reauth_total',
+    help: 'Total step-up re-authentication attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
  * Email-verification confirmations (the token-spending step, not the send).
  * The send is not counted: it rides the email queue, whose own metrics say whether mail moves.
  * What no other signal answers is how many verification links actually get clicked — the

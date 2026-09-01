@@ -60,7 +60,8 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                     admin: user.admin ?? false,
                     imageUrl: user.imageUrl,
                     authTime: user.authTime,
-                    amr: user.amr
+                    amr: user.amr,
+                    analyticsConsent: user.analyticsConsent
                 };
             }
         })
@@ -189,7 +190,8 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
                 admin: true,
                 imageUrl: user.imageUrl,
                 authTime: user.authTime,
-                amr: user.amr
+                amr: user.amr,
+                analyticsConsent: user.analyticsConsent
             };
             next();
         })
@@ -201,8 +203,8 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
 };
 
 /**
- * The two step-up tiers BETTER_SECURITY.md wave 4 defines, read through `environmentNumber`
- * exactly like the token TTLs are. Kernel-level, not `account`'s: `requireFreshAuth` is mounted
+ * The two step-up tiers, read through `environmentNumber` exactly like the token TTLs are.
+ * Kernel-level, not `account`'s: `requireFreshAuth` is mounted
  * by any module with a money or identity route — `cart`, `payments`, `account` itself — and none
  * of them may reach into a sibling's config to get at it.
  */

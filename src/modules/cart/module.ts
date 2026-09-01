@@ -6,7 +6,8 @@
  *
  * ── Position ───────────────────────────────────────────────────────────────────────────────
  * Reaches:      account, delivery, inventory, orders, products, users
- * Reached by:   wishlist (the move-to-cart exit)
+ * Reached by:   wishlist (the move-to-cart exit); account (the data export reads the caller's
+ *               own cart)
  * Not imports:  `20260808160000-cart-collection.js` creates this module's collection and reads
  *               `users` to do it.
  *

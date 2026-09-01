@@ -62,11 +62,17 @@ const REFUNDABLE_PAYMENT_STATUS: PaymentStatus = 'succeeded';
  * An unresolvable payer does NOT refuse the payment: orders survive account deletion, so the
  * order's id is kept and the gap logged.
  *
- * @param orderUserId - the account id the order carries
- * @returns the id to persist on the payment
+ * `orderUserId` is `undefined` for an order whose account has already been detached (erased) —
+ * a live admin intent against a long-erased order's own account is gone, not merely
+ * unresolvable, so there is nothing to look up or fall back to.
+ *
+ * @param orderUserId - the account id the order carries, or `undefined` once detached
+ * @returns the id to persist on the payment, or `undefined` to persist none
  */
-const resolvePayerId = (orderUserId: string): Promise<string> =>
-    userRepository
+const resolvePayerId = (orderUserId: string | undefined): Promise<string | undefined> => {
+    if (orderUserId === undefined) return Promise.resolve(undefined);
+
+    return userRepository
         .findById(orderUserId)
         .then((user) => {
             if (user) return user.id;
@@ -76,6 +82,7 @@ const resolvePayerId = (orderUserId: string): Promise<string> =>
             return orderUserId;
         })
         .catch(() => orderUserId);
+};
 
 /**
  * Which payments a caller may read — the same rule `orderService.callerScope` applies, over this
@@ -109,7 +116,7 @@ export const createIntent = (
                 { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
             ]);
 
-        return resolvePayerId(String(order.userId))
+        return resolvePayerId(order.userId ? String(order.userId) : undefined)
             .then((payerId) =>
                 paymentRepository.upsertIntent(orderId, payerId, {
                     amount: orderTotal(order),
@@ -368,10 +375,39 @@ export const refundForOrder = (orderId: string): Promise<void> =>
     performRefund(orderId).then(() => undefined);
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
+/**
+ * `USER_DELETED`'s listener. Unsets `userId` on every payment this account
+ * made; the payment row itself is never touched, same as `orders`' detach.
+ *
+ * @param userId - the erased account's id
+ */
+export const detachUserId = (userId: string): Promise<void> =>
+    paymentRepository.detachUserId(userId).then((detached) => {
+        if (detached > 0)
+            logger.info({
+                message: 'Detached payments from an erased account.',
+                userId,
+                detached
+            });
+    });
+
+/**
+ * Every payment this account made — for the account's own data export. Unpaginated on purpose:
+ * an export is a one-time full answer, not a listing a client pages through.
+ *
+ * @param userId - the caller's own id
+ */
+export const findOwnPayments = (userId: string): Promise<PaymentDocument[]> =>
+    // `limit` well past `findAll`'s own 1000-row default — an export answers "all of it", not a
+    // page of it.
+    paymentRepository.findAll(paymentRepository.ownerScope(userId), { limit: 100_000 });
+
 export const paymentService = {
     createIntent,
     confirmPayment,
     getForOrder,
     refundForOrder,
-    refundByOrder
+    refundByOrder,
+    detachUserId,
+    findOwnPayments
 };
