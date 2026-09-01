@@ -163,7 +163,8 @@ export const passwordResetChange = (
  * Hard-delete the caller's own account, confirmed by a one-time token.
  * Wraps `userService.remove` rather than emitting inside it: `remove` is also `removeById`'s
  * last step for the admin `DELETE /users/:id`, which already reports its own
- * `ADMIN_USER_DELETED`. Emitting inside `remove` would double up there, and — worse — misattribute
+ * `ADMIN_USER_ERASED`/`ADMIN_USER_SOFT_DELETED`. Emitting inside `remove` would double up there,
+ * and — worse — misattribute
  * it: this event's `actor_user_id`/`actor_role` are the deleted account's own, correct for a
  * self-delete but backwards for an admin's.
  */

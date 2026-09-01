@@ -43,8 +43,14 @@ export interface DeleteControllerSpec {
     entity: string;
     /** The service call. `hardDelete` true destroys the row; false stamps `deletedAt`. */
     remove: (id: string, hardDelete: boolean) => Promise<RemoveResult>;
-    /** The module's own audit action for a successful delete. */
-    auditAction: AuditAction;
+    /**
+     * The module's own audit action for a successful delete — a fixed action, or a function of
+     * `hardDelete` for a module where soft and hard delete are different enough facts to want
+     * different action strings (GDPR_FIX.md G3: `users` splits them so the audit trail can answer
+     * "was this erasure request actually discharged" — only `hardDelete: true` scrubs the record;
+     * the soft path is reversible and does not).
+     */
+    auditAction: AuditAction | ((hardDelete: boolean) => AuditAction);
     /** The i18n key answered when the id is well-formed but matches nothing. */
     notFoundKey: string;
 }
@@ -92,7 +98,10 @@ export const createDeleteController = ({
 
                     emitAuditEvent(
                         buildAuditEvent(callerContextOf(request), {
-                            action: auditAction,
+                            action:
+                                typeof auditAction === 'function'
+                                    ? auditAction(hardDelete)
+                                    : auditAction,
                             outcome: 'success',
                             target_type: entity,
                             target_id: id,

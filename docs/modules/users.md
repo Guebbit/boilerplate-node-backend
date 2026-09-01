@@ -89,6 +89,17 @@ flowchart LR
     class C,W,AB,SU done;
 ```
 
+## Soft delete vs. erasure
+
+`DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, nothing else moves, and a
+second `DELETE` restores it. `?hardDelete=true` is the one that fires `user.deleted` (the cascade
+above) and actually removes the row.
+
+Only the hard path **discharges an Art. 17 erasure request** (GDPR_FIX.md G3). The audit trail says
+so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.user.erased` — two
+actions rather than one `admin.user.deleted`, so "was this request actually closed out" is
+answerable from the log alone, not from remembering which flag an admin clicked.
+
 ## Related pages
 
 - [Modules overview](./index.md) — the whole context map

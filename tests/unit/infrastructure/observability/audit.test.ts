@@ -64,7 +64,7 @@ describe('emitAuditEvent', () => {
 
     it('passes all event fields through to the logger', () => {
         const event: AuditEvent = {
-            action: 'admin.user.deleted',
+            action: 'admin.user.erased',
             actor_user_id: 'admin-456',
             actor_role: 'admin',
             outcome: 'success',
@@ -78,7 +78,7 @@ describe('emitAuditEvent', () => {
         emitAuditEvent(event);
 
         const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, AuditEvent];
-        expect(call[2].action).toBe('admin.user.deleted');
+        expect(call[2].action).toBe('admin.user.erased');
         expect(call[2].target_type).toBe('user');
         expect(call[2].target_id).toBe('user-789');
         expect(call[2].trace_id).toBe('trace-001');

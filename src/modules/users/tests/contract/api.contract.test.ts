@@ -8,8 +8,20 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createUser } from '@modules/users/tests/fixtures';
+import * as auditPort from '@infrastructure/observability/audit';
+import { observePort } from '@tests/ports';
 
 setupTestDb();
+
+/*
+ * The audit port is REPLACED, not spied on — `jest.spyOn` cannot redefine the non-configurable
+ * getter a CommonJS namespace import exposes under swc. See `tests/support/ports.ts`.
+ */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
 
 // Serializes the payload and checks for credential fields/values that must never leave the API.
 const assertNoCredentials = (payload: unknown) => {
@@ -198,5 +210,47 @@ describe('PUT /users/{id}', () => {
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
+    });
+});
+
+describe('DELETE /users/{id} — the audit action names which discharge happened (GDPR_FIX.md G3)', () => {
+    it('soft delete audits admin.user.soft_deleted, not an erasure', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'soft-delete@example.com' });
+
+        const response = await api()
+            .delete(`/users/${String(target._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: 'admin.user.soft_deleted',
+                outcome: 'success',
+                metadata: { hardDelete: false }
+            })
+        );
+    });
+
+    it('?hardDelete=true audits admin.user.erased — the one that discharges an Art. 17 request', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'hard-delete@example.com' });
+
+        const response = await api()
+            .delete(`/users/${String(target._id)}?hardDelete=true`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: 'admin.user.erased',
+                outcome: 'success',
+                metadata: { hardDelete: true }
+            })
+        );
     });
 });

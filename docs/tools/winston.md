@@ -44,7 +44,7 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 
 ## Audit events
 
-`emitAuditEvent` (in `src/infrastructure/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login`, `admin.user.deleted`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
+`emitAuditEvent` (in `src/infrastructure/observability/audit.ts`) is the only entry point for auditable actions. Each event has a stable `action` (`auth.login`, `admin.user.erased`, …), an `outcome` (`success` / `failure`), and a `level` derived from the outcome.
 
 ```json
 {

@@ -13,10 +13,16 @@ import { usersAuditActions } from '../audit';
  * DELETE /users — delete a user by id in the request body (admin).
  * DELETE /users/:id — delete by path id. `?hardDelete=true` deletes permanently, else soft.
  * Hard delete announces `USER_DELETED`, cascading to cart, wishlist and address book.
+ *
+ * Only `?hardDelete=true` discharges an Art. 17 erasure request (GDPR_FIX.md G3) — the audit
+ * action names which one happened, so the trail itself can answer that question later.
  */
 export const deleteUsers = createDeleteController({
     entity: 'user',
     remove: (id, hardDelete) => userService.removeById(id, hardDelete),
-    auditAction: usersAuditActions.ADMIN_USER_DELETED,
+    auditAction: (hardDelete) =>
+        hardDelete
+            ? usersAuditActions.ADMIN_USER_ERASED
+            : usersAuditActions.ADMIN_USER_SOFT_DELETED,
     notFoundKey: 'users.not-found'
 });
