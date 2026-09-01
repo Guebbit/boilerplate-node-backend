@@ -52,7 +52,8 @@ export default withMermaid(
                             { text: 'Tactical DDD', link: '/theory/tactical-ddd' },
                             { text: 'Request Flow', link: '/theory/request-flow' },
                             { text: 'Request Input', link: '/theory/request-input' },
-                            { text: 'Clustering & Shutdown', link: '/theory/clustering' }
+                            { text: 'Clustering & Shutdown', link: '/theory/clustering' },
+                            { text: 'Web Attack Catalog', link: '/theory/web-attack-catalog' }
                         ]
                     }
                 ],

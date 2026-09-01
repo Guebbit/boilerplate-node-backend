@@ -614,7 +614,8 @@ reads edges — named the owner immediately:
 ```
 
 78 buffers, 95% of all buffer bytes, **17.0 MB each**, held by a variable named `buffer` in a module
-scope. That is `node_modules/bson/lib/bson.cjs`:
+scope. That is `node_modules/bson/lib/bson.cjs`, compiled from upstream
+[`src/bson.ts`](https://github.com/mongodb/js-bson/blob/main/src/bson.ts):
 
 ```js
 const MAXSIZE = 1024 * 1024 * 17;
@@ -642,8 +643,18 @@ The cap only ever decided _when_ the worker died, never _whether_ it grew.
 **What is left.** The repo cannot share one `bson` across registries: jest routes even
 `createRequire` through its own resolver, and `process` and the core-module objects are re-created
 per test file, so every channel a shim could use is isolated by design. The remaining levers are
-Stryker's `maxTestRunnerReuse` (restart the runner every _n_ mutants — supported, and documented
-upstream for exactly this situation) and an upstream report against `bson`.
+Stryker's `maxTestRunnerReuse` (restart the runner every _n_ mutants) and an upstream report against
+`bson` — the latter not yet filed; nothing on `mongodb/js-bson` names this eager module-scope
+allocation as a leak (checked 2026-09-01).
+
+The former is not a workaround invented under pressure — it is Stryker's own sanctioned answer to a
+dependency holding module-scope state a reused worker can't shed.
+[stryker-mutator/stryker-js#2922](https://github.com/stryker-mutator/stryker-js/issues/2922)
+documents the same class of problem for native ESM (a reused worker can't reset a module's state
+between mutants, since Node has no `require.cache` equivalent for ESM) and prescribes
+`maxTestRunnerReuse: 1` as the fix. [The option's own docs](https://stryker-mutator.io/docs/stryker-js/configuration/#maxtestrunnerreuse-number)
+frame it the same way: _"Not recommended unless you are experiencing memory leaks that you are
+unable to resolve"_ — this is that case, not a special one.
 
 **The lever that looks right and is not.** Jest's `workerIdleMemoryLimit` recycles a worker once it
 passes a memory bound, which is the plain-jest analogue of `maxTestRunnerReuse` and the first thing

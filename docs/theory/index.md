@@ -139,5 +139,6 @@ the point.
 | Follow one request end-to-end            | [Request Flow](./request-flow.md)                                           |
 | Know which sources an endpoint reads     | [Request Input](./request-input.md)                                         |
 | Understand process model & shutdown      | [Clustering & Shutdown](./clustering.md)                                    |
+| Know every attack a site can receive     | [Web Attack Catalog](./web-attack-catalog.md)                               |
 | Understand dependency choices            | [Tools](../tools/)                                                          |
 | Change contract, types, or mocks         | [API](../api/)                                                              |
