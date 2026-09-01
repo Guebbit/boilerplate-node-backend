@@ -13,6 +13,14 @@ import { requestLogger } from '@infrastructure/http/middlewares/request-logger';
 import { attachLocale } from '@infrastructure/http/middlewares/locale';
 
 /**
+ * Matches a canonical UUID (any RFC 4122 version/variant) — the only shape `x-request-id` is
+ * trusted in from a client. BETTER_SECURITY.md 3.3d: this value reaches Winston and every audit
+ * entry verbatim, so an unvalidated one is a log-injection vector (newlines, control characters,
+ * an arbitrarily long string) rather than just a correlation id.
+ */
+const REQUEST_ID_PATTERN = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+
+/**
  * Install request-id generation, access logging, the observability context and locale negotiation.
  *
  * @param app - the express application to configure
@@ -22,7 +30,11 @@ export const installRequestContext = (app: Express): void => {
      * Request ID middleware — reuse client ID or generate new UUID
      */
     app.use((request, response, next) => {
-        const requestId = request.get('x-request-id') ?? crypto.randomUUID();
+        const clientRequestId = request.get('x-request-id');
+        const requestId =
+            clientRequestId && REQUEST_ID_PATTERN.test(clientRequestId)
+                ? clientRequestId
+                : crypto.randomUUID();
         request.requestId = requestId;
         response.setHeader('x-request-id', requestId);
         next();

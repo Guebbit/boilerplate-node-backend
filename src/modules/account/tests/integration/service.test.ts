@@ -11,7 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/fixtures';
 import { accountService } from '@modules/account/services';
-import { userRepository } from '@modules/users';
+import { userRepository, hashToken } from '@modules/users';
 import { TokenType, type Token, type UserDocument } from '@modules/users';
 import { asReject, asSuccess } from '@tests/response';
 import * as analyticsPort from '@infrastructure/observability/analytics';
@@ -315,7 +315,8 @@ describe('tokenAdd', () => {
             email: 'tokenadd@example.com'
         });
         expect(stored?.tokens).toHaveLength(1);
-        expect(stored?.tokens[0]?.token).toBe(token);
+        // Hashed at rest (wave 3.1) — the returned `token` is the plaintext, storage holds its digest.
+        expect(stored?.tokens[0]?.token).toBe(hashToken(token));
         expect(stored?.tokens[0]?.type).toBe(TokenType.PASSWORD_RESET);
     });
 
@@ -351,7 +352,7 @@ describe('tokenAdd', () => {
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token).toSorted()).toEqual(
-            [first, second].toSorted()
+            [first, second].map((value) => hashToken(value)).toSorted()
         );
     });
 

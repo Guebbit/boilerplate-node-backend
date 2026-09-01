@@ -18,7 +18,7 @@ import {
 } from '@modules/account/session/jwt';
 import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { TokenType } from '@modules/users';
-import { userRepository } from '@modules/users';
+import { userRepository, hashToken } from '@modules/users';
 
 setupTestDb();
 
@@ -150,9 +150,9 @@ describe('createRefreshToken', () => {
         const issued = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
 
         // `tokens` is select:false, so it has to be re-read explicitly — the same way the
-        // revocation lookup does.
+        // revocation lookup does. Stored as a digest (wave 3.1), never the plaintext `issued`.
         const reloaded = await userRepository.findByIdWithCredentials(String(user._id));
-        const stored = reloaded!.tokens.find((entry) => entry.token === issued);
+        const stored = reloaded!.tokens.find((entry) => entry.token === hashToken(issued));
 
         expect(stored).toBeDefined();
         // The type matters: `tokenRemoveAll(REFRESH)` is what logout calls, and a token filed

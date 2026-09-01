@@ -14,8 +14,22 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { createProduct } from '@modules/products/tests/fixtures';
 import { userRepository } from '@modules/users';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
+import * as mailerPort from '@infrastructure/adapters/mailer';
 
 setupTestDb();
+
+/*
+ * The mailer is REPLACED, not spied on — same reasoning as the audit/analytics ports elsewhere
+ * (`jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes
+ * under swc). Needed here because `tokens[].token` is a digest at rest (BETTER_SECURITY.md wave
+ * 3.1): the plaintext verify token this suite submits to `/account/verify-confirm` only ever
+ * exists in the emailed link, never in storage — see `verifyTokenFromMail` below.
+ */
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/adapters/mailer'),
+    enqueueEmail: jest.fn().mockResolvedValue(undefined)
+}));
 
 /** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
 const MISSING_ID = '65dc8a99604c307b702b5ccc';
@@ -48,10 +62,30 @@ const loginWithCookie = async (overrides: Parameters<typeof createUser>[0] = {})
     };
 };
 
-/** The stored verify-token value for a user — what the emailed link would carry. */
+/** Whether the account holds a verify token — a digest at rest, so only presence is checkable. */
 const readVerifyToken = async (userId: string) => {
     const stored = await userRepository.findByIdWithCredentials(userId);
     return stored?.tokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)?.token;
+};
+
+/**
+ * The PLAINTEXT verify token from the most recently queued mail — what the link in the email
+ * actually carries. `tokens[].token` is a `hashToken` digest at rest (BETTER_SECURITY.md wave
+ * 3.1), so this suite cannot read the usable token back from storage; it has to observe it the
+ * same way the account holder would, via `verifyRequestEmail`'s `linkUrl` (`.../verify/<token>`).
+ *
+ * Reads `mailerPort.enqueueEmail` directly rather than through `observePort` (`@tests/ports`):
+ * that helper CLEARS the mock's history on hand-out, which would erase the very call this reads.
+ */
+const verifyTokenFromMail = (): string => {
+    const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
+        typeof mailerPort.enqueueEmail
+    >;
+    const lastCall = enqueueEmail.mock.calls.at(-1);
+    const data = lastCall?.[2] as { linkUrl?: string } | undefined;
+    const token = /\/([\da-f]{16,})$/.exec(data?.linkUrl ?? '')?.[1];
+    if (!token) throw new Error('no verify token found in the queued mail');
+    return token;
 };
 
 /** `Max-Age` of the named cookie on a response, in seconds. */
@@ -404,7 +438,7 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         expect(request.status).toBe(200);
         expect(request).toSatisfyApiSpec();
 
-        const token = await readVerifyToken(user.id);
+        const token = verifyTokenFromMail();
         const confirm = await api().post('/account/verify-confirm').send({ token });
         expect(confirm.status).toBe(200);
         expect(confirm).toSatisfyApiSpec();
@@ -432,9 +466,9 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
     });
 
     it('a token spends exactly once', async () => {
-        const { user, bearer } = await loginWithCookie();
+        const { bearer } = await loginWithCookie();
         await api().post('/account/verify-request').set('Authorization', bearer);
-        const token = await readVerifyToken(user.id);
+        const token = verifyTokenFromMail();
 
         const first = await api().post('/account/verify-confirm').send({ token });
         const second = await api().post('/account/verify-confirm').send({ token });

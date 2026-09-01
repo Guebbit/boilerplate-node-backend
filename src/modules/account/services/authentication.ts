@@ -90,6 +90,14 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
     });
 
 /**
+ * A bcrypt hash of no real password, computed once at import time (a one-time boot cost, not a
+ * per-request one). BETTER_SECURITY.md 3.3b: `login` compares against this on an unknown email,
+ * so "no such account" costs the same as "wrong password" — without it, bcrypt's own cost is
+ * exactly what makes the fast path a timing oracle for enumerating registered addresses.
+ */
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12);
+
+/**
  * The `tokens.type` a password-reset link carries.
  *
  * Named here rather than spelled at each call site because it is policy, not detail: it used to
@@ -386,12 +394,17 @@ export const login = (
             // blocks a deactivated account at the front door, same clause `findAuthenticatableById` uses.
             .findOneWithCredentials({ email, active: { $ne: false }, deletedAt: undefined })
             .then((user) => {
-                if (!user) return generateReject(401, [t('account.login.wrong-data')]);
-
-                return bcrypt.compare(password ?? '', user.password).then((doMatch) => {
-                    if (!doMatch) return generateReject(401, [t('account.login.wrong-data')]);
-                    return generateSuccess<UserDocument>(user);
-                });
+                // BETTER_SECURITY.md 3.3b: compare against DUMMY_PASSWORD_HASH on a miss, so an
+                // unknown email costs the same as a wrong password — an unconditional `return`
+                // here would answer 401 before bcrypt's own cost, the timing gap that lets an
+                // attacker tell "no such account" from "wrong password" by response time alone.
+                return bcrypt
+                    .compare(password ?? '', user?.password ?? DUMMY_PASSWORD_HASH)
+                    .then((doMatch) => {
+                        if (!user || !doMatch)
+                            return generateReject(401, [t('account.login.wrong-data')]);
+                        return generateSuccess<UserDocument>(user);
+                    });
             })
             .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
     );

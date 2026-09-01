@@ -7,7 +7,13 @@
  */
 
 import type { Session } from '@types';
-import { userRepository, TokenType, type Token, type UserDocument } from '@modules/users';
+import {
+    userRepository,
+    TokenType,
+    hashToken,
+    type Token,
+    type UserDocument
+} from '@modules/users';
 import { userService } from '@modules/users';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
@@ -28,7 +34,10 @@ export const findLiveToken = (
     userRepository.findByToken(token, type).then((user) => {
         if (!user) return undefined;
 
-        const entry = user.tokens.find((tk) => tk.token === token && tk.type === type);
+        // `tokens[].token` is hashed at rest (wave 3.1) — hash `token` the same way to re-find it
+        // on the just-loaded document.
+        const digest = hashToken(token);
+        const entry = user.tokens.find((tk) => tk.token === digest && tk.type === type);
         if (!entry) return undefined;
         if (entry.expiration && entry.expiration < new Date()) return undefined;
 
@@ -51,7 +60,8 @@ export const spendLiveToken = (user: UserDocument, token: string): Promise<boole
  * Maps one stored refresh token to the wire's `Session`. The token VALUE never leaves this
  * function — a live refresh token is as good as a password — so the subdocument id is the
  * handle; `current` compares against the caller's own refresh cookie (bearer-only callers have
- * none, so every entry there is honestly `current: false`).
+ * none, so every entry there is honestly `current: false`). `cookieToken` is hashed before the
+ * comparison, since `token.token` is a digest at rest (wave 3.1).
  */
 const toSession = (token: Token, cookieToken?: string): Session => ({
     id: String(token._id),
@@ -59,7 +69,7 @@ const toSession = (token: Token, cookieToken?: string): Session => ({
     // Absent until this token has been exchanged at least once — an unused session reads as
     // unused rather than as one that happens to share the moment it was issued.
     ...(token.lastUsedAt ? { lastUsedAt: token.lastUsedAt.toISOString() } : {}),
-    current: cookieToken !== undefined && token.token === cookieToken
+    current: cookieToken !== undefined && token.token === hashToken(cookieToken)
 });
 
 /**

@@ -9,6 +9,7 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import bcrypt from 'bcrypt';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
@@ -22,6 +23,19 @@ export enum TokenType {
     REFRESH = 'refresh',
     PASSWORD_RESET = 'password'
 }
+
+/**
+ * Digest a token value for storage/lookup — BETTER_SECURITY.md wave 3.1. `users.tokens[].token`
+ * holds live refresh JWTs, password-reset tokens and delete-confirmation tokens; a plain sha256
+ * digest is enough because every value here already carries 128 bits of entropy from
+ * `randomBytes(16)` or a signed JWT — there is no low-entropy secret to stretch, and bcrypt would
+ * only slow the refresh path every authenticated client hits on a timer. Exported so callers that
+ * compare an in-memory token against an already-loaded document (`account/services/tokens.ts`,
+ * `users/service.ts` `consumeToken`) hash the same way storage does, and so
+ * `db/migrations/*-hash-user-tokens.js` hashes existing rows with the identical function.
+ */
+export const hashToken = (token: string): string =>
+    createHash('sha256').update(token).digest('hex');
 
 /**
  * User tokens
@@ -298,7 +312,8 @@ userSchema.pre('save', function () {
 
 /**
  * Add a token to this user document and persist it.
- * Returns the token string so callers can use it directly.
+ * Returns the PLAINTEXT token string so callers can use it — the cookie, the emailed link — but
+ * only its {@link hashToken} digest is ever written to the document. See wave 3.1 above `hashToken`.
  */
 userSchema.methods.tokenAdd = function (
     type: Token['type'],
@@ -307,7 +322,7 @@ userSchema.methods.tokenAdd = function (
 ): Promise<string> {
     const entry: Token = {
         type,
-        token,
+        token: hashToken(token),
         expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
     };
 

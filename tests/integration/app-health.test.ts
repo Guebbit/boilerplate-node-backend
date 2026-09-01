@@ -30,6 +30,27 @@ describe('System routes', () => {
 
         expect(response.status).toBe(404);
     });
+
+    // BETTER_SECURITY.md 3.3d: only a well-formed UUID from the client is trusted and reflected
+    // back — see request-context.ts.
+    it('echoes a well-formed x-request-id back to the caller', async () => {
+        const requestId = '4f9c9a10-2b3e-4d5c-8f1a-0e6b7c8d9e10';
+        const response = await api().get('/').set('x-request-id', requestId);
+
+        expect(response.headers['x-request-id']).toBe(requestId);
+    });
+
+    it('replaces a malformed x-request-id rather than reflecting it', async () => {
+        // Node's http client already refuses a literal CR/LF in a header value, so this asserts
+        // against an ordinary non-UUID string — the shape check is what closes the log-injection
+        // gap for values a client CAN actually send, long/odd ones included.
+        const response = await api().get('/').set('x-request-id', 'not-a-uuid');
+
+        expect(response.headers['x-request-id']).not.toBe('not-a-uuid');
+        expect(response.headers['x-request-id']).toMatch(
+            /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i
+        );
+    });
 });
 
 describe('Observability routes', () => {

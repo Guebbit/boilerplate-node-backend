@@ -227,12 +227,14 @@ describe('accountService.passwordChange', () => {
     });
 });
 
-/** A user holding one real, stored refresh token — what the refresh cookie would have carried. */
+/**
+ * A user holding one real, stored refresh token — what the refresh cookie would have carried.
+ * `createRefreshToken`'s OWN return value, not a re-read from storage: `tokens[].token` is a
+ * `hashToken` digest at rest (BETTER_SECURITY.md wave 3.1), never the plaintext JWT.
+ */
 const issueRefreshToken = async () => {
     const user = await createUser({ email: 'refresh@example.com', username: 'refresher' });
-    await createRefreshToken(user.id);
-    const stored = await userRepository.findByIdWithCredentials(user.id);
-    return String(stored?.tokens?.[0]?.token);
+    return createRefreshToken(user.id);
 };
 
 /**

@@ -8,7 +8,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser } from '@modules/users/tests/fixtures';
-import { userRepository } from '@modules/users';
+import { userRepository, hashToken } from '@modules/users';
 import { TokenType, type UserDocument } from '@modules/users';
 // The model directly: it is no longer on the barrel, because no sibling MODULE needs it. A spec
 // reaching its own module's internals is correct — `eslint-plugin-boundaries` allows exactly that.
@@ -224,23 +224,26 @@ describe('userRepository', () => {
         });
     });
 
+    // Every fixture below seeds `tokens` directly rather than through `tokenAdd`, so it stores
+    // `hashToken(...)` explicitly — BETTER_SECURITY.md wave 3.1 hashes at rest, and a plaintext
+    // seed here would describe a document production never actually writes.
     describe('token methods', () => {
         it('tokenRemoveAll removes all tokens of the selected type', async () => {
             const user = await createUser({
                 tokens: [
                     {
                         type: TokenType.REFRESH,
-                        token: 'refresh-1',
+                        token: hashToken('refresh-1'),
                         expiration: new Date(Date.now() + 60_000)
                     },
                     {
                         type: TokenType.REFRESH,
-                        token: 'refresh-2',
+                        token: hashToken('refresh-2'),
                         expiration: new Date(Date.now() + 120_000)
                     },
                     {
                         type: TokenType.PASSWORD_RESET,
-                        token: 'password-1',
+                        token: hashToken('password-1'),
                         expiration: new Date(Date.now() + 120_000)
                     }
                 ]
@@ -262,12 +265,12 @@ describe('userRepository', () => {
                 tokens: [
                     {
                         type: TokenType.REFRESH,
-                        token: 'expired-token',
+                        token: hashToken('expired-token'),
                         expiration: expired
                     },
                     {
                         type: TokenType.REFRESH,
-                        token: 'valid-token',
+                        token: hashToken('valid-token'),
                         expiration: futureExpiration
                     }
                 ]
@@ -281,7 +284,7 @@ describe('userRepository', () => {
             expect(removed).toBe(1);
             expect(refreshed).not.toBeNull();
             expect(refreshed!.tokens).toHaveLength(1);
-            expect(refreshed!.tokens[0].token).toBe('valid-token');
+            expect(refreshed!.tokens[0].token).toBe(hashToken('valid-token'));
         });
 
         it('tokenRemoveExpired rejects when the write fails, rather than inventing a status', async () => {
@@ -307,13 +310,14 @@ describe('userRepository', () => {
         it('findByTokenValue finds the holder whatever kind the token is', async () => {
             const user = await createUser({
                 tokens: [
-                    { type: TokenType.REFRESH, token: 'session-token' },
-                    { type: TokenType.PASSWORD_RESET, token: 'reset-token' }
+                    { type: TokenType.REFRESH, token: hashToken('session-token') },
+                    { type: TokenType.PASSWORD_RESET, token: hashToken('reset-token') }
                 ]
             });
 
-            // Untyped by design: the refresh flow's question is "does this credential still exist
-            // on a document", and the JWT itself carries no type to narrow by.
+            // `findByTokenValue` takes the PLAINTEXT and hashes it internally — untyped by
+            // design: the refresh flow's question is "does this credential still exist on a
+            // document", and the JWT itself carries no type to narrow by.
             await expect(userRepository.findByTokenValue('session-token')).resolves.toMatchObject({
                 _id: user._id
             });
@@ -326,15 +330,16 @@ describe('userRepository', () => {
         it('tokenTouch stamps the token that matched, not the first in the array', async () => {
             const user = await createUser({
                 tokens: [
-                    { type: TokenType.REFRESH, token: 'first-session' },
-                    { type: TokenType.REFRESH, token: 'second-session' }
+                    { type: TokenType.REFRESH, token: hashToken('first-session') },
+                    { type: TokenType.REFRESH, token: hashToken('second-session') }
                 ]
             });
 
+            // `tokenTouch` takes the PLAINTEXT and hashes it internally, same as `findByTokenValue`.
             await userRepository.tokenTouch('second-session');
             const refreshed = await userRepository.findByIdWithCredentials(user._id.toString());
             const byValue = (value: string) =>
-                refreshed!.tokens.find(({ token }) => token === value);
+                refreshed!.tokens.find(({ token }) => token === hashToken(value));
 
             // This is what the positional `$` buys: without it the stamp lands on `tokens.0` and
             // every session in `GET /account/sessions` reports the wrong last-used time.

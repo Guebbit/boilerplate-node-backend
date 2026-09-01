@@ -6,7 +6,7 @@
  * already revoked. The model is a double — none of this needs a database.
  */
 import { userSchema, type Token } from '@modules/users/model';
-import { TokenType } from '@modules/users';
+import { TokenType, hashToken } from '@modules/users';
 import { asStub } from '@tests/stub';
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -40,7 +40,9 @@ const documentDouble = (tokens?: Token[]) => {
 beforeEach(() => jest.clearAllMocks());
 
 describe('tokenAdd', () => {
-    it('pushes the token onto the user, in the database', async () => {
+    it('pushes the HASH of the token onto the user, in the database', async () => {
+        // BETTER_SECURITY.md wave 3.1: `tokens[].token` is `hashToken(token)` at rest, never
+        // the plaintext handed to `tokenAdd`.
         const document = documentDouble([]);
 
         await methods.tokenAdd.call(document, TokenType.REFRESH, 3_600_000, 'the-token');
@@ -49,7 +51,7 @@ describe('tokenAdd', () => {
         expect(filter).toEqual({ _id: USER_ID });
         expect(update.$push.tokens).toMatchObject({
             type: TokenType.REFRESH,
-            token: 'the-token'
+            token: hashToken('the-token')
         });
     });
 
@@ -105,14 +107,14 @@ describe('tokenAdd', () => {
         expect(document.updateOne.mock.calls[0][2]).toEqual({ timestamps: false });
     });
 
-    it('mirrors the token into a token list that was loaded', async () => {
+    it('mirrors the HASH into a token list that was loaded', async () => {
         const tokens: Token[] = [];
         const document = documentDouble(tokens);
 
         await methods.tokenAdd.call(document, TokenType.REFRESH, 3_600_000, 'the-token');
 
         expect(tokens).toHaveLength(1);
-        expect(tokens[0].token).toBe('the-token');
+        expect(tokens[0].token).toBe(hashToken('the-token'));
     });
 
     it('succeeds when the token list was never loaded', async () => {

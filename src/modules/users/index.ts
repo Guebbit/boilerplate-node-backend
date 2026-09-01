@@ -10,7 +10,7 @@
 
 export { userService } from './service';
 export { userRepository } from './repository';
-export { TokenType, zodUserSchema } from './model';
+export { TokenType, zodUserSchema, hashToken } from './model';
 export type { UserDocument, Token } from './model';
 
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */

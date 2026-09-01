@@ -16,7 +16,7 @@ import {
     sendVerificationEmail,
     EMAIL_VERIFY_TOKEN_TYPE
 } from '@modules/account/services';
-import { userRepository, TokenType } from '@modules/users';
+import { userRepository, TokenType, hashToken } from '@modules/users';
 import { asReject, asSuccess } from '@tests/response';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
@@ -215,13 +215,14 @@ describe('sessionRemove', () => {
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-b');
 
         const tokens = await readTokens(user.id);
-        const target = tokens.find((token) => token.token === 'refresh-a');
+        // `token.token` is a digest at rest (wave 3.1) — `tokenAdd` hashed 'refresh-a' before storing.
+        const target = tokens.find((token) => token.token === hashToken('refresh-a'));
 
         const result = await userRepository.sessionRemove(user.id, String(target?._id));
 
         expect(result.modifiedCount).toBe(1);
         const remaining = await readTokens(user.id);
-        expect(remaining.map(({ token }) => token)).toEqual(['refresh-b']);
+        expect(remaining.map(({ token }) => token)).toEqual([hashToken('refresh-b')]);
     });
 
     it('does not reach the other token kinds through a session handle', async () => {
@@ -294,7 +295,7 @@ describe('tokenRemoveByValue', () => {
         await userRepository.tokenRemoveByValue('phone');
 
         const remaining = await readTokens(user.id);
-        expect(remaining.map(({ token }) => token)).toEqual(['laptop']);
+        expect(remaining.map(({ token }) => token)).toEqual([hashToken('laptop')]);
     });
 
     it('reports an already-spent value as a no-op', async () => {
@@ -318,7 +319,7 @@ describe('logoutCurrentSession', () => {
         await accountService.logoutCurrentSession('phone', testCallerContext);
 
         const remaining = await readTokens(user.id);
-        expect(remaining.map(({ token }) => token)).toEqual(['laptop']);
+        expect(remaining.map(({ token }) => token)).toEqual([hashToken('laptop')]);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_LOGGED_OUT,
@@ -378,7 +379,7 @@ describe('sendVerificationEmail', () => {
         await sendVerificationEmail(user, testCallerContext);
 
         const tokens = await readTokens(user.id);
-        expect(tokens.find(({ token }) => token === 'live-session')).toBeDefined();
+        expect(tokens.find(({ token }) => token === hashToken('live-session'))).toBeDefined();
     });
 });
 

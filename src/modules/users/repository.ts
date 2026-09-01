@@ -6,7 +6,7 @@
  * See: docs/modules/users.md
  */
 
-import { userModel, applyUserTransform, TokenType } from './model';
+import { userModel, applyUserTransform, TokenType, hashToken } from './model';
 import type { UserDocument, Token } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
 import {
@@ -93,13 +93,16 @@ export const userRepository: Repository<UserDocument> & {
      * matches both conditions on the SAME array entry — a plain two-path filter would also match
      * a reset-token holder via an unrelated delete token from the same account-deletion flow.
      *
+     * `token` is hashed before the query — wave 3.1, the stored value is `hashToken(token)`, never
+     * the plaintext.
+     *
      * @param token - the token value from the link the user followed
      * @param type - which kind of token it must be
      * @returns the holder, or `null`
      */
     findByToken: (token: string, type: Token['type']) =>
         userModel
-            .findOne({ tokens: { $elemMatch: { token, type } } })
+            .findOne({ tokens: { $elemMatch: { token: hashToken(token), type } } })
             .select(CREDENTIAL_FIELDS)
             .exec(),
 
@@ -120,13 +123,14 @@ export const userRepository: Repository<UserDocument> & {
      * two simultaneous confirms both loaded version V and the second `save()` raised a
      * `VersionError` — a 500 on a request that had already succeeded. Idempotent: pulling an
      * already-spent token matches nothing and reports `modifiedCount: 0`. `timestamps: false`
-     * since spending a token isn't a change to the account.
+     * since spending a token isn't a change to the account. `token` is hashed before the filter —
+     * wave 3.1.
      */
     tokenRemove: (id: string, token: string) =>
         userModel
             .updateOne(
                 { _id: toObjectId(id) },
-                { $pull: { tokens: { token } } },
+                { $pull: { tokens: { token: hashToken(token) } } },
                 {
                     timestamps: false
                 }
@@ -138,16 +142,19 @@ export const userRepository: Repository<UserDocument> & {
      * filter: `POST /account/logout` works from the refresh cookie alone, and the cookie's value
      * is itself the proof of ownership. Idempotent like `tokenRemove`: a value no document holds
      * matches nothing and reports `modifiedCount: 0`, which logout doesn't distinguish from
-     * success. `timestamps: false` — ending a session is not a change to the account.
+     * success. `timestamps: false` — ending a session is not a change to the account. `token` is
+     * hashed before both the filter and the `$pull` — wave 3.1.
      */
-    tokenRemoveByValue: (token: string) =>
-        userModel
+    tokenRemoveByValue: (token: string) => {
+        const digest = hashToken(token);
+        return userModel
             .updateOne(
-                { 'tokens.token': token },
-                { $pull: { tokens: { token } } },
+                { 'tokens.token': digest },
+                { $pull: { tokens: { token: digest } } },
                 { timestamps: false }
             )
-            .exec(),
+            .exec();
+    },
 
     /**
      * Drop every expired token from every document — the housekeeping sweep. Returns a plain
@@ -173,20 +180,21 @@ export const userRepository: Repository<UserDocument> & {
      * credential still exists — narrowing by type would depend on a field the JWT itself doesn't
      * carry. Carries `AUTHENTICATABLE_FILTER` too, so a refresh cookie that survives a
      * deactivation or soft delete stops working on its very next exchange, same clause as `login`.
+     * `token` is hashed before the query — wave 3.1.
      */
     findByTokenValue: (token: string) =>
-        userModel.findOne({ 'tokens.token': token, ...AUTHENTICATABLE_FILTER }).exec(),
+        userModel.findOne({ 'tokens.token': hashToken(token), ...AUTHENTICATABLE_FILTER }).exec(),
 
     /**
      * Stamp a token as used, so `GET /account/sessions` can show which device is idle. A
      * POSITIONAL update (`tokens.$`): mongod evaluates it at write time, so two devices
      * refreshing at once cannot overwrite each other's array. `timestamps: false` — using a
-     * session is not a change to the account.
+     * session is not a change to the account. `token` is hashed before the filter — wave 3.1.
      */
     tokenTouch: (token: string) =>
         userModel
             .updateOne(
-                { 'tokens.token': token },
+                { 'tokens.token': hashToken(token) },
                 { $set: { 'tokens.$.lastUsedAt': new Date() } },
                 { timestamps: false }
             )

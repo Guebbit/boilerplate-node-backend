@@ -16,7 +16,7 @@ import {
     type ResponseErrorItem,
     validationErrors
 } from '@infrastructure/http/response';
-import { zodUserSchema, TokenType } from './model';
+import { zodUserSchema, TokenType, hashToken } from './model';
 import type { UserDocument } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
 import { userRepository } from './repository';
@@ -271,7 +271,10 @@ export const findByEmail = (email: string): Promise<UserDocument | undefined | n
  */
 export const consumeToken = (user: UserDocument, token: string): Promise<boolean> =>
     userRepository.tokenRemove(user.id, token).then(({ modifiedCount }) => {
-        user.tokens = user.tokens.filter((tk) => tk.token !== token);
+        // `tokens[].token` is hashed at rest (wave 3.1) — hash `token` the same way to resync
+        // the loaded document's local copy after the DB `$pull`.
+        const digest = hashToken(token);
+        user.tokens = user.tokens.filter((tk) => tk.token !== digest);
         // `true` only for the caller whose write actually removed it. Two simultaneous uses of one
         // reset link both pass the earlier "does this token exist" read, so this is the only
         // point at which they can be told apart — see `postResetConfirm`.

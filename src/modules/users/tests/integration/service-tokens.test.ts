@@ -8,18 +8,23 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/fixtures';
 import * as userService from '@modules/users/service';
-import { userRepository } from '@modules/users';
+import { userRepository, hashToken } from '@modules/users';
 import type { Token } from '@modules/users';
 
 setupTestDb();
 
-/** A user carrying one reset token and one delete token, so the type half of each filter counts. */
+/**
+ * A user carrying one reset token and one delete token, so the type half of each filter counts.
+ * Seeded with `hashToken`'s output, not the plaintext: this fixture writes `tokens` directly
+ * (bypassing `tokenAdd`), so it has to store what production actually stores — a digest
+ * (BETTER_SECURITY.md wave 3.1) — or `consumeToken`'s hashed lookup would never match it.
+ */
 const createUserWithTokens = () =>
     createUser({
         email: 'tokens@example.com',
         tokens: [
-            { type: 'password', token: 'reset-token-value' },
-            { type: 'delete', token: 'delete-token-value' }
+            { type: 'password', token: hashToken('reset-token-value') },
+            { type: 'delete', token: hashToken('delete-token-value') }
         ] as Token[]
     });
 
@@ -58,7 +63,9 @@ describe('userService.consumeToken', () => {
         const reread = await userRepository.findOneWithCredentials({
             email: 'tokens@example.com'
         });
-        expect(reread?.tokens?.some((entry) => entry.token === 'reset-token-value')).toBe(false);
+        expect(
+            reread?.tokens?.some((entry) => entry.token === hashToken('reset-token-value'))
+        ).toBe(false);
     });
 
     it('leaves the account’s other tokens alone', async () => {
@@ -69,7 +76,9 @@ describe('userService.consumeToken', () => {
         const stored = await userRepository.findOneWithCredentials({
             email: 'tokens@example.com'
         });
-        expect(stored?.tokens?.map((entry) => entry.token)).toEqual(['delete-token-value']);
+        expect(stored?.tokens?.map((entry) => entry.token)).toEqual([
+            hashToken('delete-token-value')
+        ]);
     });
 
     it('persists the removal rather than only mutating the in-memory document', async () => {
@@ -80,7 +89,9 @@ describe('userService.consumeToken', () => {
         const reread = await userRepository.findOneWithCredentials({
             email: 'tokens@example.com'
         });
-        expect(reread?.tokens?.some((entry) => entry.token === 'delete-token-value')).toBe(false);
+        expect(
+            reread?.tokens?.some((entry) => entry.token === hashToken('delete-token-value'))
+        ).toBe(false);
     });
 
     it('is a no-op for a token the user does not hold', async () => {
