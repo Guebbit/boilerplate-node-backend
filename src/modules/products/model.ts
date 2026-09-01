@@ -199,6 +199,10 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
  * see `./service` `search()`.
  */
 export const applyProductTransform = applySerialization(productSchema, {
+    // Document-only bookkeeping for the image digest pipeline, never part of the `Product`
+    // contract — see the schema field's own comment. `additionalProperties: false` makes a leaked
+    // `pendingImageKey` fail response validation rather than just look untidy.
+    omit: ['pendingImageKey'],
     after: applyProductAvailability
 });
 

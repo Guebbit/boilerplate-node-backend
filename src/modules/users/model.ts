@@ -346,7 +346,9 @@ userSchema.methods.tokenRemoveAll = function (type: Token['type']) {
  * and every route serving a `User` list is admin-only.
  */
 export const applyUserTransform = applySerialization(userSchema, {
-    omit: ['password', 'tokens']
+    // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
+    // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
+    omit: ['password', 'tokens', 'pendingImageKey']
 });
 
 /** The compiled Mongoose model. */
