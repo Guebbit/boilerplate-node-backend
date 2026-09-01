@@ -26,7 +26,7 @@ export const router = Router();
  *
  * `submissionLimiter` first, same reasoning as the credential budgets: a spent budget should not
  * cost a database write. It is a DIFFERENT limiter from `credentialLimiters` — this form's abuse
- * is a successful post repeated, not a failed one. See docs/tools/security.md#the-two-rate-limit-budgets.
+ * is a successful post repeated, not a failed one. See docs/tools/security.md#the-rate-limit-budgets.
  */
 router.post('/contact', submissionLimiter, invalidateCache(['feedback']), postFeedbackContact);
 

@@ -8,6 +8,7 @@
 
 import { Router } from 'express';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
+import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/adapters/storage';
 import { getUsers, searchUsersKeyParameters } from './controllers/get-users';
 import { writeUsers } from './controllers/write-users';
@@ -32,10 +33,22 @@ router.post('/search', cacheUsersSearch, getUsers);
 router.get('/', cacheUsersSearch, getUsers);
 
 // POST /users (create)
-router.post('/', invalidateCache(['users', 'account']), upload.single('imageUpload'), writeUsers);
+router.post(
+    '/',
+    uploadLimiter,
+    invalidateCache(['users', 'account']),
+    upload.single('imageUpload'),
+    writeUsers
+);
 
 // PUT /users — id in body (update)
-router.put('/', invalidateCache(['users', 'account']), upload.single('imageUpload'), writeUsers);
+router.put(
+    '/',
+    uploadLimiter,
+    invalidateCache(['users', 'account']),
+    upload.single('imageUpload'),
+    writeUsers
+);
 
 // DELETE /users — id in body
 router.delete('/', invalidateCache(['users', 'account']), deleteUsers);
@@ -44,7 +57,13 @@ router.delete('/', invalidateCache(['users', 'account']), deleteUsers);
 router.get('/:id', setCache(3600, { tags: ['users'], keyParameters: [] }), getUserItem);
 
 // PUT /users/:id (update)
-router.put('/:id', invalidateCache(['users', 'account']), upload.single('imageUpload'), writeUsers);
+router.put(
+    '/:id',
+    uploadLimiter,
+    invalidateCache(['users', 'account']),
+    upload.single('imageUpload'),
+    writeUsers
+);
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true
 router.delete('/:id', invalidateCache(['users', 'account']), deleteUsers);

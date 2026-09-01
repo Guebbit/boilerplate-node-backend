@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { credentialLimiters } from '@infrastructure/http/middlewares/rate-limit';
+import { credentialLimiters, uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/adapters/storage';
 import { getAccount } from './controllers/get-account';
@@ -53,6 +53,7 @@ router.get('/', isAuth, getAccount);
 // PUT /account — update own profile (requires auth). The upload mirrors signup's.
 router.put(
     '/',
+    uploadLimiter,
     isAuth,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
@@ -72,6 +73,7 @@ router.post('/login', credentialLimiters, postLogin);
 router.post(
     '/signup',
     credentialLimiters,
+    uploadLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
     postSignup

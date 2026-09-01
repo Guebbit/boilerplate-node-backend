@@ -80,7 +80,13 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
             user.username,
             token
         );
-        void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
+        // High priority: a token-bearing link the user is actively waiting on, not a notification.
+        void enqueueEmail(
+            { to: user.email, subject: mail.subject },
+            mail.template,
+            mail.data,
+            'high'
+        );
     });
 
 /**
@@ -125,10 +131,12 @@ export const requestPasswordReset = (
                     user.username,
                     token
                 );
+                // High priority: a token-bearing link the user is actively waiting on, not a notification.
                 void enqueueEmail(
                     { to: user.email, subject: mail.subject },
                     mail.template,
-                    mail.data
+                    mail.data,
+                    'high'
                 );
                 return true;
             }
@@ -145,7 +153,13 @@ export const requestPasswordReset = (
 export const requestAccountSetup = (user: UserDocument): Promise<void> =>
     tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then((token) => {
         const mail = setupRequestEmail(user.locale ?? getDefaultLocale(), user.username, token);
-        void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
+        // High priority: a token-bearing link the user is actively waiting on, not a notification.
+        void enqueueEmail(
+            { to: user.email, subject: mail.subject },
+            mail.template,
+            mail.data,
+            'high'
+        );
     });
 
 /**

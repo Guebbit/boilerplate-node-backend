@@ -4,11 +4,10 @@ Plan for turning every uploaded image into a **digested original** (metadata str
 capped, recompressed) plus a **thumbnail** the frontend can render in lists, without ever serving a
 byte that has not been through both.
 
-Status: **implemented on the backend** (steps 1–6 below). The frontend follow-up section at the
-bottom is still outstanding — deliberately: it is gated on `sync:frontend`, which has not run yet.
-Also outstanding: `npm run test:mutation:baseline` (the mutation score baseline will have shifted)
-and a decision on whether the upload endpoints need a tighter rate limit than they have today (see
-"Things that will bite").
+Status: **implemented on the backend and the frontend.** Still outstanding:
+`npm run test:mutation:baseline` (the mutation score baseline will have shifted). The upload
+rate-limit decision flagged under "Things that will bite" is resolved — `uploadLimiter` in
+`http/middlewares/rate-limit.ts`, see `docs/tools/security.md#the-rate-limit-budgets`.
 
 ---
 
@@ -319,9 +318,8 @@ come out of that run.
 - **Remote and default images get no thumbnail.** `readUploadedImage` merges a body-supplied
   `imageUrl` when no file was uploaded; those are somebody else's URLs. `thumbnailUrl` stays absent
   and the frontend falls back to the full image.
-- **Upload endpoints should sit under a tighter rate limit** than the general one — image processing
-  is CPU-bound and a burst is a cheap way to saturate it. Verify what
-  `http/middlewares/rate-limit.ts` currently applies to the upload routes.
+- ~~Upload endpoints should sit under a tighter rate limit than the general one~~ — resolved:
+  `uploadLimiter`, mounted on all 8 `upload.single('imageUpload')` routes.
 
 ---
 

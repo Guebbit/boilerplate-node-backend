@@ -159,18 +159,40 @@ That is what makes the handler's three outcomes mean what they say:
 | reject        | `nack(msg, false, true)`  | back on `<queue>`, tried again |
 
 **Upgrading an existing broker.** `assertQueue` throws `PRECONDITION_FAILED` when a queue already
-exists with different arguments, which is what adding the dead-letter policy does to a broker
-holding queues declared without it. The channel dies, is replaced, and fails the same way. Delete
-the old queues once (`rabbitmqctl delete_queue worker.email.send`, and the same for
-`worker.pdf.generate`) with the consumers stopped, then restart the app — the declarations are
+exists with different arguments — which is what adding the dead-letter policy, and later the
+`x-max-priority` argument in [Priority](#priority), does to a broker holding queues declared
+without them. The channel dies, is replaced, and fails the same way. Delete the old queues once
+(`rabbitmqctl delete_queue worker.email.send`, and the same for `worker.pdf.generate` and
+`worker.image.digest`) with the consumers stopped, then restart the app — the declarations are
 recreated on the first publish.
+
+### Priority
+
+Every work queue is declared with `x-max-priority: 1`, so every message carries one of two
+levels:
+
+| `JobPriority` | Number | Meaning                                                                                                        |
+| ------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| `'normal'`    | `0`    | Default. Everything informational.                                                                             |
+| `'high'`      | `1`    | A person is actively blocked on this — jumps ahead of `'normal'` messages currently waiting on the same queue. |
+
+`enqueueEmail()` defaults to `'normal'` and takes an optional fourth argument; the account
+module's token-bearing links (password reset, account deletion, account setup, email
+verification — all short-TTL, all a person is staring at an inbox for) pass `'high'`. Order
+confirmations, delivery notices and the rest stay `'normal'`.
+
+Two levels, deliberately: RabbitMQ's priority ordering is approximate under load — it reorders
+within whatever the broker currently has buffered, not a strict global heap — so this is "give
+the few urgent things a preference," not a real-time scheduler. See
+[RabbitMQ: Priority Queue Support](https://www.rabbitmq.com/docs/priority).
 
 ### Options
 
-| Publish option | Default | Description                     |
-| -------------- | ------- | ------------------------------- |
-| `durable`      | `true`  | Queue survives broker restarts. |
-| `persistent`   | `true`  | Message is written to disk.     |
+| Publish option | Default    | Description                                                                                        |
+| -------------- | ---------- | -------------------------------------------------------------------------------------------------- |
+| `durable`      | `true`     | Queue survives broker restarts.                                                                    |
+| `persistent`   | `true`     | Message is written to disk.                                                                        |
+| `priority`     | `'normal'` | `'high'` jumps ahead of `'normal'` messages waiting on the same queue — see [Priority](#priority). |
 
 | Consume option | Default | Description                              |
 | -------------- | ------- | ---------------------------------------- |

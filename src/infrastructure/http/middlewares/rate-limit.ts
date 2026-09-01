@@ -1,10 +1,10 @@
 /**
  * @module
  * Rate limiting: a global burst brake across the whole surface, a pair of tighter budgets for
- * routes that accept a credential, and one more for the public submission that emails an operator.
- * Every limiter shares one Redis-or-memory store (see `rate-limit-store.ts`), fails open on a
- * store error, and answers through the shared error envelope rather than express-rate-limit's own
- * plain-text body.
+ * routes that accept a credential, and one each for the public submission that emails an operator
+ * and for routes that accept an image upload. Every limiter shares one Redis-or-memory store (see
+ * `rate-limit-store.ts`), fails open on a store error, and answers through the shared error
+ * envelope rather than express-rate-limit's own plain-text body.
  */
 
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -27,7 +27,7 @@ import { callerContextOf } from '@infrastructure/http/request';
  *
  * The test suites raise it tenfold — see `tests/support/setup.ts`.
  *
- * See: docs/tools/security.md#the-two-rate-limit-budgets
+ * See: docs/tools/security.md#the-rate-limit-budgets
  */
 export const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 
@@ -60,6 +60,14 @@ export const DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX = 30;
  * budget is spent by success rather than failure.
  */
 export const DEFAULT_SUBMISSION_RATE_LIMIT_MAX = 5;
+
+/**
+ * Image uploads allowed per window, per ADDRESS.
+ *
+ * Sized well above what one legitimate session needs (bulk product-image edits included) and well
+ * below the global brake — see `uploadLimiter` for why this budget exists at all.
+ */
+export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = 20;
 
 /** The configured window, in ms — falls back to {@link DEFAULT_RATE_LIMIT_WINDOW_MS}. */
 const windowMs = () =>
@@ -155,7 +163,7 @@ const identityOf = (request: Request): string => {
  * office, CI, the e2e suite) is never locked out by people getting it right. Exported as an array
  * because Express flattens one, so a route cannot apply half of the pair.
  *
- * See: docs/tools/security.md#the-two-rate-limit-budgets
+ * See: docs/tools/security.md#the-rate-limit-budgets
  */
 export const credentialLimiters: RequestHandler[] = [
     rateLimit({
@@ -184,11 +192,28 @@ export const credentialLimiters: RequestHandler[] = [
  * the caller's address (the default `keyGenerator`), since the only identity a contact form
  * carries beyond that is free text a spammer varies for free.
  *
- * See: docs/tools/security.md#the-two-rate-limit-budgets
+ * See: docs/tools/security.md#the-rate-limit-budgets
  */
 export const submissionLimiter: RequestHandler = rateLimit({
     ...limiterOptions(rateLimitStore('submissions'), true),
     limit: environmentNumber('NODE_SUBMISSION_RATE_LIMIT_MAX', DEFAULT_SUBMISSION_RATE_LIMIT_MAX, 1)
+});
+
+/**
+ * The budget for routes that accept an image upload.
+ *
+ * Image processing (the `worker.image.digest` pipeline — see `docs/tools/image-processing.md`) is
+ * CPU-bound: decoding and re-encoding is real work whether it runs in the request (no broker
+ * configured) or in a worker consuming one job at a time. The global brake alone was sized for
+ * ordinary browsing, not for gating something that expensive, so a burst of well-formed upload
+ * requests is a cheap way to saturate it. Spent by success, like `submissionLimiter`, for the same
+ * reason: the cost is in a well-formed request being processed, not in a failed one.
+ *
+ * See: docs/tools/security.md#the-rate-limit-budgets
+ */
+export const uploadLimiter: RequestHandler = rateLimit({
+    ...limiterOptions(rateLimitStore('uploads'), true),
+    limit: environmentNumber('NODE_UPLOAD_RATE_LIMIT_MAX', DEFAULT_UPLOAD_RATE_LIMIT_MAX, 1)
 });
 
 /**

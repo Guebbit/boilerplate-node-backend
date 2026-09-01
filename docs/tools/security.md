@@ -63,7 +63,7 @@ flowchart LR
     H -- No --> J[401 Unauthorized]
 ```
 
-## The two rate-limit budgets
+## The rate-limit budgets
 
 **The global limiter is sized for browsing.** A single-page app spends 5–15 requests rendering one
 page, and a full pass of the frontend's live e2e suite issues ~150, peaking at 52 in a minute
@@ -98,6 +98,15 @@ well-formed body, gets a `201`, and an operator gets an email). Mounting `creden
 `submissionLimiter` spends its budget on every request, success or failure, keyed on the caller's
 address like the global limiter, at a much smaller default (`NODE_SUBMISSION_RATE_LIMIT_MAX=5`) —
 a person files a contact request once.
+
+**A fourth budget, same shape as the third.** `uploadLimiter` guards every route that accepts an
+image (`upload.single('imageUpload')`, across `products`, `users` and `account`). The cost here
+isn't a spam email, it's CPU: each upload feeds the `worker.image.digest` pipeline —
+decode/strip-metadata/resize/re-encode via `sharp` — which runs inline when no broker is
+configured, and one at a time per worker (`prefetch: 1`) when one is. Like `submissionLimiter`,
+`skipSuccessfulRequests` is off: a well-formed upload is the expensive case, not a rejected one.
+Default `NODE_UPLOAD_RATE_LIMIT_MAX=20` — generous enough for someone editing several product
+images in a row, well under the global brake.
 
 ## Why the metrics endpoint has its own credential
 

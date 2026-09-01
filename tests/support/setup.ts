@@ -68,6 +68,14 @@ process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX ??= '1000';
 process.env.NODE_SUBMISSION_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * `uploadLimiter` needs the same treatment, for the same reason `submissionLimiter` does: it
+ * spends its budget on a SUCCESSFUL upload, and any suite calling signup, product-create or
+ * account-update with an image more than `DEFAULT_UPLOAD_RATE_LIMIT_MAX` (20) times from one
+ * address inside a window would trip it on an otherwise-passing run.
+ */
+process.env.NODE_UPLOAD_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * The limiters count IN MEMORY here, never in Redis.
  *
  * Not a preference — a requirement. `src/app.ts` imports `dotenv/config`, so `.env` reaches the
