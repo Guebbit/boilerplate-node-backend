@@ -2,37 +2,36 @@
 
 ## Purpose
 
-Integration tests for the payments service (`createIntent`, `confirmPayment`, `getForOrder`, `refundByOrder`) run against a real Mongo instance. They pin the two ordering invariants (order total → intent amount; order `pending→paid` before payment `→succeeded`) and the four guards: idempotent intent, no double-confirm, decline-is-retryable, and at-most-once refund. The provider is the in-repo `fake` one, whose magic cards define the contract.
+Integration tests for the payments service that pin its core invariants: intent creation freezes the order's published total (shipping included), confirmation atomically transitions order → paid and payment → succeeded, a decline is retryable, and the `ORDER_CANCELLED` refund listener fires at-most-once. Runs against real MongoDB (`setupTestDb`) with the `fake` payment provider, because the guarantees under test are the conditional writes themselves.
 
 ## Key elements
 
-- **`orderFor(price?, quantity?)`** — Fixture: creates a user, a product, and a single-line order via the orders test factory.
-- **`paidOrder()`** — Fixture: builds on `orderFor`, then calls `createIntent` + `confirmPayment` with `GOOD_CARD`; returns a fully paid order.
-- **`GOOD_CARD`** (`'4242 4242 4242 4242'`) — Card number the fake provider recognises as a success.
-- **`FAKE_DECLINE_CARD`** (imported from `@modules/payments/providers/fake`) — Card number that triggers a decline path.
-- **`asReject(result)`** — Cast helper so tests can assert on `ResponseReject.status` / `.errors[].code` without a runtime check.
-- **`describe('createIntent')`** — Verifies: amount equals `order.totalPrice` (shipping included); idempotency (second call returns the same row, `count` stays 1); 404 for a non-owner; 409 + `PAYMENT_ORDER_NOT_PAYABLE` for a non-pending order.
-- **`describe('confirmPayment')`** — Verifies: order becomes `paid` and payment `succeeded` with `cardLast4`; decline returns 409 + `PAYMENT_DECLINED`, order stays `pending`, and the *same* document can be re-confirmed; 404 for non-owner; 409 + `PAYMENT_NOT_CONFIRMABLE` on second confirm; 409 on a new intent after money moved.
-- **`describe('getForOrder')`** — Caller sees own payment; a stranger receives 404.
-- **`describe('refund on cancel')`** — Registers all modules in `beforeEach`, resets domain events in `afterEach`. Verifies: `orderService.cancelById` on a paid order flips payment to `refunded`; cancelling a never-paid order leaves no refund row.
+- **`orderFor(price?, quantity?)`** — Fixture helper: creates a user, a product, and a pending order. Most tests start from this.
+- **`paidOrder()`** — Fixture helper: builds on `orderFor`, then creates an intent and confirms it with `GOOD_CARD`, returning a fully-paid order.
+- **`asReject(result)`** — Narrowing cast to `ResponseReject` so tests can assert on `.status` and `.errors[0].code`.
+- **`GOOD_CARD` / `FAKE_DECLINE_CARD`** — Test card numbers; the latter triggers the provider's simulated decline path.
+- **`describe('createIntent')`** — Verifies: total is copied from the order (not recomputed), shipping is included, idempotency (one payment row per order), 404 for non-owner, 409 + `PAYMENT_ORDER_NOT_PAYABLE` for non-pending orders.
+- **`describe('confirmPayment')`** — Verifies: order → `paid` before payment → `succeeded`, decline returns 409 + `PAYMENT_DECLINED` and leaves the order retryable, 404 for non-owner, 409 + `PAYMENT_NOT_CONFIRMABLE` on double-confirm, and that a second `createIntent` after payment is rejected.
+- **`describe('getForOrder')`** — Verifies read-access ownership: caller's payment returns success, stranger's returns 404.
+- **`describe('refund on cancel')`** — Verifies that cancelling a paid order flips the payment to `refunded`, and cancelling an unpaid order leaves the intent untouched. Uses `registerModules` in `beforeEach` and `resetDomainEvents` in `afterEach` to wire/clean the event bus.
 
 ## Relationships
 
-- **`@modules/payments/service`** — System under test; all four exported functions are exercised.
-- **`@modules/payments/repository`** — `paymentRepository.findByOrderId` / `.count` used for post-state assertions.
-- **`@modules/payments/providers/fake`** — Supplies `FAKE_DECLINE_CARD`; the provider itself acts as the test double for card authorisation.
-- **`@modules/payments/module`** — Registered in the refund suite so its `ORDER_CANCELLED` listener is active.
-- **`@modules/orders/service`** — `orderService.getById` (state checks) and `orderService.cancelById` (triggers the refund event).
-- **`@modules/orders/repository`** — `orderRepository.updateStatusIfIn` to simulate a `shipped` order for the 409 guard test.
-- **`@modules/orders/tests/factory`** — `createOrder`, `toOrderItem` build the order fixtures.
-- **`@kernel/registry`** — `registerModules` wires event subscriptions; required for the refund-on-cancel suite.
-- **`@kernel/events`** — `resetDomainEvents` tears down listener subscriptions after each refund test.
-- **`@infrastructure/http/response`** — `ResponseReject` type used by `asReject` for typed error assertions.
-- **`@modules/account/module`, `@modules/cart/module`, `@modules/delivery/module`, `@modules/inventory/module`** — Registered alongside `paymentsModule` in the refund suite so the full module graph is present.
+- **`src/modules/payments/service.ts`** — The unit under test: `createIntent`, `confirmPayment`, `getForOrder`, `refundByOrder`.
+- **`src/modules/payments/repository.ts`** — `paymentRepository` used to assert persisted state after each operation.
+- **`src/modules/payments/providers/fake.ts`** — Source of `FAKE_DECLINE_CARD`; the provider instance the tests exercise.
+- **`src/modules/payments/module.ts`** — Registered in the refund suite; carries the `ORDER_CANCELLED` listener that triggers the refund.
+- **`src/modules/orders/index.ts`** — Exports `orderService` and `orderRepository`, used for status reads, status transitions, and `cancelById`.
+- **`src/modules/orders/tests/fixtures.ts`** — Provides `createOrder` and `toOrderItem` for building test orders.
+- **`src/modules/orders/module.ts`** — Registered in the refund suite so its event emissions reach the registry.
+- **`src/kernel/registry.ts`** — `registerModules` wires all module event subscriptions; required for the refund tests to exercise the listener path.
+- **`src/kernel/events.ts`** — `resetDomainEvents` clears the bus between refund tests to prevent cross-test bleed.
+- **`src/infrastructure/http/response.ts`** — Source of the `ResponseReject` type used by `asReject`.
+- **`src/modules/account/module.ts`, `cart/module.ts`, `delivery/module.ts`, `inventory/module.ts`** — Registered alongside the payments module so the full event graph is active during refund tests.
 
 ## Notes
 
-- Tests run against **real Mongo** (`setupTestDb`), not in-memory stubs, because the guarantees under test are the *conditional writes* (compare-and-swap on order status, compare-and-swap on payment status).
-- The refund-on-cancel suite **must** call `registerModules` in `beforeEach`; without it the `ORDER_CANCELLED` listener never fires and a test asserting "no refund for never-paid" would pass for the wrong reason (no listener, not a correct at-most-once guard).
-- The fake provider is used *as the contract*, not as a simplification: `GOOD_CARD` and `FAKE_DECLINE_CARD` are the only two card numbers that matter, so the tests exercise both real paths (success and decline) without a network mock.
-- `testCallerContext` (from `@tests/caller-context`) is passed as the fourth argument to `confirmPayment`; it satisfies the service's requirement for a caller envelope without constructing one inline.
+- **`registerModules` is mandatory in the refund suite.** The `ORDER_CANCELLED` → refund subscription is wired through the registry at module-registration time. A test that skips it will assert "refund never fires" and *pass for the wrong reason*. This is the same trap as the cart's `USER_DELETED` suite.
+- **Ownership failures return 404, not 403.** The convention is "absence, not forbidden" — a stranger's order/payment simply doesn't exist from their perspective.
+- **The shipping test compares against `order.toJSON().totalPrice`, not a literal.** This pins the invariant against the *published* number (what OpenAPI and the UI surface), catching the historical bug where the intent summed line items independently and silently dropped shipping cost.
+- **Real database, fake provider.** The conditional writes (`updateStatusIfIn`, atomic state transitions) are what make the guarantees hold; mocking the repository would test nothing about those guarantees. The provider is `fake` so tests are deterministic and network-free.

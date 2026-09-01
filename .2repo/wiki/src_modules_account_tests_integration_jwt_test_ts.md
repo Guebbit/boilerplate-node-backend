@@ -2,32 +2,31 @@
 
 ## Purpose
 
-Integration tests for the four JWT functions exported by `@modules/account/session/jwt`. They verify the security-critical split between stateless access tokens (signature + expiry only) and stateful refresh tokens (signature **and** a database revocation lookup against the user document). Several tests exist specifically to guard against the refresh path silently dropping its DB lookup, which would make logout cosmetic and let stolen refresh tokens live out their full TTL.
+Integration test suite for the JWT module (`session/jwt.ts`). It verifies the security-critical contract between stateless access tokens and stateful refresh tokens: that refresh tokens require both a valid signature **and** a matching row on the user document, that logout (token removal) actually revokes sessions, and that the two secret types are never interchangeable.
 
 ## Key elements
 
-- **`beforeEach` / `afterEach`** — Pin `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, and the two expiry env vars to fixed test values, then restore the originals. Prevents silent dependence on a developer's `.env`.
-- **`describe('verifyAccessToken')`** — Confirms valid access tokens resolve, and that cross-secret signing, expiry, malformed strings, and payload tampering all reject.
-- **`describe('verifyRefreshToken')`** — Confirms a refresh token must be *both* correctly signed *and* present on the user document. Explicitly tests that a validly-signed orphan token is rejected (`Forbidden`), that revocation via `tokenRemoveAll` flips the result, and that an expired token is rejected before any DB hit.
-- **`describe('createRefreshToken')`** — Round-trips an issued token through `verifyRefreshToken`; asserts storage under `TokenType.REFRESH` with a real future expiry; rejects unknown user IDs; and verifies **accumulation** (two consecutive calls yield two independently verifiable tokens, i.e. multi-device login).
-- **`describe('createAccessToken')`** — Exercises the refresh→access exchange. Key sub-cases:
-  - Revoked refresh token → no access token minted (`Forbidden`).
-  - Revocation on a document whose `tokens` field was never loaded (`select: false`) must resolve *and* actually revoke — guards against a post-write `undefined.filter` crash that previously turned a successful logout into a 500.
-  - Identity is carried from the refresh token, not caller-supplied.
+- **`describe('verifyAccessToken')`** — Confirms payload resolution on a valid token, and rejection on: wrong secret (refresh secret), expired token, malformed string, and tampered payload (forged base64 segment).
+- **`describe('verifyRefreshToken')`** — Confirms the two-part check: valid signature *and* stored-on-user. Rejects orphan tokens (valid sig, no row), revoked tokens (removed after a prior success check), wrong secret, and expired tokens.
+- **`describe('createRefreshToken')`** — Round-trips a newly issued token through `verifyRefreshToken`; asserts the stored entry has `type: REFRESH` and a future expiry; rejects unknown user IDs; verifies multi-device accumulation (two tokens coexist rather than one replacing the other).
+- **`describe('createAccessToken')`** — Exchanges a stored refresh token for a verifiable access token; refuses revoked, unsigned, or foreign tokens; pins the payload identity to the refresh token's owner (not caller-supplied); includes a "bare document" test guarding the `select: false` edge case.
+- **Env-var harness** — `beforeEach`/`afterEach` save/restore `NODE_TOKEN_*` keys and set fixed test secrets so the suite never reads `.env`.
 
 ## Relationships
 
-- **`src/modules/account/session/jwt.ts`** — the module under test; all four exported functions are the subjects of every test block.
-- **`src/modules/account/session/config.ts`** — supplies `RefreshTokenExpiryTime.SHORT` used when issuing tokens in the `createRefreshToken` tests.
-- **`src/modules/users/index.ts`** — re-exports `TokenType` (used for `tokenAdd` / `tokenRemoveAll` calls) and `userRepository` (used to re-load documents with credentials and to load "bare" documents for the `select: false` edge case).
-- **`src/modules/users/model.ts`** — the user document's `tokenAdd`, `tokenRemoveAll`, and the `tokens` field (declared `select: false`) are exercised directly; tests assert storage type, expiry, and the atomic-`$pull` revocation path.
-- **`src/modules/users/repository.ts`** — `findByIdWithCredentials` is used to re-read the `tokens` array after mutations; `findById` is used to obtain a document *without* tokens, specifically to test the `undefined.filter` regression.
-- **`src/modules/users/tests/factory.ts`** — `createUser` creates a fresh user per test, providing the identity that tokens are issued for.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope; the entire file requires a live database (MongoDB) because refresh-token verification and revocation hit the store.
+| Neighbor | Interaction |
+|---|---|
+| `session/jwt.ts` | System under test; imports `verifyAccessToken`, `verifyRefreshToken`, `createRefreshToken`, `createAccessToken`. |
+| `session/config.ts` | Imports `RefreshTokenExpiryTime` to parameterize `createRefreshToken` calls. |
+| `users/index.ts` | Imports `TokenType` (enum) and `userRepository` (for `findByIdWithCredentials` / `findById`). |
+| `users/model.ts` | Exerced indirectly via `user.tokenAdd` and `user.tokenRemoveAll` on user documents. |
+| `users/repository.ts` | Exerced indirectly via `userRepository.findByIdWithCredentials` and `userRepository.findById`. |
+| `users/tests/fixtures.ts` | `createUser` provides a fresh user document per test. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the test database before the suite runs. |
 
 ## Notes
 
-- **Database required.** Unlike unit tests, this file calls `setupTestDb()` and performs real queries. It will fail (or hang) in an environment without a reachable test database.
-- **`tokens` is `select: false`.** Any assertion that reads back a stored token must go through `userRepository.findByIdWithCredentials`, not a plain `findById`. The dedicated "bare document" test relies on this exact asymmetry.
-- **Env-var restoration is delete-or-assign.** The `afterEach` restores each key with `delete` when it was previously `undefined`, avoiding leakage of test secrets into later test suites.
-- **The file is truncated in this snapshot.** The final `describe('createAccessToken')` test ("carries the identity…") is cut off mid-line; the full suite may contain additional cases.
+- **Secrets are set explicitly** (not via dotenv) because the test runner does not load `.env`. The four `NODE_TOKEN_*` keys are saved and restored around each test to avoid leaking into sibling suites.
+- **`tokens` is `select: false`** on the user schema. Reading it requires `findByIdWithCredentials`; a plain `findById` leaves `tokens === undefined`. The "bare document" test in `createAccessToken` specifically guards a past bug where `tokenRemoveAll` succeeded in the DB (`$pull`) but then threw on `undefined.filter(...)`, turning a successful logout into a 500.
+- **Multi-device guard**: the `createRefreshToken` suite asserts that two successive issuances *both* survive and are independently verifiable, preventing a future regression to a `tokens = [newToken]` assignment.
+- **Dual-assertion revocation tests**: both `tokenRemoveAll` resolving *and* the subsequent `createAccessToken` rejecting are asserted together, because either half alone is satisfiable by incorrect code (e.g., a no-op revocation, or a revocation that throws after the write).

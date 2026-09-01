@@ -2,19 +2,20 @@
 
 ## Purpose
 
-Barrel file that exposes the audit-logs module's single public symbol. Sibling modules are expected to import only through this file (same convention as `modules/products/index.ts`). The module owns a database collection but no HTTP URL; its write sink is registered at import time by the module's own `module.ts`, while its read path is served by the `observability` module.
+Public barrel (export surface) for the `audit-logs` module. It is the **only** file a sibling module is allowed to import from this directory (same convention as `modules/products/index.ts`). It exists to keep the module's internal structure (service, repository, model, types) encapsulated while still exposing the read path that `observability` needs to serve `GET /observability/audit`.
 
 ## Key elements
 
-- **`auditLogService`** (re-exported from `./service`) — the sole export. It is the read interface that `observability` uses to query the audit trail. The repository, model, and related types that back it are intentionally *not* re-exported; they remain internal to the module.
+- **`auditLogService`** — re-exported from `./service`. This is the single export of the barrel; it is the repository/model object that consumers use to read the audit trail. No other symbols (types, helpers, model) are re-exported.
 
 ## Relationships
 
-- **`./service.ts`** — source of the single re-export. This file adds no logic; it simply forwards `auditLogService`.
-- **`src/modules/observability/controllers/get-observability-audit.ts`** — primary consumer. `observability` owns `GET /observability/audit` and reaches the audit-logs service *through this barrel* rather than importing `./service` directly.
-- **`src/modules/audit-logs/tests/unit/service.test.ts`** — unit-tests the service object this barrel exposes. The test targets `service.ts` directly, not the barrel, but the barrel is what other modules see.
+- **`./service`** (`src/modules/audit-logs/service.ts`) — sole import target. `auditLogService` is defined there; this file merely re-exports it.
+- **`src/modules/observability/controllers/get-observability-audit.ts`** — downstream consumer. It imports `auditLogService` *through this barrel* (not directly from `./service`) to read entries for the `GET /observability/audit` endpoint.
+- **`src/modules/audit-logs/tests/unit/service.test.ts`** — unit-tests `auditLogService` directly (imports `./service` internally, not the barrel). The barrel is not a test dependency.
 
 ## Notes
 
-- **Write path is NOT wired through this file.** It is registered by `module.ts` at import time as the sink behind `@infrastructure/observability/audit`. `app.ts` deliberately does not name this domain to do the wiring.
-- **One export is a deliberate boundary**, not an oversight. If a future consumer needs the repository or a type, the correct response is to add an explicit re-export here with a comment explaining why, not to reach into `./service` from outside the module.
+- The barrel intentionally exports **one symbol only**. If `observability` or another module needs types from the audit-log model, the convention (per the comment) is that this is "this module's business, not the dashboard's"—meaning the types should travel through the service's public API rather than being re-exported here.
+- Write-path registration happens at import time in `module.ts`; it is **not** performed through this file.
+- The module owns a collection and has **no URL** of its own; the only HTTP surface is the read endpoint owned by `observability`.

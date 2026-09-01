@@ -2,35 +2,30 @@
 
 ## Purpose
 
-Declares the wishlist module as a single `AppModule` object that the kernel can register. It wires the module's HTTP routes, cross-module dependencies, domain-event subscriptions, seed functions, and demo shape into one place so the rest of the application never needs to import individual wishlist pieces directly.
+Module manifest for the wishlist feature. It registers the module's name, base path, routes, event subscriptions, demo seeding, and locale path into the kernel's `AppModule` contract so the application can discover and wire up the module at startup.
 
 ## Key elements
 
-- **Default export** — an object satisfying `AppModule` (from `@kernel/registry`) with:
-  - `name: 'wishlist'`, `subdomain: 'supporting'`, `basePath: '/wishlist'`
-  - `routes` — the Express/Hono router imported from `./routes`
-  - `dependsOn` — declarative list of soft dependencies on **cart** (customer-supplier), **products** (conformist), **users** (conformist)
-  - `subscribe()` — registers two `onDomainEvent` handlers:
-    - `PRODUCT_DELETED` → calls `productRemoveFromWishlistsById`
-    - `USER_DELETED` → calls `wishlistDeleteByUserId`
-  - `seeds` / `seedExport` — imported from `./demo`
-  - `demoShapes` — `{ wishlists: 'stored' }`
-  - `locales` — filesystem path built with `path.join(__dirname, 'locales')`
+- **Default export** – An object `satisfies AppModule` that bundles every piece of module metadata in one place.
+- **`subscribe()`** – Registers two domain-event handlers: on `PRODUCT_DELETED` it calls `productRemoveFromWishlistsById`; on `USER_DELETED` it calls `wishlistDeleteByUserId`. These keep wishlists consistent without the wishlist module importing products/users at runtime.
+- **`routes`** – The Express/Hono router imported from `./routes`, mounted at `basePath: '/wishlist'`.
+- **`seeds` / `seedExport`** – `seedWishlistsCollection` (from `./demo`) and `exportSeededWishlists` for demo data injection and retrieval.
+- **`demoShapes`** – Declares `{ wishlists: 'stored' }`, indicating the `GET /wishlist` endpoint resolves the caller's list against the product catalogue.
+- **`locales`** – Resolves to a `locales/` directory next to this file.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — provides the `AppModule` type that the default export satisfies.
-- **`src/kernel/events.ts`** — provides `onDomainEvent`, used inside `subscribe()` to listen for cross-module events.
-- **`src/modules/products/index.ts`** — exports the `PRODUCT_DELETED` event constant consumed here.
-- **`src/modules/users/index.ts`** — exports the `USER_DELETED` event constant consumed here.
-- **`src/modules/wishlist/routes.ts`** — supplies the `router` object mounted at `/wishlist`.
-- **`src/modules/wishlist/service.ts`** — supplies `wishlistDeleteByUserId` and `productRemoveFromWishlistsById`, invoked only within event handlers (no HTTP-layer coupling).
-- **`src/modules/wishlist/demo.ts`** — supplies the seed and seed-export functions.
-- **`src/modules.ts`** — upstream aggregator that imports this module to register it with the kernel.
+- **`src/kernel/registry.ts`** – Supplies the `AppModule` type the manifest must satisfy.
+- **`src/kernel/events.ts`** – Supplies `onDomainEvent`, the subscription API used inside `subscribe()`.
+- **`src/modules/products/index.ts`** – Exports the `PRODUCT_DELETED` event constant referenced by the subscription.
+- **`src/modules/users/index.ts`** – Exports the `USER_DELETED` event constant referenced by the subscription.
+- **`src/modules/wishlist/routes.ts`** – Provides the `router` attached to the manifest.
+- **`src/modules/wishlist/demo.ts`** – Provides `seedWishlistsCollection` and `exportSeededWishlists`.
+- **`src/modules/wishlist/service.ts`** – Provides `wishlistDeleteByUserId` and `productRemoveFromWishlistsById` used as event-handler callbacks.
+- **`src/modules.ts`** – Aggregates this module alongside other module manifests for the application entry point.
 
 ## Notes
 
-- Cross-module side effects (product deletion, user deletion) are handled **exclusively via domain events**, keeping the static import graph acyclic. There are no direct function-level imports from `products/` or `users/` business logic.
-- The `dependsOn` array is **declarative metadata** (DDC relationship labels) — it does not create runtime imports. The only runtime cross-module imports are the two event-constant values.
-- `__dirname` is used, indicating the file runs under a CommonJS transpilation context (or a bundler that preserves it); it will not work in a pure ESM runtime without a shim.
-- The module is intentionally labelled **supporting**: it holds no business rules of its own, only a stored list of product references.
+- The module is a **leaf** in the import graph ("Reached by: nothing"). It does not export any symbols other than the default manifest object.
+- Cleanup of orphaned wishlist entries is **event-driven**, not import-driven: products and users emit domain events rather than calling wishlist code directly. This is the mechanism that keeps the cross-module dependency graph acyclic.
+- `path.join(__dirname, 'locales')` is a runtime path resolution; the directory must exist relative to the compiled output location.

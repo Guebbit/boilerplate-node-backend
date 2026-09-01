@@ -1,24 +1,21 @@
 # src/modules/orders/tests/unit/emails.test.ts
 
 ## Purpose
-
-Unit tests for the order-confirmation email builder and the invoice document builder in `@modules/orders/emails`. The assertions are shaped around specific billing-error failure modes (wrong item fields, total that omits shipping, lines built off the wrong array) and verify that the builder delegates to `orderTotal` rather than recomputing a divergent sum.
+Unit tests for the two customer-facing money-rendering builders in the orders module — `orderConfirmEmail` and `invoiceDocument`. The file exists to catch the specific failure mode where a formatting slip (swapped fields, missing line, recomputed total, untranslated key) is read as a billing error by the end customer. It explicitly does **not** re-derive the total; it only asserts the builder defers to `orderTotal`.
 
 ## Key elements
-
-- **`ORDER`** (const) — shared fixture: two items with distinct titles/quantities/prices plus a `shippingCost`, so no field can silently stand in for another.
-- **`describe('orderConfirmEmail')`** — 8 tests covering: template name, one-line-per-item count, per-line field correctness, total equals `orderTotal(ORDER)` (shipping included), shipping actually changes the total, customer name in greeting, empty-items order produces zero lines, locale pass-through + translated subject, and that all copy slots resolve to real strings (no `orders.*` key leaks).
-- **`describe('invoiceDocument')`** — 4 tests covering: one-line-per-item with correct values, order ID appears in `pageMetaTitle`, a non-string ID (object with `toString`) renders without `[object Object]`, and locale pass-through with translated title.
+- **`ORDER`** – Shared fixture: two items with distinct titles, quantities, and prices, plus a non-zero `shippingCost`. Chosen so no field can accidentally stand in for another.
+- **`describe('orderConfirmEmail', …)`** – Nine tests covering: correct template name, one line per item, per-line field fidelity, total defers to `orderTotal`, shipping is included in the total, customer name is interpolated (no `{{…}}` residue), empty-items array doesn't throw, locale propagation, and no unresolved `orders.*` translation keys.
+- **`describe('invoiceDocument', …)`** – Four tests covering: per-line fidelity, order id in `pageMetaTitle`, non-string id (object with `toString`) rendered safely (no `[object Object]`), and locale propagation.
+- **Imports** – `orderConfirmEmail`, `invoiceDocument`, `OrderLines` from `@modules/orders/emails`; `orderTotal` from `@modules/orders/domain`.
 
 ## Relationships
-
-- **`src/modules/orders/emails.ts`** — the module under test; provides `orderConfirmEmail`, `invoiceDocument`, and the `OrderLines` type.
-- **`src/modules/orders/domain/index.ts`** — re-exports `orderTotal`, which this file imports to cross-check that the email/invoice builders delegate to the domain total rather than computing their own.
-- **`src/modules/orders/domain/totals.ts`** — implements `orderTotal`; its own correctness is covered in `totals.property.test.ts`. This file only asserts the builder *calls* it, not that the math is right.
+- **`src/modules/orders/emails.ts`** – The module under test. Provides both builder functions and the `OrderLines` type used by the fixture.
+- **`src/modules/orders/domain/index.ts`** – Re-exports `orderTotal`, which the test calls to compute the expected total string and assert the email's `data.total` contains it.
+- **`src/modules/orders/domain/totals.ts`** – Where `orderTotal` is actually implemented. The test header comment notes its correctness is covered separately by `totals.property.test.ts`; this file only checks the email *uses* it.
 
 ## Notes
-
-- The doc-comment at the top of the file enumerates the three concrete failure modes the suite guards against; it reads as a spec, not just a comment.
-- `orderTotal` correctness is **not** asserted here—only that the builder uses it. Do not add arithmetic checks to this file; they belong in `totals.property.test.ts`.
-- The empty-order test exists because an admin-created order can have zero items and a naive `items[0]` access would throw at runtime rather than in a test.
-- The non-string ID test (object with `toString`) encodes the invariant that the builder wraps the ID in `String(...)`; dropping that coercion is invisible until a customer receives an invoice titled `[object Object]`.
+- The total assertion is an **anti-drift** check (`data.total` contains `String(orderTotal(ORDER))`), not a re-implementation. Do not replace it with a local sum.
+- The invoice `id` parameter is typed `unknown` (real orders carry ObjectIds as often as strings). The `[object Object]` test guards the `String(id)` coercion inside the builder — removing that coercion is invisible until a customer receives a malformed title.
+- The empty-items test applies only to `orderConfirmEmail`; `invoiceDocument` always receives an `id` and is never exercised with zero items here.
+- The distinct-value fixture (`100` vs `7.5`, `2` vs `3`, different titles) is intentional — it prevents a builder that reuses one item's fields across all lines from passing.

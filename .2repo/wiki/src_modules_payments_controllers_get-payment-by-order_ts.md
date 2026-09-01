@@ -1,18 +1,22 @@
 # src/modules/payments/controllers/get-payment-by-order.ts
 
 ## Purpose
-Controller handler for `GET /payments/order/:orderId`. It retrieves the payment intent (and its current status) associated with a given order so that the order page's payment panel can restore in-flight state on reload instead of forcing the user to start over.
+
+Thin Express controller for `GET /payments/order/:orderId`. It delegates to `paymentService.getForOrder` and returns the payment (intent, status, etc.) so the order page's payment panel can recover its state on a mid-flow reload rather than restarting.
 
 ## Key elements
-- **`getPaymentByOrder`** (exported function) — Accepts an Express `Request<{ orderId?: string }>` and `Response`. Calls `paymentService.getForOrder(orderId, authContext)`, then either short-circuits via `refused` or resolves with `successResponse`. All unhandled rejections are funnelled into `catchAs`.
+
+- **`getPaymentByOrder(request, response)`** (exported) — Resolves the `orderId` route param, calls `paymentService.getForOrder` with the caller's `authContext`, then either short-circuits via `refused` (rejected result) or sends the payload via `successResponse`. Errors are funneled to `catchAs(response, 'getPaymentByOrder')`.
 
 ## Relationships
-- **`src/modules/payments/routes.ts`** — Registers this handler on the `/payments/order/:orderId` route.
-- **`src/modules/payments/service.ts`** — Provides `paymentService.getForOrder()`, the actual data-fetching + authorization logic this controller delegates to.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` for the 200 path.
-- **`src/infrastructure/http/controller.ts`** — Supplies `refused` (401/403 short-circuit) and `catchAs` (structured error → response).
+
+- **`src/modules/payments/service.ts`** — Calls `paymentService.getForOrder(orderId, authContext)`; this is the sole business-logic dependency.
+- **`src/infrastructure/http/controller.ts`** — Provides the `catchAs` (error → HTTP) and `refused` (rejected-result → HTTP) helpers.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the happy-path JSON envelope.
+- **`src/modules/payments/routes.ts`** — Registers `getPaymentByOrder` as the handler for the `GET /payments/order/:orderId` route.
 
 ## Notes
-- The `orderId` param is coerced with `String(...)` before being passed to the service; the type is `orderId?: string` on the Request generic, so the cast guards against `undefined` at runtime.
-- Authorization context is read from `request.authContext` (set by upstream middleware, not this file) and forwarded to the service.
-- The handler is a plain function using promise `.then/.catch` rather than `async/await`, consistent with the surrounding controller style.
+
+- The route param is typed `orderId?: string` but immediately wrapped in `String(...)` before being passed to the service — harmless but suggests the param could theoretically arrive as a non-string in some middleware configurations.
+- `request.authContext` is expected to be populated by upstream auth middleware; the controller does not validate its presence.
+- The `refused` / `successResponse` split means the service can return a structured "rejected" result (e.g. not-found, not-authorized) that maps to a non-2xx without throwing.

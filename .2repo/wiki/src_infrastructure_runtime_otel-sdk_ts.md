@@ -2,26 +2,24 @@
 
 ## Purpose
 
-Bootstraps the OpenTelemetry `NodeSDK` for the application: configures service identity, batch OTLP span export, and auto-instrumentation for HTTP, Express, Mongoose, and Redis. Exposes a start/shutdown pair so the rest of the codebase never touches OTel APIs directly.
+Bootstraps the OpenTelemetry `NodeSDK` for this process: wires up resource identity, the OTLP batch exporter, and auto-instrumentations for HTTP, Express, Mongoose, and Redis. It must be imported *before* any of those libraries begin handling traffic, because the instrumentation packages monkey-patch their targets at `sdk.start()` time — code that is already loaded stays un-patched and emits no spans.
 
 ## Key elements
 
-- **`startTracing(): void`** — Idempotent entry point. Builds a `NodeSDK` with a resource (`service.name` from `NODE_SERVICE_NAME`, `service.version` from `npm_package_version`), the span-processor pipeline, and four instrumentations, then calls `sdk.start()` to apply monkey-patches.
-- **`shutdownTracing(): Promise<void>`** — Calls `sdk.shutdown()` to flush any spans still queued in the `BatchSpanProcessor`. Resolves immediately if `startTracing` was never called.
-- **`buildProcessors(): SpanProcessor[]`** — Returns `[]` (no-op) when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset; otherwise returns a `BatchSpanProcessor` wrapping an `OTLPTraceExporter` pointed at `<endpoint>/v1/traces` with optional headers from `OTEL_EXPORTER_OTLP_HEADERS`.
-- **`sdk` / `started`** — Module-scope singletons. `started` guards against double-registration of instrumentations; `sdk` holds the instance so `shutdownTracing` can flush the same object.
+- **`startTracing()`** (exported) — Idempotent entry point. Builds a `NodeSDK` with a resource (`service.name`, `service.version`), a span-processor pipeline, and the four instrumentations, then calls `sdk.start()`. Safe to call multiple times; guarded by the `started` flag.
+- **`shutdownTracing()`** (exported) — Flushes the `BatchSpanProcessor` queue and calls `sdk.shutdown()`. Returns `Promise<void>`; resolves immediately if the SDK was never started.
+- **`buildProcessors()`** (module-private) — Reads `OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` to construct a `BatchSpanProcessor` + `OTLPTraceExporter`. Returns `[]` when no endpoint is set (spans are created but discarded).
+- **`sdk` / `started`** (module-scope variables) — Single SDK instance and per-process idempotency guard.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — Calls `shutdownTracing()` as the final step in the shutdown chain so infra teardown is still traced and pending spans are not lost.
-- **`src/cluster.ts`** — Each cluster worker imports this module in its own process; the `started` flag is intentionally per-process so every worker instruments independently.
-- **`src/infrastructure/observability/tracer.ts`** — Consumes the context/span created by this module's instrumentations (e.g. reads `traceId` for log correlation, or opens manual child spans).
-- **`src/app.ts`** — Must import this module *before* Express begins handling requests; otherwise the HTTP/Express patches land after the server is live and early requests produce no spans.
+- **`src/app.ts`** — Imports `startTracing()` before the Express app begins listening, ensuring the HTTP/Express/Mongoose/Redis patches are in place before the first request.
+- **`src/cluster.ts`** — Each cluster worker process imports this module independently; the `started` flag is per-process, so workers instrument themselves without cross-process coordination.
+- **`src/infrastructure/runtime/server-lifecycle.ts`** — Calls `shutdownTracing()` as the final step in the shutdown sequence so that infrastructure teardown spans are still flushed before the process exits.
 
 ## Notes
 
-- **Import order is a hard requirement.** The instrumentation packages patch target modules at `sdk.start()` time. Any library that has already processed traffic stays un-patched for that process's lifetime.
-- **`OTEL_EXPORTER_OTLP_ENDPOINT` is a base URL only** (e.g. `http://localhost:4318`); the `/v1/traces` path is appended internally.
-- **No endpoint → silent mode.** The SDK still runs and `traceId` is available in the context, but zero spans are exported. This is the expected local-dev / test behavior.
-- **`OTEL_EXPORTER_OTLP_HEADERS`** uses the OTel-specified `key=value,key2=value2` format; it is parsed into a `Record<string, string>` before being handed to the exporter.
-- **Version stamping depends on npm.** `npm_package_version` is only injected when the process is started via an npm script (`npm start`, etc.). A bare `node dist/…` launch falls back to `'0.0.0'`.
+- **Import order is critical.** If this module is loaded after Express or Mongoose have already been required, those libraries remain un-patched for the lifetime of the process.
+- **No-op mode by default.** Without `OTEL_EXPORTER_OTLP_ENDPOINT` the SDK still runs (spans exist, `traceId` is available for log correlation) but nothing is exported. This keeps local dev and test output quiet without a collector.
+- **Header parsing is manual.** `OTEL_EXPORTER_OTLP_HEADERS` is split on `,` then on `=`; there is no support for quoted values or empty keys beyond the destructuring defaults.
+- **Version source.** `service.version` reads `npm_package_version` (auto-injected by npm scripts) and falls back to `'0.0.0'`; in a bare `node` invocation it will be `'0.0.0'`.

@@ -2,23 +2,23 @@
 
 ## Purpose
 
-Unit tests for the inventory transition table (`counterDeltaFor`) and the derived availability read (`availabilityOf`). Rather than restating each table row, the tests assert the three invariants the table encodes: only receipts/adjustments change unit counts, commits shift both columns equally, and reserve is exactly inverted by release/expire. No mocks or database are used — the functions under test are pure.
+Unit tests for the inventory transition table. Rather than asserting "output equals input," the suite pins down three invariants: only receipt or adjustment changes the unit count, a commit shifts both counters equally so availability is untouched, and reserve / release / expire are exact inverses. No mocks, no database—pure function calls.
 
 ## Key elements
 
-- **`counterDeltaFor` tests** — six `it` blocks verifying: exhaustive coverage of every `StockMovementReason` value, the closed set of reasons that mutate `onHand`, the commit invariant (`onHandDelta === reservedDelta`), the reserve-inverse property (parameterized over `release` and `expire`), the zero-`onHand` guarantee for reserve/release/expire, and sign preservation for `adjust`.
-- **`availabilityOf` tests** — a table-driven test (`it.each`) covering normal, fully-reserved, and partially-absent counter objects, plus a dedicated clamp test asserting that a negative result is reported as `0`.
-- **`EVERY_REASON`** — local constant built via `Object.values(StockMovementReason)`, reused to guarantee every contract reason is exercised.
+- **`counterDeltaFor` block** — asserts exhaustiveness over every `StockMovementReason` value, that only `commit`/`receive`/`adjust` touch `onHand`, that commit deltas are equal on both counters, that `reserve` + `release`/`expire` sum to zero on both counters, that `reserve`/`release`/`expire` never alter `onHand`, and that `adjust` preserves sign (−3 stays −3).
+- **`availabilityOf` block** — table-driven checks that `onHand − reserved` is the result, that absent counters read as 0 (not Infinity), and that a negative result is clamped to 0.
+- **`EVERY_REASON`** — `Object.values(StockMovementReason)`, used to drive the exhaustiveness and filtering loops.
 
 ## Relationships
 
-- **`src/modules/inventory/domain/transitions.ts`** — the implementation under test; `counterDeltaFor` and `availabilityOf` originate here.
-- **`src/modules/inventory/domain/index.ts`** — the barrel export the test imports from (`../../domain`), re-exporting the two functions from `transitions.ts`.
-- **`src/types/index.ts`** — source of the `StockMovementReason` enum (aliased as `@types`), which defines the closed set of movement reasons the tests iterate over.
+- **`src/modules/inventory/domain/index.ts`** — re-exports `counterDeltaFor` and `availabilityOf`, which are the two functions under test (imported via `../../domain`).
+- **`src/modules/inventory/domain/transitions.ts`** — defines the actual transition table and the exhaustive switch that `counterDeltaFor` implements; these tests are the behavioral contract for that module.
+- **`src/types/index.ts`** — source of the `StockMovementReason` enum; the exhaustiveness test iterates its values to ensure the table stays in lockstep with the contract.
 
 ## Notes
 
-- The tests deliberately do **not** hard-code individual delta values per reason (e.g., `reserve` → `{0, +1}`); they assert *relationships between* deltas. This is intentional: a row-by-row copy test would pass even if the table were duplicated with a shared bug.
-- The `adjust` sign test exists to catch a `Math.abs` regression that would silently convert write-offs into gains.
-- `availabilityOf({})` returning `0` is an explicit safety choice (treat missing counters as "nothing to sell"), not an oversight — the comment flags this as the safe direction for a number that gates a charge.
-- The exhaustive-reason test doubles as a compile-time check: because `counterDeltaFor` switches over the enum, adding a reason without handling it only surfaces if this test calls it with that reason.
+- The exhaustiveness test is load-bearing: `counterDeltaFor` switches over the enum, so a new reason added to `StockMovementReason` without a table entry is only a compile error if *something* passes that value in. This test is that something.
+- The `adjust` sign test exists to catch an accidental `Math.abs` that would turn write-offs into phantom stock.
+- `availabilityOf` treats missing counters as 0 deliberately—the safe default when the number gates a charge.
+- The negative-clamp case (`onHand: 3, reserved: 8`) is expected to be unreachable given upstream guards, but is asserted to keep it from ever reaching a UI.

@@ -2,36 +2,33 @@
 
 ## Purpose
 
-Integration test suite for `userRepository`, exercising every public method (`create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`, `updateMany`, and the token helpers) against a real database. It verifies persistence-level contracts: default values, password hashing, lean-object return shapes, pagination options, filter semantics, and token-lifecycle behaviour.
+Integration test suite for `userRepository`, exercising every public method (CRUD + token operations) against a real in-memory MongoDB instance wired up by `setupTestDb`. It exists to verify that the repository's Mongoose interactions behave correctly end-to-end—pre-save hooks, lean queries, pagination options, and token sweeps—without relying on mocks for the database layer.
 
 ## Key elements
 
-- **`describe('userRepository', …)`** — top-level suite; one nested `describe` per repository method.
-- **`create` tests** — assert a new Mongoose document is returned, password is hashed (not stored plain), and `admin` defaults to `false`.
-- **`findById` / `findOne` tests** — happy-path retrieval plus `null` on miss.
-- **`findAll` tests** — no-filter, `limit`, `skip` (cursor pagination), filter by field, and that results are **lean objects** (no `.save`).
-- **`count` tests** — unfiltered total, filtered count, empty-collection zero.
-- **`save` / `deleteOne` / `updateMany` tests** — in-memory mutation flush, permanent removal, and bulk `$set` with non-matching documents left untouched.
-- **`tokenRemoveAll` test** — removes all tokens of a given `TokenType`, leaves others.
-- **`tokenRemoveExpired` tests** — removes only expired entries; **rejects** (throws) when the underlying `updateMany().exec()` fails, rather than resolving with an HTTP-style status. The spy targets `Users.updateMany` (the Mongoose model static) with a query-object mock that exposes `.exec`.
-- **Session-lookup tests (truncated)** — assert the two queries the session/JWT layer delegates to this repository (`findByIdWithCredentials` and a positional update) live here, not in `account/session/jwt.ts`.
+- **`setupTestDb()`** — called once at module top-level to seed and clean the in-memory Mongo before any `describe` block runs.
+- **`describe('create')`** — asserts a document is inserted, the pre-save hook hashes the password, and `admin` defaults to `false`.
+- **`describe('findById')` / `describe('findOne')`** — happy-path and null-return cases.
+- **`describe('findAll')`** — no-filter, `limit`, `skip` (cursor pagination), query filtering, and lean-object guarantee (no Mongoose `save` method via `asStub`).
+- **`describe('count')`** — total, filtered, and empty-collection counts.
+- **`describe('save')`** — persists in-memory Mongoose mutations back to the DB.
+- **`describe('deleteOne')`** — permanent removal; `findById` returns `null` afterward.
+- **`describe('updateMany')`** — bulk `$set` on matching docs; non-matching docs untouched.
+- **`describe('token methods')`** — `tokenRemoveAll(type)`, `tokenRemoveExpired()` (valid vs. expired sweep, failure-rejection path via a spied `Users.updateMany`), and token-lookup methods (truncated in source).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/users/index.ts` | Source of `userRepository`, `TokenType`, `UserDocument` (barrel re-exports). |
-| `src/modules/users/model.ts` | Imported directly as `userModel` (aliased `Users`) to spy on the Mongoose static `updateMany` for the rejection test. The comment notes this is an intentional spec-reaching-into-module-internal pattern. |
-| `src/modules/users/repository.ts` | System under test; all assertions call methods on `userRepository`. |
-| `src/modules/users/tests/factory.ts` | Provides `makeUser` (in-memory object builder) and `createUser` (persists via the repository). |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` called once at module top to prepare the test database. |
-| `tests/support/stub.ts` | `asStub` used to type-narrow a lean object when asserting absence of Mongoose methods. |
-| `src/modules/users/factory.ts` | Indirect: `createUser` in the test factory likely wraps the domain factory to build a valid `Partial<UserDocument>`. |
+- **`src/modules/users/index.ts`** — provides the `userRepository` factory, `TokenType` enum, and `UserDocument` type that the tests import and assert against.
+- **`src/modules/users/repository.ts`** — the unit under test; every `it` block exercises one of its exported methods.
+- **`src/modules/users/model.ts`** — imported directly as `Users`; spied on in the `tokenRemoveExpired` failure test to make `updateMany().exec()` reject.
+- **`src/modules/users/tests/fixtures.ts`** — supplies `makeUser()` (plain-object factory) and `createUser()` (inserts via the repository) for every test that needs seed data.
+- **`tests/support/setup-test-db.ts`** — boots the in-memory Mongo and calls `setupTestDb()` once at the top of this file.
+- **`tests/support/stub.ts`** — provides `asStub<T>()`, used to cast a lean object so the test can assert absence of Mongoose instance methods.
+- **`src/modules/users/fixtures.ts`** — listed as a neighbor but not imported here; the test uses the module-local `tests/fixtures.ts` instead.
 
 ## Notes
 
-- **Direct model import**: `userModel` is imported from `@modules/users/model` rather than the barrel. The in-file comment justifies this: no sibling module needs the model, so it was removed from the barrel; a spec may still reach its own module's internals.
-- **`asStub` on lean objects**: `findAll` returns plain JS; the test uses `asStub<{ save?: unknown }>(user).save` to assert `.save` is `undefined`, confirming lean mode.
-- **Token-removal failure contract**: `tokenRemoveExpired` **rejects** on write failure. The comment explicitly states this replaced an old `{ status: 500, success: false }` resolution so the service layer (`adminTokenCleanup`) owns the HTTP-level decision. The spy must return a query-like object with `.exec`, not a bare rejected promise, because the repository calls `.exec()` internally.
-- **`makeUser() as Partial<UserDocument>`**: The cast acknowledges the factory returns a plain object; the repository accepts a partial document.
-- The file is truncated in the provided content; the session-lookup `describe` block is incomplete.
+- The direct import of `userModel` from `@modules/users/model` is intentional: the barrel (`index.ts`) no longer re-exports it. A comment in the file notes that `eslint-plugin-boundaries` explicitly permits a spec reaching into its own module's internals.
+- `tokenRemoveExpired` is asserted to **reject** on write failure (not resolve a status object). A comment documents that the old contract returned `{ status: 500, success: false }` from a Mongoose static, which conflated persistence with HTTP semantics.
+- When stubbing the failure path, the mock must return a **query-like object** with `.exec()` (not a rejected promise), because the repository calls `.exec()` on the returned query. A plain `mockRejectedValue` would throw `"exec is not a function"`.
+- The file is truncated in the source snapshot; the `findByToken` / `findByIdWithCredentials` tests are cut off.

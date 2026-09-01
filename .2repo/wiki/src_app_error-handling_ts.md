@@ -2,34 +2,28 @@
 
 ## Purpose
 
-Centralised error handling for the application at both levels a failure can surface: inside an HTTP request (as the final Express error middleware) and outside one (process-level `unhandledRejection` / `uncaughtException`). It ensures every unhandled error is logged, recorded on the active OpenTelemetry span, and responded to with a safe, generic payload.
+Global error handling for the Express application. It defines the last-resort error handler that catches any failure no route or middleware handled, and it registers `process.on` handlers for unhandled rejections and uncaught exceptions. Both answer the same question — "what happens to a failure nobody else handled?" — at the request level and the process level respectively.
 
 ## Key elements
 
-- **`handleUncaughtError(error, request, response, _next)`** — The global Express error middleware. Dispatches by error type:
-  - `MulterError` → 400 with the multer error code/message.
-  - `ExtendedError` → its own `httpCode` and `errors` array.
-  - Errors matching `databaseErrorInterpreter` with status < 500 → that status with a generic `INVALID_REQUEST` message.
-  - Everything else → 500 with a constant `INTERNAL_ERROR` message (never `error.message`).
-  - All branches log via `logger.error` with `request_id`, `trace_id`, and status; the error is also recorded on the active span.
-
-- **`installErrorHandling(app: Express)`** — Mounts `handleUncaughtError` on the app and registers the two process-level handlers. In `NODE_ENV === 'test'` it skips the `uncaughtException` handler so Jest's own reporting is preserved.
+- **`handleUncaughtError(error, request, response, _next)`** — The global Express error handler. Determines the status code (400 for `MulterError`, the stored `httpCode` for `ExtendedError`, the interpreted status for known driver errors, 500 otherwise), logs with request/trace IDs, records the error on the active OTel span, and sends a structured rejection via `rejectResponse`. For 500s the client receives a constant i18n message; the real detail lives only in the log.
+- **`installErrorHandling(app)`** — Mounts `handleUncaughtError` on the Express app and registers `unhandledRejection` / `uncaughtException` process listeners. Skips the `uncaughtException` listener (and its `process.exit(1)`) when `NODE_ENV === 'test'` so Jest retains control of the process.
 
 ## Relationships
 
-- **`src/app.ts`** — Calls `installErrorHandling(app)` after route installation; this file's middleware is the last middleware in the Express chain.
-- **`src/infrastructure/adapters/logger.ts`** — Provides `logger` (request-scoped error logging) and `auditLogger` (process-level audit events).
-- **`src/infrastructure/http/errors.ts`** — Supplies the `ExtendedError` type (checked via `instanceof`) and `databaseErrorInterpreter` for classifying driver errors.
-- **`src/infrastructure/http/response.ts`** — `rejectResponse` is the single helper that writes the JSON error body; all branches in `handleUncaughtError` return through it.
-- **`src/infrastructure/observability/tracer.ts`** — `recordErrorOnActiveSpan` attaches the error to the current span; `getActiveSpanContext().traceId` is included in log output.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — `t()` provides the localized strings for `generic.error-unknown` and `generic.error-internal`.
-- **`tests/unit/app/process-error-handlers.test.ts`** — Unit-tests the process-level handler registration (rejection logging, exception logging, `process.exit` call, test-env skip).
-- **`package.json`** — Runtime deps exercised here: `express`, `multer`.
+- **`src/app.ts`** — The caller. `installErrorHandling` must be invoked after routes are installed; the Express error handler only catches errors from middleware/routes mounted before it.
+- **`src/infrastructure/adapters/logger.ts`** — Supplies `logger` (request-scoped error logging) and `auditLogger` (process-level events).
+- **`src/infrastructure/http/errors.ts`** — Supplies the `ExtendedError` class (carries `httpCode` and `errors` array) and `databaseErrorInterpreter`, which maps known driver errors (malformed ObjectId, duplicate key, etc.) to a client-facing status < 500.
+- **`src/infrastructure/http/response.ts`** — Supplies `rejectResponse`, the single formatting path for all error responses from this file.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Supplies `t()` for the two constant client-facing messages (`generic.error-unknown`, `generic.error-internal`).
+- **`src/infrastructure/observability/tracer.ts`** — Supplies `recordErrorOnActiveSpan` (records the error on the current span) and `getActiveSpanContext` (extracts the trace ID for the log line).
+- **`tests/unit/app/process-error-handlers.test.ts`** — Unit-tests the process-level handler registration (verifying the test-env skip logic and the audit log calls).
+- **`package.json`** — Declares the runtime dependencies this file imports (`express`, `multer`).
 
 ## Notes
 
-- **Mount order is critical.** `installErrorHandling` must run *after* `installRoutes`; an Express error middleware only catches errors thrown by middleware registered before it.
-- **The 500 branch intentionally leaks nothing.** The response body is a constant translated string; `error.message` is log-only. Do not "helpfully" switch to returning the message.
-- **`databaseErrorInterpreter` is a safety net, not a contract.** Controllers are still expected to `.catch()` their own database calls; this branch catches the ones that slip through.
-- **In test mode the `uncaughtException` handler is deliberately not registered** so Node's default (and Jest's) reporting is preserved. The `unhandledRejection` handler is always registered.
-- **`handleUncaughtError` is exported for direct testing** because, as a trailing error middleware, it cannot be reached by simply adding a throwing route after it.
+- **Mount order matters.** `handleUncaughtError` must be registered *after* all routes (and the 404 catch-all). Adding a throwing route after the handler is mounted makes it unreachable, which is why the comment notes it can't be reached by "just adding a route to `app`" in a test.
+- **500 response is deliberately opaque.** The client always gets the i18n constant `INTERNAL_ERROR` / `error-internal`; `error.message` is never forwarded. All detail goes to the log line with `request_id` and `trace_id`.
+- **`databaseErrorInterpreter` is a safety net, not a substitute.** It covers the case where a controller forgot a `.catch()`. The documented expectation (see `docs/theory/request-flow.md`) is that controllers handle their own driver errors.
+- **`uncaughtException` handler always exits.** It logs then calls `process.exit(1)` in every non-test environment because the process state after an uncaught exception is undefined.
+- **`NODE_ENV === 'test'` guard.** Only the `uncaughtException` listener is skipped; the `unhandledRejection` listener is still registered under the test runner.

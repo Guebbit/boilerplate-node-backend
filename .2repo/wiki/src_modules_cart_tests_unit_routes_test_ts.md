@@ -2,23 +2,24 @@
 
 ## Purpose
 
-Unit test for the cart router's route table. It verifies that the cart module exposes exactly the expected endpoints in the correct declaration order (critical for Express first-match semantics), that every route is authenticated with `isAuth` but never `isAdmin`, and that no route sets a shared cache while `POST /checkout` does invalidate the orders/products caches.
+Unit test for the cart router that pins down three invariants: the exact set and declaration order of endpoints, the authorization posture (authenticated, never admin), and the caching policy (invalidate at checkout, never set a shared cache). It exists so that accidental reordering, guard changes, or cache additions break the build immediately.
 
 ## Key elements
 
-- **`ALL`** — canonical list of all eight cart route signatures (method + path) that the router must expose.
-- **`chainOf(signature)`** — helper that looks up the middleware chain for a single route by matching its `"METHOD /path"` string against `routeTable(router)`.
-- **`describe('cart routes — what is mounted')`** — asserts the full endpoint list and that literal-segment paths (`/summary`, `/checkout`) are declared before the `/:productId` wildcard.
-- **`describe('cart routes — authorization')`** — asserts `isAuth` on every route and the *absence* of `isAdmin` on any route (a cart is per-caller by design).
-- **`describe('cart routes — caching')`** — asserts `POST /checkout` includes an `invalidateCache([orders|products])` step and that no route calls `setCache` (a shared cache would leak one shopper's cart to another).
+- **`ALL`** — the expected list of nine `METHOD /path` signatures, used as the source of truth for every assertion.
+- **`chainOf(signature)`** — helper that looks up the middleware chain for a route signature via `routeTable(router)`.
+- **`describe('…what is mounted')`** — asserts `routeSignatures(router)` equals `ALL` and that literal paths (`/summary`, `/checkout`, `/all`) are declared before `/:productId`.
+- **`describe('…authorization')`** — iterates every signature in `ALL` to confirm `isAuth` is present; separately asserts no route carries `isAdmin`.
+- **`describe('…caching')`** — confirms `POST /checkout` includes `invalidateCache([orders|products])` and that no route in `ALL` uses `setCache`.
+- **`jest.mock('@infrastructure/http/middlewares/cache', …)`** — replaces the real cache middleware with `cacheMock()` from the test-support module before the router import.
 
 ## Relationships
 
-- **`src/modules/cart/routes.ts`** — the module under test; this file imports its `router` export and asserts against its mounted routes.
-- **`tests/support/routes.ts`** — provides the `routeTable`, `routeSignatures`, and `guardsOn` helpers that inspect an Express router's middleware chain in a test-friendly way. Also supplies the `cacheMock()` factory used in the `jest.mock` call.
+- **`src/modules/cart/routes.ts`** — the module under test; the test imports its exported `router` and inspects its route table, guards, and middleware chains.
+- **`tests/support/routes.ts`** — provides the shared test utilities (`routeTable`, `routeSignatures`, `guardsOn`, `cacheMock`) that this file uses to interrogate any Express router in a uniform way.
 
 ## Notes
 
-- The `jest.mock` for the cache middleware is hoisted above the `import { router }`, so the router is built with the mocked cache middleware in place. The mock delegates to `routeSignatures`/`guardsOn`-compatible chain entries (e.g. the string `'invalidateCache([orders|products])'`), meaning assertions match on *named* entries rather than real function references.
-- The ordering test (`/summary` and `/checkout` before `/:productId`) is not just a style check: Express resolves routes in declaration order, so a regression that reorders them would silently turn `GET /cart/summary` into a product-lookup for id `"summary"`.
-- The "no `setCache` anywhere" assertion encodes a *negative* invariant. It exists so that adding a cache-write to any cart route fails the suite and forces a deliberate review, rather than being an implicit assumption.
+- Route **ordering** is part of the contract: Express matches first-declared, so if `/all` or `/summary` were declared after `/:productId`, the literal would be swallowed as a product id. The test enforces this with explicit `indexOf` comparisons.
+- The "absence" assertions (no `isAdmin`, no `setCache`) are deliberate invariants, not gaps. Adding an admin route or a shared cache to the cart module will fail these tests by design.
+- The `jest.mock` for the cache middleware must appear before the `import { router }` line; reordering those two statements will cause the real middleware to be loaded and the caching assertions to test the wrong thing.

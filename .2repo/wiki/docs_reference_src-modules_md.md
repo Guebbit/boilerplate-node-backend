@@ -2,23 +2,35 @@
 
 ## Purpose
 
-Catalogs the **file shapes** (recurring file patterns) shared across all thirteen modules under `src/modules/`, explaining each shape once so readers don't need to re-learn the structure per domain. Serves as the index into the per-module pages and the enforcement test that keeps new shapes visible.
+Catalogues every file **shape** that can appear under `src/modules/<domain>/` and maps each shape to the modules that carry it. It exists so a reader can recognise any file in the 13-module tree by its pattern alone, without needing to know the specific domain. It is the single source of truth for "what belongs where" inside a module folder.
 
 ## Key elements
 
-- **Core shape table** — the nine files every module carries (`module.ts`, `routes.ts`, `controllers/`, `service.ts`, `services/`, `repository.ts`, `model.ts`, `openapi.yaml`, `locales/`), each with a one-line description and "read next" links.
-- **Optional shape table** — eleven files present only when a domain needs them (`index.ts`, `domain/`, `events.ts`, `audit.ts`, `metrics.ts`, `analytics.ts`, `emails.ts`, `probes.ts`, `demo.ts`, `factory.ts`, `asyncapi.yaml`).
-- **One-offs** — three shapes unique to a single module (`session/` in account, `providers/` in payments, `config.ts`).
-- **Mermaid flowchart** — visualises the declaration → routes → controllers → service → domain/repository → model pipeline, plus optional side files.
-- **Enforcement note** — `tests/cross-cutting/module-file-shapes.test.ts` holds the same catalogue as regex patterns and fails on unrecognised files in a module folder.
+- **Core shape table** — the nine files present in every module: `module.ts` (manifest), `routes.ts`, `controllers/`, `service.ts` / `services/`, `repository.ts`, `model.ts`, `openapi.yaml`, `locales/*.json`.
+- **Optional shape table** — eleven shapes a module may or may not carry: `index.ts` (barrel), `domain/`, `events.ts`, `audit.ts`, `metrics.ts`, `analytics.ts`, `emails.ts`, `probes.ts`, `demo.ts`, `fixtures.ts`, `asyncapi.yaml`.
+- **One-off table** — shapes unique to a single module (e.g. `session/` in `account`), flagged as genuine domain-specific pieces rather than naming drift.
+- **Mermaid flowchart** — the layer order from manifest → routes → controllers → service → domain/repo → model, with optional side-car files branching off the manifest.
+- **Tip callout** — states that a file matching none of the listed shapes is either a new shape to add here or misplaced; the page is the enforceable catalogue.
 
 ## Relationships
 
-- **docs/reference/tests.md** — this page names three cross-cutting tests that enforce its catalogue: `module-file-shapes.test.ts` (unrecognised file shapes), `controller-naming.test.ts` (controller file naming), and `audit-actions.test.ts` (audit action vocabulary). A new shape or audit action must be registered in the corresponding test to avoid invisible drift.
+- **`docs/theory/layers.md`** — the layer model this page operationalises per-module; "Read next" links point there for `service.ts`, `repository.ts`, `controllers/`.
+- **`docs/theory/domain-layer.md`** — explains the `domain/*.ts` shape (pure rules, lint-guaranteed free of Mongoose/Express).
+- **`docs/theory/module-lifecycle.md`** — the add/remove lifecycle that the `module.ts` manifest declaration drives.
+- **`docs/modules/index.md`** — the per-domain pages that describe *what each domain does* with these shapes; this page is the shape catalogue, those pages are the domain catalogue.
+- **`docs/api/endpoints.md`** — the endpoint contract that `routes.ts` lines correspond to.
+- **`docs/api/contract-fragmentation.md`** — explains why `openapi.yaml` and `asyncapi.yaml` are per-module fragments bundled into a root document.
+- **`docs/api/openapi-workflow.md`** / **`docs/api/asyncapi-workflow.md`** — the authoring workflows for those fragments.
+- **`docs/reference/contracts.md`** — `npm run contracts:bundle` (referenced for `analytics.ts` and `openapi.yaml`) is the bundling step documented there.
+- **`docs/reference/data.md`** — `demo.ts` seed fixtures and the `db:seed` script interact with the data/reference material.
+- **`docs/reference/ops.md`** — `audit.ts`, `metrics.ts`, `analytics.ts` are the per-module hooks into the ops surface described there.
+- **`docs/reference/src-app.md`** — `locales/*.json` and the `no-hardcoded-user-text` lint rule are owned at the app level.
+- **`docs/reference/tests.md`** — `fixtures.ts` exists so sibling contract suites can build documents; `audit-actions.test.ts` (referenced in the audit row) lives under the test tree.
+- **`docs/reference/scripts.md`** — `npm run db:seed` and `npm run contracts:bundle` are the scripts that consume `demo.ts` and the contract fragments respectively.
 
 ## Notes
 
-- A module with none of the optional-shape files is *not* incomplete; the doc explicitly calls it "small."
-- `openapi.yaml` fragments are treated as the source of truth: code is written to match the fragment, never the reverse. The same contract-first stance applies to `asyncapi.yaml`.
-- The `index.ts` barrel is the sole public surface of a module; importing past it into internals is a lint error, making that file the effective module boundary.
-- Adding a new shape costs exactly one line in `module-file-shapes.test.ts` and one row in this page — the doc warns that skipping either makes the shape "invisible."
+- The page is deliberately a **shape catalogue, not a domain guide**. Domain-specific behaviour is pushed to `docs/modules/<name>/`; mixing the two is the failure mode the tip callout warns against.
+- `service.ts` becomes `services/` (a barrel + per-operation files) past ~300 lines; the shape name changes but the tier does not.
+- `fixtures.ts` is production code by design—not test scaffolding—because cross-module contract suites import it.
+- The file treats any unrecognised file in a module folder as a review question, making the page itself a lightweight invariant (reinforced, per the tip, by a test that cross-checks the tree against the list).

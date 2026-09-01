@@ -13,8 +13,8 @@ _Canonical 2repo context source for AI editors._
 ## Index Metadata
 - Provider: `ollama`
 - Model: `qwen3.8:27b`
-- Index revision: `d2ef89091b74e6cf04e5c335838dcf7fdb4c4fb6a91ebaa55eefa51eb8b3f523`
-- Indexed chunks: `8674`
+- Index revision: `3315a5f779d6768797e6ccfc13524474eb821ff266e8d78305a7a6e29a1ca55e`
+- Indexed chunks: `8753`
 - Memory entries: `0`
 
 ## Query

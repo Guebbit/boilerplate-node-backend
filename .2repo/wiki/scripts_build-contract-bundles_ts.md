@@ -1,26 +1,28 @@
 # scripts/build-contract-bundles.ts
 
 ## Purpose
-CLI entry point (`npm run contracts:bundle`) that rebuilds the repo's committed contract bundles from their fragment sources. Bundles stay committed because external tooling (Spectral, Orval, Prism, the seed runner, `check:spec-identity`) reads them directly. The script also supports a `--check` mode for CI that fails instead of rewriting, and accepts bundle names to narrow the run.
+
+CLI entry point (invoked as `npm run contracts:bundle`) that rebuilds the repository's committed contract bundles (OpenAPI, AsyncAPI, etc.) from their source fragments, or verifies in `--check` mode that the committed files are not stale. The bundles are committed because downstream consumers—spectral, orval, Prism, the seed runner, and `check:spec-identity`—read the bundled files, while the fragments remain the source of truth.
 
 ## Key elements
-- **CLI argument parsing** (top-level): reads `process.argv`, separates `--check` flag from named bundle identifiers, validates names against the registry, and exits 2 on unknown names.
-- **`bundle(bundles)`** — assembles each bundle, compares against the committed copy via `isStale`, and writes only the stale ones (skips writing under `--check`). Returns the stale list.
-- **`isStale(bundle)`** — string-compares `assembleBundle(bundle)` against `readCommittedBundle(bundle)`.
-- **Narrowed path** (`named.length > 0`): resolves the requested bundles, rejects `--check` on generated (client-collection) bundles, then assembles/checks.
-- **Full path** (no names given): iterates `CONTRACT_BUNDLES` filtered by `!isGenerated(item)`, so client collections are excluded unless explicitly named.
-- **`fail(message)`** — prints to stderr and calls `process.exit(1)`.
+
+- **`arguments_` / `checkOnly` / `named`** — parses `process.argv` into the `--check` flag and a list of bundle names to narrow the run.
+- **`relative(file)`** — converts an absolute path to a repo-root-relative path for log output.
+- **`bundle(bundles)`** — core assembly step: calls `assembleBundle` on each entry, compares against the committed file via `readCommittedBundle`, writes only drifted files (skipped under `--check`), and returns the stale list.
+- **`fail(message)`** — prints an error and exits with code 1.
+- **Main flow (two branches):**
+  - *Named run* — builds exactly the requested bundles; refuses `--check` on generated (client-collection) bundles since they are uncommitted by design.
+  - *Full run* — builds all authored bundles (`!isGenerated`) and skips the generated collections unless explicitly requested by name.
 
 ## Relationships
-- **`scripts/contracts/bundle-registry.ts`** — direct import; provides `CONTRACT_BUNDLES`, `assembleBundle`, `findBundle`, `isGenerated`, `readCommittedBundle`, `REPO_ROOT`, and the `ContractBundle` type. This script is the primary consumer of that registry.
-- **`scripts/contracts/openapi-bundle.ts`, `asyncapi-bundles.ts`, `analytics-events-bundle.ts`, `client-collections-bundle.ts`** — the individual bundle definitions registered in `CONTRACT_BUNDLES`. This script does not import them directly; it operates on them through the registry's assemble/read functions.
-- **`scripts/contracts/bundle-kinds.ts`** — defines the bundle-kind taxonomy referenced by the registry types this script consumes.
-- **`scripts/regenerate-artifacts.ts`** — upstream orchestrator that invokes this script (or the `contracts:bundle` npm script) as part of a broader artifact-regeneration pipeline.
-- **`tests/cross-cutting/mail-copy.test.ts`** — cross-cutting test that exercises output produced by the bundling process.
+
+- **`scripts/contracts/bundle-registry.ts`** — the sole import; supplies `assembleBundle`, `CONTRACT_BUNDLES`, `findBundle`, `isGenerated`, `readCommittedBundle`, `REPO_ROOT`, and the `ContractBundle` type. All bundle metadata and assembly logic lives there.
+- **`scripts/contracts/bundle-kinds.ts`** — upstream dependency of `bundle-registry.ts`; defines the bundle-kind taxonomy that `CONTRACT_BUNDLES` entries reference.
+- **`tests/cross-cutting/mail-copy.test.ts`** — downstream consumer of the committed bundle output this script produces/maintains.
 
 ## Notes
-- Selection logic lives in this script (not in `package.json`) because npm appends `--` arguments only to the **last** command in a `&&` chain, which would silently drop flags if the logic were in a script chain.
-- Client collections (e.g. Bruno) are **generated and `.gitignore`'d**; they are intentionally excluded from the full run and from `--check`. Request them by name (`npm run contracts:bundle -- bruno`).
-- `--check` is a byte-identity assertion: it compares the in-memory assembly to the committed file and exits 1 on any drift. It never writes.
-- The script is run with `tsx` (shebang), not compiled ahead of time.
-- The stale check is a simple string inequality on the assembled vs. committed text — there is no per-fragment diff or partial write.
+
+- **Why the flag parsing lives here, not in `package.json`:** npm appends `--` arguments only to the *last* command in a `&&`-joined script, so a chain like `a && b -- foo` would silently drop `foo` from `a`. Keeping the selection in the script sidesteps that.
+- **Generated collections are opt-in:** they are produced from the *committed* contract (not the fragments) and are `.gitignore`'d. A full run never writes them; `--check` explicitly refuses them to avoid a permanently-red CI gate. Request them by name (e.g. `npm run contracts:bundle -- bruno`).
+- **Paired-repo copy:** the `--check` failure message reminds the developer that every authored bundle is byte-identical with a counterpart in a paired repository and must be copied there as well.
+- **Exit codes:** `0` success, `1` stale or other failure, `2` unknown bundle name(s) (lists known names for correction).

@@ -2,22 +2,22 @@
 
 ## Purpose
 
-Locks down the audit-log schema as a compliance contract: required fields, closed enum sets, Mongoose options (`timestamps`, `bufferCommands`), and index/TTL configuration. Because the audit-log collection is the one in the system whose schema is a policy artifact rather than a convenience, these invariants are asserted explicitly so that any accidental change to the model is caught at test time.
+Compliance test that pins the audit-log schema's structural contract: which fields are mandatory, which enums are closed, which Mongoose options are set, and which indexes (including the TTL) exist. It treats the schema as a security artifact rather than a convenience, so that silent drift—missing fields, open-ended enums, a buffering write, or a misconfigured TTL—fails loudly instead of degrading audit coverage.
 
 ## Key elements
 
-- **`RETENTION_SECONDS`** – Computed from `NODE_AUDIT_RETENTION_DAYS` (default 90) × 86400. Used to assert the TTL index's `expireAfterSeconds` against the configured value rather than a literal.
-- **`describe('what an entry must carry')`** – Asserts the six required paths (`action`, `actor_role`, `actor_user_id`, `level`, `outcome`, `timestamp`) and the closed enum sets for `actor_role`, `outcome`, and `level`. Verifies `anonymous` is a valid role.
-- **`describe('options')`** – Asserts `timestamps: false` (entry is stamped at event time, not write time) and `bufferCommands: false` (a failed write rejects so the caller's fallback can fire).
-- **`describe('indexes and retention')`** – Asserts the exact set of three indexes (two compound descending-by-timestamp, one ascending single-field), the TTL `expireAfterSeconds` value, and that the TTL index is the ascending `timestamp_1` form Mongo requires for expiry.
+- **`RETENTION_SECONDS`** — module-level constant; `NODE_AUDIT_RETENTION_DAYS` (default 90) × 86 400. Mirrors the model's own default so the test and the policy move together if the env var changes.
+- **`describe('…what an entry must carry')`** — asserts the six required paths (`action`, `actor_role`, `actor_user_id`, `level`, `outcome`, `timestamp`) and the closed enum sets for `actor_role`, `outcome`, and `level`. Includes a dedicated assertion that `anonymous` is a valid role.
+- **`describe('…options')`** — asserts `timestamps: false` + required `timestamp` (entry is stamped by the emitter, not the writer) and `bufferCommands: false` (an unreachable DB must reject so the caller's fallback path fires).
+- **`describe('…indexes and retention')`** — asserts the three index specs, the TTL (`expireAfterSeconds`) on the `timestamp_1` index only, and that the TTL index is single-field ascending (Mongo requirement).
 
 ## Relationships
 
-- **`src/modules/audit-logs/model.ts`** — Source of `auditLogSchema`, the sole object under test. Every assertion in this file reads properties, options, and index metadata off that schema instance.
-- **`tests/support/schema.ts`** — Provides the introspection helpers this file uses to read the schema without instantiating a model: `requiredPaths`, `enumOf`, `optionsOf`, `indexSpecs`, `indexOptionSpecs`.
+- **`src/modules/audit-logs/model.ts`** — source of `auditLogSchema`, the unit under test. All assertions inspect this object's fields, options, and index metadata.
+- **`tests/support/schema.ts`** — supplies the inspection helpers used throughout: `requiredPaths`, `enumOf`, `optionsOf`, `indexSpecs`, and `indexOptionSpecs`. Without it the tests would need raw Mongoose introspection.
 
 ## Notes
 
-- The TTL retention assertion is parameterised on `NODE_AUDIT_RETENTION_DAYS`, so changing that env var moves the schema default and the test expectation together. A TTL appearing on any index other than `timestamp_1` will fail the `indexOptionSpecs` check.
-- The dedicated "ascending direction" test exists because Mongo only honours `expireAfterSeconds` on a single-field ascending index; a descending or compound index on `timestamp` would compile silently but never delete documents.
-- All five "enrichment" fields (IP, user-agent, request/trace IDs, target, metadata) are intentionally **not** in the required set; the test pins that only the six answerability fields are mandatory.
+- `RETENTION_SECONDS` is read from the environment at test time, not frozen. Changing `NODE_AUDIT_RETENTION_DAYS` in CI or locally shifts both the model's default and the expected TTL value simultaneously.
+- The TTL index **must** be a single-field ascending index (`timestamp: 1`). The two compound indexes also contain `timestamp` but in descending order; confusing them produces an index where Mongo silently never expires documents.
+- The `anonymous` role assertion exists because a failed-login event (the most security-critical entry) has no authenticated user; without it, the entry that matters most has no `actor_role` to record.

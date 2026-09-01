@@ -2,30 +2,27 @@
 
 ## Purpose
 
-Module registration for the translations/locales feature. Wires the backend-tenant override reader into the i18n infrastructure at import time and declares the module manifest (routes, locale files, seeds, demo shapes) consumed by the kernel. It owns no request-handling logic itself; it is the connective tissue that tells the infrastructure where translations live and how to read runtime overrides.
+Module manifest and import-time bootstrap for the **locales** module. It registers the runtime locale-override provider with `@infrastructure/i18n` and declares the module's routes, i18n resource path, seeding hooks, and demo shape metadata in a single `AppModule` object. The file exists so that `src/modules.ts` can collect it and the i18n layer can call back for overrides, without any module needing to import this file directly.
 
 ## Key elements
 
-- **`registerLocaleOverrideProvider(() => localeService.readApiOverrides())`** — Called at import time (a side-effect, not a manifest field). Hands i18n a thunk that reads the backend tenant's override rows. The thunk is invoked on refresh cycles, never on the request path.
-- **`export default { … } satisfies AppModule`** — The module manifest object:
-  - `name: 'locales'`, `subdomain: 'generic'`, `basePath: '/locales'`
-  - `routes: router` (from `./routes`)
-  - `locales: path.join(__dirname, 'locales')` — the module's own tier-1 JSON files (used for its own error messages)
-  - `seeds: seedLocalesCollection`, `seedExport: exportSeededLocales` (from `./demo`)
-  - `demoShapes` — declares both response shapes as `'stored'` (composed, not raw collection rows)
+- **`registerLocaleOverrideProvider(() => localeService.readApiOverrides())`** — Executed at import time (not via a manifest field). Wires the backend tenant's override rows into `@infrastructure/i18n` so admin-typed overrides flow into `t()`. The factory is lazy; it only touches the database on refresh, not per-request.
+- **`export default { … } satisfies AppModule`** — The manifest entry consumed by the kernel. Exposes `name`, `basePath` (`/locales`), `routes`, `locales` (path to the module's own i18n JSON), `seeds`, `seedExport`, and `demoShapes`.
+- **`demoShapes`** — Marks `locales` and `localeMessages` endpoints as `'stored'`, meaning their responses are composed (capabilities envelope / nested tree) rather than raw collection rows.
 
 ## Relationships
 
-- **`@infrastructure/i18n` (`src/infrastructure/i18n/index.ts`)** — Source of `registerLocaleOverrideProvider`. The i18n layer also loads this module's `locales` directory at boot for tier-1 resolution.
-- **`src/kernel/registry.ts`** — Provides the `AppModule` type that the default export satisfies.
-- **`src/modules.ts`** — Upward aggregator that collects this module's default export into the app's module list.
-- **`./routes`** — Supplies the Express/Hono router mounted at `/locales`.
-- **`./services/index.ts`** — Supplies `localeService`, whose `readApiOverrides` is the registered thunk.
-- **`./demo.ts`** — Supplies the seed and seed-export functions used in demo/dev mode.
+- **`src/infrastructure/i18n/index.ts`** — Source of `registerLocaleOverrideProvider`; the sole consumer of the provider this file registers.
+- **`src/infrastructure/i18n/overrides.ts`** — Houses the override-provider registry and refresh mechanism that the registered factory feeds.
+- **`src/kernel/registry.ts`** — Provides the `AppModule` type used in the `satisfies` constraint.
+- **`src/modules.ts`** — Collects this default export alongside other module manifests to build the application's route/seed table.
+- **`src/modules/locales/routes.ts`** — Supplies `router`, attached to the manifest's `routes` field.
+- **`src/modules/locales/services/index.ts`** — Supplies `localeService`; its `readApiOverrides` method is the body of the registered provider.
+- **`src/modules/locales/demo.ts`** — Supplies `seedLocalesCollection` and `exportSeededLocales` for the `seeds` / `seedExport` manifest fields.
 
 ## Notes
 
-- **No `index.ts` barrel.** The file's own docblock states nothing should import this module directly. All i18n access goes through `@infrastructure/i18n`, which sits *below* the module layer. Importing this file from infrastructure would invert the layering rule.
-- **Import-time side effect.** `registerLocaleOverrideProvider` runs when the module is first evaluated (i.e., when the app collects its modules), not inside a request handler. It does not touch the database at that point—only the registered thunk does, later on refresh.
-- **Two-tier model.** Tier 1 (filesystem JSON) and Tier 2 (database override rows) are deliberately disjoint. A key that exists only in the database is *not* resolvable by `t()`; the files define the keyspace, rows only redefine values.
-- **`satisfies AppModule`** rather than `: AppModule`—gives full type-checking while preserving the literal object shape for consumers.
+- **No `index.ts`.** The file's doc-comment is explicit: nothing imports this module, and nothing should. All i18n access goes through `@infrastructure/i18n`; the module manifest is consumed only by `src/modules.ts` at boot.
+- **Two-tier separation.** Deployed locale files (loaded into i18next at boot) and runtime overrides (owned by this module, one row per language/tenant/key) are intentionally disjoint. Neither is awaited on the request path, so a database outage degrades gracefully to a stale overlay.
+- **Import-time registration is deliberate.** The override provider is registered as a top-level side-effect (same pattern as `audit-logs` installing its sink) rather than as a manifest field, because the field is only ever filled by one module and putting it in the manifest would force `app.ts` to locate it.
+- **Self-translation.** The `locales` field points at the module's own i18n directory so its error messages (e.g., a 409 key-collision) respect the admin's requested language rather than defaulting to English.

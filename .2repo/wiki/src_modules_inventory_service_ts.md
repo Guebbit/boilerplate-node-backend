@@ -2,44 +2,46 @@
 
 ## Purpose
 
-The single module responsible for every stock mutation in the application. Enforces one invariant through a shared chokepoint (`applyTransition`): a product's counters never move without a corresponding ledger row, and a ledger row is never written for a counter that did not move. All public operations (reserve, commit, release, expire, sweep) funnel through this path.
+The single application-level chokepoint for every stock counter change. It implements the reserve → commit / release lifecycle for order holds, guarantees that a counter move and its ledger row are inseparable (via `applyTransition`), and provides the externally-driven expiry sweep. No Mongo transactions are used; atomicity comes from conditional writes in mongod plus the reservation's unique `orderId` for idempotency.
 
 ## Key elements
 
-- **`applyTransition(reason, productId, quantity, context)`** *(private)* — The chokepoint. Performs the conditional write via `writerFor`, and only on success writes a `stockMovementRepository.create` row. Returns `boolean` (moved or not). Every stock change in the codebase goes through this function.
-- **`writerFor(reason)`** *(private)* — Table mapping each `StockMovementReason` to the matching `productRepository` conditional-write method. Must stay in sync with `counterDeltaFor`; asserted by `tests/unit/transitions.test.ts`.
-- **`reserveForOrder(orderId, lines)`** — Holds every line for an order or none. Inserts a unique `orderId` hold first (exactly-once), then takes lines one-by-one. On shortfall: reads the blocking product back, rolls back all taken lines via `applyTransition(release)`, deletes the hold, and returns the specific `StockShortfall[]`.
-- **`commitForOrder(orderId)`** — Claims `held → committed` (at-most-once) then moves counters for each line. A counter refusal is **logged**, not thrown, because payment has already settled.
-- **`releaseForOrder(orderId, reason: 'release' | 'expire')`** — Claims `held → released` then returns units. The parameter is intentionally narrowed to two literals to prevent a caller from accidentally passing `commit`.
-- **Sweep / expiry logic** (truncated in listing) — Releases all expired holds in batches of `SWEEP_BATCH_SIZE` (200), emits a `RESERVATION_EXPIRED` domain event so the `orders` module can cancel the underlying order. Driven externally; the app ships no scheduler.
-- **`StockLine`, `StockShortfall`, `ReserveOutcome`** — Public shapes for callers to pass in and read out.
-- **`LevelFilters`, `MovementFilters`** — Query-filter interfaces consumed by the read controllers (`get-inventory-levels`, `get-stock-movements`), extending the shared `PaginationInput` / `SearchFilters`.
-- **`isStockBoundToOrder(orderId)`** *(private)* — Checks whether a hold is still `held` or `committed`; used by callers that need to know if stock is locked to an order's frozen basket.
+- **`applyTransition`** (private) — The one function all stock changes pass through. Performs the conditional counter write first; if it refuses, no ledger row is written. If it succeeds, a `StockMovementDocument` is created via `stockMovementRepository`.
+- **`reserveForOrder`** (exported) — Holds stock for every line in an order, all-or-nothing. Inserts a unique hold record for idempotency, then takes lines one at a time. On failure, rolls back already-taken lines through `applyTransition(release)` and reports a `StockShortfall` with live availability.
+- **`commitForOrder`** (exported) — Claims `held → committed` (at-most-once), then commits each line's counters. A counter refusal is logged, not thrown, because payment has already moved.
+- **`releaseForOrder`** (exported) — Claims `held → released`, then releases each line. Accepts only `'release' | 'expire'` to prevent a caller from accidentally recording a sale.
+- **`runReservationSweep`** (exported) — Exports up to `SWEEP_BATCH_SIZE` (200) stale holds, releases each via `releaseForOrder(expire)`, and emits `RESERVATION_EXPIRED` so the orders module can cancel. Externally triggered; the app ships no scheduler.
+- **`ReserveOutcome`** (exported type) — Discriminated union: `{ held: true }` or `{ held: false; shortfalls: StockShortfall[] }`.
+- **`StockLine` / `StockShortfall`** (exported interfaces) — Line-level request and shortfall shapes.
+- **`LevelFilters` / `MovementFilters`** (exported interfaces) — Query-filter types consumed by the inventory controllers.
+- **`writerFor`** (private) — Maps a `StockMovementReason` to the correct `productRepository` conditional-write method. Kept in sync with `counterDeltaFor`'s deltas table; asserted by `tests/unit/transitions.test.ts`.
+- **`levelFor`** (private) — Reads a product's raw counters and computes `available` via `availabilityOf`.
+- **`isStockBoundToOrder`** (private) — Checks whether a hold is in `held` or `committed` status (i.e. stock is still bound to the order's lines).
 
 ## Relationships
 
-- **`productRepository`** (`@modules/products`) — All conditional counter writes (`reserveUnits`, `commitUnits`, `releaseUnits`, `receiveUnits`, `adjustUnits`) and raw reads (`findByIdRaw`) are delegated here.
-- **`stockMovementRepository` / `reservationRepository`** (`./repository`) — Ledger-row inserts and hold lifecycle (insert, claim status, delete, find).
-- **`./domain`** — `counterDeltaFor` (reason → signed deltas for the ledger row) and `availabilityOf` (derives `available` from `onHand`/`reserved`).
-- **`./config`** — `reservationTtlMinutes` (hold expiry window) and `lowStockThreshold` (used by the levels controller).
-- **`./audit`** (`inventoryAuditActions`) + **`@infrastructure/observability/audit`** (`emitAuditEvent`, `buildAuditEvent`) — Audit-trail emission for state transitions.
-- **`@kernel/events`** (`emitDomainEvent`) — Publishes `RESERVATION_EXPIRED` (and potentially other domain events) to the event bus.
-- **`@infrastructure/persistence/search`** — `normalizePagination`, `buildPaginatedMeta` for paginated read endpoints.
-- **`@infrastructure/persistence/base-repository`** — `SearchFilters` type base for `MovementFilters`.
-- **`@infrastructure/http/request`** — `CallerContext` type for audit attribution.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` helpers for controller-level response shaping.
-- **`@infrastructure/i18n`** — `t` for user-facing strings (shortfall messages, audit labels).
-- **`@infrastructure/adapters/logger`** — `logger.error` for non-fatal counter-refusal logging in `commitForOrder` / `releaseForOrder`.
-- **`src/modules/cart/services/checkout.ts`** — Primary caller of `reserveForOrder` (checkout) and `commitForOrder` (post-payment).
-- **`src/modules/cart/tests/integration/stock.test.ts`** — Integration tests exercising reserve/commit/release flows through the cart.
-- **`src/modules/inventory/controllers/get-inventory-levels.ts`** — Consumes `LevelFilters` and the level-read helpers.
-- **`src/modules/inventory/controllers/get-stock-movements.ts`** — Consumes `MovementFilters` and the ledger-read helpers.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/cart/services/checkout.ts` | Consumer of `reserveForOrder` / `commitForOrder` during the checkout flow. |
+| `src/modules/cart/tests/integration/stock.test.ts` | Integration-test consumer exercising the reserve/commit/release path. |
+| `src/modules/inventory/controllers/get-inventory-levels.ts` | Consumes `LevelFilters` (and likely `levelFor` / pagination helpers) to serve stock-board reads. |
+| `src/modules/inventory/controllers/get-stock-movements.ts` | Consumes `MovementFilters` to serve paginated ledger reads. |
+| `src/modules/inventory/config.ts` | Provides `reservationTtlMinutes` (hold TTL) and `lowStockThreshold`. |
+| `src/modules/inventory/audit.ts` | Provides `inventoryAuditActions` used by the sweep's audit emit. |
+| `src/kernel/events.ts` | `emitDomainEvent` is called for `RESERVATION_EXPIRED` in the sweep. |
+| `src/infrastructure/observability/audit.ts` | `emitAuditEvent` / `buildAuditEvent` used for `ADMIN_RESERVATIONS_SWEPT` audit trail. |
+| `src/infrastructure/persistence/search.ts` | `normalizePagination`, `buildPaginatedMeta`, `PaginationInput` for paginated reads. |
+| `src/infrastructure/persistence/create-repository.ts` | `SearchFilters` type extends into `MovementFilters`. |
+| `src/infrastructure/http/request.ts` | `CallerContext` type parameterises `runReservationSweep`'s audit context. |
+| `src/infrastructure/http/response.ts` | `generateSuccess` / `generateReject` / response types imported (used by controller layer). |
+| `src/infrastructure/i18n/index.ts` | `t` helper for localised strings. |
+| `src/infrastructure/adapters/logger.ts` | `logger.error` for counter-refusal incidents in commit/release. |
 
 ## Notes
 
-- **No Mongo transactions.** Atomicity relies entirely on conditional (compare-and-swap) writes in mongod. Two documented crash windows exist: (1) a crash mid-reserve strands held lines until the sweep recovers them; (2) a crash between `claimStatus` and the counter move strands units (deliberately chosen over the alternative, which would let two callers both move counters).
-- **Rollback is visible in the ledger.** In `reserveForOrder`, the give-back is recorded as a separate `release` row (with a note), not netted against the original `reserve` row. The ledger is an audit trail, not a diff.
-- **`writerFor` ↔ `counterDeltaFor` invariant.** These two tables must agree on which reasons produce which signed deltas. A unit test (`tests/unit/transitions.test.ts`) enforces this; adding a new `StockMovementReason` requires updating both.
-- **`releaseForOrder` parameter is intentionally narrow** (`'release' | 'expire'`, not the full enum). This is a compile-time guard against passing `'commit'` to a function that would record a sale.
-- **The hold document's unique `orderId` is the idempotency key** for `reserveForOrder`. Retried checkouts lose the insert and return `{ held: true }` without touching counters.
-- **Sweep is externally driven.** The module exposes the sweep function but ships no timer/cron. The orchestrator (or a job runner) calls it periodically, same pattern as the `delivery` courier.
+- **No transactions.** Atomicity relies on mongod's conditional write (compare-and-swap) for the counter and the unique `orderId` insert for the hold. Gaps (e.g. the window between counter success and ledger-row write) are acknowledged at call sites rather than closed by a 2PC.
+- **Rollback is a real ledger entry.** When `reserveForOrder` unwinds, it calls `applyTransition(release)`, so the ledger records both the take *and* the give-back. The system deliberately does not net them to zero.
+- **`releaseForOrder`'s parameter is intentionally narrow.** It accepts the two-literal union `'release' | 'expire'` instead of the full `StockMovementReason` enum, so a caller cannot accidentally pass `'commit'` and record a phantom sale.
+- **The sweep is idempotent by construction.** `releaseForOrder` claims `held → released` atomically; if the orders module's own cancel path calls back in, it finds the hold already released and does nothing.
+- **`SWEEP_BATCH_SIZE = 200`.** A full batch implies more work remains; the caller is expected to re-schedule (the app ships no internal timer).
+- **`writerFor` and `counterDeltaFor` must stay in sync.** A unit test (`tests/unit/transitions.test.ts`) asserts the mapping; adding a new `StockMovementReason` requires updating both tables.

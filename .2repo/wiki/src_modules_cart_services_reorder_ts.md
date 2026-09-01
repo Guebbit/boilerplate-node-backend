@@ -2,31 +2,29 @@
 
 ## Purpose
 
-Implements "reorder": copying the line-items of a past order back into the caller's cart. It lives in the cart module (not orders) so that the only write target is the cart, preserving the declared `cart → orders` dependency direction and avoiding a cycle where orders would reach back into cart.
+Copies a past order's line items back into the caller's cart. It lives in the **cart** module (not orders) because the write target is the cart; the order is only read. This keeps the `cart → orders` dependency direction that the module manifests declare and avoids the cycle an `/orders/{id}/reorder` route would require.
 
 ## Key elements
 
-- **`reorderIntoCart(userId, orderId, context)`** — the sole export. Reads the order (scoped to the caller), re-resolves each product against today's catalogue in a single parallel pass, sequentially upserts addable lines into the cart, then returns the refreshed `CartView`. Emits audit + analytics events on success.
-- **`ReorderLine`** (local interface) — a resolved order line pairing `productId`, `quantity`, and a nullable `ProductDocument` (`null` = product no longer public).
+- **`reorderIntoCart(userId, orderId, context)`** — The sole export. Resolves the order (scoped to the caller), re-resolves each product against today's catalogue via `productRepository.findPublicById`, sequentially upserts addable lines into the cart, and returns a `CartView`. Emits audit + analytics events on success.
+- **`ReorderLine`** (local interface) — A single requested line with its resolved `product` (`ProductDocument | null`). `null` means the product is gone/inactive/soft-deleted and the line will be skipped.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — shapes the return value via `generateSuccess` / `generateReject` and the `ResponseSuccess<CartView> | ResponseReject` union.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope('cart', error)` maps `CastError` / generic errors to a standard error envelope.
-- **`@infrastructure/http/request`** — imports the `CallerContext` type for audit/analytics attribution.
-- **`@infrastructure/i18n`** — `t` translates user-facing messages (order-not-found, unavailable, success).
-- **`@infrastructure/observability/analytics`** — `emitAnalyticsEvent` + `buildAnalyticsBase` fire the `CART_REORDERED` event on success.
-- **`@infrastructure/observability/audit`** — `emitAuditEvent` + `buildAuditEvent` record the `USER_CART_REORDERED` action.
-- **`../analytics` / `../audit`** — supply the `cartAnalyticsEvents` and `cartAuditActions` constants used above.
-- **`../repository`** — `cartRepository.upsertLine` (sequential writes) and `cartRepository.findByUserId` (final cart read).
-- **`./view`** — `toCartView` serialises the raw cart document into the API-facing `CartView`.
-- **`@modules/orders`** — `orderRepository.findByIdScoped(orderId, orderRepository.visibleScope(userId))` fetches only the caller's own order.
-- **`@modules/products`** — `productRepository.findPublicById` re-validates each product; `ProductDocument` is the resolved type.
-- **`services/index.ts`** — barrel that re-exports this service.
+- **`@modules/orders` / `orderRepository`** — Reads the order via `findByIdScoped` with `visibleScope(userId)`; the only cross-module data read.
+- **`@modules/products` / `productRepository`** — Resolves each `productId` through `findPublicById` to check current availability.
+- **`../repository` (`cartRepository`)** — Writes lines with `upsertLine` and reads the final cart with `findByUserId`.
+- **`./view` (`toCartView`, `CartView`)** — Shapes the final cart document into the API response.
+- **`@infrastructure/i18n` (`t`)** — Localised error/success messages.
+- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` envelope construction.
+- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` for the `.catch` handler.
+- **`@infrastructure/observability/analytics`** — Emits a `CART_REORDERED` analytics event on success.
+- **`@infrastructure/observability/audit`** — Emits a `USER_CART_REORDERED` audit event on success.
+- **`../analytics` / `../audit`** — Provide the event-name and action constants used above.
 
 ## Notes
 
-- **Sequential cart writes are intentional.** Parallel `upsertLine` calls against the same cart document race on the unique `userId` index; the `for…await` loop guarantees each write sees the previous one's state.
-- **Two-shapes product ID.** The order's embedded snapshot may carry the id as `id` (normalized aggregate output) or `_id` (raw Mongoose). The code reads both spellings (`snapshot.id ?? snapshot._id`) rather than casting, to stay correct regardless of which shape the repository returns.
-- **Skip vs. refuse semantics.** `upsertCartItem` in `./items` *refuses* a non-public product (correct for a single "add to cart" call). Here, skipping is the right behaviour for a batch refill; however, if *every* line is skipped the response is a 409 `REORDER_UNAVAILABLE`, not a 200 with an unchanged cart.
-- **Scoping is caller-only.** `visibleScope(userId)` means an admin cannot reorder another user's order into their own cart — the cart being written is always the caller's.
+- **Sequential writes are intentional.** Each `upsertLine` reads-then-rewrites the same cart document; parallel calls would lose lines to a last-write-wins race. The `for…await` loop is not an oversight.
+- **Skip, don't refuse.** An unavailable product is silently dropped from the batch. Only when *every* line is unavailable does the call return `409 REORDER_UNAVAILABLE`. This contrasts with `./items`' `upsertCartItem`, which rejects the whole request on a single bad product.
+- **`id` vs `_id` duality.** Scoped aggregate reads return normalized output where `_id` is already renamed to `id`, but the static type still shows `_id`. The code reads both (`snapshot.id ?? snapshot._id`) rather than casting — a deliberate guard against the two-shapes trap that also affects `orderService.getById`.
+- **Scoping is a security boundary.** `visibleScope(userId)` ensures a caller can only reorder their *own* orders; it is not merely a convenience filter.

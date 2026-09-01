@@ -2,29 +2,26 @@
 
 ## Purpose
 
-Asserts the Mongoose **schema declarations** for the Product model — defaults, `required` flags, `select: false`-driven exclusion, auto-timestamps, and `toJSON` serialization. Sibling specs in this folder test behaviour/transforms; this file pins the schema itself as part of the public API contract.
+Integration tests that verify Mongoose schema **declarations** — defaults, `required`, `select: false` — against a real MongoDB instance. These behaviors belong to Mongoose, not the application, so a mocked model would only assert the mock's own interpretation. Sibling specs in this folder cover the transforms; this file covers the raw contract.
 
 ## Key elements
 
-- **`describe('product schema', …)`** — single suite containing six `it` blocks:
-  - *Defaults for omitted optional fields* — creates a product with only `title` + `price`, asserts `description`, `categories`, `tags`, `active`, `deletedAt`, `imageUrl` land on their schema-declared values.
-  - *Requires `title`* / *Requires `price`* — expects `productRepository.create` to reject when each is absent.
-  - *Accepts a price of zero* — guards against a truthiness-based guard that would wrongly reject `0`.
-  - *Stamps `createdAt` and `updatedAt`* — verifies Mongoose timestamps are populated.
-  - *Serialises to `id`, never `_id` or `__v`* — checks `product.toJSON()` output shape.
-
-- **`setupTestDb()`** — call at module top-level; ensures a real MongoDB instance is available.
-- **`as never` casts** on `create` payloads — the tests intentionally pass minimal/partial objects that don't satisfy the full TS type.
+- **`setupTestDb()`** (top-level) — boots a real test database before any test runs.
+- **"applies documented defaults…"** — creates a product with only `title` and `price`; asserts `description`, `categories`, `tags`, `active`, `deletedAt`, and `imageUrl` all receive their schema defaults.
+- **"requires a title" / "requires a price"** — confirm `required` enforcement rejects omitted fields.
+- **"accepts a price of zero"** — guards against a truthiness-based guard that would wrongly reject `price: 0`.
+- **"stamps createdAt and updatedAt"** — verifies Mongoose timestamp hooks fire on insert.
+- **"serialises to id, never _id or __v"** — asserts `toJSON()` output uses a string `id` and excludes `_id` and `__v`.
 
 ## Relationships
 
-- **`src/modules/products/index.ts`** — exports `productRepository`, the system under test.
-- **`src/modules/products/repository.ts`** — implementation behind `productRepository.create`; the test exercises its write path to reach Mongoose schema validation.
-- **`src/modules/products/tests/factory.ts`** — provides `createProduct`, a convenience wrapper used for the timestamp and serialization tests.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, which spins up the real Mongo instance the tests run against.
+- **`src/modules/products/index.ts`** — provides the `productRepository` export (via the barrel) used for all create calls.
+- **`src/modules/products/repository.ts`** — the `productRepository.create` method under test (imported through the index).
+- **`src/modules/products/tests/fixtures.ts`** — supplies the `createProduct` helper used by the timestamp and serialization tests.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, which provisions the in-memory/file-backed Mongo instance.
 
 ## Notes
 
-- Tests run against **real MongoDB**, not a mocked model, because the assertions target Mongoose's own interpretation of `default`, `required`, `timestamps`, and `toJSON`. A mock would only assert the mock's opinion.
-- The `as never` cast on every `create` call means the TypeScript compiler is bypassed; the tests rely on the runtime schema to enforce (or reject) shapes. This is intentional — the schema *is* the contract being tested.
-- `active: true` and `deletedAt: undefined` are asserted as **independent** fields; a product can be active-and-deleted or inactive-and-undeleted.
+- Tests intentionally use `as never` casts to pass type checking while supplying deliberately incomplete payloads; this is a pattern specific to "what the schema rejects" tests, not a type-safety workaround.
+- `active` and `deletedAt` are explicitly noted as **independent** axes — a product can be active-but-deleted or inactive-but-not-deleted.
+- The serialization test calls `toJSON()` rather than checking the raw doc; the contract is about the wire/API shape, not internal representation.

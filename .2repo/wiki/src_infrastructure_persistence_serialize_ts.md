@@ -2,23 +2,27 @@
 
 ## Purpose
 
-Single serialization layer that converts a stored Mongoose document into its API wire payload. Exists because the OpenAPI contract (95 schemas with `additionalProperties: false`) demands a uniform shape — `_id` → `id`, `__v` removed, no undeclared keys — and two code paths (`toJSON` and raw `.lean()`/`.aggregate()`) each need it in a different way. This file provides one transform that serves both.
+Single serialization boundary that converts a stored Mongoose document into its wire payload (the shape declared in `openapi.yaml`). It renames `_id` → `id`, drops `__v`, and strips caller-named keys. One function serves both serialization paths: Mongoose `toJSON` (where the framework already supplies `id`/drops `__v`) and raw `.lean()`/`.aggregate()` results (where the caller must perform every step manually via the returned transform).
 
 ## Key elements
 
-- **`SerializeTransform`** (type) — signature for a plain-object mutator that returns the wire-shaped record.
-- **`SerializeOptions`** (interface) — per-model configuration: `dropId` (delete `_id` entirely; used only by `audit-logs`), `omit` (array of top-level keys to strip), `after` (arbitrary post-processing hook), `virtuals` (toggle Mongoose virtual inclusion in `toJSON`).
-- **`SerializableSchema`** (interface, not exported) — structural type requiring only `set('toJSON', …)`. Avoids spelling Mongoose's generic `Schema<T>` which would reject or over-constrain the parameter.
-- **`applySerialization`** (exported function) — builds the transform, calls `schema.set('toJSON', …)` to wire it into the Mongoose path, and **returns** the same transform so the model can export it for the lean/aggregate path. Not a `schema.plugin()` because the return value must be surfaced.
+- **`SerializeTransform`** (type) — `(serialized: Record<string, unknown>) => Record<string, unknown>`. The mutation-and-return signature shared by both the `toJSON` path and the lean/aggregate path.
+- **`SerializeOptions`** (interface) — Per-model customization knobs:
+  - `dropId` — delete `_id` entirely instead of renaming (used only by `audit-logs`).
+  - `omit` — array of top-level keys to strip (secrets, contract-omitted fields).
+  - `after` — model-specific hook for nested normalization, derived fields, or format adjustments.
+  - `virtuals` — whether `toJSON` includes Mongoose virtuals (default `true`).
+- **`SerializableSchema`** (interface, internal) — Structural type requiring only `set('toJSON', …)`. Avoids depending on Mongoose's generic `Schema<T>` which would pin the serializer to one model.
+- **`applySerialization(schema, options?)`** (function, exported) — Builds the transform, wires it into the schema's `toJSON` (with `versionKey: false`), and **returns** the transform so the model can export it for the lean/aggregate path. Deliberately a direct call, not `schema.plugin()`, because the return value must propagate.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/base-repository.ts`** — calls the returned `SerializeTransform` inside its `normalize` step for `.lean()` and `.aggregate()` results (raw BSON where no `toJSON` virtuals or options are applied).
-- **`src/modules/*/model.ts`** (account, audit-logs, cart, delivery, feedback, inventory, locales, orders, payments, products, users, wishlist) — each calls `applySerialization(schema, options)` once at model definition to wire `toJSON` and to obtain the exported serializer for the repository path.
-- **`tests/cross-cutting/serialize.property.test.ts`** — property-based tests that exercise the transform against arbitrary document shapes to verify the invariant output contract.
+- **All `src/modules/*/model.ts` files** (account, audit-logs, cart, delivery, feedback, inventory, locales, orders, payments, products, users, wishlist) — Each model calls `applySerialization` once during schema construction, passing its `SerializeOptions`, and exports the returned `SerializeTransform` for use in `.lean()`/`.aggregate()` queries (e.g., via `normalize` in `create-repository.ts`).
+- **`tests/cross-cutting/serialize.property.test.ts`** — Property-based tests exercising the transform contract (id renaming, `__v` removal, omit stripping, `after` hook ordering) against the shared function.
 
 ## Notes
 
-- The transform is intentionally idempotent across both call paths: it always writes `id` and deletes `__v` even though the `toJSON` path already gets those from `virtuals: true` / `versionKey: false`. The `after` hook runs **after** the `omit` loop, so it can reintroduce derived fields that `omit` stripped.
-- The `transform` callback inside `schema.set('toJSON', …)` uses a single `as Record<string, unknown>` cast (not `as unknown as`). Mongoose types the serialized parameter from the raw document type, which is narrower than the string-keyed record, so one widening step suffices.
-- `dropId: true` is currently only used by `audit-logs`, which has no addressable REST endpoint; the convention is that exposing an `id` there would invite one to be built.
+- The `as Record<string, unknown>` cast inside the `toJSON` transform is a single widening step (Mongoose hands a narrower `{ _id, __v? }` type); the code comment explicitly avoids `as unknown as`.
+- `dropId` is currently used by exactly one model (`audit-logs`) because that collection has no addressable endpoint; adding a second user would be a design smell.
+- The `omit` loop carries an `eslint-disable` for `no-dynamic-delete` — this is intentional, as deleting caller-named keys from a plain record is the function's core job.
+- The `after` hook receives the partially-processed object (after id/`__v`/omit steps), so it can rely on those being settled.

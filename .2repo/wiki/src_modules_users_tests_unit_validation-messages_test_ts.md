@@ -2,25 +2,26 @@
 
 ## Purpose
 
-Guards against **PROBLEM 01**: `t()` being called at module scope before `i18next.init()`, causing Zod to silently fall back to its built-in English defaults. Instead of merely checking that a message "isn't a dotted key" (which Zod defaults pass), these tests assert the **exact shipped i18n strings** for both `en` and `it`, and verify the schema resolves messages lazily per parse.
+Unit tests that verify `zodUserSchema`'s validation messages resolve against the **active** i18next locale at parse time, not against whatever locale happened to be set (or unset) when the module was first imported. The tests assert the exact shipped strings per locale so that a silent fallback to Zod's built-in English defaults — the failure mode produced by calling `t()` before `i18next.init()` — is caught immediately rather than masked by a generic "key looks valid" check.
 
 ## Key elements
 
-- **`copy(locale)`** — extracts the `users` translation namespace from `mergedResources()` for a given locale.
-- **`invalidUser`** — fixture with an invalid email, too-short username, and too-short password, guaranteed to trigger three Zod issues.
-- **`messagesFor(locale)`** — loads the users module *before* i18n init (via `loadBeforeI18n`), runs `zodUserSchema.safeParse(invalidUser)`, and returns the issue messages.
-- **`'uses the English copy verbatim…'`** — asserts the three expected `en` strings appear in the parse errors.
-- **`'uses the Italian copy…'`** — same assertion with `it` strings.
-- **`'is actually translated…'`** — sanity-checks that the Italian and English `field-email-invalid` strings differ.
-- **`'follows a locale change without the schema being rebuilt'`** — inside `jest.isolateModulesAsync`, initializes i18next once, parses in `en`, calls `i18next.changeLanguage('it')`, parses again on the **same** schema object, and asserts both language strings appear without any module re-import.
+- **`copy(locale)`** — extracts the `users`-namespace string map for `'en'` or `'it'` from `mergedResources()`, used as the source of truth for expected messages.
+- **`invalidUser`** — a fixed payload (`{ email, username, password }`) guaranteed to violate every rule under test.
+- **`messagesFor(locale)`** — async helper that calls `loadBeforeI18n(locale, …)` to import the users module *before* i18n init, then runs `zodUserSchema.safeParse(invalidUser)` and returns the array of issue messages.
+- **`describe('user validation messages')`** — four cases:
+  1. English messages match the shipped English strings verbatim.
+  2. Italian messages match the shipped Italian strings when locale is `it`.
+  3. Meta-check: the Italian strings are *not* identical to the English ones (guards against a missing translation file).
+  4. Locale-change test: parses the same schema object under `en`, switches to `it` via `i18next.changeLanguage`, parses again, and confirms the messages differ. Uses `jest.isolateModulesAsync` to control the import cache.
 
 ## Relationships
 
-- **`src/modules/users/index.ts`** — the module under test; its exported `zodUserSchema` is the Zod schema whose error messages are asserted.
-- **`tests/support/i18n-boot.ts`** — provides `loadBeforeI18n` (forces module load *before* i18n init to make the ordering real) and `mergedResources` (the combined i18n resource bundle used both for initialization and for extracting expected strings).
+- **`src/modules/users/index.ts`** — the module under test. The tests import it (via `loadBeforeI18n` or direct `import`) to obtain `zodUserSchema`, then call `.safeParse` to trigger message resolution.
+- **`tests/support/i18n-boot.ts`** — supplies `loadBeforeI18n` (loads a module, initializes i18next to a chosen locale, and gates on a sentinel translation key) and `mergedResources()` (the consolidated i18n resource bundle). Both are imported at the top of the file.
 
 ## Notes
 
-- The last test (`jest.isolateModulesAsync`) exists because a thunk-based `t()` call resolves at parse time; an eagerly-resolved message string would not change after `changeLanguage`. This is the behavioral property the test locks in.
-- `loadBeforeI18n` takes a *probe key* (`'users.field-email-invalid'`) so the boot helper can verify the key exists in resources before proceeding.
-- The test file's header comment documents the historical guard gap (old test only checked for non-dotted-key shape) so future readers understand why exact-string assertions are intentional, not over-specified.
+- The module doc comment calls out the specific regression this file guards against: `t()` invoked at module scope before `i18next.init()` returns `undefined`, causing Zod to silently use its own English defaults. The "exact string" assertions are deliberately stricter than a `not.toBe(aDottedKey)` check.
+- The locale-change test (case 4) deliberately avoids `loadBeforeI18n` and instead uses `jest.isolateModulesAsync` + manual `i18next.init` / `changeLanguage` to prove the schema's message function is a thunk that re-reads the active locale, not a value frozen at import time.
+- Both `en` and `it` are the only locales exercised; adding a new locale requires extending the `copy` helper's union type and the test cases.

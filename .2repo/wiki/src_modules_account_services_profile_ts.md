@@ -2,42 +2,37 @@
 
 ## Purpose
 
-Self-service account maintenance: reading, updating, and hard-deleting the caller's own profile, plus password changes (reset-link and live-session). Sits on the "maintain an identity" side of the account split; `./authentication` handles "prove an identity". Password lives here because every flow that writes one (reset link, logged-in change) is a mutation of an existing account, not a gate into it.
+Self-service account maintenance: profile field updates and password changes for an already-authenticated user. Split from `./authentication` along the proving-vs-maintaining line — authentication answers "who is this?", this file answers "change something about my account." Password lives here because every flow that writes one is a modification to an existing record, not a way into the system.
 
 ## Key elements
 
-- **`validatePasswordChange`** – Zod-validates a password/confirm pair in isolation; returns i18n error items or `[]`. Split out so `reset-confirm` can reject a bad body *before* spending the one-time token.
-- **`passwordChange`** – Validates then writes `user.password` via `userRepository.save`; returns 422 reject or 200 success.
-- **`getOwnProfile`** – Reads a user by id through `userService.getById`, emitting `USER_PROFILE_VIEWED` analytics. Wrapper (not an emit inside `getById`) so the admin lookup path doesn't count as a self-view.
-- **`passwordResetChange`** – Delegates to `passwordChange`; on success emits `AUTH_PASSWORD_RESET_COMPLETED` audit, `ACCOUNT_DELETED`-style analytics, and fire-and-forget enqueues the reset-confirmation email.
-- **`removeOwnAccount`** – Snapshots email/username/locale **before** calling `userService.remove(user, true)`; on success emits `AUTH_ACCOUNT_DELETE_COMPLETED` audit, `ACCOUNT_DELETED` analytics, and enqueues the goodbye email.
-- **`zodProfileSchema`** *(internal)* – Partial schema for `PUT /account`: `email`, `username` (i18n thunks from `zodUserSchema`) + `locale`, `imageUrl` (from `UpdateAccountBody`).
-- **`updateProfile`** – Validates with `zodProfileSchema`, loads the doc with credentials, sets `verified = false` if email changed, persists via `userService.update`; emits `AUTH_PROFILE_UPDATED` audit on success. E11000 duplicates surface as 409 through `rejectDatabaseEnvelope`.
-- **`passwordChangeWithCurrent`** *(truncated in source)* – Live-session password change gated on the current password; reuses `passwordChange` as its final step.
+- **`validatePasswordChange`** — Pure validation of a new-password pair (length, confirm-match) via a Zod superRefine; returns i18n error items or an empty array. Extracted so `reset-confirm` can validate *before* spending a one-time token.
+- **`passwordChange`** — Validates the pair, sets `user.password`, saves via `userRepository.save`. Returns a standard success/reject envelope.
+- **`getOwnProfile`** — Wraps `userService.getById` to emit the `USER_PROFILE_VIEWED` analytics event. Kept separate so admin lookups (which share `getById`) don't miscount as self-views.
+- **`passwordResetChange`** — Calls `passwordChange`, then on success emits an audit event and fires a reset-confirmation email (locale resolved from the user, not the request).
+- **`removeOwnAccount`** — Captures email/username/locale *before* calling `userService.remove(user, true)` (hard delete), then emits audit + analytics and sends a goodbye email.
+- **`zodProfileSchema`** *(internal)* — Partial schema for `PUT /account`: picks `email`/`username` from `zodUserSchema`, extends with `locale`, `imageUrl`, `phone`, `website`, `thumbnailUrl`, `pendingImageKey`.
+- **`updateProfile`** — Validates body against `zodProfileSchema`, loads the user with credentials, un-verifies the account if email changed, delegates to `userService.update`, emits `AUTH_PROFILE_UPDATED` audit on success.
+- **`passwordChangeWithCurrent`** — Validates the new pair *first* (cheap), then bcrypt-compares the current password, then delegates to `passwordChange`. Wrong current password → 422, not 401.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@modules/users` | Reads `zodUserSchema`, `userRepository`, `userService`, `UserDocument` type. |
-| `@infrastructure/adapters/mailer` | `enqueueEmail` called (fire-and-forget) in `passwordResetChange` and `removeOwnAccount`. |
-| `@modules/account/emails` | `resetConfirmEmail` / `deleteConfirmEmail` build the template + data passed to the mailer. |
-| `@infrastructure/http/response` | `generateSuccess`, `generateReject`, `validationErrors`, response type aliases. |
-| `@infrastructure/http/errors` | `rejectDatabaseEnvelope('auth', err)` for Mongoose cast/save failures. |
-| `@infrastructure/http/request` | `CallerContext` type (carries locale, auth identity for audit/analytics base). |
-| `@infrastructure/i18n` | `t()` for inline messages; `getDefaultLocale()` as last-resolve locale. |
-| `@infrastructure/observability/analytics` | `emitAnalyticsEvent` / `buildAnalyticsBase` in `getOwnProfile`, `passwordResetChange`, `removeOwnAccount`. |
-| `@infrastructure/observability/audit` | `emitAuditEvent` / `buildAuditEvent` in `passwordResetChange`, `removeOwnAccount`, `updateProfile`. |
-| `@modules/account/analytics` | `accountAnalyticsEvents` enum (event names). |
-| `@modules/account/audit` | `accountAuditActions` enum (action names). |
-| `src/modules/account/tests/integration/self-service.test.ts` | Integration tests exercising these flows end-to-end. |
-| `src/modules/account/services/index.ts` | Barrel that re-exports this module's public functions. |
+- **`@modules/users`** — Primary data layer: `zodUserSchema` (validation base), `userRepository` (save, findByIdWithCredentials), `userService` (getById, update, remove), `UserDocument` type.
+- **`../emails`** — `resetConfirmEmail` / `deleteConfirmEmail` build the locale-aware email payload; this file handles the `enqueueEmail` call.
+- **`../analytics` / `../audit`** — Provide the event/action constant maps (`accountAnalyticsEvents`, `accountAuditActions`) used in every post-mutation emit.
+- **`@infrastructure/observability/analytics` & `audit`** — `emitAnalyticsEvent`, `buildAnalyticsBase`, `emitAuditEvent`, `buildAuditEvent` (the actual sinks).
+- **`@infrastructure/http/response`** — Envelope constructors (`generateSuccess`, `generateReject`, `validationErrors`).
+- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` for Mongoose/CastError → HTTP mapping.
+- **`@infrastructure/http/request`** — `CallerContext` type threaded through every mutation for audit/analytics attribution.
+- **`@infrastructure/i18n`** — `t()` for user-facing messages, `getDefaultLocale()` as last-resort locale fallback.
+- **`@infrastructure/adapters/mailer`** — `enqueueEmail` (fire-and-forget queue publish).
 
 ## Notes
 
-- **Wrapper pattern, not inline emits.** `passwordResetChange`, `removeOwnAccount`, and `updateProfile` wrap shared `userService` methods rather than embedding audit/analytics inside them. This prevents double-firing (e.g., `passwordChange` is also the last step of `passwordChangeWithCurrent`) and prevents misattribution (e.g., an admin's `DELETE /users/:id` would incorrectly report the deleted user as the actor).
-- **Locale resolution order** for outbound mail: `user.locale → context.locale → getDefaultLocale()`. The request's `Accept-Language` is deliberately only the *fallback* because reset/delete links are typically clicked from an email client on an arbitrary device.
-- **Fire-and-forget email.** `void enqueueEmail(…)` — a transient queue failure must not convert a successful password reset or account deletion into an HTTP error.
-- **Read-before-write in `removeOwnAccount`.** The account's email, username, and locale are destructured *before* `userService.remove` so the goodbye mail can be composed after the document is gone.
-- **Email change un-verifies.** `updateProfile` sets `user.verified = false` when the email field differs from the stored value; the controller (not this function) sends the new verification email.
-- **`zodProfileSchema` is intentionally narrower** than the admin `userService.update`: no `admin`, `active`, or `password` fields are writable here.
+- **Locale resolution for outbound mail** is always `user.locale → context.locale → getDefaultLocale()`. The request's `Accept-Language` is only a fallback because reset/delete links are typically clicked from a shared or borrowed device where that header is meaningless.
+- **`removeOwnAccount` snapshots fields before the write.** The delete is hard; after `remove` resolves the document no longer exists, so email/username/locale must be captured from the in-memory copy.
+- **`updateProfile` un-verifies on email change** (`user.verified = false`). The caller must re-verify; this prevents carrying a verified mailbox onto a new address.
+- **422, not 401, for a wrong current password** in `passwordChangeWithCurrent`. A 401 would be intercepted by client session-expired handlers and log out a valid session.
+- **Email sends are `void enqueueEmail(...)`** — intentionally fire-and-forget. A transient queue outage must not turn a successful reset or delete into an error response.
+- **`thumbnailUrl` / `pendingImageKey`** appear in `zodProfileSchema` but not in the public `UpdateAccountBody` contract; they are server-side artifacts from image-upload handling passed through by the controller.
+- **Duplicate email** on `updateProfile` surfaces as Mongoose E11000 → mapped to 409 by `rejectDatabaseEnvelope`, consistent with signup.

@@ -2,27 +2,26 @@
 
 ## Purpose
 
-Verifies two locale-related invariants of the order-invoice pipeline: (1) the generic PDF worker renders only the copy it was handed at production time and never re-resolves locale at render time, and (2) every multer upload method re-enters the request locale after the stream is consumed. The test lives here (in the orders module) rather than in the PDF-worker module so that deleting `orders` removes the template, its dictionaries, and this spec together.
+Verifies that the invoice PDF pipeline renders copy in the locale it was produced in, independent of any ambient locale scope. It covers two units: the generic PDF worker (which only interpolates pre-resolved strings from `invoiceDocument`) and the `upload.single` middleware chain (which re-enters the request locale after multer consumes the stream). The test lives under `modules/orders` rather than under the infrastructure worker because the scenario is orders-specific and should disappear with the module.
 
 ## Key elements
 
-- **`escaped(value)`** — HTML-escapes a string to match EJS `<%= %>` output (apostrophes → `&#39;`, etc.) so expectations align with rendered HTML.
-- **`renderHtmlToPdfMock` / `renderedHtml()`** — Mock of `@infrastructure/adapters/pdf#renderHtmlToPdf`; `renderedHtml()` extracts the HTML string the mock received, used as the assertion surface.
-- **`invoiceJob(locale?)`** — Builds a job envelope whose `templateData` is pre-resolved by `invoiceDocument(locale, order)`. Deliberately shaped as an *owner-scoped* read (plain `id`, no `_id`).
-- **`runMiddleware(middleware, request)`** — Invokes an express middleware outside any locale scope (the state multer leaves the chain in) and returns whatever `getLocaleContext()` reports after the call.
-- **`describe('the PDF worker renders the copy it was given')`** — Asserts Italian/English copy appears in the rendered HTML, that an ambient `runWithLocale('en')` scope does *not* override an Italian job, that the order id (not `undefined`) is interpolated into the title, that malformed jobs are discarded, and that a render failure rejects (for retry) rather than resolving `false`.
-- **`describe('every upload method restores the locale')`** — Iterates over all five multer methods (`single`, `array`, `fields`, `none`, `any`), asserting each returns a 3-handler chain and that the first handler re-enters the negotiated locale; also confirms the chain is a no-op when no locale was set.
+- **`escaped(value)`** — Local helper that applies the same HTML-entity escaping EJS `<%= %>` performs, so assertions can match rendered output directly.
+- **`renderHtmlToPdfMock` / `renderedHtml()`** — Jest mock for `@infrastructure/adapters/pdf`; `renderedHtml()` extracts the HTML string passed to the mocked renderer for inspection.
+- **`invoiceJob(locale)`** — Builds a job envelope via `invoiceDocument(locale, …)` from `../../emails`, simulating what a producer publishes (no locale field on the envelope itself).
+- **`runMiddleware(middleware, request)`** — Invokes an Express middleware outside any `runWithLocale` scope and captures the locale the next handler observes.
+- **`describe('the PDF worker renders the copy it was given')`** — Asserts Italian/English rendering, owner-shaped `id` (not `_id`) in the title, ambient-locale independence, malformed-job rejection, and that a render failure *rejects* (retry) rather than resolves `false` (dead-letter).
+- **`describe('upload.single restores the locale')`** — Asserts the full 3-handler chain is returned, that the first handler re-enters the negotiated locale, and that it is a no-op when no locale was set.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/context.ts`** — Source of `runWithLocale` and `getLocaleContext`, imported via the i18n barrel; used in the ambient-locale test and inside `runMiddleware` to observe the locale after a middleware call.
-- **`src/infrastructure/i18n/index.ts`** — The barrel export path through which `runWithLocale` / `getLocaleContext` are imported.
-- **`src/modules/orders/emails.ts`** — Provides `invoiceDocument`, which resolves the locale dictionary into concrete template data *before* the worker sees it; the test asserts the worker only interpolates that pre-resolved data.
-- **`tests/support/stub.ts`** — Provides `asStub<Request>(…)` used to cast a plain object into the `Request` type for the upload-middleware tests.
+- **`src/modules/orders/emails.ts`** — Source of `invoiceDocument`, which resolves all locale-specific copy into plain strings before the worker sees them. The test feeds its output into the worker and asserts the strings appear verbatim (escaped) in the rendered HTML.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Provides `runWithLocale` (used to set an ambient scope the worker must ignore) and `getLocaleContext` (used in `runMiddleware` to read the locale the upload chain restored).
+- **`tests/support/stub.ts`** — `asStub<Request>(…)` creates minimally-typed Express `Request` objects for the upload-middleware tests without a real HTTP server.
 
 ## Notes
 
-- Expectations are pre-escaped via `escaped()` because the templates intentionally use `<%= %>` (auto-escaping user-supplied product titles). Do not "fix" expectations to un-escaped strings or loosen templates to `<%- %>`.
-- The `invoiceJob` helper's order shape (no `_id`) is a deliberate regression guard: an admin's hydrated-document shape carries both `id` and `_id`, so a read of `_id` passes for admins but interpolates the literal string `"undefined"` for owner-scoped reads. The assertion `.not.toContain('undefined')` is the only check that catches this.
-- The ambient-locale test (`runWithLocale('en', …)` wrapping an Italian job) exists to prove the worker never consults a dictionary at render time; if a future refactor adds locale lookup inside the worker, this test will be the one to fail.
-- The upload-chain tests use `it.each` over a const tuple of method names; `fields` requires an argument (`[]`) while the others are zero-arg — the helper handles both.
+- The test deliberately uses **owner-shaped** order data (`id` only, no `_id`). The docblock explains that `applyOrderTransform` strips `_id` after writing `id`; an admin's unscoped read keeps both, and reading `_id` would render the literal string `"undefined"` for owner downloads.
+- EJS templates use `<%= %>` (escaped) on purpose for user-supplied product titles; the test mirrors that escaping rather than requesting a switch to `<%- %>`.
+- Dynamic `await import(…)` is used for `@infrastructure/adapters/pdf.worker` and `@infrastructure/adapters/storage` so the module-level `jest.mock` on `@infrastructure/adapters/pdf` is in effect before those modules load.
+- The upload tests assert **three** handlers in the chain (locale-restoring, content-type guard, image-store commit) to prevent a partial mount that would accept non-image bytes or stage files without a pointer.

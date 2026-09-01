@@ -1,33 +1,32 @@
 # src/modules/orders/demo.ts
 
 ## Purpose
-Provides the order book's slice of the demo dataset: three seed orders (pickup, shipped, soft-deleted) plus the functions to write them into the collection and export them in serialized form. Exists so the demo database contains realistic order rows without any of them having gone through a live checkout.
+
+Provides the demo (seed) dataset for the orders collection. Each fixture is a concrete order that demonstrates a specific real-world case (stale email, free shipping, soft-deletion on a non-admin). Product data is looked up live from the catalogue via `seedProductById` rather than restated, so the snapshot always mirrors the current product row unless a fixture explicitly overrides a field.
 
 ## Key elements
 
-- **`snapshotOf(productId)`** – Looks up a product via `seedProductById` (throws if absent) and reshapes it into the `OrderSnapshotInput` shape an order item stores.
-- **`line(productId, quantity)`** – Convenience wrapper that pairs a snapshot with a quantity to form one order line.
-- **`orderFixtures`** – Three `makeOrder(...)` results:
-  - Admin pickup order with a deliberately stale email (`oldpsw@root.it`).
-  - Admin shipped order (`shippingMethod: 'standard'`, `shippingCost: 0`, full `shippingAddress`).
-  - Non-admin soft-deleted order (`deletedAt` set, `userId: SEED_USER_ID`).
-- **`seedOrdersCollection()`** – Upserts all fixtures via `upsertById(orderRepository, …)`. Called by the demo seeder orchestrator.
-- **`exportSeededOrders()`** – Returns the serialized orders (with derived `totalItems`, `totalQuantity`, `totalPrice`) via `exportCollection(orderModel, …)`.
+- **`snapshotOf(productId)`** – Reshapes a live catalogue row (from `@modules/products/demo`) into the `OrderSnapshotInput` shape an order item stores. Throws if the product is absent from the demo catalogue.
+- **`line(productId, quantity)`** – Composes one order line: a product snapshot plus a quantity.
+- **`orderFixtures`** *(exported)* – Array of three `makeOrder(...)` fixtures, each exercising a distinct case: (1) admin order with a stale email and an out-of-stock item, (2) admin order with shipping columns (free standard delivery), (3) soft-deleted order on the non-admin account.
+- **`seedOrdersCollection()`** *(exported)* – Upserts every fixture via `upsertById(orderRepository, order)`; returns `SeedOutcome[]`. Called by `db/demo/index.ts`.
+- **`exportSeededOrders()`** *(exported)* – Serialises the seeded documents through `orderModel` (so `applyOrderTransform` derives `totalItems`, `totalQuantity`, `totalPrice`) and returns them under the `orders` key, matching the API response shape.
 
 ## Relationships
 
-- **`src/modules/orders/factory.ts`** – Consumes `makeOrder` and the `OrderSnapshotInput` type to build fixture objects.
-- **`src/modules/orders/model.ts`** – Uses `orderModel` for the `exportSeededOrders` query.
-- **`src/modules/orders/repository.ts`** – Passes `orderRepository` to `upsertById` during seeding.
-- **`src/modules/orders/module.ts`** – Declares/registers `seedOrdersCollection` for the demo seeder entry-point.
-- **`src/infrastructure/persistence/seed.ts`** – Supplies `upsertById`, `SeedOutcome`, and `exportCollection` used by both the seed and export paths.
-- **`src/kernel/seed-accounts.ts`** – Source of the four `SEED_*` id/email constants used across all three fixtures.
-- **`src/modules/products/demo.ts`** – Provides `SEED_PRODUCT_IDS` and `seedProductById`; the lookup-and-throw check for missing products lives there, not here.
+- **`@modules/products/demo`** – Calls `seedProductById` and reads `SEED_PRODUCT_IDS` to build snapshots; does not restate product fields.
+- **`@kernel/seed-accounts`** – Imports `SEED_ADMIN_ID`, `SEED_ADMIN_EMAIL`, `SEED_USER_ID`, `SEED_USER_EMAIL` for fixture identity; no registry edge on a `users` module.
+- **`./fixtures`** – Imports `makeOrder` and the `OrderSnapshotInput` type.
+- **`./model`** – Imports `orderModel`, used by `exportSeededOrders` for serialisation.
+- **`./repository`** – Imports `orderRepository`, passed to `upsertById`.
+- **`@infrastructure/persistence/seed`** – Uses `upsertById`, `exportCollection`, and the `SeedOutcome` type.
+- **`./module.ts`** – Declares `seedOrdersCollection` in the module's seed registry.
+- **`src/modules/inventory/service.ts` / `src/modules/cart/services/checkout.ts`** – Not imported; the absence of a `reserveForOrder` call is deliberate (see Notes).
 
 ## Notes
 
-- **No seeded inventory reservation.** The seeder runs modules concurrently and the invariant is that no fixture is derived from another module's write. Reserving stock would create a race with `products/demo.ts`; the fixtures intentionally leave `reserved` at 0.
-- **`shippingCost` is a frozen decision, not a rate lookup.** The shipped order stores the cost `priceShipping` computed at checkout time (here 0 because the line total exceeds the `freeAbove` threshold), not the current rate-card value.
-- **Soft-delete ordering is intentionally inconsistent.** The third fixture's `deletedAt` predates its `createdAt`; nothing in the codebase reads both together, and the soft-delete branches only test field presence.
-- **Email is a snapshot, not a live reference.** The module reads demo addresses from `@kernel/seed-accounts` rather than a user registry, mirroring the rule that an order remembers where it was sent and has no live dependency on `users`.
-- **The stale-email fixture is load-bearing.** The first order deliberately carries an email that differs from `SEED_ADMIN_EMAIL` to demonstrate the snapshot property in the data itself rather than in a comment.
+- **No reservation is seeded.** The seeder runs all modules concurrently; calling `reserveForOrder` would race with `products/demo.ts` writing the same product document. All seeded products therefore have `reserved: 0`.
+- **Soft-deleted fixture date inconsistency is intentional.** The `deletedAt` timestamp is earlier than the `createdAt` encoded in the order ID. Nothing in the codebase reads both fields together; only the *presence* of `deletedAt` matters for queries.
+- **Shipping address is restated, not imported.** The `shippingAddress` object duplicates the admin's default address from `account/demo.ts` because the orders module declares no dependency edge on the account module.
+- **Derived totals are not stored.** `totalItems`, `totalQuantity`, and `totalPrice` are computed by `applyOrderTransform` at serialisation time; they appear in `exportSeededOrders` output but in no fixture field.
+- **Lookup, not copy.** If a `SEED_PRODUCT_IDS` entry is removed from `products/demo.ts`, `snapshotOf` throws at seed time rather than silently omitting the line.

@@ -2,26 +2,24 @@
 
 ## Purpose
 
-Integration tests for the four token-facing lookups in `userService` (`findByEmail`, `findByPasswordResetToken`, `findByAccountDeleteToken`, `consumeToken`). These functions use `findOneWithCredentials` instead of the ordinary finder because the schema marks `tokens` with `select: false`; the tests pin the invariant that the returned document actually carries a populated `tokens` array and that each lookup is filtered by the correct `tokens.type`.
+Integration tests for the two token-facing methods on the users service — `findByEmail` and `consumeToken`. It verifies that `findByEmail` returns a populated tokens array (not `undefined`) and that `consumeToken` enforces one-time-use semantics with the change persisted to the database.
 
 ## Key elements
 
-- **`createUserWithTokens`** – local helper that seeds a user with *both* a `password`-type reset token and a `delete`-type token. This dual-token fixture is what makes the `type` half of each filter observable in the assertions.
-- **`describe('userService.findByEmail')`** – 3 cases: basic lookup, `tokens` array is populated (not `undefined`), and empty result for an unknown email.
-- **`describe('userService.findByPasswordResetToken')`** – 4 cases: finds holder, rejects a delete token (cross-type isolation), returns token entries (so caller can read expiration), empty for unknown token.
-- **`describe('userService.findByAccountDeleteToken')`** – 3 cases: finds holder, rejects a reset token, empty for unknown token.
-- **`describe('userService.consumeToken')`** – 4 cases: consumed token is unusable on next lookup, sibling tokens survive, removal is persisted (not just in-memory), no-op for a token the user does not hold.
+- **`createUserWithTokens()`** – Local helper that calls the shared `createUser` fixture with two tokens (one `password`/reset, one `delete`) so filter-type and multi-token assertions have realistic data.
+- **`describe('userService.findByEmail', …)`** – Three cases: happy-path lookup, tokens array is present and has length 2 (guards against the `select: false` pitfall), and unknown email resolves falsy.
+- **`describe('userService.consumeToken', …)`** – Four cases: consumed token no longer appears on re-read, sibling tokens are untouched, removal is persisted (verified via a fresh DB read), and an unknown token is a safe no-op.
 
 ## Relationships
 
-- **`src/modules/users/service.ts`** – the module under test; all four `describe` blocks call its exported functions.
-- **`src/modules/users/index.ts`** – re-exported entry point; the test imports `userRepository` and the `Token` type from here.
-- **`src/modules/users/repository.ts`** – exercised directly in the `consumeToken` persistence assertions via `userRepository.findOneWithCredentials`.
-- **`src/modules/users/tests/factory.ts`** – provides `createUser`, used by both the direct factory calls and the `createUserWithTokens` helper.
-- **`tests/support/setup-test-db.ts`** – provides `setupTestDb`, called once at module load to seed a clean database for the suite.
+- **`src/modules/users/service.ts`** – The system under test; both `findByEmail` and `consumeToken` are called directly.
+- **`src/modules/users/index.ts`** – Barrel import for `userRepository` and the `Token` type used in assertions and fixture casts.
+- **`src/modules/users/repository.ts`** – `userRepository.findOneWithCredentials` is the re-read mechanism that proves persistence after `consumeToken`.
+- **`src/modules/users/tests/fixtures.ts`** – Provides `createUser` used by both the local helper and the plain-lookup test.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module scope to ensure a real database is available before any test runs.
 
 ## Notes
 
-- The file's header comment explicitly warns that swapping `findOneWithCredentials` for the ordinary finder would not fail inside these functions (they are one-liners) but would produce a `TypeError` on `undefined` one or two layers downstream in the reset/delete flows. The `tokens`-array tests are the guard against that regression.
-- The dual-token fixture is load-bearing: with only one token per user, a missing `type` filter would still pass. Every lookup test therefore plants *both* types and asserts cross-rejection.
-- `consumeToken` concurrency (two simultaneous uses of the same token) is covered separately under `tests/integration/concurrency/`; these tests pin the serial single-use behaviour that the race tests measure against.
+- The module doc-comment clarifies scope: live reset/delete/verify tokens are handled by `accountService.findLiveToken` and are **not** covered here.
+- `findByEmail` deliberately uses `findOneWithCredentials` (rather than the default finder) because `select: false` on `tokens` would leave the array `undefined`; callers immediately `.push` onto it, so a plain finder would throw a `TypeError` one layer away. The second test in the `findByEmail` block exists specifically to pin this contract.
+- `consumeToken` assertions re-read through `userRepository.findOneWithCredentials` rather than trusting the in-memory object, ensuring the test validates a committed DB mutation, not just a local splice.

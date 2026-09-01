@@ -2,35 +2,36 @@
 
 ## Purpose
 
-Service layer for the CRUD and bulk-import operations on individual translated key-value rows (entries) within a language. It sits between the HTTP controller and the repositories, enforcing tenant-scoped key uniqueness, validating key structure, and emitting audit events. All writes are narrowed to a single tenant because a key is only unique within one keyspace.
+Service layer for CRUD and bulk-import of locale entries (translated key-value rows) scoped to a single language and tenant. Sits between the HTTP handlers and the repository, enforcing tenant-scoped key uniqueness, key-naming rules, and audit logging on every write.
 
 ## Key elements
 
-- **`searchEntries(tag, filters)`** — Returns one paginated page of a language's entries, sorted by `key` (stable total order), with optional text and tenant filters. Tenant is passed through `readableTenant` (lenient: drops unknown ids rather than rejecting).
-- **`createEntry(tag, payload, context?)`** — Adds a single key. Validates tenant is known, key is not already present in that tenant, and the key is structurally safe relative to existing keys in the same tenant. Emits `ADMIN_LOCALE_ENTRY_CREATED` audit when a `CallerContext` is supplied.
-- **`updateEntry(tag, entryId, payload, context?)`** — Changes one entry's value. Looks up by id, then verifies `entry.locale` matches the path tag (cross-language edit → 404). Emits `ADMIN_LOCALE_ENTRY_UPDATED`.
-- **`deleteEntry(tag, entryId, context?)`** — Removes one entry after the same locale-match check. Returns the deleted key. Emits `ADMIN_LOCALE_ENTRY_DELETED`.
-- **`importEntries(tag, tenant, entries, mode, context?)`** — Bulk import. `mode` is `'replace'` (delete unlisted keys) or `'merge'` (leave them). Entire batch is validated (duplicates, unsafe segments, collisions with surviving stored keys) before anything is written. Emits `ADMIN_LOCALE_ENTRY_IMPORTED` with `mode`, `tenant`, counts, and revision in metadata.
+- **`searchEntries(tag, filters)`** — Paginated list of entries for one language, sorted by `key` (not `createdAt`) to guarantee stable page boundaries. Unknown tenant in filters is silently dropped via `readableTenant`.
+- **`createEntry(tag, payload, context?)`** — Validates the tenant, trims the key, checks for exact duplicates and structural collisions (`rejectUnusableKey`) against the same tenant's existing keys, then inserts. Emits `ADMIN_LOCALE_ENTRY_CREATED` audit when `context` is provided.
+- **`updateEntry(tag, entryId, payload, context?)`** — Looks up by id, verifies the entry's `locale` matches the path tag (404 on mismatch), saves the new value. Emits `ADMIN_LOCALE_ENTRY_UPDATED`.
+- **`deleteEntry(tag, entryId, context?)`** — Same id + locale cross-check as update, then removes the row. Emits `ADMIN_LOCALE_ENTRY_DELETED`.
+- **`importEntries(tag, tenant, entries, mode, context?)`** — Bulk import. Validates duplicates and batch collisions in-memory, then validates each key against the *surviving* stored keys (for `replace` that set is empty; for `merge` it is the stored keys the batch doesn't overwrite). Writes atomically via the repository. Emits `ADMIN_LOCALE_ENTRY_IMPORTED` with `mode`, `tenant`, counts, and revision in metadata.
 
 ## Relationships
 
-- **`./keys`** — Delegates all key-structure validation: `findDuplicateKey`, `findUnsafeKeySegment`, `findBatchCollision`, `rejectUnusableKey`.
-- **`./languages`** — Uses `languageNotFound` (standard 404 shape), `rejectUnknownTenant` (strict write-time guard), and `readableTenant` (lenient read-time passthrough).
-- **`../repository`** — Calls `localeRepository.findByTag` and `localeMessageRepository` (search, listKeys, createEntry, findById, saveEntryValue, removeEntry, importEntries).
-- **`../audit`** — Imports `localeAuditActions` enum for the `action` field in every audit event.
-- **`../model`** — Uses `LocaleMessageDocument` as the domain type for entries.
-- **`@infrastructure/http/response`** — Wraps all returns in `generateSuccess` / `generateReject`.
-- **`@infrastructure/http/request`** — Accepts `CallerContext` for audit emission.
-- **`@infrastructure/observability/audit`** — `buildAuditEvent` + `emitAuditEvent` on every write.
-- **`@infrastructure/i18n`** — `t()` for user-facing error strings.
-- **`@infrastructure/persistence/search`** — `PaginatedMeta` type on the search result.
+- **`@infrastructure/http/response`** — All return values are wrapped in `generateSuccess` / `generateReject` to produce the unified `ResponseSuccess | ResponseReject` shape.
+- **`@infrastructure/http/request`** — Imports `CallerContext` (optional parameter on write operations; its presence gates the audit emit).
+- **`@infrastructure/i18n`** — Imports `t` for localized error messages (key-exists, collision, not-found).
+- **`@infrastructure/observability/audit`** — `buildAuditEvent` + `emitAuditEvent` fire after each successful write.
+- **`@infrastructure/persistence/search`** — `PaginatedMeta` type on the search response.
+- **`../repository`** — `localeRepository.findByTag` (language lookup) and `localeMessageRepository` (all row reads/writes: `search`, `listKeys`, `createEntry`, `findById`, `saveEntryValue`, `removeEntry`, `importEntries`).
+- **`../audit`** — `localeAuditActions` constants naming the four audit action strings.
+- **`../model`** — `LocaleMessageDocument` type (the persisted row shape).
+- **`./keys`** — `findDuplicateKey`, `findBatchCollision`, `rejectUnusableKey` (key-naming and collision logic).
+- **`./languages`** — `languageNotFound` (404 factory), `readableTenant` (lenient filter), `rejectUnknownTenant` (strict guard).
 - **`@types`** — Request/response payload types (`CreateLocaleEntryRequest`, `UpdateLocaleEntryRequest`, `LocaleEntryInput`, `LocaleImportResult`, `LocaleTenant`).
+- **`services/index.ts`** — Barrel re-export so handlers can import from the service namespace.
 
 ## Notes
 
-- **Tenant scoping is the central invariant.** Collision and usability checks are always narrowed to the tenant being written. The same key may legitimately exist in two tenants.
-- **`replace` vs `merge` is the sole behavioral difference** in `importEntries`. In replace mode the "survivors" list is empty, so batch keys are never checked against keys they are about to overwrite.
-- **Audit is conditional.** If `context` is `undefined` (e.g., internal test calls), no audit event fires. Production controllers always pass it.
-- **Audit metadata stores the key, never the value.** This keeps the audit trail from becoming an unmanaged second copy of the dictionary.
-- **Sort key is `key`, not `createdAt`.** This guarantees a stable, deterministic page boundary for translators browsing alphabetically.
-- **`readableTenant` (read) vs `rejectUnknownTenant` (write)** are intentional halves of one policy: reads are forgiving, writes are strict. They live in `./languages` and are used side-by-side here.
+- **Asymmetric tenant policy:** reads silently drop an unknown tenant (`readableTenant`); writes reject it outright (`rejectUnknownTenant`). This is intentional — a filter narrowing is safer than a 400 on a list endpoint.
+- **Key scope is `(locale, tenant)`:** the same key string is legal in two tenants. All duplicate/collision checks are narrowed to the tenant being written.
+- **`context?` is the audit toggle:** passing `undefined` (as tests do) suppresses the `emitAuditEvent` call entirely. Production handlers always pass a real `CallerContext`.
+- **`importEntries` is all-or-nothing:** the entire batch is validated before any write; a half-applied import is explicitly treated as worse than a rejection.
+- **Audit metadata records the key, never the translated value** — the trail is an index into the dictionary, not a second copy of it.
+- **Sort order for pagination is `(locale, key)`:** the natural unique constraint doubles as the total ordering, preventing a row from appearing on two pages.

@@ -2,35 +2,31 @@
 
 ## Purpose
 
-Single controller handler for the three product write endpoints (`POST /products`, `PUT /products`, `PUT /products/:id`). It parses the request (including multipart uploads), validates the payload via the product service, then delegates to `create` or `updateById` depending on whether an id is present. It also owns the lifecycle of an uploaded image file: if validation or persistence fails, the file this request just stored is removed.
+Single admin controller handling product creation (POST /products) and update (PUT /products, PUT /products/:id). Both paths share validation, image bookkeeping, and upload-cleanup-on-failure logic, so they are consolidated into one handler that branches on the presence of an `id` in the request body.
 
 ## Key elements
 
-- **`writeProducts`** — the sole export. Accepts a generic Express `Request` whose body type is the union of all six product write request variants (JSON and multipart). Returns the HTTP response inline (no wrapper).
-- **`readInput`** (from `@infrastructure/http/request`) — single declaration point for fields that need coercion from potentially-untyped multipart bodies: `id`, `active` (boolean), `price`/`onHand` (numbers), `categories`/`tags` (string arrays).
-- **`resolveImageUrl`** (from `@infrastructure/http/uploads`) — extracts the uploaded-file URL; takes priority over a body-supplied `imageUrl`.
-- **`productService.validateData` / `.create` / `.updateById`** (from `../service`) — validation and persistence.
-- **`successResponse` / `rejectResponse` / `rejectDatabaseError`** (from `@infrastructure/http/response` and `errors`) — uniform response helpers.
-- **`imageStore.remove`** (from `@infrastructure/adapters/image-store`) — cleans up the file uploaded by this request on any failure path.
-- **`t`** (from `@infrastructure/i18n`) — localized error strings (used only for the missing-id PUT guard).
-- **`callerContextOf`** (from `@infrastructure/http/request`) — derives the caller/audit context passed into service calls.
+- **`writeProducts`** (exported handler) — Reads typed input via `readInput`, reads the uploaded image via `readUploadedImage`, validates with `productService.validateData`, then dispatches to `productService.create` or `productService.updateById` depending on whether an `id` is present. Returns 201 on create, 200 on update, 422 on validation failure or missing id with PUT.
+- **`readInput` call** — Declares `id`, `active` (boolean), `price`/`onHand` (numbers), and `categories`/`tags` (string arrays) so multipart bodies (which lose JS types) are coerced before reaching the zod schema.
+- **`readUploadedImage` call** — Extracts `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and the `deleteUpload` cleanup function from the request.
+- **`validated` object** — Type-asserts the coerced fields as `Pick<Product, …> & { pendingImageKey?: string }`, since `pendingImageKey` is server-derived and not part of the `Product` type.
+- **`openingCount`** — The `onHand` value, applied only on the create path. Deliberately excluded from `validated` so the update path never overwrites stock.
 
 ## Relationships
 
-- **`src/modules/products/routes.ts`** — wires `writeProducts` as the handler for the three write routes.
-- **`src/modules/products/service.ts`** — provides `validateData`, `create`, `updateById`; the controller is a thin HTTP adapter over this service.
-- **`src/infrastructure/http/request.ts`** — supplies `readInput` (field coercion) and `callerContextOf` (audit context).
-- **`src/infrastructure/http/uploads.ts`** — supplies `resolveImageUrl` to extract the uploaded file's URL from the request.
-- **`src/infrastructure/adapters/image-store.ts`** — used only for `imageStore.remove` cleanup on failure paths.
-- **`src/infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` shape all outbound responses.
-- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseError` maps service-layer exceptions to a consistent 500 shape.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — provides `t()` for the one inline localized message.
-- **`src/types/index.ts`** — source of the `CreateProductRequest*`, `UpdateProductRequest*`, `Product` type imports.
+- **`src/modules/products/service.ts`** — Calls `productService.validateData`, `.create`, and `.updateById`; the controller is a thin transport layer over the service.
+- **`src/modules/products/routes.ts`** — Registers `writeProducts` as the handler for the POST/PUT product routes.
+- **`src/infrastructure/http/request.ts`** — Provides `readInput` (typed field extraction) and `callerContextOf` (extracts caller/auth context passed to the service).
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` for uniform JSON replies.
+- **`src/infrastructure/http/errors.ts`** — Provides `rejectDatabaseError` for mapping service-level DB failures to HTTP responses.
+- **`src/infrastructure/adapters/image-store.ts`** — Provides `readUploadedImage` (parses multipart image, returns metadata + `deleteUpload`) and the `deleteUpload` function used to clean up orphaned uploads on any failure path.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Supplies the `t` translation function used in the 422 "missing data" message.
+- **`src/types/index.ts`** — Source of `CreateProductRequest`, `UpdateProductRequest`, `Product`, and related multipart type definitions.
 
 ## Notes
 
-- **`onHand` is create-only.** It is read from the request and passed to `productService.create`, but deliberately excluded from the update path. Stock changes on an existing product go through `POST /inventory/receipts` or `POST /inventory/adjustments`, which are signed, conditional, and ledger-backed. The `validated` object (shared by both paths) does not include `onHand`.
-- **Multipart type gap.** Multipart bodies arrive as flat strings; `readInput` declares which fields need boolean/number/array coercion so `zodProductSchema` doesn't reject them.
-- **Image cleanup scope.** `deleteUpload` removes only the file uploaded *by this request* (`imageUrlFile`), never a body-supplied `imageUrl`. This prevents a failed validation from destroying an image another request or user owns.
-- **PUT without an id** returns 422 with a localized "missing data" message; it is treated as a protocol error, not a creation attempt.
-- **Cleanup ordering.** On every failure path the code calls `deleteUpload().catch(() => undefined)` *before* sending the error response, so a transient storage outage doesn't escalate a 422 into a 500.
+- **`onHand` is create-only by design.** The update contract intentionally omits the stock counter; modifying existing inventory must go through the signed/ledgered `POST /inventory/receipts` or `/adjustments` endpoints to avoid clobbering counts changed by sales.
+- **`price` and `active` are declared in `readInput`** not because the JSON path needs coercion, but because the multipart image-upload variants of the same route deliver them as raw strings, which the downstream zod schema would reject.
+- **Upload cleanup is fire-and-forget on validation failure.** `deleteUpload().catch(() => undefined)` ensures a transient storage error cannot escalate a client-side 422 into a server 500.
+- **PUT without an `id` is a 422** (not 404 or 405), treated as a malformed request rather than a routing error.
+- The file references `docs/theory/request-input.md` for the rationale behind the single-declaration `readInput` pattern.

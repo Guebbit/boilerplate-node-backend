@@ -2,29 +2,27 @@
 
 ## Purpose
 
-Exercises the six i18n message thunks in `zodUserSchema` to guarantee two things that "happy-path parse" suites never verify: (1) each thunk is evaluated lazily (so it never resolves to `undefined` before `i18next.init()`), and (2) each message is attached to the correct rule rather than a sibling with a similar constraint.
+Unit tests that verify `zodUserSchema`'s i18n error-message thunks resolve to the correct English copy at validation time. They exist because import-time coverage tools report 100 % on the schema declaration regardless of whether the `() => t('…')` thunks ever execute; these tests force each thunk to run and confirm the message matches the shipped `en.json` entry, catching regressions like eager `t('…')` calls (which resolve before `i18next.init()` and silently fall back to English) or a message attached to the wrong rule.
 
 ## Key elements
 
-- **`en` / `copy(key)`** — Loads the shipped English dictionary via `readLocaleDictionary('en')` and provides a `copy` helper so assertions reference i18n keys, not prose.
-- **`validUser`** — A payload that satisfies every rule, letting each test break exactly one field in isolation.
-- **`messagesFor(payload, field)`** — Runs `zodUserSchema.safeParse`, filters issues by top-level field name, and returns the array of messages Zod produced for that field.
-- **`describe('email messages')`** — Asserts `field-email-required` vs. `field-email-invalid` are each produced (and the other is *not*) for the respective failure.
-- **`describe('username messages')`** — The `min(1)` vs. `min(3)` disambiguation: `'ab'` must yield `field-username-min`, never `field-username-required`.
-- **`describe('password messages')`** — Derives the one-character-short boundary from `createUserBodyPasswordMin` (generated schema) rather than a hardcoded literal; also confirms the exact-minimum length passes.
-- **`describe('inherited rules')`** — Feeds a bad `admin` value to confirm `.extend()` preserves base-class rules (`admin`, `active`, `imageUrl`) from the generated `CreateUserBody`.
+- **`en` / `copy(key)`** – Loads the shipped English locale dictionary via `readLocaleDictionary('en')` and exposes a helper that retrieves a user-scoped string by key. All assertions compare against this ground truth rather than hard-coded literals.
+- **`validUser`** – A baseline payload that passes every schema rule, so each test can mutate exactly one field.
+- **`messagesFor(payload, field)`** – Runs `zodUserSchema.safeParse`, then extracts and returns only the error messages whose `issue.path[0]` matches the given field.
+- **`describe('email messages')`** – Asserts that empty email yields `field-email-required` and a malformed address yields `field-email-invalid` (and *not* the required copy).
+- **`describe('username messages')`** – Asserts empty username → `field-username-required`; a 2-char username → `field-username-min` (distinguishes `min(1)` from `min(3)`).
+- **`describe('password messages')`** – Asserts empty password → `field-password-required`; one character below `createUserBodyPasswordMin` → `field-password-min`; exactly the minimum length → no errors.
+- **`describe('inherited rules')`** – Confirms fields that `zodUserSchema` does not override (e.g. `admin`) are still validated, guarding against a future `.extend()` that accidentally replaces the base schema.
 
 ## Relationships
 
-- **`src/modules/users/index.ts`** → re-exports `zodUserSchema`, the sole SUT.
-- **`src/modules/users/model.ts`** → defines the schema and its message thunks; the file's header comment documents "PROBLEM 01" (eager thunk evaluation) that these tests guard against.
-- **`src/infrastructure/i18n/index.ts`** → provides `readLocaleDictionary`, which loads the locale JSON the thunks resolve against at runtime.
-- **`src/infrastructure/i18n/catalog.ts`** → underlying catalog/dictionary store that `readLocaleDictionary` reads from.
-- **`@api/schemas.zod`** (not in neighbor list but imported) → `createUserBodyPasswordMin` keeps the min-length boundary in lock-step with `openapi.yaml`.
+- **`src/modules/users/index.ts`** – Barrel re-export of `zodUserSchema`; the test imports the schema through this path.
+- **`src/modules/users/model.ts`** – Defines `zodUserSchema` (built on top of the generated `CreateUserBody` via `.extend()`). The test exercises its rules and message thunks.
+- **`src/infrastructure/i18n/index.ts`** – Barrel export that provides `readLocaleDictionary`, used to load the English dictionary for assertions.
+- **`src/infrastructure/i18n/catalog.ts`** – The underlying catalog file whose `en.json` entries the thunks resolve against; the test reads the same file to build its expected strings.
 
 ## Notes
 
-- Assertions always go through `copy(key)`, so the English source of truth remains `en.json`; a wording change requires no test edit.
-- The `createUserBodyPasswordMin` import means a contract change in `openapi.yaml` automatically shifts the boundary test instead of leaving a stale literal.
-- The "inherited rules" block is the only test that does **not** use `messagesFor`; it asserts parse failure to catch a regression where `.extend()` accidentally replaces the base schema.
-- The file header explicitly frames itself as a regression guard for eager thunk evaluation: if a thunk were changed from `() => t(…)` to `t(…)`, Zod would substitute its own English and every copy-key assertion here would fail.
+- The password-minimum boundary is derived from `createUserBodyPasswordMin` (imported from `@api/schemas.zod`) rather than a hard-coded number, so the test tracks changes to `openapi.yaml` automatically.
+- Each "wrong copy" assertion is paired with a `not.toContain` for the adjacent message, ensuring the thunk is bound to the correct Zod rule (e.g. `min` vs. `required`).
+- The "inherited rules" test is intentionally minimal (just checks that a type-coercible invalid `admin` fails); it is a smoke guard, not a full validation of every base field.

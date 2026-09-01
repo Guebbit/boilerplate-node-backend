@@ -1,16 +1,20 @@
 # src/app/system-routes.ts
 
 ## Purpose
-Defines a minimal Express router that exposes a single liveness/ping endpoint (`GET /`). It exists so that external monitors, load-balancers, or operators can confirm the process is alive without hitting any business-logic routes.
+
+Defines system-level HTTP routes that concern the process itself rather than any domain module. Currently it exposes only the root ping endpoint, serving as a liveness check that the API is up. It lives outside `src/modules` because it has no business-logic owner.
 
 ## Key elements
-- **`router`** (exported `Router` instance) – the sole export; consumed by the parent routing layer.
-- **`GET /`** – returns HTTP 200 with body `{ status: 'ok' }` and the message `"API is running"`. The handler is intentionally stateless (request param is unused).
+
+- **`router`** (exported) — An Express `Router` instance. `app/routes.ts` mounts it at the application root (`/`).
+- **`GET /`** — Returns `200` with body `{ status: "ok" }` and the message `"API is running"`, confirming the process is alive.
 
 ## Relationships
-- **`src/app/routes.ts`** – imports the exported `router` and mounts it into the application's route tree (e.g. `app.use('/system', router)` or similar), making the ping reachable at a top-level or sub-path URL.
-- **`src/infrastructure/http/response.ts`** – provides the `successResponse` helper used here to serialize the standard success envelope (status code, data, message) so the response shape stays consistent with the rest of the API.
+
+- **`src/app/routes.ts`** — The sole consumer of this file's `router` export; it mounts it at `/`.
+- **`src/infrastructure/http/response.ts`** — Provides the `successResponse` helper used to shape the ping reply (status code, body, and message in one call).
 
 ## Notes
-- The route path is `/` *relative to wherever the router is mounted*; the absolute URL depends on how `routes.ts` wires it in.
-- Because the handler ignores the request object entirely, it is safe behind rate-limiters or can be whitelisted for uptime checks.
+
+- The module docblock mentions "contract/docs endpoints" as a future or sibling concern mounted alongside this router, but no such routes are defined in this file yet.
+- The handler ignores the request object (prefixed `_request`) and always returns the same static payload—there is no conditional logic.

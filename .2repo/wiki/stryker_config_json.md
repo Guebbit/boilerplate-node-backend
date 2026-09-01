@@ -2,37 +2,28 @@
 
 ## Purpose
 
-Stryker mutation-testing configuration for the backend. It defines which source files are mutated, which test files may (and may not) run against the mutants, how results are thresholded, and how incremental caching is handled. The file's primary value is the extensive `_comment` array, which records *why* every scope, exclusion, and threshold decision was made and links out to `docs/tools/mutation-testing.md` for the full glossary and diagrams.
+Configuration file for [Stryker Mutating](https://stryker-mutator.io/) mutation testing. It defines which source files are mutated, how tests are executed (via a dedicated Jest config), where reports are written, and the performance/quality thresholds that gate CI.
 
 ## Key elements
 
-- **`$schema`** – Points to the local `@stryker-mutator/core` JSON schema for editor validation.
-- **`_comment`** – A multi-paragraph array documenting: the origin of every number, the incremental-cache design, the scope/exclusion rationale, threshold philosophy, and the standing signal that `src/app/**` has no unit tests.
-- **`mutate`** – Scope of files Stryker will mutate: `infrastructure/`, `kernel/`, and every module's model, repository, service, routes, and supporting files. Barrel `index.ts` files, `module.ts`, `demo.ts`, `src/app/**`, and test directories are excluded.
-- **`testPathIgnorePatterns`** – **Regexes** (not globs) for test files excluded from the mutation run: contract suites (two locations), per-module integration suites, `outbox-names.test.ts`, and `contract-bundles.test.ts`.
-- **`ignorePatterns`** – Filesystem paths Stryker must not copy into its sandbox (`.tmp/**`, `.stryker-tmp*/`). Must **not** include `public/**`.
-- **`incremental`** – Stores per-mutant verdicts in `reports/stryker-incremental.json` (committed) so unchanged code+tests skip re-testing. Nightly runs pass `--force` to bypass the cache.
-- **Thresholds (`high` / `low` / `break`)** – `high`/`low` only colour the report. `break: 60` is the sole failing gate and is a deliberate floor (currently below the observed band); the real per-file gate lives in `mutation-baseline.json`.
-- **`disableTypeChecks`** – Discussed in comments; keeping it on avoids type-breaking mutants being counted as kills without an assertion earning them.
+- **`testRunner` / `jest`** – Runs mutations with Jest using a *custom* project type and `jest.config.mutation.js`. `enableFindRelatedTests: true` lets Stryker skip unrelated tests for speed.
+- **`jest.config.testPathIgnorePatterns`** – Excludes integration, contract, fuzz, and specific cross-cutting test files from the mutation run (only unit-level tests exercise mutants).
+- **`mutate`** – Glob patterns targeting `src/infrastructure/`, `src/kernel/`, and `src/modules/*/**`, explicitly excluding barrel `index.ts` files and module-level test directories.
+- **`ignorePatterns`** – Directories (coverage, reports, dist, docs, tmp) that Stryker should never scan or write into.
+- **`coverageAnalysis: "perTest"`** – Stryker maps coverage per individual test, enabling the find-related-tests optimisation.
+- **`incremental: true`** – Only mutate files that have changed since the last baseline, reducing CI time on large PRs.
+- **`thresholds`** – Mutation score gates: score ≥ 80 is "high", < 60 is "low", and the run **fails** if the score drops below 60 (`break`).
+- **`reporters` / `htmlReporter` / `jsonReporter`** – Outputs HTML and JSON reports to `reports/mutation/`.
+- **`timeoutMS: 30000`** – A single mutant that takes > 30 s is killed and marked as timeout.
+- **`concurrency: 4` / `maxTestRunnerReuse: 5`** – Run up to 4 mutants in parallel; recycle each Jest worker after 5 mutants to limit memory drift.
 
 ## Relationships
 
-No graph neighbors are recorded for this file. The comments reference several sibling artifacts that interact with it at runtime or in CI:
-
-- **`mutation-baseline.json`** – The per-file gate; `npm run test:mutation:check` (the PR-time check) compares the last report against this file without running mutants.
-- **`.github/workflows/mutation.yml`** – Nightly and on-demand mutation runs that execute the suite once per mutant.
-- **`run-mutation-tests.ts`** – Clears `.tmp/` before starting; the source of a race condition with `ignorePatterns`.
-- **`.gitignore`** – Contains a negation for `reports/stryker-incremental.json` (must be `reports/*` + negation, not `reports/` + negation, because git does not descend into an excluded directory).
-- **`docs/tools/mutation-testing.md`** – Full explanation, glossary, and diagrams referenced by the comments.
-- **Frontend `stryker.config.json`** – Written as a pair; the `break: 60` floor and the "exclude what the tool cannot measure" philosophy are mirrored.
+No graph neighbors are recorded for this file. It is a leaf configuration consumed by the Stryker CLI at run time and referenced (indirectly) by `jest.config.mutation.js` which it points to.
 
 ## Notes
 
-- `testPathIgnorePatterns` entries are **regexes**, not globs. `[^/]+` is the module-name segment; a mistake here silently skips (or includes) wrong test files.
-- `ignorePatterns` must **not** list `public/**` — the sandbox is the only filesystem tests see, and `tests/unit/db/seed-fixtures.test.ts` asserts seed fixture image URLs resolve to committed files under `public/images/seed/`. Omitting `public/` causes Stryker to refuse to start.
-- The incremental cache file **must be committed**. An ignored file makes the optimisation local-only and invisible to CI.
-- A stale cache (refactor moving code between files, bad merge resolution) is mitigated by the nightly `--force` flag; ad-hoc local runs reuse the cache.
-- `break: 60` is **below** the current observed band (~28.66 % total / 51.57 % covered). Every run will fail until real unit coverage closes the gap. This is intentional, not a misconfiguration.
-- `src/app/**` is excluded because it is exercised only by integration/contract suites that are themselves excluded from the mutation runner. The exclusion is a standing reminder: **the Express wiring has no unit tests.** If a unit-test suite for `src/app/**` is added, it should be re-included in `mutate`.
-- `contract-bundles.test.ts` is excluded because Stryker prepends `// @ts-nocheck` in the sandbox, making byte-identical assertions against committed bundles impossible. Excluding it costs no coverage (it exercises files outside `mutate`).
-- `outbox-names.test.ts` is excluded because Stryker rewrites string literals in sandboxed source, breaking a regex that matches `template: '...'` as a plain literal.
+- The Jest config used here (`jest.config.mutation.js`) is **separate** from the standard `jest.config.js`; changes to one do not automatically propagate to the other.
+- `incremental: true` means Stryker caches a baseline (usually under `.stryker-tmp*/` or `.stryker/`). Deleting that cache forces a full re-mutation on the next run.
+- The `mutate` globs intentionally skip `src/modules/*/index.ts`. If a new module's barrel re-exports logic, that logic will **not** be mutation-tested unless the source file it re-exports is matched by another glob.
+- `thresholds.break` is what makes CI red; `high`/`low` only affect report colouring. A score of 59 fails the build, 60 passes.

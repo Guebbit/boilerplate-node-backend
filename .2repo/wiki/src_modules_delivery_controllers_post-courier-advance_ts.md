@@ -1,18 +1,23 @@
 # src/modules/delivery/controllers/post-courier-advance.ts
 
 ## Purpose
-Express handler for `POST /delivery/advance`. It triggers a single "courier tick" that causes every parcel currently on a truck to arrive. Because the repository deliberately ships no scheduler, this admin-facing endpoint (or the demo's admin button) serves as the manual cron.
+
+Handles the `POST /delivery/advance` admin endpoint. Because this repository deliberately has no scheduler, an operator (or a demo admin button) acts as the cron job: calling this endpoint simulates one courier "tick," advancing every parcel currently on a truck to its destination.
 
 ## Key elements
-- **`postCourierAdvance(request, response)`** — Exported Express handler. Extracts caller context via `callerContextOf(request)`, delegates to `deliveryService.runCourierAdvance(...)`, replies with `{ advanced }` through `successResponse`, and routes rejections through `catchAs(response, 'postCourierAdvance')`.
+
+- **`postCourierAdvance(request, response)`** (exported) — The sole export. Extracts the caller context via `callerContextOf`, delegates to `deliveryService.runCourierAdvance(ctx)`, then returns the `advanced` count in a `successResponse`. Errors are routed through `catchAs(response, 'postCourierAdvance')`.
 
 ## Relationships
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs`, the shared error-catch wrapper used here.
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, which reads the authenticated caller context off the Express `Request`.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard JSON success envelope.
-- **`src/modules/delivery/service.ts`** — Supplies `deliveryService`; the handler calls its `runCourierAdvance` method for all business logic.
-- **`src/modules/delivery/routes.ts`** — Registers `postCourierAdvance` on the `POST /delivery/advance` route.
+
+- **`src/modules/delivery/service.ts`** — Calls `deliveryService.runCourierAdvance()`; all domain logic (marking parcels as delivered, updating state) lives in the service.
+- **`src/modules/delivery/routes.ts`** — Wires this handler to the `POST /delivery/advance` path.
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the shared error-serialization helper used here.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, the standard JSON-success envelope.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which pulls the authenticated caller's context off the Express request.
 
 ## Notes
-- The JSDoc block in the file explicitly documents the "no scheduler" design decision; the endpoint is the only way to advance parcels in production-like flows.
-- The handler is a thin delegation layer—no business logic lives here. All state changes are in `deliveryService.runCourierAdvance`.
+
+- This is an **admin-gated** endpoint (the comment references the same admin pattern as the token-cleanup endpoint). There is no in-process timer or queue worker; the endpoint *is* the scheduler.
+- The JSDoc `@module` tag and the route comment are the canonical source of intent; the implementation is a thin pass-through with no branching logic.
+- `advanced` in the response is whatever the service resolves to (expected to be a count), but the controller does not shape or validate it.

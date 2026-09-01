@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Centralizes the two deployment-tunable numbers (reservation TTL and low-stock threshold) into a single import point. Both values are read as functions rather than module-level constants so that environment-variable changes take effect on the next call and tests can vary them per case.
+Single source of truth for the two inventory deployment knobs (reservation TTL and low-stock threshold). Exists to eliminate the transcription risk of duplicating a default value across consumers — a problem that actually occurred before this file was extracted. Both values are read per call (not captured at import) so an operator env-var change takes effect on the next request and tests can vary them case-by-case.
 
 ## Key elements
 
-- **`reservationTtlMinutes(): number`** — Reads `NODE_RESERVATION_TTL_MINUTES` (default 30, minimum 0). Returns the hold lifetime in minutes; stamped onto each hold at reserve time, so changes affect only new checkouts.
-- **`lowStockThreshold(): number`** — Reads `NODE_LOW_STOCK_THRESHOLD` (default 5, minimum 0). Returns the availability level at or below which a product is considered needing restock.
+- **`reservationTtlMinutes()`** — Returns the hold-without-payment window in minutes (`NODE_RESERVATION_TTL_MINUTES`, default 30, floor 0). Stamped at reserve time; a later change affects only new checkouts.
+- **`lowStockThreshold()`** — Returns the availability level at or below which a product is considered needing restock (`NODE_LOW_STOCK_THRESHOLD`, default 5, floor 0).
 
 ## Relationships
 
-- **`src/infrastructure/runtime/environment.ts`** — Provides `environmentNumber`, the helper both functions call to parse and floor-clamp the env var at runtime.
-- **`src/modules/inventory/service.ts`** — Consumes `reservationTtlMinutes` when creating holds and `lowStockThreshold` for its `lowOnly` catalogue-wide filter.
-- **`src/modules/inventory/metrics.ts`** — Consumes `lowStockThreshold` to compute `products_low_stock_total` (public-visible products only).
+- **`src/infrastructure/runtime/environment.ts`** — Sole import; provides `environmentNumber` which resolves an env var with a default and a floor value.
+- **`src/modules/inventory/service.ts`** — Consumer of `reservationTtlMinutes` (stamped at reserve time) and `lowStockThreshold` (the "admin board" spanning the full catalogue).
+- **`src/modules/inventory/metrics.ts`** — Consumer of `lowStockThreshold` (the "gauge" scoped to public products only).
 
 ## Notes
 
-- Both exports are **functions, not constants**. Importers must call them (`lowStockThreshold()`) rather than reading a value. This is deliberate: values are re-read per invocation.
-- `lowStockThreshold` is intentionally shared by two readers that count **different populations** (full catalogue vs. public-only). The two resulting counts will differ and that is expected — do not "fix" the discrepancy.
-- The third argument to `environmentNumber` (`0`) is a minimum bound, not a default; the second argument is the default.
+- Both exports are **arrow functions, not constants**. They must be called at the point of use; importing the bare value would freeze the read at module-load time and defeat the per-call design.
+- `lowStockThreshold` is intentionally shared by two readers that count **different populations** (whole catalogue vs. public-only). Their resulting counts will not match; this is expected, not a bug.
+- The floor argument to `environmentNumber` is `0` for both, meaning a misconfigured env var will degrade to "no TTL" / "everything is low stock" rather than throwing.

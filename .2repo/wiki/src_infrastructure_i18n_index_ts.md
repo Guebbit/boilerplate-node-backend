@@ -2,25 +2,26 @@
 
 ## Purpose
 
-Barrel (entry-point) export for the i18n infrastructure. It re-exports the public API of four submodules—`catalog`, `overrides`, `context`, `negotiate`—under a single import path (`@infrastructure/i18n`) so that ~70 import sites never need to know which file answers a given symbol. It also enforces the project convention that request-scoped translation is always obtained via this module, never from a global `i18next` instance.
+Barrel module for the request-scoped i18n subsystem. It re-exports the four sub-modules (`catalog`, `overrides`, `context`, `negotiate`) under a single import path so that every call site uses `@infrastructure/i18n` instead of reaching into i18next's global instance directly. This keeps the per-request translation context (see `./context`) on the hot path and avoids the one-global-instance-with-one-active-language model that i18next's default export exposes.
 
 ## Key elements
 
-- **From `./catalog`** — `getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales`, `loadLocaleResources`, `readLocaleDictionary`, `registerLocaleDirectories`, `resetSupportedLocales`: locale discovery, per-module resource merge, and boot-time registration.
-- **From `./overrides`** — `applyLocaleOverrides`, `getOverrideRefreshMs`, `refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `resetLocaleOverrides`, `startLocaleOverrideRefresh`, `stopLocaleOverrideRefresh`, `LocaleOverrideProvider`: admin-editable database overlay with a timed refresh lifecycle.
-- **From `./context`** — `createLocaleContext`, `getCurrentLocale`, `getLocaleContext`, `runWithLocale`, `runWithLocaleContext`, `t`, `translator`, `LocaleContext`: the `AsyncLocalStorage`-backed request scope and the ambient `t` function.
-- **From `./negotiate`** — `negotiateLocale`: resolves an `Accept-Language` header to one supported locale.
+- **`t`, `translator`** (from `./context`) — the per-request translation function; the primary symbol consumers import.
+- **`createLocaleContext`, `getLocaleContext`, `runWithLocale`, `runWithLocaleContext`** (from `./context`) — helpers for binding a `LocaleContext` to the current async execution scope.
+- **`getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales`, `loadLocaleResources`, `readLocaleDictionary`, `registerLocaleDirectories`, `resetSupportedLocales`** (from `./catalog`) — static locale-dictionary loading and registry.
+- **`applyLocaleOverrides`, `refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `startLocaleOverrideRefresh`, `stopLocaleOverrideRefresh`, `getOverrideRefreshMs`, `resetLocaleOverrides`, `LocaleOverrideProvider`** (from `./overrides`) — admin-editable translation overlay with optional periodic refresh.
+- **`negotiateLocale`** (from `./negotiate`) — matches an `Accept-Language` header against the supported-locale list.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/catalog.ts`, `overrides.ts`, `context.ts`, `negotiate.ts`** — this file's sole role is re-exporting their public symbols; it defines nothing itself. The only internal edge between submodules is `overrides` → `catalog`.
-- **`src/infrastructure/http/middlewares/locale.ts`** — primary consumer: calls `negotiateLocale` and wraps the request in `runWithLocale` / `runWithLocaleContext` so downstream code sees the correct `t`.
-- **`src/app.ts`, `src/app/error-handling.ts`** — import locale helpers (`getDefaultLocale`, `listSupportedLocales`, `t`) for boot-time setup and error-message formatting.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — drives the override refresh loop via `startLocaleOverrideRefresh` / `stopLocaleOverrideRefresh`.
-- **`src/infrastructure/http/validation-messages.ts`, `middlewares/security.ts`, `middlewares/authorizations.ts`, `delete-controller.ts`, `request.ts`, `modules/account/controllers/delete-account-confirm.ts`** — leaf consumers that call `t` (or `translator`) for user-facing strings.
+- **`./catalog`, `./context`, `./negotiate`, `./overrides`** — the four files this barrel re-exports from; they contain the actual logic and this file adds no behavior of its own.
+- **`src/infrastructure/http/middlewares/locale.ts`** — likely the middleware that calls `negotiateLocale` and then `createLocaleContext` / `runWithLocale` to bind the chosen locale per request.
+- **`src/app.ts`, `src/app/error-handling.ts`, `src/infrastructure/surfaces/*`, `src/kernel/middlewares/authorizations.ts`, `src/infrastructure/http/validation-messages.ts`** — consumer call sites that import `t` (and possibly `negotiateLocale`) through this barrel to produce localized strings.
+- **`src/infrastructure/runtime/server-lifecycle.ts`** — likely responsible for calling `startLocaleOverrideRefresh` / `stopLocaleOverrideRefresh` and `registerLocaleDirectories` during startup/shutdown.
 
 ## Notes
 
-- **Never import `t` from `'i18next'` directly.** The library's default export is a single global instance with one active language; `./context` exists specifically to avoid that. This barrel is the sanctioned entry point.
-- Import sites outside `src/infrastructure/i18n/` should use the barrel (`@infrastructure/i18n`), not a submodule path. Reaching for a submodule is reserved for code *inside* this directory (e.g., `overrides` importing `catalog`).
-- See `docs/tools/i18n.md` for the broader design rationale.
+- The JSDoc explicitly forbids importing `t` from `'i18next'` directly; always go through this barrel so the per-request context is used.
+- All ~70 import sites reference the path alias `@infrastructure/i18n` rather than a relative path — use the alias when adding new call sites.
+- `resetSupportedLocales` and `resetLocaleOverrides` exist for test isolation; they are not expected in production code paths.
+- For deeper design context see `docs/tools/i18n.md` (referenced in the module doc-comment).

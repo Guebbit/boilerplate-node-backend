@@ -2,41 +2,40 @@
 
 ## Purpose
 
-Defines and registers all HTTP-level and process-level Prometheus metrics (via `prom-client`) for the service. It provides the shared registry, the core RED counters/histograms for request traffic, in-flight gauges, and helper functions for recording a completed request and aggregating histogram data into percentiles. It exists so that every module and the HTTP middleware write into a single, scrape-ready metric set rather than ad-hoc per-module registries.
+Defines and registers all HTTP-level and Node.js process-level Prometheus metrics for the service. It provides the shared prom-client registry that every module's `metrics.ts` file registers against, the RED metrics (rate, errors, duration) for every request, in-flight gauge tracking, and helper utilities for reading and summarising histogram data in the in-app overview endpoint.
 
 ## Key elements
 
-- **`metricsRegistry`** – Re-export of `prom-client`'s default `register`. Every module's `metrics.ts` and the scrape endpoint reference this single instance.
-- **`collectDefaultMetrics()`** – One-time call that installs prom-client's built-in Node.js collectors (CPU, memory, event-loop lag, GC, etc.) into the shared registry.
-- **`_processUptimeGauge` / `_heapSizeLimitGauge`** – Two `Gauge` metrics (`process_uptime_seconds`, `nodejs_heap_size_limit_bytes`) with `collect()` callbacks that read the value at scrape time. Both are private (underscore-prefixed, unused reference) and exist only for their registration side-effect.
-- **`httpRequestsTotal`** – `Counter` (labels: `method`, `route`, `status_code`). The primary request-count series.
-- **`httpRequestDuration`** – `Histogram` (labels: `method`, `route`; buckets: 5–5000 ms). Deliberately omits `status_code` to control cardinality.
-- **`httpRequestErrorsTotal`** – `Counter` (labels: `method`, `route`, `status_code`). Counts only 4xx/5xx for cheap alerting.
-- **`httpInflightRequests`** – Unlabelled `Gauge`. Live count of requests currently being processed.
-- **`UNMATCHED_ROUTE`** – String constant (`'unmatched'`) used as the single label value for requests that hit no Express route, preventing unbounded label growth.
-- **`getRouteLabel(request)`** – Reads `request.route` (set by Express during routing) and returns the mounted route template as a stable string, or `UNMATCHED_ROUTE`. Normalizes trailing slashes.
-- **`recordRequestMetric(input)`** – Single entry point that increments the request counter, observes the histogram, and (for ≥ 400) increments the error counter. Takes a `RequestMetricInput` object.
-- **`incrementInflight()` / `decrementInflight()`** – Pair to manage the in-flight gauge; must be called in matching pairs around each request lifecycle.
-- **`aggregateLatencyBuckets(values)`** – Internal: collapses a prom-client histogram `get()` result into sorted per-boundary cumulative counts plus a total. Skips `_sum`/`_count` rows.
-- **`sumMetricValues(values)`** – Internal: sums all sample values in a prom-client `get()` result into one number.
-- **Percentile estimation** (truncated in source) – Walks the cumulative buckets to estimate p50/p95/p99.
+- **`metricsRegistry`** – Re-export of prom-client's default `register`. The single shared registry all modules use so `/metrics` and the overview endpoint see one coherent set of series.
+- **`collectDefaultMetrics({ register })`** – One-time call that installs Node.js runtime collectors (CPU, memory, event-loop lag, GC, etc.) onto the shared registry.
+- **`_processUptimeGauge` / `_heapSizeLimitGauge`** – Two custom Gauges prom-client does not ship: `process_uptime_seconds` and `nodejs_heap_size_limit_bytes` (the fixed V8 ceiling, useful for `used/limit` OOM alerts).
+- **`httpRequestsTotal`** (Counter) – Total requests by `method`, `route`, `status_code`. The canonical RED numerator.
+- **`httpRequestDuration`** (Histogram) – Request duration in ms, buckets `[5…5000]`, labels `method` + `route` only (no `status_code` to limit cardinality).
+- **`httpRequestErrorsTotal`** (Counter) – 4xx/5xx responses by method, route, status. Keeps alert rules simple.
+- **`httpInflightRequests`** (Gauge) – Unlabelled live count of requests in flight; paired with `incrementInflight()` / `decrementInflight()`.
+- **`UNMATCHED_ROUTE`** – Constant `'unmatched'` used as the `route` label for requests that hit no Express route, bounding cardinality.
+- **`getRouteLabel(request)`** – Extracts the matched route template from `request.route` + `request.baseUrl`, normalises trailing slashes, and falls back to `UNMATCHED_ROUTE`.
+- **`recordRequestMetric(input)`** – Records one completed request: increments the total counter, observes the duration histogram, and increments the error counter if status ≥ 400.
+- **`incrementInflight()` / `decrementInflight()`** – Gauge up/down; must be called in matched pairs on every code path.
+- **`aggregateLatencyBuckets(values)`** – Collapses a prom-client histogram `get()` result into a sorted array of `{ upperBound, cumulativeCount }` pairs plus a total count (skips `_sum`/`_count` rows, uses `+Inf` for total).
+- **`percentileFromHistogramBuckets(buckets, total, p)`** – Walks cumulative buckets to return the first boundary whose count ≥ `total × p`. A coarse approximation (returns the bucket boundary, not an interpolated value).
+- **`sumMetricValues(values)`** – Sums `.value` across all label-combination entries to get one aggregate number.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/request-logger.ts`** – Calls `incrementInflight`, `decrementInflight`, and `recordRequestMetric` on each request's `finish` event; the primary consumer of the public recording API.
-- **`src/modules/*/metrics.ts`** (account, audit-logs, cart, inventory, orders, payments) – Each imports `metricsRegistry` to register domain-specific counters against the same shared registry, making them visible to `/metrics` scrapes.
-- **`src/modules/observability/controllers/get-observability-metrics-overview.ts`** – Reads metric values (via `metricsRegistry.getSingleMetric` or `getMetricsAsJson`) to build the JSON overview response; uses `aggregateLatencyBuckets` and the percentile helper for latency summaries.
-- **`src/modules/observability/routes.ts`** – Wires the overview controller to `GET /observability/metrics/overview`.
-- **`src/infrastructure/observability/process-snapshot.ts`** – Sibling in the same directory; likely consumes the process gauges (`process_uptime_seconds`, `nodejs_heap_size_limit_bytes`) or `collectDefaultMetrics` output for snapshot reporting.
-- **`src/app/telemetry.ts`** – Application-level telemetry setup; likely the startup file that ensures `collectDefaultMetrics` and the metric definitions are loaded before the HTTP server begins serving.
-- **`tests/unit/infrastructure/observability/metrics-http.test.ts`** – Unit tests for `getRouteLabel`, `recordRequestMetric`, `aggregateLatencyBuckets`, and the percentile logic.
-- **`src/modules/observability/tests/unit/metrics-overview.test.ts`** – Tests the overview controller, exercising the aggregation helpers indirectly.
+- **`src/infrastructure/http/middlewares/request-logger.ts`** – The metrics middleware that calls `incrementInflight`, `decrementInflight`, `getRouteLabel`, and `recordRequestMetric` on every request's start/finish.
+- **`src/app/telemetry.ts`** – Top-level app wiring that ensures this module's side-effects (registry setup, default metrics) run at boot.
+- **Module `metrics.ts` files** (`account`, `audit-logs`, `cart`, `inventory`, `orders`, `payments`, `persistence`) – Each registers its own domain counters/gauges against the same `metricsRegistry`, making them visible in `/metrics` and queryable by the overview endpoint without importing the owning module.
+- **`src/infrastructure/observability/metrics-cache.ts`** / **`stream.ts`** – Sibling observability modules; likely share the registry or follow the same registration pattern.
+- **`src/modules/observability/controllers/get-observability-metrics-overview.ts`** – Consumes `percentileFromHistogramBuckets`, `aggregateLatencyBuckets`, and `sumMetricValues` to build the JSON response for `GET /observability/metrics/overview`.
+- **`src/modules/observability/routes.ts`** – Registers the overview endpoint that exercises the helpers above.
+- **`src/modules/observability/tests/unit/metrics-overview.test.ts`** / **`routes.test.ts`** – Unit tests covering the overview controller's use of the histogram helpers and route wiring.
 
 ## Notes
 
-- **In-flight gauge pairing is manual.** There is no try/finally wrapper here; the middleware is responsible for calling `decrementInflight` on *every* exit path (success, error, client abort). A missed call causes permanent upward drift.
-- **Label cardinality discipline.** `route` is always a stable template (from `getRouteLabel`), never a raw path. `status_code` is excluded from the histogram labels on purpose. The `UNMATCHED_ROUTE` constant caps the "no match" case to one series.
-- **Gauges use `collect()` callbacks, not timers.** `process_uptime_seconds` and `nodejs_heap_size_limit_bytes` compute their value at scrape time, so there is no interval bookkeeping.
-- **`_processUptimeGauge` / `_heapSizeLimitGauge` are intentionally "unused" variables.** The underscore prefix and the lint suppression are deliberate; the constructor side-effect (registration) is the entire purpose.
-- **Histogram buckets are the precision limit.** Percentile queries can only resolve to the listed boundaries (5, 10, 25, …, 5000 ms); there is no interpolation between them.
-- **`httpRequestErrorsTotal` is redundant with `httpRequestsTotal` filtered by status ≥ 400.** It exists solely to keep alerting rules a simple `rate()` over one counter.
+- **Cardinality guard:** `route` is always a *template* (e.g. `/orders/:id`), never a raw path. `UNMATCHED_ROUTE` collapses all 404s into one series. Never derive a label from user-supplied path segments.
+- **In-flight gauge is unlabelled and process-wide.** A missed `decrementInflight` (e.g. on a client-abort path that skips the `finish` listener) causes permanent upward drift.
+- **`percentileFromHistogramBuckets` over-estimates** within a bucket (returns the upper boundary). This is intentional for the in-app overview; production alerting should use Prometheus `histogram_quantile` with interpolation.
+- **`nodejs_heap_size_limit_bytes`** is distinct from prom-client's `nodejs_heap_size_total_bytes`. Use `used / limit` (not `used / total`) for OOM-pressure alerts; `total` grows on demand and keeps `used/total` near 1.
+- **`request.route` is typed `any` by Express** and can be a RegExp or array for non-string routes. `getRouteLabel` guards with an `unknown` cast and returns `UNMATCHED_ROUTE` for anything that is not a plain string.
+- **The file has module-level side-effects** (`collectDefaultMetrics`, Gauge construction). Importing it has observable consequences; it is designed to be imported once at startup, not lazily.

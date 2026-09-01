@@ -2,31 +2,33 @@
 
 ## Purpose
 
-Defines the Mongoose schemas, model instances, document types, and serialization transforms for the two Mongo collections backing the OVERRIDE tier of i18n: registered languages and their per-tenant translated string entries. Every persistence-level rule (uniqueness, derived fields, index shape) is declared here so that all write and read paths share a single source of truth.
+Defines the two Mongoose schemas, indexes, and model exports for the locale OVERRIDE tier: the **languages** collection (registered BCP 47 tags) and the **entries** collection (one row per language/tenant/key translation). This tier is read exclusively through a boot-time overlay rebuilt by `@infrastructure/i18n`; a Mongo outage degrades to a stale overlay, never a failed `t()` call.
 
 ## Key elements
 
-- **`deriveBaseLanguage(tag)`** – Extracts and lowercases the ISO 639-1 subtag from a BCP 47 tag (e.g. `pt-BR` → `pt`). Used by the schema hook; also called directly by seeds and migrations.
-- **`LocaleDocument` / `LocaleMessageDocument`** – Mongoose document interfaces that override the generated `Language` / `LocaleEntry` date fields to match Mongoose's `timestamps` behavior.
-- **`localeSchema`** – Language schema: `tag`, `baseLanguage` (derived), `name`, `nativeName`, `direction`, `active`, `revision`. A `pre('validate')` hook auto-derives `baseLanguage` from `tag` on every save. Unique index on `tag`.
-- **`localeMessageSchema`** – Entry schema: `locale` (string tag, not ObjectId), `tenant`, `key` (flat dotted string), `value` (defaults to `''`). Unique compound index on `{ locale, tenant, key }` with that specific key order to serve both whole-dictionary reads and per-language admin listings.
-- **`applyLocaleTransform` / `applyLocaleMessageTransform`** – Serialization normalizers (map `_id` → `id`, strip `__v`) built via `applySerialization`.
-- **`localeModel` / `localeMessageModel`** – The two Mongoose model singletons (`Locale` / `LocaleMessage`). The latter resolves to the `localemessages` collection on disk.
+- **`deriveBaseLanguage(tag)`** — extracts and lowercases the ISO 639-1 subtag (`pt-BR` → `pt`). Used by the schema hook and by seeds/migrations that bypass Mongoose setters.
+- **`LocaleDocument` / `LocaleMessageDocument`** — Mongoose `Document` interfaces that omit the domain `id`/timestamps and add optional `createdAt`/`updatedAt`.
+- **`localeSchema`** — languages collection. Fields: `tag` (unique, lowercased), `baseLanguage` (derived), `name`, `nativeName`, `direction` (LTR/RTL enum, default LTR), `active` (public visibility flag), `revision` (bumped by the repository on any entry write).
+- **`localeSchema.pre('validate')`** — auto-sets `baseLanguage` from `tag` on every save, so no write path can drift the two.
+- **`localeMessageSchema`** — entries collection. Fields: `locale` (tag string, not ObjectId), `tenant` (plain string; service rejects unknown tenants), `key` (flat or dotted, stored as a single string), `value` (defaults to `''`; empty is a valid un-translated row).
+- **`localeMessages_locale_tenant_key`** — unique compound index `{locale, tenant, key}`. Serves both the per-tenant download read and the admin `locale`-only listing as a prefix.
+- **`applyLocaleTransform` / `applyLocaleMessageTransform`** — wrappers around `applySerialization` that map `_id`→`id` and strip `__v`.
+- **`localeModel` / `localeMessageModel`** — the two `mongoose.model()` exports consumed by the repository and services.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/serialize.ts`** — Exports `applySerialization`, which this file calls to produce the two transform functions.
-- **`src/types/index.ts`** — Supplies the `LocaleDirection` enum and the `Language` / `LocaleEntry` interfaces that the document types extend.
-- **`src/modules/locales/repository.ts`** — Consumes `localeModel` / `localeMessageModel` for all CRUD; the `revision` bump on write lives in that file, not here.
-- **`src/modules/locales/services/languages.ts` / `entries.ts` / `capabilities.ts`** — Query the models (e.g. `active` filter, whole-dictionary reads by `locale` + `tenant`).
-- **`src/modules/locales/demo.ts`** — Seeds sample documents through the models.
-- **`src/modules/locales/tests/integration/repository.test.ts`** and **`tests/unit/service.test.ts`** — Exercise the schemas and models directly.
+- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, the single helper both transform functions delegate to.
+- **`src/types/index.ts`** — source of the `LocaleDirection` enum and the `Language` / `LocaleEntry` domain types that the document interfaces extend.
+- **`src/modules/locales/repository.ts`** — the only writer that bumps `revision` and performs the cascade-delete of entries when a language is removed; the schema's `revision` comment points here.
+- **`src/modules/locales/services/languages.ts`**, **`…/entries.ts`**, **`…/capabilities.ts`** — service layers that read/write through the models and enforce tenant/entry invariants before a row touches Mongo.
+- **`src/modules/locales/demo.ts`**, **`…/fixtures.ts`** — seed and fixture data written directly against the models (bypassing service-layer validation, relying on the schema's `lowercase`/`trim` options and the `pre('validate')` hook).
+- **`src/modules/locales/tests/unit/schema-contract.test.ts`**, **`…/service.test.ts`**, **`…/integration/repository.test.ts`** — unit and integration coverage for schema defaults, index uniqueness, and repository-level revision/cascade behavior.
 
 ## Notes
 
-- **Nothing in this file is awaited on the hot request path.** `negotiateLocale` and `t()` never read a row; the overlay is rebuilt at boot / on a timer / after a write. The worst case of Mongo being down is two admin endpoints failing, never a locale resolution failure.
-- **`pre('validate')`, not `pre('save')`.** `required: true` is enforced during validation; a `save` hook would run after the error it exists to prevent.
-- **`value` uses `default: ''` rather than `required: true`.** An empty translation is a legitimate row (imported but untranslated); `required` on a String rejects the empty string.
-- **Index names are explicit** (`locales_tag`, `localeMessages_locale_tenant_key`) to match the names created by the corresponding migrations. A derived name would cause an index-options conflict at boot on every migrated database.
-- **`tenant` is a plain string, not an enum.** The set of valid tenants is runtime configuration; the service rejects unknown tenants with 422 before a row is written. An enum would create a boot-order dependency.
-- **`key` is a flat dotted string**, not a nested path. The alternative (nested `messages` object) turns a single-word edit into a multi-level `$set` and introduces dot-escaping pitfalls.
+- **Collection name on disk is `localemessages`** (Mongoose lowercases + pluralises `LocaleMessage`). Migrations and any direct Mongo queries must use that spelling.
+- **Index names are hard-coded** to match the corresponding migration files (`locales_tag`, `localeMessages_locale_tenant_key`). A rename here without updating the migration will cause a duplicate-index conflict at boot.
+- **`locale` in the entries schema is the tag string, not an ObjectId.** There is no foreign-key join; referential integrity is enforced by the repository's cascade delete.
+- **`tenant` is part of the row's identity** (in the unique index), not merely a label. Two tenants can legitimately own the same `key`.
+- **`value` defaults to `''`** rather than being `required: true`, because Mongoose's `required` on a String rejects the empty string, and an empty translation (key imported but not yet filled) is a valid row.
+- **`baseLanguage` is derived in `pre('validate')`, not `pre('save')`**, because Mongoose checks `required: true` at validation time; a `pre('save')` hook would run after the check and the field would appear missing.

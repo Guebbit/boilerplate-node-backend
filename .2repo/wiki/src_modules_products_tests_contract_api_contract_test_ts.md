@@ -1,32 +1,33 @@
 # src/modules/products/tests/contract/api.contract.test.ts
 
 ## Purpose
-Contract tests for the `/products` REST surface. They assert the wire-response shape against `openapi.yaml` (including `additionalProperties: false`) so that a field leaking into a payload is caught immediately. A small number of behavioural assertions are included solely to guarantee that each contract branch (scope, pagination, delete modes) is actually exercised — the behavioural "why" lives in unit/service suites.
+
+Contract tests for the `/products` REST surface. Every assertion calls `toSatisfyApiSpec()` to validate the wire response shape against `openapi.yaml` (including `additionalProperties: false`), and a smaller set of behavioural assertions verify that filter-scoping and delete-semantics invariants hold regardless of how the backend implements them.
 
 ## Key elements
 
-- **`GET /products` suite** — validates the list response for anonymous, admin, empty, and paginated callers; rejects out-of-range `page`/`pageSize` with 422; treats blank values as absent (defaults applied).
-- **`GET /products — the filters it now publishes`** — confirms `title` narrowing works and that a stranger requesting `?active=false` cannot retrieve inactive rows (scope invariant, mechanism-agnostic).
-- **`POST /products/search`** — single contract-match assertion for the search endpoint.
-- **`GET /products/{id}`** — contract match for 200 and 404 responses.
-- **`DELETE /products/{id}`** — soft-delete default, `hardDelete=false` (string "false" must NOT be truthy), `hardDelete=true`, non-boolean rejection (422), and contradictory-source OR semantics (query + body).
-- **`DELETE /products/{id}/hard`** — path-form hard-delete; verifies it wins over a contradictory `?hardDelete=false`.
-- **`GET /products/categories`** — contract match; asserts only the public catalogue is counted.
-- **`stored(id)`** (local helper) — calls `productRepository.findByIdRaw` to inspect the raw row, so soft-deleted products remain visible to assertions.
+- **`describe('GET /products — the filters it now publishes')`** – Asserts that `title` and `active` query filters narrow results for authenticated staff, and that a stranger's visibility scope cannot be overridden by explicitly requesting inactive rows.
+- **`describe('GET /products')`** – Contract-shape checks for anonymous, admin, empty-list, and paginated responses; `it.each` block verifying out-of-range `page`/`pageSize` values return 422; a test confirming blank pagination params are treated as absent (defaults applied).
+- **`describe('POST /products/search')`** – Contract-shape check for the search endpoint.
+- **`describe('GET /products/{id}')`** – Contract-shape checks for a found and a missing (404) product.
+- **`stored(id)` helper** – Wraps `productRepository.findByIdRaw(id)` so tests can inspect the raw collection row after a delete (sees soft-deleted rows).
+- **`describe('DELETE /products/{id}')`** – Verifies soft-delete by default, `hardDelete=false` still soft-deletes (string `'false'` is truthy), `hardDelete=true` hard-deletes, non-boolean values return 422, and contradictory sources (query + body) resolve via OR.
+- **`describe('DELETE /products/{id}/hard')`** – Path-based hard-delete; asserts the path form wins over a contradicting `?hardDelete=false` query param.
+- **`describe('GET /products/categories')`** – Contract-shape check; also asserts only the public (active) catalogue is counted.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — provides the `toSatisfyApiSpec()` matcher (aliased via `@tests/contract`) used on virtually every assertion.
-- **`tests/support/http.ts`** — provides `api()` (supertest-style client) and `authenticateAs()` for bearer-token setup.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to prepare/teardown the test database.
-- **`src/modules/products/tests/factory.ts`** — `createProduct()` seeds rows with configurable fields (title, active, categories, tags).
-- **`src/modules/products/index.ts`** — exports `productRepository`, used by the local `stored()` helper for raw-collection reads.
-- **`src/modules/products/repository.ts`** — the implementation under test (exercised through HTTP); `findByIdRaw` is the only direct method call.
+- **`tests/support/contract.ts`** – Imported as `@tests/contract`; registers the `toSatisfyApiSpec()` jest matcher that every contract assertion relies on.
+- **`tests/support/http.ts`** – Provides `api()` (supertest wrapper) and `authenticateAs()` for building authenticated requests.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module scope to seed and isolate the test database.
+- **`src/modules/products/tests/fixtures.ts`** – `createProduct()` inserts fixture rows for every test.
+- **`src/modules/products/index.ts`** – Re-exports `productRepository`, which is used by the `stored()` helper to read raw rows post-delete.
+- **`src/modules/products/repository.ts`** – The underlying repository whose `findByIdRaw` method the `stored()` helper delegates to.
 
 ## Notes
 
-- **`hardDelete` boolean-from-string trap:** the test explicitly asserts that `?hardDelete=false` soft-deletes (the string `"false"` is truthy in a naïve "is the param present?" check). The endpoint must parse the *value*, not test for presence.
-- **OR, not precedence, for contradictory sources:** when `hardDelete` is supplied in both query and body, `true` in either source triggers hard-delete. A `false` in one source must not cancel a `true` in the other.
-- **`/hard` path is the strongest signal:** `DELETE /{id}/hard?hardDelete=false` still hard-deletes; the path expresses explicit intent that outranks the query.
-- **Scope test is mechanism-agnostic:** the assertion checks that a stranger *cannot see* the inactive row, not *how* (merge-order overwrite vs. AND-clause). This keeps the test portable across backends.
-- **Blank pagination ≠ invalid:** `?page=&pageSize=` is treated as "unspecified" (defaults 1/10), distinct from `page=0` or `page=abc` which are 422.
+- **`hardDelete` string-truthiness:** The test `soft-deletes for hardDelete=false rather than destroying the record` documents that reading the query value as *presence* would treat the string `"false"` as truthy and hard-delete. The endpoint must parse the value, not just check presence.
+- **OR, not precedence, for contradictory `hardDelete` sources:** A `true` in either query or body hard-deletes; an undecodable value in either source still 422s even if the other says `true`. The test suite pins both rules.
+- **Path beats query:** `/products/{id}/hard?hardDelete=false` still hard-deletes—the URL is the more explicit intent.
+- **Scope guarantee, not mechanism:** The stranger-filter test asserts the *result* (inactive rows are invisible) without asserting *how* (scope-merge vs. conjunctive clause), so the test is portable across backends that implement the guarantee differently.
+- **`stored()` reads the raw collection:** It bypasses any soft-delete filter, which is why it can distinguish soft- from hard-delete after a DELETE call.

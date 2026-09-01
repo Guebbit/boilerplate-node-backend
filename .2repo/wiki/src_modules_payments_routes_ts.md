@@ -1,25 +1,28 @@
 # src/modules/payments/routes.ts
 
 ## Purpose
-Defines the Express router that wires all HTTP payment endpoints (intent creation, confirmation, lookup by order, and refund) to their respective controllers, with authentication enforced at the router level.
+
+Express router that defines the four payment endpoints (intent, confirm, read-by-order, refund) and enforces the authentication/authorization boundary for all of them. It exists so the module's public surface is a single `router` export that `module.ts` can mount, while keeping auth policy in one visible place.
 
 ## Key elements
-- **`router`** (exported) — The Express `Router` instance. All payment module routes hang off this object.
-- **`router.use(getAuth, isAuth)`** — Applies the two auth middlewares to every route on this router before any handler runs.
-- **`POST /intent`** → `postPaymentIntent` — Freezes an order's price in preparation for card confirmation.
-- **`GET /order/:orderId`** → `getPaymentByOrder` — Retrieves the payment record associated with a given order.
-- **`POST /order/:orderId/refund`** → `isAdmin` → `postPaymentRefund` — Operator-initiated refund; the order itself is left unchanged.
-- **`POST /:id/confirm`** → `postPaymentConfirm` — Submits the Stripe card dialog (confirms the payment intent).
+
+- **`router`** (exported `Router`) — the sole export; all other identifiers are route registrations or imports.
+- **`router.use(getAuth, isAuth)`** — applies authentication to every subsequent route; no payment endpoint is reachable anonymously.
+- **`POST /intent`** → `postPaymentIntent` — freezes an order's price for later confirmation.
+- **`GET /order/:orderId`** → `getPaymentByOrder` — read-only lookup of the payment behind an order.
+- **`POST /order/:orderId/refund`** → `postPaymentRefund`, additionally guarded by `isAdmin` — operator-only money return.
+- **`POST /:id/confirm`** → `postPaymentConfirm` — card-dialog submit that finalises a payment.
 
 ## Relationships
-- **`src/kernel/middlewares/authorizations.ts`** — Supplies the three middleware functions (`getAuth`, `isAuth`, `isAdmin`) that gate access to these routes.
-- **`src/modules/payments/controllers/post-payment-intent.ts`** — Handler for `POST /intent`.
-- **`src/modules/payments/controllers/post-payment-confirm.ts`** — Handler for `POST /:id/confirm`.
-- **`src/modules/payments/controllers/get-payment-by-order.ts`** — Handler for `GET /order/:orderId`.
-- **`src/modules/payments/controllers/post-payment-refund.ts`** — Handler for `POST /order/:orderId/refund`.
-- **`src/modules/payments/module.ts`** — The module entry point that imports and mounts this `router` into the broader application.
+
+- **`src/kernel/middlewares/authorizations.ts`** — source of the three middleware functions (`getAuth`, `isAuth`, `isAdmin`) consumed on every route.
+- **`src/modules/payments/controllers/post-payment-intent.ts`**, **`post-payment-confirm.ts`**, **`get-payment-by-order.ts`**, **`post-payment-refund.ts`** — the four handler functions wired to their respective routes.
+- **`src/modules/payments/module.ts`** — mounts this `router` into the application's payment route tree.
+- **`src/modules/payments/tests/unit/routes.test.ts`** — unit tests that assert route shape and middleware ordering.
+- **`tests/cross-cutting/authenticated-controllers.test.ts`** — verifies that every controller registered here sits behind `isAuth`.
+- **`tests/cross-cutting/write-routes-are-guarded.test.ts`** — verifies that all `POST` routes here are guarded (auth, and `isAdmin` where applicable).
 
 ## Notes
-- The refund route is the **only** one that adds a second gate (`isAdmin`) on top of the router-wide auth. All other payment routes require only a standard authenticated user.
-- The confirm route parameterises by **payment id** (`/:id/confirm`), not by order id. Callers must already possess the payment intent id returned by `POST /intent`.
-- Route ordering matters for Express: the more specific `/order/:orderId` and `/order/:orderId/refund` paths are registered **before** the wildcard `/:id/confirm`, avoiding an accidental match.
+
+- The `isAdmin` guard is applied **per-route** (only on `/order/:orderId/refund`), not at the router level. The other three routes are auth-only. The file's header comment frames this as an intentional split: a refund left open to any authenticated caller would be a self-service withdrawal, while locking intent/confirm to admins would make checkout impossible.
+- Route ordering matters: `GET /order/:orderId` and `POST /order/:orderId/refund` are registered before the catch-all `POST /:id/confirm` so that Express doesn't misroute a refund as a confirm.

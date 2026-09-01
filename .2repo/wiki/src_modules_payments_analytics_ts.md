@@ -2,20 +2,19 @@
 
 ## Purpose
 
-Declares the analytics event names owned by the payments module and augments the infrastructure analytics port's type map so the names are available to the whole project without the infrastructure layer knowing about payments. This file contains no logic—only a name registry and a `declare module` type extension.
+Declares the analytics event names emitted by the payments module and registers them in the shared analytics port's type map. Controllers import this file directly (rather than a published copy) to get typed event names, following the same augmentation pattern as `./audit.ts`.
 
 ## Key elements
 
-- **`paymentsAnalyticsEvents`** (`as const`) — the two event names this module emits: `PAYMENT_SUCCEEDED` (`'payment_succeeded'`) and `PAYMENT_DECLINED` (`'payment_declined'`). Together they form the funnel's last gate; their ratio is the conversion metric a payment-provider change would move.
-- **`declare module '@infrastructure/observability/analytics'`** — adds a `payments` key to `AnalyticsEventMap`, typed as the union of the values above. Follows the same augmentation pattern as `./audit.ts`, keeping the catalogue distributed and the infrastructure layer domain-agnostic.
+- **`paymentsAnalyticsEvents`** (exported const) — The two analytics events the module emits: `PAYMENT_SUCCEEDED` (`"payment_succeeded"`) and `PAYMENT_DECLINED` (`"payment_declined"`). Together they form the funnel's last gate; `succeeded / (succeeded + declined)` is the conversion metric that changes when a payment provider is swapped.
+- **`declare module '@infrastructure/observability/analytics'`** — Augments the `AnalyticsEventMap` interface with a `payments` key typed to the union of the event values, so downstream consumers get autocomplete and type safety without a separate re-export.
 
 ## Relationships
 
-- **`src/modules/payments/service.ts`** — the service/controller layer that fires these events imports `paymentsAnalyticsEvents` directly to emit `payment_succeeded` / `payment_declined` at the appropriate points in the payment flow.
-- **`scripts/contracts/analytics-events-bundle.ts`** — collects or validates event names across modules (e.g., for contract checks or documentation generation); this file is one of the sources it draws from.
+- **`src/modules/payments/service.ts`** — The payment service that presumably fires these two events (`PAYMENT_SUCCEEDED`, `PAYMENT_DECLINED`) as part of its transaction flow. It imports this file to reference the typed event names when emitting analytics calls.
 
 ## Notes
 
-- **Boundary split:** These names are backend-only and are never published to the frontend. The paired frontend events live in `shared/contracts/analytics.frontend.ts` (events the service *never* observes). Keeping them in separate files is what prevents a single event from being double-counted.
-- **Naming rule:** Event name strings must conform to the convention documented at `docs/tools/analytics.md#naming`.
-- **No central registry:** New events are added here (or in sibling modules like `./audit.ts`) rather than in a shared file; `infrastructure` stays free of domain knowledge.
+- Naming for the event strings must follow the convention in `docs/tools/analytics.md#naming`; do not rename casually.
+- The `as const` on the export is load-bearing: it's what lets the `declare module` augmentation derive a precise string-literal union instead of `string`.
+- The module comment explicitly states that controllers import *this file* (not a published/re-exported copy), so adding a re-export elsewhere can create a source of truth mismatch.

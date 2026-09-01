@@ -2,23 +2,25 @@
 
 ## Purpose
 
-Handler for `POST /inventory/reservations/sweep`. Triggers the reservation-expiry tick by delegating to `inventoryService.runReservationSweep`, then returns the count of expired holds. The app ships no internal scheduler, so this endpoint is the external trigger (cron, platform job, or operator), following the same pattern as `POST /delivery/advance`.
+HTTP handler for `POST /inventory/reservations/sweep`. It triggers the reservation-expiry sweep on demand. The app ships no internal scheduler, so an external caller (cron, CI, operator) invokes this endpoint to tick expirations — the same arrangement as `POST /delivery/advance`. A single audit record is written per sweep run rather than per individual order (each order's own cancellation path records its own audit).
 
 ## Key elements
 
-- **`postReservationsSweep`** (exported) — Express handler. Calls `inventoryService.runReservationSweep(callerContextOf(request))`, responds `200` with `{ expired }` and the i18n message `inventory.sweep-success`, and funnels errors through `catchAs`.
+- **`postReservationsSweep`** *(exported handler)* — Accepts an Express `Request`/`Response`, calls `inventoryService.runReservationSweep(callerContextOf(request))`, then:
+  - On success: replies **200** with body `{ expired }` and the i18n message `inventory.sweep-success` via `successResponse`.
+  - On failure: delegates to `catchAs(response, 'postReservationsSweep')` for standard error formatting.
 
 ## Relationships
 
-- **`src/modules/inventory/service.ts`** — source of `inventoryService.runReservationSweep`, the business logic that expires stale holds and cancels the associated orders.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the authenticated caller's context to pass as the audit actor.
-- **`src/infrastructure/http/response.ts`** — `successResponse` builds the 200 JSON body.
-- **`src/infrastructure/i18n/index.ts`** — `t('inventory.sweep-success')` supplies the human-readable success message.
-- **`src/infrastructure/http/controller.ts`** — `catchAs` wraps unhandled rejections into a standard error response.
-- **`src/modules/inventory/routes.ts`** — registers this handler on the `/inventory/reservations/sweep` route.
+- **`../service`** (`src/modules/inventory/service.ts`) — Provides `inventoryService.runReservationSweep`, the actual sweep logic.
+- **`../routes`** (`src/modules/inventory/routes.ts`) — Registers this handler as the `POST /inventory/reservations/sweep` route.
+- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the caller's identity/context to pass into the service.
+- **`@infrastructure/http/response`** — `successResponse` builds the JSON success envelope.
+- **`@infrastructure/http/controller`** — `catchAs` wraps errors into a consistent HTTP error response.
+- **`@infrastructure/i18n`** — `t('inventory.sweep-success')` localizes the success message.
 
 ## Notes
 
-- **External trigger, not internal cron.** The application has no built-in scheduler; something outside the process (cron entry, platform scheduled job, operator) must call this endpoint periodically.
-- **Audit granularity is per-run, not per-order.** One audit row records *that* a sweep ran and *how many* holds it expired. Individual order cancellations are audited by the orders' own cancel path. This separation lets an operator trace "who pressed the button" without duplicating per-order audit data.
-- The i18n key `inventory.sweep-success` is the only customer-facing string here; the `{ expired }` count is the payload.
+- There is **no built-in scheduler**; the sweep only runs when this endpoint is explicitly called. If the external tick stops firing, reservations will not expire.
+- The sweep produces **one** audit entry per invocation (not one per expired reservation). Individual order-level audit trails come from the order cancellation path, not from this sweep.
+- The `expired` field in the response body is the count (or list) of reservations that were expired by this run, as returned directly by the service.

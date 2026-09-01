@@ -2,27 +2,29 @@
 
 ## Purpose
 
-Centralizes the "token is live" rule (entry exists, type matches, not expired) that was previously copy-pasted across three controllers and a fourth inline check. Provides the canonical find/spend pair for non-password tokens (reset, verification, delete-confirmation, refresh) and the session-listing logic for `GET /account/sessions`, so every flow asks for the rule by name instead of re-deriving it.
+Central owner of the user's `tokens` array. Every non-password flow (password reset, email verification, delete confirmation, refresh sessions) is an entry in that array, and "live" semantics are defined once here. Provides the find/spend pair used by one-time-link controllers and the `GET /account/sessions` service function.
 
 ## Key elements
 
-- **`findLiveToken(type, token)`** — Read-only lookup: returns the `UserDocument` holding a live token of the given type, or `undefined` for every refusal (missing, wrong type, expired, already spent). Does **not** remove the entry.
-- **`spendLiveToken(user, token)`** — Atomically removes the token via `userService.consumeToken` (backed by a `$pull`). Returns `true` only to the winner of a concurrent race; `false` is indistinguishable from a never-existed token.
-- **`toSession(token, cookieToken?)`** *(private)* — Maps a stored `Token` subdocument to the wire `Session` shape. Never exposes the token value; uses `_id` as the handle. `current` is `true` only when the caller's refresh cookie matches.
-- **`sessionsList(userId, cookieToken?)`** — Fetches the user's document with credentials, filters `tokens` to `TokenType.REFRESH` only, maps via `toSession`, and returns a `ResponseSuccess`/`ResponseReject` pair.
+- **`findLiveToken(type, token)`** — Looks up the user document holding a live token of the given type. Live = entry exists, type matches, and either has no `expiration` or is past it. Returns the document or `undefined` for every refusal reason (no user, no entry, expired). Does **not** mutate.
+- **`spendLiveToken(user, token)`** — Atomically removes the token entry by delegating to `userService.consumeToken` (a `$pull`). Returns `true` only if *this* call's write removed the entry; `false` means a concurrent caller already spent it. Re-exported here so the find/spend pair is consumed from one module.
+- **`toSession(token, cookieToken?)`** *(private)* — Maps a stored refresh token to the wire `Session` shape. The raw token value never escapes this function; the subdocument `_id` is the external handle. `current` is `true` only when the caller's refresh cookie matches. `expiration` and `lastUsedAt` are omitted (not zero-filled) when absent.
+- **`sessionsList(userId, cookieToken?)`** — Service for `GET /account/sessions`. Loads the user via `findByIdWithCredentials` (because `tokens` is `select: false`), filters to `TokenType.REFRESH` only, maps through `toSession`, and wraps in `generateSuccess`. Returns a 404 reject with an i18n message if the user is not found.
 
 ## Relationships
 
-- **`@modules/users` (index, model, repository, service)** — Imports `userRepository` (for `findByToken`, `findByIdWithCredentials`), `userService` (for `consumeToken`), and the `Token`, `TokenType`, `UserDocument` types. This file is the single account-side caller of `consumeToken`; controllers do not reach the users module directly for token ops.
-- **`@infrastructure/http/response`** — Imports `generateSuccess`, `generateReject`, and the `ResponseSuccess`/`ResponseReject` types used by `sessionsList`.
-- **`@infrastructure/i18n`** — Imports `t` for the 404 message in `sessionsList`.
-- **`@types`** — Imports the `Session` wire type that `toSession` and `sessionsList` produce.
-- **`src/modules/account/services/index.ts`** — Barrel that re-exports this file so other account modules import from the services index rather than the path.
+- **`src/modules/users/index.ts` / `model.ts` / `repository.ts`** — Imports `userRepository`, `TokenType`, `Token`, `UserDocument`. Calls `findByToken` (find path) and `findByIdWithCredentials` (sessions path) on the repository.
+- **`src/modules/users/service.ts`** — `spendLiveToken` delegates the atomic `$pull` to `userService.consumeToken`, keeping the write logic in the users module.
+- **`src/infrastructure/http/response.ts`** — Uses `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types to shape controller-agnostic return values.
+- **`src/infrastructure/i18n/index.ts`** (via `context.ts`) — Calls `t()` for the 404 error message.
+- **`src/types/index.ts`** — Imports the `Session` wire type used as the public shape of a listed session.
+- **`src/modules/account/services/index.ts`** — This file's exports are re-exported through the account-services barrel.
 
 ## Notes
 
-- **`undefined` is the only refusal.** `findLiveToken` intentionally collapses "never existed", "wrong type", "expired", and "already spent" into one absent value so a dead link is indistinguishable from a fabricated one and the response never confirms an account exists.
-- **Absent `expiration` means "never expires."** Tokens issued with a non-positive TTL are stored without an `expiration` field; treating the field's absence as "expired" would revoke exactly those.
-- **The find/spend split is load-bearing.** `post-reset-confirm` must validate the new password *between* the two calls; a combined `findAndSpend` would either force validation after the burn or require a callback parameter.
-- **`tokens` is `select: false`** on the user document. `sessionsList` uses `findByIdWithCredentials` specifically to surface the array; a plain `findById` would not include it.
-- **`sessionsList` filters to `REFRESH` only.** Other token types (reset, verification, delete-confirmation) are one-time secrets in flight, not sessions; listing them would disclose that an operation is pending.
+- **Separate find and spend on purpose.** Only the spend is atomic (`$pull`); the find is a plain read. `post-reset-confirm` needs to validate *before* spending, so the two steps must remain independently callable.
+- **No-expiration ≠ expired.** A token entry with no `expiration` field is intentionally immortal (non-positive TTL). Treating its absence as "already expired" would revoke exactly those.
+- **Refusal is opaque.** `findLiveToken` returns `undefined` for "no user", "wrong type", "expired", and "token not found" alike. Callers must answer with a single generic message to avoid user enumeration.
+- **Race on spend is indistinguishable from a miss.** A `false` from `spendLiveToken` is the losing side of two simultaneous uses of one link; the controller should respond identically to a token that never existed.
+- **`tokens` is `select: false`** in the user model. `findByIdWithCredentials` exists specifically to include it; a plain `findById` would return an empty array and silently break the sessions endpoint.
+- **Sessions list hides one-time secrets.** Filtering to `REFRESH` only means a pending reset / verification / delete link does not appear in the list, so an attacker who somehow learns the user id gains no signal that an operation is in flight.

@@ -2,37 +2,33 @@
 
 ## Purpose
 
-Integration test suite for the user service (`src/modules/users/service.ts`), exercised against a real (in-memory) database. It validates the public service API — input validation, search/filter/pagination, single-user fetch, creation, and update — confirming both happy paths and boundary conditions (wrong types, soft-delete vs. active, i18n message integrity, password hashing).
+Integration test suite for `userService` that exercises validation, search, `getById`, and the admin create/update/delete flows against an in-memory MongoDB spun up by `setupTestDb`. It exists to catch contract-level bugs (wrong status codes, leaked i18n keys, incorrect filter semantics) that unit tests on individual functions would miss.
 
 ## Key elements
 
-- **`setupTestDb()`** (module-level) — initialises the test database before any test runs.
-- **`describe('userService.validateData')`** — asserts field-level validation rules: required fields, type checks for `admin`/`active` booleans, `imageUrl` as a server-relative path (`uri-reference`), tolerance of undeclared keys (e.g. `id` in PUT bodies), and that error messages are translated strings, never raw i18n keys.
-- **`describe('userService.search')`** — covers text/email/username filters, the `active` filter (distinct from soft-delete), pagination, and empty-collection meta.
-- **`seedActiveAndDeleted()`** (local helper) — creates three users whose `active` and `deletedAt` values deliberately disagree, so a filter that conflates the two would fail.
-- **`describe('userService.getById')`** — verifies a real Mongoose document is returned (has `.save`), and `undefined` for missing/absent IDs.
-- **`describe('userService.create')`** — confirms the pre-save hook hashes the password and that the `admin` flag persists.
-- **`describe('userService.updateById')`** — checks field updates, password re-hash on non-empty password, and that an empty-string password leaves the hash untouched. Uses `userRepository.findByIdWithCredentials` to read the stored hash directly.
-- **`asStub<T>(…)`** — type-only cast helper used throughout assertions to access Mongoose document fields without widening the type to `any`.
+- **`describe('userService.validateData')`** — Asserts return shape (array of `{ message, details }`), type-checking of `admin`/`active` flags, `uri-reference` (not `uri`) for `imageUrl`, tolerance of undeclared body keys (e.g. `id` on PUT), and that error messages are translated copy, never raw dotted i18n keys.
+- **`describe('userService.search')`** — Covers text/email/username partial-match filters, `active` column filtering (explicitly independent of `deletedAt`), pagination (`page`/`pageSize`/`meta.totalPages`), and empty-collection meta.
+- **`describe('userService.getById')`** — Verifies a live Mongoose document is returned (`.save` is a function), and `undefined` for missing/absent IDs.
+- **`describe('userService.create')`** — Checks password hashing via pre-save hook, admin flag propagation, the no-password path (service fills a placeholder to satisfy Mongoose's `required: true`), and emission/non-emission of `USER_SETUP_REQUESTED` domain event based on `sendSetupEmail`.
+- **`seedActiveAndDeleted()`** (local helper) — Creates three users whose `active` and `deletedAt` values deliberately disagree, so tests can prove the two facts are independent.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/users/service.ts` | Module under test; all `describe` blocks call its exports. |
-| `src/modules/users/tests/factory.ts` | Supplies `createUser` (seeds a user via the repository) and the `PLAIN_PASSWORD` constant. |
-| `src/modules/users/index.ts` | Re-exports `userRepository` (used in the password-change assertion) and the `UserDocument` type. |
-| `src/modules/users/repository.ts` | `findByIdWithCredentials` is called to verify the stored hash after an update. |
-| `src/modules/users/model.ts` | Implicitly exercised — assertions on `.save`, `toJSON` normalisation, and `CastError` behaviour depend on the Mongoose schema defined here. |
-| `src/infrastructure/http/response.ts` | Type-only import of `ResponseSuccess` / `ResponseReject` for casting service return values. |
-| `tests/support/setup-test-db.ts` | Provides `setupTestDb`, called once at module load to create/clean the in-memory DB. |
-| `tests/support/caller-context.ts` | Provides `testCallerContext`, passed as the auth/caller parameter to `create` and `updateById`. |
-| `tests/support/stub.ts` | Provides `asStub`, the assertion-side type cast used throughout. |
+- **`src/modules/users/service.ts`** — The module under test; calls `validateData`, `search`, `getById`, `create`.
+- **`src/modules/users/tests/fixtures.ts`** — Provides `createUser` (seed helper) and `PLAIN_PASSWORD` constant.
+- **`src/modules/users/index.ts`** — Source of `userRepository` (used directly in the no-password test to inspect stored credentials) and the `USER_SETUP_REQUESTED` event constant.
+- **`src/modules/users/repository.ts`** — Reached via `userRepository.findByIdWithCredentials` to assert the DB actually contains a non-empty password.
+- **`src/kernel/events.ts`** — `onDomainEvent` subscribes to `USER_SETUP_REQUESTED`; `resetDomainEvents` clears subscriptions in `afterEach`.
+- **`src/infrastructure/http/response.ts`** — Type imports (`ResponseSuccess`, `ResponseReject`) for typing test expectations.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory Mongo at module scope.
+- **`tests/support/caller-context.ts`** — `testCallerContext` passed as the second argument to `userService.create`.
+- **`tests/support/stub.ts`** — `asStub<T>` narrows test results for property assertions without full type knowledge.
+- **`src/modules/users/model.ts`** — Referenced in comments; its Mongoose schema (`required: true` on password, `toJSON` transform) drives several assertions.
 
 ## Notes
 
-- **`active` ≠ soft-delete.** The `seedActiveAndDeleted` helper is purpose-built so that `active: true` and `deletedAt != null` coexist on one record. Any future change that routes the `active` filter through `deletedAt` will be caught by the three filter tests.
-- **i18n raw-key guard.** A historical bug let i18next return the key itself (e.g. `"users.field-email-invalid"`) to the client. The test asserts every `message` does *not* match `/^[a-z]+(?:\.[\da-z-]+)+$/` — a shape-based check that survives copy rewording.
-- **`imageUrl` is `uri-reference`, not `uri`.** A server-relative path (`/uploads/…`) must pass validation; requiring an absolute URL would reject every avatar upload.
-- **Non-strict body parsing.** Undeclared keys (e.g. `id` in a PUT payload) are silently ignored by `validateData`, not rejected. This is intentional for partial-update ergonomics.
-- **Password verification pattern.** After `create` or `updateById`, the test compares the returned/stored hash against `PLAIN_PASSWORD` or the previous hash rather than re-hashing, because the hash includes a per-call salt.
+- `setupTestDb()` runs once at **module level**, not in `beforeEach`; data accumulates across `it` blocks within a suite. Tests that assert exact counts (e.g. "length 2", "length 3") rely on the specific seed order within their own block.
+- The `active` filter tests are intentionally adversarial: a deleted user is still `active: true` and a deactivated user is **not** deleted. This proves the service filters on the `active` column alone and does not silently apply a `deletedAt IS NULL` clause.
+- The i18n assertion matches the *shape* of a raw key (`/^[a-z]+(?:\.[\da-z-]+)+$/`) rather than specific copy, so it survives copy rewrites.
+- `resetDomainEvents()` appears only in the no-password `afterEach`; other suites that subscribe (if any further down in the truncated file) must clean up themselves.
+- The file header mentions "update/delete flows" but the visible portion is truncated; those suites are expected further in the file.

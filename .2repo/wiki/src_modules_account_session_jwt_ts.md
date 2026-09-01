@@ -2,28 +2,28 @@
 
 ## Purpose
 
-Issues and verifies the application's JWTs (access and refresh tokens). Access-token verification is a pure signature check; refresh-token verification additionally confirms the token is still present on the user document. Refresh tokens are persisted to the user record at creation time, making revocation a matter of removing the stored value.
+Owns all JWT issuance and verification for the `account` domain: minting access and refresh tokens, verifying them, and persisting refresh tokens on the user document. Policy (secrets, TTLs, expiry tiers) is delegated to `./config`; this file is purely the sign/verify/persist mechanics.
 
 ## Key elements
 
-- **`TokenData`** — minimal payload shape (`{ id: string }`) shared by both token types.
-- **`verifyAccessToken(token)`** — stateless `jsonwebtoken.verify` against the access-token secret. Resolves with `TokenData`.
-- **`verifyRefreshToken(token)`** — signature check against the refresh-token secret, then `userRepository.findByTokenValue` to confirm the token hasn't been revoked. Rejects with `'Forbidden'` if the token is absent from the user document.
-- **`createRefreshToken(id, remember?)`** — loads the user (with credentials), signs a HS256 refresh JWT carrying a random `jti` (`randomUUID()`), then persists it via `userRepository.tokenAdd`. Returns the updated user document.
-- **`recordRefreshTokenUse(refreshToken)`** — calls `userRepository.tokenTouch` to stamp the token's last-used time. **Never rejects**; failures are swallowed by design.
-- **`createAccessToken(refreshToken)`** — verifies the refresh token (including the DB lookup) and signs a new short-lived access token.
-- **Re-exports from `./config`** — `RefreshTokenExpiryTime`, `getExpiryTime`, `getExpiryTimeMilliseconds` are forwarded so callers need only import from this file.
+- **`TokenData`** — interface for the JWT payload; contains only `id: string`.
+- **`verifyAccessToken(token)`** — stateless `jsonwebtoken.verify` against the access-secret. No DB call.
+- **`verifyRefreshToken(token)`** — JWT verify against the refresh-secret, then a `userRepository.findByTokenValue(token)` revocation check. Rejects with `'Forbidden'` if the token isn't on the user document.
+- **`createRefreshToken(id, remember?)`** — loads the user via `findByIdWithCredentials`, signs a refresh JWT (HS256, `jwtid: randomUUID()`), and persists it with `user.tokenAdd(TokenType.REFRESH, …)`. Returns the updated user document.
+- **`recordRefreshTokenUse(refreshToken)`** — stamps the token as "used" via `userRepository.tokenTouch` so the sessions endpoint can show idle devices. Swallows all errors (resolves to `undefined`) so a bookkeeping write failure never 401s a valid refresh.
+- **`createAccessToken(refreshToken)`** — calls `verifyRefreshToken`, then signs a short-lived access JWT using `getAccessTokenTTL()`.
 
 ## Relationships
 
-- **`./config`** — source of secrets (`getAccessTokenSecret`, `getRefreshTokenSecret`), TTL helpers (`getAccessTokenTTL`, `getExpiryTime`, `getExpiryTimeMilliseconds`), and the `RefreshTokenExpiryTime` type. All policy lives there; this file only consumes it.
-- **`@modules/users` (`src/modules/users/index.ts`)** — provides `userRepository` and `TokenType`. Methods used: `findByTokenValue`, `findByIdWithCredentials`, `tokenAdd`, `tokenTouch`. The user document is the store for issued refresh tokens.
-- **`src/modules/users/repository.ts` / `model.ts`** — the concrete implementation behind those `userRepository` calls; token storage and the positional `tokenTouch` update live here.
-- **Consumers** — `post-login.ts`, `services/authentication.ts`, and `module.ts` call into these exports as part of login, refresh, and session-listing flows. Unit and integration tests (`session-jwt.test.ts`, `jwt.test.ts`, `service-flows.test.ts`) exercise the functions directly.
+- **`./config` (`src/modules/account/session/config.ts`)** — single source for secrets, TTLs, and expiry-time helpers. This file imports every policy value from there and owns no key material itself.
+- **`@modules/users` (`src/modules/users/index.ts`)** — imports `userRepository` and the `TokenType` enum. All DB reads/writes for refresh tokens (find, add, touch) go through the users module's repository and model methods.
+- **`src/modules/account/services/authentication.ts` / `controllers/post-login.ts`** — downstream consumers that call these exports (e.g., `createAccessToken`, `verifyRefreshToken`) during the login and token-refresh flows.
+- **Tests** — `tests/unit/session-jwt.test.ts` exercises individual exports; `tests/integration/jwt.test.ts` and `service-flows.test.ts` exercise them through the full request/response path.
 
 ## Notes
 
-- **`jti` is load-bearing.** Without the random `jti`, two refresh tokens minted in the same second for the same user are byte-identical (payload is just `{ id }`, and `iat`/`exp` are second-resolution). A `jti` ensures each token is a unique credential, so revoking one doesn't revoke a sibling session.
-- **`recordRefreshTokenUse` is fire-and-forget.** It swallows its own errors so a bookkeeping write can never turn a valid refresh into a 401.
-- **Access-token verification is stateless; refresh-token verification is not.** Only `verifyRefreshToken` touches the database. `verifyAccessToken` is safe to call without a connection pool.
-- **`createAccessToken` is not called during login.** Login mints the first access token inline; `createAccessToken` is the refresh-route path. `recordRefreshTokenUse` is likewise refresh-route-only — stamping at issue time would make the "last used" field meaningless.
+- **`jwtid` / `jti` is load-bearing.** Without it, two refresh tokens signed in the same second for the same user are byte-identical, so revoking one silently revokes the other (a phone logout would log out a simultaneously active laptop). The `jti` claim makes each token addressable; `verify` does **not** check it—only the DB lookup on `tokens.token` does.
+- **`recordRefreshTokenUse` never throws.** It catches and discards all errors. This is intentional: the refresh exchange must succeed even if the "last-used" timestamp write fails. Do not add a re-throw.
+- **`recordRefreshTokenUse` is called only from the refresh route**, never from `createAccessToken` at initial login. Stamping at issue time would make every new session look "just used" and defeat the idle-detection purpose.
+- **`findByIdWithCredentials`** is used (not plain `findById`) because `tokenAdd` needs the credentials subdocument to push onto.
+- Access-token TTL is passed in **seconds** (`getAccessTokenTTL()`), matching `jsonwebtoken`'s `expiresIn` unit. Don't switch to milliseconds here.

@@ -2,25 +2,29 @@
 
 ## Purpose
 
-A single-page quick reference for every test and benchmark command in the repo: what each answers, how long it takes, whether it's in the CI gate, and how to interpret failures. Intended as the first stop before drilling into individual layer documentation.
+A single-reference cheat sheet for every test and benchmark command in the repo: what each answers, how long it takes, whether it is a CI gate, and the correct flags to use. It exists so a developer (or AI assistant) can pick the right command in under a minute without reading the full package-scripts reference.
 
 ## Key elements
 
-- **30-second version** — four commands covering the most common workflows (single module, all units, per-module report, full gate).
-- **Command reference table** — 12 rows mapping each `npm run` script to the question it answers, approximate duration, and gate status.
-- **Running one thing** — `test:module -- <path>` (8 suites / 92 tests example), Jest watch mode, and `--onlyChanged` usage with a mandatory `--runInBand` caveat.
-- **Reading a failure** — output format of `test:report` (per-module table, slowest suites, failure list) and its dependency on a prior JSON-report run.
-- **Five test layers** — unit, cross-cutting, integration, contract, fuzz: data source and what each uniquely catches.
-- **Performance** — `bench` (autocannon, flat load) vs. `bench:k6` (k6, ramping load with pass/fail thresholds) vs. `bench:k6:checkout` (write-path under contention).
+- **30-second command set** — the four most common invocations (`test:module`, `test:unit`, `test:report`, `complete`).
+- **Full command table** — 13 rows mapping each `npm run` script to its question, runtime, and gate status (✅ / ❌).
+- **Running one thing** — `test:module -- <path>`, Jest `--watch`, and `--onlyChanged` patterns, each with the mandatory `--runInBand` caveat.
+- **Reading a failure** — how `test:report` parses the Jest JSON report (produced by `test:unit:report`) into per-module summaries, slowest suites, and failure listings; optional coverage rows from `lcov.info`.
+- **Five test layers table** — unit, cross-cutting, integration, contract, fuzz; each with its data source and what it structurally catches.
+- **Performance section** — `bench` (autocannon, flat load) vs. `bench:k6` (ramping load with pass/fail thresholds); note that `k6/*.js` thresholds are placeholders to be seeded from a real measurement (~1.4× p95).
+- **`bench:k6:checkout` warning** — it writes real orders and mutates stock; requires a throwaway DB and a subsequent `db:seed:reset`.
 
 ## Relationships
 
-- **`docs/tools/testing-and-docs.md`** — linked as "Related"; this page points readers there for deeper coverage of the five layers and the underlying data. The report-script section also notes that a byte-identical copy of `test:report` exists in the paired frontend (Vitest JSON matches Jest `--json` shape), kept in sync by `npm run check:spec-identity`.
+- **docs/tools/package-scripts.md** — the full annotated list of every `package.json` script; this page links to it for "every script, annotated."
+- **docs/tools/testing-and-docs.md** — deeper coverage of the five test layers, fixtures, and the data behind them; linked as the next-read page.
+- **docs/tools/mutation-testing.md** — the `test:mutation` script (nightly, minutes-long) is only summarized here; that page covers the tool's configuration and interpretation.
+- **docs/tools/mongodb-mongoose.md** — integration tests use an in-memory Mongo via `tests/support/setup-test-db.ts`; that page documents the demo-data seeding and connection setup referenced here.
 
 ## Notes
 
-- **`--runInBand` is non-negotiable.** Contract and integration suites share a single in-memory Mongo; running them in parallel produces failures that look like real bugs. Every script enforces this; manual `npx jest` invocations must repeat the flag.
-- **`test:report` is read-only.** It parses a JSON file already written by `test:unit:report`. Without that file, the command has nothing to report. Coverage rows appear only if `coverage/lcov.info` exists (produced by `test:unit:coverage`).
-- **k6 thresholds are placeholders.** The page explicitly instructs readers to seed them from a real `bench` p95 × 1.4 before trusting pass/fail verdicts.
-- **`bench:k6:checkout` is destructive.** It creates orders and mutates stock; the page warns to point it at a throwaway DB and run `db:seed:reset` after.
-- This is a documentation file, not executable code. All "commands" listed are npm scripts defined elsewhere (see `package-scripts.md` referenced in the Related section).
+- **`--runInBand` is non-optional.** The contract and integration suites share a database. Dropping this flag (e.g., with `--onlyChanged` in a bare `npx jest` call) causes parallel DB access that produces failures indistinguishable from real bugs.
+- **`test:report` needs a JSON file on disk.** It does not run tests itself; `test:unit:report` must have been executed in the same session first.
+- **Frontend parity.** The `test-report` script has a byte-identical Vitest counterpart in the paired frontend repo; `npm run check:spec-identity` enforces that the two copies stay in sync.
+- **k6 thresholds are intentionally loose.** They are regression guards, not SLA targets. Setting them too tight makes the suite fire on normal variance, training the team to ignore it.
+- **`test:prism` is not a gate.** It lives under `complete:manual` and is meant for spec-authoring loops, not CI.

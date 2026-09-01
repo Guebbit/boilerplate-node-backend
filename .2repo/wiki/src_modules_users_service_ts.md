@@ -2,43 +2,38 @@
 
 ## Purpose
 
-Admin-facing user CRUD and search service. It owns the write path for user documents created or modified by operators (create, update, soft/hard delete) and provides token-based lookups consumed by the `account` module. Authentication flows (signup, login, password reset) live in the `account` module; this file is the complementary admin surface.
+Admin-facing user CRUD and search service. Handles creating, reading, updating, and deleting user documents on behalf of an operator, plus paginated search for the admin panel. Explicitly scoped *away* from authentication (signup, login, password reset, token lifecycle) which lives in the `account` module.
 
 ## Key elements
 
-- **`validateData(userData, requirePassword?)`** — Runs the full `zodUserSchema` (or a password-optional variant) against raw input and returns UI-friendly error items. Deliberately accepts `unknown` because it is the type-establishing boundary.
-- **`search(filters)`** — Paginated user search for the admin panel; delegates to `userRepository.search` and returns `{ items, meta: PaginatedMeta }`.
-- **`getById(id?)`** — Single-user lookup by ID; resolves `undefined` when no ID is supplied.
-- **`create(data, context)`** — Creates a user with `verified: true` hardcoded (admin vouches for the address). Emits an audit event and an analytics event keyed on the new user's ID.
-- **`update(user, data)`** — Field-by-field assignment onto an already-loaded document, then saves. Returns a `ResponseSuccess | ResponseReject` envelope (no throws).
-- **`updateById(id, data, context)`** — Fetches the document (with credentials), delegates to `update()`, emits audit + analytics events on success. Emits `USER_DEACTIVATED` specifically when `active` flips to `false`.
-- **`remove(user, hardDelete?)`** — Soft delete toggles `deletedAt`; hard delete emits `USER_DELETED` domain event (awaited) before calling `userRepository.deleteOne`, allowing the cart module to clean up.
-- **`findByEmail` / `findByPasswordResetToken` / `findByAccountDeleteToken`** — Token/email lookups used by `account` controllers and services. All return the document with credentials populated.
-- **`consumeToken(user, token)`** — Atomic `$pull` of a one-time token from the user's `tokens` array. Returns `true` only if this call's write actually removed the token (disambiguates concurrent duplicate clicks).
+- **`validateData(userData, requirePassword?)`** — Runs the full `zodUserSchema` (or a partial variant when `requirePassword` is false) against `unknown` input; returns `ResponseErrorItem[]` (empty = valid). Intentionally validates the whole schema so no field slips through to Mongoose as a 500.
+- **`search(filters?)`** — Paginated user search; delegates to `userRepository.search`. Returns `{ items, meta: PaginatedMeta }`.
+- **`getById(id?)`** — Fetches one user by ID. Resolves to `undefined` (not a rejection) when `id` is falsy.
+- **`enqueueIfPending(user)`** — Fire-and-forget (`void`) dispatch of `enqueueImageDigest` when the document carries a `pendingImageKey`. Returns the user for chaining; callers must not await the digest.
+- **`create(data, context)`** — Admin user creation. Hardcodes `verified: true`. If no password is supplied, fills the required field with `randomBytes(32).toString('hex')`. Emits audit + analytics events, optionally emits `USER_SETUP_REQUESTED` domain event to queue a setup email.
+- **`update(user, data)`** — Field-by-field mutation of a loaded `UserDocument`. Image trio (`imageUrl` / `thumbnailUrl` / `pendingImageKey`) is set atomically. Returns a `ResponseSuccess | ResponseReject` envelope (never throws).
+- **`updateById(id, data, context)`** — Loads the document via `findByIdWithCredentials`, delegates to `update`, then emits audit and (if `active === false`) a `USER_DEACTIVATED` analytics event.
+- **`remove(user, hardDelete?)`** — Soft delete toggles `deletedAt` (re-running on an already-soft-deleted user *restores* it). Hard delete awaits `USER_DELETED` domain event emission before calling `userRepository.deleteOne`.
+- **`findByEmail(email)`** — Looks up a user by email, loading credentials (`select: false` fields included) because callers immediately write a token onto the document.
+- **`consumeToken(user, token)`** — Atomic `$pull` of a token from the user's token array. Returns `true` only for the write that actually removed it.
 
 ## Relationships
 
-- **`@infrastructure/http/response`** — All write operations return `ResponseSuccess`/`ResponseReject` envelopes; `validateData` maps Zod errors to `ResponseErrorItem[]` via `validationErrors`.
-- **`@infrastructure/http/request`** — Imports the `CallerContext` type, passed by controllers into `create`, `updateById` for audit/analytics attribution.
-- **`@infrastructure/i18n`** — Uses `t()` for user-facing status messages (e.g. `users.not-found`, `users.hard-deleted`).
-- **`@infrastructure/observability/audit`** — `create` and `updateById` emit structured audit events via `buildAuditEvent` / `emitAuditEvent`.
-- **`@infrastructure/observability/analytics`** — Emits `USER_CREATED` (on create) and `USER_DEACTIVATED` (on deactivation) analytics events.
-- **`@infrastructure/persistence/search`** — `search` return type includes `PaginatedMeta` from the shared pagination helper.
-- **`@kernel/events`** — `remove(hardDelete=true)` emits `USER_DELETED` and **awaits** it before deleting, so subscribers (cart) can clean up first.
-- **`./analytics`** — Supplies `usersAnalyticsEvents` enum used in analytics payloads.
-- **`./audit`** — Supplies `usersAuditActions` enum used in audit payloads.
-- **`src/modules/account/services/tokens.ts`** — Calls `findByPasswordResetToken`, `findByAccountDeleteToken`, and `consumeToken` during reset/delete flows.
-- **`src/modules/account/controllers/delete-account-request.ts`** — Calls `findByAccountDeleteToken` to locate the user before confirming deletion.
-- **`src/modules/account/services/profile.ts`** — Calls `findByEmail` for profile lookups.
-- **`src/modules/cart/tests/integration/service.test.ts`** — Exercises the `USER_DELETED` event path to verify cart cleanup on hard delete.
-- **`src/modules/account/tests/unit/delete-account.test.ts`** — Unit-tests the token-consume and remove flows.
-- **`src/modules/account/tests/integration/persisted-locale.test.ts`** — Verifies the `locale` field written by `update` persists correctly.
+- **`@infrastructure/http/response`** — Source of `generateSuccess`, `generateReject`, `validationErrors`, and the `ResponseSuccess` / `ResponseReject` / `ResponseErrorItem` types used as return contracts throughout.
+- **`@infrastructure/http/request`** — Provides the `CallerContext` type threaded into `create` and `updateById` for audit/analytics attribution.
+- **`@infrastructure/i18n`** — `t()` used for user-facing messages (`users.not-found`, `users.hard-deleted`, `users.soft-deleted`).
+- **`@infrastructure/observability/audit`** — `emitAuditEvent` / `buildAuditEvent` called in `create` and `updateById`.
+- **`@infrastructure/observability/analytics`** — `emitAnalyticsEvent` / `buildAnalyticsBase` called in `create` and `updateById`.
+- **`@infrastructure/adapters/image.worker`** — `enqueueImageDigest` called (fire-and-forget) from `enqueueIfPending`.
+- **`@kernel/events`** — `emitDomainEvent` used for `USER_SETUP_REQUESTED` (create) and `USER_DELETED` (hard delete).
+- **`@infrastructure/persistence/search`** — `PaginatedMeta` type in the `search` return signature.
+- **`src/modules/account/…` (consumers)** — `findByEmail` is called by the account module's reset-request and delete-account flows; `consumeToken` is called by the reset-confirm path. This service does not import from `account`, keeping the dependency arrow one-directional.
 
 ## Notes
 
-- **Type your parameters off the generated contract shape** (`CreateUserRequest`, `UpdateUserByIdRequest`), not a hand-picked `Pick<UserRecord, …>`. A hand-picked list previously dropped `active`, causing `PUT /users/:id` to fire `USER_DEACTIVATED` analytics without actually writing the field.
-- **`verified` is hardcoded `true` in `create`.** It is not part of `CreateUserRequest`; the admin is implicitly vouching for the address. The self-service `accountService.signup` leaves it `false`.
-- **`validateData` validates the full schema, not a `.pick()`.** A narrower pick would let wrongly-typed `admin`, `active`, or `imageUrl` reach Mongoose and surface as a 500 CastError instead of the promised 422.
-- **`consumeToken` uses `$pull`, not read-modify-write.** Two simultaneous confirms of one reset link both pass the existence check; `$pull` makes the second a no-op at mongod level instead of a `VersionError` → 500.
-- **Soft delete is a toggle.** Calling `remove` twice on an already-soft-deleted user restores it. The cart is intentionally left intact on soft delete (restoreable); only the hard path emits `USER_DELETED` to trigger cart cleanup.
-- **`findByEmailVerifyToken` is private** (no `export`), used only internally by the account module's verification flow.
+- **Whole-schema validation is deliberate.** `validateData` calls `schema.safeParse` on the complete schema (or `.partial({ password: true })`), never a `.pick()`. A pick would let wrong-typed `admin` / `active` / `imageUrl` reach Mongoose and surface as a 500 instead of the promised 422.
+- **`update` typing history.** The parameter is typed off `UpdateUserByIdRequest` rather than a hand-picked `Pick` because a previous hand-copied list silently omitted `active`, causing `active: false` to fire `USER_DEACTIVATED` without persisting the field.
+- **Soft delete is a toggle, not a set.** `user.deletedAt = user.deletedAt ? undefined : new Date()` — calling `remove` on an already soft-deleted user restores them.
+- **Hard delete emits before writing.** `emitDomainEvent(USER_DELETED, …)` is awaited *before* `deleteOne`, so downstream subscribers (e.g. cart cleanup) complete first. Only the hard path emits; a soft delete is treated as "a restore waiting to happen."
+- **`consumeToken` uses `$pull`, not read-modify-write.** Two simultaneous confirms of the same reset token would otherwise both load version V and the second write would raise a `VersionError` (500) on a request that had already succeeded. `$pull` makes the second consume a no-op.
+- **`enqueueIfPending` is `void`.** It is a queue publish, not a CPU-bound digest. Callers chain it for convenience but must not await the underlying work.

@@ -2,36 +2,30 @@
 
 ## Purpose
 
-Defines the type-level contract that every domain module must satisfy (`AppModule`) and provides the boot-time functions that validate the module list and wire up domain-event subscriptions. It turns the explicit array in `src/modules.ts` into a validated, mounted application without any filesystem discovery.
+Defines the **module manifest type** (`AppModule`) and the two runtime entry points (`registerModules`, `resolveImageTargets`) that turn the explicit list in `src/modules.ts` into a wired-up application. It is the single place where the shape of a module is enforced at the type level, so enabling a domain is a one-line edit to the list rather than a filesystem discovery step.
 
 ## Key elements
 
-- **`ContextRelationship`** — union of four labels (`conformist`, `customer-supplier`, `published-language`, `shared-kernel`) that describe the *shape* of a cross-module dependency, not just its existence.
-- **`ContextEdge`** — a single entry in `dependsOn`: the target module name, the relationship label, and a one-sentence `because` rationale.
-- **`Subdomain`** — `'core' | 'supporting' | 'generic'`; drives how much modelling effort a module may carry (enforced by a cross-cutting test).
-- **`AppModuleCommon`** — shared fields: `name`, `subdomain`, `dependsOn`, `subscribe`, `locales`, `seeds`.
-- **`RoutedModule`** — adds `basePath` + `routes` (an Express `Router`) for modules that serve HTTP.
-- **`HeadlessModule`** — uses `never` for `basePath`/`routes`, so a module that owns a collection but exposes no URL is a distinct type.
-- **`DemoExport`** — discriminated union: either `{ seedExport, demoShapes }` or neither, so an unclassified collection is a compile-time error.
-- **`AppModule`** — `(RoutedModule | HeadlessModule) & DemoExport`; the single type every entry in `src/modules.ts` must satisfy.
-- **`validateModules(appModules)`** — three-pass check: duplicate names, unknown/self dependencies, and cycle detection (DFS with `settled`/`walking` sets). Throws on first violation.
-- **`registerModules(appModules)`** — calls `validateModules`, then iterates modules calling `subscribe?.()` so all event handlers exist before any route is mounted.
+- **`DemoShape`** (`'response' | 'stored'`) — classifies whether a seeded collection is served verbatim by the API or only stored internally.
+- **`DemoExport`** — discriminated union requiring `seedExport` *and* `demoShapes` together (or neither). Forces every exported collection to be labelled at the manifest, preventing an unclassified row from leaking into a sibling repo.
+- **`ImageTarget`** — the writeback contract a module registers so the image-digest worker can persist `imageUrl`/`thumbnailUrl` onto a document without importing the module's repository. The `writeback` call is guarded by a `pendingImageKey` match to make stale/duplicate deliveries no-ops.
+- **`AppModule`** — the full manifest: `name`, optional `basePath`, `routes`, `subscribe`, `locales` (a directory path, not loaded dicts), `seeds`, `imageTargets`, plus the `DemoExport` intersection.
+- **`resolveImageTargets(appModules)`** — flattens every module's `imageTargets` into a single `Record<string, ImageTarget | undefined>` for the worker. Takes the list as a parameter (does not import `enabledModules`) to keep this file free of `src/modules/*` imports.
+- **`registerModules(appModules)`** — iterates the list and calls each module's `subscribe?.()`. Called once at boot, after all modules are known, so any handler may reference a sibling.
 
 ## Relationships
 
-- **`src/modules.ts`** — exports the `AppModule[]` that this file validates and registers; the list is the single source of truth for what is enabled.
-- **`src/app.ts`** — calls `registerModules` during boot and reads `locales` fields to call `registerLocaleDirectories` before `i18next.init()`.
-- **`src/app/routes.ts`** — mounts each `RoutedModule`'s `routes` at its `basePath`.
-- **`src/kernel/events.ts`** — the event-bus that `subscribe` hooks into; the registry's cycle check explicitly directs mutual dependencies here instead of as imports.
-- **`src/infrastructure/persistence/seed.ts`** — provides the `SeedOutcome` type consumed by `AppModuleCommon.seeds`.
-- **`src/modules/*/module.ts`** (account, audit-logs, cart, delivery) — each exports an `AppModule` value that is the concrete instance of the types defined here.
-- **`db/demo/assemble.ts`** — calls each module's `seeds` function to build the demo dataset.
-- **`docs/theory/modules.md`** — the normative document for the manifest shape defined here.
+- **`src/modules.ts`** — produces the `AppModule[]` list that is passed to `registerModules` and `resolveImageTargets`. This file does *not* import it.
+- **`src/app.ts`** — calls `registerModules` during boot and reads each module's `locales` path to pass to `registerLocaleDirectories` before `i18next.init()`.
+- **`src/app/workers.ts`** — calls `resolveImageTargets` once and hands the resulting lookup to `infrastructure/adapters/image.worker.ts` as a plain resolver.
+- **`src/infrastructure/persistence/seed.ts`** — provides the `SeedOutcome` type used by the `seeds` field.
+- **Module files** (`account`, `audit-logs`, `cart`, `delivery`, `feedback`, `inventory`, `locales`) — each exports an object conforming to `AppModule`; they are listed in `src/modules.ts` but never imported by this file.
+- **`db/demo/assemble.ts`** — walks `enabledModules` and calls each module's `seedExport`.
 
 ## Notes
 
-- `dependsOn` must remain a DAG. The error message for a cycle points developers to domain events rather than a restructure.
-- `subscribe` is deliberately separated from route mounting: a handler may fire in response to another module's request, so all subscriptions must be registered before the first route responds.
-- `seedExport` must read back through the model's `toJSON` (the real serializer), not return the fixtures it wrote — returning fixtures would publish a guess labelled as truth.
-- `demoShapes` is stated explicitly per collection rather than derived, because a shape-matcher can confidently mislabel a stored row as a response shape.
-- The `never` fields in `HeadlessModule` and the discriminated `DemoExport` union make partial/ambiguous configurations a **type error**, not a runtime surprise.
+- **No `src/modules/*` imports, by design.** The constraint exists so `infrastructure/adapters/image.worker.ts` (which needs `resolveImageTargets` but must not import a module directly) can depend on this file without creating a cycle. If you add a helper here, do not reach into a module.
+- **`resolveImageTargets` return type is `ImageTarget | undefined`**, stated explicitly because `noUncheckedIndexedAccess` is off project-wide; without the annotation an unregistered `collection` string would type-check as always present.
+- **`seedExport` must read rows back through the model's `toJSON`**, not return the fixtures it wrote. Returning fixtures would publish a guess labelled as truth in the downstream demo dataset.
+- **`demoShapes` is stated, not derived.** A structural matcher could mislabel a `stored` collection as `response` (e.g. `locales`), so the classification is an explicit per-collection map.
+- **`subscribe` is separate from route mounting.** A domain-event handler may fire for an event emitted by a sibling mid-request, so all subscriptions must be registered before the first route is reachable.

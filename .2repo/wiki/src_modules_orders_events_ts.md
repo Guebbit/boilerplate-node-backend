@@ -2,25 +2,24 @@
 
 ## Purpose
 
-Declares the domain events emitted by the orders module by augmenting the kernel's `DomainEventMap` interface, and exports typed event-name constants. This keeps the event catalogue distributed (each module augments the map itself) and gives emitters and listeners a single shared spelling for each event name.
+Declares the `orders` module's domain events by augmenting the kernel's `DomainEventMap` interface, and exports the event-name constants so emitters and listeners share a single source of truth. Because `orders` sits low in the dependency graph (payments and delivery depend on it, not vice-versa), emitting these events is the module's only outward communication channel.
 
 ## Key elements
 
-- **`DomainEventMap` augmentation** (`declare module '@kernel/events'`) — adds two event payloads to the kernel's event registry:
-  - `'order.cancelled'` — `{ orderId: string; refund: boolean }`. Emitted after the cancellation write succeeds. The `refund` flag carries *policy* (whether money is owed back) rather than letting listeners decide.
-  - `'order.status_changed'` — `{ orderId: string; from: OrderStatus; to: OrderStatus }`. Emitted on any status transition regardless of the actor (admin, payment landing, courier job). Listeners are expected to filter on `to`.
-- **`ORDER_CANCELLED`** (`export const`) — string constant `'order.cancelled'`.
-- **`ORDER_STATUS_CHANGED`** (`export const`) — string constant `'order.status_changed'`.
+- **`DomainEventMap` augmentation** (`declare module '@kernel/events'`) — adds two entries to the kernel's global event payload map:
+  - `'order.cancelled'` → `{ orderId: string; refund: boolean }`. Emitted after the cancel write; `refund` conveys whether the requester is owed money (customer vs. operator).
+  - `'order.status_changed'` → `{ orderId: string; from: OrderStatus; to: OrderStatus }`. Emitted on any status transition; listeners filter on `to`.
+- **`ORDER_CANCELLED`** (`export const`) — the literal `'order.cancelled'`, exported to avoid duplicating the string across emitters and listeners.
+- **`ORDER_STATUS_CHANGED`** (`export const`) — the literal `'order.status_changed'`, same purpose.
 
 ## Relationships
 
 - **`src/types/index.ts`** — provides the `OrderStatus` type used in the `order.status_changed` payload.
-- **`src/modules/orders/index.ts`** — barrel file that re-exports `ORDER_CANCELLED` and `ORDER_STATUS_CHANGED` so consumers can import the constants without reaching into the events file directly.
-- **`src/modules/orders/service.ts`** — the emitter: performs the order write (cancel, status move) and then fires these events. The events are emitted *after* the write, meaning listeners always see a committed fact.
-- **`src/modules/orders/module.ts`** — module registration point that wires the orders service and its event listeners into the kernel's event bus.
+- **`src/modules/orders/service.ts`** — the expected emitter of both events (announces state changes produced by order operations).
+- **`src/modules/orders/index.ts` / `src/modules/orders/module.ts`** — barrel / module-registration files that wire this event declaration into the module's public surface and the kernel's event registry.
 
 ## Notes
 
-- The `refund` boolean on `order.cancelled` is a deliberate policy carrier, not a signal to "do the refund." Suppressing the event when no refund is due would misrepresent the fact that a cancellation happened; instead the flag tells the listener *whether* to act.
-- `order.status_changed` is intentionally actor-agnostic. Listeners must filter on the `to` value; the event does not carry a "source" field.
-- Module augmentation (not a direct edit of `@kernel/events`) is the convention: no shared file enumerates all domains, so the catalogue grows per-module without cross-cutting edits.
+- Events are added via **interface augmentation**, not by editing the kernel's own map. This keeps the catalogue open to every module without a central edit.
+- `order.cancelled` is documented as emitted **after** the write; the `$in` guard upstream guarantees at-most-once delivery, so the event is a notification, not a trigger.
+- The `refund` flag is intentionally carried in the payload so listeners don't have to re-derive policy from context.

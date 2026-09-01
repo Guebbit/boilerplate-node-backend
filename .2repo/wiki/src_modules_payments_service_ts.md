@@ -2,45 +2,48 @@
 
 ## Purpose
 
-Owns the money-movement rules for an order's payment lifecycle: creating a payment intent, confirming (charging) a payment, and handling the charge-to-refund rollback when the order is no longer payable. Delegates actual charging/refunding to a resolved payment provider and commits held inventory only after the order has conditionally transitioned to `paid`.
+Orchestrates the money flow for an order behind a provider port. Implements three invariants: only a `pending` order's owner may start paying; the order's `pending → paid` conditional move (not the charge) is the gate, so a charge whose order has slipped away is refunded on the spot; a refund is the `ORDER_CANCELLED` listener, made at-most-once by the conditional `succeeded → refunded` move. Exposes the three HTTP-facing operations: create intent, confirm payment, and read-for-order.
 
 ## Key elements
 
-- **`CONFIRMABLE_PAYMENT_STATUSES`** — readonly array `['requires_confirmation', 'declined']`; the set of payment states the confirm endpoint accepts. Written as an array (not a `Set`) so the same value can serve both an `includes()` membership test and a MongoDB `$in` filter in conditional writes.
-- **`REFUNDABLE_PAYMENT_STATUS`** — `'succeeded'`; the only state from which money can be refunded.
-- **`resolvePayerId(orderUserId)`** — looks up the user in `userRepository` to confirm the id still resolves; falls back to the raw `orderUserId` (with a `logger.warn`) if the account has been deleted, so an unattributed payment is still possible.
-- **`callerScope`** — built via `createOwnerScope(paymentRepository.ownerScope)`; restricts payment reads to the caller's own records (admins get `undefined` scope = all).
-- **`createIntent(orderId, authContext)`** — verifies the order is payable via `canTransition(order.status, OrderStatus.paid, 'system')`, freezes the amount with `orderTotal(order)`, and upserts the payment intent. Idempotent for re-requests; returns 409 if the order has already been paid.
-- **`confirmPayment(paymentId, card, authContext, context)`** — the core charge flow:
-  1. Loads the payment scoped to the caller; checks status against `CONFIRMABLE_PAYMENT_STATUSES`.
-  2. Calls `provider.charge(...)`.
-  3. On **decline**: conditionally writes `status → 'declined'` (re-asserting the same status filter), returns 409 `PAYMENT_DECLINED`.
-  4. On **success**: conditionally moves the order `statusesLeadingTo(paid) → paid`. If the order is gone, immediately calls `provider.refund(...)` and returns 409.
-  5. Writes the payment row to `'succeeded'`, calls `inventoryService.commitForOrder(...)` to release held stock, and emits the `ORDER_STATUS_CHANGED` domain event.
-- **Analytics / audit side-channels** — after confirm, emits analytics (`paymentsAnalyticsEvents`) and audit (`paymentsAuditActions`) events for decline and success outcomes.
+- **`CONFIRMABLE_PAYMENT_STATUSES`** — readonly array `['requires_confirmation', 'declined']`. Deliberately an array (not a `Set`) because the same value is used both as a JS membership test and as the MongoDB `$in` array in conditional writes.
+- **`REFUNDABLE_PAYMENT_STATUS`** — the constant `'succeeded'`; the only status from which money can be returned.
+- **`resolvePayerId`** (private) — looks the payer up in `users`; if the record is gone, logs a warning and falls back to the order's stored user id. Never blocks the payment.
+- **`callerScope`** (private) — owner-scope authorization built via `createOwnerScope` over `paymentRepository.ownerScope`; mirrors `orderService.callerScope` but over this module's collection.
+- **`createIntent`** (export) — creates or refreshes the payment intent for an order. Amount is frozen through `orderTotal` so the intent matches the order's serializer. Re-asking (double-click) returns the existing intent; an order that can no longer reach `paid` returns **409** `PAYMENT_ORDER_NOT_PAYABLE`.
+- **`confirmPayment`** (export) — the core charge flow, strictly ordered:
+  1. Provider `charge`.
+  2. Conditional order move (`statusesLeadingTo(paid)` → `paid`) via `orderRepository.updateStatusIfIn`.
+  3. If the move fails (order gone / racing tab), immediately `provider.refund` and return 409.
+  4. Update the payment row to `succeeded` with `cardLast4`.
+  5. `inventoryService.commitForOrder` (result intentionally unchecked — a `false` means an expiry sweep won; inventory handles it).
+  6. Emit `ORDER_STATUS_CHANGED` domain event.
+
+  A provider **decline** updates the row to `declined` (re-asserting the confirmable-status filter) and returns **409** `PAYMENT_DECLINED`.
+- **`getForOrder`** (export) — fetches the payment row scoped to the caller, then reads the order to derive the `pay` action (payability is a function of *both* payment status and order status, kept server-side).
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `src/modules/orders/index.ts` | Reads order via `orderService.getById`; conditionally transitions order status via `orderRepository.updateStatusIfIn`; re-exports `ORDER_STATUS_CHANGED` event constant. |
-| `src/modules/orders/domain/lifecycle.ts` | `canTransition` gates whether an order is still payable; `statusesLeadingTo(paid)` supplies the `$in` filter for the conditional write. |
-| `src/modules/orders/domain/totals.ts` | `orderTotal(order)` freezes the charge amount at intent-creation time. |
-| `src/modules/orders/model.ts` | `OrderDocument` type used for the order read. |
-| `src/modules/inventory/service.ts` | `inventoryService.commitForOrder(orderId)` releases held units after the order is confirmed paid. |
-| `src/kernel/authorization.ts` | `createOwnerScope` builds the caller-scope function for payment reads. |
-| `src/kernel/events.ts` | `emitDomainEvent(ORDER_STATUS_CHANGED, …)` published after a successful confirm. |
-| `src/infrastructure/http/response.ts` | `generateSuccess` / `generateReject` shape every API response. |
-| `src/infrastructure/http/request.ts` | `CallerContext` type passed into `confirmPayment` for audit/analytics attribution. |
-| `src/infrastructure/i18n/index.ts` | `t('payments.…')` localises all user-facing error and success messages. |
-| `src/infrastructure/adapters/logger.ts` | `logger.warn` for unresolvable payer ids. |
-| `src/infrastructure/observability/analytics/index.ts` | `emitAnalyticsEvent` / `buildAnalyticsBase` record payment outcomes. |
-| `src/infrastructure/observability/audit.ts` | `emitAuditEvent` / `buildAuditEvent` record payment actions for the audit trail. |
+| `@modules/orders` (index) | Reads order via `orderService.getById`; writes order status via `orderRepository.updateStatusIfIn`; derives amount with `orderTotal`; asks payability via `canTransition` / `statusesLeadingTo`; emits `ORDER_STATUS_CHANGED`. |
+| `@modules/orders/domain/totals.ts` | `orderTotal` is the single source of the charge amount, shared with the order serializer and confirmation email. |
+| `@modules/orders/domain/lifecycle.ts` | `canTransition` and `statusesLeadingTo` define which order statuses are payable / transitionable; this module never hard-codes the set. |
+| `@modules/inventory` (service) | `inventoryService.commitForOrder` releases held stock after a successful `pending → paid` move. |
+| `@kernel/events.ts` | `emitDomainEvent` fires `ORDER_STATUS_CHANGED` on successful confirm. |
+| `@kernel/authorization.ts` | `createOwnerScope` builds the caller-scoped query filter for the payment repository. |
+| `@infrastructure/http/response.ts` | All returns are `generateSuccess` / `generateReject` envelopes. |
+| `@infrastructure/http/request.ts` | `CallerContext` type is threaded through `confirmPayment` for audit / analytics attribution. |
+| `@infrastructure/i18n/index.ts` | `t()` localises every user-facing error message. |
+| `@infrastructure/observability/audit.ts` | `emitAuditEvent` / `buildAuditEvent` record `PAYMENT_CONFIRMED` and `PAYMENT_FAILED`. |
+| `@infrastructure/observability/analytics/index.ts` | `emitAnalyticsEvent` / `buildAnalyticsBase` emit `PAYMENT_SUCCEEDED` or `PAYMENT_DECLINED`. |
+| `@infrastructure/adapters/logger.ts` | `logger.warn` for unresolvable payer IDs. |
 
 ## Notes
 
-- **Charge-before-order-move is deliberate.** The PSP takes money before the DB knows about it. The conditional `pending → paid` write is the single at-most-once gate; if it fails, the charge is refunded immediately. Inventory commit follows the same gate, so a lost race leaves the customer with a paid order and the shop logs the missed commit.
-- **`CONFIRMABLE_PAYMENT_STATUSES` is intentionally an array.** It is read twice in different shapes (`includes` vs. MongoDB `$in`). A `Set` would force a spread back to array and would duplicate the list. Any future status change must be added in one place.
-- **`declined` is retryable.** It is the only backwards transition in the payment lifecycle, which is why it appears in the confirmable set and must be preserved whenever the lifecycle changes.
-- **Payer resolution never blocks payment.** A deleted account's outstanding order remains payable; the gap is logged, not rejected.
-- **`createIntent` is idempotent.** The `upsertIntent` call means a double-click returns the same intent rather than creating a second one.
+- **Array, not Set.** `CONFIRMABLE_PAYMENT_STATUSES` is kept as a `readonly` array so the same reference works in both a JS `includes` check and a MongoDB `$in` clause without re-spreading.
+- **The gate is the order, not the charge.** The conditional `pending → paid` write is what makes the confirm flow at-most-once and what triggers the instant-refund fallback. A successful provider charge with a lost order is *not* a committed payment.
+- **Decline is the one backward step** in the payment lifecycle (`succeeded` is terminal except for the refund path; `declined` can be re-confirmed with a new card).
+- **Inventory commit is fire-and-forget.** The boolean return of `commitForOrder` is deliberately ignored; a `false` means an expiry sweep raced ahead, which is an inventory concern, not a payment one.
+- **Audit / analytics fire only on success and `PAYMENT_DECLINED`.** Other 409s (not found, not confirmable, order gone) are request-shape or race problems and are not attributed to a card event.
+- **Payer resolution is best-effort.** A deleted user does not block payment; the order's user id is persisted unverified with a warning log.

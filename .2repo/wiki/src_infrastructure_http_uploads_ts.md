@@ -2,23 +2,24 @@
 
 ## Purpose
 
-Read-side upload helpers that normalize the three shapes multer can put on an Express request (`.single`, `.array`, `.fields`) into one uniform array of paths, and expose the committed image URL. The write side (where files land, naming, persistence) lives entirely in the storage adapters; this module only makes controllers indifferent to which multer middleware variant a route used.
+Read-side helper for multer-processed Express requests. Normalises the three shapes multer can attach to `request` (`.single`, `.array`, `.fields`) into uniform return types, and exposes the stored-image metadata (URLs, pending keys) that the storage adapter writes onto the request during the write phase. Controllers import this instead of touching `request.file` / `request.files` / `request.storedImageUrls` directly.
 
 ## Key elements
 
-- **`toPosixPath(value: string): string`** — Replaces every `\` with `/`. Used to turn a Windows-style `path.join()` result into a URL-safe path. Deliberately does *not* use `path.posix.normalize` (which would leave backslashes intact on POSIX).
-- **`getFormFiles(request: Request): string[] | undefined`** — Extracts uploaded file paths regardless of whether the route used `.single()`, `.array()`, or `.fields()`. Returns a flat `string[]` of paths, or `undefined` when no files were uploaded (collapsing the empty-array case).
-- **`resolveImageUrl(request: Request): string | undefined`** — Returns `request.storedImageUrls?.[0]`. The URL is set by the image store at commit time; this function only reads it back so controllers never construct or strip filesystem paths.
+- **`toPosixPath(value: string): string`** — Replaces every `\` with `/`. Used when a filesystem path must be turned into a URL-safe path; safe here because upload filenames are random hex.
+- **`getFormFiles(request: Request): string[] | undefined`** — Returns the flat list of uploaded file paths regardless of whether the route used `multer.single()`, `.array()`, or `.fields()`. Normalises an empty upload to `undefined` so callers have a single falsy check.
+- **`resolveImageUrl(request): string | undefined`** — Reads `request.storedImageUrls?.[0]`; the CDN/local URL produced when the storage adapter digested the image inline.
+- **`resolveThumbnailUrl(request): string | undefined`** — Reads `request.storedThumbnailUrls?.[0]`; the thumbnail URL produced alongside the image.
+- **`resolvePendingImageKey(request): string | undefined`** — Reads `request.quarantinedImageKeys?.[0]`; present when a broker will digest the image asynchronously instead of inline.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/storage.ts`** — Owns the write side (file naming, where bytes land). `resolveImageUrl` reads back the URL the storage layer set on the request.
-- **`src/infrastructure/adapters/image-store.ts`** — Produces the `storedImageUrls` array on the request via its `storeUploadedImages` flow; `resolveImageUrl` is the sole read accessor for that value.
-- **`src/modules/account/controllers/post-signup.ts`**, **`put-account.ts`**, **`src/modules/products/controllers/write-products.ts`**, **`src/modules/users/controllers/write-users.ts`** — Consumer controllers that call `getFormFiles` / `resolveImageUrl` instead of touching `req.file` / `req.files` directly.
-- **`tests/unit/infrastructure/http/uploads.test.ts`** — Unit tests covering the three multer shapes and the empty-file normalization.
+- **`src/infrastructure/adapters/storage.ts`** — Owns the write side. Its `quarantineUploadedImages` function populates `storedImageUrls`, `storedThumbnailUrls`, and `quarantinedImageKeys` on the request; this module is the only consumer that reads those properties back into controller-usable values.
+- **`src/infrastructure/adapters/image-store.ts`** — The async "broker" referenced by `resolvePendingImageKey`; when it takes a digest job the image key is stored on the request here and resolved later.
+- **`tests/unit/infrastructure/http/uploads.test.ts`** — Unit tests covering the normalisation logic in `getFormFiles` and the path/url/key resolvers.
 
 ## Notes
 
-- `getFormFiles` normalizes "present but empty" (e.g. `req.files = []`) to `undefined` so callers have a single falsy check rather than distinguishing `[]` from `undefined`.
-- `resolveImageUrl` takes index `[0]` unconditionally — these endpoints accept one image; extras are silently ignored.
-- The URL is never derived by stripping `NODE_PUBLIC_PATH` off a multer path. The store builds it, keeping filesystem separators out of the persisted value entirely.
+- `toPosixPath` deliberately uses a literal `replaceAll('\\', '/')` rather than `path.posix.normalize()`, which would leave backslashes intact (they are legal filename characters on POSIX).
+- The three `resolve*` functions are mutually exclusive per request: either the image was digested inline (URL + thumbnail available) or queued for the broker (pending key available, no URL yet). Callers should check `resolveImageUrl` first and fall back to `resolvePendingImageKey`.
+- All `resolve*` functions accept `Pick<Request, …>` rather than the full `Request`, so they can be called with minimal stubs in tests.

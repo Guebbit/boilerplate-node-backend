@@ -2,28 +2,28 @@
 
 ## Purpose
 
-Data-access layer for the Wishlist domain. It wires the Mongoose model to the rest of the module by combining the shared base-repository factory (standard CRUD + serialization) with the four domain-specific write operations a wishlist actually needs. Every write is keyed by `userId` (a unique index), so no caller ever reads before writing.
+Data-access layer for the Wishlist domain. Wraps Mongoose operations behind a typed repository interface, combining the generic CRUD provided by `createRepository` with three domain-specific writes (add line, remove line) and two cleanup writes triggered by product/user deletion. Exists so the service layer never touches Mongoose directly.
 
 ## Key elements
 
-- **`wishlistRepository`** (exported const) — typed as `BaseRepository<WishlistDocument>` plus four custom methods. The type is spelled out explicitly to sidestep TS7056 (Mongoose generics are too large for inference at an export boundary).
-- **`findByUserId`** — `findOne` on `userId`; resolves `null` when the user has no wishlist (same state as an empty list; no placeholder docs are ever created).
-- **`addLine`** — `findOneAndUpdate` with `$addToSet` + `upsert: true`. Atomic: the set prevents duplicate lines, and the equality filter on the unique `userId` key lets mongod resolve the upsert without an E11000 race.
-- **`removeLine`** — `findOneAndUpdate` with `$pull`; resolves `null` if the wishlist or the line is absent, so the service can return 404 without a second query.
-- **`deleteByUserId`** — hard `deleteOne`; used during account deletion to prevent orphaned wishlists.
-- **`removeProductFromAll`** — `updateMany` + `$pull`; called when a product is deleted to clean up every wishlist that referenced it.
+- **`wishlistRepository`** — the single exported object. Its type is `Repository<WishlistDocument>` plus five domain methods; the full type is spelled out inline because Mongoose's generics are too large for TS to infer at an export boundary (TS7056).
+- **`findByUserId(userId)`** — `findOne` by user; returns `null` if the user has never saved a wishlist (no placeholder documents are ever created).
+- **`addLine(userId, productId)`** — `findOneAndUpdate` with `{ upsert: true, returnDocument: 'after' }` and `$addToSet`. The filter is an exact equality on `userId` (the unique index key), so the upsert is atomic and cannot collide with itself — no retry loop is needed (unlike the cart).
+- **`removeLine(userId, productId)`** — `findOneAndUpdate` with `$pull`. Resolves `null` when the wishlist or the line is absent, letting the caller return 404 without a second query.
+- **`deleteByUserId(userId)`** — `deleteOne`; used by account-deletion flows.
+- **`removeProductFromAll(productId)`** — `updateMany` + `$pull`; used when a product is hard-deleted.
+- All methods are `async` because `toObjectId` (from `create-repository`) throws on malformed ids, converting what would be a Mongoose 500 into a 4xx at the boundary.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/base-repository.ts`** — supplies `createBaseRepository` (spread into the exported object for generic CRUD), `toObjectId` (used in every filter to convert strings to ObjectIds), and the `BaseRepository` type contract.
-- **`src/modules/wishlist/model.ts`** — provides `wishlistModel` (the Mongoose model), `applyWishlistTransform` (serialization hook passed to the base factory), and the `WishlistDocument` type.
-- **`src/modules/wishlist/service.ts`** — primary consumer; calls the repository's domain methods and translates `null` results into 404s.
-- **`src/modules/wishlist/tests/integration/service.test.ts`** — integration tests that exercise the repository indirectly through the service.
-- **`src/modules/wishlist/demo.ts`** — seed/demo path that imports the repository to create sample data.
+- **`./model.ts`** — provides `wishlistModel` (the Mongoose model) and `applyWishlistTransform` (the transform passed into `createRepository`).
+- **`@infrastructure/persistence/create-repository`** — provides the `createRepository` factory (standard find/get/insert/update/delete), `toObjectId` validation helper, and the `Repository` type contract.
+- **`./service.ts`** — the primary consumer; calls the domain methods and maps `null` results to HTTP status codes.
+- **`./demo.ts`** — exercises the repository for local/demo purposes.
+- **`./tests/integration/service.test.ts`** — integration tests that exercise the repository through the service.
 
 ## Notes
 
-- **No retry loop** (unlike the cart repository). Two design facts make it unnecessary: `$addToSet` makes the line-add idempotent, and the upsert filter is an exact equality on the unique `userId` key, which mongod resolves atomically. A concurrency regression test (`tests/integration/concurrency/wishlist-races.test.ts`, 25-way contention) guards the filter shape.
-- **`null` is meaningful**: both `findByUserId` and `removeLine` use `null` to signal absence rather than an empty object. Callers must handle it.
-- **All methods are `async`** because `toObjectId` throws on malformed input; the base-repository docs explain the 4xx-vs-500 rationale.
-- **`deleteByUserId`** has an explicit `.then(() => {})` to coerce the Mongoose promise to a `void` return type.
+- **No retry loop.** Unlike `../cart/repository.ts`'s `upsertLine`, `addLine` does not retry. The cart's second-step filter (`{ userId, 'items.productId': { $ne } }`) is *not* an exact match on its unique key, so two concurrent writes can both see "absent" and one loses. Wishlist's filter is an exact equality on the unique `userId`, which mongod resolves atomically. A regression test (`tests/integration/concurrency/wishlist-races.test.ts`, 25-way contention) would go red if the filter ever stopped being an equality.
+- **No placeholder documents.** `findByUserId` returning `null` and an empty `items` array are intentionally distinct states; no code path creates an empty wishlist document.
+- **`$addToSet` makes `addLine` idempotent** — adding a product that is already present is a no-op that returns the document, not an error.

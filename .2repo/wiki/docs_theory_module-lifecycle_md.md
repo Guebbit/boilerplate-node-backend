@@ -2,36 +2,34 @@
 
 ## Purpose
 
-A step-by-step procedural guide for adding and removing a module. While `modules.md` explains *why* the module shape looks the way it does, this page is the operational checklist: which registries to touch, what files to create, in what order, and which commands to run. It exists so that the "one folder + one registry line" claim stays enforceable rather than aspirational.
+The concrete, step-by-step procedure for adding or removing a domain module, including the exact registries to edit, the commands to run, and the paired-repo steps. It is the "what you actually type" companion to the conceptual reasoning in `modules.md`.
 
 ## Key elements
 
-- **Five-registry table** — the canonical list of where a module must be named: `enabledModules` (always), `MODULE_SECTIONS` (HTTP), `ANALYTICS_SECTIONS` (analytics), `ASYNC_SECTION_ORDER` / `SHARED_SECTIONS` (asyncapi), `FRONTEND_PAIRING` (always). Plus the near-sixth: `probes.ts` imports in the client-collections bundle.
-- **Adding-a-module flow (7 steps)** — `mkdir` → registry line → contract fragments → `npm run contracts:bundle` → `docs/modules/<name>.md` → frontend copy → `npm run complete`.
-- **Folder layout convention** — `module.ts` is the sole import target; everything else is optional and self-registering. `wishlist` is the reference tree.
-- **`module.ts` manifest contract** — `name`, `subdomain`, `basePath`, `routes`, `dependsOn` (with `as`/`because`), `locales`, `seeds`. Strategic fields (`subdomain`, `as`, `because`) are required and validated by tests.
-- **Headless module note** — omitting `basePath`/`routes` yields a valid module (e.g. `audit-logs`); the union type makes a dangling router a compile error.
-- **Contract-fragment rules** — a section entry without a fragment is a hard error; a fragment without a section entry is silently dropped. `SHARED_SECTIONS` decides what reaches `asyncapi.public.yaml` and the paired frontend.
-- **`npm run contracts:bundle`** — assembles OpenAPI, both AsyncAPI bundles, analytics events, and seed identities. Client collections (Bruno, Insomnia, Mockoon, Postman) are opt-in flags and git-ignored.
-- **Docs page shape** — `docs/modules/<name>.md` is hand-written, three-part (At a glance / The story / Related pages), and must not restate code.
-- **Removal procedure** — mirror of addition; `rm -rf` the folder, delete each registry line, mirror deletions in the paired frontend. Anything else that breaks is flagged as real coupling.
+- **Five registries table** — enumerates every place a module is named (`enabledModules`, `MODULE_SECTIONS`, `ASYNC_SECTION_ORDER`, `SHARED_SECTIONS`, `FRONTEND_PAIRING`) and which are conditional on the domain serving HTTP, owning an `asyncapi.yaml`, or being browser-reachable.
+- **Probes map** — `scripts/contracts/client-collections-bundle.ts` statically imports each module's `probes.ts` by name; deletion is a compile-time error, addition is guarded by `tests/cross-cutting/probes-are-wired.test.ts`.
+- **Seed export** — replaces the old `SEED_SECTION_ORDER`; a module writes a `demo.ts`, `npm run seed:export` publishes the dataset, and `npm run check:seed-export` is the staleness gate.
+- **Addition procedure (7 steps)** — `mkdir` + `module.ts` → one line in `src/modules.ts` → contract fragments + section entries → `npm run contracts:bundle` → `docs/modules/<name>.md` → copy shared files to the frontend → `npm run complete`.
+- **Manifest shape** — the `AppModule` union type (`name`, optional `basePath`/`routes`, `locales`, `seeds`); headless modules omit `basePath`/`routes` entirely.
+- **Folder layout reference** — the canonical file tree at `src/modules/<name>/` with a note on which files are "layers" vs. "subjects" and what decides placement of new files.
+- **Removal procedure** — implied by the same claim read in reverse: `rm -rf` the folder, delete the line(s) from the registries, regenerate bundles, remove from the paired repo; anything that still breaks is real coupling.
 
 ## Relationships
 
-- **`docs/theory/modules.md`** — the companion "why" page. This file explicitly defers to it for the reasoning behind the shape and for strategic-DDD detail.
-- **`src/modules.ts`** — holds the `enabledModules` array; the single line added/removed in step 2 lives here.
-- **`scripts/contracts/openapi-bundle.ts`** — owns `MODULE_SECTIONS`; the domain's `openapi.yaml` fragment is listed here.
-- **`scripts/contracts/analytics-events-bundle.ts`** — owns `ANALYTICS_SECTIONS`; stale entries here produce the named hard error.
-- **`scripts/contracts/asyncapi-bundles.ts`** — owns both `ASYNC_SECTION_ORDER` and `SHARED_SECTIONS`; the shared split determines what the paired frontend receives.
-- **`scripts/contracts/client-collections-bundle.ts`** — statically imports each `probes.ts` by name; deletion stops the build, but a *new* probe file without an entry here is silent (caught only by the test below).
-- **`tests/cross-cutting/frontend-pairing.test.ts`** — enforces that every module has a `FRONTEND_PAIRING` entry (or a documented "none" sentence); fails on missing entries.
-- **`tests/cross-cutting/probes-are-wired.test.ts`** — fails when a `probes.ts` exists on disk but is not listed in `client-collections-bundle.ts`, closing the silent-omission gap.
+- **`docs/theory/modules.md`** — the conceptual "why" behind the module shape; this page is its procedural twin.
+- **`docs/theory/strategic-ddd.md`** — defines the four kinds of cross-domain relationship that the manifest docblock should name in prose.
+- **`docs/api/contract-fragmentation.md`** — explains how `openapi.yaml`, `asyncapi.yaml`, and `probes.ts` fragments are read and assembled; the section-entry rules here feed that mechanism.
+- **`docs/reference/src-modules.md`** — the vocabulary table for file shapes; a new module with a unique shape gets a row here.
+- **`docs/modules/wishlist.md`** — the reference module added under this procedure and the smallest docs page to copy when writing `docs/modules/<name>.md`.
+- **`docs/theory/index.md`** — the landing page that links into this page as the "how to add/remove" entry.
+- **`docs/theory/layers.md`** — describes the layering convention (routes → service → repository → domain) that the folder layout here encodes.
+- **`docs/theory/reading-path.md`** — positions this page in the reader's sequence (read `modules.md` first, then this one when you actually create or delete a domain).
 
 ## Notes
 
-- `FRONTEND_PAIRING` is the only registry that names the *other* repository; forgetting it does not break the build, it widens the FE/BE gap silently.
-- The old `SEED_SECTION_ORDER` registry no longer exists. Demo data is now **published** via `npm run seed:export` (real seeders → `db/demo/demo-data.json`); a module just needs a `demo.ts`. Staleness check: `npm run check:seed-export`.
-- Route mounting, the seeder, i18n boot, audit vocabulary, and the metrics registry all *walk* `enabledModules` rather than enumerating domains independently — that is why they never appear in the add/remove checklist.
-- A fragment on disk with **no** section entry is worse than a section entry with no fragment: it is silently ignored, so the endpoint ships undocumented.
-- Client-collection files (`contract.*.bruno`, etc.) are generated, git-ignored, and never hand-edited. A request the contract cannot describe belongs in that module's `probes.ts`, not in a collection export.
-- `dependsOn` entries name siblings, not files. An undeclared cross-module import surfaces as a 500 at runtime; a declared one fails boot by name if the sibling is disabled.
+- `enabledModules` ordering is kept **alphabetical** by convention; order only affects route-mounting sequence, which is irrelevant for distinct base paths.
+- A contract fragment on disk **without** a section entry is silently ignored (endpoint ships undocumented); a section entry without a fragment is a loud build error. The asymmetry matters.
+- `SHARED_SECTIONS` vs. non-shared is the quiet asyncapi failure: omitting a browser-reachable channel means the frontend generates types that never mention it.
+- The `probes.ts` import is deliberately **static** (not dynamic) so that deleting a module fails at compile time rather than producing a silently short bundle at runtime.
+- The manifest docblock (the prose above `export default`) is where cross-domain reads/relationships are declared; it is the only place a reader sees both the `import` list and the rationale together.
+- `analytics.ts` and `demo.ts` need **no** registry entry — both are swept from disk by their respective tests/gates.

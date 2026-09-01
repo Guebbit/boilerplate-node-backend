@@ -2,27 +2,28 @@
 
 ## Purpose
 
-Controller for `POST /account/reset-confirm`. Validates a one-time password-reset token (delivered via email link), verifies the new-password pair, atomically consumes the token, updates the account's password, and destroys all active session cookies so the user must re-authenticate with the new credentials.
+Handles `POST /account/reset-confirm`: validates a one-time password-reset token (delivered via email link), verifies the new password pair, atomically spends the token, sets the new password, and invalidates all active sessions.
 
 ## Key elements
 
-- **`postResetConfirm`** (exported) — The sole controller function. Orchestrates the full confirm flow: body parsing → token lookup → password validation → atomic token spend → password write → cookie teardown → success response.
-- **`refuseToken`** (local closure) — Sends a uniform `422` with a single `account.reset.token-not-found` i18n string. Used for every token failure path (not found, already spent, race loser) to prevent token enumeration.
+- **`postResetConfirm`** (exported) — The sole controller. Expects the token as a URL query parameter and `{ password, passwordConfirm }` in the JSON body. Orchestration order: parse body → find live token → validate password pair → atomically spend token → change password → destroy session cookies → 200.
+- **`refuseToken`** (local helper) — Always returns `422` with the same i18n message (`account.reset.token-not-found`) regardless of *why* the token is unusable (missing, expired, already spent). Prevents token-existence enumeration.
+- **`ConfirmPasswordResetBody`** — Zod schema (from `@api/schemas.zod`) used by `parseBody` to validate the request body.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Imports `parseBody` (validates raw body against a Zod schema, short-circuits the response on failure) and `refused` (checks a service result for a refusal and mirrors it onto the HTTP response).
-- **`@infrastructure/http/request`** — Imports `callerContextOf` to extract request metadata (IP, user-agent, etc.) forwarded into `accountService.passwordResetChange`.
-- **`@infrastructure/http/response`** — Imports `successResponse` and `rejectResponse` as the only way this controller writes to the HTTP response.
-- **`@infrastructure/i18n`** — Imports `t` for localising user-facing messages (`account.reset.token-not-found`, `account.reset.success`).
-- **`../services`** — Imports `accountService` and `PASSWORD_RESET_TOKEN_TYPE`; all domain logic (token lookup, validation, atomic spend, password write) lives in the service layer.
-- **`../session/cookies`** — Imports `destroyRefreshCookie` and `destroyLoggedCookie` to invalidate all active sessions after a successful reset.
-- **`@types`** — Imports `PasswordResetConfirmRequest` for the typed body shape (token, password, passwordConfirm).
-- **`@modules/account/routes.ts`** — Registers this handler as the `POST /account/reset-confirm` route.
+- **`src/modules/account/services/index.ts`** — Primary dependency. `accountService.findLiveToken`, `.validatePasswordChange`, `.spendLiveToken`, `.passwordResetChange`, and the `PASSWORD_RESET_TOKEN_TYPE` constant all come from here. The service also owns the confirmation-email side effect.
+- **`src/modules/account/session/cookies.ts`** — `destroyRefreshCookie` / `destroyLoggedCookie` clear the user's active sessions on success so all other devices are logged out.
+- **`src/infrastructure/http/controller.ts`** — Provides `parseBody` (schema-validated body extraction) and `refused` (shared refusal check on service results).
+- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts IP/user-agent context passed into `passwordResetChange` for audit logging.
+- **`src/infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` shape all HTTP replies.
+- **`src/infrastructure/i18n/index.ts`** — `t()` supplies localized messages (error and success).
+- **`src/modules/account/routes.ts`** — Registers `postResetConfirm` at `POST /account/reset-confirm`.
+- **`src/types/index.ts`** — `PasswordResetConfirmRequest` defines the expected body shape for Express type parameters.
 
 ## Notes
 
-- **Two-phase token consumption is intentional.** `findLiveToken` is a read; `spendLiveToken` is an atomic `$pull` that returns a boolean indicating whether *this* request removed the entry. The read-validate-spend ordering ensures a mistyped password confirmation does not burn a one-time token. A race loser receives the same `refuseToken` response as an invalid token.
-- **Token source.** Despite the Express path-params type declaring `token?: string`, the code reads `token` exclusively from the parsed request body. The token originally arrives in the email link URL and is submitted as a form field.
-- **Password confirmation email** is published inside `accountService.passwordResetChange`, not in this controller.
-- **All token failures are indistinguishable** (422, single message) by design; see the note in `services/tokens.ts` for the security rationale.
+- **Token lives in the URL, not the body.** It arrives as a query parameter on the link in the reset email. The body carries only the new password fields.
+- **Validate-before-spend pattern.** Password validation runs *before* the atomic `spendLiveToken` call. A mistyped password therefore does **not** burn the one-time link; the user can retry. The race between two simultaneous confirms of the same link is resolved solely by the atomic `$pull` inside `spendLiveToken` — the loser receives the same 422 as an invented token.
+- **Uniform failure responses.** Whether the token is missing, expired, or already spent, the response is identical (`422` + `account.reset.token-not-found`). This is deliberate; see the note referenced in `services/tokens.ts`.
+- **Confirmation email is a service concern.** The controller does not send or publish any email; `accountService.passwordResetChange` handles that.

@@ -2,25 +2,37 @@
 
 ## Purpose
 
-A single-page reference that maps the top of `src/`, the `src/app/` assembly directory, the `src/kernel/` module system, and `src/types/`. It exists so a reader can orient themselves in the four-tier architecture (`infrastructure → kernel → modules → app`) without opening each file individually. It pairs with the deeper theory docs under `docs/theory/` and tool docs under `docs/tools/`.
+Reference catalog for the top of `src/`: the three boot files, the `src/app/` assembly steps, the `src/kernel/` module system, and the `src/types/` contract surface. It exists so a reader can locate any file in these four areas and understand its role in the dependency chain (`infrastructure → kernel → modules → app`) without opening the source.
 
 ## Key elements
 
-- **`src/cluster.ts`** — Process entry point (named in `package.json`); forks one worker per core, restarts dead workers.
-- **`src/app.ts`** — Boot sequence; the sole file that knows the install order. Tracing → env validation → infra → six `install*` calls in request order.
-- **`src/modules.ts`** — Alphabetical list of enabled domains (one import + one array entry each). No filesystem discovery or auto-registration.
-- **`src/globals.d.ts`** — Ambient type widening of Express `Request` (uploaded image URLs, locale, translator, observability handle).
-- **`src/app/` (8 files)** — One file per install step, grouped by *when* it runs: `security.ts`, `request-context.ts`, `telemetry.ts`, `static-assets.ts`, `routes.ts`, `system-routes.ts`, `error-handling.ts`, `workers.ts`, `demo.ts`.
-- **`src/kernel/` (6 files)** — The module contract and cross-module seams: `registry.ts` (`AppModule` type), `authentication.ts`, `middlewares/authorizations.ts`, `authorization.ts` (`createCallerScope`), `events.ts`, `seed-accounts.ts`.
-- **`src/types/`** — `index.ts` (single import path via `@types`) and `asyncapi.generated.ts` (generated, never hand-edited).
+- **`src/cluster.ts`** — Process entry point (`package.json` `main`). Forks one worker per core; restarts a dead worker.
+- **`src/app.ts`** — The sole boot-sequence file. Orders tracing, env validation, infra, then the six `install*` calls (which *are* the middleware stack in request order).
+- **`src/modules.ts`** — Explicit, alphabetical list of enabled domains. No filesystem discovery; toggling a domain is one line here.
+- **`src/globals.d.ts`** — Ambient `Request` widenings (locale, translator, observability handle, uploaded URLs) that middlewares write and controllers read.
+- **`src/app/` (9 files)** — One file per install step, ordered by *when* it runs: `security.ts`, `request-context.ts`, `telemetry.ts`, `static-assets.ts`, `routes.ts`, `system-routes.ts`, `error-handling.ts`, `workers.ts`, `demo.ts`.
+- **`src/kernel/` (6 files)** — Defines what a module *is*: `registry.ts` (the `AppModule` type), `authentication.ts` (seam), `middlewares/authorizations.ts` (route guard), `authorization.ts` (row-scoping), `events.ts` (domain-event bus), `seed-accounts.ts` (shared demo credentials).
+- **`src/types/`** — `index.ts` (single re-export path for Orval + AsyncAPI + auth DTO) and `asyncapi.generated.ts` (generated, gitignored, never hand-edited).
 
 ## Relationships
 
-No graph neighbors are recorded for this file. It is a documentation-only artifact and is referenced *by* other docs via the "Read next" links it contains (e.g., `../theory/architecture.md`, `../theory/modules.md`, `../tools/security.md`), but does not appear as a dependency target in the dependency graph.
+- **`docs/theory/architecture.md` / `docs/theory/layers.md`** — The four-tier dependency direction this file documents is enforced by `eslint.config.ts` and described there.
+- **`docs/theory/clustering.md`** — `src/cluster.ts` is the subject; switching to single-process means pointing `main` at `src/app.ts`.
+- **`docs/theory/modules.md` / `docs/theory/module-lifecycle.md`** — `src/modules.ts` and `src/kernel/registry.ts` are the operational counterparts to the theory.
+- **`docs/theory/reading-path.md`** — `src/app.ts` boot order and the `install*` sequence map directly to the reading path.
+- **`docs/api/observability.md`** — `src/app/telemetry.ts` (Prometheus HTTP metrics) and `src/app/system-routes.ts` (liveness ping, process-level endpoints) are the code behind the documented observability surface.
+- **`docs/api/asyncapi-workflow.md` / `docs/api/regenerating.md`** — `src/types/asyncapi.generated.ts` is produced by `npm run gen:asyncapi`; regenerating is the prescribed workflow after an `asyncapi.yaml` change.
+- **`docs/reference/contracts.md`** — `src/types/index.ts` re-exports the contract models referenced there.
+- **`docs/reference/data.md`** — `src/kernel/seed-accounts.ts` holds the demo credentials that data seeding depends on.
+- **`docs/reference/ops.md`** — `src/app/static-assets.ts` serves the `public/` directory described in ops.
+- **`docs/reference/src-modules.md`** — The per-module source layout that `src/modules.ts` enables and `src/app/routes.ts` mounts.
+- **`docs/reference/index.md`** — This file is one entry in the reference index.
+- **`docs/reference/tests.md`** — The demo profile (`src/app/demo.ts`) is consumed by the e2e suite described there.
 
 ## Notes
 
-- The file is a **reference doc**, not source code. Its "Key elements" describe other files; editing this page does not change runtime behaviour.
-- The install-step order in `src/app/` is explicitly load-bearing (security before context, context before telemetry, routes before error handling). The doc calls this out because reordering is behaviour, not cosmetics.
-- `src/types/index.ts` is the *only* sanctioned import path for contract types; importing generated files directly is enforced against by `tests/cross-cutting/generated-type-shadowing.test.ts`.
-- The file ends truncated (the `asyncapi.generated.ts` row is cut off), so the full description of the generated-types check is not visible here.
+- The order of the `install*` calls in `src/app.ts` is **load-bearing**: security → context → telemetry → routes → error handling. Reordering changes observable behaviour (e.g. `trust proxy` must precede any IP-reading middleware).
+- `src/app/routes.ts` does not import any module directly; it walks the kernel registry. Adding a module is a change to `src/modules.ts`, not to `routes.ts`.
+- `src/types/asyncapi.generated.ts` is gitignored and regenerated by `postinstall` and a pre-commit hook. Importing it by path (instead of via `src/types/index.ts`) will break if the file is absent before generation.
+- `src/app/demo.ts` is gated by `NODE_DEMO=true` **and** fenced by `eslint-plugin-boundaries` in `eslint.config.ts`; it is not reachable in a non-demo build.
+- The kernel deliberately has zero knowledge of which modules exist. Any kernel file that imports a concrete module violates the architectural contract and will fail lint.

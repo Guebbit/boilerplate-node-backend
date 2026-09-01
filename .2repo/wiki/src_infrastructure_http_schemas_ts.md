@@ -2,26 +2,28 @@
 
 ## Purpose
 
-Shared Zod schemas for the handful of scalar query parameters (`page`, `pageSize`, `hardDelete`) that multiple HTTP endpoints accept. They exist so that bounds, coercion, and defaults for these scalars are declared once in infrastructure rather than re-derived per controller, preventing divergent behaviour (e.g. one endpoint returning 422 for `?pageSize=500` while another silently clamped).
+Defines shared Zod schemas for the small set of scalar HTTP inputs (`page`, `pageSize`, `hardDelete`) accepted by multiple endpoints. It exists so these scalars are validated once in infrastructure rather than re-derived per controller, preventing the kind of disagreement that once made `GET /products` and `GET /feedback` disagree on a legal page size. Bounds and defaults track `openapi.yaml` via orval-generated constants, with cross-cutting tests guarding drift.
 
 ## Key elements
 
-- **`hardDeleteSchema`** — `z.preprocess(blankToUndefined, z.boolean().default(false))`. Treats the param as a boolean *value*, not a presence check, so `?hardDelete=false` does not trigger a hard delete. Absent → `false` (soft delete).
-- **`pageSchema`** — `z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional())`. Coerces the query-string text to an integer ≥ 1; stays optional so `normalizePagination` downstream remains the sole authority on defaults.
-- **`pageSizeSchema`** — Same shape as `pageSchema` plus `.max(100)`.
-- **`paginationSchema`** — `z.object({ page, pageSize })`; convenience wrapper for endpoints that validate nothing else.
-- **`blankToUndefined`** (private) — Maps `''`, `undefined`, and `null` to `undefined` so that `.optional()` / `.default()` treat the param as absent rather than producing a spurious 422.
-- **`PAGE_SIZE_MAX = 100`**, **`HARD_DELETE_DEFAULT = false`** — Hardcoded constants mirroring `openapi.yaml` shared components. Intentionally *not* imported from the orval-generated client (see Notes).
+- **`PAGE_SIZE_MAX`** (const, `100`) — upper bound for `pageSize`; declared locally to avoid importing from a single orval-generated per-operation constant that would couple infrastructure to one domain.
+- **`HARD_DELETE_DEFAULT`** (const, `false`) — default for the soft/hard delete switch when the caller omits the field.
+- **`blankToUndefined`** (function) — preprocess helper that maps `''`, `null`, and `undefined` to `undefined`, so `.optional()` / `.default()` treat them as "absent" rather than an invalid value (prevents spurious 422s from untouched form fields).
+- **`hardDeleteSchema`** (export) — `z.preprocess(blankToUndefined, z.boolean().default(false))`; reads the value as a boolean, never as presence.
+- **`pageSchema`** (export) — coerces to integer ≥ 1; stays `optional` (no default applied here).
+- **`pageSizeSchema`** (export) — coerces to integer, bounds to `1..100`; stays `optional`.
+- **`paginationSchema`** (export) — `z.object({ page, pageSize })` convenience pair for endpoints that validate nothing else.
 
 ## Relationships
 
-- **Consumed by every controller that accepts pagination or `hardDelete`** (e.g. `get-products.ts`, `get-feedback.ts`, `get-inventory-levels.ts`, `get-stock-movements.ts`, `get-users.ts`, `get-orders.ts`, `get-locale-entries.ts`, `get-observability-audit.ts`, `delete-controller.ts`). They spread or reference these schemas in their request-input `z.object` definitions.
-- **`tests/cross-cutting/contract-scalars.test.ts`** — Asserts that the hardcoded `PAGE_SIZE_MAX` and `HARD_DELETE_DEFAULT` still match every operation orval generated from `openapi.yaml`. Changing the OpenAPI component without updating these constants fails the build.
-- **`tests/unit/infrastructure/http/schemas.test.ts`** — Unit-tests the coercion, blank handling, and bounds of each exported schema in isolation.
-- **`docs/theory/request-input.md`** — Documents the `readInput` decode-then-validate pipeline that these schemas sit in; the schemas are the validation half.
+- **Consumed by controllers** — `create-delete-controller`, `get-feedback`, `get-inventory-levels`, `get-stock-movements`, `get-locale-entries`, `get-observability-audit`, `get-orders`, `get-products`, and `get-users` import these schemas to validate their respective query/body scalars before business logic runs.
+- **`tests/cross-cutting/contract-scalars.test.ts`** — asserts `PAGE_SIZE_MAX` (and `HARD_DELETE_DEFAULT`) still match the values orval generates from `openapi.yaml`, catching drift if the generated constants change.
+- **`tests/unit/infrastructure/http/schemas.test.ts`** — unit-tests the schemas' coercion, bounds, defaults, and blank-value handling.
+- **`@infrastructure/persistence/search`** (`normalizePagination`) — the single authority on pagination *defaults*; the schemas here deliberately leave `page`/`pageSize` as `undefined` so that function can apply them.
 
 ## Notes
 
-- **Why constants are hardcoded, not imported.** Orval flattens a shared OpenAPI component into a separate constant *per operation* (e.g. `GetProductsPageSizeMax`, `GetFeedbackPageSizeMax`, …). Importing any one would embed a domain module's name in infrastructure and break when that module is removed. The cross-cutting test inverts the dependency: the OpenAPI contract is the source of truth, and the build fails if the local constants drift.
-- **`hardDelete` is a toggle, not a one-way flag.** A `DELETE` stamps `deletedAt` if absent and clears it if present (i.e. a second DELETE restores). Every module's `remove` implements this; this file is where the semantics are documented.
-- **`page`/`pageSize` are deliberately `.optional()` with no `.default()`.** `normalizePagination` in `@infrastructure/persistence/search` is the single authority on "page 1, ten per page." Defaulting here would introduce a second, always-overwritten set of numbers.
+- **Value vs. presence for `hardDelete`**: `?hardDelete=false` is a *value* (soft delete), not an absence. The `!!request.query.hardDelete` pattern would treat the string `"false"` as truthy and permanently delete — the schema avoids this by reading through `z.boolean()`.
+- **No defaults in the schemas**: `pageSchema` and `pageSizeSchema` are `.optional()` with no `.default()`. Defaulting here would be silently overwritten by `normalizePagination` and create a second source of truth.
+- **Local constants, not imports**: `PAGE_SIZE_MAX` and `HARD_DELETE_DEFAULT` are *declared* in this file rather than imported from the orval client. This keeps infrastructure decoupled from any single domain's generated fragment; the contract-scalar test enforces agreement.
+- **`blankToUndefined` uses `== null`** (loose) to catch both `undefined` and an explicit JSON `null` in the same guard.

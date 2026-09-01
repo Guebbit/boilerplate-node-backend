@@ -2,30 +2,34 @@
 
 ## Purpose
 
-Port that owns the single mapping between a persisted `imageUrl` value and a concrete filesystem location. Nothing outside this file is permitted to turn an `imageUrl` into a path, so that swapping the storage backend (e.g. to an S3/CDN bucket) is a one-file change rather than a five-file change. The one implemented backend stores files under `NODE_PUBLIC_PATH/images/` and serves them via `express.static`.
+Defines the `ImageStore` port — the single boundary through which all callers interact with image persistence. It guarantees that no code outside this file converts an `imageUrl` into a filesystem path, so swapping the local-disk backend for S3/CDN touches one file instead of every write controller. Currently the only concrete implementation (`filesystemImageStore`) stores files under `NODE_PUBLIC_PATH/images/`.
 
 ## Key elements
 
-- **`ImageStore` (interface)** — the contract: `put(stagedPath) → Promise<string>` (consume a staged upload, return the persistable URL) and `remove(imageUrl?) → Promise<boolean>` (best-effort delete; never throws).
-- **`filesystemImageStore`** — the local-disk implementation of `ImageStore`.
-  - `put` moves the file into `<publicRoot>/images/<basename>` and returns `/images/<name>` (literal `/` join, not `path.join`, to stay URL-safe on Windows).
-  - `remove` resolves the URL against the public root, enforces two containment checks (target stays under `<public>/` AND its parent directory is exactly `<public>/images/`), then calls `deleteFile`. Returns `false` (no-op) for remote URLs, `undefined`, or anything outside the flat `images/` directory.
-- **`imageStore`** — the singleton the rest of the app imports. Currently aliased to `filesystemImageStore`; deliberately no backend switch exists yet.
-- **`isRemoteUrl`** — regex check for absolute (`scheme://…`) or protocol-relative (`//…`) URLs; used to short-circuit `remove` so it never tries to unlink a path like `public/https://…`.
-- **`IMAGES_SEGMENT`** (`'images'`) and **`publicRoot()`** — shared constants for the directory name, URL segment, and base path; kept together so they stay in sync.
+- **`ImageStore`** (interface) — the port. Seven methods split into two failure contracts:
+  - *Throwing* (retryable): `quarantine`, `promote`, `putDerivative`, `readQuarantined`, `readImage`.
+  - *Never rejecting* (cleanup on error paths): `removeQuarantined`, `remove`.
+- **`filesystemImageStore`** (exported const) — the local-disk implementation of `ImageStore`. All callers receive this value today.
+- **`resolveUnderPublicRoot`** — path-traversal guard; refuses any `imageUrl` that resolves outside the public root.
+- **`isRemoteUrl`** — detects absolute/protocol-relative URLs so `remove` is a no-op for externally-hosted or default images.
+- **`IMAGES_SEGMENT` / `THUMBNAIL_VERSION`** — constants kept in sync with the `express.static` mount and the immutable cache headers; bumping `THUMBNAIL_VERSION` rotates thumbnails without overwriting in-place.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/filesystem.ts`** — imported for `deleteFile` and `moveFile`; the only actual filesystem I/O this module performs.
-- **`src/infrastructure/http/uploads.ts`** — imported for `toPosixPath` (normalises backslashes on Windows before path resolution).
-- **Callers** (`post-signup`, `put-account`, `write-products`, `write-users`, `products/service`) — each calls `imageStore.put` on successful upload and `imageStore.remove` on update/delete of a record. They only ever see the `ImageStore` interface, never a path.
-- **`tests/unit/infrastructure/adapters/image-store.test.ts`** — unit tests for `filesystemImageStore`.
-- **`src/infrastructure/adapters/storage.ts`** / **`image-signatures.ts`** — adjacent infrastructure; not imported here but part of the same adapter layer.
+- **`@infrastructure/adapters/filesystem`** — supplies `deleteFile` and `moveFile` used by `quarantine`, `removeQuarantined`, `remove`, and `putDerivative`.
+- **`@infrastructure/http/uploads`** — supplies `toPosixPath` (path normalisation for `resolveUnderPublicRoot`); also exports `resolveImageUrl` / `resolvePendingImageKey` / `resolveThumbnailUrl` which callers use *before* handing a key to this store.
+- **`@infrastructure/adapters/image.worker.ts`** — the digest job that calls `readQuarantined` → (decode) → `promote` / `putDerivative` / `removeQuarantined` in sequence.
+- **`@infrastructure/adapters/storage.ts`** — provides the upstream staging path (`stagedPath`) that `quarantine` moves; its `resolveUploadDestination` mirrors the `mkdir` strategy used here.
+- **Write controllers** (`post-signup`, `put-account`, `write-users`, `write-products`, `products/service`) — the call sites that invoke `quarantine` at request time and `remove` on delete/replace.
+- **`scripts/backfill-image-thumbnails.ts`** — the sole caller of `readImage`; allowed to read any file under the images root, including `images/seed/` fixtures.
+- **`tests/unit/infrastructure/adapters/image-store.test.ts`** — unit tests for the interface contract and filesystem implementation.
+- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** — exercises the worker's interaction with `ImageStore` (quarantine → promote → removeQuarantined).
 
 ## Notes
 
-- `put` **throws** on failure (the request must abort); `remove` **never throws** (it runs on already-failing code paths and must not mask the original error).
-- The `remove` containment logic has two layers: a coarse `startsWith(root)` check and a strict `dirname === <root>/images` check. The second is the load-bearing one today; the first is kept as a stated invariant that becomes critical if nested key prefixes are ever added.
-- Files in subdirectories of `images/` (e.g. `images/seed/` for demo fixtures) are explicitly **not** deletable through this store, even though they live under the public root.
-- `URL.canParse` is deliberately not used for the remote-URL check: it accepts `mailto:` and other irrelevant schemes, and rejects the protocol-relative `//host/…` form that does need to be caught.
-- Rebuilding the container loses all uploads (no volume by default). The file's docblock flags this and notes that the durable fix is a second `ImageStore` implementation, not a config flag.
+- **URL construction is literal, not `path.join`.** `promote` and `putDerivative` build the returned URL with template strings (`/images/<name>`) to avoid Windows backslashes that `express.static` and browsers would not handle.
+- **Quarantine is outside `NODE_PUBLIC_PATH` by design.** A quarantined file must survive a container restart so a pending digest job can still find it; placing it under the public tree would make unvalidated bytes fetchable.
+- **`remove` only unlinks flat files directly under `images/`.** Subdirectory files (e.g. `images/seed/`) are treated as owned by another system and are never deleted by this method.
+- **`remove` also deletes the matching thumbnail** (best-effort) because it is the only call site aware that a document's image is going away.
+- **No backend selector exists intentionally.** The file documents that a future S3/CDN implementation would be a second `ImageStore` value; the switch has not been written yet.
+- **`imageUrl` is an opaque handle.** Callers must never parse, split, or re-derive a filesystem path from it. The `uri-reference` format allows `../` sequences, which is why `resolveUnderPublicRoot` exists.

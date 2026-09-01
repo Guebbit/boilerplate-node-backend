@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Defines the admin-facing HTTP controller for deleting users. It wires the two `DELETE /users` endpoints (id in body or in path) to the user service via a shared delete-controller factory, and attaches audit logging for every deletion.
+Single-purpose controller module that wires up the `DELETE /users` and `DELETE /users/:id` admin endpoints (soft delete by default, hard delete via `?hardDelete=true`). It delegates all business logic to the user service and exists so that route definitions and audit policy stay decoupled from the controller shape.
 
 ## Key elements
 
-- **`deleteUsers`** (exported const) — the controller instance produced by `createDeleteController`. Configured with:
-  - `entity: 'user'` — label used by the factory for routing/semantics.
-  - `remove(id, hardDelete)` — delegates to `userService.removeById(id, hardDelete)`.
-  - `auditAction: usersAuditActions.ADMIN_USER_DELETED` — the audit event recorded on each call.
-  - `notFoundKey: 'users.not-found'` — i18n key returned when no user matches the id.
+- **`deleteUsers`** (exported const) — The only export. Built by calling `createDeleteController` with:
+  - `entity: 'user'`
+  - `remove(id, hardDelete)` — calls `userService.removeById(id, hardDelete)`
+  - `auditAction` — set to `usersAuditActions.ADMIN_USER_DELETED`
+  - `notFoundKey: 'users.not-found'` — i18n key returned when the id does not resolve to a record
 
 ## Relationships
 
-- **`src/infrastructure/http/delete-controller.ts`** — Supplies the `createDeleteController` factory. This file passes its config object in; the factory handles the two route signatures (body-id vs. path-id), the `?hardDelete` query param parsing, and the standard 404/500 responses.
-- **`src/modules/users/service.ts`** — Provides `userService.removeById`, which performs the actual (soft or hard) deletion.
-- **`src/modules/users/audit.ts`** — Provides the `usersAuditActions.ADMIN_USER_DELETED` enum/constant used as the audit action.
-- **`src/modules/users/routes.ts`** — Registers `deleteUsers` on the users router so it is reachable at the `/users` paths.
+- **`create-delete-controller.ts`** — Provides the generic factory (`createDeleteController`) that produces the request handler. This file is a thin configuration over that factory.
+- **`service.ts`** — Supplies `userService.removeById`, the actual persistence call (soft or hard).
+- **`audit.ts`** — Supplies `usersAuditActions.ADMIN_USER_DELETED`, the audit-log action key recorded after a successful delete.
+- **`routes.ts`** — Imports and mounts `deleteUsers` on the `DELETE /users` and `DELETE /users/:id` paths.
 
 ## Notes
 
-- Hard delete (via `?hardDelete=true`) announces a `USER_DELETED` domain event, which is the mechanism that cascades deletion of the account's cart, wishlist, and address book. Soft delete does **not** trigger that cascade.
-- Both route variants are admin-only; the authorization check is presumably handled by the `createDeleteController` factory or a route-level guard in `routes.ts`.
-- The controller is a thin composition—no business logic lives here. All domain behavior is in `service.ts`; all route mechanics are in the infrastructure factory.
+- Hard delete (`?hardDelete=true`) triggers a `USER_DELETED` domain event that cascades to cart, wishlist, and address book (per the docblock). The cascade logic itself lives downstream of the service, not in this file.
+- The controller accepts the user id either from the **request body** (`DELETE /users`) or the **path param** (`DELETE /users/:id`); the `createDeleteController` factory abstracts that duality.
+- The module is annotated `@module` and has no default export—import `{ deleteUsers }` by name.

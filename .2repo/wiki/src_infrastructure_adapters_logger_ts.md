@@ -2,27 +2,30 @@
 
 ## Purpose
 
-Provides the application's structured logging layer built on Winston. It exposes a redaction-aware JSON logger (`logger`) for general use and a fixed-format audit logger (`auditLogger`) for compliance events, ensuring sensitive fields are stripped from every record before output.
+Central structured-logging setup built on Winston. It defines the redaction pipeline, format selection (JSON vs. human-readable), log-level resolution, and exposes two ready-to-use logger instances (`logger` and `auditLogger`) that every other module in the codebase imports for emitting log records.
 
 ## Key elements
 
-- **`SENSITIVE_FIELDS`** — `Set<string>` of lowercase field names (passwords, tokens, keys, SSN, card data, etc.) that are always redacted. Exported for exhaustive per-entry unit testing.
-- **`redactSensitiveFields(input)`** — Recursively walks objects/arrays and replaces any key matching `SENSITIVE_FIELDS` with the literal `[REDACTED]`. Returns copies; never mutates the input. Exported for unit testing.
-- **`serializeError(error)`** — Converts an `Error` (or any thrown value) into a plain object with `name`/`message`/`stack`. Stack is omitted in production to avoid leaking filesystem paths.
-- **`redactFormat`** — Winston format *factory* that serializes embedded `Error` values, then runs `redactSensitiveFields` over all caller-supplied metadata. Must be invoked (`redactFormat()`) to produce a format instance.
-- **`resolveLogLevel()`** — Returns `NODE_LOG_LEVEL` if set, otherwise `info` in production and `debug` everywhere else.
-- **`resolveConsoleFormat()`** — Returns `prettyFormat` (ANSI-coloured, single-line) when stdout is a TTY *and* not production; otherwise `baseFormat` (timestamp → redact → JSON). Chosen by TTY status, not `NODE_ENV`, to keep piped/container output parseable.
-- **`logger`** — The primary app logger. Single `Console` transport on stdout. `defaultMeta.service` set from `NODE_SERVICE_NAME` (default `'api'`). Intended for container log-collection (Loki, CloudWatch, Datadog).
-- **`auditLogger`** — Fixed `info` level, always JSON, adds `log_type: 'audit'` to `defaultMeta`. Cannot be silenced or reformatted by environment config. Fed by the audit/observability layer.
+- **`SENSITIVE_FIELDS`** — `Set` of lowercase field names (password, token, ssn, etc.) that must never appear in log output. Exported for exhaustive unit-test assertion.
+- **`redactSensitiveFields(input)`** — Recursively walks objects/arrays and replaces any key in `SENSITIVE_FIELDS` with `[REDACTED]`. Returns copies; never mutates the input.
+- **`serializeError(error)`** — Converts a thrown `Error` (or arbitrary value) into a plain serializable object. Omits `stack` in production to prevent path/internals leakage.
+- **`redactFormat`** — Winston format *factory* (must be called as `redactFormat()`). Serializes `rest.error` then applies `redactSensitiveFields` to all caller-supplied metadata before returning the record.
+- **`resolveLogLevel()`** — Returns `NODE_LOG_LEVEL` if set; otherwise `info` in production, `debug` locally.
+- **`baseFormat`** (internal) — Pipeline: ISO-8601 timestamp → redact → `json()`. One-line-per-record output for log collectors.
+- **`prettyFormat`** (internal) — Same pipeline up to redaction, then `colorize` + a `printf` layout for terminal reading.
+- **`resolveConsoleFormat()`** — Chooses `prettyFormat` when stdout is a TTY and env is non-production; `baseFormat` (JSON) in all other cases including production.
+- **`logger`** — Primary application logger. Console transport to stdout only. Default meta includes `service` (from `NODE_SERVICE_NAME`, default `"api"`).
+- **`auditLogger`** — Dedicated compliance/audit stream. Hard-coded `info` level and JSON format regardless of environment. Adds `log_type: 'audit'` to every record. Fed by `@infrastructure/observability/audit`.
 
 ## Relationships
 
-- **Consumers (all graph neighbors listed above)** — `src/app.ts`, `src/app/demo.ts`, `src/app/error-handling.ts`, `src/app/workers.ts`, `src/cluster.ts`, the other adapters (`cache`, `email.worker`, `filesystem`, `mailer`, `pdf.worker`, `queue`, `storage`), and the `db/` scripts (`cache-clear`, `demo/index`, `run-script`) import `logger` (and in some cases `auditLogger`) to emit structured log records. This file is the single logging entry point for all of them.
+- All other modules in the dependency graph (`src/app.ts`, `src/app/error-handling.ts`, `src/app/workers.ts`, `src/app/demo.ts`, `src/cluster.ts`, `src/infrastructure/adapters/cache.ts`, `src/infrastructure/adapters/email.worker.ts`, `src/infrastructure/adapters/filesystem.ts`, `src/infrastructure/adapters/image.worker.ts`, `src/infrastructure/adapters/mailer.ts`, `db/cache-clear.ts`, `db/demo/index.ts`, `db/run-script.ts`, `scripts/backfill-image-thumbnails.ts`, `scripts/reap-quarantine.ts`) import `logger` (and where applicable `auditLogger`) from this module to emit log records.
+- The file itself depends only on the `winston` package.
 
 ## Notes
 
-- **Redaction is key-based, not value-based.** A secret nested under an innocuous key name (e.g. `data.user.pass`) will only be caught if the key itself is in `SENSITIVE_FIELDS`. Adding a new sensitive field requires updating the set *and* its test.
-- **`redactFormat` is a factory.** Forgetting the trailing `()` when composing formats will silently pass the factory function where a format instance is expected.
-- **Console transport only.** No file transports are configured; the platform (container runtime / log collector) owns rotation and storage. Adding a file transport inside the container will bloat the image layer.
-- **`auditLogger` intentionally ignores `NODE_LOG_LEVEL` and TTY detection.** Its shape is a compliance contract—changing its format or level is a policy change, not a config tweak.
-- **`resolveConsoleFormat` uses `process.stdout.isTTY`**, so `npm test` (piped) and `docker logs` both get JSON even in development, which is correct but may surprise anyone grepping dev logs for pretty output.
+- `redactFormat` is a **factory** (a `winston.format(fn)` wrapper). It must be invoked (`redactFormat()`) before being placed in a `format.combine(...)` chain — passing the bare function will silently skip redaction.
+- `resolveConsoleFormat` keys off `process.stdout.isTTY`, **not** `NODE_ENV` alone. A non-TTY stdout (pipe, container log file) always yields JSON, even in dev. This is deliberate: log collectors (Loki, CloudWatch, Datadog) require stable one-line JSON.
+- `redactSensitiveFields` is case-insensitive via lowercase comparison but does **not** redact values that merely contain a sensitive string (e.g. a message body) — only keys that match.
+- The `auditLogger` level is intentionally not env-driven; `NODE_LOG_LEVEL` cannot silence or elevate it.
+- Only the `Console` transport is registered (stdout). File transports are deliberately absent: container platforms own log collection and rotation.

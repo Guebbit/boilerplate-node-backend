@@ -2,23 +2,22 @@
 
 ## Purpose
 
-Low-level filesystem helpers (`moveFile`, `deleteFile`) used to relocate and clean up upload files. They exist as a thin adapter layer so callers don't repeat `rename`/`EXDEV` fallback logic or ad-hoc error-swallowing patterns.
+Small, dependency-light module that centralises two low-level filesystem operations every disk-touching adapter needs: a cross-mount `moveFile` (with an EXDEV fallback) and a non-throwing `deleteFile` (log-and-swallow). Existing so no other adapter re-derives either pattern on its own.
 
 ## Key elements
 
-- **`moveFile(source, destination)`** — Moves a file. Tries atomic `rename` first; on `EXDEV` (cross-device) falls back to `copyFile` + `unlink`. **Throws** on any non-EXDEV error or if the copy/unlink fail, because a failed move means the uploaded bytes are missing.
-- **`deleteFile(filePath)`** — Deletes a file. Delegates to `@guebbit/js-toolkit`'s `deleteFile` with an error callback. **Never throws**; on failure it calls `logger.error({ message, error })`. Intended for post-validation cleanup of multer-staged uploads.
-- Imports `copyFile`, `rename`, `unlink` from `node:fs/promises`; imports `deleteFile` from `@guebbit/js-toolkit` (aliased to avoid collision); imports `logger` from the local logger adapter.
+- **`moveFile(source, destination)`** (exported, async) — Attempts an atomic `rename()`. If it fails with `EXDEV` (the common case: upload staging on tmpfs vs. a mounted volume), falls back to `copyFile` → `unlink`. **Throws** on any other error or on a failed fallback, because a failed move means the bytes the client sent are not where the database expects them.
+- **`deleteFile(filePath)`** (exported, sync) — Delegates to `@guebbit/js-toolkit`'s `deleteFile` with an error callback. **Never throws**; unexpected failures are logged at `error` level through the shared logger. Intended for cleanup of multer uploads after a failed validation.
+- **Imports** — `node:fs/promises` (`copyFile`, `rename`, `unlink`), `@guebbit/js-toolkit` (`deleteFile`), `@infrastructure/adapters/logger` (`logger`).
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — `deleteFile` calls `logger.error` to report failed deletions. The error object is passed under the `error` key to stay within the `redactFormat`/`serializeError` contract.
-- **`src/infrastructure/adapters/storage.ts`** / **`src/infrastructure/adapters/image-store.ts`** — Consumers of these helpers for persisting or cleaning up uploaded files (images, generic uploads) in the public directory.
+- **`src/infrastructure/adapters/logger.ts`** — Imported; its `logger` is the sole error sink inside `deleteFile`'s callback.
+- **`src/infrastructure/adapters/image-store.ts`** / **`src/infrastructure/adapters/storage.ts`** — Graph neighbours listed as consumers; the module doc states "every other adapter that touches disk builds on these two," indicating they call `moveFile` and/or `deleteFile` rather than re-implementing the fallbacks.
 
 ## Notes
 
-- The `EXDEV` fallback is **the common production path**, not an edge case: uploads land in `/tmp` (tmpfs) while the public dir is on disk or a mounted volume. The `rename` fast path is mainly exercised in tests.
-- Copy-then-unlink ordering in the fallback is deliberate: a crash mid-sequence leaves a stale staged file (recoverable by the next `deleteFile` call); the reverse order would lose the upload.
-- `deleteFile` is at `logger.error` level (not `warn`) because a persistent delete failure usually signals a permissions or mount misconfiguration.
-- The error object is passed whole under the `error` key; do **not** spread its properties (e.g. `stack`) into the log payload, as that bypasses `serializeError` and leaks absolute container paths into production logs.
-- `moveFile` requires the destination **directory** to already exist; it does not create directories.
+- **Order matters in the EXDEV fallback:** `copyFile` before `unlink` ensures a crash between the two leaves a *stale staged file* (recoverable) rather than losing the upload entirely.
+- **Error object in `deleteFile`:** The error is passed as a nested `error` property, *not* spread into its own fields. This keeps `redactFormat` / `serializeError` as the single gate deciding whether stack traces (and container paths) reach production logs.
+- **eslint-disable on the `try/catch` in `moveFile` is intentional** — the catch block *is* the cross-mount fallback, not a generic error swallow.
+- **`moveFile` destination directory must already exist**; the function does not create intermediate paths.

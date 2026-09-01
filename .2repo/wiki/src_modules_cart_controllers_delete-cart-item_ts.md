@@ -2,24 +2,24 @@
 
 ## Purpose
 
-Route handler for `DELETE /cart/:productId`. Validates the path parameter and delegates removal to the cart service, returning the updated cart or a structured error.
+Thin HTTP adapter that exposes `DELETE /cart/:productId` (canonical) and `DELETE /cart` (alias) by delegating to `cartService.cartItemRemoveById`. It normalises the two input shapes into a single `productId` string, validates it, and translates the service result into an HTTP response.
 
 ## Key elements
 
-- **`deleteCartItem`** (sole export) — Express handler that reads `productId` from the path, validates it as an ObjectId, calls `cartService.cartItemRemoveById`, and emits a `200` (with updated cart + localized message) or an error response.
+- **`deleteCartItem`** (exported) — The sole handler. Resolves `productId` via `readInput(request, { surface: 'write', ids: ['productId'] })`, which checks the path segment first and falls back to the body (for the alias route). Returns `422` if the value is not a valid ObjectId; otherwise calls `cartService.cartItemRemoveById` and responds with the updated cart (`200`) or a refusal/404 from the service.
 
 ## Relationships
 
-- **`src/modules/cart/routes.ts`** — registers `deleteCartItem` as the handler for `DELETE /cart/:productId`.
-- **`src/modules/cart/services/index.ts`** — source of `cartService.cartItemRemoveById`, which performs the actual removal and returns 404 if the item is absent.
-- **`src/infrastructure/http/request.ts`** — supplies `authContextOf`, `readInput`, `callerContextOf`, and `isValidObjectId` used in the controller body.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse` and `rejectResponse` for output formatting.
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs` (promise-rejection → error response) and `refused` (service-level rejection → response short-circuit).
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — provides `t()` for the localized "product removed" and "missing data" messages.
-- **`src/types/index.ts`** — defines `RemoveCartItemRequest` used in the handler's generic signature.
+- **`@infrastructure/http/request`** — Supplies `authContextOf` (extracts `userId`), `isValidObjectId` (validation), `readInput` (dual-surface extraction), and `callerContextOf` (pass-through metadata to the service).
+- **`@infrastructure/http/response`** — `successResponse` for the 200 path, `rejectResponse` for the 422 validation failure.
+- **`@infrastructure/http/controller`** — `catchAs` wraps the rejection path with a standardised error shape; `refused` inspects the service result to short-circuit on 4xx/5xx outcomes before the success branch.
+- **`@infrastructure/i18n`** — `t()` resolves the `cart.product-removed` success message and `generic.error-missing-data` error message at request time.
+- **`../services` (cart)** — `cartService.cartItemRemoveById(userId, productId, callerContext)` performs the actual deletion and returns the updated cart or a 404 if the item is absent.
+- **`@types`** — `RemoveCartItemRequest` types the body parameter for the alias route.
+- **`routes.ts` (cart)** — Wires `deleteCartItem` to both the canonical and alias route definitions (not a direct import; the controller is registered there).
 
 ## Notes
 
-- **Path-param only, by design.** `productId` is read with `{ surface: 'path' }`; there is intentionally no body field. The route cannot match without the URL segment, so a body `productId` would be unreachable. This differs from `PUT /cart/:productId`, which does accept a body (`UpdateCartItemByIdRequest`).
-- **Error split.** The controller only guards against an invalid ObjectId (→ 422). The 404 "item not in cart" case is raised by the service layer and handled via `refused`/`catchAs` — do not expect it here.
-- **`callerContextOf(request)`** is forwarded to the service; it carries caller metadata (e.g. locale, session hints) that the service may use.
+- The alias route (`DELETE /cart`) carries `x-alias-of: removeCartItem` and *requires* `productId` in the body. The canonical route takes it as a path segment. `readInput` with `surface: 'write'` resolves this by preferring the path segment and falling back to the body, so the same handler serves both without branching.
+- Validation failure (non-ObjectId `productId`) returns `422`, not `400` or `404` — consistent with the "missing/invalid data" convention used elsewhere.
+- The service owns the 404-when-not-in-cart behaviour; the controller does not duplicate that check.

@@ -2,35 +2,23 @@
 
 ## Purpose
 
-Asserts the **database-level contracts** of the inventory schemas — unique indexes, defaults, enum values, required paths, and index specs. These guarantees are enforced by MongoDB, not by any service code path, so weakening them would not cause a test in the integration suite to fail. This file is the only place that pins those structural invariants.
+Schema-contract tests for the two inventory collections (`stockMovementSchema` and `reservationSchema`). They assert the *shape* of the MongoDB schemas—required fields, defaults, enums, index specs, and referential types—so that guarantees like exactly-once reservation, replayable deltas, and correct index coverage are enforced by CI rather than discovered in production.
 
 ## Key elements
 
-- **`describe('stockMovementSchema — the ledger')`** — Verifies the ledger schema:
-  - Required paths are exactly `productId` + `reason`.
-  - `reason` enum matches the generated `StockMovementReason` contract *and* the exported `MOVEMENT_REASONS` array (guards against a fourth independent declaration).
-  - `productId` is an `ObjectId` ref to `Product`.
-  - Both delta fields (`onHandDelta`, `reservedDelta`) default to `0` (replayability via column sum).
-  - `timestamps` option is on.
-  - Index list is exactly two, both with `createdAt: -1`.
-
-- **`describe('reservationSchema — the hold')`** — Verifies the reservation schema:
-  - `orderId` index is `unique=true` (the exactly-once reservation gate).
-  - Required paths: `expiresAt`, `items`, `orderId`, `status`.
-  - `status` enum is exactly `['held', 'committed', 'released']`; default is `'held'`.
-  - Sub-schema `items` requires `productId` + `quantity` with `min: 1`; `_id` is disabled.
-  - Index list is exactly the `orderId` unique index and the `status+1, expiresAt+1` sweep index.
-  - No index carries `expireAfterSeconds` (deliberate: a TTL index would *delete* the doc and leak stock).
+- **`describe('stockMovementSchema — the ledger')`** — asserts: only `productId` + `reason` are required; `reason` enum mirrors `StockMovementReason`; `productId` is an ObjectId ref to `Product`; both delta fields default to `0`; timestamps are on; exactly two descending-`createdAt` indexes exist.
+- **`describe('reservationSchema — the hold')`** — asserts: `orderId` carries a unique index (the exactly-once gate); four required paths including `items`; `status` is a 3-value enum defaulting to `'held'`; item sub-schema requires `productId` + `quantity` (min 1, `_id: false`); two indexes (unique `orderId`, composite `status+1, expiresAt+1`); **no** `expireAfterSeconds` on any index (TTL would delete the doc and leak stock).
+- **Helpers used** (all from `@tests/schema`): `requiredPaths`, `enumOf`, `typeOf`, `refOf`, `defaultOf`, `optionsOf`, `indexSpecs`, `indexOptionSpecs`, `indexBehaviour`, `subSchema`, `pathOptions`.
 
 ## Relationships
 
-- **`src/modules/inventory/model.ts`** — Source of the two schemas under test (`stockMovementSchema`, `reservationSchema`) and the `MOVEMENT_REASONS` export cross-checked against the contract enum.
-- **`src/types/index.ts`** — Provides `StockMovementReason` (a Zod/contract-generated enum) used as the ground truth for the `reason` field's allowed values.
-- **`tests/support/schema.ts`** — Supplies all introspection helpers (`defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `indexBehaviour`, `optionsOf`, `pathOptions`, `requiredPaths`, `refOf`, `subSchema`, `typeOf`) that extract structural metadata from Mongoose schemas without instantiating them.
+- **`src/modules/inventory/model.ts`** — source of `stockMovementSchema`, `reservationSchema`, and `MOVEMENT_REASONS`. Every assertion reads properties off these two schema objects.
+- **`src/types/index.ts`** — provides the `StockMovementReason` enum; the test cross-checks that the schema's `reason` enum and the exported `MOVEMENT_REASONS` array both equal `Object.values(StockMovementReason)`, preventing a third independent copy.
+- **`tests/support/schema.ts`** — supplies the introspection helpers (`enumOf`, `indexSpecs`, `subSchema`, etc.) that let the tests read Mongoose schema internals without instantiating models.
 
 ## Notes
 
-- These tests assert **structure, not behavior**. A schema change that alters a default, adds an index, or widens an enum will fail here even though every integration test still passes. That is the point.
-- The file documents *why* each assertion matters in inline comments (e.g., "a retried checkout is detected by the insert failing, with no read-then-write race to lose"). Read the comments before modifying a schema.
-- The TTL-index check (`indexBehaviour`) is a **negative** assertion: it exists to prevent a well-intentioned "just add a TTL" fix from silently deleting reservations and leaking reserved stock.
-- `MOVEMENT_REASONS` is asserted equal to `Object.values(StockMovementReason)` to catch drift if someone adds a reason in one place but not the other.
+- This is a *meta*-test: it inspects the schema definition object, not a running database. It cannot catch misconfiguration in the connection layer, only drift in the schema code.
+- The file deliberately does **not** test application logic (reservation lifecycle, sweep queries). Its scope is limited to "the schema says what we think it says."
+- The TTL-index assertion is a guard against a *regression*: a well-meaning `expireAfterSeconds` addition would pass all behavioural tests (documents simply vanish before the sweep runs) and silently leak reserved stock.
+- Index assertions use the exact string format produced by `indexSpecs` (e.g. `'createdAt: createdAt-1'`). If the helper's formatting changes, these tests break without the underlying schema having changed.

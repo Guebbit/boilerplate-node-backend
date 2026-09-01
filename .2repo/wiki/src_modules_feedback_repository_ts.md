@@ -2,26 +2,26 @@
 
 ## Purpose
 
-Thin repository layer for `FeedbackRequest` documents. It delegates all CRUD logic to the shared base-repository factory, supplying only the module-specific model, transform, and search configuration. This keeps the feedback module free of raw query code while giving the service a standard repository interface.
+Declares the feedback-request repository instance using the shared `createRepository` factory. It wires the domain model, document transform, and searchable-field spec together so that the service layer gets a ready-made CRUD/search interface without reimplementing persistence logic.
 
 ## Key elements
 
-- **`feedbackRequestRepository`** (exported const) — The only export. Created by `createBaseRepository<FeedbackRequestDocument>` with:
-  - **Model:** `feedbackRequestModel` (from `./model`).
-  - **Transform:** `applyFeedbackRequestTransform` — applied to query results before they reach callers.
-  - **`searchable` spec:**
-    - `objectIds` — matches `id` against `_id`.
-    - `regex` — matches `email` as a regex pattern.
-    - `text` — full-text search across `name`, `email`, `subject`, `message`.
+- **`feedbackRequestRepository`** (exported constant) — the sole export. A repository instance created by `createRepository<FeedbackRequestDocument>` configured with:
+  - `transform`: `applyFeedbackRequestTransform` — applied to documents on read.
+  - `searchable`:
+    - `objectIds`: maps the logical `id` field to the Mongo `_id` field.
+    - `regex`: enables regex search on `email`.
+    - `text`: enables full-text search across `name`, `email`, `subject`, `message`.
+  - **`status` is intentionally omitted** from the searchable spec (see Notes).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/base-repository.ts`** — Provides the `createBaseRepository` factory that this file calls. All CRUD and search mechanics live there; this file only configures it.
-- **`src/modules/feedback/model.ts`** — Supplies `feedbackRequestModel`, `applyFeedbackRequestTransform`, and the `FeedbackRequestDocument` type used as the generic parameter.
-- **`src/modules/feedback/service.ts`** — Consumes `feedbackRequestRepository` for persistence operations. The JSDoc explicitly notes that the service is responsible for mapping a raw `status` string to the closed enum *before* passing a scope down to this repository.
-- **Tests** (`service.test.ts`, `model.test.ts`, `schema-contract.test.ts`) — Exercise this repository indirectly through the service and directly through model/schema contracts.
+- **`src/infrastructure/persistence/create-repository.ts`** — Provides the `createRepository` factory that this file calls to build the repository instance.
+- **`src/modules/feedback/model.ts`** — Supplies `feedbackRequestModel` (the collection/schema definition), `applyFeedbackRequestTransform` (document shape mapper), and the `FeedbackRequestDocument` type used as the generic parameter.
+- **`src/modules/feedback/service.ts`** — Consumes `feedbackRequestRepository` for reads/writes. The module doc-comment notes that `status` filtering is a *service*-level domain decision, not a repository concern.
+- **`src/modules/feedback/tests/integration/*.test.ts`** — Integration tests exercise the repository through the service and model contracts.
 
 ## Notes
 
-- **`status` is intentionally absent from the `searchable` spec.** It is a closed enum, and the raw-string → enum mapping is a domain decision owned by the service layer. Do not add `status` to the search config here; handle it upstream.
-- The file contains no logic beyond configuration — if you need to change query behaviour, look at `base-repository.ts` or adjust the `searchable` object.
+- **No `status` in the search spec.** The inline comment is explicit: `status` is a closed enum, and translating a raw user-supplied string into that enum is a domain decision. The service is expected to resolve `status` into a pre-built query scope *before* calling the repository, rather than letting the repository accept an arbitrary string.
+- The file contains no business logic of its own — all behavior is delegated to the factory, the model, and the transform. If CRUD/search behavior looks wrong, inspect `create-repository.ts` and `model.ts` first.

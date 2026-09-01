@@ -2,39 +2,38 @@
 
 ## Purpose
 
-Data-access layer for user documents. Wraps the Mongoose `userModel` with standard CRUD (delegated to a base factory) plus the credential-specific reads and token-lifecycle writes that the account services need. It exists to centralise the one sanctioned re-selection of `select: false` fields (`password`, `tokens`) and to express every token mutation as an atomic positional update rather than a read-modify-write.
+Persistence layer for the `users` collection. Wraps the standard CRUD provided by the shared `createRepository` factory with the credential reads and token-lifecycle operations that the `account` module needs across the shared-kernel boundary. Centralises the two `select: false` fields (`password`, `tokens`) into sanctioned helpers so that re-selection logic lives in one place.
 
 ## Key elements
 
-- **`CREDENTIAL_FIELDS`** (`'+password +tokens'`) — the single string used by every method that must surface the hidden fields; keeps the `select` re-enablement in one place.
-- **`userRepository`** (exported const) — the full repository object:
-  - *Base CRUD* (inherited from `createBaseRepository`) — `find`, `findById`, `create`, `update`, `deleteOne`, etc., with a `searchable` config exposing `objectIds`, `text`, `regex`, and `booleans` (`active`, `admin`, `verified`).
-  - **`updateMany(filter, update)`** — bulk update passthrough.
-  - **`findByIdWithCredentials(id)`** / **`findOneWithCredentials(where)`** — fetch a user *with* password and tokens; the only sanctioned credential reads.
-  - **`findByToken(token, type)`** — fetch the user holding a token of a specific type (uses `$elemMatch`); includes credentials so callers can read the entry's expiration.
-  - **`tokenRemove(id, token)`** — atomic `$pull` of one token by user id + value; idempotent.
-  - **`tokenRemoveByValue(token)`** — atomic `$pull` by token value alone (single-session logout; no user id required).
-  - **`tokenRemoveExpired()`** — collection-wide sweep of expired tokens; returns `modifiedCount`.
-  - **`findByTokenValue(token)`** — untyped-by-kind revocation lookup ("does this credential still exist?").
-  - **`tokenTouch(token)`** — positional `$set` of `lastUsedAt` on the matched token entry.
-  - **`sessionRemove(id, sessionId)`** — revoke one `refresh`-type token by its subdocument id, scoped to the owner's document.
+- **`CREDENTIAL_FIELDS`** (`'+password +tokens'`) — the only string used to re-select the two schema fields that are excluded by default; used by every credential-aware finder.
+- **`userRepository`** — the sole export. A `Repository<UserDocument>` (from the factory) extended with:
+  - `updateMany` — batch update; explicit because Mongoose generics trigger TS7056 at the export boundary.
+  - `findByIdWithCredentials` / `findOneWithCredentials` — standard finders that re-select `password` + `tokens`.
+  - `findByToken(token, type)` — `$elemMatch` lookup so token value **and** type must match the same array entry; returns the holder with credentials.
+  - `findByTokenValue(token)` — untyped revocation lookup (no `type` filter); used by the refresh flow to check whether a token still exists.
+  - `tokenRemove(id, token)` — atomic `$pull` by user id + token value (spend a one-shot token).
+  - `tokenRemoveByValue(token)` — atomic `$pull` by token value alone (single-session logout from the refresh cookie).
+  - `tokenRemoveExpired()` — bulk `$pull` of all expired tokens; returns a plain count, not an HTTP status.
+  - `tokenTouch(token)` — positional `$set` on `tokens.$.lastUsedAt` so concurrent refreshes don't overwrite each other.
+  - `sessionRemove(id, sessionId)` — `$pull` one refresh token by sub-document `_id`, pinned to `type: refresh` so it cannot target reset/delete tokens.
+  - `writebackImage` — conditional writeback of `imageUrl`/`thumbnailUrl` keyed on `pendingImageKey`; returns a boolean (`matchedCount > 0`) so a stale or duplicate job is a detectable no-op.
+
+All token mutations pass `timestamps: false` because spending/expiring/touching a token is not an account edit.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/base-repository.ts`** — provides `createBaseRepository`, `toObjectId`, and the `BaseRepository<T>` interface. `userRepository` spreads the factory output and augments it with the credential/token methods above.
-- **`src/modules/account/services/authentication.ts`** — calls `findByIdWithCredentials` during login.
-- **`src/modules/account/services/verification.ts`** — calls `findByToken` + `tokenRemove` for reset-confirm / delete-confirm flows.
-- **`src/modules/account/services/tokens.ts`** — calls `tokenRemove`, `findByTokenValue` for token lifecycle.
-- **`src/modules/account/session/jwt.ts`** — calls `findByTokenValue` (revocation check) and `tokenTouch` (refresh) during the JWT refresh flow.
-- **`src/modules/account/services/token-cleanup.ts`** — calls `tokenRemoveExpired` for the scheduled housekeeping sweep.
-- **`src/modules/account/services/profile.ts`** — calls `findByIdWithCredentials` / `findOneWithCredentials` for password change.
-- **`src/modules/account/tests/**`** — integration and unit tests exercise the above methods end-to-end and in isolation.
+- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository`, `toObjectId`, and the `Repository` type. The factory supplies the base CRUD object spread into `userRepository`.
+- **`src/infrastructure/adapters/image.worker.ts`** — contributes the `ImageWriteback` type that `writebackImage` satisfies; the image-digest pipeline calls into this repository to persist finished thumbnails.
+- **`src/modules/account/services/*`** (authentication, profile, tokens, token-cleanup, verification) — the primary consumers across the kernel edge. They call the credential and token helpers rather than issuing raw Mongoose queries.
+- **`src/modules/account/session/jwt.ts`** — uses `findByTokenValue` for the refresh-token revocation check during token validation.
+- **`scripts/backfill-image-thumbnails.ts`** — exercises the `writebackImage` path in bulk.
+- **`src/modules/account/tests/**`** — integration and contract tests drive `findByIdWithCredentials`, `findByToken`, `tokenRemove`, `tokenRemoveByValue`, `tokenRemoveExpired`, `tokenTouch`, `sessionRemove`, and `writebackImage` to verify token-lifecycle invariants (idempotency, `modifiedCount` semantics, concurrent-refresh safety).
 
 ## Notes
 
-- `password` and `tokens` are `select: false` on the schema. Plain `findById`/`find` will **never** return them; you must go through `*WithCredentials` or `findByToken`.
-- `findByToken` deliberately uses `$elemMatch`. The naïve two-dotted-path form (`{ 'tokens.token': v, 'tokens.type': t }`) would match a user who holds the value in one entry and the type in another — a false positive during concurrent reset+delete.
-- Every token mutation passes `timestamps: false`. The convention: token lifecycle events are not account changes and must not bump `updatedAt`.
-- `tokenRemoveExpired` returns a plain `number` (the count). It does **not** return an HTTP status or error shape; the calling service decides what the count means.
-- The `searchable.booleans.active` filter targets the `active` column, not `deletedAt`. "Deactivated" and "deleted" are distinct states.
-- The `userRepository` type is written out explicitly (not inferred) because Mongoose's generics are too large for TS to serialise at an export boundary (TS7056).
+- **Never** add `.select('+password')` or `.select('+tokens')` outside this file. The two `*WithCredentials` helpers and `findByToken`/`findByTokenValue` are the sanctioned entry points.
+- `findByToken` uses `$elemMatch` deliberately. A naive `{ 'tokens.token': x, 'tokens.type': y }` filter would also match a document that holds token *x* as a reset token and token *y* as a delete token in separate array entries.
+- `sessionRemove` pins `type: TokenType.REFRESH` in the `$pull` condition. This is a safety constraint, not an optimisation—without it a leaked sub-document id could revoke a pending reset or delete confirmation.
+- `writebackImage` is conditional on `pendingImageKey` still equal to the job's `key`. This makes late or duplicate image-worker deliveries a `false` return rather than an overwrite, and a hard-deleted user a detectable miss.
+- The explicit interface on `userRepository` (rather than letting TypeScript infer) exists because Mongoose's generic parameter list is too large for TS to serialise at an export boundary (TS7056). Do not "simplify" it back to inference.

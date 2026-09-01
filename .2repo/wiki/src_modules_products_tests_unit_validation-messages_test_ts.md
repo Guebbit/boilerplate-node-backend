@@ -2,23 +2,20 @@
 
 ## Purpose
 
-Verifies that the products module's Zod schema emits validation messages from the active locale's translation copy (Italian) rather than falling back to Zod's built-in English defaults. It is the catalogue-schema counterpart to the analogous test documented in `modules/users`.
+Unit test that verifies the product catalogue's Zod schema emits **locale-specific** validation messages (Italian) rather than Zod's built-in English defaults. It guards the i18n wiring between the schema in `@modules/products/model` and the product translation namespace.
 
 ## Key elements
 
-- **`copy(locale)`** – Helper that pulls the `products` sub-namespace out of `mergedResources()` for a given locale, returning a flat `Record<string, string>` of message keys.
-- **`describe('product validation messages')`** – Single test that:
-  - Loads `zodProductSchema` (from `@modules/products/model`) with Italian i18n active via `loadBeforeI18n`.
-  - Parses an invalid product object (`title: 'ab'`, `price: -1`).
-  - Asserts the emitted error messages include the Italian strings for `field-title-min` and `field-price-min` verbatim.
+- **`copy(locale)`** – helper that pulls the `products` sub-object out of the merged i18n resources for `'en'` or `'it'`, so assertions can reference message keys directly (e.g. `it['field-title-min']`).
+- **`describe('product validation messages')`** – single suite.
+- **`it('uses the Italian copy verbatim, not a Zod default')`** – loads the module under the `'it'` locale via `loadBeforeI18n`, calls `safeParse` with a deliberately invalid payload (`title: 'ab'`, `price: -1`), and asserts the error messages match the Italian translation strings for `field-title-min` and `field-price-min`.
 
 ## Relationships
 
-- **`tests/support/i18n-boot.ts`** – Provides `loadBeforeI18n` (initializes i18n for a locale *before* the target module is imported, so its thunks bind to the right language) and `mergedResources` (exposes the already-merged translation bundle for direct key lookups). Both are consumed here.
-- **`@modules/products/model`** – Exports `zodProductSchema`; the test's parse call exercises its `title` and `price` field constraints.
+- **`tests/support/i18n-boot.ts`** – provides `loadBeforeI18n` (bootstraps the i18n runtime for a given locale *before* dynamically importing the module under test) and `mergedResources` (exposes the resolved resource bundle for the active locale). This file depends on both for locale setup and message lookup.
 
 ## Notes
 
-- The file header comment explicitly cross-references the `modules/users` test as the "full documentation" of the failure mode being defended; read that file for context on *why* locale-bound copy can silently regress to Zod defaults.
-- `loadBeforeI18n` is critical: importing the model without first activating the target locale would bind the schema's message thunks to English, making the assertion pass for the wrong reason.
-- The test only covers two fields (`field-title-min`, `field-price-min`); it is a sentinel for the "copy resolves against locale" invariant, not an exhaustive message-coverage suite.
+- The module doc-block explicitly delegates the full i18n explanation to `modules/users`; this test is a thin, catalogue-specific mirror of that pattern.
+- The test passes a **key hint** (`'products.field-title-min'`) as the third argument to `loadBeforeI18n`—this is the i18n-boot mechanism for pre-loading the specific resource key the assertion will need.
+- Only the Italian locale is asserted; there is no symmetric `'en'` test in this file.

@@ -2,19 +2,19 @@
 
 ## Purpose
 
-Defines and exports the Prometheus `Counter` for tracking total orders created (admin/staff-initiated). Lives in the orders module rather than in infrastructure so that the metric is owned by the domain it measures; the overview endpoint reads registered metrics without needing a direct import of this file.
+Defines the Prometheus counter(s) for the orders domain. Counters live here (in the module) rather than in `infrastructure` so the overview endpoint can read them without a direct import into this file. This file owns the `order_created_total` metric for admin-created orders.
 
 ## Key elements
 
-- **`orderCreatedTotal`** (`Counter`) — Unlabelled counter named `order_created_total`. Tracks the total number of orders created. Registered against `metricsRegistry`. Deliberately kept separate from `cart`'s `cart_checkout_total` so that staff-created orders do not skew the customer checkout success rate.
+- **`orderCreatedTotal`** (`Counter`) — Exported Prometheus counter named `order_created_total`. Tracks total orders created by staff. Intentionally unlabelled and kept separate from cart's `cart_checkout_total` so manual orders don't distort the customer checkout success rate.
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-http.ts`** — Provides `metricsRegistry`, the shared registry into which `orderCreatedTotal` is registered.
-- **`src/modules/orders/controllers/write-orders.ts`** — Consumer of `orderCreatedTotal` within the same module (the write path increments the counter when an order is created).
+- **`src/infrastructure/observability/metrics-http.ts`** — Provides the shared `metricsRegistry` instance; this file registers its counter against it.
+- **`src/modules/orders/controllers/write-orders.ts`** — Downstream consumer expected to increment `orderCreatedTotal` when an order is successfully created.
 
 ## Notes
 
-- The counter is intentionally **unlabelled**. The rationale (per the inline comment) is that admin-created orders have no user-facing failure mode worth segmenting on.
-- Do not merge this counter with `cart_checkout_total`; the separation is a deliberate metric-design decision to keep checkout success-rate calculations clean.
-- For the broader convention of *why* metrics live in the module (not in `infrastructure`) and how the overview endpoint reads them indirectly, see `modules/account/metrics.ts`.
+- The counter has **no labels** by design — admin-created orders have no user-facing failure mode to distinguish. Do not add labels without a clear reason.
+- The module doc points to `modules/account/metrics.ts` as the canonical explanation of *why* domain metrics live in the module layer. If the placement pattern seems unusual, check that file first.
+- The overview endpoint reads these counters **without** importing this file directly (indirect access via the shared registry). Avoid adding side-effectful imports here.

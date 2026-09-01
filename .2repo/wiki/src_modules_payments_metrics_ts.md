@@ -2,18 +2,18 @@
 
 ## Purpose
 
-Declares the Prometheus domain counters owned by the payments module. By living here (in the module) rather than in infrastructure, the counter co-locates with the business logic that increments it, following the same convention as `modules/account/metrics.ts`.
+Defines the PromQL counters owned by the payments module. It keeps domain-level metrics colocated with the module that produces them (rather than in `infrastructure`) so ownership is obvious and the overview endpoint can read them without creating a reverse import.
 
 ## Key elements
 
-- **`paymentConfirmTotal`** (exported `Counter`) — tracks payment-confirmation attempts, labelled by `outcome`. Registered against `metricsRegistry`. The label is intentional: the decline/total *ratio* is the operational signal (fraud or provider incident), which would be masked if outcomes were summed into a single unlabelled counter.
+- **`paymentConfirmTotal`** (exported `Counter`, `payment_confirm_total`) — Counts payment-confirmation attempts. Labeled by `outcome` so that the *ratio* of successes to declines is observable; a flat total would mask a fraud or provider incident.
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-http.ts`** — provides the shared `metricsRegistry` instance into which `paymentConfirmTotal` registers itself. This is the sole import from infrastructure.
-- **`src/modules/payments/controllers/post-payment-confirm.ts`** — the confirm-endpoint controller; the natural caller that increments `paymentConfirmTotal` with the appropriate `outcome` label on each request.
+- **`src/infrastructure/observability/metrics-http.ts`** — Supplies the shared `metricsRegistry` into which `paymentConfirmTotal` registers. This is the only import into infrastructure from this file.
+- **`src/modules/payments/controllers/post-payment-confirm.ts`** — The confirm handler is the expected increment site: it would call `paymentConfirmTotal.inc({ outcome })` after each confirm attempt.
 
 ## Notes
 
-- The file-level doc comment points to `modules/account/metrics.ts` for the rationale behind per-module metric placement and for how the overview endpoint reads counters *without* importing this file (avoids a runtime dependency from the read path into the module).
-- Only one counter exists here today; any new payment-domain counters should be added to this file rather than to the infrastructure layer.
+- The module doc-comment points to `modules/account/metrics.ts` as the reference implementation of the "metrics live in the module, not in infrastructure" convention. If you add a new counter here, follow that file's placement rules.
+- The overview endpoint reads these counters *without* importing this file (per the header comment); do not add a re-export from `infrastructure` or the metric will be double-counted in discovery.

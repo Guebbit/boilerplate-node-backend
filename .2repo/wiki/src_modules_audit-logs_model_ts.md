@@ -2,30 +2,30 @@
 
 ## Purpose
 
-Mongoose model for the persisted audit-trail collection. It is the queryable, durable half of the audit system: it exists so `GET /observability/audit` can answer "what has actor X done" from the API without a log backend (Loki/file) being wired up. It replaced a 200-entry in-process ring buffer that was per-worker, per-restart, and shared across all actors.
+Mongoose model, schema, and serialization transform for the persisted audit-log collection. It is the durable, queryable half of the audit system: the log line (written by `@infrastructure/observability/audit`) is the compliance record, while this collection exists so `GET /observability/audit` can answer "what has actor X done" from the API. Fields use **snake_case** deliberately — the document is returned verbatim as `AuditEventItem` in `openapi.yaml` and must match the shape a SIEM ingests.
 
 ## Key elements
 
-- **`AuditLogDocument`** — Interface extending Mongoose `Document`. Derived from `AuditEntry` (type-only import from `@infrastructure/observability/audit`) with `action` widened from the `AuditAction` union to `string`, because historical rows may carry renamed/retired actions.
-- **`AuditLogModel`** — `Model<AuditLogDocument>` type alias for use in schema/model generics.
-- **`retentionDays`** — Read once at import time via `environmentNumber('NODE_AUDIT_RETENTION_DAYS', 90, 1)`; feeds the TTL index.
-- **`auditLogSchema`** — Mongoose `Schema` with snake_case fields (`actor_user_id`, `actor_role`, `action`, `outcome`, `ip`, `user_agent`, `request_id`, `trace_id`, `target_type`, `target_id`, `metadata`, `timestamp`, `level`). Notable options: `timestamps: false` (entry carries its own action-time timestamp), `bufferCommands: false` (fire-and-forget; never queue while Mongo is down). Defines two compound indexes (`{actor_user_id, timestamp:-1}`, `{action, timestamp:-1}`) and a TTL index on `timestamp`.
-- **`applyAuditLogTransform`** — Serialization config built with `applySerialization`: drops `_id`/`__v`, disables virtuals, converts `timestamp` to an ISO-8601 string.
-- **`auditLogModel`** — The registered Mongoose model (`'AuditLog'`), the import entrypoint for repository/service code.
+- **`AuditLogDocument`** – `Document & Omit<AuditEntry, 'action'>` with `action` widened to `string`. Derived from `AuditEntry` (type-only import) so the two stay the same shape without duplication; the widening accounts for historical rows written by older builds.
+- **`AuditLogModel`** – Mongoose `Model<AuditLogDocument>` type alias.
+- **`auditLogSchema`** – Schema with `timestamps: false` (the entry stamps its own `timestamp` at action time) and `bufferCommands: false` (offline writes fail fast instead of queueing, since `record()` is fire-and-forget). Defines three indexes: two compound query indexes (`actor_user_id + timestamp desc`, `action + timestamp desc`) and a TTL index on `timestamp`.
+- **`retentionDays`** – Read once at import from `NODE_AUDIT_RETENTION_DAYS` (default 90). Consumed only by the TTL index at startup.
+- **`applyAuditLogTransform`** – Serialization for the admin dashboard. Drops `_id`/`__v`, disables Mongoose's `id` virtual, and converts `timestamp` to an ISO-8601 string to match `openapi.yaml`.
+- **`auditLogModel`** – The `model('AuditLog', …)` entrypoint consumed by the repository layer.
 
 ## Relationships
 
-- **`@infrastructure/observability/audit`** — Type-only import of `AuditEntry`; `AuditLogDocument` is a structural widening of it. No runtime dependency.
-- **`@infrastructure/persistence/serialize`** — Provides `applySerialization` used to build `applyAuditLogTransform`.
-- **`@infrastructure/runtime/environment`** — Provides `environmentNumber` for the retention-days default.
-- **`src/modules/audit-logs/repository.ts`** — Consumes `auditLogModel` / `AuditLogDocument` for read and write operations.
-- **`src/modules/audit-logs/service.ts`** — Higher-level service that calls the repository; its `record` call is the fire-and-forget path that motivated `bufferCommands: false`.
-- **Tests** (`repository.test.ts`, `retention.test.ts`, `service.test.ts`) — Exercise the model, retention TTL logic, and the service layer against this schema.
+- **`@infrastructure/observability/audit.ts`** – Source of the `AuditEntry` type (type-only import). No runtime dependency; the sink writes what it is handed and this model reads what was written, with no translation in either direction.
+- **`@infrastructure/persistence/serialize.ts`** – Provides `applySerialization`, which `applyAuditLogTransform` wraps with audit-specific options.
+- **`@infrastructure/runtime/environment.ts`** – Provides `environmentNumber`, used to read `NODE_AUDIT_RETENTION_DAYS` at import time.
+- **`src/modules/audit-logs/repository.ts`** – Consumes `auditLogModel` for CRUD operations against the collection.
+- **`src/modules/audit-logs/service.ts`** – Calls the repository; its `record()` method is the fire-and-forget contract that motivates `bufferCommands: false`.
+- **Tests** (`schema-contract`, `retention`, `service`, `repository` integration) – Verify field-level contract, TTL behaviour, service integration, and repository persistence respectively.
 
 ## Notes
 
-- **Field naming is snake_case on purpose.** The names match the `AuditEventItem` shape in `openapi.yaml`, which in turn mirrors the log-line keys a SIEM ingests. Renaming would require a mapping layer and break the admin dashboard.
-- **`action` is `string`, not `AuditAction`.** A row written by an older build may name a since-retired action; typing reads as the narrow union would be an unenforceable claim about history.
-- **`bufferCommands: false` is a deliberate exception** to the codebase default. Audit writes are fire-and-forget (the log line is the compliance record), so buffering only adds a 10 s timer per audited request during outages. It was diagnosed via a Jest worker that would not exit.
-- **TTL index is not hot-reloadable.** Changing `NODE_AUDIT_RETENTION_DAYS` after the index exists does nothing; you must drop and recreate it (use a migration under `db/migrations/` with `collMod`).
-- **`_id` is dropped, not renamed.** Audit entries have no per-document endpoint; exposing an id would invite one to be built. `virtuals` is explicitly off to prevent Mongoose's free `id` virtual from sneaking it back.
+- **snake_case is intentional and non-negotiable.** Renaming fields to camelCase would require a read-time mapping on every query response. Do not "fix" the naming.
+- **TTL index is not hot-reloadable.** Mongo does not modify an existing TTL index's `expireAfterSeconds`. Changing `NODE_AUDIT_RETENTION_DAYS` requires a `collMod` migration under `db/migrations/`; a restart alone is insufficient.
+- **`bufferCommands: false` is a deliberate exception.** Every other collection in this codebase buffers to ride out reconnections. Here, buffering was causing a 10 s timer per audited request to hold the event loop open (surfaced as a Jest worker-exit failure in `locale.test.ts`). The log line is the compliance record; the DB row is a queryable convenience.
+- **No `id` virtual exists on purpose.** Entries are read as a stream only; there is no `GET /…/:id` endpoint and there should not be. Exposing an id would invite one.
+- **`metadata` is `Schema.Types.Mixed` by design.** The audit vocabulary is open-ended; typing it would require a schema change for every new call site.

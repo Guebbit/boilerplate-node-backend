@@ -2,34 +2,35 @@
 
 ## Purpose
 
-Explains the four-tier module architecture (app → modules → kernel → infrastructure) and the dependency rules that make adding or removing a domain a one-folder-plus-one-line operation. It exists so a reader never has to guess which tier a file belongs to.
+Explains the four-tier directory architecture (`app` → `modules` → `kernel` → `infrastructure`), the one-directional dependency rule, and the exact criterion for deciding which tier a file belongs to. Exists so that adding or removing a domain is a mechanical act (one folder, one registry line) and so the `kernel`/`infrastructure` boundary — the line people most often cross — has a single unambiguous test.
 
 ## Key elements
 
-- **Four-tier table** — defines what each tier knows about, what it may import, and the folder it occupies. Every arrow points down; lint enforces both directions of each edge.
-- **Infrastructure / kernel boundary question** — the single decision test: "If this project had no modules at all, would this file still make sense?" Yes → infrastructure; No → kernel.
-- **Kernel file inventory (5 files)** — `registry.ts`, `events.ts`, `authentication.ts`, `middlewares/authorizations.ts`, `seed-accounts.ts`. Each has a one-line justification for why it cannot be infrastructure.
-- **Infrastructure file inventory** — caches, locale, observability, rate limiting, email/PDF workers, route-flag toggle, worker registration. All domain-free but not kernel because they don't dissolve without modules.
-- **Naming rationale** — documents why this repo uses `kernel` (not `platform`, `core`, `common`) and `infrastructure` (not `base`, `utils`), with a cross-project comparison table (VS Code, NestJS, Angular, Spring, Backstage).
-- **Authorization port pattern** — `authorizations.ts` lives in kernel behind a port that `account` registers; prevents a `users → account → users` cycle and an upward `modules → app` import.
-- **"App" tier justification** — holds bootstrap, system routes, and `modules.ts` because they are the only code allowed to know which domains exist.
-- **Where everything else sits** — a flowchart from process entry through `modules.ts` → modules → kernel → infrastructure.
+- **Four-tier table** — `src/app` (assembly), `src/modules/<name>` (one domain each), `src/kernel` (the module system itself), `src/infrastructure` (substrate). Arrows point down only; lint enforces both directions.
+- **`src/kernel/` (5 files)** — `registry.ts` (AppModule, DAG check, `registerModules`), `events.ts` (inter-module messaging), `authentication.ts` (auth port), `middlewares/authorizations.ts` (guard consuming that port), `seed-accounts.ts` (shared demo IDs owned by no single module).
+- **Infrastructure/kernel boundary test** — "If this project had no modules, would this file still make sense?" Yes → infrastructure; No → kernel. Being domain-free alone is insufficient.
+- **Auth port pattern** — kernel declares "turn this token into a user"; `account` module registers an implementation at boot. Avoids a `users ↔ account` cycle and prevents modules from importing upward into `app`.
+- **Naming rationale** — why `kernel` (microkernel: loads plugins it has never heard of) and `infrastructure` (hexagonal substrate) were chosen over `platform`, `core`, `common`, `base`; documents the overloading problem with "core" across NestJS, Angular, Spring, VS Code, Backstage.
+- **"App" tier justification** — holds bootstrap steps and the system route; the only tier allowed to know *which* domains exist. Test: does it need to know domain identities?
+- **Middleware / adapter placement table** — response cache, locale, observability, rate-limit, route-flag, email/PDF workers all live in `infrastructure` because none of them require module knowledge.
 
 ## Relationships
 
-- **`docs/theory/index.md`** — directly linked: this page defers to it for the definitions of "domain" and "barrel".
-- **`docs/theory/architecture.md`** — sibling theory page; `modules.md` covers the tier structure that `architecture.md` describes at a higher level.
-- **`docs/theory/layers.md`** — complementary: `layers.md` covers the conceptual layering; `modules.md` pins each layer to a concrete folder and file set.
-- **`docs/theory/domain-layer.md`** — explains the domain (modules) tier in depth; `modules.md` places that tier in the four-tier dependency graph.
-- **`docs/theory/module-lifecycle.md`** — covers what happens at boot (registration, DAG check, event wiring); `modules.md` defines *where* those steps live (kernel vs. app).
-- **`docs/theory/request-flow.md`** — traces a request through tiers; `modules.md` defines the tier boundaries that the flow crosses.
-- **`docs/reference/src-modules.md`** — the per-module reference; `modules.md` is the architectural page that explains the folder structure those references live in.
-- **`docs/reference/src-app.md`** — documents the app tier code; `modules.md` justifies why bootstrap and system routes sit there.
-- **`docs/modules/index.md`** — the practical "list of domains" page; `modules.md` is the theory behind why that list is a single array in `modules.ts`.
+- **`docs/theory/index.md`** — parent page; defines the shared vocabulary (domain, barrel, tier) that this page references.
+- **`docs/theory/layers.md`** — broader layering discussion; this page is the concrete instantiation of the tier rule for `src/`.
+- **`docs/theory/architecture.md`** — overall system architecture; this page covers the directory-level dependency contract that architecture enforces.
+- **`docs/theory/module-lifecycle.md`** — covers what happens at runtime when a module loads; this page covers *where* the code lives and *who may import whom*.
+- **`docs/theory/request-flow.md`** — traces a request through the tiers; this page explains why the tiers are ordered the way they are.
+- **`docs/theory/domain-layer.md`** — domain-layer responsibilities; this page's "Modules" tier row and the barrel rule connect to it.
+- **`docs/reference/src-modules.md`** — per-module API reference; this page explains the structural rules those modules follow.
+- **`docs/reference/src-app.md`** — reference for `src/app` and `src/modules.ts`; this page justifies why those files sit at the top tier.
+- **`docs/modules/index.md`** — catalog of concrete domains; this page defines the folder-per-domain rule that catalog assumes.
+- **`docs/getting-started.md`** — onboarding; links here as the conceptual prerequisite before reading module code.
+- **`README.md`** — top-level project overview; this page is the "why" behind the directory layout it lists.
 
 ## Notes
 
-- The `kernel` vs. `infrastructure` distinction is the most commonly confused boundary. The operational test is deletion: if you `rm -rf src/modules/` and the file loses its purpose, it is kernel.
-- `seed-accounts.ts` looks like it belongs in the `users` module but lives in kernel to avoid three extra registry edges and a dangling-reference trap. Its own header carries the full argument.
-- "Two modules need it" is explicitly *not* a reason to push a shared rule into infrastructure or kernel. It belongs in the owning domain's barrel.
-- The naming section is load-bearing: the words `kernel` and `infrastructure` are deliberately chosen over `platform`, `core`, `common`, and `base`. A rename is discouraged as "motion rather than progress."
+- The `kernel` tier is deliberately five files. If a new file is added there, the boundary test must be re-applied; "two modules share this rule" is explicitly *not* a valid reason to place it in kernel or infrastructure — the rule belongs to the owning domain's barrel.
+- `seed-accounts.ts` is the most common "why is this in kernel?" question. It holds demo-ID *handles* (not user records) so that `orders`, `cart`, and `wishlist` can reference a person without importing `@modules/users`. The file's own header comment carries the full argument.
+- The naming section documents a deliberate decision *not* to rename `kernel` → `platform` despite VS Code precedent. The names are locked; a rename would be "motion rather than progress."
+- `src/modules.ts` and `app.ts` sit beside `src/app/` (not inside it) because the registry names every enabled domain — nothing below `app` may do that.

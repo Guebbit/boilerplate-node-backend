@@ -1,32 +1,29 @@
 # src/modules/orders/routes.ts
 
 ## Purpose
-Express router that wires all HTTP endpoints for order CRUD and cancellation to their controllers, applying shared authentication, role-based authorization, response caching, and cache invalidation in the correct order.
+
+Express router that defines every HTTP endpoint for the orders module. It layers authentication, authorization, cache invalidation, and route-flag middleware around thin controller handlers so that callers never need to know those concerns.
 
 ## Key elements
-- **`router`** (exported) — the Express `Router` instance consumed by the orders module; all order endpoints hang off it.
-- **Route table** — the following handlers are registered (order matters for Express matching):
-  - `POST /search` → `getOrders` (cached 1 h, key derived from `searchOrdersKeyParameters`)
-  - `GET /` → `getOrders` (same cache config; non-admin sees own orders only)
-  - `POST /` → `writeOrders` (admin; invalidates `orders` + `products` tags)
-  - `PUT /` → `writeOrders` (admin; id in body)
-  - `DELETE /` → `deleteOrders` (admin; id in body)
-  - `POST /:id/cancel` → `postCancelOrder` (owner or admin; invalidates `orders` + `products`)
-  - `GET /:id/invoice` → `getOrderInvoice` (cached 1 h)
-  - `GET /:id` → `getOrderItem` (cached 1 h)
-  - `PUT /:id` → `writeOrders` (admin)
-  - `DELETE /:id` → `deleteOrders` (admin; soft delete unless `?hardDelete=true`)
-  - `DELETE /:id/hard` → `deleteOrders` (admin; `routeFlag('hardDelete')` injects the flag)
+
+- **`router`** – The exported `Router` instance. All routes are mounted here and the module-level `router.use(getAuth, isAuth)` enforces authentication on every endpoint.
+- **`cacheOrdersSearch`** – A pre-built `searchCache('orders', searchOrdersKeyParameters)` middleware shared by `POST /search` and `GET /`.
+- **Route table** – Eleven endpoints covering list, create, update, delete, cancel, invoice, and hard-delete. Static segments (`/search`, `/:id/invoice`, `/:id/hard`) are deliberately ordered before the generic `/:id` so Express does not swallow them.
+- **Authorization split** – `isAdmin` gates all mutating routes except `POST /:id/cancel`, which is the single write a non-admin owner can perform.
 
 ## Relationships
-- **`src/modules/orders/module.ts`** — imports and mounts the exported `router` into the application's route tree.
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth` (applied globally via `router.use`) and `isAdmin` (applied per-route to admin-only mutations).
-- **`src/infrastructure/http/middlewares/cache.ts`** — `setCache` wraps read routes with a 1 h TTL keyed by the `orders` tag; `invalidateCache` is inserted before mutation handlers to bust the `orders` (and sometimes `products`) tag.
-- **`src/infrastructure/http/middlewares/route-flag.ts`** — `routeFlag('hardDelete')` is used on the `/:id/hard` path to set the hard-delete flag programmatically instead of via query string.
-- **Controllers** (`get-orders`, `write-orders`, `delete-orders`, `get-order-item`, `get-order-invoice`, `post-cancel-order`) — each is the terminal handler for one or more routes; `getOrders` is shared between the `/search` and `/` GET endpoints.
+
+- **`@kernel/middlewares/authorizations`** – Supplies `getAuth`, `isAuth`, and `isAdmin`; applied globally and per-route.
+- **`@infrastructure/http/middlewares/cache`** – Supplies `searchCache`, `setCache`, and `invalidateCache`; used to key read caches and to bust `['orders']` / `['orders', 'products']` tags on every write.
+- **`@infrastructure/http/middlewares/route-flag`** – Supplies `routeFlag('hardDelete')` so `DELETE /:id/hard` sets the same flag as a `?hardDelete=true` query parameter on `DELETE /:id`.
+- **Controllers** (`get-orders`, `write-orders`, `delete-orders`, `get-order-item`, `get-order-invoice`, `post-cancel-order`) – Imported as the terminal handlers for each route.
+- **`src/modules/orders/module.ts`** – Mounts the exported `router` into the application's route tree.
+- **`src/modules/orders/tests/unit/routes.test.ts`** – Unit-test coverage for this file's route wiring.
+- **`tests/cross-cutting/authenticated-controllers.test.ts`** / **`write-routes-are-guarded.test.ts`** – Cross-cutting suites that assert auth and admin guards are present on the routes defined here.
 
 ## Notes
-- Route order is intentional: `/search`, `/:id/invoice`, and `/:id/cancel` are declared before the bare `/:id` so Express matches them first. Swapping them silently breaks those endpoints.
-- `DELETE /` and `PUT /` expect the order id **in the request body**, whereas `/:id` variants take it from the path. Clients must use the correct shape.
-- The cancel endpoint is the only write a non-admin customer may perform; authorization for it is enforced inside the service layer (conditional write scoped to the caller), not by an `isAdmin` middleware here.
-- Cache tags are the string literals `'orders'` and `'products'`; any new mutation route must include the appropriate tag in `invalidateCache` to avoid serving stale data.
+
+- **Order is load-bearing.** `POST /search`, `GET /:id/invoice`, and `DELETE /:id/hard` must remain above `GET /:id` / `DELETE /:id`; reordering them silently breaks those paths.
+- **Two hard-delete entry points.** `DELETE /:id?hardDelete=true` and `DELETE /:id/hard` hit the same `deleteOrders` handler; the `routeFlag` middleware normalises the path-based form into the same query-parameter contract.
+- **Cache TTLs are hardcoded** at 3 600 s for `/:id` and `/:id/invoice` reads; there is no configuration or override.
+- **`POST /:id/cancel` invalidates both `orders` and `products` tags**, while other admin writes invalidate only `orders` (except `POST /` create, which also touches `products`).

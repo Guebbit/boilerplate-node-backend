@@ -2,27 +2,26 @@
 
 ## Purpose
 
-Unit test for the locales Express router. It locks in three invariants that are easy to break during refactoring: the exact set and order of mounted routes, the per-route authorization guard chain (public reads carry no auth guard; admin writes carry all three in order), and the caching contract (shared Redis cache with 1-hour TTL and `browserRevalidate` on public reads, no cache on the editing screen, tag invalidation on every write). The file header explains *why* the two design choices it guards exist, so a future "cleanup" that inverts them fails loudly.
+Unit test that pins the locale router's contract: which endpoints exist and in what order, which middleware guards each carries, and how caching is configured. It exists so that accidental "simplifications" (adding a router-level auth gate, reordering paths, dropping `browserRevalidate`, caching the editor screen) fail loudly rather than degrading silently in production.
 
 ## Key elements
 
-- **`PUBLIC`** – Array of four route signatures (`GET /`, `GET /tenants`, `GET /:locale/messages`, `GET /:locale`) representing the anonymous-facing reads.
-- **`ADMIN`** – Array of nine route signatures covering all writes plus the two admin-only reads (`GET /:locale/entries`, `GET /:locale/entries/:entryId`).
-- **`chainOf(signature)`** – Helper that resolves a `"METHOD /path"` string to its full middleware chain via `routeTable`.
-- **`routeTable`, `routeSignatures`, `guardsOn`** – Test utilities imported from `@tests/routes`; they introspect the Express router's internal stack to extract paths, method+path pairs, and named guards without issuing HTTP requests.
-- **`jest.mock('@infrastructure/http/middlewares/cache', …)`** – Replaces the real cache middleware with `cacheMock()` so the test can assert on its invocation arguments (TTL, tags, `browserRevalidate`) in the chain.
-- **Three `describe` blocks** – "what is mounted", "authorization", "caching" — each group asserts one dimension of the router contract.
-- **"Ungoverned" sweep test** – Filters all mounted signatures for any that are neither in `PUBLIC` nor carry `isAdmin`; asserts the result is empty. Catches routes added later with no guard at all.
+- **`chainOf(signature)`** — local helper; looks up a route by `"METHOD /path"` string and returns its middleware chain.
+- **`PUBLIC`** — array of the four visitor-readable signatures (`GET /`, `GET /tenants`, `GET /:locale/messages`, `GET /:locale`).
+- **`ADMIN`** — array of the nine admin-tier signatures (CRUD on locales and entries, plus `GET /:locale/entries`).
+- **describe "what is mounted"** — asserts exact route set/order and that `/tenants` precedes `/:locale` (Express first-match rule).
+- **describe "authorization"** — asserts public routes carry no `isAuth`/`isAdmin`; `GET /` carries `getAuth` but not `isAuth`; every ADMIN route names all three guards in order; no route escapes both lists.
+- **describe "caching"** — asserts `setCache(3600…)` with `tags: ['locales']` and `browserRevalidate: true` on all PUBLIC reads; `GET /:locale/entries` has no cache middleware; all write ADMIN routes call `invalidateCache([locales])`.
+- **`jest.mock` for cache middleware** — replaced with `cacheMock()` from test support so chain inspection is deterministic.
 
 ## Relationships
 
-- **`src/modules/locales/routes.ts`** – The module under test. Exports `router`; this test file imports it and asserts on its route table, guard chains, and cache middleware invocations.
-- **`tests/support/routes.ts`** – Provides the three introspection utilities (`routeTable`, `routeSignatures`, `guardsOn`) and the `cacheMock` factory used by the jest mock. Without this helper the test would need to walk Express's internal `router.stack` directly.
+- **`src/modules/locales/routes.ts`** — the module under test; the file imports its `router` export and inspects every route's path, method, and middleware chain.
+- **`tests/support/routes.ts`** — provides the inspection utilities (`routeTable`, `routeSignatures`, `guardsOn`, `optionsOf`) and `cacheMock()` used throughout; this file is the primary consumer of those helpers.
 
 ## Notes
 
-- `GET /` is the one public route that includes `getAuth` (to list inactive languages for an admin's manifest) but must **not** include `isAuth`. The test asserts both conditions explicitly; adding `isAuth` here would break anonymous access.
-- Route order is part of the contract: `/tenants` must appear before `/:locale` in the stack, otherwise Express matches `tenants` as a locale code and the tenants endpoint 404s.
-- There is deliberately no `router.use(isAuth, isAdmin)` gate. Each admin route declares all three guards inline in the order `getAuth → isAuth → isAdmin`. The per-route ordering is asserted with `indexOf` comparisons.
-- The cache test for `GET /:locale/entries` asserts the route has **no** `setCache` call at all — it is the editing screen and must always be fresh.
-- `browserRevalidate=true` is asserted on every public cached route so a translator's browser doesn't serve a stale copy after Redis is invalidated.
+- The test is intentionally written as a *specification*: the file header states that reads are public and guards are per-route by design. Any refactor that "tidies" the router by adding a shared gate will break the per-route guard-order assertions.
+- `GET /:locale/entries` is the one ADMIN-listed route that must **not** be cached; it is excluded from the invalidate-cache loop and separately asserted cache-free.
+- The `getAuth` on `GET /` is *optional* (no `isAuth` beside it); the test asserts its presence but explicitly forbids `isAuth`, making the asymmetric intent unambiguous.
+- Ordering assertion (`/tenants` before `/:locale`) is a guard against Express's first-match behavior; a naive route reorder would silently 404 the tenants endpoint.

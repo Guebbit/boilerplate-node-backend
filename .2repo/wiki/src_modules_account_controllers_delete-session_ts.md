@@ -2,29 +2,27 @@
 
 ## Purpose
 
-Controller for `DELETE /account/sessions/:sessionId` — revokes a single refresh-token session belonging to the authenticated caller ("log out that device"). It exists to let a user terminate any of their own sessions from the account management UI without affecting the current cookie-based session.
+Thin HTTP adapter for `DELETE /account/sessions/:sessionId`. It extracts the authenticated caller's id and the target session id from the request, delegates the actual revocation to `accountService.sessionRevoke`, and maps the result to a `200` or `404` HTTP response.
 
 ## Key elements
 
-- **`deleteSession`** (exported) — The sole handler. Reads the caller's user id via `authContextOf`, extracts `sessionId` from route params, calls `accountService.sessionRevoke`, then branches on `modifiedCount`:
-  - `0` → `404` with `t('account.sessions.not-found')`
-  - `> 0` → `200` with `t('account.sessions.revoked')`
-  - Exception → delegated to `catchAs(response, 'deleteSession')`
+- **`deleteSession(request, response)`** — sole export. Reads `authContextOf(request)` for the caller's user id (guaranteed present by upstream `isAuth` middleware) and `request.params.sessionId`. Calls `accountService.sessionRevoke(id, sessionId, callerContextOf(request))`. Responds with `200` + i18n `"account.sessions.revoked"` on success, or `404` + `"account.sessions.not-found"` when `modifiedCount === 0`. Errors are funnelled through `catchAs`.
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `src/modules/account/routes.ts` | Registers this handler on the `DELETE /account/sessions/:sessionId` route. |
-| `src/modules/account/services/index.ts` | Provides `accountService.sessionRevoke(id, sessionId, callerCtx)` which performs the actual DB update. |
-| `src/infrastructure/http/request.ts` | `authContextOf` extracts the authenticated user id; `callerContextOf` packages IP/user-agent metadata passed to the service. |
-| `src/infrastructure/http/response.ts` | `successResponse` / `rejectResponse` shape the JSON envelopes. |
-| `src/infrastructure/http/controller.ts` | `catchAs` is the uniform error-to-HTTP mapping used in the `.catch` branch. |
-| `src/infrastructure/i18n/index.ts` | `t()` localizes the success/not-found messages. |
+| `src/modules/account/routes.ts` | Wires the `DELETE /account/sessions/:sessionId` route to `deleteSession` (behind `isAuth`). |
+| `src/modules/account/services/index.ts` | Source of `accountService`; this controller calls `sessionRevoke`. |
+| `src/infrastructure/http/controller.ts` | Provides `catchAs`, the unified error-to-HTTP mapper. |
+| `src/infrastructure/http/request.ts` | Provides `authContextOf` and `callerContextOf` for pulling user id / request metadata. |
+| `src/infrastructure/http/response.ts` | Provides `successResponse` / `rejectResponse` helpers. |
+| `src/infrastructure/i18n/index.ts` | Provides the `t()` translation function for user-facing messages. |
+| `src/infrastructure/i18n/context.ts` | Backing context for the `t()` calls (resolved per-request). |
 
 ## Notes
 
-- **Auth is pre-ensured** by an upstream `isAuth` middleware; the controller does not check tokens itself.
-- **Cross-user / wrong-type ids return 404, not 403.** The repository filters on both the caller's document and `type: 'refresh'`, so a foreign id or a pending reset/verify token id simply matches zero rows.
-- **Malformed ids return 422.** `toObjectId` throws inside the service; `catchAs` maps that to a 422. This keeps the 404/422 split consistent with every other id-taking endpoint.
-- **Revoking the current session is explicitly allowed.** Unlike `POST /account/logout`, this endpoint does not clear the `Set-Cookie` header; the current client's next refresh attempt will simply fail.
+- The service-layer query is filtered to the caller's document **and** `type: refresh`, so a token id belonging to another user, or to a pending reset/verify/delete flow, yields `modifiedCount === 0` → `404` rather than leaking existence.
+- Revoking the *current* session is intentional and valid; it is equivalent to `POST /account/logout` except that no cookie is cleared (this endpoint cannot clear another client's cookie anyway).
+- Malformed `sessionId` values are rejected with `422` by `toObjectId` inside the service layer — same convention as every other id-taking endpoint.
+- The handler uses promise `.then/.catch` rather than `async/await`, consistent with the controller-layer style seen elsewhere.

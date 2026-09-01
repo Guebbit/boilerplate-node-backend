@@ -2,21 +2,22 @@
 
 ## Purpose
 
-Resolves delivery email copy into finished, render-ready strings. Each exported function takes a locale and domain-specific variables, runs them through the i18n translator, and returns a fully-populated `EmailContent` object so that whatever renders the email later performs zero further string resolution.
+Resolves the user-facing copy for delivery emails into finished, fully-interpolated strings at call time. The caller passes the locale and variable values; the returned object is ready for the mailer to render without further i18n resolution. Follows the same convention as `@modules/account/emails`.
 
 ## Key elements
 
-- **`shipmentShippedEmail(locale, name, trackingCode): EmailContent`** — The only export. Builds the "your order is on its way" email (template `delivery.shipment-shipped`). Translates subject, greeting, body, tracking line, and footer via the `delivery.email-shipped.*` i18n namespace and returns them inside the standard `EmailContent` shape (template, subject, data).
+- **`shipmentShippedEmail(locale, name, trackingCode): EmailContent`** — The sole export. Builds a complete `EmailContent` object for the "order shipped" notification: sets the template key `delivery.shipment-shipped`, a translated subject, and a `data` bag containing greeting, body, tracking line (interpolated with `trackingCode`), page meta fields, and a shared email footer. `pageMetaLinks` is always an empty array.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/index.ts`** — Provides the `translator` factory used to obtain a locale-scoped translation function.
-- **`src/infrastructure/adapters/mailer.ts`** — Supplies the `EmailContent` type that defines the return shape (template / subject / data contract) the mailer adapter expects.
-- **`src/modules/delivery/service.ts`** — The delivery service that calls `shipmentShippedEmail` when an order transitions to `shipped`, then passes the result to the mailer.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Exercises email templates end-to-end; this file's output shape is one of the templates under test.
+- **`@infrastructure/adapters/mailer`** — Imports the `EmailContent` type that defines the return shape of every function in this file.
+- **`@infrastructure/i18n`** (index / context) — Imports `translator`, which is called with the `locale` argument to produce a bound `t` function used for all string lookups.
+- **`src/modules/delivery/service.ts`** — The delivery service is the expected caller that invokes `shipmentShippedEmail` when an order transitions to `shipped`.
+- **`src/modules/delivery/tests/unit/emails.test.ts`** — Unit tests that assert the resolved strings and structure of `shipmentShippedEmail`.
+- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Validates that the template key `delivery.shipment-shipped` referenced here exists in the mailer's template registry.
 
 ## Notes
 
-- The header comment explicitly cross-references `@modules/account/emails` for the shared convention: *language is an argument, output is finished text, the renderer resolves nothing*. If you add a new delivery email, follow the same pattern in this file rather than inlining translation calls at the render site.
-- `data.pageMetaLinks` is always an empty array in the current template; include it for forward-compatibility with the mailer's HTML shell.
-- Only one email variant exists in this file so far. The file is intentionally separate from `service.ts` so that copy and orchestration stay decoupled.
+- The module doc comment cross-references `@modules/account/emails` as the origin of the "pass locale in, get finished text out" rule; keep both files in sync if the convention changes.
+- There is exactly one email in this file. If more delivery events (e.g. `delivered`, `failed`) are added, they belong here as additional exports following the same pattern.
+- `t` is scoped per-call (created inside the function), so there is no shared translator state across invocations.

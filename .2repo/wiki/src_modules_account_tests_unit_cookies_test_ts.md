@@ -2,26 +2,25 @@
 
 ## Purpose
 
-Unit tests for the four cookie functions exported by `src/modules/account/session/cookies.ts`. They verify that the `jwt` refresh-token cookie and the `isAuth` UI-hint cookie are set and cleared with the correct flag combination (httpOnly, secure, sameSite, path, maxAge), because a single wrong flag turns an XSS bug into an account takeover or a logout into a no-op.
+Unit tests for the four cookie helpers in `session/cookies.ts`. They pin down the security-relevant flag combinations (httpOnly, secure, sameSite, path) for both the `jwt` credential cookie and the `isAuth` frontend-hint cookie, and verify that the "destroy" variants emit flag sets that will actually cause the browser to drop the cookie on logout.
 
 ## Key elements
 
-- **`makeResponse()`** – local helper that returns a plain object with `cookie: jest.fn()` and `clearCookie: jest.fn()`, cast via `asStub` to a typed `Response`. No external mock framework is needed beyond this.
-- **`describe('createRefreshCookie')`** – asserts `name = 'jwt'`, `httpOnly: true`, `sameSite: 'lax'`, `path: '/'`, `secure` tracks `NODE_ENV`, and `maxAge` derives from the passed `RefreshTokenExpiryTime` tier (or falls back to the access-token window).
-- **`describe('destroyRefreshCookie')`** – asserts `clearCookie` is called with the *same* flag set used at creation; explicitly checks production `secure` propagation.
-- **`describe('createLoggedCookie')`** – asserts `name = 'isAuth'`, value `'true'`, **no** `httpOnly` (frontend must read it), and `maxAge` matches the refresh-cookie tier so the hint never outlives the credential.
+- **`makeResponse()`** – local helper that wraps `asStub` to return a typed Express `Response` whose `cookie` and `clearCookie` are `jest.fn()`s, so each test can inspect the exact `(name, value, options)` triple passed to Express.
+- **`describe('createRefreshCookie')`** – asserts `jwt` is set with `httpOnly: true`, `sameSite: 'lax'`, `path: '/'`; `secure` tracks `NODE_ENV`; `maxAge` is derived from the requested `RefreshTokenExpiryTime` tier or falls back to the access-token window.
+- **`describe('destroyRefreshCookie')`** – asserts `clearCookie('jwt', …)` carries the same flag subset used at set-time, including the environment-dependent `secure` flag.
+- **`describe('createLoggedCookie')`** – asserts `isAuth` is set to the literal `'true'`, is **not** `httpOnly` (explicitly checked as `undefined`), and shares the refresh cookie's `maxAge`.
 - **`describe('destroyLoggedCookie')`** – asserts `clearCookie('isAuth', { path: '/' })`.
-- **`beforeEach` / `afterEach`** – sets real env values (`NODE_TOKEN_REFRESH_TIME_SHORT = '3600'`, `NODE_TOKEN_ACCESS_TIME = '900'`) so `maxAge` assertions exercise actual config wiring; restores original env (handling `undefined` via `delete`).
+- **`beforeEach` / `afterEach`** – save/restore `NODE_ENV`, `NODE_TOKEN_REFRESH_TIME_SHORT`, and `NODE_TOKEN_ACCESS_TIME` so each test runs in isolation with known expiry values (3600 s / 900 s).
 
 ## Relationships
 
-- **`src/modules/account/session/cookies.ts`** – the module under test; all four exported functions (`createRefreshCookie`, `destroyRefreshCookie`, `createLoggedCookie`, `destroyLoggedCookie`) are imported and exercised.
-- **`src/modules/account/session/config.ts`** – supplies `RefreshTokenExpiryTime`, passed as the expiry-tier argument in the `createRefreshCookie` / `createLoggedCookie` calls.
-- **`tests/support/stub.ts`** – provides `asStub`, a type-level cast used to make the plain mock object assignable to `Response & { cookie: jest.Mock; clearCookie: jest.Mock }`.
+- **`src/modules/account/session/cookies.ts`** – the module under test; this file imports and exercises all four exported helpers (`createRefreshCookie`, `destroyRefreshCookie`, `createLoggedCookie`, `destroyLoggedCookie`).
+- **`src/modules/account/session/config.ts`** – provides the `RefreshTokenExpiryTime` enum used as the tier argument; the tests depend on the underlying env-var values this config reads.
+- **`tests/support/stub.ts`** – supplies the `asStub` type-guard used to type the mock Response without asserting on runtime values.
 
 ## Notes
 
-- Flags are asserted **individually** (not via a single `toEqual` blob) so a regression that swaps `httpOnly` between the two cookies is caught immediately.
-- The `secure` flag is tested in two separate `it` blocks by toggling `NODE_ENV`; there is no global mock of `process.env` — the real variable is mutated and restored.
-- `asStub` is a compile-time-only assertion; at runtime `makeResponse()` just returns an object with two `jest.fn()`s. Do not expect `response.cookie` to carry any Express internals.
-- The test file header comment (the long doc block) doubles as a design rationale for *why* each flag matters — treat it as the spec these tests encode.
+- The `isAuth` `httpOnly` assertion uses `toBeUndefined()` rather than `toBe(false)`. This is intentional: it catches a future refactor that might set `httpOnly: false` explicitly, which some cookie libraries treat differently from the flag being absent.
+- `maxAge` assertions use the real numeric values from the env vars (e.g. `3_600_000`) rather than mocking the config module, so a broken wiring in `config.ts` (e.g. seconds vs. milliseconds) would be caught here.
+- The destroy tests assert only the flags that matter for browser matching (name + path + security flags). They do **not** assert `maxAge` on `clearCookie`, because a zero/negative expiry is the mechanism by which `clearCookie` works and is not a meaningful flag to pin.

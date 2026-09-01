@@ -2,28 +2,29 @@
 
 ## Purpose
 
-Integration test that pins the **declarative schema contract** of the User Mongoose model — defaults, `select: false`, `required`, unique index, and `toJSON` shape — against a real MongoDB instance. It exists because these guarantees live in schema options, not in repository logic, and no other spec asserts them.
+Integration tests that pin Mongoose schema-level guarantees — `select: false` on credentials, `default` values, the bcrypt hash, the `unique` email index, and `toJSON` serialization shape. They run against a real MongoDB instance because these are Mongoose's own runtime behaviors; a mocked model would only re-assert the mock's opinion, not the actual schema.
 
 ## Key elements
 
-- **`describe('user schema', …)`** — single suite, six cases:
-  - *hides password and tokens from an ordinary read* — asserts `findById` returns `undefined` (not `null`/empty) for `password` and `tokens`.
-  - *exposes credentials only through the explicit selector* — asserts `findByIdWithCredentials` returns a `String` password.
-  - *hashes the password rather than storing it verbatim* — matches the `^\$2[aby]\$` bcrypt prefix.
-  - *defaults admin to false* — creates a user without `admin` and expects `false`.
-  - *serialises to id, never _id, __v, password or tokens* — inspects the `toJSON()` output shape.
-  - *enforces email uniqueness at the database level* — expects an `E11000` / duplicate-key error on a second insert with the same email.
+- **`describe('user schema')`** — single top-level block containing six focused `it` cases.
+- **"hides password and tokens from an ordinary read"** — verifies `findById` returns `undefined` (not `null`/`[]`) for `password` and `tokens`, confirming `select: false` is active.
+- **"exposes credentials only through the explicit selector"** — confirms `findByIdWithCredentials` *does* return the hashed password.
+- **"hashes the password rather than storing it verbatim"** — asserts the stored value matches `/^\$2[aby]\$/` (bcrypt prefix), not just "differs from input."
+- **"defaults admin to false"** — creates a user without `admin` and asserts the field resolves to `false` (privilege-by-omission guard).
+- **"serialises to id, never _id, __v, password or tokens"** — checks `toJSON()` output: `id` present as string, `_id`/`__v`/`password`/`tokens` absent.
+- **"enforces email uniqueness at the database level"** — expects a duplicate insert to reject with a Mongo `E11000` / "duplicate key" error, pinning the unique index that `authService.signup`'s non-atomic `findOne`-then-insert flow depends on.
 
 ## Relationships
 
-- **`src/modules/users/index.ts`** — imported as `@modules/users`; provides the `userRepository` under test.
-- **`src/modules/users/repository.ts`** — source of `userRepository` methods called here (`findById`, `findByIdWithCredentials`, `create`).
-- **`src/modules/users/tests/factory.ts`** — imported as `@modules/users/tests/factory`; supplies `createUser` which builds and persists a user in the test DB.
-- **`tests/support/setup-test-db.ts`** — imported as `@tests/setup-test-db`; `setupTestDb()` spins up (and tears down) a real MongoDB instance for the suite.
+- **`src/modules/users/index.ts`** — source of the `userRepository` import (`@modules/users`). The repository methods under test (`findById`, `findByIdWithCredentials`, `create`) are re-exported through this barrel.
+- **`src/modules/users/repository.ts`** — not imported directly here; consumed indirectly via the `index.ts` re-export. Its method implementations are what the assertions actually exercise.
+- **`src/modules/users/tests/fixtures.ts`** — provides `createUser`, the shared helper that inserts a fully-populated user so each test can focus on a single schema property.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, called once at module scope to spin up/tear down the dedicated test database for these integration tests.
 
 ## Notes
 
-- Uses a **real MongoDB** (via `setupTestDb`) rather than a mocked Mongoose model, because the assertions target Mongoose's own handling of `default`, `select`, `unique`, and `toJSON` — a mock would only assert the mock's interpretation.
-- The email-uniqueness test is deliberately **not** a concurrency test; it pins the index constraint that the separate `tests/integration/concurrency/auth-races.test.ts` race scenario depends on. If a schema edit drops `unique`, this file fails deterministically instead of a timing-dependent test.
-- The `password` assertion after creation uses the literal `'Password1!'` — this is the factory's known default, not a value the test chose. Changing the factory's default password without updating this assertion will break the hash test.
-- The `as never` cast in the `admin` default test acknowledges that the full `create` signature (likely requiring more fields) is intentionally bypassed to isolate the default behaviour.
+- **Real Mongo, no mocks.** The file header explicitly states the rationale: `default`, `select: false`, and the unique index are Mongoose/Mongo behaviors that a Jest mock would simulate rather than exercise.
+- **`undefined` vs. empty array.** The `select: false` assertion deliberately checks `toBeUndefined()` — a stronger guarantee than "selected but blank," since an unselected field has nothing to accidentally serialise.
+- **`as never` cast** on the `create` call in the admin test: the fixture's `createUser` likely includes fields (e.g. `tokens`) that this minimal literal omits, so the cast silences a type mismatch that is intentional here.
+- **Email-uniqueness test is a safety net, not a race test.** The actual concurrency scenario lives in `tests/integration/concurrency/auth-races.test.ts`; this case only ensures a schema edit that drops `unique` is caught immediately.
+- **bcrypt prefix regex** (`$2[aby]$`) matches both legacy and modern bcrypt salt versions. If the project ever migrates to a different KDF, this assertion must be updated in lockstep.

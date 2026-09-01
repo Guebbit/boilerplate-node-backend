@@ -2,21 +2,20 @@
 
 ## Purpose
 
-Thin Express controller that exposes `GET /products/categories`, returning every category and tag in the public catalogue with counts. It exists to give the storefront its filter-chip data and is intentionally as thin as possible: delegate to the service, format the response, and funnel errors through a shared handler.
+A thin HTTP controller that exposes the product service's `facets()` method as a `GET /products/categories` endpoint. It translates the service result into the standard success/error response shapes so the storefront can render its category/tag filter chips.
 
 ## Key elements
 
-- **`getCatalogueFacets`** (exported) — The sole handler. Accepts `(request: Request, response: Response)`, calls `productService.facets()`, then either sends the result via `successResponse` or delegates the rejection to `catchAs(response, 'getCatalogueFacets')`. No local state, no business logic.
+- **`getCatalogueFacets(request, response)`** (exported) — Calls `productService.facets()`, sends the result via `successResponse`, and funnels any rejection through `catchAs(response, 'getCatalogueFacets')`.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to shape the 200 body.
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs`, the shared error-catcher that maps a rejected promise to a consistent error response and logs under the label `'getCatalogueFacets'`.
-- **`src/modules/products/service.ts`** — Imports `productService` and calls its `facets()` method; all catalogue-query logic lives there.
-- **`src/modules/products/routes.ts`** — Registers `getCatalogueFacets` on the `GET /products/categories` route (inferred from the JSDoc path).
+- **`src/modules/products/service.ts`** — Imports `productService` and invokes its `facets()` method; this file contains no domain logic of its own.
+- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to shape the 200 reply.
+- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` to produce the standard error envelope on failure.
+- **`src/modules/products/routes.ts`** — Consumes this handler to wire it onto the catalogue routes (public, cached listing).
 
 ## Notes
 
-- The handler uses a promise-chain (`.then`/`.catch`) style rather than `async/await`, matching the convention in this codebase's controllers.
-- Per the JSDoc, the response is intended to be cached by an upstream layer (e.g., CDN or HTTP cache) and invalidated together with the products listing via a shared cache tag. The controller itself performs no caching.
-- `request` is accepted but never read; the route carries all needed context.
+- The JSDoc states the endpoint is **public and cached**; a "products cache tag" invalidates it whenever the catalogue changes. The cache config is not in this file — it lives in the routes/infrastructure layer.
+- Error handling is entirely delegated to `catchAs`; the string literal `'getCatalogueFacets'` is the operation label used in the error payload. There is no custom error logic here.

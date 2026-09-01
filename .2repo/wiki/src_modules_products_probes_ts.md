@@ -2,24 +2,24 @@
 
 ## Purpose
 
-Holds the product-module probe requests that an OpenAPI contract cannot express—negative validation checks, cross-cutting headers, optional-only query params, and dataset-specific state fixtures. These probes are appended to generated client collections after the contract-derived requests so the API's *rejection* and *edge-state* behavior is exercised alongside the happy path.
+Holds the products module's ad-hoc probe requests — edge-case scenarios that the OpenAPI contract cannot express on its own (validation failures, `Accept-Language` diffs, optional-filter combinations, and visibility-branch fixtures). It complements the generated collection rather than replacing it.
 
 ## Key elements
 
-- **`probes: Probe[]`** (exported, typed from `@guebbit/openapi-runnable-collections`) — the sole export; an array of five probe objects, each with `name`, `why`, `method`, `path`, and optional `auth`, `body`, or `headers`.
-  - *422 on schema violation* — `POST /products` with empty title + negative price; asserts the validation envelope.
-  - *Italian `Accept-Language`* — `GET /products/{{seedProductId}}`; verifies locale-aware messages without a per-operation contract declaration.
-  - *All optional filters at once* — `GET /products` with paging, price bounds, and active flag; exercises the filter combination most likely to expose a bad index.
-  - *Soft-deleted product, anonymous* — `GET /products/{{seedSoftDeletedProductId}}`; expects 404 for anonymous, record for admin (send twice).
-  - *Inactive product, anonymous* — `GET /products/{{seedInactiveProductId}}`; distinguishes `active: false` from `deletedAt` set.
+- **`probes: Probe[]`** (exported const) — Five probe entries, each a `Probe` from `@guebbit/openapi-runnable-collections`:
+  - *422 on invalid body* — POST `/products` with empty `title` and negative `price`; verifies the validation envelope and `errors[]` shape.
+  - *Italian locale* — GET a product with `Accept-Language: it`; intended to be sent beside the generated request and diffed on `message`.
+  - *All optional filters* — GET `/products` with `page`, `pageSize`, `minPrice`, `maxPrice`, `active`; exercises the filter combination most likely to hit a missing index.
+  - *Soft-deleted, anonymous* — GET `/products/{{seedSoftDeletedProductId}}`; expects 404 for anonymous, 200 for admin (send twice).
+  - *Inactive, anonymous* — GET `/products/{{seedInactiveProductId}}`; contrasts `active: false` with `deletedAt` to observe distinct visibility rules.
 
 ## Relationships
 
-- **`scripts/contracts/client-collections-bundle.ts`** — The bundle generator imports this module's `probes` and emits them into every client collection *after* the contract-derived requests. Seed tokens (`{{seedProductId}}`, `{{seedSoftDeletedProductId}}`, `{{seedInactiveProductId}}`) are declared in that file; a probe referencing an unknown token causes the generator to fail with a list of valid tokens.
+- **`scripts/contracts/client-collections-bundle.ts`** — Owns the *other half* of the probe story: defines what a probe is for, the emit pipeline that ships these probes, and the registry of valid `{{seedToken}}` values (e.g. `{{seedProductId}}`, `{{seedSoftDeletedProductId}}`, `{{seedInactiveProductId}}`). Probes here reference those tokens but do not define them.
 
 ## Notes
 
-- **Never paste literal IDs into `path`.** Use `{{seedToken}}` placeholders. The token vocabulary is closed and enforced at generation time—typos are caught, not silently resolved.
-- The `why` field is the human (and AI) rationale for each probe; it doubles as test documentation and should be kept current if the probe's intent changes.
-- Probes are additive to the contract: they do not alter the OpenAPI spec and are not visible to consumers of the spec itself.
-- The soft-deleted vs. inactive pair is intentional: they are *different* visibility states, and the probes exist so the distinction is observable rather than assumed.
+- The `{{seed…}}` tokens are **not** defined in this file; resolve them in `client-collections-bundle.ts` before running a probe.
+- The Italian-locale probe is deliberately sent *beside* the generated request (not instead of it) so the only diff is the localised `message` field.
+- The soft-deleted vs. inactive probes are a pair: they exist to make the two visibility branches observable in one dataset. Run them with and without the admin token and compare.
+- `Accept-Language` is never declared per-operation in the contract (it is a global interceptor concern), so no code generator will emit it — that is exactly why this probe lives here.

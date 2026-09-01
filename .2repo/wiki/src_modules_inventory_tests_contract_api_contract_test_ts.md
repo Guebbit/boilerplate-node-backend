@@ -1,24 +1,31 @@
 # src/modules/inventory/tests/contract/api.contract.test.ts
 
 ## Purpose
-HTTP contract-test suite for the `/inventory` routes. It pins the observable API contract — status codes, response shapes, error codes, pagination metadata — as reached over the wire, for both reads (levels, movements) and writes (receipts, adjustments, reservation sweep). Transition logic itself is covered by the unit suite; this file only verifies that each branch is reachable and correctly shaped at the HTTP boundary.
+
+HTTP contract tests for every `/inventory` endpoint. Each test asserts the status code, response envelope, and key field shapes against the registered API spec (via `toSatisfyApiSpec()`), pinning the wire contract independent of internal business-logic rules. Covers both read endpoints (levels, movements) and write transitions (receipts, adjustments, reservations/sweep), including their 401/403/404/409/422 error branches.
 
 ## Key elements
-- **`MISSING_ID`** — `'f'.repeat(24)`, a syntactically valid ObjectId guaranteed to collide with no fixture or seed. Used to exercise 404 branches (as opposed to 422).
-- **`describe('GET /inventory/levels')`** — 200 happy path (onHand/reserved/available), `lowOnly=true` filter, pagination (`page`/`pageSize`/`totalPages`), 403 for non-admin.
-- **`describe('GET /inventory/movements')`** — empty ledger, pagination with `totalItems` reflecting full match count, `reason` filter, `productId` filter (verifies both `onHandDelta` and `reservedDelta`), 403.
-- **`describe('POST /inventory/receipts')`** — 200 with updated counters, 404 unknown product, 422 invalid body, 401 unauthenticated.
-- **`describe('POST /inventory/adjustments')`** — 200 negative delta, 409 `INVENTORY_BELOW_RESERVED`, 422 zero delta, 403 non-admin.
-- **`describe('POST /inventory/reservations/sweep')`** — 200 `{ expired: 0 }`, 403 non-admin.
-- Every assertion block ends with `expect(response).toSatisfyApiSpec()` to validate the full response against the API spec.
+
+- **`MISSING_ID`** — `'f'.repeat(24)`, a syntactically valid ObjectId guaranteed to collide with no seeded fixture; used to exercise the 404 branch specifically (not the 422 validation branch).
+- **`describe('GET /inventory/levels')`** — Happy path (onHand/reserved/available trio), `lowOnly=true` filter, pagination (`page`/`pageSize`), and 403 for non-admin.
+- **`describe('GET /inventory/movements')`** — Empty ledger, pagination with `totalItems` ≠ page length, `reason` filter, product-scoped view verifying both `onHandDelta` and `reservedDelta`, and 403.
+- **`describe('POST /inventory/receipts')`** — 200 (counters update), 404 (unknown product), 422 (invalid body), 401 (unauthenticated).
+- **`describe('POST /inventory/adjustments')`** — 200 (negative delta), 409 (`INVENTORY_BELOW_RESERVED`), 422 (zero delta), 403 (non-admin).
+- **`describe('POST /inventory/reservations/sweep')`** — 200 with `{ expired: 0 }`, 403 for non-admin.
+- **`setupTestDb()`** — Called once at module top; resets the database before the suite runs.
 
 ## Relationships
-- **`tests/support/contract.ts`** — imported as `'@tests/contract'`; installs the `toSatisfyApiSpec()` matcher used throughout.
-- **`tests/support/http.ts`** — provides `api()` (supertest-style client) and `authenticateAs(role)` which returns a `{ bearer }` token.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to prepare a clean database per test.
-- **`src/modules/products/tests/factory.ts`** — `createProduct()` creates fixture products with configurable `onHand`, `reserved`, and `title`.
+
+| Neighbor | Interaction |
+|---|---|
+| `tests/support/contract.ts` | Provides the `toSatisfyApiSpec()` custom matcher registered on `expect`; every test asserts against it. |
+| `tests/support/http.ts` | Provides `api()` (supertest request builder) and `authenticateAs(role)` for obtaining a bearer token. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` wipes and reseeds the DB so each test starts from a clean slate. |
+| `src/modules/products/tests/fixtures.ts` | `createProduct()` seeds a product row with controlled `onHand`/`reserved` values for each scenario. |
 
 ## Notes
-- The contract suite **does not seed** catalogue data. The 404 test therefore relies on `MISSING_ID` being absent *by construction*, not by observation. A previous value (`65dc8a99604c307b702b5ccc`) was silently identical to `SEED_PRODUCT_IDS.panino` and would have broken the test if the suite ever started seeding.
-- `toSatisfyApiSpec()` is the single gate that enforces response-shape conformance; the explicit `toMatchObject` / `toHaveLength` assertions on top document *which* fields the test author cares about without re-validating the entire schema.
-- The `meta.totalItems` in pagination responses counts all matching rows, not the current page — an intentional contract choice so clients can render "showing X of Y".
+
+- **Contract vs. unit boundary** — This file deliberately tests *shape and status*, not the internal arithmetic. The module docstring explicitly delegates "transitions' own rules" to the unit suite; don't add business-logic assertions here.
+- **`MISSING_ID` convention** — All-`f` (not a realistic hex string) so a future seed that happens to generate a plausible-looking unused ID won't silently turn a 404 test into a 200.
+- **`toSatisfyApiSpec()` is the load-bearing assertion** — Field-level `toMatchObject` / `toHaveLength` calls are supplementary readability; the spec matcher is what actually pins the contract. If the spec file changes, these tests break even if the manual assertions still pass.
+- **401 vs 403 distinction** — Receipts include a 401 (no token at all); every other endpoint uses 403 (token present, role insufficient). Don't "fix" one to match the other without checking the route's auth guard.

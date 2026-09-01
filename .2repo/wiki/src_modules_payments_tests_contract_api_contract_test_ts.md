@@ -2,29 +2,30 @@
 
 ## Purpose
 
-Contract tests for the three `/payments` routes (`POST /intent`, `POST /{id}/confirm`, `GET /order/{orderId}`). Each test drives a real HTTP request through the app and asserts both the status code and that the response body matches the published API spec (`toSatisfyApiSpec`). The focus is on proving every contract branch is reachable over HTTP; business-logic (money) rules are covered in the unit suite.
+Contract tests for the `/payments` HTTP surface. Each test pins that a specific status-code branch (201, 200, 409, 404, 422, 401) is reachable over HTTP and that the response body satisfies the declared API spec. Business/money logic is intentionally excluded here and lives in the unit suite.
 
 ## Key elements
 
-- **`MISSING_ID`** – A well-formed ObjectId guaranteed to not exist, used to exercise the 404 path without triggering a 422 validation failure.
-- **`GOOD_CARD`** – `'4242424242424242'`, the fake-provider's always-succeed card number.
-- **`authenticateWithOrder()`** – Helper that logs in a user, creates a product (price 10) and a 2-item order, returning `{ bearer, order }`.
-- **`authenticateWithIntent()`** – Builds on the above; additionally posts `/payments/intent` and returns `{ bearer, order, paymentId }`. Throws a descriptive error if the 201 setup step fails.
-- **`describe('POST /payments/intent')`** – Four cases: 201 success, 404 unknown order, 422 invalid body, 401 unauthenticated.
-- **`describe('POST /payments/{id}/confirm')`** – Four cases: 200 success, 409 declined card, 404 unknown payment, 422 bad card format.
-- **`describe('GET /payments/order/{orderId}')`** – Two cases: 200 with existing intent, 404 when no intent exists yet.
+- **`MISSING_ID`** – A syntactically valid ObjectId that is guaranteed absent, used to hit 404 branches (as opposed to 422 for malformed input).
+- **`GOOD_CARD`** – The standard test card number (`4242424242424242`) that the fake provider approves.
+- **`authenticateWithOrder()`** – Creates a logged-in user, a product (price 10), and a 2-item order; returns the bearer token and order.
+- **`authenticateWithIntent()`** – Extends the above by also creating a payment intent via `POST /payments/intent`; returns bearer, order, and the new payment ID.
+- **`describe('POST /payments/intent')`** – Verifies 201 (fresh intent), 404 (missing order), 422 (empty body), and 401 (no auth).
+- **`describe('POST /payments/{id}/confirm')`** – Verifies 200 (succeeded charge), 409 with `PAYMENT_DECLINED` code, 404 (missing payment), and 422 (invalid card string).
+- **`describe('GET /payments/order/{orderId}')`** – Verifies 200 (caller's own payment) and 404 (no intent yet for the order).
 
 ## Relationships
 
-- **`tests/support/contract.ts`** – Imported as `@tests/contract`; registers the `toSatisfyApiSpec()` matcher used by every assertion.
-- **`tests/support/http.ts`** – Provides `api()` (the HTTP client) and `authenticateAs()` (session creation).
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initializes the in-memory/database fixture before any test runs.
-- **`src/modules/products/tests/factory.ts`** – `createProduct` seeds a product for the order.
-- **`src/modules/orders/tests/factory.ts`** – `createOrder` and `toOrderItem` seed a valid order the payment attaches to.
-- **`src/modules/payments/providers/fake.ts`** – Exports `FAKE_DECLINE_CARD`, the card number the fake provider always declines, used to hit the 409 branch.
+- **`tests/support/contract.ts`** – Supplies the `toSatisfyApiSpec()` matcher used on every assertion to validate response shape against the OpenAPI schema.
+- **`tests/support/http.ts`** – Supplies the `api()` request helper and `authenticateAs()` for obtaining bearer tokens.
+- **`tests/support/setup-test-db.ts`** – Called once at module top level to provision/tear down the test database.
+- **`src/modules/products/tests/fixtures.ts`** – `createProduct` builds the product record needed for order setup.
+- **`src/modules/orders/tests/fixtures.ts`** – `createOrder` and `toOrderItem` build the order that the payment intent references.
+- **`src/modules/payments/providers/fake.ts`** – `FAKE_DECLINE_CARD` is a card number the fake provider rejects, exercising the 409 decline branch without a real gateway.
 
 ## Notes
 
-- Every test ends with `expect(response).toSatisfyApiSpec()`; a passing status-code check alone is insufficient.
-- `MISSING_ID` is intentionally a *valid* ObjectId shape so the route returns 404 (resource not found) rather than 422 (malformed input). Swapping it for a garbage string would silently change which branch you are testing.
-- The file does **not** test amount math, currency rounding, or retry logic — those are deliberately excluded (see the header comment) and live in the unit suite.
+- Every test ends with `expect(response).toSatisfyApiSpec()`, which is the core contract assertion; the explicit status/code checks above it are supplementary readability aids.
+- The file deliberately does **not** test amount calculations, idempotency, or retry semantics — those belong to the unit tests.
+- `setupTestDb()` runs at import time (top-level call), so the DB is ready before any `describe` block executes.
+- The 409 decline test asserts on `errors[0].code === 'PAYMENT_DECLINED'`; if the fake provider's error shape changes, this is the first place to break.

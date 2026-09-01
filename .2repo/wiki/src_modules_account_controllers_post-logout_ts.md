@@ -1,21 +1,26 @@
 # src/modules/account/controllers/post-logout.ts
 
 ## Purpose
-Handler for `POST /account/logout`. Destroys the **current** session only (identified by its refresh cookie) while leaving sessions on other devices untouched. Treats "not logged in" as success rather than an error, so it always returns 200.
+
+HTTP controller for `POST /account/logout`. It acts as a thin adapter that reads the refresh token from the request cookie, delegates to `accountService.logoutCurrentSession`, clears the session cookies, and returns a localized success message. It exists to keep the route layer free of business logic while providing a single, predictable logout endpoint.
 
 ## Key elements
-- **`postLogout(request, response)`** — The sole export. Reads the `jwt` refresh cookie from `request.cookies`, calls `accountService.logoutCurrentSession`, then clears both the refresh and logged-in cookies and sends a 200 with an i18n-translated success message. Errors are funneled through `catchAs`.
+
+- **`postLogout(request, response)`** — The sole export. Reads `request.cookies.jwt` as the refresh token, calls `accountService.logoutCurrentSession` with that token and `callerContextOf(request)`, then on success destroys both the refresh and "logged" cookies and replies `200` with `t('account.logout.success')`. Errors are funneled through `catchAs`.
 
 ## Relationships
-- **`src/modules/account/routes.ts`** — Registers `postLogout` as the handler for `POST /account/logout`.
-- **`src/modules/account/services/index.ts`** — Supplies `accountService.logoutCurrentSession(token, callerContext)` which performs the token revocation.
-- **`src/modules/account/session/cookies.ts`** — Provides `destroyRefreshCookie` and `destroyLoggedCookie` to clear the two session cookies on the response.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the shared error-to-response mapper.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to derive IP/user-agent context for audit logging.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the standard 200 envelope.
-- **`src/infrastructure/i18n/`** — Provides `t()` to translate the success message key `account.logout.success`.
+
+- **`src/modules/account/routes.ts`** — Registers `postLogout` as the handler for the `POST /account/logout` route.
+- **`src/modules/account/services/index.ts`** — Source of `accountService.logoutCurrentSession`, the actual revocation logic.
+- **`src/modules/account/session/cookies.ts`** — Supplies `destroyRefreshCookie` and `destroyLoggedCookie`, the two cookie-clearing helpers invoked after a successful logout.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, extracting caller metadata (IP, user-agent, etc.) for audit/logging.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the uniform 200 JSON envelope.
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the shared error-catch wrapper that maps thrown errors to HTTP responses.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Source of the `t()` translation function used for the success message.
 
 ## Notes
-- The refresh cookie key is `jwt` (read from `request.cookies.jwt`), not a bearer token. The cookie *is* the session credential, so no `Authorization` header is needed.
-- A missing cookie or an already-revoked token does **not** produce an error response; the function still returns 200. This is intentional — the caller asked to be logged out, and they already are.
-- Only the current session is revoked. Other active sessions on other devices are unaffected. Use a separate "logout all" endpoint for that.
+
+- **Always 200.** A missing or already-revoked refresh cookie is treated as "not logged in on this device," not as an error. Clients should not expect 4xx here.
+- **Session-scoped, not account-scoped.** Only the current session is revoked; other devices remain signed in (contrast with a "logout all" endpoint if one exists elsewhere).
+- **No bearer token required.** The refresh cookie doubles as both the credential and the address of the session to revoke, mirroring the pattern used by `GET /account/refresh`.
+- The token is read from `request.cookies.jwt` — not from `Authorization` headers — so any middleware that populates `req.cookies` must run before this handler.

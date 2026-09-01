@@ -2,29 +2,23 @@
 
 ## Purpose
 
-Express controller handler for `DELETE /wishlist/:productId`. It extracts the caller's identity, validates the product ID, delegates removal to the wishlist service, and shapes the HTTP response (200 success, 404 for items the caller cannot see, or error).
+Thin HTTP adapter that handles `DELETE /wishlist/:productId`. It extracts the authenticated user and product ID from the request, validates the ID format, and delegates the actual removal to `wishlistService.wishlistRemove`, then maps the service result to a structured HTTP response.
 
 ## Key elements
 
-- **`deleteWishlistItem`** (exported) — The sole export. An async-by-promise handler that:
-  - Reads `userId` via `authContextOf(request).id`.
-  - Validates `productId` with `malformedProductId`; short-circuits if invalid.
-  - Calls `wishlistService.wishlistRemove(userId, productId, callerContextOf(request))`.
-  - On refusal, delegates to `refused(response, result)`.
-  - On success, sends 200 with `result.data` and `result.message`.
-  - Catches unhandled rejections via `catchAs(response, 'deleteWishlistItem')`.
+- **`deleteWishlistItem`** (exported) — The sole export. Accepts Express `Request<{ productId: string }>` and `Response`. Validates `productId` via `isValidObjectId` (422 on failure), calls `wishlistService.wishlistRemove(userId, productId, callerContextOf(request))`, and returns either a 200 with data/message or a refused/error response.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Provides the `catchAs` and `refused` helpers used for uniform error/refusal handling.
-- **`src/infrastructure/http/request.ts`** — Source of `authContextOf` (extracts user identity) and `callerContextOf` (propagates caller context into the service call).
-- **`src/infrastructure/http/response.ts`** — Source of `successResponse`, which serializes the 200 payload.
-- **`src/modules/wishlist/controllers/shared/product-id.ts`** — Provides `malformedProductId`, the shared validation guard for product ID params.
-- **`src/modules/wishlist/routes.ts`** — Registers `deleteWishlistItem` as the handler for the `DELETE /wishlist/:productId` route.
-- **`src/modules/wishlist/service.ts`** — Exposes `wishlistService.wishlistRemove`, the domain operation this controller delegates to.
+- **`@infrastructure/http/controller`** — Supplies `catchAs` (unified error-to-response mapping) and `refused` (short-circuits when the service signals the caller lacks access).
+- **`@infrastructure/http/request`** — Supplies `authContextOf` (extracts user ID), `callerContextOf` (passes downstream context to the service), and `isValidObjectId` (format guard).
+- **`@infrastructure/http/response`** — Supplies `successResponse` (200 envelope) and `rejectResponse` (error envelope with status + messages).
+- **`@infrastructure/i18n`** — Supplies the `t` translator for user-facing error strings.
+- **`../service`** — Provides `wishlistService.wishlistRemove`, the actual domain operation this controller wraps.
+- **`../routes`** — Wires this controller to the `DELETE /wishlist/:productId` path in the wishlist router.
 
 ## Notes
 
-- The JSDoc calls out an intentional contract: removing a product the caller cannot currently see returns **404**, mirroring the cart-remove behavior so clients know their view is stale.
-- Success is returned as **200** (not 204), carrying both `data` and a `message` from the service result.
-- `callerContextOf(request)` is forwarded into the service call — any audit/tenancy context must be set on the request before this handler runs.
+- An invalid ObjectId yields **422** (not 404), deliberately signaling "malformed value" rather than "not found." A valid-but-unseen product ID still returns 404 via the service's `refused` path.
+- The `refused` check sits *before* `successResponse`; if the service marks the result as refused (e.g., product not in this user's wishlist), the response is sent immediately and the success branch is skipped.
+- Error handling is fully delegated to `catchAs(response, 'deleteWishlistItem')` — no manual `try/catch` or per-error mapping in this file.

@@ -2,28 +2,27 @@
 
 ## Purpose
 
-Handler for `PUT /account` — the self-service endpoint that lets an authenticated user edit their own profile (email, username, locale, avatar image). It exists because admin-only `/users` write routes return 403 to regular users, so this is the sole path for non-admin profile updates.
+HTTP handler for `PUT /account`: lets an authenticated user update their own profile (email, username, locale, image, phone, website). It is a thin adapter over `accountService.updateProfile`, plus two side-effects that accompany a self-service edit — uploaded-image cleanup on failure and a re-verification email when the address changes. It exists as a separate self-service path because the `/users` write routes are admin-gated.
 
 ## Key elements
 
-- **`putAccount`** (exported function) — Express handler accepting `Request<unknown, unknown, UpdateAccountRequest | UpdateAccountRequestMultipart>`. Reads the caller's `id` and current `email` from `authContextOf`, merges a file-upload image URL (via `resolveImageUrl`) with a body-supplied `imageUrl`, then delegates to `accountService.updateProfile`. On success with a changed email, fires `sendVerificationEmail` (fire-and-forget, `void`-ed). On failure or error, calls `imageStore.remove(imageUrlFile)` to delete only the image *this* request uploaded.
+- **`putAccount`** (exported) — The sole export; an Express `(request, response) => void` handler. Reads auth context, extracts uploaded-image fields, delegates to `accountService.updateProfile`, triggers re-verification if email changed, and responds with a localized success/failure payload.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — calls `accountService.updateProfile(id, { email, username, locale, imageUrl }, callerContext)` and `sendVerificationEmail(result.data, callerContext)`.
-- **`src/modules/account/services/verification.ts`** — source of `sendVerificationEmail`; invoked asynchronously when the email field changes.
-- **`src/modules/account/routes.ts`** — registers `putAccount` as the handler for the `PUT /account` route (implied by the doc comment).
-- **`src/infrastructure/http/request.ts`** — provides `authContextOf` (user id + email) and `callerContextOf` (i18n/locale context passed to services).
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` and `rejectResponse` for all HTTP replies.
-- **`src/infrastructure/http/errors.ts`** — provides `rejectDatabaseError` used in the `.catch` branch.
-- **`src/infrastructure/http/uploads.ts`** — provides `resolveImageUrl` to extract a URL from a multipart file upload.
-- **`src/infrastructure/adapters/image-store.ts`** — `imageStore.remove` cleans up the newly uploaded file when the update fails.
-- **`src/infrastructure/i18n/index.ts`** — `t('account.update.success')` supplies the translated success message.
-- **`src/types/index.ts`** — `UpdateAccountRequest` and `UpdateAccountRequestMultipart` define the body shapes.
+- **`routes.ts`** (same module) — registers `putAccount` as the handler for the `PUT /account` route behind the `isAuth` middleware.
+- **`services/index.ts`** / **`services/verification.ts`** — `accountService.updateProfile` performs the actual persistence and validation; `sendVerificationEmail` is fired (fire-and-forget) when the email address changes.
+- **`@infrastructure/adapters/image-store.ts`** — `readUploadedImage` pulls `imageUrl`, `thumbnailUrl`, `pendingImageKey`, and the `deleteUpload` cleanup callback out of the (possibly multipart) request.
+- **`@infrastructure/http/request.ts`** — `authContextOf` yields the caller's `id` and current `email`; `callerContextOf` packages locale/context for the service layer.
+- **`@infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` shape the HTTP replies.
+- **`@infrastructure/http/errors.ts`** — `rejectDatabaseError` translates Mongoose `CastError` and generic errors into a consistent 4xx/5xx body.
+- **`@infrastructure/i18n`** — `t('account.update.success')` supplies the localized success message.
+- **`@types`** — `UpdateAccountRequest` and `UpdateAccountRequestMultipart` describe the two body shapes (JSON vs. multipart).
 
 ## Notes
 
-- **Image cleanup is intentionally narrow.** `deleteUpload` removes only `imageUrlFile` (the file this request uploaded). If the client sent a body `imageUrl` instead, no file was created here, so nothing is deleted.
-- **Validation is done inside `accountService.updateProfile`, not by a generated schema.** The body is read via the `UpdateAccountRequest` type cast so that service-level validation (with translated error messages) is what surfaces to the client, rather than an English-language schema rejection.
-- **Verification email is fire-and-forget.** The `void` keyword ensures the HTTP response does not wait on the email queue; a delivery failure does not fail the update request.
-- **The `email` comparison** (`email !== currentEmail`) gates verification re-sending: `updateProfile` already unsets the `verified` flag internally, so the controller only needs to dispatch the new link.
+- **No `imageUrl = ''` default.** Unlike the create paths, an absent `imageUrl` is passed through as `undefined`, which `updateProfile` interprets as "not sent" and leaves the stored value intact. Defaulting to `''` would *clear* the existing image.
+- **Body is cast, not re-parsed.** `request.body as UpdateAccountRequest` is intentional: `updateProfile` validates fields with its own translated messages. Parsed through a generated schema first, the schema would reject in English before the service's (potentially localized) validation runs.
+- **Re-verification is fire-and-forget.** `void sendVerificationEmail(...)` does not block the HTTP response; the email goes to the *new* address, proving the mailbox that now backs the account.
+- **`deleteUpload` runs on both failure and error paths** (`.then` rejection branch and `.catch`), ensuring the uploaded file is removed whenever the update does not succeed.
+- **Auth is assumed, not checked here.** The `isAuth` middleware (wired in `routes.ts`) guarantees the token is valid; the controller simply reads the context.

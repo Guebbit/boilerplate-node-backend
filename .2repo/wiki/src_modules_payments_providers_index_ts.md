@@ -2,25 +2,27 @@
 
 ## Purpose
 
-Defines the `PaymentProvider` port (interface) and the env-driven factory that resolves which concrete implementation the payments service talks to. This file is the single seam between the domain service and any real payment service provider (PSP); swapping implementations is a one-line registry addition plus an env var change, with no service- or frontend-facing changes.
+Defines the `PaymentProvider` port (interface), the `ChargeOutcome` type, and a memoised, env-driven resolver that selects which concrete provider implementation answers at runtime. It is the single seam a real PSP (e.g. Stripe) plugs into without touching the rest of the payments module.
 
 ## Key elements
 
-- **`ChargeOutcome`** (type) — `'succeeded' | 'declined'`. A decline is a valid *answer*; only transport-level failures are thrown.
-- **`PaymentProvider`** (interface) — the port contract: `name`, `charge(charge, card)`, and `refund(charge)`. The service depends on this shape and nothing else.
-- **`PROVIDERS`** (module-local record) — the registry of implementations available to this build. Currently only `fake`. Adding a real PSP means adding one key here.
-- **`resolvePaymentProvider()`** (exported function) — memoised factory that reads `NODE_PAYMENT_PROVIDER` (default `'fake'`) on first call, looks it up in `PROVIDERS`, and throws on an unknown name. No `reset` function exists by design: one build, one provider, for the lifetime of the process.
-- **Re-exports from `./card`** — `cardLastFour` and the `CardDetails` type are re-exported so consumers can `import { CardDetails }` from this barrel.
+- **`ChargeOutcome`** — union type `'succeeded' | 'declined'`; the only non-throwing results a `charge()` call can return.
+- **`PaymentProvider`** — the interface every provider must satisfy: a `name` string, a `charge(charge, card)` async method, and a `refund(charge)` async method.
+- **`PROVIDERS`** — a `Record<string, PaymentProvider>` registry; currently maps `"fake"` → `fakePaymentProvider`. Adding a live provider means dropping a new file here and adding one line.
+- **`provider`** (module-level) — memoised cache slot; `undefined` until first resolution.
+- **`resolvePaymentProvider()`** — reads `NODE_PAYMENT_PROVIDER` (default `"fake"`), looks up the registry, caches the result, and returns the instance.
+- **Re-exports** — `cardLastFour` and the `CardDetails` type are re-exported from `./card` so consumers can import them from this barrel.
 
 ## Relationships
 
-- **`./card`** — source of the `CardDetails` type and `cardLastFour` helper, both re-exported here.
-- **`./fake`** — provides `fakePaymentProvider`, the sole entry in the `PROVIDERS` registry.
-- **`../service`** — the payments service calls `resolvePaymentProvider()` and then uses the returned `PaymentProvider` for all charge/refund operations.
-- **`../tests/unit/providers.test.ts`** — unit-tests the registry resolution, the env-var default, and the throw-on-unknown-name path.
+- **`providers/card.ts`** — source of the `CardDetails` type and `cardLastFour` helper re-exported here; `CardDetails` is also the parameter type on `PaymentProvider.charge`.
+- **`providers/fake.ts`** — supplies `fakePaymentProvider`, the default entry in the `PROVIDERS` registry.
+- **`service.ts`** — the primary consumer; calls `resolvePaymentProvider()` to obtain the active instance before delegating `charge`/`refund`.
+- **`tests/unit/providers.test.ts`** — exercises the provider contract (likely against the fake) and the resolution logic.
 
 ## Notes
 
-- **Memoisation without reset.** Unlike the analogous `ImageStore` or mailer transport patterns, there is deliberately no `reset` seam. Tests that need a different provider vary `NODE_PAYMENT_PROVIDER` *before* the first `resolvePaymentProvider()` call in a fresh module registry (e.g., `jest.resetModules()`).
-- **Loud failure on bad env.** An unrecognised `NODE_PAYMENT_PROVIDER` value throws at the first payment attempt rather than silently falling back to `fake`. This is intentional: silent fake charges in a production-like environment would mask a misconfiguration.
-- **Idempotency split.** `refund` is documented as idempotent at the provider side; the *caller* (service) is responsible for only refunding `succeeded` payments.
+- **Memoisation is one-shot.** `resolvePaymentProvider()` caches on first call; mutating `NODE_PAYMENT_PROVIDER` in a test after the first invocation has no effect. Reset requires a page reload or a test helper that clears the module.
+- **Silent misconfiguration.** A typo in `NODE_PAYMENT_PROVIDER` resolves to `undefined`; the failure surfaces as a thrown TypeError on the first `.charge()` call rather than a descriptive "unknown provider" message.
+- **`declined` is a return, not a throw.** Only transport/infrastructure failures throw. Callers must branch on the `ChargeOutcome` value to handle declines.
+- **`refund` idempotency is the provider's contract.** The caller's guard is solely "only refund payments whose status is `succeeded`."

@@ -1,19 +1,24 @@
 # src/modules/delivery/tests/unit/routes.test.ts
 
 ## Purpose
-Unit test for the delivery route table. It verifies that exactly three endpoints are mounted in the documented order, that each carries the correct authentication guard, and that no route is accidentally left unauthenticated. The file exists to catch the specific drift risk of a new route being added without a guard.
+
+Unit-test suite that pins the delivery module's route table: the exact set of endpoints, their order, and the per-route authentication guard on each. It exists to catch drift — especially a new route added without a guard — before it ships open.
 
 ## Key elements
-- **`describe('delivery routes')`** — the single test suite; five `it` blocks cover the full contract.
-- **Order/shape test** — asserts `routeSignatures(router)` equals `['GET /methods', 'GET /order/:orderId', 'POST /advance']` in that exact sequence.
-- **Per-route guard assertions** — `GET /methods` must *not* have `isAuth`; `GET /order/:orderId` must have `isAuth` but *not* `isAdmin`; `POST /advance` must have `isAdmin`.
-- **Sweep test** — filters all route signatures for those lacking `isAuth` and asserts the result is exactly `['GET /methods']`. Any new unguarded route fails here.
+
+- **Route-signature test** — asserts `routeSignatures(router)` equals `['GET /methods', 'GET /order/:orderId', 'POST /advance']` in that exact order.
+- **Public guard test (`GET /methods`)** — verifies the route carries no `isAuth` guard, keeping shipping-method pricing visible to unauthenticated shoppers.
+- **Session guard test (`GET /order/:orderId`)** — asserts `isAuth` is present and `isAdmin` is absent; ownership logic is delegated to the controller, this test only checks the gate.
+- **Admin guard test (`POST /advance`)** — asserts `isAdmin` is present, since this endpoint advances every parcel (operator/cron action).
+- **Sweep test** — filters all routes lacking `isAuth` and asserts the result is exactly `['GET /methods']`. Any future route added without a guard fails this test.
 
 ## Relationships
-- **`src/modules/delivery/routes.ts`** — provides the `router` instance under test; this file reads its mounted routes and middleware without invoking handlers.
-- **`tests/support/routes.ts`** — provides the `routeSignatures(router)` and `guardsOn(router, signature)` helpers that this test (and presumably other route tests) rely on to introspect a router's table.
+
+- **`src/modules/delivery/routes.ts`** — source of the `router` object under test; the file under inspection.
+- **`tests/support/routes.ts`** — provides the `routeSignatures(router)` and `guardsOn(router, signature)` helpers used by every assertion in this file.
 
 ## Notes
-- Guards are deliberately per-route (not an inherited default), so the sweep test is the only structural safety net against a new route shipping open.
-- The file uses path aliases `@modules/delivery/routes` and `@tests/routes`; no direct relative imports.
-- Test comments encode the *why* (public pricing, ownership gating, operator-only bulk advance) — treat them as the spec's rationale when modifying the route table.
+
+- Guards are **per-route**, not an inherited default. The file's own comment calls this out as the most likely drift vector: a fourth route added to `routes.ts` silently has no guard unless the sweep test is updated.
+- The sweep test is the primary safety net; it is intentionally a *closed-world* assertion (the open set must equal exactly one entry), not an "at least" check.
+- This suite checks **route-level** guards only. It does not (and cannot) verify controller/service-level ownership checks like "user owns this orderId."

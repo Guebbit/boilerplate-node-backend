@@ -2,30 +2,30 @@
 
 ## Purpose
 
-Implements a per-file mutation-testing ratchet. Because Stryker's built-in thresholds are global (one strong file can mask a weak one), this module records each file's mutation score on a real run and enforces that no file silently drops below its recorded value. Scores can only move **up** (via `--update`); lowering a baseline is always a deliberate human decision in a commit.
+Implements a per-file mutation-score ratchet on top of Stryker's globally-thresholded output. It reads a Stryker JSON report, scores each file individually, compares against a committed per-file baseline, and produces the updated baseline (scores only ever move up). This exists so that one strong file cannot mask a regression in another, and so a drop in coverage of existing assertions is caught per-file rather than buried in an aggregate.
 
 ## Key elements
 
-- **`SCORE_TOLERANCE`** (1 point) — absorbs the timeout-vs-survivor race under machine load; not slack for real regression.
-- **`KILLED` / `NOT_VIABLE`** (sets) — which mutant statuses count as detected vs. excluded from the denominator. `Timeout` counts as killed; `RuntimeError`, `CompileError`, `Ignored` are excluded entirely.
-- **`scoresFromReport(report)`** — reduces a Stryker JSON report to a per-file percentage map. Files with zero viable mutants are scored 100, not 0.
-- **`readReport(root?)`** / **`readBaseline(root?)`** / **`writeBaseline(baseline, root?)`** — I/O helpers for the Stryker report (`reports/mutation/mutation.json`) and the committed baseline (`mutation-baseline.json`).
-- **`compareToBaseline(current, baseline?)`** — returns a sorted `FileComparison[]` with verdicts: `held`, `improved`, `regressed`, `new`, `removed`.
-- **`missingFromReport(current, baseline?)`** — lists baseline files absent from a (possibly partial) report, guarding against accidental re-baselining that would drop other files.
-- **`nextBaseline(current, baseline?)`** — builds the next baseline using `Math.max(previous, current)` per file, so scores never decrease.
-- **`formatRegressions(comparisons)`** — human-readable summary of regressed files with guidance on how to respond; returns `''` when clean.
-- **`MutationBaseline`**, **`FileComparison`**, **`FileVerdict`** — shared type definitions exported for consumers.
+- **`MutationProfile` / `MUTATION_PROFILES`** — Describes the two Stryker scopes (`unit`, `deep`) by their report path and baseline file path. `unit` is the fast nightly default; `deep` also covers integration tests.
+- **`profileFromArguments`** — Maps CLI flags (`--deep`) to a `MutationProfileName`; defaults to `unit`.
+- **`SCORE_TOLERANCE`** (const, `1`) — One-point band that absorbs the timeout/survivor nondeterminism so the gate doesn't flake under machine load.
+- **`scoresFromReport`** — Computes a per-file percentage (killed / viable mutants) from a Stryker report. Files with zero viable mutants are scored 100 to avoid a permanent false alarm.
+- **`readReport` / `readBaseline` / `writeBaseline`** — Thin file I/O for the Stryker report and the committed JSON baseline, keyed by profile.
+- **`compareToBaseline`** — Returns a `FileComparison[]` with a verdict per file: `held`, `improved`, `regressed`, `new`, or `removed`.
+- **`missingFromReport`** — Flags baseline files absent from the current report; used to reject recording a partial-run report.
+- **`nextBaseline`** — Builds the baseline to commit. Uses `Math.max(previous, current)` per file so scores never decrease automatically.
+- **`formatRegressions`** — Human-readable multi-line message listing regressed files and explaining how to re-record intentionally.
 
 ## Relationships
 
-- **`scripts/check-mutation-baseline.ts`** — the CI gate; imports `readReport`, `readBaseline`, `compareToBaseline`, `missingFromReport`, and `formatRegressions` to decide pass/fail and print the summary.
-- **`scripts/run-mutation-tests.ts`** — orchestrates the Stryker run and (with `--update`) calls `nextBaseline` + `writeBaseline` to commit a new baseline.
-- **`tests/unit/scripts/mutation-baseline.test.ts`** — unit tests covering score computation, comparison verdicts, the ratchet asymmetry, and edge cases (empty files, partial reports).
+- **`scripts/check-mutation-baseline.ts`** — Consumes the exports here (`readReport`, `readBaseline`, `compareToBaseline`, `nextBaseline`, `missingFromReport`, `writeBaseline`, `formatRegressions`, `profileFromArguments`, `MUTATION_PROFILES`) to perform the actual CI check or `--update` write.
+- **`tests/unit/scripts/mutation-baseline.test.ts`** — Unit-tests the scoring, comparison, ratchet, and partial-report-guard logic in this file.
 
 ## Notes
 
-- The frontend has a mirrored copy of this logic; keep them in sync.
-- `nextBaseline` builds its key set **only** from the current report's files. If the report is partial (single-file `--mutate`), recording it would silently drop every other file. `missingFromReport` exists to catch this before `writeBaseline` is called.
-- `Timeout` is intentionally counted as "killed" (Stryker's own convention): a mutant that hangs the suite *was* detected, just expensively.
-- A file whose mutants are all `RuntimeError`/`CompileError`/`Ignored` gets a score of 100, not 0 — there was nothing for tests to catch, so calling it untested would be a permanent false alarm.
-- The baseline file (`mutation-baseline.json`) is committed to the repo; `generatedAt` makes a stale baseline visible.
+- **Ratchet asymmetry is intentional.** `nextBaseline` only raises scores; a regressed file keeps its old (higher) baseline value and keeps failing until genuinely fixed. Lowering a baseline is a human decision made in a commit with a stated reason.
+- **Do not mix profiles.** A `unit` score is only comparable to another `unit` score; comparing against a `deep` baseline (or vice versa) misreads every integration-covered file.
+- **Partial-run guard.** `missingFromReport` must be checked before calling `nextBaseline` + `writeBaseline`; otherwise a `--mutate` run on a single file silently drops every other file from the ratchet.
+- **`Timeout` counts as killed.** This follows Stryker's own convention; the file's `KILLED` set includes it.
+- **Frontend mirror.** The header comment states the frontend maintains a parallel copy of this logic. Keep them in sync when changing scoring or comparison semantics.
+- **Scoring edge case.** A file where every mutant is `RuntimeError`/`CompileError`/`Ignored` receives a score of 100, not 0, to prevent a permanent "untested" alarm.

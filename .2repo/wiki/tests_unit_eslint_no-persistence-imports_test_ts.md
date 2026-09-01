@@ -2,23 +2,23 @@
 
 ## Purpose
 
-Unit tests for the `no-persistence-imports` ESLint rule, exercising it through ESLint's `RuleTester` so that assertions mirror exactly what a lint run produces (parsed AST, not source strings). The cases are split along the rule's two detection routes — binding-name match and module-path match — and across its two shipped configurations (strict for controllers, `Model`-only elsewhere), catching regressions in either axis that a defaults-only test would miss.
+Unit test for the `noPersistenceImports` ESLint rule, exercised through ESLint's `RuleTester` so that assertions operate on the parsed AST exactly as a real lint run would. Covers both detection routes (imported binding name and module path) and both shipped configurations (strict for controllers, Model-only for the rest), catching regressions that a default-options-only test would miss.
 
 ## Key elements
 
-- **`tester`** – A `RuleTester` instance configured with the `typescript-eslint` parser (required because the rule must see `import type` nodes, which espree cannot parse).
-- **`MODEL_ONLY`** – The lax option set (`bindings: ['Model'], paths: false`) applied to non-controller modules under `src/modules/**`.
-- **`STRICT`** – The strict option set (`bindings: ['Repository', 'Model'], paths: true`) applied to controllers.
-- **`valid` cases** – Five scenarios that must *not* trigger the rule: a service importing a repository, `model.ts` itself importing mongoose, a seeder's model import (empty bindings list), a plain data type, and the `base-repository` helper (path check is segment-anchored, not suffix-matched).
-- **`invalid` cases** – Six scenarios that *must* trigger the rule, covering: barrel-import name detection, alias (`as`) detection, path detection, `import type` detection, single-report-on-overlap (path verdict subsumes binding verdict), and namespace imports.
+- **`tester`** — `RuleTester` instance configured with the `typescript-eslint` parser (`tseslint.parser`), `ecmaVersion: 'latest'`, `sourceType: 'module'`.
+- **`MODEL_ONLY`** — Options constant for the lax profile: `bindings: ['Model']`, `paths: false`.
+- **`STRICT`** — Options constant for the controller profile: `bindings: ['Repository', 'Model']`, `paths: true`.
+- **`tester.run(...)`** (top-level) — Declares five valid and six invalid cases. Valid cases include service-side repository imports, `model.ts` self-imports, seeder exemptions, plain data types, and the `createRepository` helper. Invalid cases cover barrel-name detection, aliased imports, path-based detection, `import type` imports, deduplication (one report for a combined name+path hit), and namespace imports.
 
 ## Relationships
 
-- **`eslint/rules/no-persistence-imports.ts`** – The rule under test. This file imports `noPersistenceImports` from that module and passes it as the rule implementation to `RuleTester.run`. All valid/invalid cases and `messageId` assertions (`'binding'`, `'path'`) are defined by that rule.
+- **`eslint/rules/no-persistence-imports.ts`** — Imports the `noPersistenceImports` rule object, which is the sole subject under test. The test passes it as the rule implementation to `RuleTester`.
 
 ## Notes
 
-- `tester.run` is called at **top level**, not inside a `describe` or `test` block, because `RuleTester` emits its own `describe`/`it` scaffolding and Jest rejects nested describes.
-- The parser is reached via the `typescript-eslint` **meta package** (not `@typescript-eslint/parser` directly) because the latter has no `main`/`types` entry — only an `exports` map — and `tsconfig.jest.json` resolves modules as `node16`, under which ts-jest cannot find its declarations (TS2307).
-- The `as never` casts on `parser` and the rule are needed to satisfy TypeScript's structural checks at the call site; they do not change runtime behavior.
-- The "one mistake, one report" invalid case (`orderModel` from `./model`) asserts exactly **one** error with `messageId: 'path'`, documenting that the path verdict subsumes the binding verdict for the same declaration.
+- `tester.run` must be called at the top level (not inside a `describe`/`it` block): RuleTester emits its own `describe`/`it` structure, and Jest rejects nested describes.
+- The parser is the TypeScript parser, not espree, because half the invalid cases use `import type` syntax that espree cannot parse.
+- The parser is imported via the `typescript-eslint` meta package (not `@typescript-eslint/parser`) because the latter ships only an `exports` map with no `main`/`types`, breaking ts-jest under the project's `node16` module resolution. The same spelling is already used in `eslint.config.ts`.
+- Both `as never` casts (on the parser and the rule) silence TypeScript's structural-type mismatch without changing runtime behavior.
+- The valid case for `createRepository` documents that the path check is anchored on a segment boundary — the name ending in "Repository" is not enough to trigger a violation when `paths: true`.

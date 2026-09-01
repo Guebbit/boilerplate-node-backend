@@ -2,21 +2,22 @@
 
 ## Purpose
 
-Express controller handler for `GET /cart/summary`. It retrieves the authenticated user's cart and returns only the lightweight `summary` portion (intended for badge/count UIs), keeping the payload smaller than a full cart fetch.
+Thin HTTP adapter for `GET /cart/summary`. Translates an incoming Express request into a call to the cart service's badge-summary method and sends back the summary object. Exists so the route layer never touches business logic directly.
 
 ## Key elements
 
-- **`getCartSummary(request, response)`** — Exposed as the route handler. Resolves the user ID via `authContextOf(request)`, calls `cartService.cartGetForBadge(id)`, and sends `cart.summary` back through `successResponse`. Errors are funneled to `catchAs`.
+- **`getCartSummary`** (exported) — Request handler for `GET /cart/summary`. Extracts the authenticated user id via `authContextOf(request).id`, calls `cartService.cartGetForBadge(id)`, and responds with `cart.summary` through `successResponse`. Errors are delegated to `catchAs(response, 'getCartSummary')`.
 
 ## Relationships
 
-- **`src/infrastructure/http/request.ts`** — Uses `authContextOf` to extract the authenticated user's ID from the incoming request.
-- **`src/infrastructure/http/response.ts`** — Uses `successResponse` to shape the HTTP 200 reply.
-- **`src/infrastructure/http/controller.ts`** — Uses `catchAs` as the unified rejection handler so error formatting stays consistent across controllers.
-- **`src/modules/cart/services/index.ts`** — Calls `cartService.cartGetForBadge(id)`; the sole domain-level dependency.
-- **`src/modules/cart/routes.ts`** — Registers `getCartSummary` as the handler for the `GET /cart/summary` route.
+- **`src/modules/cart/services/index.ts`** — Source of `cartService`; this controller calls its `cartGetForBadge` method and expects the returned object to carry a `.summary` property.
+- **`src/modules/cart/routes.ts`** — Registers `getCartSummary` on the `GET /cart/summary` route.
+- **`src/infrastructure/http/request.ts`** — Provides `authContextOf`, used to pull the user id off the request.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, the standard 200 wrapper for this module's replies.
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the shared error-catch helper that formats and sends the error response.
 
 ## Notes
 
-- Only `cart.summary` is sent to the client, not the full cart object. Consumers expecting line items must hit a different endpoint.
-- Follows the project's `.then().catch(catchAs(response, 'opName'))` controller pattern rather than `async/await` — keep new controllers consistent with this style.
+- The controller only returns `cart.summary`, not the full cart object. Consumers expecting line items or totals beyond the summary shape will get `undefined`.
+- Authentication is assumed to be validated upstream (middleware in `routes.ts`); `authContextOf(request).id` is accessed without a null-check. If the auth guard is removed or reordered, this handler will throw on an undefined id rather than returning 401.
+- The module doc-comment labels it a "thin HTTP adapter" — do not add branching or transformation logic here; keep changes in the service layer.

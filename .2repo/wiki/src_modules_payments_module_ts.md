@@ -2,29 +2,31 @@
 
 ## Purpose
 
-Module registration file for the **payments** module. Declares the module's identity (name, base path, subdomain), its inter-module dependencies in DDD terms, its HTTP routes, and its domain-event subscriptions, then hands the whole thing to the kernel via the `AppModule` contract. It is the single entry point the rest of the system uses to wire payments in.
+Module manifest for the **payments** domain. Wires the module's HTTP routes, a domain-event subscription (refund on order cancellation), and locale files into the application shell so the kernel can mount and start it. Exists purely as the composition root for the payments feature; it contains no business logic.
 
 ## Key elements
 
-- **Default export (`AppModule`)** – The module descriptor object, checked with `satisfies AppModule`. Carries `name`, `subdomain` (`'supporting'`), `basePath` (`/payments`), `routes`, `dependsOn`, `subscribe`, and `locales`.
-- **`subscribe`** – A zero-arg function (invoked by the kernel at boot, not at import time) that calls `onDomainEvent(ORDER_CANCELLED, …)`. When the payload carries a `refund` field it delegates to `refundForOrder(orderId)`; otherwise it is a no-op.
-- **`dependsOn`** – Declarative list of three relationships: **orders** (customer-supplier), **inventory** (customer-supplier), **users** (conformist). Each entry includes a `because` string explaining the coupling.
-- **`routes`** – Re-exported from `./routes`; mounted under `/payments`.
-- **`refundForOrder`** – Imported from `./service`; the single function this file calls at runtime (via the event handler).
-- **`locales`** – Resolved with `path.join(__dirname, 'locales')`; a CJS-style path for i18n files.
+- **`export default { … } satisfies AppModule`** — the module descriptor consumed by the kernel registry. Declares:
+  - `name: 'payments'` — module identifier.
+  - `basePath: '/payments'` — URL prefix for its routes.
+  - `routes: router` — the Express/Fastify router from `./routes`.
+  - `subscribe()` — registers a listener on the `ORDER_CANCELLED` domain event; when an order carries a `refund` payload, calls `refundForOrder(orderId)` from `./service`.
+  - `locales` — path to the module's locale directory.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** – Supplies the `AppModule` type that the default export satisfies.
-- **`src/kernel/events.ts`** – Supplies `onDomainEvent`, used inside `subscribe` to register the `ORDER_CANCELLED` handler.
-- **`src/modules/orders/index.ts`** – Exports the `ORDER_CANCELLED` event constant that this module subscribes to; also the "orders" dependency declared in `dependsOn`.
-- **`src/modules/payments/routes.ts`** – Provides the Express/router instance assigned to the `routes` field.
-- **`src/modules/payments/service.ts`** – Provides `refundForOrder`, the refund logic invoked when an order is cancelled with a refund.
-- **`src/modules.ts`** – Aggregates all module default exports (including this one) for the kernel to register at startup.
+- **`src/kernel/registry.ts`** — provides the `AppModule` type that constrains the default export shape.
+- **`src/kernel/events.ts`** — provides `onDomainEvent`, the subscription helper used inside `subscribe()`.
+- **`src/modules/orders/index.ts`** — exports the `ORDER_CANCELLED` event constant the subscription listens for.
+- **`src/modules/payments/routes.ts`** — supplies the `router` mounted under `/payments`.
+- **`src/modules/payments/service.ts`** — supplies `refundForOrder`, the action invoked when the cancel event fires with a refund.
+- **`src/modules.ts`** — aggregates this module (and others) for kernel boot.
+- **`src/modules/cart/tests/integration/stock.test.ts`** — integration test that exercises the stock-hold/confirm flow the payments confirm path depends on.
+- **`src/modules/payments/tests/integration/service.test.ts`** — integration tests for the refund service called by this subscription.
 
 ## Notes
 
-- `subscribe` is a **function**, not a call. The kernel is expected to invoke it during module boot; importing this file alone triggers no side effects.
-- The `dependsOn` array is **metadata only** — it documents intent for humans and tooling but does not enforce import order or runtime checks.
-- The `refundForOrder` call is guarded by a truthiness check on `refund` in the event payload; a cancelled order *without* a refund field produces no action.
-- `locales` uses `__dirname`, meaning this file must be executed in a CommonJS (or CJS-compatible) context; a pure ESM build would need a different resolution strategy.
+- The `subscribe` callback is called **once** at module start by the kernel; it is not re-registered per request. If `refund` is absent on the event payload, the handler is a no-op (returns `undefined`).
+- The file intentionally contains **no** domain logic—only wiring. Payment rules live in `./service` and `./routes`.
+- `locales` uses `path.join(__dirname, 'locales')`, so the directory must exist relative to the compiled file location (matters for bundlers or `ts-node` transpile-only modes).
+- The module docstring states payments is a **leaf** in the dependency graph ("Reached by: nothing"); removing it breaks payment processing but not compilation of other modules.

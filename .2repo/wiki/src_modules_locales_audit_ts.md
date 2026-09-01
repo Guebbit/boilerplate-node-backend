@@ -2,21 +2,22 @@
 
 ## Purpose
 
-Defines the audit action constants for all locale-management write operations (locale CRUD and locale-entry CRUD/import) and registers them in the shared audit type map via module augmentation. The file exists because the dictionary stores no edit history and copy has left the repository, so these rows are the sole record of who changed what translation text.
+Declares the audit action strings that the locales module emits when an admin mutates locale or locale-entry records, and merges them into the app-wide `AuditActionMap` type via module augmentation. This gives call sites in the locale services a typed, centralized source of action identifiers while keeping the naming convention (`noun.noun.verb`) enforced cross-cuttingly.
 
 ## Key elements
 
-- **`localeAuditActions`** (const object) — Seven string constants in `noun.noun.verb` form: `admin.locale.{created,updated,deleted}`, `admin.locale_entry.{created,updated,deleted,imported}`. The single `imported` action covers both bulk routes; the differing mode is carried in metadata rather than split into two actions.
-- **`declare module '@infrastructure/observability/audit'`** — Augments `AuditActionMap` with a `locales` key typed as the union of the values above, so the observability layer can reference these actions in a type-safe way.
+- **`localeAuditActions`** (exported const) — Maps seven constant names (`ADMIN_LOCALE_CREATED`, `…UPDATED`, `…DELETED`, `ADMIN_LOCALE_ENTRY_CREATED`, `…UPDATED`, `…DELETED`, `ADMIN_LOCALE_ENTRY_IMPORTED`) to their string values (e.g. `'admin.locale_entry.imported'`).
+- **Module augmentation of `@infrastructure/observability/audit`** — Extends `AuditActionMap` with a `locales` key typed as the value union of `localeAuditActions`, making the actions part of the global audit type system without a shared enum.
 
 ## Relationships
 
-- **`src/modules/locales/services/languages.ts`** — Emits the `ADMIN_LOCALE_*` actions (create, update, delete a locale) when mutating locale records.
-- **`src/modules/locales/services/entries.ts`** — Emits the `ADMIN_LOCALE_ENTRY_*` actions (create, update, delete, import entries) when mutating individual translation entries or performing bulk imports.
-- **`src/modules/locales/tests/unit/audit.test.ts`** — Unit-tests the constants exported by this file (shape, naming, completeness).
+- **`src/modules/locales/services/languages.ts`** — Consumes `localeAuditActions` values (e.g. `ADMIN_LOCALE_CREATED/UPDATED/DELETED`) when recording admin locale CRUD events.
+- **`src/modules/locales/services/entries.ts`** — Consumes the entry-scoped actions (`ADMIN_LOCALE_ENTRY_*`) when recording admin locale-entry CRUD and bulk-import events.
+- **`src/modules/locales/tests/unit/audit.test.ts`** — Unit-tests the shape, values, or typing of `localeAuditActions` defined here.
 
 ## Notes
 
-- **Snake-case is mandatory, not hyphenated.** The cross-cutting sweep `tests/cross-cutting/audit-actions.test.ts` enforces `noun.noun.verb` in lower snake_case; `locale-entry` would fail it, `locale_entry` passes.
-- **Reads are intentionally not audited** in either tier. `GET /locales/{locale}/messages` is public/anonymous, and `GET /locales/{locale}/entries` returns publish-ready text—unlike the `feedback` module, whose reads are audited because they carry PII.
-- **Augmentation, not a shared enum.** The pattern mirrors `modules/account/audit.ts`; each domain declares its own action set and plugs it into the global `AuditActionMap` interface rather than importing from a central registry.
+- The naming format (`noun.noun.verb`, snake_case) is not enforced by this file alone; `tests/cross-cutting/audit-actions.test.ts` validates it across all modules.
+- Bulk import of locale entries uses a **single** action (`ADMIN_LOCALE_ENTRY_IMPORTED`) rather than separate upsert/overwrite actions; the differentiation lives in the event's metadata, keeping compliance queries to one filterable prefix.
+- The augmentation pattern (vs. a shared enum) is deliberate and mirrors the approach in `modules/account/audit.ts`; do not refactor to a common enum without checking that file's rationale.
+- Only write operations are audited here; reads are intentionally excluded.

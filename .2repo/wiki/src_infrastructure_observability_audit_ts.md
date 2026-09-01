@@ -2,35 +2,38 @@
 
 ## Purpose
 
-Provides the audit-trail layer: a closed vocabulary of action identifiers, a structured event shape, and the emit/persist pipeline that records *who did what to which resource, and whether it succeeded*. It is deliberately separate from application logging — audit entries are a compliance artefact written to a dedicated always-on logger with a stable, machine-readable field set.
+Defines the application's structured audit-trail system — a security/compliance artefact deliberately separated from general application logging. It provides the event schema, action-constant namespace, and the emit/persist pipeline that every module uses to record *who did what to which resource, and whether it succeeded*, via a dedicated `auditLogger` stream and an optional persistence sink.
 
 ## Key elements
 
-- **`coreAuditActions`** — Three app-level action constants (`security.unauthorized`, `security.forbidden`, `security.rate_limit_hit`). Emitted by `middlewares/authorizations.ts` for requests refused before any domain handler runs.
-- **`AuditActionMap`** — Empty interface serving as a declaration-merging seam. Each module (e.g. `modules/account/audit.ts`) augments it with its own action strings, keeping the vocabulary closed and type-safe.
-- **`AuditAction`** — Union of `CoreAuditAction | AuditActionMap[keyof AuditActionMap]`.
+- **`coreAuditActions`** — Three app-level action constants (`security.unauthorized`, `security.forbidden`, `security.rate_limit_hit`) emitted by middleware before any domain module sees the request.
+- **`AuditActionMap`** — An intentionally empty interface; each module augments it via TypeScript declaration merging (same pattern as `DomainEventMap`) so `infrastructure` never imports a module.
+- **`AuditAction`** — Union of the three core strings and whatever the enabled modules declare; deleting a module drops its actions from the union.
 - **`AuditEvent`** — The structured event shape (snake_case fields: `actor_user_id`, `actor_role`, `action`, `outcome`, `ip`, `user_agent`, `request_id`, `trace_id`, `target_type`, `target_id`, `metadata`).
-- **`AuditEntry`** — `AuditEvent` + `timestamp: Date` + `level: 'info' | 'warn'`, added at emit time.
-- **`AuditSink`** / **`registerAuditSink`** — Port for a persistence callback (e.g. DB write). Installed once at module-load time by the audit-logs module. Unregistered is a valid state.
-- **`emitAuditEvent(event)`** — Writes the log line via `auditLogger`, then invokes the registered sink. Swallows and logs any sink exception so a broken sink can never fail the in-flight request.
-- **`extractRequestContext(context)`** — Pulls `ip`, `user_agent`, `request_id`, `trace_id` from `CallerContext` / active OTel span.
-- **`resolveActorRole(context)`** — Derives `'admin' | 'user' | 'anonymous'` from the caller's admin flag and presence of an id.
-- **`buildAuditEvent(context, fields)`** — Assembles a full `AuditEvent` from caller context plus action-specific fields. Caller overrides win for `actor_user_id`/`actor_role`; context-derived fields (`ip`, `trace_id`, …) are spread last and cannot be overridden.
+- **`AuditEntry`** — `AuditEvent` plus `timestamp` and `level`, added at emit time.
+- **`AuditSink` / `registerAuditSink`** — Port interface and one-time installer for a persistence callback; unregistered is a valid state (tests, queue workers).
+- **`emitAuditEvent`** — Synchronous emitter: writes the log line via `auditLogger`, then fire-and-forget calls the sink (with a catch-all so a misbehaving sink cannot crash the request).
+- **`extractRequestContext`** — Pulls `ip`, `user_agent`, `request_id`, `trace_id` from a `CallerContext`.
+- **`resolveActorRole`** — Maps caller context to `'admin' | 'user' | 'anonymous'` (most-privileged check first).
+- **`buildAuditEvent`** — Assembles a complete `AuditEvent` from `CallerContext` + caller-supplied fields; context-derived fields are spread last so they cannot be overridden.
 
 ## Relationships
 
-- **`@infrastructure/adapters/logger`** — Imports `auditLogger`; every audit event is written through it as the durable, always-on log line.
-- **`@infrastructure/observability/tracer`** — Imports `getActiveSpanContext` to stamp `trace_id` onto each event, linking audit entries to distributed traces.
-- **`@infrastructure/http/request`** — Imports the `CallerContext` type; `buildAuditEvent`, `extractRequestContext`, and `resolveActorRole` all consume it.
-- **`@kernel/middlewares/authorizations`** — Sole emitter of the three `coreAuditActions`; it calls `emitAuditEvent` when a request is denied before reaching domain code.
-- **`@modules/account/*` (services, controllers)** — Call `buildAuditEvent` + `emitAuditEvent` for domain-specific actions (login, reset, verification, token cleanup, profile changes). Each module also augments `AuditActionMap` in its own `audit.ts`.
-- **`@modules/account/tests/**`** — Unit tests exercise `buildAuditEvent`/`emitAuditEvent` in isolation (no sink registered); integration tests assert audit lines appear in service flows.
+- **`src/infrastructure/adapters/logger.ts`** — Imports `auditLogger`, the dedicated always-on Winston logger that audit lines are written to.
+- **`src/infrastructure/observability/tracer.ts`** — Imports `getActiveSpanContext` to attach the OTel `trace_id` to each audit event.
+- **`src/infrastructure/http/request.ts`** — Imports the `CallerContext` type used by all builder helpers.
+- **`src/kernel/middlewares/authorizations.ts`** — Emits `security.unauthorized` / `security.forbidden` events via `emitAuditEvent`.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Emits `security.rate_limit_hit` events.
+- **`src/modules/account/controllers/post-login.ts`, `post-reset-request.ts`**, and account services (`authentication.ts`, `verification.ts`, `profile.ts`, `token-cleanup.ts`) — Consumers that call `buildAuditEvent` / `emitAuditEvent` and augment `AuditActionMap` with domain-specific actions.
+- **`src/infrastructure/surfaces/create-delete-controller.ts`** — Emits audit events for resource CRUD operations.
+- **`src/modules/account/tests/unit/audit.test.ts`**, **`service-flows.test.ts`**, **`self-service.test.ts`** — Unit and integration tests exercising the emit/build path.
 
 ## Notes
 
-- **Field names are snake_case** on purpose — they are log data consumed by SIEM tooling, not TypeScript identifiers. Do not "fix" them to camelCase.
-- **`AuditActionMap` augmentation is type-only.** Infrastructure imports nothing from modules; a module's actions leave the `AuditAction` union the moment that module is removed.
-- **Sink contract: must not throw, must not reject.** `emitAuditEvent` wraps the call in `try/catch` as a second line of defence, but the sink implementation itself is responsible for fire-and-forget semantics (the audit-log schema uses `bufferCommands: false`).
-- **`ip` is the proxy/LB address** unless Express `trust proxy` is configured. Behind a load balancer, that setting is what makes the field meaningful for incident investigation.
-- **`actor_user_id` fallback chain:** explicit override → `context.caller.id` → `'unknown'`. The override exists so a failed login can record the *attempted* email rather than an empty string.
-- **Unregistered sink is normal.** Unit tests and queue workers run without one; the log line is still written and remains the compliance record.
+- Field names are **snake_case** deliberately (they are SIEM/log-tooling data, not TS API); the rest of the codebase uses camelCase.
+- `infrastructure` sits at the bottom of the dependency graph and **cannot import from `@modules/*` or `@kernel/*`**; the `AuditSink` port and `AuditActionMap` declaration-merging exist to keep that boundary intact.
+- `registerAuditSink` is called at **module-load time** (not DB-connect time) from `@modules/audit-logs/module`, so the sink implementation must tolerate a disconnected database.
+- `emitAuditEvent` is fully **synchronous** (`void`); the sink contract forbids throwing, and the `try/catch` is a safety net for a sink that breaks that contract.
+- `actor_user_id` is **never omitted** — it defaults to `'unknown'` so downstream queries can rely on its presence.
+- `ip` reflects the **proxy/LB address** unless Express `trust proxy` is configured; behind a load balancer that setting is what makes the field meaningful.
+- The `action` string doubles as the Winston log **message**, so log backends can filter/grep on it directly.

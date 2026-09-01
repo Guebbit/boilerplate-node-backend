@@ -1,31 +1,23 @@
 # src/modules/account/demo.ts
 
 ## Purpose
-
-Defines the demo dataset for the address-book collection and the seed/export functions the persistence layer calls to populate and read back those fixtures. Without this file the seeder skips the collection entirely (a module that declares no `seeds` is silently omitted), leaving `/account/addresses` empty and the checkout address step with nothing to select.
+Provides the address-book slice of the demo dataset. It defines two seeded address books (admin with two entries, ordinary customer with one), a seeding function, and a read-back export. It exists so that demo scenarios like "exactly one default entry per book" and "an order's shipping address is a snapshot that can diverge from the live book" are observable against real data.
 
 ## Key elements
-
-- **`addressBookFixtures`** — Array of two `AddressBook` objects built via `makeAddressBook`: one for the admin (2 entries: `home` default + `office`) and one for the regular customer (1 entry: `casa`, phone omitted to exercise the optional-field contract).
-- **`upsertByOwner`** *(internal)* — Looks up an existing book by `userId`; returns `'skipped'` if found, otherwise calls `addressBookRepository.create` and returns `'created'`.
-- **`seedAddressBooksCollection`** — Public entry point. Maps `addressBookFixtures` through `upsertByOwner` and returns `Promise<SeedOutcome[]>`. Declared in `module.ts`; invoked by `db/demo/index.ts`.
-- **`exportSeededAddressBooks`** — Reads the stored rows back via `exportCollection(addressBookModel, …)` and returns them as `{ addressBooks: [...] }`. Intended for frontend mocks that build the `GET /account/addresses` response by reading `items` directly.
+- **`addressBookFixtures`** — Array of two `AddressBook` objects built via `makeAddressBook`. The admin's book has two items (one default, one non-default) to exercise the "set as default" demo; the customer's book has a single item and deliberately omits the optional `phone` field.
+- **`seedAddressBooksCollection()`** — Upserts each fixture into the collection keyed by `userId` (the unique/owner column) rather than the pinned `_id`. Returns `SeedOutcome[]`.
+- **`exportSeededAddressBooks()`** — Reads all seeded books back from the model sorted by `userId` and returns them under the key `addressBooks`. Intended for the frontend mock to consume directly.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/kernel/seed-accounts.ts` | Imports `SEED_ADMIN_ID` and `SEED_USER_ID` to tie fixtures to known seed accounts. |
-| `src/infrastructure/persistence/seed.ts` | Imports `SEED_SAVE_OPTIONS`, the `SeedOutcome` type, and `exportCollection` for write/save options and the read-back helper. |
-| `src/modules/account/factory.ts` | Imports `makeAddressBook` to construct the fixture objects. |
-| `src/modules/account/model.ts` | Imports `addressBookModel`; passed to `exportCollection` in the export function. |
-| `src/modules/account/repository.ts` | Imports `addressBookRepository`; used for `findByUserId` and `create` in the upsert path. |
-| `src/modules/account/module.ts` | Declares `seedAddressBooksCollection` as this module's seed entry (the seeder walks module manifests). |
+- **`src/kernel/seed-accounts.ts`** — Supplies `SEED_ADMIN_ID` and `SEED_USER_ID` used as the `userId` on each fixture.
+- **`src/infrastructure/persistence/seed.ts`** — Provides the `SeedOutcome` type, `exportCollection`, and `upsertByOwner` helpers used by the seed and export functions.
+- **`src/modules/account/fixtures.ts`** — Provides `makeAddressBook`, the factory that shapes raw input into the fixture objects.
+- **`src/modules/account/model.ts`** — Provides `addressBookModel` (the Mongoose model) passed to `exportCollection`.
+- **`src/modules/account/repository.ts`** — Provides `addressBookRepository`, the repository handle passed to `upsertByOwner`.
+- **`src/modules/account/module.ts`** — Declares `seedAddressBooksCollection` as part of the module's seed contract; the actual call originates from `db/demo/index.ts`.
 
 ## Notes
-
-- **Upsert key is `userId`, not `_id`.** Fixtures pin a `_id`, but the skip-if-present check queries by `userId` (the unique column all address queries use). Re-running the seeder therefore idempotently skips by owner.
-- **Admin has exactly two entries by design.** "Exactly one default" is only observable with ≥ 2; the second entry is what a "make this the default" demo interacts with. The customer has one to cover the single-address checkout path.
-- **No zero-address fixture.** Absence and an empty book are indistinguishable in the API (`addressesGet` returns `[]` for both), and every fresh signup starts in that state, so no fixture is needed.
-- **`orders/demo.ts` restates the admin's `home` entry** as a frozen `shippingAddress` on a seeded order rather than importing it. That duplication is intentional: an order's address is a snapshot that must be able to diverge from the live book.
-- **Export shape ≠ API shape.** `exportSeededAddressBooks` returns the raw stored row (entries serialize as `Address` via the shared `addressItemSchema`). The `GET /account/addresses` response is a different view built by `./services/addresses`; a frontend mock should read `items` from the export, not expect the endpoint wrapper here.
+- Seeding is keyed on `userId` (the unique owner column) even though each fixture also pins an `_id`. This mirrors how every runtime query reaches a book.
+- `orders/demo.ts` deliberately **restates** (does not import) a copy of the admin's default entry as an order's `shippingAddress`. This keeps the order's snapshot independent of the live book so the two can diverge—a property the fixture set is designed to make checkable.
+- The customer's single entry omits `phone` entirely (not set to `''`) so the dataset demonstrates what an absent optional field looks like to a client.
+- `exportSeededAddressBooks` is a read-only helper for the frontend mock; no API endpoint serves a raw address book. Stored items already serialize to the contract's `Address` shape via `addressItemSchema`'s shared serializer.

@@ -2,24 +2,28 @@
 
 ## Purpose
 
-CLI entry point for the per-file mutation ratchet. Reads the latest Stryker mutation report (`reports/mutation/mutation.json`), compares it against `mutation-baseline.json`, reports regressions, and optionally records improvements. It is deliberately separate from running Stryker so a CI job can split the expensive test run and the cheap gate into independent steps.
+CLI entry point for the per-file mutation ratchet. It reads the Stryker report (`reports/mutation/mutation.json`), compares per-file scores against a committed JSON baseline, and either fails the process (exit 1) if any file regressed or records a new baseline. It deliberately does **not** invoke Stryker, keeping the gate cheap enough to run in a separate CI step from the actual mutation run.
 
 ## Key elements
 
-- **`--update` flag** (detected via `process.argv.includes`) — toggles between read-only check mode and baseline-recording mode.
-- **Read path** — calls `readReport()` and `readBaseline()` from the module; on first run (no baseline) it records the current report as the initial baseline and exits 0.
-- **Partial-report guard** — before any write with `--update`, `missingFromReport()` verifies the report covers every file the baseline already knows about; if not, the script refuses to update and exits 1 to prevent silently erasing ratchet memory.
-- **Verdict summary** — tallies `held`, `improved`, `regressed`, `added`, and `removed` counts from `compareToBaseline()`.
-- **Progress output** — prints every new file (with score), every improvement (before → after), and every removed file, even on a passing run, so a silent pass is distinguishable from a non-running check.
-- **Regression handling** — on regression, prints `formatRegressions()` output and exits 1. With `--update`, still calls `writeBaseline(nextBaseline(current, baseline))` but `nextBaseline` never lowers a score, so the ratchet holds.
+- **`--update` flag** (detected via `process.argv`) — switches the script from "check only" to "check and rewrite the baseline."
+- **`profileFromArguments` / `MUTATION_PROFILES`** — selects a named profile (default vs. `--deep`), each with its own report path and committed baseline file, so scores are only compared against measurements taken the same way.
+- **`readReport(profile)`** — parses the Stryker JSON report for the selected profile; a missing/invalid report exits 2.
+- **`readBaseline(profile)`** — loads the committed baseline; returns `null` on first-ever run, in which case the script writes the report as the initial baseline and exits 0.
+- **`missingFromReport(current, baseline)`** — detects files present in the baseline but absent from the report, guarding against a partial Stryker run silently erasing ratchet memory on `--update`.
+- **`compareToBaseline(current, baseline)`** — returns per-file verdicts: `held`, `improved`, `new`, `removed`, or regressed.
+- **`nextBaseline(current, baseline)`** — merges the two, keeping the *higher* score per file (the ratchet: scores only ever go up).
+- **`writeBaseline(next, profile)`** — persists the merged baseline.
+- **`formatRegressions(comparisons)`** — produces a human-readable block of regressed files for `console.error`.
+- **Exit codes** — 0: all fine; 1: one or more files regressed (or partial-report guard fired); 2: report file could not be read.
 
 ## Relationships
 
-- **`scripts/mutation-baseline.ts`** — sole dependency. All domain logic (read/write baseline, read report, comparison, formatting, partial-report detection, `MUTATION_BASELINE_PATH`) lives there. This file is purely the CLI wiring, exit-code control, and console output.
+- **`scripts/mutation-baseline.ts`** — provides every imported function and constant (`compareToBaseline`, `missingFromReport`, `formatRegressions`, `nextBaseline`, `readBaseline`, `readReport`, `writeBaseline`, `MUTATION_PROFILES`, `profileFromArguments`). This file is the CLI shell; all comparison, I/O, and merging logic lives in that module.
 
 ## Notes
 
-- **Exit codes:** `0` = pass (or first-baseline recording), `1` = regression detected or partial-report guard tripped, `2` = no mutation report file found.
-- **Ratchet is one-way:** `nextBaseline` (in the module) only ever takes `max(baseline, current)` per file, so a score can never decrease in the recorded baseline regardless of `--update`.
-- **Does not invoke Stryker.** Run `npm run test:mutation` first; this script only reads the JSON artifact it produces.
-- **Shebang is `#!/usr/bin/env tsx`** — executed directly as a script, not compiled to JS first.
+- The ratchet is **monotonic per file**: `nextBaseline` takes `max(current, baseline)` per file, so a regressed file keeps its old (higher) baseline and continues to fail until the code is actually fixed.
+- New and improved files are printed even when the overall result is a pass — an intentional design so a silent exit 0 isn't indistinguishable from a broken/no-op check.
+- The `--deep` profile exists because integration tests under `tests/integration/` are only mutated in that scope; it has a separate report and baseline so scores remain comparable.
+- Running `--update` when the report is a subset of the baseline (e.g. a targeted `--mutate 'some/file.ts'` run) is **refused** with exit 1; the user must run a full mutation pass or explicitly delete the baseline first.

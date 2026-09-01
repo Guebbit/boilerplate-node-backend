@@ -2,35 +2,55 @@
 
 ## What This Is
 
-A TypeScript backend service for a multi-tenant e-commerce platform. It exposes both a REST API (Zod-validated request/response schemas) and an async/event-driven interface (AsyncAPI specs, internal and public). Core domain modules cover products, cart, checkout, orders, inventory reservations, payments, delivery, user accounts/sessions, locales (i18n), audit logs, feedback, and observability.
+A TypeScript e-commerce backend API with a contract-first approach. It manages users, accounts/sessions, cart, checkout, orders, inventory (with reservations), delivery, feedback, and audit logging. Data is stored in MongoDB (evidenced by collection-based migrations). The API supports multi-tenant localization (locale collections, base language, tenant scoping) and image pipeline processing.
 
-## Architecture at a Glance
+## Main Areas
 
-| Layer | Location | Role |
-|---|---|---|
-| **Infrastructure** | `src/infrastructure/` | Cross-cutting concerns: HTTP transport (`controller`, `request`, `response`), internationalization (`i18n/`), adapters (e.g. `logger`) |
-| **Domain modules** | `src/modules/` | Business logic per bounded context: `orders`, `users`, `products`, `cart`, `inventory`, `payments`, `locales`, `delivery`, `account`, `feedback`, etc. |
-| **Shared types** | `src/types/` | Core type definitions consumed across nearly every module |
-| **Database** | `db/` | Schema migrations (timestamped JS), demo/seed data, operational scripts (`run-script.ts`, `cache-clear.ts`) |
-| **API contracts** | Root level | `asyncapi.yaml` / `asyncapi.public.yaml`, `api/schemas.zod.ts`, plus exported collections for Bruno, Postman, Insomnia, and Mockoon |
-| **Docs** | `docs/` | VitePress site: getting-started, per-module pages, API workflow guides, contract-fragmentation notes |
-| **Tests** | `tests/` | Integration tests with a shared DB setup helper |
-| **Deployment** | Root | `docker-compose.yml` (dev) and `docker-compose.production.yml` |
+| Area | Purpose |
+|------|---------|
+| `src/infrastructure/http/` | Request/response handling, controller base class (hub connecting to ~110 files) |
+| `src/infrastructure/i18n/` | Internationalization context and resolution (~86 file connections) |
+| `src/infrastructure/adapters/` | Logger and external-service adapters |
+| `src/modules/` | Domain logic: orders, users, cart, inventory, delivery, feedback, account, audit-logs, inventory-reservations |
+| `src/types/` | Shared TypeScript type definitions |
+| `api/schemas.zod.ts` | Zod schema definitions used for request/response validation |
+| `db/migrations/` | Sequential MongoDB collection/index migrations |
+| `db/demo/` | Seed/demo data assembly |
+| `docs/` | VitePress-powered developer documentation |
+| Contract files (root) | OpenAPI, AsyncAPI, Bruno, Insomnia, Mockoon, and Postman artifacts for API testing and mocking |
+| `docker-compose.yml` / `.production.yml` | Local and production service orchestration |
+| `tests/support/` | Test DB setup and shared test helpers |
 
-### How the pieces relate
+## How the Pieces Relate
 
-1. **Types** (`src/types/index.ts`) are the shared vocabulary every module and infrastructure file imports.
-2. **Infrastructure** provides the HTTP plumbing and i18n context that each module's controllers and services depend on.
-3. **Modules** implement domain logic and talk to the database layer; they emit/consume events described in the AsyncAPI specs.
-4. **Migrations** evolve the database schema in lockstep with module changes.
-5. **Contract files** are generated or maintained alongside the code and consumed by downstream clients and mocks.
+```
+Contracts (api/, *.yml, *.json)
+        │
+        ▼
+Infrastructure (HTTP layer, i18n, logger)
+        │
+        ▼
+Modules (orders, users, cart, inventory, …)
+        │
+        ▼
+Data (MongoDB collections, migrations, cache)
+```
 
-## Where to Start Reading
+Each module exposes a service layer; the HTTP controller in `infrastructure` dispatches to those services. Contracts at the repo root define the external API surface independently of runtime code. The `docs/` site mirrors the module structure for human readers.
 
-1. **`docs/getting-started.md`** – project conventions, local dev setup.
-2. **`src/types/index.ts`** – the shared type surface (linked from ~88 files).
-3. **`src/infrastructure/http/controller.ts`** – how requests are dispatched to modules.
-4. **`src/infrastructure/i18n/context.ts`** – how locale/tenant context flows through requests.
-5. **`src/modules/orders/service.ts`** – a representative domain service (touches 46 other files) to see how modules compose infrastructure + DB + types.
-6. **`db/migrations/`** (read chronologically) – fastest way to understand the data model.
-7. **`asyncapi.yaml`** – the event/endpoint surface from the outside in.
+## Where to Start
+
+1. **`CLAUDE.md`** – project conventions and AI-assistant guidance.
+2. **`README.md`** – quick-start and high-level context.
+3. **`docs/getting-started.md`** – how to run locally (Docker, migrations, demo data).
+4. **`docs/modules/index.md`** – one-page summary of each domain module and its responsibilities.
+5. **`src/modules/orders/service.ts`** – a representative module service to see the typical request→service→DB flow.
+
+## Notable Planning / Process Docs
+
+- `CONTRACT_PLAN_POLYMORPHISM.md` – approach to polymorphic response schemas.
+- `IMAGE_PIPELINE_PLAN.md` – image processing pipeline design.
+- `INFRASTRUCTURE_LAYOUT_PLAN.md` – rationale for the `src/infrastructure/` split.
+- `REINVENTING_THE_WHEEL.md` / `LODASH.md` – team decisions on library usage.
+
+These are design discussions, not runtime code.

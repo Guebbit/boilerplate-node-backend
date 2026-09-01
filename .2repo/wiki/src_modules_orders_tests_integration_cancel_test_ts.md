@@ -2,40 +2,39 @@
 
 ## Purpose
 
-Integration tests for `orderService.cancelById` and `orderService.withActions`. They verify the cancellation invariants (atomic status gate + scope in one statement), the 404-vs-409 refusal contract, refund semantics enforced by role, the audit/analytics emissions, and the action-availability surface — all against a real test database.
+Integration tests for `orderService.cancelById` (and the related `withActions` projection) against a real database. They pin down the invariants that make the single-statement cancel safe: the status gate and ownership check are atomic, refusal reasons map to distinct HTTP statuses (404 vs 409), the refund flag is caller-scoped, and audit/analytics side-effects fire with the correct actor identity and event name.
 
 ## Key elements
 
-- **`seedOrder(user)`** — local helper that creates a product via factory and a single-item pending order for the given user.
-- **`asUser(user)`** — shorthand for a non-admin caller scope (`{ id, admin: false }`).
-- **`describe('cancelById')`** — six cases: owner cancels pending; stranger gets 404 (order unchanged); shipped order gets 409 with `ORDER_NOT_CANCELLABLE` code; admin cancels non-owned order; operator cancels `processing` (customer cannot); soft-deleted order returns 404.
-- **`describe('cancelById — who gets their money back')`** — subscribes to `ORDER_CANCELLED` domain events to assert the `refund` flag: forced `true` for customers, honours `false` for admins, defaults to `true`, and always emits the event regardless of refund.
-- **`describe('cancelById — audit and analytics')`** — asserts audit action (`ORDER_CANCELLED`), `actor_role`/`actor_user_id` distinction between customer and system-triggered (reservation timeout) cancels, and that the analytics event is `ORDER_CANCELLED` vs `ORDER_RESERVATION_EXPIRED` depending on context.
-- **`describe('withActions')`** — verifies `actions.transitions`/`cancel`/`pay` flags per status and role, confirms `paid` never appears, and that the returned body is the serialized order (not the raw document).
-- **Port mocks** — `audit` and `analytics` infrastructure ports are replaced via `jest.mock` (spreading `requireActual` and overriding the emit function).
+- **`seedOrder(user)`** — creates a product and a one-item pending order for the given user.
+- **`asUser(user)`** — returns a non-admin caller scope `{ id, admin: false }`.
+- **`describe('cancelById')`** — ownership (404), status gate (409 for `shipped`), admin override, `processing → cancelled` restricted to admin, soft-deleted orders invisible to owner.
+- **`describe('cancelById — who gets their money back')`** — subscribes to `ORDER_CANCELLED` via `onDomainEvent`; verifies customer refund is forced to `true`, admin can suppress refund, event is always emitted.
+- **`describe('cancelById — audit and analytics')`** — asserts `emitAuditEvent` / `emitAnalyticsEvent` payload shape (action, outcome, actor_role, actor_user_id, event name), including the distinction between `ORDER_CANCELLED` and `ORDER_RESERVATION_EXPIRED`.
+- **`describe('withActions')`** — verifies the action projection: which transitions are offered, `paid` is never in the list, and `actions` rides on the serialized wire shape (not the DB document).
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `src/modules/orders/service.ts` | Calls `cancelById` and `withActions` under test. |
-| `src/modules/orders/repository.ts` | Reads back state via `findById`; mutates status via `updateStatusIfIn` to set up shipped/processing/soft-deleted fixtures. |
-| `src/modules/orders/index.ts` | Exports `orderRepository` and the `ORDER_CANCELLED` event constant used in event assertions. |
-| `src/modules/orders/audit.ts` | Imports `ordersAuditActions` for expected audit action strings. |
-| `src/modules/orders/analytics.ts` | Imports `ordersAnalyticsEvents` for expected analytics event names. |
-| `src/infrastructure/observability/audit.ts` | Mocked; `emitAuditEvent` called and asserted on. |
-| `src/infrastructure/observability/analytics/index.ts` | Mocked; `emitAnalyticsEvent` called and asserted on. |
-| `src/kernel/events.ts` | Uses `onDomainEvent` / `resetDomainEvents` to capture `ORDER_CANCELLED` payloads. |
-| `src/modules/orders/tests/factory.ts` | `createOrder`, `toOrderItem` for fixture setup. |
-| `src/modules/products/tests/factory.ts` | `createProduct` for fixture setup. |
-| `src/modules/users/tests/factory.ts` | `createUser` for fixture setup. |
-| `tests/support/caller-context.ts` | Provides `testCallerContext` passed to `cancelById` in the audit test. |
-| `tests/support/ports.ts` | Provides `observePort` to turn the mocked port functions into jest spies for assertions. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the in-memory DB before the suite. |
+| `modules/orders/service.ts` | System under test: `cancelById`, `withActions` |
+| `modules/orders/repository.ts` | `findById`, `updateStatusIfIn`, `save` for assertions and state manipulation |
+| `modules/orders/index.ts` | Exports `ORDER_CANCELLED` event name |
+| `modules/orders/audit.ts` | `ordersAuditActions` constants used in assertions |
+| `modules/orders/analytics.ts` | `ordersAnalyticsEvents` constants used in assertions |
+| `modules/orders/tests/fixtures.ts` | `createOrder`, `toOrderItem` for seeding |
+| `modules/products/tests/fixtures.ts` | `createProduct` for order items |
+| `modules/users/tests/fixtures.ts` | `createUser` for owner / stranger / admin accounts |
+| `kernel/events.ts` | `onDomainEvent` / `resetDomainEvents` to capture emitted domain events |
+| `infrastructure/observability/audit.ts` | Mocked; `emitAuditEvent` replaced with `jest.fn()` |
+| `infrastructure/observability/analytics/index.ts` | Mocked; `emitAnalyticsEvent` replaced with `jest.fn()` |
+| `tests/support/ports.ts` | `observePort` wraps the mocked functions for spy-style assertions |
+| `tests/support/caller-context.ts` | `testCallerContext` passed to `cancelById` for audit-context tests |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` boots a real database for the test run |
 
 ## Notes
 
-- **Port replacement, not spying.** The audit and analytics ports are swapped with `jest.mock` + `requireActual` spread rather than `jest.spyOn`. The CommonJS namespace getter is non-configurable, so `jest.spyOn` fails under the SWC transform used by `jest.config.mutation.js` and inside Stryker's sandbox. See `tests/support/ports.ts` for the full rationale.
-- **Refund is role-gated, not caller-controlled.** Passing `{ refund: false }` as a customer is silently overridden to `true`; only an `admin` caller can suppress the refund. The test encodes this as a contract, not a bug.
-- **Analytics event name depends on context.** A customer-initiated cancel emits `ORDER_CANCELLED`; a system-triggered reservation timeout emits `ORDER_RESERVATION_EXPIRED`. Both use the same underlying `cancelById` code path — the distinction is made by the presence/absence of `CallerContext`.
-- **`afterEach` uses `jest.restoreAllMocks()`**, which resets the mocked port functions between tests; the domain-event subscription is cleaned up separately via `resetDomainEvents()`.
+- **`jest.mock` instead of `jest.spyOn` for ports.** The audit and analytics modules are namespace imports whose getters are non-configurable under the SWC transform used by `jest.config.mutation.js` and Stryker's sandbox. `jest.spyOn` would throw; full-module `jest.mock` with `requireActual` spread is the working pattern. See `tests/support/ports.ts` for the rationale.
+- **Refund is not caller-negotiable for customers.** The tests lock in that `cancelById` *forces* `refund: true` on the domain event when the caller is non-admin, even if the caller explicitly passes `{ refund: false }`. Only an admin scope can suppress it.
+- **`withActions` operates on the serialized shape.** The last test (partially visible) asserts that `actions` is set on the wire-shaped object, not the Mongoose document, because the schema transform would strip unknown fields.
+- **`afterEach(() => jest.restoreAllMocks())`** is present but the ports are replaced via `jest.mock` (module-level), so this primarily restores any incidental spies; the mock factories persist for the file's lifetime.

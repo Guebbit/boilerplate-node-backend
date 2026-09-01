@@ -2,31 +2,35 @@
 
 ## Purpose
 
-Zod-schema-driven fixture generator that produces request payloads satisfying (or violating) an API contract, used exclusively by `tests/contract/request-contract.test.ts`. It answers "does the API honour its own contract for *any* legal input?" — a complement to hand-written per-module factories that cover specific scenarios.
+A Zod-schema-driven fixture generator that produces valid and invalid request payloads for contract testing. It recursively walks a Zod v4 schema's `_zod.def` introspection surface to emit deterministic, seed-reproducible data, answering "does the API honour its contract for *any* legal input?" — a question the per-module hand-written factories in `tests/fixtures.ts` don't cover. It is additive; deterministic scenario tests still use the hand-written factories.
 
 ## Key elements
 
-- **`validPayload(schema: ZodType)`** — Returns a payload that satisfies every constraint in the given Zod schema (respects formats, min/max, patterns, arrays, nested objects, optionality).
-- **`invalidPayloads(schema: ZodType)`** — Returns an array of payloads, each violating exactly one constraint (missing required field, wrong type, out-of-range value, etc.).
-- **`resolveContractDataSeed()`** — Reads `RANDOM_DATA_SEED` env var; falls back to a random value. Exported for reuse.
-- **`createRandom(seed)` / `randomInt` / `randomAlpha` / `randomHex` / `randomWords`** — Mulberry32 PRNG and small value generators; the PRNG is seeded once per process (not per call), so successive calls in a test file draw different-but-reproducible values from the same stream.
-- **`defOf` / `checksOf` / `unwrapField` / `isOptionalField`** — Thin wrappers over Zod v4's `_zod.def` introspection (accessed via `asStub` from `./stub`) to read schema type, shape, and constraint checks without depending on a third-party fixture library.
-- **`randomStringForFormat(format)`** — Maps Zod format hints (`email`, `url`, `datetime`, `uuid`, `guid`) to plausible sample strings.
-- **`PATTERN_SAMPLES` / `satisfyPattern`** — Lookup table mapping known regex `pattern` constraints to a fixed valid string. Throws a descriptive error if an unknown pattern is encountered, preventing `validPayload` from emitting a contract-illegal value.
-- **`clampStringLength`** — Pads or truncates a generated string to satisfy `min_length`/`max_length` checks.
-- **`buildValue(schema)`** — Recursive walker that dispatches on `def.type` (`string`, `number`, `boolean`, `literal`, `enum`, `array`, `object`, `optional`, `nullable`, `default`) to construct a concrete value.
+- **`createRandom`** — Mulberry32 PRNG (~10 lines); returns a closure yielding floats in `[0, 1)`. Chosen over `@faker-js/faker` because faker v10 is ESM-only and incompatible with this project's CommonJS Jest setup.
+- **`resolveContractDataSeed`** (exported) — reads `RANDOM_DATA_SEED` from the environment; falls back to `Math.random()` if unset or non-finite.
+- **`ensureSeeded`** — one-time seeding guard; logs the seed via `console.log` (bypasses mocked loggers) so a failed run can be reproduced.
+- **`randomInt` / `randomAlpha` / `randomHex` / `randomWords`** — primitive value generators used by the schema walker.
+- **`defOf` / `checksOf`** — thin wrappers around `_zod.def` (zod v4's public typed introspection) to read a schema's type tag and constraint list.
+- **`isOptionalField`** — returns `true` for `optional` and `default` wrappers; deliberately excludes `nullable` (a nullable field is still required to be present).
+- **`unwrapField`** — recursively peels `optional`/`nullable`/`default` to reach the inner schema whose constraints apply.
+- **`randomStringForFormat`** — emits format-appropriate strings for `email`, `url`, `datetime`, `uuid`/`guid`; falls back to `randomWords()`.
+- **`PATTERN_SAMPLES`** (module-level map) — lookup table mapping regex `source` strings to known-valid samples. Adding a new `pattern` in `openapi.yaml` without a corresponding entry causes `validPayload` to throw a descriptive error rather than silently emit an illegal value.
+- **`satisfyPattern`** — post-processes a generated string against all `regex` checks; throws if no sample exists.
+- **`clampStringLength`** — pads/truncates a string to satisfy `min_length`/`max_length` checks.
+- **`buildValue`** — recursive walker dispatching on Zod type (`string`, `number`, `boolean`, `literal`, `enum`, `array`, `object`, `optional`/`nullable`/`default`) to produce a conforming value.
+- **`validPayload(schema)` / `invalidPayloads(schema)`** — the two public entry points (referenced in the header comment; the file is truncated before their full implementations are visible).
 
 ## Relationships
 
-- **`tests/support/stub.ts`** — Imports `asStub` to safely cast a `ZodType` so it can access the otherwise-hidden `_zod.def` property (Zod v4's typed introspection surface).
-- **`api/schemas.zod.ts`** — Schemas defined here are the input to `validPayload` / `invalidPayloads`; the generator walks their `_zod.def` structure to produce payloads.
-- **`tests/contract/request-contract.test.ts`** — Sole consumer; calls `validPayload` and `invalidPayloads` with schemas imported from the API schema module and asserts HTTP responses.
-- **`docs/tools/contract-request-data.md`** — Human-facing documentation explaining how to use this generator and what to do when `satisfyPattern` throws (add an entry to `PATTERN_SAMPLES`).
+- **`tests/contract/request-contract.test.ts`** — the sole consumer. Imports `validPayload` and `invalidPayloads` to drive contract tests against the API, asserting that valid payloads are accepted and each invalid payload triggers the expected 4xx.
+- **`tests/support/stub.ts`** — provides `asStub`, a type-cast helper used here to access `_zod.def` without asserting a full Zod type at each call site, keeping the introspection calls type-safe without importing internal Zod types.
 
 ## Notes
 
-- **Seed is process-wide, not call-wide.** The PRNG is seeded once (`ensureSeeded`); repeated `validPayload` calls in the same test file advance the same stream. To reproduce a failure, quote the printed `seed=…` line and set `RANDOM_DATA_SEED`.
-- **`default` counts as optional, `nullable` does not.** A `zod.boolean().default(…)` field is omitted from the payload; a `zod.string().nullable()` field must still be present (may hold `null`). Confusing these two silently produces invalid "missing required field" cases.
-- **Numbers are always integers.** The generator always emits whole numbers to satisfy both `zod.number()` and fields that are `integer` in the OpenAPI spec but lack an explicit `.int()` in the generated Zod schema.
-- **Pattern coverage is fail-loud.** Adding a new `pattern` to `openapi.yaml` without a matching `PATTERN_SAMPLES` entry causes a thrown `Error` naming this file — it will *not* silently emit an illegal value.
-- **No third-party fixture library.** The ~150-line walker exists because `zod-fixture` and `@anatine/zod-mock` lag Zod majors, and `@faker-js/faker` is ESM-only and incompatible with this project's CommonJS Jest config.
+- **Seed is process-global, not per-call.** `ensureSeeded` runs once; every subsequent `validPayload`/`invalidPayloads` call draws from the same stream, so values within one test file are distinct but reproducible with the same `RANDOM_DATA_SEED`.
+- **`RANDOM_DATA_SEED` is a cross-repo convention.** A paired frontend repo reads the same env-var name for its own mock-profile PRNG (a different algorithm — Mersenne Twister). The streams are intentionally unrelated; the shared name is purely a shared vocabulary for quoting a seed in failure reports.
+- **Numbers are always whole.** `buildValue` rounds to integers so that OpenAPI `type: integer` constraints (which don't always surface as an explicit `.int()` in the generated Zod schema) are satisfied.
+- **`default` ≠ required.** A field declared `default:` in `openapi.yaml` becomes `zod.*().default(…)` (type tag `'default'`). Omitting it is valid; treating it as required would produce a spurious 422 assertion.
+- **`nullable` is NOT optional.** `isOptionalField` excludes it on purpose: a nullable field must still be present in the payload (it may only hold `null`). Conflating the two would silently drop "missing required field" coverage.
+- **No external fixture library.** Both `zod-fixture` and `@anatine/zod-mock` lag Zod majors; this project is on Zod v4. The in-repo walker avoids a dependency-version-lag risk for ~150 lines of code.
+- **`console.log` is intentional.** The seed line bypasses the project logger so it appears in CI output even when the logger is stubbed.

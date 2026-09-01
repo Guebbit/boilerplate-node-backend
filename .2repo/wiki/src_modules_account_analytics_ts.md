@@ -2,25 +2,22 @@
 
 ## Purpose
 
-Declares the analytics event names owned by the account domain and registers them in the shared `AnalyticsEventMap` type via a module augmentation. This keeps the event catalogue distributed across the modules that emit each event, so `infrastructure` never needs to know about any specific domain.
+Declares the analytics event names owned by the account module and registers them into the shared analytics port's type map. It exists so that every account-domain event has exactly one authoritative name and a compile-time-safe reference, keeping the event catalogue distributed alongside the module that owns each name.
 
 ## Key elements
 
-- **`accountAnalyticsEvents`** (exported const) — The four event-name strings this module is responsible for: `USER_SIGNED_UP`, `USER_LOGGED_IN`, `USER_PROFILE_VIEWED`, `ACCOUNT_DELETED`.
-- **Module augmentation of `@infrastructure/observability/analytics`** — Adds an `account` key to `AnalyticsEventMap` typed as a union of the values above, giving the infrastructure layer a typed view without it importing any domain code.
+- **`accountAnalyticsEvents`** (exported const object) — the five event names this module may emit: `USER_SIGNED_UP`, `USER_LOGGED_IN`, `USER_LOGGED_OUT`, `USER_PROFILE_VIEWED`, `ACCOUNT_DELETED`. All are snake_case strings; the object is `as const`.
+- **`declare module '@infrastructure/observability/analytics'`** — augments `AnalyticsEventMap` with an `account` key whose type is the union of all values above, giving callers type-safe event names at the point of emission.
 
 ## Relationships
 
-- **`scripts/contracts/analytics-events-bundle.ts`** — Consumes this module's events (alongside other domain modules) to produce a bundled contract for the frontend.
-- **`src/modules/account/controllers/post-login.ts`** — Imports `accountAnalyticsEvents` to fire `USER_LOGGED_IN` (and likely `USER_SIGNED_UP`) at the point the event occurs.
-- **`src/modules/account/services/authentication.ts`** — Source of `USER_SIGNED_UP` and `ACCOUNT_DELETED` emissions.
-- **`src/modules/account/services/profile.ts`** — Source of `USER_PROFILE_VIEWED` emissions.
-- **`src/modules/account/tests/integration/self-service.test.ts`** — Asserts that the expected events are emitted during self-service flows.
-- **`tests/unit/infrastructure/observability/analytics.test.ts`** — Exercises the analytics port against the augmented `AnalyticsEventMap`, which includes the `account` key declared here.
+- **`src/modules/account/services/authentication.ts`** and **`src/modules/account/controllers/post-login.ts`** — consumers of the auth/onboarding events (`USER_SIGNED_UP`, `USER_LOGGED_IN`, `USER_LOGGED_OUT`). The logout event is emitted server-side from the controller because both logout routes are real API requests.
+- **`src/modules/account/services/profile.ts`** — consumer of `USER_PROFILE_VIEWED` and `ACCOUNT_DELETED`.
+- **`src/modules/account/tests/integration/self-service.test.ts`** and **`src/modules/account/tests/integration/service.test.ts`** — integration tests that assert the above services emit the correct event names.
+- **`tests/unit/infrastructure/observability/analytics.test.ts`** — unit-level tests for the analytics port; exercises the `AnalyticsEventMap` augmentation that this file provides.
 
 ## Notes
 
-- Nothing in this file *publishes* or *sends* events. It is purely a name catalogue + type declaration; the actual firing lives in controllers/services that import this constant directly.
-- `shared/contracts/analytics.frontend.ts` is a separate, frontend-facing contract. Events that appear in **both** files risk being double-counted; this module's events are intentionally **not** published to that contract.
-- Naming convention is governed by `docs/tools/analytics.md#naming` (snake_case values, `SCREAMING_SNAKE` keys).
-- The augmentation pattern mirrors `./audit.ts`: each domain module extends the shared map in its own file rather than editing a central registry.
+- `USER_LOGGED_OUT` is intentionally server-side. The comment notes that both logout routes are real HTTP requests this API answers, so the server reports the one that actually succeeded rather than relying on a client-side signal.
+- The naming convention is governed by `docs/tools/analytics.md#naming`; the paired frontend emits no custom events, so each name has exactly one emitter.
+- This file is purely declarative (constant + type augmentation). It has no runtime side effects and imports nothing from its neighbors—neighbors import *it*.

@@ -2,27 +2,27 @@
 
 ## Purpose
 
-Unit test for the account router that locks down three security-critical, type-invisible arrangements: `noStore` on every route (prevents browser/storage of a caller's own profile), paired credential rate-limiters on identity-sensitive endpoints, and deliberate public access on token-bearing routes. It exists so a refactor that silently reorders middleware, drops a limiter half, or adds `isAuth` to a reset flow is caught at the router level rather than in production.
+Structural contract test for the account router. It asserts *what middleware is mounted, in what order, on which routes*—catching regressions a type checker cannot (e.g., a `setCache` silently overriding `noStore`, a missing second rate-limit budget, or a token-bearing route accidentally gaining an `isAuth` guard). It does not test handler logic.
 
 ## Key elements
 
-- **`chainOf(signature)`** – Resolves the full middleware chain for a given `"METHOD /path"` string from the live router.
-- **`TOKEN_BEARING`** – List of 5 routes (`/delete-confirm`, `/reset-confirm`, `/verify-confirm`, `/refresh`, `/logout`) asserted to lack `isAuth` because the emailed token or cookie *is* the credential.
-- **`RATE_LIMITED`** – List of 7 credential routes asserted to carry both `credentialLimiters[0]` and `[1]` (identity-keyed and address-keyed budgets).
-- **`AUTHENTICATED`** – List of 13 self-service routes asserted to include `isAuth`.
-- **`describe('…what is mounted')`** – Verifies the exact endpoint list/order, router-level middleware (`getAuth`, `noStore`), and per-route `noStore` presence.
-- **`describe('…authorization')`** – Checks `isAuth` / absence-of-`isAuth`, the sole admin guard (`DELETE /tokens/expired`), and `isAuth`-before-`isAdmin` ordering.
-- **`describe('…credential rate limiting')`** – Asserts both limiters per route, limiter-before-`isAuth` ordering on `/password` and `/verify-request`, and that non-credential routes carry no `credentialLimiters`.
-- **`describe('…cache invalidation and uploads')`** – Asserts `invalidateCache([users|account])` on mutation routes, narrower `[account]` on `/logout-all`, upload middleware triple on `PUT /` and `POST /signup`, and zero `setCache` mounts anywhere.
+- **`chainOf(signature)`** — resolves a route's full middleware chain by `"METHOD /path"` string, used by nearly every assertion below.
+- **`TOKEN_BEARING`** — list of routes whose credential is a URL/cookie token (delete-confirm, reset-confirm, verify-confirm, refresh, logout); asserted *public* (no `isAuth`).
+- **`RATE_LIMITED`** — list of seven credential routes; each must carry **both** `credentialLimiters[0]` and `credentialLimiters[1]`, and the limiters must precede `isAuth`.
+- **`AUTHENTICATED`** — list of thirteen first-person routes that must carry `isAuth`.
+- **`describe('… what is mounted')`** — pins the exact route signature order and verifies `noStore` is present on every route.
+- **`describe('… authorization')`** — enforces auth-guard presence/absence per route, the single `isAdmin` guard on `DELETE /tokens/expired`, and that `isAuth` precedes `isAdmin`.
+- **`describe('… credential rate limiting')`** — both budgets present, ordering before `isAuth`, and no credential limiters on non-credential routes.
+- **`describe('… cache invalidation and uploads')`** — verifies `invalidateCache` tags per route, `upload.single(imageUpload)` + validation/quarantine on `PUT /` and `POST /signup`, and that **no** route mounts `setCache`.
 
 ## Relationships
 
-- **`src/modules/account/routes.ts`** – System under test. Imported as `router`; every assertion reads its live middleware chain.
-- **`tests/support/routes.ts`** – Provides the test harness: `routeTable`, `routeSignatures`, `routerMiddleware`, `guardsOn` (route-introspection helpers) and the `cacheMock`, `securityMock`, `storageMock` factories used inside the three `jest.mock` calls to stub `@infrastructure/http/middlewares/cache`, `…/security`, and `@infrastructure/adapters/storage`.
+- **`src/modules/account/routes.ts`** — the module under test. This file imports `{ router }` from it and every assertion inspects that router's mounted middleware and route table.
+- **`tests/support/routes.ts`** — provides the test-infrastructure helpers: `routeTable`, `routeSignatures`, `routerMiddleware`, `guardsOn` (used for assertions) and the factories `cacheMock()`, `securityMock()`, `storageMock()` (used in the three `jest.mock` calls that substitute the real cache, rate-limit, and storage adapters with inert sentinels).
 
 ## Notes
 
-- The `jest.mock` factories call `jest.requireActual('@tests/routes').cacheMock()` etc. — the mocks are *defined* in the support file, not inline, so the security limiter labels (`credentialLimiters[0]`, `credentialLimiters[1]`) are shared between test and mock.
-- Per-route `noStore` assertion (`it.each`) exists because a route mounted *above* the router-level `use(noStore)` would be silently cacheable; a single router-level check would not catch that.
-- Limiter-before-`isAuth` ordering is tested only on `POST /password` and `POST /verify-request` — the two authenticated credential routes — because on those a reversed order would cost a full session lookup per rejected flood request.
-- `invalidateCache` tag width is intentionally different: `users|account` for mutations that change the row served by both `/account` and `/users/:id`, but only `account` on `POST /logout-all` to avoid evicting the entire admin user directory on every mass-logout.
+- The three `jest.mock` calls are **mandatory** for the tests to run in isolation; they swap real infrastructure with the support-module mocks. Forgetting to add a mock when a new middleware dependency appears will cause the test to hit real I/O.
+- Assertions are written against *string signatures* of middleware entries (e.g. `'credentialLimiters[0]'`, `'noStore'`), not against function references. Renaming a middleware in the source will silently break these tests with no type error.
+- The file intentionally does **not** mock or test route handlers; it is a pure structural/chain test. Handler logic belongs in other test files.
+- Order assertions (`indexOf` comparisons) encode real security invariants (limiters before auth, `isAuth` before `isAdmin`), not stylistic preferences.

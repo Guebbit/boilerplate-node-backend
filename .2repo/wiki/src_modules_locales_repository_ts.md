@@ -2,40 +2,30 @@
 
 ## Purpose
 
-Data-access layer for the locales module. It owns all MongoDB reads and writes against the `locales` and `localemessages` collections, and — critically — couples every entry-level write to an atomic `revision` bump so that no caller can mutate translations without invalidating client caches.
+Data-access layer for the locales module. Wraps two Mongoose collections—languages and translated entries—behind two exported repository objects, and enforces one invariant that callers must not be trusted to maintain: every write to `localemessages` atomically bumps the parent language's `revision` counter so clients know when to re-download.
 
 ## Key elements
 
-- **`EntryInput`** / **`ImportCounts`** — narrow input/output shapes for single-entry and bulk operations.
-- **`localeBase`** / **`entryBase`** — instances from `createBaseRepository`, preconfigured with document transforms and searchable-field maps (exact, boolean, text).
-- **`findByTag(tag)`** — case-insensitive single-locale lookup; the starting point for most service routes.
-- **`publicScope()`** — returns `{ active: true }` for client-facing manifest reads; admins pass `undefined` to list all.
-- **`list(scope?)`** — unpaginated, tag-sorted language list via a direct model query (bypasses `findAll` to avoid its default 10-row limit).
-- **`countEntriesByLocale()`** — single aggregation returning a `Map<locale, count>` of downloadable entries, filtered to frontend tenants only.
-- **`listEntries(locale, tenant)`** / **`listEntriesByTenant(tenant)`** — full entry sets sorted for byte-stable builds / diffable overlays.
-- **`listKeys(locale, tenant)`** — key-only projection used by the collision check on every write.
-- **`bumpRevision(tag)`** — atomic `$inc` on `revision`; returns the new value.
-- **`createEntry` / `saveEntryValue` / `removeEntry`** — single-entry CRUD, each returning `{ entry, revision }` with the bump baked in.
-- **`importEntries(locale, tenant, inputs, { replace })`** — bulk upsert via `bulkWrite`; when `replace` is true, deletes keys absent from the input. Bumps revision once per batch.
-- **`deleteLocaleCascade(locale)`** — deletes all entries for the tag, then the locale row; returns the entry count removed.
-- **`localeRepository`** — exported `BaseRepository<LocaleDocument>` extended with the language-specific helpers above.
-- **`localeMessageRepository`** — exported `BaseRepository<LocaleMessageDocument>` extended with the entry-specific helpers (content truncated in source).
+- **`EntryInput` / `ImportCounts`** — small interfaces for a single key-value write and for bulk-import result counts (`created`, `updated`, `removed`).
+- **`localeBase` / `entryBase`** — base CRUD + search repositories built via `createRepository`. The entries base defines a single `text` filter spanning both `key` and `value` columns, plus an `exact` filter on `tenant`.
+- **`localeRepository`** (exported) — composes `localeBase` with `findByTag`, `publicScope` (returns `{ active: true }`), `list` (unpaginated, sorted by tag), `bumpRevision` (atomic `$inc`), and `deleteLocaleCascade` (deletes entries *then* the language row).
+- **`localeMessageRepository`** (exported) — composes `entryBase` with `countEntriesByLocale` (aggregate over frontend tenants only), `listEntries` (one locale + tenant, key-sorted), `listEntriesByTenant` (all locales for one tenant), `listKeys` (key-only projection), and the four write paths: `createEntry`, `saveEntryValue`, `removeEntry`, `importEntries` (bulk upsert + optional `replace` delete, single revision bump).
 
 ## Relationships
 
-- **`src/infrastructure/persistence/base-repository.ts`** — provides `createBaseRepository` and the `BaseRepository` type; this file spreads those base instances into the two exported repositories.
-- **`src/modules/locales/model.ts`** — supplies the Mongoose schemas (`localeModel`, `localeMessageModel`), their transforms, and the `LocaleDocument` / `LocaleMessageDocument` types used throughout.
-- **`src/modules/locales/tenants.ts`** — `frontendTenantIds()` gates which tenant rows `countEntriesByLocale` includes.
-- **`src/types/index.ts`** — source of the `LocaleTenant` type used in every entry-level signature.
-- **`src/modules/locales/services/*` (capabilities, entries, keys, languages, messages)** — primary consumers; they call the exported repositories and never touch the models directly.
-- **`src/modules/locales/tests/integration/repository.test.ts`** — integration tests exercising this file's public surface.
-- **`src/modules/locales/tests/integration/model.test.ts`** — tests the transform/model layer this file depends on.
+- **`src/infrastructure/persistence/create-repository.ts`** — provides the `createRepository` factory and the `Repository<T>` interface that both base repositories extend.
+- **`src/modules/locales/model.ts`** — source of the Mongoose models (`localeModel`, `localeMessageModel`), document types, and the transform functions passed to `createRepository`.
+- **`src/modules/locales/tenants.ts`** — supplies `frontendTenantIds()`, used by `countEntriesByLocale` to exclude backend-tenant rows from the manifest count.
+- **`src/types/index.ts`** — defines the `LocaleTenant` type used throughout the signatures.
+- **`src/modules/locales/services/*.ts`** (`languages`, `entries`, `keys`, `messages`, `capabilities`) — the service layer that calls into the two repositories; they never touch Mongoose models directly.
+- **`src/modules/locales/demo.ts`** — seed/demo script that exercises the write paths.
+- **`src/modules/locales/tests/integration/repository.test.ts`** — integration tests for the functions exported here.
 
 ## Notes
 
-- **Revision is not optional.** Every entry write path (`createEntry`, `saveEntryValue`, `removeEntry`, `importEntries`) calls `bumpRevision` in the same function. There is no API surface that mutates `localemessages` without also incrementing `revision`.
-- **Crash-ordering is deliberate.** Writes go rows-then-counter; a crash between them leaves entries *newer* than the revision claims, so a client under-fetches for one cycle (harmless). The reverse order would let clients cache a stale dictionary indefinitely. `deleteLocaleCascade` inverts this: entries first, locale second, so an interruption leaves a briefly-empty language rather than orphan rows.
-- **`list` bypasses the base repository.** `findAll` defaults to a 10-document limit; a silently truncated manifest is the exact failure mode this avoids.
-- **`countEntriesByLocale` is frontend-tenant-only.** Backend-override rows are excluded because the manifest's `entryCount` drives client download decisions; counting server-only keys would advertise a language as having downloadable content it doesn't.
-- **Explicit export types.** The two repository exports spell out their method signatures rather than relying on inference; Mongoose `Query` generics trigger TS7056 at export boundaries when spread from a base repository.
-- **`replace` is a repository flag, not an HTTP verb.** Both import callers share one code path; the flag is read side-by-side in `importEntries` rather than exposed as two separate endpoints.
+- **Revision is not a transaction.** Writes are ordered rows-then-counter; a crash between the two means a client under-fetches once, never caches a stale dictionary as current.
+- **`list` is unpaginated on purpose.** Languages number in the single digits by construction; `findAll`'s default limit of 10 would silently truncate.
+- **`listKeys` projects only `{ key: 1, _id: 0 }`** because the collision check runs on every write and values are the heavy payload.
+- **`importEntries` does one `bulkWrite` + one `bumpRevision`** for the whole batch, not N bumps.
+- **`deleteLocaleCascade` deletes entries before the language row** so a mid-operation crash leaves the language briefly empty (the intended end-state) rather than stale rows that a recreated language would inherit.
+- **Export types are written out explicitly.** Mongoose `Query` generics are large enough that TypeScript raises TS7056 when an inferred type crosses an export boundary; the annotations also serve as the readable contract for each collection's API.

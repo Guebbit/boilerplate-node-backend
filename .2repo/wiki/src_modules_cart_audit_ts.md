@@ -1,24 +1,20 @@
 # src/modules/cart/audit.ts
 
 ## Purpose
-
-Declares the cart domain's audit action identifiers and registers them into the shared `AuditActionMap` via TypeScript module augmentation. It exists so that cart-related audit emissions (item removal, bulk reorder) carry stable, typed action names that the observability layer can reference without a centralized enum.
+Declares the cart module's audit action names and registers them into the app-wide `AuditActionMap` via TypeScript module augmentation. It exists so that cart-specific audit events have a single, typed source of truth without polluting a shared enum.
 
 ## Key elements
-
-- **`cartAuditActions`** — A `const` object with two string-literal actions:
-  - `USER_CART_ITEM_REMOVED` (`'user.cart.item_removed'`) — emitted when a single line item disappears from a customer's cart.
-  - `USER_CART_REORDERED` (`'user.cart.reordered'`) — emitted when an entire order's lines re-enter the cart at once.
-- **`declare module '@infrastructure/observability/audit'`** — Augments the `AuditActionMap` interface with a `cart` key typed to the union of `cartAuditActions` values, making the action strings available to any code that imports that module.
+- **`cartAuditActions`** – `as const` object exposing two action strings:
+  - `USER_CART_ITEM_REMOVED` (`user.cart.item_removed`) – fired when a single line is removed from a customer's cart.
+  - `USER_CART_REORDERED` (`user.cart.reordered`) – fired when a whole order's lines re-enter the cart at once.
+- **`declare module '@infrastructure/observability/audit'`** – augments the `AuditActionMap` interface with a `cart` key whose value is the union of the two action names above.
 
 ## Relationships
-
-- **`src/modules/cart/services/items.ts`** — Consumes `cartAuditActions.USER_CART_ITEM_REMOVED` when a cart item is removed, attaching the action to the audit event.
-- **`src/modules/cart/services/reorder.ts`** — Consumes `cartAuditActions.USER_CART_REORDERED` when a reorder re-populates the cart; the order identifier is passed as metadata.
-- **`src/modules/cart/tests/unit/audit.test.ts`** — Unit-tests the shape and values of `cartAuditActions` and the module augmentation.
+- **`src/modules/cart/services/items.ts`** – expected emitter of `USER_CART_ITEM_REMOVED` when a cart line is deleted.
+- **`src/modules/cart/services/reorder.ts`** – expected emitter of `USER_CART_REORDERED` when an order's items are re-added to the cart.
+- **`src/modules/cart/tests/unit/audit.test.ts`** – unit-tests the exports and the module augmentation.
 
 ## Notes
-
-- Actions are prefixed `user.`, not `admin.`, because a customer (not an admin) performs both actions on their own cart. This is the one cart action category where the actor is the end user.
-- The file deliberately uses **module augmentation** rather than a shared enum. The rationale (and the pattern to follow) is documented in `modules/account/audit.ts`; do not introduce a new enum for cart actions.
-- Both actions are read-only records — they do not mutate cart state themselves. They exist purely so the audit trail can answer support questions ("Why is my item gone?" / "Why is my cart suddenly full?").
+- Actions use the `user.` prefix (not `admin.`) because a customer performs them on their own cart; this is the only customer-initiated action in the cart module.
+- The doc comment cross-references `modules/account/audit.ts` for the rationale behind using declaration merging instead of a shared enum for action names.
+- `USER_CART_REORDERED` is expected to carry metadata identifying the source order (per the inline comment), but the metadata shape is not defined here.

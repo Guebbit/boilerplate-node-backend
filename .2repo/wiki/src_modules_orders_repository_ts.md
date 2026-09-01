@@ -2,36 +2,36 @@
 
 ## Purpose
 
-Order data access layer. Orders embed a product snapshot (not a reference), so filtering and searching go through Mongoose's aggregation pipeline rather than the base repository's `find()`-based path. This file extends the shared base repository with an aggregation-powered `search`, a scope-aware single-document read, a composite visibility scope, and an atomic conditional status transition.
+Repository for the Order collection. Orders are read through the MongoDB aggregation pipeline (because embedded product snapshots make `find()` insufficient for cross-field filtering) while still inheriting plain CRUD from the shared repository factory. It adds scoped authorization, atomic status transitions, and pipeline-based search on top of that base.
 
 ## Key elements
 
-- **`base`** — instance from `createBaseRepository(orderModel, …)`. Supplies CRUD (`findById`, `create`, `remove`, etc.), the `buildWhere` helper, and the `normalize` transform (`applyOrderTransform`). Searchable spec maps `productId` to the embedded path `items.product._id`.
-- **`aggregate`** — thin wrapper over `orderModel.aggregate` for arbitrary pipelines.
-- **`search`** — filter → `$match` → `$sort: DEFAULT_SORT` → count, then a second pipeline with `$skip`/`$limit`. Accepts an optional `scope` (authorization) merged last so it cannot be widened by client filters. Returns `{ items, meta }`.
-- **`findByIdScoped`** — fetches one order. Unscoped → hydrated Mongoose doc (mutable, `save()`-able). Scoped → single aggregate row passed through `normalize` (plain object). Both serialize identically on the wire.
-- **`ownerScope`** — `{ userId: toObjectId(userId) }`; coerces the caller's id so it matches the stored ObjectId.
-- **`visibleScope`** — `ownerScope` + `deletedAt: { $exists: false }`; the row-level visibility rule for non-admin callers.
-- **`updateStatusIfIn`** — `findOneAndUpdate` with `status: { $in: from }` **in the filter**, so the read-and-write is atomic. Scope rides in the same filter; there is no separate ownership check.
-- **`orderRepository`** (export) — spread of `base` plus the five functions above. Typed explicitly (not inferred) because Mongoose generics trigger TS7056 at the export boundary.
+- **`orderRepository`** (export) — The single public entry point. Extends the base `Repository<OrderDocument>` with `aggregate`, a custom `search`, `findByIdScoped`, `ownerScope`, `visibleScope`, and `updateStatusIfIn`.
+- **`base`** (internal) — Result of `createRepository(orderModel, …)`. Supplies `findById`, `findOneAndUpdate`, `buildWhere`, `normalize`, and the standard CRUD verbs. Configures searchable fields including the embedded `items.product._id` path.
+- **`aggregate`** (internal helper) — Thin wrapper around `orderModel.aggregate<T>(pipeline)` for use by `search` and `findByIdScoped`.
+- **`search`** — Filter → count → page over two aggregation calls. Merges caller `scope` last so authorization can never be widened by client filters. Uses `DEFAULT_SORT` (compound) to avoid tie-breaking inconsistencies between the count and page queries.
+- **`findByIdScoped`** — Polymorphic return: unscoped returns a hydrated Mongoose doc; scoped returns a plain normalized object. Routes through the pipeline so the read and the scope are one query.
+- **`ownerScope(userId)`** — Coerces the userId string to an ObjectId and returns `{ userId }` for use as a scope.
+- **`visibleScope(userId)`** — Composes `ownerScope` with `deletedAt: { $exists: false }` (soft-delete filter). This is the scope a non-admin caller must pass.
+- **`updateStatusIfIn(id, from[], to, scope?)`** — Atomic conditional `findOneAndUpdate`: the `status: { $in: from }` guard rides in the filter, so concurrent callers race safely at the mongod level. Returns the post-update doc or `null`.
+- **Type annotation for `orderRepository`** — Written out explicitly because Mongoose generics exceed TS's serialization limit (TS7056) at an export boundary.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/base-repository.ts`** — source of `createBaseRepository`, `toObjectId`, `SearchFilters`, `BaseRepository`. Provides the CRUD contract and the `buildWhere`/`normalize` helpers used throughout.
-- **`src/infrastructure/persistence/search.ts`** — source of `normalizePagination`, `buildPaginatedMeta`, `DEFAULT_SORT`, `PaginatedMeta`.
-- **`src/modules/orders/model.ts`** — provides `orderModel` (Mongoose model), `applyOrderTransform` (the document→wire serializer), and the `OrderDocument` type.
-- **`src/modules/orders/service.ts`** — primary consumer; calls `orderRepository` methods to handle order reads, status changes, and listings.
-- **`src/modules/orders/domain/lifecycle.ts`** — defines the valid status transitions that `updateStatusIfIn` enforces via its `from` array.
-- **`src/modules/cart/services/checkout.ts`** / **`reorder.ts`** — create orders through the service and rely on the repository's `search`/`visibleScope` for post-checkout reads.
-- **`src/modules/delivery/service.ts`** — reads orders (likely `findByIdScoped` with no scope for admin, or `visibleScope` for owner) and calls `updateStatusIfIn` for shipping-status transitions.
-- **`src/modules/orders/index.ts`** — barrel re-export of `orderRepository`.
-- **Test files** (`cart/tests/integration/*`, `delivery/tests/*`, `orders/tests/contract/*`) — exercise the repository through the service layer, covering scoped reads, pagination, and status-transition concurrency.
+- **`./model`** — Imports `orderModel` (the Mongoose model), `applyOrderTransform` (used as the `normalize`/`transform` callback), and the `OrderDocument` type.
+- **`@infrastructure/persistence/create-repository`** — Imports the `createRepository` factory (base CRUD), `toObjectId` (id coercion), and the `SearchFilters` / `Repository` types.
+- **`@infrastructure/persistence/search`** — Imports `normalizePagination`, `buildPaginatedMeta`, `DEFAULT_SORT`, and `PaginatedMeta` for pagination plumbing in `search`.
+- **`./service`** — Primary consumer; passes `visibleScope` / `ownerScope` and calls `updateStatusIfIn` and `findByIdScoped`.
+- **`../cart/services/checkout`** and **`../cart/services/reorder`** — Create orders through the base CRUD surface (`create`) exposed by `orderRepository`.
+- **`../delivery/service`** — Calls `updateStatusIfIn` to advance delivery-related status transitions.
+- **`./index`** — Re-exports `orderRepository` for module consumers.
+- **Test files** (`tests/fixtures`, `tests/contract/…`, delivery & cart integration tests) — Exercise `search`, `findByIdScoped`, and `updateStatusIfIn` against a real or mocked Mongo.
 
 ## Notes
 
-- **Use `id`, never `_id`, when reading a result.** `findByIdScoped` returns either a hydrated doc (where `_id` exists) or a plain transformed object (where `_id` has been deleted). `OrderDocument extends Document`, so `_id` type-checks in both cases, but at runtime it is `undefined` on the scoped branch. The safe identifier is the virtual/transformed `id` in both shapes.
-- **`$match` does not cast.** Unlike `find()`, the aggregation `$match` stage will not auto-coerce a string to an ObjectId. All id coercion goes through `toObjectId` before the pipeline is assembled (see `buildWhere` and `ownerScope`).
-- **`DEFAULT_SORT` is required, not optional.** The count and the page are two separate `aggregate` calls; without a deterministic sort, an order that ties can appear on two pages simultaneously. Orders arrive in bursts (seeds, bulk imports, concurrent checkouts), making ties the norm.
-- **`$exists: false` for `deletedAt`, not `null`.** The `remove` method unsets the field to restore, so a live order has no `deletedAt` key at all.
-- **`search` is intentionally narrower than the base signature.** It does not accept a caller-supplied sort; the pipeline fixes it. That is why the export type omits the base `search` and redeclares it.
-- **The `async` on `search` is load-bearing.** `buildWhere` can throw synchronously on a malformed id; without `async`, a typed `Promise<T>` would throw instead of reject, bypassing the caller's `.catch()` and surfacing as a 500 instead of a 422.
+- **`$match` does not cast.** Unlike `find()`, a raw string id in a `$match` stage matches nothing. `toObjectId` must be applied *before* the pipeline is assembled; `buildWhere` does this synchronously, and `search` is `async` so a malformed-id throw surfaces as a rejection rather than bypassing a caller's `.catch()`.
+- **`DEFAULT_SORT` is compound, not a bare `createdAt`.** The count and page are two separate `aggregate()` calls; without a deterministic sort, a tie can duplicate an order across pages or skip one entirely. Orders arrive in bursts, making ties the normal case.
+- **`findByIdScoped` return is polymorphic.** Unscoped → hydrated Mongoose doc; scoped → plain object through `applyOrderTransform`. Both serialize identically, but only `id` is guaranteed on both. `_id` type-checks as present on `OrderDocument` yet is `undefined` at runtime for the scoped path — TypeScript will not catch this.
+- **`$exists: false`, not `null`.** `remove` unsets `deletedAt` to restore an order, so a restored order simply lacks the key. A `null` check would incorrectly hide restored orders.
+- **Scope is merged last in `search`.** `{ ...base.buildWhere(filters), ...scope }` ensures no client-supplied filter can override the authorization boundary.
+- **`updateStatusIfIn` guard is in the filter, not a pre-read.** Two racing requests (e.g. customer cancel + admin ship) both evaluate `status: { $in: from }` atomically under mongod's document lock; exactly one wins.

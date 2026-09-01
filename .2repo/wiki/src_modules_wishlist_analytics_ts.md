@@ -2,23 +2,23 @@
 
 ## Purpose
 
-Declares the three analytics event names the wishlist module emits and registers them into the analytics port's type map. It exists so the module owns its event vocabulary locally (same pattern as `./audit.ts`) without the infrastructure layer needing to know about domain specifics.
+Declares the analytics event names emitted by the wishlist module (a "save funnel" with a single exit point into the purchase funnel) and registers them into the app-wide `AnalyticsEventMap` so that emit sites get autocomplete and type safety. It contains no runtime logic—only a const map and a `declare module` augmentation.
 
 ## Key elements
 
-- **`wishlistAnalyticsEvents`** (exported `as const` object) — the three event-name constants:
-  - `WISHLIST_ITEM_ADDED` / `WISHLIST_ITEM_REMOVED` — save-funnel events.
-  - `WISHLIST_MOVED_TO_CART` — the single exit point that bridges the save funnel into the purchase funnel; the primary metric to watch.
-- **`declare module '@infrastructure/observability/analytics'`** — augments the port's `AnalyticsEventMap` interface with a `wishlist` key whose type is the union of the event-name values. This makes the names available to the analytics emitter without editing a shared file.
+- **`wishlistAnalyticsEvents`** – `as const` object with three keys/values:
+  - `WISHLIST_ITEM_ADDED` → `'wishlist_item_added'`
+  - `WISHLIST_ITEM_REMOVED` → `'wishlist_item_removed'`
+  - `WISHLIST_MOVED_TO_CART` → `'wishlist_moved_to_cart'` — the single event that bridges the save funnel to the purchase funnel.
+- **`declare module '@infrastructure/observability/analytics'`** – Augments the `AnalyticsEventMap` interface with a `wishlist` key whose type is the union of the three string literals above, giving callers compile-time checking on event names.
 
 ## Relationships
 
-- **`src/modules/wishlist/service.ts`** — The wishlist service (and its controllers) imports `wishlistAnalyticsEvents` directly to fire events. No intermediate publisher exists; this file is the single source of the strings.
-- **`src/modules/wishlist/tests/unit/analytics.test.ts`** — Unit tests that exercise the event declarations and/or the module augmentation.
-- **`scripts/contracts/analytics-events-bundle.ts`** — Consumes the event-name catalogue (via the augmented port type) to build or validate the analytics-events bundle.
+- **`src/modules/wishlist/service.ts`** – Consumes the exported event names (via the augmented `AnalyticsEventMap`) when firing wishlist analytics events through the analytics port.
+- **`src/modules/wishlist/tests/unit/analytics.test.ts`** – Unit-tests this module's declarations (event name values and/or the augmentation contract).
 
 ## Notes
 
-- These event names are **not** published to the paired frontend. Only events defined in `shared/contracts/analytics.frontend.ts` cross that boundary; keeping the wishlist names here prevents double-counting a single event on both sides of the repo boundary.
-- Naming convention is governed by `docs/tools/analytics.md#naming` (snake_case, past-tense verb phrases).
-- The `as const` on `wishlistAnalyticsEvents` is what lets the `declare module` augmentation derive a literal union type for the `wishlist` key rather than a plain `string`.
+- This file is **type-only at runtime**: it exports a plain const and a `declare module` block. Importing it for side-effects has no runtime effect beyond the const binding.
+- Event naming follows the convention in `docs/tools/analytics.md#naming` (snake_case, `module_action` pattern).
+- The same augmentation pattern is used by `./audit.ts`; keep new wishlist events in this file rather than scattering them across service code.

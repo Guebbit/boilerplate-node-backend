@@ -2,35 +2,31 @@
 
 ## Purpose
 
-Defines the Express router for all product-catalogue HTTP endpoints. It declares route paths, attaches the correct middleware chain (auth, caching, file-upload, route-flag), and delegates to the product controllers. Public read operations and admin-gated write operations share this single router.
+Defines the Express router for the product catalogue. It wires public read endpoints and admin-gated write endpoints to their controllers, applies caching where the response is caller-independent, and ensures route ordering so static segments (`/search`, `/categories`) are not swallowed by the `/:id` parameter pattern.
 
 ## Key elements
 
-- **`router`** (exported) — the `express.Router()` instance consumed by `module.ts`.
-- **Route table** — 10 endpoints spanning `POST /search`, `GET /`, `POST /`, `PUT /`, `DELETE /`, `GET /categories`, `GET /:id`, `PUT /:id`, `DELETE /:id`, `DELETE /:id/hard`.
-- **Auth middleware chain** — `getAuth` applied globally; `isAuth` + `isAdmin` added per-route on all write operations.
-- **Caching** — `setCache(3600, …)` on read routes (tag `products`); `invalidateCache(['products'])` on every write route.
-- **`upload.single('imageUpload')`** — Multer-style single-file upload prepended to create/update routes.
-- **`routeFlag('hardDelete')`** — converts a path segment into a boolean flag on `DELETE /:id/hard`.
-- **`searchProductsKeyParameters`** — imported from `get-products` controller; used as the dynamic portion of the search cache key.
+- **`router`** (exported) — the `express.Router` instance consumed by the module mount.
+- **Route table** — 10 route definitions covering GET/POST/PUT/DELETE on `/`, `/search`, `/categories`, `/:id`, and `/:id/hard`.
+- **`cacheProductsSearch`** — a shared `searchCache('products', …)` middleware instance applied to both `GET /` and `POST /search`.
+- **Middleware composition** — each route chains from `@kernel/middlewares/authorizations` (`getAuth`, `isAuth`, `isAdmin`), `@infrastructure/http/middlewares/cache` (`setCache`, `searchCache`, `invalidateCache`), `@infrastructure/adapters/storage` (`upload`), and `@infrastructure/http/middlewares/route-flag` (`routeFlag`).
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, `isAdmin`; applied before every controller call.
-- **`src/infrastructure/http/middlewares/cache.ts`** — provides `setCache` / `invalidateCache`; controls response caching under the `products` tag.
-- **`src/infrastructure/http/middlewares/route-flag.ts`** — provides `routeFlag`; used on the hard-delete route to derive a flag from the path.
-- **`src/infrastructure/adapters/storage.ts`** — provides `upload`; handles multipart image upload on write routes.
-- **`src/modules/products/controllers/get-products.ts`** — provides `getProducts` handler and `searchProductsKeyParameters`.
-- **`src/modules/products/controllers/write-products.ts`** — provides `writeProducts` (create + update).
-- **`src/modules/products/controllers/delete-products.ts`** — provides `deleteProducts` (soft or hard depending on flag).
-- **`src/modules/products/controllers/get-product-item.ts`** — provides `getProductItem` for the `/:id` GET.
-- **`src/modules/products/controllers/get-catalogue-facets.ts`** — provides `getCatalogueFacets` for `/categories`.
-- **`src/modules/products/module.ts`** — imports `router` from this file to mount it into the application.
-- **`docs/theory/reading-path.md`** — references this file as part of the module's reading path.
+- **`src/modules/products/module.ts`** — mounts `router` onto the application's product path.
+- **Controllers** (`get-products`, `write-products`, `delete-products`, `get-product-item`, `get-catalogue-facets`) — each is the terminal handler for one or more routes defined here.
+- **`src/kernel/middlewares/authorizations.ts`** — supplies `getAuth`, `isAuth`, `isAdmin`; applied globally and per-route.
+- **`src/infrastructure/http/middlewares/cache.ts`** — supplies the cache read/write/invalidate primitives used on every route.
+- **`src/infrastructure/adapters/storage.ts`** — supplies the `upload` middleware for the `imageUpload` multipart field on write routes.
+- **`src/infrastructure/http/middlewares/route-flag.ts`** — supplies `routeFlag('hardDelete')` for the `DELETE /:id/hard` variant.
+- **`src/modules/products/tests/unit/routes.test.ts`** — unit-tests the route definitions and middleware order in this file.
+- **`tests/cross-cutting/write-routes-are-guarded.test.ts`** — asserts that every write route in this file carries `isAuth` + `isAdmin`.
+- **`tests/cross-cutting/authenticated-controllers.test.ts`** — exercises the controllers reachable from these routes under an authenticated context.
 
 ## Notes
 
-- **Route ordering matters.** `/search` and `/categories` are static segments declared *before* `/:id`; swapping them would cause "search" or "categories" to be captured as `:id`.
-- **Duplicate write paths.** Both `PUT /` (id in body) and `PUT /:id` (id in path) call `writeProducts`; they exist to support different client conventions.
-- **Shared cache key.** `POST /search` and `GET /` intentionally share the `products:search` cache key, so a search via either verb populates the same entry.
-- **`DELETE /:id` vs `DELETE /:id/hard`.** Same controller, same middleware except the latter adds `routeFlag('hardDelete')` instead of relying on a `?hardDelete=true` query parameter.
+- **Route order is load-bearing.** `/search` and `/categories` are declared before `/:id`; moving them after would cause the literal strings to be captured as an `id` parameter.
+- **`getAuth` runs on every route** (including public reads) so that admin callers receive extended visibility without a separate admin endpoint.
+- **Write routes invalidate the `'products'` cache tag** *before* the handler runs; the read routes set a 3600 s TTL on the same tag.
+- **`DELETE /:id/hard`** is functionally equivalent to `DELETE /:id?hardDelete=true`; the path variant uses `routeFlag` to inject the flag so the controller sees the same shape.
+- Upload field name is **`imageUpload`** (singular) — clients sending a different key will get a silent no-op on the image.

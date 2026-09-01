@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Centralizes Zod validation error messages so that every schema in the process—generated (`@api/schemas.zod`) or hand-written—returns a translated refusal in the caller's language. It exists because, without it, generated schemas fell back to Zod's built-in English while hand-written schemas used Italian, producing inconsistent 422 copy depending on the endpoint.
+Centralises Zod validation error messages so that every schema—generated or hand-written—returns a localised, human-readable string in the caller's language instead of Zod's default English. It achieves this via a single global `customError` hook rather than annotating each schema, meaning codegen output needs no per-field message properties.
 
 ## Key elements
 
-- **`registerValidationMessages()`** (exported) — Installs a `customError` handler on Zod's global config via `z.config()`. Called once from the boot sequence.
-- **`messageFor(issue: $ZodIssue): string`** — Maps a single Zod issue to a `t(…)` call. Covers `invalid_type`, `too_small`, `too_big`, `invalid_format`, `not_multiple_of`, `unrecognized_keys`, `invalid_value`; everything else falls to the generic `validation.invalid`.
-- **`sizeKey(bound, origin): string`** — Picks the correct dictionary key for min/max constraints based on what is being sized (string chars, array/set/file items, number value).
-- **`NAMED_FORMATS`** — A `Set` of format strings (`email`, `url`, `uuid`, `datetime`, `date`, `time`) that get a dedicated sentence; all other formats use `validation.invalid-format`.
+- **`registerValidationMessages()`** *(sole export)* — Installs the global error map on the Zod singleton by calling `z.config({ customError })`. Must be invoked explicitly during app boot; it is not a side-effect of importing this module.
+- **`messageFor(issue: $ZodIssue): string`** — Maps a single Zod v4 issue to a translated sentence. Every code branch resolves to an i18n key; the `default` case returns the generic `validation.invalid` key so no path falls through to untranslated English.
+- **`sizeKey(bound, origin): string`** — Selects the correct i18n key for `too_small` / `too_big` based on the type being constrained (string → characters, array/set/file → items, number → value), producing three distinct sentences.
+- **`NAMED_FORMATS`** — A `Set` of format names (`email`, `url`, `uuid`, `datetime`, `date`, `time`) that receive dedicated messages; anything else gets the generic `validation.invalid-format` key.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/index.ts`** — Provides the `t` function imported at the top of this file; every resolved message goes through it.
-- **`src/infrastructure/i18n/context.ts`** — Supplies the request-scoped `t` binding. Because `customError` runs at *parse* time (not schema-construction time), it reads the active request's `t`, so concurrent requests in different languages cannot cross-contaminate.
-- **`src/app.ts`** — Calls `registerValidationMessages()` during the boot sequence, making the dependency on i18n being mounted visible in the startup order.
-- **`tests/support/setup.ts`** — Invokes `registerValidationMessages()` so that tests exercising request parsing receive translated messages rather than Zod defaults.
+- **`src/app.ts`** — Calls `registerValidationMessages()` in the boot sequence, immediately after the i18n layer is mounted, making the dependency ordering explicit.
+- **`src/infrastructure/i18n/index.ts`** — Source of the `t` import; re-exports the translation function used by `messageFor`.
+- **`src/infrastructure/i18n/context.ts`** — Provides the request-scoped language context that `t` resolves at parse time, so the correct locale is read per-request rather than fixed at construction.
+- **`tests/support/setup.ts`** — Invokes `registerValidationMessages()` so integration tests exercise the same translated error paths.
 
 ## Notes
 
-- Keys are per **constraint type** (~17 total), not per field. A per-field key would require one dictionary entry per generated shape (511+).
-- Precedence is preserved: any field that already declares its own `t(…)` message (e.g. `zodUserSchema`) wins; this global map is the fallback that answers everywhere no specific copy exists.
-- The `z.config()` call mutates a process-wide singleton. It must be called before any request is parsed, which is why the call is explicit in `app.ts` rather than a side-effect at import time.
-- The `default` branch in `messageFor` guarantees no issue code can silently fall through to Zod's English string—unknown codes get the generic (but translated) `validation.invalid`.
+- Executes at **parse time**, not schema-construction time, which is why it can safely read the request-scoped `t`.
+- Roughly 17 i18n keys cover every issue shape produced by the generated schemas (`@api/schemas.zod`); no per-field keys are needed.
+- Unrecognised issue codes (e.g. a bare `.refine()` with no message, union mismatches) deliberately degrade to the generic `validation.invalid` key—translated but vague is preferred over precise-but-in-the-wrong-language.
+- The file imports `$ZodIssue` from `zod/v4/core`, tying it to Zod v4's internal issue type rather than the public `z.ZodIssue`.

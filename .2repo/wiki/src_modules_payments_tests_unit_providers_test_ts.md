@@ -2,24 +2,31 @@
 
 ## Purpose
 
-Unit tests for the payment-provider layer that exercise pure logic with no database or network: the `cardLastFour` utility, the fake provider's charge/refund outcomes, and the environment-driven provider resolver. It lives at the unit level (not `tests/integration/`) precisely because none of these paths persist a document or hit Mongo.
+Unit tests for the payment-provider port: the `cardLastFour` utility, the fake PSP's charge/refund behavior, and the `resolvePaymentProvider` registry. These live here (rather than in `tests/integration/`) because none of the paths under test touch a database—only in-memory logic and provider selection.
 
 ## Key elements
 
-- **`describe('cardLastFour')`** — verifies last-four extraction and that spaces are stripped before slicing.
-- **`describe('fakePaymentProvider.charge')`** — asserts the fake PSP declines the documented magic number (`FAKE_DECLINE_CARD` / `4000 0000 0000 0002`), handles spaced input, and succeeds on any other card.
-- **`describe('fakePaymentProvider.refund')`** — confirms `refund` always resolves to `undefined` (no failure path in the fake).
-- **`loadResolver` (local helper)** — calls `jest.resetModules()` then dynamically imports `providers/index` so the module-level memoisation resets between tests.
-- **`describe('resolvePaymentProvider')`** — checks the default (fake), an explicit `NODE_PAYMENT_PROVIDER` value, and that an unknown provider name throws with a descriptive message rather than silently falling back.
+- **`describe('cardLastFour')`** — verifies `cardLastFour` (from `card.ts`) returns the last four digits and strips spaces before slicing.
+- **`describe('fakePaymentProvider.charge')`** — exercises `fakePaymentProvider.charge` (from `fake.ts`):
+  - Declines the documented `FAKE_DECLINE_CARD` magic number.
+  - Declines the same number with spaces (simulates raw form input).
+  - Returns `'succeeded'` for any other card.
+- **`describe('fakePaymentProvider.refund')`** — asserts `refund` resolves to `undefined` (no ledger to contradict it).
+- **`loadResolver`** (local helper) — calls `jest.resetModules()` then dynamically imports `../../providers/index`, returning a fresh `resolvePaymentProvider` with its memoisation cleared.
+- **`describe('resolvePaymentProvider')`** — checks the registry (from `index.ts`):
+  - Defaults to the `fake` provider when `NODE_PAYMENT_PROVIDER` is unset.
+  - Honours an explicit `NODE_PAYMENT_PROVIDER=fake` value.
+  - Restores the original env var in `afterEach`.
 
 ## Relationships
 
-- **`src/modules/payments/providers/card.ts`** — static import of `cardLastFour`; tested directly.
-- **`src/modules/payments/providers/fake.ts`** — static import of `fakePaymentProvider` and the `FAKE_DECLINE_CARD` constant; charge/refund behaviour is the primary subject of two `describe` blocks.
-- **`src/modules/payments/providers/index.ts`** — dynamically imported inside `loadResolver` after `jest.resetModules()`; the exported `resolvePaymentProvider` is the target of the env-var / fallback tests.
+- **`src/modules/payments/providers/card.ts`** — source of `cardLastFour`, the utility under test.
+- **`src/modules/payments/providers/fake.ts`** — source of `fakePaymentProvider` and the `FAKE_DECLINE_CARD` constant; the primary SUT for charge/refund tests.
+- **`src/modules/payments/providers/index.ts`** — source of `resolvePaymentProvider`; imported dynamically (not statically) so `jest.resetModules` can yield a clean module instance each test.
 
 ## Notes
 
-- `jest.resetModules()` is called in both `loadResolver` and the `afterEach` hook. The `afterEach` also restores or deletes `NODE_PAYMENT_PROVIDER` to prevent env leakage between tests.
-- The decline card is tested in two forms (raw and space-separated) to mirror how a real form would submit it; this is an intentional guard, not a separate code path.
-- The comment block at the top of the file explicitly documents *why* this test lives in `tests/unit/` rather than alongside `service.test.ts` in `tests/integration/`—useful context if the project's test layout is ever refactored.
+- `resolvePaymentProvider` is imported via dynamic `import()` + `jest.resetModules()`, not a top-level static import, specifically to defeat its internal memoisation between tests.
+- The `FAKE_DECLINE_CARD` value is a "documented magic number" (the test title calls it that); its actual value is whatever `fake.ts` exports, and the spaced variant `'4000 0000 0000 0002'` is used to confirm the provider normalises input the same way `cardLastFour` does.
+- `refund` resolves to `undefined`, not a status string—assert with `.resolves.toBeUndefined()`.
+- The env-var test saves/restores `process.env.NODE_PAYMENT_PROVIDER` manually; there is no `beforeAll`/`afterAll` pair—cleanup is in `afterEach`.

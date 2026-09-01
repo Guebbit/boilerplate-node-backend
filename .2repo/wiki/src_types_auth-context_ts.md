@@ -2,23 +2,23 @@
 
 ## Purpose
 
-Defines the transport-safe authentication context DTO (`AuthContext`) and the narrower authorization-decision type (`Caller`). It exists so that controllers, middleware, and services depend on a plain interface rather than a Mongoose `UserDocument`, keeping the HTTP/auth layer decoupled from persistence internals.
+Defines two small type aliases that decouple the HTTP/auth flow from Mongoose document internals. Services, controllers, and middleware consume these plain-shape types instead of `UserDocument`, so the auth contract on the wire is stable and auditable without leaking ORM concerns.
 
 ## Key elements
 
-- **`AuthContext` (interface)** — The resolved caller identity: `id`, `email`, `username`, `admin`, and optional `imageUrl`. This is what a *request carries* after the auth middleware has resolved it.
-- **`Caller` (type)** — `Partial<Pick<AuthContext, 'id' | 'admin'>>`. The minimal shape an *authorization rule* may inspect. Intentionally narrower than `Partial<AuthContext>`: it excludes identity fields (`email`, `username`, `imageUrl`) so that rules cannot read them by type.
+- **`AuthContext`** (interface) — Transport-safe DTO for a resolved caller. Fields: `id`, `email`, `username`, `admin`, and optional `imageUrl`. This is what a request carries after authentication succeeds.
+- **`Caller`** (type alias) — `Partial<Pick<AuthContext, 'id' | 'admin'>>`. A deliberately narrower view: only the two fields an authorization rule may read. Both optional because the request may be anonymous. Excludes `email`, `username`, `imageUrl` on purpose so that a rule's type signature makes it impossible (by type) to branch on identity rather than permission.
 
 ## Relationships
 
-- **`src/types/index.ts`** — Re-exports `AuthContext` and `Caller` as part of the project-wide type surface.
-- **`src/infrastructure/http/request.ts`** — Attaches an `AuthContext` to the request object after authentication.
-- **`src/kernel/authorization.ts`** — Consume point for `Caller`; authorization rules receive and check this narrower type.
-- **`src/modules/delivery/service.ts`, `src/modules/orders/service.ts`, `src/modules/payments/service.ts`** — Service methods accept `authContext?: AuthContext` (or `Caller`) to identify the acting user without touching the Mongoose model.
-- **`src/modules/products/tests/integration/service.test.ts`** — Constructs `AuthContext` / `Caller` fixtures for integration tests.
-- **`src/globals.d.ts`** — Likely references these types in global augmentation (e.g., extending `Request`).
+- **`src/types/index.ts`** — Barrel re-export; downstream imports typically reach these types through the index rather than the file path directly.
+- **`src/infrastructure/http/request.ts`** — Attaches an `AuthContext` to the incoming request after auth middleware resolves; controllers read it from here.
+- **`src/kernel/authorization.ts`** — Authorization rules accept a `Caller` parameter, constraining what they may inspect to `id` and `admin`.
+- **`src/modules/delivery/service.ts`, `src/modules/orders/service.ts`, `src/modules/payments/service.ts`** — Service methods take an optional `authContext?: AuthContext` parameter, representing the (possibly anonymous) caller for the operation.
+- **`src/modules/products/tests/integration/service.test.ts`** — Constructs mock `AuthContext` objects to exercise service-level authorization paths.
+- **`src/globals.d.ts`** — Likely augments the global `Request` type (e.g., Express) so that `req` carries an `AuthContext` field accessible in controllers without a local import.
 
 ## Notes
 
-- Use `Caller`, not `Partial<AuthContext>`, when writing authorization predicates. The distinction is deliberate: `Caller` signals "I only need a permission bit," while `Partial<AuthContext>` would silently permit reading identity fields, which is not auditable by type alone.
-- Services that accept an *optional* caller (anonymous requests possible) should type the parameter as `Caller | undefined`, not `AuthContext | undefined`, unless they genuinely need the full identity.
+- `Caller` is **not** `Partial<AuthContext>`. If you need to check `email` or `username` inside an authorization rule, the type system will reject it — that is intentional. Use the full `AuthContext` at the controller/middleware layer instead.
+- Both types are pure type-level constructs (interface + type alias); there is no runtime code in this file.

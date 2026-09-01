@@ -2,28 +2,26 @@
 
 ## Purpose
 
-Integration test suite for the `productRepository` CRUD interface and its aggregate queries. It exercises the full stack (repository → Mongoose model → MongoDB) against a real test database, verifying both the happy-path behaviors and the empty-collection edge cases that calling code guards against.
+Integration tests for `productRepository` executed against a real MongoDB instance. Covers CRUD operations (create, find, count, save, delete) and pins the empty-catalogue contract for the aggregate reads (`facets`, `sumReserved`, `availabilityPage`), where a `$group`/`$facet` pipeline returns no row at all rather than a zeroed one.
 
 ## Key elements
 
-- **`describe('productRepository')`** — top-level block covering `create`, `findById`, `findOne`, `findAll`, `count`, `save`, and `deleteOne`.
-- **`describe('an empty catalogue')`** — separate block that wipes the collection in `beforeEach` and asserts the "absent-row" arms: `facets()` returns empty arrays, `sumReserved()` returns `0`, and `availabilityPage()` returns `{ items: [], totalItems: 0 }` rather than throwing on a missing `$group`/`$facet` row.
-- **`setupTestDb()`** — called at module load; provisions a clean in-memory (or temp) MongoDB instance for the entire suite.
-- **`makeProduct` / `createProduct`** (from `@modules/products/tests/factory`) — builders that produce valid product documents; `createProduct` additionally persists one to the test DB.
-- **`asStub<T>()`** (from `@tests/stub`) — a type-narrowing helper used to assert that `findAll` returns plain JS objects (no Mongoose `save` method).
+- **`describe('productRepository')`** — main suite; each nested `describe` maps to one repository method: `create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`.
+- **`describe('an empty catalogue')`** — isolated suite that wipes the collection in `beforeEach` (`productModel.deleteMany({})`) and asserts the three aggregate methods return safe defaults (`{ categories: [], tags: [] }`, `0`, `{ items: [], totalItems: 0 }`).
+- **`setupTestDb()`** — called at module top-level to provision and connect the test database before any test runs.
+- **`asStub<{ save?: unknown }>`** — used in the `findAll` lean-objects test to assert Mongoose document methods (e.g. `save`) are absent on returned plain objects.
 
 ## Relationships
 
-- **`src/modules/products/index.ts`** — source of the `productRepository` export under test (imported via `@modules/products`).
-- **`src/modules/products/repository.ts`** — the system under test; every assertion validates its public API.
-- **`src/modules/products/model.ts`** — imported as `productModel` for the `deleteMany({})` cleanup in the empty-catalogue block.
-- **`src/modules/products/tests/factory.ts`** — provides `makeProduct` (in-memory builder) and `createProduct` (persist-and-return) fixtures.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, which configures the Mongoose connection to the test database before any test runs.
-- **`tests/support/stub.ts`** — provides `asStub`, a cast helper used to type-narrow an object for property-existence assertions.
+- **`@modules/products`** (`src/modules/products/index.ts`) — imports `productRepository`, the unit under test.
+- **`../../model`** (`src/modules/products/model.ts`) — imports `productModel` solely for `deleteMany({})` cleanup in the empty-catalogue suite.
+- **`@modules/products/tests/fixtures`** (`src/modules/products/tests/fixtures.ts`) — provides `makeProduct` (plain input object) and `createProduct` (helper that inserts via the repository and returns the document).
+- **`@tests/setup-test-db`** (`tests/support/setup-test-db.ts`) — initialises the in-memory or local Mongo instance for the suite.
+- **`@tests/stub`** (`tests/support/stub.ts`) — `asStub` cast helper used to probe for absence of Mongoose methods.
 
 ## Notes
 
-- The `findAll` "lean objects" test uses `asStub` to check that `product.save` is `undefined`; this is a deliberate contract assertion that `findAll` strips Mongoose document methods.
-- The `findOne` "first match" test intentionally does **not** assert which of the two inserted products is returned, because MongoDB does not guarantee insertion order in query results.
-- The empty-catalogue block runs **after** the main suite and relies on `productModel.deleteMany({})` in `beforeEach`; it does not use the factory helpers.
-- `create` and `save` tests assert on full Mongoose documents (with `_id`, methods available), while `findAll`/`findOne`/`findById` assert on lean or document shapes depending on the repository's internal implementation—read the assertions to distinguish which path returns what.
+- The file runs against a **real** Mongo instance (not an in-memory mock), so CI must have a MongoDB available or `setupTestDb` must spin one up.
+- The empty-catalogue suite intentionally **does not** share state with the main suite; its `beforeEach` wipe means the main suite must run first or be independent. In practice Jest runs top-level `describe` blocks in file order, so the main suite seeds data and the empty-catalogue suite wipes it.
+- `findAll` tests assert **lean** (plain-object) output via the `asStub` check — if the repository ever stops calling `.lean()`, this test fails.
+- The `create` test for `imageUrl` does not assert the schema default value itself; it only confirms a supplied URL round-trips. The default is a schema concern, not a repository concern.

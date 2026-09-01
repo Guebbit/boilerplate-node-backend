@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Property-based tests (via `fast-check`) for `sumLineItems` and `orderTotal` in `totals.ts`. They lock in two guarantees: the functions are **total** (any input, including garbage types, yields a finite number without throwing) and **arithmetically exact in cents** (additivity, scaling, and order-independence hold with integer equality, not float tolerance). A regression to decimal accumulation or a lost `|| 0` guard would be caught.
+Property-based tests for the order-total arithmetic in `domain/totals.ts`. Guarantees that `sumLineItems` and `orderTotal` are total (never NaN, never throw) even against hostile or nullish input, and that their numeric results satisfy exact arithmetic invariants (additivity, scaling, order-independence) at cent precision.
 
 ## Key elements
 
-- **`RUN`** — shared config: seed `20_260_809`, 300 runs, stop on first failure. One place to adjust the run for the whole file.
-- **`nullish()`** — arbitrary yielding `null` or `undefined`; models the two spellings a failed product-populate can leave.
-- **`lineItem()`** — well-formed arbitrary: integer `quantity` 0–1000, integer `product.price` 0–100 000 (cents).
-- **`hostileLineItem()`** — arbitrary with garbage in every field (strings, booleans, floats, `null`, `undefined`, empty objects); drives the totality tests.
-- **`describe('sumLineItems — totality')`** — asserts no `NaN`, no throw, and `count === items.length` for arbitrary hostile input.
-- **`describe('sumLineItems — arithmetic invariants')`** — zero-cart identity, order-independence, non-negativity, exact additivity over concatenation (compared via `Math.round(· * 100)`), linear scaling of price with quantity, and the zero-quantity line contributing 0 to money but +1 to count.
-- **`describe('orderTotal')`** — verifies `orderTotal` equals the line price when shipping is `undefined`/`null`/`0`, adds shipping exactly in cents, and never yields `NaN` even with hostile items and a non-numeric shipping cost.
+- **`RUN`** — Single `{ seed, numRuns, endOnFailure }` constant applied to every `fc.assert` call. Change the seed in one place.
+- **`nullish()`** — Arbitrary yielding `null` or `undefined`, modelling both spellings a failed product-populate can leave behind.
+- **`lineItem()`** — Arbitrary for a well-formed `LineItem` (integer quantity 0–1000, integer price 0–100 000).
+- **`hostileLineItem()`** — Arbitrary for maximally malformed `LineItem`s (wrong types, missing keys, nullish fields). Cast to `fc.Arbitrary<LineItem>`.
+- **`describe('sumLineItems — totality')`** — Asserts no NaN, no throw, and correct `count` for arbitrary hostile input.
+- **`describe('sumLineItems — arithmetic invariants')`** — Zero-on-empty, order-independence, non-negativity, additivity over concatenation (compared in cents), quantity-scaling, and zero-quantity line handling.
+- **`describe('orderTotal')`** — Verifies `orderTotal` equals the line total when shipping is absent/zero, adds shipping exactly in cents, and never returns NaN.
 
 ## Relationships
 
-- **`src/modules/orders/domain/totals.ts`** — the sole system under test. This file imports `sumLineItems`, `orderTotal`, and the `LineItem` type from there. Every assertion is a contract imposed on that module's public API.
+- **`src/modules/orders/domain/totals.ts`** — Source under test. This file imports `sumLineItems`, `orderTotal`, and the `LineItem` type from there. Every property asserts behaviour of those three exports.
 
 ## Notes
 
-- All price comparisons multiply by 100 and round before asserting equality. This is intentional: it pins the implementation to integer-cent arithmetic and would fail a float-`+` implementation (e.g. `0.1 + 0.2 ≠ 0.3`).
-- The seed in `RUN` makes every failing run reproducible; the header comment documents the convention that a counterexample should be frozen back into a plain `it()` with the seed as a comment.
-- `hostileLineItem` uses `fc.oneof` with `requiredKeys: []`, so any subset of keys may be absent — it is intentionally broader than the TypeScript type and relies on the runtime guards in `sumLineItems`.
-- `orderTotal` is tested with `shippingCost` as `undefined`, `null`, **and** `0` — the first two model pre-delivery orders and `pickup`, respectively.
+- All money comparisons go through `Math.round(x * 100)` before equality; the division back to dollars is the only imprecision, so raw float `===` is never used for price.
+- `hostileLineItem` uses `requiredKeys: []` so *every* field is optional—this is intentional to simulate a fully missing populate, not a typo.
+- The `nullish()` helper exists to prevent a lint migration to `undefined`-only from silently dropping the `null` path; both must be exercised.
+- Seeded with a fixed value (`20_260_809`); a failure reproduces as a plain `it()` counterexample rather than a one-off flake.

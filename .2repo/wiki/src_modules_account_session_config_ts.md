@@ -2,29 +2,28 @@
 
 ## Purpose
 
-Centralises all token-related environment settings (expiry durations and signing secrets) in one place. It holds no token and issues none — it simply reads the deployment's "how long does a session last" values so that `./jwt` can sign against them and `./cookies` can derive `maxAge` from them.
+Centralises all token-related environment variable reads (expiry durations, signing secrets) into one module. It performs no token issuance or verification itself—callers (`jwt.ts`, `cookies.ts`) consume its values to sign tokens or set cookie `maxAge`.
 
 ## Key elements
 
-- **`RefreshTokenExpiryTime`** (enum) — three refresh-token tiers: `SHORT`, `MEDIUM`, `LONG`.
-- **`TOKEN_EXPIRY_ENV`** (module-private) — maps each tier (plus a `'default'` key) to its `NODE_TOKEN_REFRESH_TIME_*` / `NODE_TOKEN_ACCESS_TIME` env-var name.
-- **`getExpiryTime(remember?)`** — returns the expiry for a tier in **seconds** (integer). Falls back to `NODE_TOKEN_ACCESS_TIME` when no tier is supplied. Returns `0` if the env var is unset.
-- **`getExpiryTimeMilliseconds(remember?)`** — thin `* 1000` wrapper around `getExpiryTime`.
-- **`getAccessTokenSecret()`** — returns `process.env.NODE_TOKEN_ACCESS` (empty string if unset).
-- **`getRefreshTokenSecret()`** — returns `process.env.NODE_TOKEN_REFRESH` (empty string if unset).
-- **`getAccessTokenTTL()`** — returns `NODE_TOKEN_ACCESS_TIME` as a number via `environmentNumber`, defaulting to `0`.
+- **`RefreshTokenExpiryTime`** (enum) — the three "remember me" tiers: `SHORT`, `MEDIUM`, `LONG`.
+- **`TOKEN_EXPIRY_ENV`** (internal const) — maps each tier (plus `'default'`) to its `NODE_TOKEN_*` environment variable name.
+- **`getExpiryTime(remember?)`** — returns the expiry for a tier in **seconds** (falls back to `NODE_TOKEN_ACCESS_TIME` when no tier is given). Returns `0` if the env var is unset.
+- **`getExpiryTimeMilliseconds(remember?)`** — same as above, multiplied by 1000.
+- **`getAccessTokenSecret()`** — reads `NODE_TOKEN_ACCESS` from `process.env` (empty-string fallback).
+- **`getRefreshTokenSecret()`** — reads `NODE_TOKEN_REFRESH` from `process.env` (empty-string fallback).
+- **`getAccessTokenTTL()`** — shorthand for the default access-token lifetime in seconds (`NODE_TOKEN_ACCESS_TIME`).
 
 ## Relationships
 
-- **`src/infrastructure/runtime/environment.ts`** — imports `environmentNumber`, used by `getAccessTokenTTL`.
-- **`src/modules/account/session/jwt.ts`** — consumes the secrets and TTLs exposed here to sign tokens (stated in this file's header comment).
-- **`src/modules/account/session/cookies.ts`** — consumes the expiry values here to set `maxAge` on session cookies (stated in this file's header comment).
-- **`src/modules/account/controllers/post-login.ts`** — downstream consumer; reaches these values transitively through `jwt.ts` / `cookies.ts` during the post-login flow.
-- **Tests** (`jwt.test.ts`, `cookies.test.ts`, `tokens.test.ts`) — unit/integration tests that exercise the expiry and secret getters in this file.
+- **`src/infrastructure/runtime/environment.ts`** — sole import; provides `environmentNumber` which every duration read in this file delegates to.
+- **`src/modules/account/session/jwt.ts`** — consumes `getAccessTokenSecret`, `getRefreshTokenSecret`, and `getAccessTokenTTL` to sign/verify JWTs.
+- **`src/modules/account/session/cookies.ts`** — consumes `getExpiryTimeMilliseconds` to set the `maxAge` on refresh-token cookies.
+- **`src/modules/account/controllers/post-login.ts`** — orchestrates the session flow that ultimately calls the above two modules.
+- **Tests** (`tokens.test.ts`, `cookies.test.ts`, `jwt.test.ts`) — exercise the exported helpers directly or indirectly to verify expiry values, secret retrieval, and cookie/JWT wiring.
 
 ## Notes
 
-- Unset env vars resolve to **`0`** (seconds) or **`''`** (secrets), never `undefined`. Callers should guard against a zero TTL before calling `setTimeout` or `expiresAt` arithmetic.
-- `getExpiryTime` reads `process.env` directly, whereas `getAccessTokenTTL` goes through `environmentNumber`. Both ultimately read the same variable (`NODE_TOKEN_ACCESS_TIME`); prefer one helper over the other to avoid divergence.
-- The file was previously named `tokens.ts` at the module root; the rename to `config.ts` was intentional to signal "no token is held or issued here."
-- `getExpiryTimeMilliseconds` is only used by consumers that need ms (e.g. cookie `maxAge`); JWT signing uses the seconds variant.
+- All duration helpers return **0** (not a thrown error) when the corresponding env var is absent; callers must guard against zero-length tokens.
+- `getAccessTokenSecret` / `getRefreshTokenSecret` use `process.env` directly rather than `environmentNumber`, because they are strings—don't assume every export goes through the `environment` helper.
+- The file deliberately avoids the name `tokens.ts` (already used at the module root for actual token creation) to prevent import ambiguity.

@@ -1,25 +1,19 @@
 # src/modules/account/tests/unit/auth-surface.test.ts
 
 ## Purpose
-
-Guards the account module's public API boundary in two ways: (1) asserts that the barrel (`@modules/account`) re-exports exactly the declared names from `@modules/account/services` with object identity (not mere existence), and (2) scans the entire source tree to confirm no file outside `src/modules/account/` imports an internal path (e.g. `@modules/account/session/jwt`) that bypasses the barrel.
+Pins the public surface of the account barrel by verifying that every re-export resolves to the **same object** its source exports (identity, not existence) and that no undeclared names leak out. This catches a class of bug—barrel re-exporting the wrong binding—that compiles cleanly and slips past smoke tests.
 
 ## Key elements
-
-- **`ADDRESS_EXPORTS`** — `readonly` tuple listing the single cross-module surface name (`addressForCheckout`). Adding a new barrel export without updating this tuple fails the test.
-- **`describe('the account barrel')`** — two tests: one checks `toBe` identity between `account[name]` and `addresses[name]` for each declared export; the other asserts `Object.keys(account)` equals exactly the declared set (no silent widening).
-- **`describe('nothing outside the module reaches past the barrel')`** — a static-analysis-style sweep over every `.ts` file under `src/`. Flags any file outside the account directory whose source matches `from '@modules/account/<anything-but-module>'`.
-- **`listSourceFiles(directory)`** — recursive `readdirSync` helper that collects all `.ts` files under a given root.
+- **`ADDRESS_EXPORTS`** — const tuple declaring the sole allowed public name (`addressForCheckout`). Adding a new export requires updating this list, making barrel widening an explicit, review-visible decision.
+- **`describe('the account barrel')`** — top-level suite containing two assertions:
+  - *Identity check* (`toBe`): for each name in `ADDRESS_EXPORTS`, asserts `account[name]` is the very same binding as `addresses[name]`. A forked re-export (correct name, different object) fails here.
+  - *Closed-surface check*: asserts the sorted key set of the account barrel equals the sorted `ADDRESS_EXPORTS`, so an accidental extra export fails the suite.
 
 ## Relationships
-
-- **`src/modules/account/index.ts`** — the barrel under test. The file imports it as `@modules/account` and asserts its key set and value identities.
-- **`src/modules/account/services/index.ts`** — imported as `@modules/account/services`; used as the reference implementation against which barrel re-exports are identity-compared.
+- **`src/modules/account/index.ts`** — the barrel under test; imported as `@modules/account`. The suite asserts its key set and binding identities.
+- **`src/modules/account/services/index.ts`** — the services barrel imported as `@modules/account/services`; serves as the reference side of the identity comparison for `addressForCheckout`.
 
 ## Notes
-
-- Identity check uses `toBe` (reference equality), not `toEqual`. A barrel that re-exports a *copy* or a *different binding* will fail even if the shape looks right.
-- The barrel-widening test compares sorted key arrays. A new export added to `index.ts` will fail here until explicitly added to `ADDRESS_EXPORTS`.
-- The external-import scan excludes `@modules/account/module` (the manifest/registration entry point) via a negative lookahead in the regex.
-- The `SOURCE_ROOT` is derived by walking four directory levels up from the test file (`tests/unit/` → `tests/` → `account/` → `modules/` → `src/`). A canary test (`finds the source tree it means to scan`) guards against a path-derivation mistake silently scanning zero files.
-- This test complements ESLint's module-boundary rule (which covers `src/modules/**`); it exists to catch consumers in non-module areas like `src/middlewares/`, `src/bootstrap/`, `src/jobs/`, `src/workers/`, and `src/infrastructure/`.
+- The test deliberately excludes any token/auth-port surface: the kernel's auth port is the only auth path per request and is wired from `module.ts` directly, so it is not expected on the account barrel.
+- Uses `toBe` (reference identity), not `toEqual`. This is intentional—a re-export that points at a *different* object with the same shape would pass an equality check but break callers relying on the singleton.
+- `Object.keys(...).toSorted()` requires Node 20+ / ES2023 `Array.prototype.toSorted`.

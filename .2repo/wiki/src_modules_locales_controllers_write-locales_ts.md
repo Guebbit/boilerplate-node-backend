@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Admin-only HTTP controllers for creating (POST /locales) and updating (PUT /locales/:locale) language records. They validate the request body with Zod, delegate the write to `localeService`, and shape the HTTP response. They do **not** register a language for use by the API at runtime — i18next reads supported locales once per worker at boot, so a row written here only becomes resolvable after a file is deployed.
+Admin-only controllers for the two mutating locale endpoints: `POST /locales` (register a new language in the dynamic tier) and `PUT /locales/:locale` (edit a language's display names, direction, or visibility). They validate the request body with Zod, delegate the actual work to `localeService`, and shape the HTTP response.
 
 ## Key elements
 
-- **`displayName`** (const) — Zod schema: `z.string().trim().min(1)`. Trims *before* the length check so a single-space string is rejected by the schema (400, named field) instead of surfacing as a Mongoose `required` violation (422, generic).
-- **`createLocale(request, response)`** — Validates body against `CreateLocaleBody` extended with `displayName` for `name` and `nativeName`. Calls `localeService.createLanguage`. Returns **201** on success.
-- **`updateLocale(request, response)`** — Validates body against `UpdateLocaleBody` extended with optional `displayName` for `name` and `nativeName`. Calls `localeService.updateLanguage` with the `:locale` param. Returns **200** on success. The locale tag itself is intentionally absent from the body schema (renaming it would rename an entire dictionary).
+- **`displayName`** (Zod schema) — `z.string().trim().min(1)`. Trims before the length check so a single-space string is rejected here (with a named field error) rather than surfacing later as a generic Mongoose 422.
+- **`createLocale`** (exported) — Validates the body against `CreateLocaleBody` extended with the `displayName` rule for `name` and `nativeName`. Calls `localeService.createLanguage`, returns **201** on success.
+- **`updateLocale`** (exported) — Validates the body against `UpdateLocaleBody` extended with optional `displayName` rules. Calls `localeService.updateLanguage` with `request.params.locale`, returns **200** on success.
 
 ## Relationships
 
-- **`src/modules/locales/services/index.ts`** — Source of `localeService`; provides `createLanguage` and `updateLanguage` which perform the actual persistence.
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` (uniform error handler), `refused` (short-circuits on service-level refusal), and `rejectValidation` (sends a 400 with Zod error details).
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to emit the standard success envelope.
-- **`src/infrastructure/http/request.ts`** — Imports `callerContextOf` to extract the admin identity passed into the service layer.
-- **`src/modules/locales/routes.ts`** — Wires `createLocale` / `updateLocale` to their respective method+path entries.
-- **`src/types/index.ts`** — Source of the `CreateLocaleRequest` and `UpdateLocaleRequest` types used to parameterize Express's `Request<TParams, TRes, TBody>`.
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, `refused`, and `rejectValidation`, the shared error-handling helpers both handlers use.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which extracts the authenticated caller context from the Express `Request` and passes it into the service call.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for uniform 200/201 response envelopes.
+- **`src/modules/locales/services/index.ts`** — Exports `localeService`; the sole data-access dependency of both handlers (`createLanguage` / `updateLanguage`).
+- **`src/modules/locales/routes.ts`** — The route definitions that bind `createLocale` and `updateLocale` to the Express `POST /locales` and `PUT /locales/:locale` paths.
+- **`src/types/index.ts`** — Source of the `CreateLocaleRequest` and `UpdateLocaleRequest` generic types used in the Express `Request<…>` signatures.
 
 ## Notes
 
-- Both controllers use the promise-chain pattern (`.then` / `.catch`) rather than `async/await`, consistent with the rest of the controller layer.
-- The `displayName` trim-before-min trick is a deliberate workaround for a JSON Schema limitation (no trim operation); the OpenAPI spec still declares `minLength: 1`, which is weaker than the runtime check. If you add a new free-text field, apply the same pattern rather than relying on the schema's `minLength` alone.
-- Validation failures are returned via `Promise.resolve(rejectValidation(...))` (not `throw`), so the outer `.catch(catchAs)` in the service chain never sees a Zod error.
+- The locale **tag** (language code) is deliberately not part of the `PUT` body. Every entry in the dictionary references it, so renaming would cascade. Only display names, direction, and visibility are mutable.
+- Neither handler touches i18next's per-worker locale table; that is read once at boot via `listSupportedLocales()`. A newly created locale is not resolvable until a worker restart.
+- The `displayName` trim-before-min-length pattern is a workaround for a mismatch between OpenAPI `minLength: 1` (which accepts `" "`) and Mongoose's automatic trim on a `required: true` field (which turns `" "` into `""`).

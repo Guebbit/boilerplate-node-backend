@@ -2,26 +2,25 @@
 
 ## Purpose
 
-Shared helper functions that eliminate the four repeated steps in every HTTP controller (validation, refusal branching, error catching, and body parsing). Deliberately exported as individual helpers rather than a `defineController()` wrapper, so that stack traces stay pointed at the handler, generic type inference is preserved, and the `controller-chain-must-catch` ESLint rule can still see the literal `.catch()` at each call site.
+Shared HTTP helpers that extract the four steps every Express controller repeats—read input, validate, call a service, branch on the result, catch—into small composable functions. They deliberately avoid a `defineController()` wrapper so the `.catch()` call, the service result, and the handler itself remain visible to the `controller-chain-must-catch` AST linter.
 
 ## Key elements
 
-- **`ServiceResult<TData>`** (internal interface) — structural shape every service returns (`success`, `status`, `message?`, `data?`, `errors?`). Defined locally because `@infrastructure` must not import from a module.
-- **`refused(response, result)`** — sends the rejection response if `result.success` is false and returns `true`; returns `false` on success. Controllers use it as a one-line bail-out before the success path.
-- **`catchAs(response, context)`** — returns a callback suitable for `.catch()`. Logs the operation name (`context`) and delegates to `rejectDatabaseError`.
-- **`rejectValidation(response, error)`** — sends a 422 with Zod error details via `rejectResponse` + `validationErrors`.
-- **`parseBody(schema, body, response)`** — runs `safeParse` against a generated Zod schema. On success returns the typed `TSchema['_output']`; on failure sends 422 and returns `undefined`. Caller must bail out on `undefined` without touching the response again.
+- **`ServiceResult<TData>`** — Structural interface describing the envelope every service returns (`success`, `status`, optional `data` / `errors`). Not imported from a specific module to keep the layering clean.
+- **`refused(response, result)`** — If the service result is a rejection, sends the error response and returns `true`; otherwise returns `false`. Only handles the failure half; the success path is intentionally left to each controller.
+- **`catchAs(response, context)`** — Curried factory that returns a `.catch()` callback delegating to `rejectDatabaseError`. Keeps the literal `.catch(` at the call site for the AST rule.
+- **`rejectValidation(response, error)`** — Sends a 422 with Zod-specific error items from a `ZodError`.
+- **`parseBody(schema, body, response)`** — Runs `safeParse`; on success returns the typed data, on failure sends 422 and returns `undefined`. Callers must bail immediately on `undefined`.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — provides `rejectResponse`, `validationErrors`, and the `ResponseErrorItem` type used by `refused`, `rejectValidation`, and `parseBody`.
-- **`src/infrastructure/http/errors.ts`** — provides `rejectDatabaseError`, the only dependency of `catchAs`.
-- **Account module controllers** (`post-login.ts`, `get-sessions.ts`, `delete-session.ts`, etc.) — the primary consumers; each imports these four helpers to replace inline validation, refusal branching, and catch logic.
-- **`src/infrastructure/http/delete-controller.ts`** — peer in the same directory; follows the same controller pattern and is expected to consume these helpers.
+- **`./response`** — Source of `rejectResponse`, `validationErrors`, and the `ResponseErrorItem` type; used by `refused`, `rejectValidation`, and `parseBody`.
+- **`./errors`** — Source of `rejectDatabaseError`; consumed by `catchAs`.
+- **`src/infrastructure/surfaces/create-*-controller.ts`** — Surface factories that import these helpers to wire concrete route handlers.
+- **`src/modules/account/controllers/*.ts`** — Individual account-module controllers (login, logout, address CRUD, session management, password change, etc.) that each call `parseBody`, `refused`, and `catchAs` in their handler body.
 
 ## Notes
 
-- `parseBody` and `extractAndValidateId` (in `./request`) share a contract: they **respond** as well as extract. The caller must check for `undefined` and return immediately; a second `res.*` call after that is a bug.
-- `refused` intentionally does **not** handle the success path — controllers still own how and what they send on success (201 vs 200, transformed payload, audit event ordering, etc.).
-- `catchAs` returns a **callback**, not a thrown value. The literal `.catch(catchAs(res, 'opName'))` syntax is what the ESLint rule `controller-chain-must-catch.ts` expects to find in the AST.
-- `ServiceResult` is structural on purpose: it mirrors `generateSuccess` / `generateReject` output without importing those helpers, keeping the dependency direction module → infrastructure.
+- `parseBody` both *responds* and *extracts*: if it returns `undefined`, the 422 is already sent and the handler must `return` without touching `response` again.
+- The success path is intentionally **not** abstracted—controllers differ in payload shape, status code (200 vs 201), and side-effects (audit events), so only the refusal side is shared.
+- `catchAs` is curried (`catchAs(res, "op-name")`) so the call site reads `.catch(catchAs(res, "deleteSession"))`, preserving the `.catch(` token the linter greps for.

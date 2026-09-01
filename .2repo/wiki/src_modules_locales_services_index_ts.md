@@ -2,27 +2,24 @@
 
 ## Purpose
 
-Barrel (namespace) file that re-exports every public function from the five locale-service sub-modules into a single `localeService` object. It exists so that the seven controllers, `module.ts`, and the integration test suite all import one name rather than a list of twenty-four scattered exports, keeping the re-export surface trivially in sync with the folder.
+Barrel file for the locales service tier. It aggregates functions from five sub-modules (`keys`, `capabilities`, `languages`, `entries`, `messages`) into a single `localeService` namespace object, which is the **only** name anything outside `services/` imports. It exists so consumers get one stable import target instead of 24 individual re-exports that would drift out of sync with the folder.
 
 ## Key elements
 
-- **`localeService`** (sole export) — a frozen object bundling 24 functions drawn from five sibling files:
-  - `keys.ts` → `buildMessageTree`, `findUnsafeKeySegment`, `findKeyCollision`, `findBatchCollision`, `findDuplicateKey`
-  - `capabilities.ts` → `isRightToLeft`, `describeLanguage`, `staticCapability`, `dynamicCapability`, `mergeCapabilities`, `readDynamicTier`, `callerScope`, `listCapabilities`, `listTenants`
-  - `languages.ts` → `createLanguage`, `updateLanguage`, `deleteLanguage`
-  - `entries.ts` → `searchEntries`, `createEntry`, `updateEntry`, `deleteEntry`, `importEntries`
-  - `messages.ts` → `readMessages`, `readApiOverrides`
+- **`localeService`** (exported object) — the sole export of this module. Contains all 24 functions the locale service exposes, grouped by sub-module:
+  - *Capabilities:* `isRightToLeft`, `describeLanguage`, `staticCapability`, `dynamicCapability`, `mergeCapabilities`, `readDynamicTier`, `callerScope`, `listCapabilities`, `listTenants`
+  - *Keys:* `buildMessageTree`, `findUnsafeKeySegment`, `findKeyCollision`, `findBatchCollision`, `findDuplicateKey`
+  - *Languages:* `createLanguage`, `updateLanguage`, `deleteLanguage`
+  - *Entries:* `searchEntries`, `createEntry`, `updateEntry`, `deleteEntry`, `importEntries`
+  - *Messages:* `readMessages`, `readApiOverrides`
 
 ## Relationships
 
-- **Imported by all seven locale controllers** (`get-locales`, `write-locales`, `delete-locale`, `get-locale-entries`, `write-locale-entries`, `delete-locale-entry`, `get-locale-messages`, `get-locale-tenants`) — each pulls specific functions off `localeService` to implement its endpoint.
-- **Imported by `module.ts`** — wires the service into the module's DI / route registration.
-- **Imported by `tests/integration/model.test.ts`** — exercises the same surface the controllers use.
-- **Re-exports from five sibling files** (`keys.ts`, `capabilities.ts`, `languages.ts`, `entries.ts`, `messages.ts`) — the actual implementations live there; this file adds no logic.
+- **Imports from** (the five sub-modules it re-exports): `./keys`, `./capabilities`, `./languages`, `./entries`, `./messages`.
+- **Imported by** (all consume the single `localeService` object): the seven locale controllers (`get-locales`, `write-locales`, `get-locale-entries`, `write-locale-entries`, `get-locale-messages`, `get-locale-tenants`, `delete-locale-entry`, `delete-locale`), `module.ts`, and three test suites including `tests/integration/model.test.ts`.
 
 ## Notes
 
-- There are **no loose named re-exports** (`export { foo } from …`). The only importable name is `localeService`. Adding a second export list is explicitly discouraged by the in-file comment.
-- Architectural invariant stated in the header: **nothing exported here is ever awaited by `t()`, `negotiateLocale`, or the locale middleware at request time.** All functions are database-backed and live on the admin/override path.
-- `readApiOverrides` is the one read that the middleware *does* consult, but only via a request-time overlay rebuild — the set of languages the API can answer in is still fixed at boot from deployed files and cannot be changed by a DB row.
-- The file was split out of a single ~300-line module; the rationale lives in `docs/theory/layers.md`.
+- **No loose re-exports.** The file deliberately avoids `export { fn }` alongside the namespace object. Adding a second list of 24 names would double the maintenance surface; `localeService` is the one and only importable name.
+- **Not on the hot path.** The header doc-block states that nothing here is ever `await`ed by `t()`, `negotiateLocale`, or the locale middleware. Overrides written by these functions reach `t()` only through an overlay rebuilt off the request path.
+- **Folder, not file.** The service was split from a single file into this folder structure once it exceeded ~300 lines (see `docs/theory/layers.md` for the threshold policy).

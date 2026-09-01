@@ -2,26 +2,26 @@
 
 ## Purpose
 
-Public barrel (single entry point) for the products module. It defines the only API surface that sibling modules may import, keeping the production interface deliberately narrow so that each export represents a stable contract. Lint (`eslint-plugin-boundaries`) enforces this: importing deeper paths like `@modules/products/service` from outside is a compile-time error.
+Public barrel (entry point) for the products module. It is the **only** surface a sibling module may import from; `eslint-plugin-boundaries` makes reaching internal paths like `@modules/products/service` a lint error. Keeping the surface narrow is a deliberate contract: every re-export here is a promise that the internal implementation can move without breaking consumers.
 
 ## Key elements
 
-- **`productService`** — the module's service instance, exported for sibling modules that need product queries or mutations.
-- **`productRepository`** — the data-access layer, exported alongside the service for modules that need direct repository access.
-- **`ProductDocument`** (type) — the full Mongoose document shape.
-- **`ProductSnapshot`** (type) — a product's stored fields stripped of document machinery; the shape `orders` embeds on every order line to freeze the product state at purchase time.
-- **`productSchema` / `applyProductTransform`** — the Mongoose schema and its serialization transform, published so that `orders` can snapshot a product's shape rather than hold a live reference (preventing later catalogue edits from rewriting order history).
-- **`PRODUCT_DELETED`** (event constant) — the module's emitted event; importing the barrel is also what installs the payload type declaration.
+- **`productService`** — the main service interface, re-exported from `./service`.
+- **`productRepository`** — data-access layer, re-exported from `./repository`.
+- **`ProductDocument`** *(type)* — the full Mongoose document shape, re-exported from `./model`.
+- **`ProductSnapshot`** *(type)* — the product's stored fields without document machinery. Published because the `orders` module's own types name it when embedding a product on each line item.
+- **`productSchema` / `applyProductTransform`** — the Mongoose schema and its serialization transform, re-exported from `./model`. Needed by modules (e.g. `orders`) that **embed** a product snapshot at purchase time rather than holding a reference, so a later catalogue edit cannot rewrite order history.
+- **`PRODUCT_DELETED`** — event constant re-exported from `./events`. Importing the barrel also installs the event payload declaration.
 
 ## Relationships
 
-- **`src/modules/orders/model.ts`, `src/modules/orders/factory.ts`, `src/modules/orders/service.ts`** — consume `ProductSnapshot`, `productSchema`, and `applyProductTransform` to embed a denormalised product copy on each order line.
-- **`src/modules/cart/module.ts` and cart services** — listed as a consumer of the *second* public path (`@modules/products/demo`) for seeders, not this barrel.
-- **`src/modules/inventory/service.ts`, `src/modules/inventory/metrics.ts`** — graph neighbours that interact with product data; their coupling is asserted by the same boundary lint rules that gate this barrel.
-- **Integration test files** (`cart`, `inventory`, `orders`, `account`) — exercise the public surface defined here rather than reaching into internal paths.
+- **`orders` (`model.ts`, `service.ts`)** — consumes `ProductSnapshot`, `productSchema`, and `applyProductTransform` to embed a frozen product copy on each order line. This is the primary reason those symbols are exported from the barrel.
+- **`cart` (`module.ts`, `services/items.ts`, `services/reorder.ts`, `services/view.ts`)** — imports `productService` / `productRepository` through this barrel to look up product data for cart operations.
+- **`inventory` (`service.ts`, `metrics.ts`)** — interacts via `productService` / `productRepository` for stock-aware lookups.
+- **Seeders in `cart`, `wishlist`, `orders`** — do **not** import from this barrel for demo data. They use the separate `@modules/products/demo` path, keeping this surface production-only.
 
 ## Notes
 
-- The demo catalogue is **intentionally excluded** from this barrel. It lives behind a separate path (`@modules/products/demo`) so that "what a sibling may import" and "what is the production API" remain the same question. `eslint-plugin-boundaries` restricts that second door to seeders only.
-- Adding a new export here is treated as a cross-module API commitment — the file's own comment frames each export as "a promise … that this shape will not move."
-- The file is a pure re-export; all logic lives in `./service`, `./repository`, `./model`, and `./events`.
+- **Demo catalogue is deliberately excluded.** It lives behind `@modules/products/demo`, and `eslint-plugin-boundaries` restricts that path to seeder files only. Do not add a demo re-export here.
+- **`PRODUCT_DELETED` is side-effectful to import.** The barrel's import statement is what installs the event payload declaration; consuming modules get the type without importing `./events` directly.
+- **`ProductSnapshot` ≠ `ProductDocument`.** The former is the plain stored-field shape (what `orders` embeds); the latter includes Mongoose document mechanics. Confusing them will break serialization in the orders module.

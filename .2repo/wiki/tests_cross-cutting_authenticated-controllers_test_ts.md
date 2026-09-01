@@ -2,23 +2,26 @@
 
 ## Purpose
 
-A static-analysis guard test that verifies no controller handler using the `authContextOf` accessor is mounted on a route lacking `isAuth` protection. It exists because TypeScript cannot express "this route is authenticated" — that knowledge lives in `routes.ts` routing order, and a misplaced `router.use(isAuth)` (e.g., mid-file) would otherwise let a public route silently call `authContextOf` and crash at runtime with `undefined.id`.
+Cross-cutting invariant test: every controller handler that calls `authContextOf()` must be mounted on a route whose middleware stack includes `isAuth`. It closes the gap that no single type can cover — a controller can be written to read the caller while `routes.ts` accidentally leaves the route public — by inspecting the *resolved* Express middleware stack rather than re-parsing route source text.
 
 ## Key elements
 
-- **`handlersReadingAuthContext(moduleRoot)`** — Scans every `.ts` file in `<module>/controllers/` for the literal string `authContextOf(` and returns the set of exported handler names (`export const <name> =`) that use it.
-- **`unauthenticatedMounts(moduleRoot)`** — Walks `<module>/routes.ts` line-by-line, tracking whether a `router.use(...isAuth...)` blanket has been seen. Returns handler names mounted on routes that are *not* covered by such a blanket and do not themselves pass `isAuth`.
-- **`modules()`** — Lists directory names under `src/modules/` (resolved relative to this test file).
-- **Test: "finds no handler asserting an auth context its route does not guarantee"** — Cross-references the two sets above across all modules; fails listing any offending `module: handler` pair.
-- **Test: "actually finds controllers to check"** — Canary assertion that the total count of auth-reading handlers is > 10, preventing a false pass from a path-resolution bug or empty scan.
+- **`ROUTED_MODULES`** — maps the twelve module names to their actual Express `Router` instances (imported from each module's `routes.ts`), giving the test the real mounted middleware chain.
+- **`handlersReadingAuthContext(moduleRoot)`** — reads every `controllers/*.ts` file in a module directory, finds files containing `authContextOf(`, and extracts exported handler names via regex. Returns a `Set<string>`.
+- **`handlersMountedUnauthenticated(router)`** — iterates `effectiveRouteTable(router)` rows; collects every handler in a row whose `applies`/`chain` does **not** include `isAuth`. Returns a `Set<string>`.
+- **`moduleNames()` / `MODULES_ROOT`** — lists every subdirectory under `src/modules/` so the test also covers modules that have *no* router (they are simply skipped).
+- **Test 1** (`finds no handler asserting an auth context its route does not guarantee`) — intersects the two sets per module; expects an empty offender list.
+- **Test 2** (`actually finds controllers to check`) — canary: asserts the total count of auth-reading handlers across all modules exceeds 10, guarding against a vacuous pass.
+- **`jest.mock` blocks** — stubs `cache`, `route-flag`, `storage`, and `rate-limit` middlewares (via helpers exported from `@tests/routes`) so the real routers can be constructed without infrastructure dependencies.
 
 ## Relationships
 
-No graph neighbors are recorded for this file. It is self-contained: it reads source files via `node:fs` and performs no imports from the application under test.
+- **`tests/support/routes.ts`** — supplies `effectiveRouteTable` (resolves a Router into per-route middleware chains) and the mock factories (`cacheMock`, `routeFlagMock`, `storageMock`, `securityMock`) used in the `jest.mock` calls.
+- **All twelve `src/modules/*/routes.ts`** — imported for their `router` export; the test inspects their fully-mounted middleware stacks. The test does *not* import individual controllers; it reads their source from disk.
+- **`src/modules/*/controllers/*.ts`** (indirect, via `readFileSync`) — the test statically scans these files at test time to discover which handlers call `authContextOf(`.
 
 ## Notes
 
-- **No imports from `src/`.** The test is purely lexical — it reads file contents as text. This means it will still pass if the project does not compile, but it also means it cannot catch indirect or renamed usages (e.g., a re-export alias for `authContextOf`).
-- **Order-sensitive route parsing.** The `unauthenticatedMounts` helper treats a `router.use(isAuth)` line as a one-way latch: everything *below* it is authenticated, everything *above* it is not. Comment lines (`//` and `*`) are skipped. This mirrors the documented hazard in the `feedback` module where `router.use(isAuth)` appears mid-file.
-- **Handler extraction heuristic.** The "handler" is identified as the last identifier on the `router.<method>(...)` line. Multi-arg or multi-line route definitions may not be parsed correctly.
-- **`MODULES_ROOT`** is computed from `__dirname/../..` → `src/modules`. If the test is run from a different working directory or the project is restructured, both the scan and the canary will silently find nothing (the canary only guards against zero, not against the wrong directory).
+- The test intentionally uses the *real* mounted Express routers (not a re-parse of `routes.ts` source) so that guards applied via variables, spreads, or multi-line `router.use` calls are still detected — Express has already resolved them into a uniform stack by the time `effectiveRouteTable` reads them.
+- New modules that add a router must be added to `ROUTED_MODULES` in this file (and the companion `write-routes-are-guarded.test.ts`); the `moduleNames()` scan will find the directory, but the test silently skips modules absent from `ROUTED_MODULES`.
+- The canary threshold (`> 10`) is a soft floor; if the codebase shrinks below that, the assertion will need updating. It exists to catch a regression where the source-scanning regex stops matching (e.g., a rename of `authContextOf`) and the main test passes vacuously.

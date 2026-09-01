@@ -2,22 +2,23 @@
 
 ## Purpose
 
-Implements `Accept-Language` header negotiation: given a client-supplied header string and a list of supported locales, it returns the single best-matching locale. It is a pure function (no request object, no ambient state) so both the HTTP middleware and tests can call it with arbitrary inputs.
+Pure function for `Accept-Language` header negotiation: given a client-supplied language string and the API's supported locale list, returns the best-match locale. It has no I/O or ambient state (no request object, no module-level config) so it can be called from the HTTP middleware or directly in tests with an arbitrary supported list.
 
 ## Key elements
 
-- **`negotiateLocale(acceptLanguage?: string, supported?: string[]): string`** — The sole export. Parses the header, honours q-weights, matches region tags to their base language (`en-GB` → `en`), treats `*` as "return the default", and falls back to `NODE_FALLBACK_LOCALE` (or the first supported locale) when nothing matches. Never throws on malformed input.
+- **`negotiateLocale(acceptLanguage?, supported?)`** — The sole export. Accepts an optional `Accept-Language` header string and an optional `string[]` of supported locales (defaults to `listSupportedLocales()`). Parses comma-separated tags with `;q=` parameters, sorts by quality (stable for equal weights), then matches in order: wildcard `*` → exact tag → base-language tag (e.g. `en-GB` → `en`). Returns the fallback locale if nothing matches. Never throws on malformed input.
+- **Fallback resolution** — Uses `getFallbackLocale()` if it appears in the supported list; otherwise falls back to the first entry of the provided list.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/catalog.ts`** — Source of `getFallbackLocale()` and `listSupportedLocales()`, used as the default `supported` argument and the fallback value.
-- **`src/infrastructure/http/middlewares/locale.ts`** — Consumes `negotiateLocale` to resolve the request's locale before handing the request to handlers.
-- **`src/infrastructure/i18n/index.ts`** — Barrel file that re-exports this module's public API.
-- **`tests/unit/infrastructure/i18n/negotiate.test.ts`** — Unit tests that call `negotiateLocale` with crafted headers and supported lists.
+- **`src/infrastructure/i18n/catalog.ts`** — Source of `getFallbackLocale()` and `listSupportedLocales()`; the only runtime dependency.
+- **`src/infrastructure/http/middlewares/locale.ts`** — Primary consumer; calls `negotiateLocale` per request to resolve the response locale.
+- **`src/infrastructure/i18n/index.ts`** — Barrel module that re-exports this file alongside the rest of the i18n infrastructure.
+- **`tests/unit/infrastructure/i18n/negotiate.test.ts`** — Unit tests exercising the negotiation logic with synthetic supported lists.
 
 ## Notes
 
-- **Stable sort via `.toSorted`** — Candidates with equal q-weights retain their original header order, preserving the client's stated preference.
-- **Unparseable q-value ≠ `q=0`** — A missing or non-numeric `q` defaults to 1 (the client still named a language); `q=0` is an explicit refusal and is filtered out.
-- **Fallback resolution** — If `getFallbackLocale()` is not in the `supported` list, the first entry of `supported` is used instead. This means the fallback is *always* a member of the provided list (or the global default as a last resort).
-- **`supported` is case-insensitive** — A lowercase map is built for lookups, but the original casing from the supported list is returned.
+- `q=0` is parsed as an explicit refusal (tag is filtered out); an unparseable `q=` value (e.g. `q=abc`) defaults to `1` rather than being treated as zero.
+- Matching is case-insensitive via a `Map` of lowercased supported locales, but the *original* casing from the supported list is returned.
+- The function relies on `Array.prototype.toSorted` (ES2023), so the runtime/target must support it.
+- The `supported` parameter exists so tests and callers can inject a custom list without mutating the catalogue.

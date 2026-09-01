@@ -1,21 +1,17 @@
 # src/modules/delivery/tests/unit/rates.test.ts
 
 ## Purpose
-
-Unit tests for the pure, table-driven shipping-rate functions in `domain/rates.ts`. Because the pricing logic operates over a static in-memory table (no DB, no I/O), it qualifies as a genuine unit test and lives here rather than in `tests/integration/`.
+Unit tests for the pure shipping-rate domain functions (`findShippingMethod`, `priceShipping`) and the `SHIPPING_METHODS` table. No database or mocks are needed because the pricing logic is a static lookup plus a threshold check; this file exists to pin that behaviour in isolation from the persistence layer (which lives in `tests/integration/`).
 
 ## Key elements
-
-- **`describe('findShippingMethod')`** — Verifies lookup by known id returns the expected object, and that an unknown id yields `undefined`.
-- **`describe('priceShipping')`** — Covers four pricing paths: flat rate below the free-shipping threshold, zero cost at/above the threshold, a method with no threshold (always flat), and the special-case pickup method priced at 0 (distinct from "method not found").
-- **`describe('SHIPPING_METHODS')`** — Data-canary: asserts every entry in the committed table has a non-negative `price`, catching a typo before it surfaces at checkout.
+- **`describe('findShippingMethod')`** — verifies lookup by id (`express`) and `undefined` for an id the shop does not offer (`overnight`).
+- **`describe('priceShipping')`** — covers the four pricing branches: flat rate below the free-shipping threshold, zero at/above the threshold, flat rate when the method has no threshold (`express`), and the special `pickup` method that always prices at zero.
+- **`describe('SHIPPING_METHODS')`** — a data-integrity canary: asserts every entry in the committed table has a non-negative `price`.
 
 ## Relationships
-
-- **Imports from `src/modules/delivery/domain/rates.ts`** — the sole production dependency. Pulls in `findShippingMethod`, `priceShipping`, and the `SHIPPING_METHODS` constant; every assertion in this file exercises those three exports.
+- **`src/modules/delivery/domain/rates.ts`** — the sole import target. This test file exercises `findShippingMethod`, `priceShipping`, and the `SHIPPING_METHODS` constant exported from that module. No other files are imported.
 
 ## Notes
-
-- The file header documents *why* this test lives in `unit/` rather than `integration/`: the pricing rule is pure, while `service.test.ts` required a real database and was moved out. If the domain gains DB or network I/O, these tests would need to relocate.
-- The `SHIPPING_METHODS` block is a data-validation guard (canary), not a logic test — it exists to catch a bad committed value, not a code path.
-- Pickup pricing (0) is deliberately tested separately from the "no method" case (`undefined`) to prevent a future refactor from conflating the two.
+- The module doc comment explicitly records *why* `service.test.ts` was moved to `tests/integration/`: the pricing rule is pure, the service persistence is not. If you add a new shipping method, update `SHIPPING_METHODS` in the domain file and add a case here.
+- The `pickup` method is asserted to price at zero, which is intentionally distinct from the `undefined` case (an unknown id). A regression that conflates the two would pass the `express` tests but fail the `pickup` one.
+- Tests use `!` (non-null assertion) on `findShippingMethod(...)` results because the valid ids are known at test-writing time; the `undefined` path is covered separately.

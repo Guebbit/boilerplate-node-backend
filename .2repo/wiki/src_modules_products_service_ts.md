@@ -2,50 +2,45 @@
 
 ## Purpose
 
-Business-logic layer for the Product entity. Translates high-level operations (search, CRUD, facet counts) into repository calls and orchestrates side-effects (analytics, audit, domain events, image-file cleanup). Controllers and other modules call this service rather than the repository directly.
+The product service layer: all business logic for the catalogue entity. It is the single entry point controllers call into, sitting between HTTP handlers and the repository. It owns validation, search/read access control, CRUD orchestration, image-lifecycle side-effects, and the emission of analytics/audit/domain events.
 
 ## Key elements
 
-- **`validateData(productData: unknown): ResponseErrorItem[]`** — Zod-schema validation at the untyped boundary; returns UI-friendly error messages (empty array = valid).
-- **`callerScope`** — Pre-built visibility filter via `createVisibilityScope`. `undefined` for admins (no restriction); public-catalogue predicate for everyone else.
-- **`search(filters, scope?)`** — Product search with text/price/category filters and 1-based pagination. Delegates query construction to `productRepository.search`.
-- **`searchViewed(filters, scope, context)`** — Wraps `search` + emits a `PRODUCTS_SEARCHED` analytics event. Exists separately so non-controller callers (tests, `facets`) can read the catalogue without triggering analytics.
-- **`getById(id, scope?)`** — Fetch a single product; returns `undefined` for falsy id, `null`/`undefined` if not found.
-- **`getByIdViewed(id, scope, context)`** — Wraps `getById` + emits a `PRODUCT_VIEWED` analytics event.
-- **`create(data, context)`** — Inserts a new product; sanitizes `categories`/`tags`; emits an `ADMIN_PRODUCT_CREATED` audit event.
-- **`update(product, data)`** — In-place field mutation, then `productRepository.save`. If `imageUrl` changed, removes the old file from `imageStore` after saving.
-- **`updateById(id, data, context)`** — Fetch-then-update; returns a `generateReject(404, …)` envelope (not a throw) when the product is missing; emits `ADMIN_PRODUCT_UPDATED` audit on success.
-- **`remove(product, hardDelete?)`** — Emits `PRODUCT_DELETED` domain event **before** the write (so downstream listeners finish first). Hard delete: `deleteOne` + `imageStore.remove`. Soft delete: toggles `deletedAt`.
-- **`removeById(id, hardDelete?)`** — Fetch-then-remove; 404 reject envelope if not found.
-- **`facets`** *(truncated in source)* — Returns category/tag counts for the public catalogue; pass-through to a repository aggregation.
+- **`validateData(productData: unknown)`** — Runs the Zod product schema; returns an empty array on success or a list of `ResponseErrorItem` on failure. Accepts `unknown` deliberately so callers never cast at the boundary.
+- **`callerScope`** — A visibility-scope function (from `createVisibilityScope`) that resolves to `undefined` for admins (no filter) or the published-catalogue scope for everyone else.
+- **`search(filters, scope)`** — Core catalogue query; delegates to `productRepository.search`. No analytics here.
+- **`searchViewed(filters, scope, context)`** — Wraps `search` and emits a `PRODUCTS_SEARCHED` analytics event. Exists so non-HTTP callers (tests, `facets`) can search without needing a `CallerContext`.
+- **`getById(id, scope)`** — Fetches one product; returns `Promise.resolve()` (i.e. `undefined`) when `id` is falsy, or the repository's `null` on miss.
+- **`getByIdViewed(id, scope, context)`** — Wraps `getById` and emits `PRODUCT_VIEWED` when a product is found.
+- **`create(data, context)`** — Persists a new product, sanitises `categories`/`tags`, fires an audit event, and enqueues a background image-digest job if a `pendingImageKey` is present.
+- **`update(product, data)`** — Applies partial field changes, handles image-replacement (URL swap + old-file deletion via `imageStore.remove`), saves, then enqueues image digest if pending. Notably does **not** touch any stock/counter field.
+- **`updateById(id, data, context)`** — Fetches by ID, returns a 404 `ResponseReject` (not a throw) on miss, delegates to `update`, fires an audit event, and wraps the result in `generateSuccess`.
+- **`remove(product, hardDelete?)`** — Soft delete is a **flip** on `deletedAt` (calling twice restores). Hard delete removes the document and the image file. Both paths `await` `emitDomainEvent(PRODUCT_DELETED, …)` before the write so downstream listeners (e.g. cart cleanup) have completed first.
+- **`sanitizeStringArray`** (internal) — Trims, drops blanks, de-duplicates string arrays for `categories`/`tags`.
+- **`enqueueIfPending`** (internal) — Fire-and-forget publish of an image-digest job when `pendingImageKey` is set.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@infrastructure/adapters/image-store.ts` | `update` and `remove(hard)` call `imageStore.remove(…)` to delete superseded/removed image files. |
-| `@infrastructure/http/request.ts` | Imports the `CallerContext` type used by analytics/audit wrappers. |
-| `@infrastructure/http/response.ts` | Imports `generateSuccess`, `generateReject`, `validationErrors`, and response types for uniform envelope returns. |
-| `@infrastructure/i18n/index.ts` (→ `context.ts`) | Imports `t` for localized user-facing messages (e.g. "not found", "hard-deleted"). |
-| `@infrastructure/observability/analytics/index.ts` | `searchViewed` / `getByIdViewed` emit events via `emitAnalyticsEvent` + `buildAnalyticsBase`. |
-| `@infrastructure/observability/audit.ts` | `create` / `updateById` emit audit records via `emitAuditEvent` + `buildAuditEvent`. |
-| `@infrastructure/persistence/search.ts` | Imports `PaginatedMeta` type for search result shape. |
-| `@kernel/authorization.ts` | `createVisibilityScope` builds the `callerScope` used to restrict reads. |
-| `@kernel/events.ts` | `emitDomainEvent(PRODUCT_DELETED, …)` in `remove`; awaited before the DB write. |
-| `./analytics.ts` | `productsAnalyticsEvents` enum keys for event names. |
-| `./audit.ts` | `productsAuditActions` enum keys for audit actions. |
-| `./events.ts` | `PRODUCT_DELETED` event constant. |
-| `./model.ts` | `zodProductSchema`, `ProductDocument` type. |
-| `./repository.ts` | `productRepository` — all DB reads/writes. |
-| `controllers/delete-products.ts` | Calls `removeById`. |
-| `controllers/get-catalogue-facets.ts` | Calls the (truncated) `facets` function. |
-| `modules/cart/tests/integration/service.test.ts` | Cart integration tests exercise the `PRODUCT_DELETED` domain event emitted by `remove`. |
+- **`src/kernel/authorization.ts`** — Provides `createVisibilityScope`, which produces the `callerScope` export; read-path access control is entirely delegated here.
+- **`src/kernel/events.ts`** — `emitDomainEvent` is called (and awaited) in `remove` before the DB write, so domain listeners finish before the product state changes.
+- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` / `buildAnalyticsBase` are used by `searchViewed` and `getByIdViewed`.
+- **`src/infrastructure/observability/audit.ts`** — `emitAuditEvent` / `buildAuditEvent` fire on `create` and `updateById`.
+- **`src/infrastructure/adapters/image-store.ts`** — `imageStore.remove` deletes the old image file on image replacement (`update`) and on hard delete (`remove`).
+- **`src/infrastructure/adapters/image.worker.ts`** — `enqueueImageDigest` is called (fire-and-forget) after create/update when a pending upload key exists.
+- **`src/infrastructure/http/response.ts`** — `generateSuccess`, `generateReject`, `validationErrors` shape every HTTP-facing return value.
+- **`src/infrastructure/http/request.ts`** — Imports the `CallerContext` type used by the "Viewed" wrappers and the audit/analytics paths.
+- **`src/infrastructure/i18n/index.ts`** — `t()` localises user-facing strings (e.g. `products.not-found`, `products.hard-deleted`).
+- **`src/infrastructure/persistence/search.ts`** — Provides the `PaginatedMeta` type on search results.
+- **`src/modules/products/analytics.ts`** — Supplies the `productsAnalyticsEvents` enum (event names).
+- **`src/modules/products/audit.ts`** — Supplies the `productsAuditActions` enum (action names).
+- **`src/modules/products/controllers/delete-products.ts`** — Controller that calls `remove` (the only exported write path for deletion).
+- **`src/modules/cart/tests/integration/service.test.ts`** — Integration test that exercises the product service (search/getById) through the cart flow.
 
 ## Notes
 
-- **No stock writes here.** A large inline comment documents that absolute stock writes were removed from `update`; counters now move only via signed transitions in `@modules/inventory` (`receipts`, `adjustments`) to avoid lost-update races.
-- **`*Viewed` wrappers are intentional.** Analytics is not folded into `search`/`getById` so that internal callers (unit tests, cross-module lookups, `facets`) don't pollute analytics streams.
-- **404 reporting style.** `updateById` and `removeById` return a `ResponseReject` envelope rather than throwing, making "not found" distinguishable from a genuine DB error at the call site.
-- **`PRODUCT_DELETED` is awaited before the write.** This guarantees listeners (e.g. cart emptying the product from every user's cart) complete before the product stops resolving, keeping the dependency arrow cart → products only.
-- **`validateData` accepts `unknown` by design** — it is the single point where raw request data is established as typed; callers are not expected to pre-cast.
-- **`update` mutates the document in place** before calling `save`; it does not construct a new object.
+- **"Viewed" wrappers are deliberate.** `searchViewed` / `getByIdViewed` exist so that unit tests, inter-service lookups, and `facets` can call `search` / `getById` without fabricating a `CallerContext`. Do not fold the analytics logic into the base functions.
+- **Stock/counter fields are absent by design.** `update` intentionally omits any inventory write; counters now move only through signed, conditional transitions in `@modules/inventory`. Do not re-add a raw `stock` assignment here.
+- **`remove` soft-delete is a toggle.** A second `remove` call on an already-soft-deleted product restores it (`deletedAt` flips to `undefined`).
+- **404 is returned, not thrown.** `updateById` uses `generateReject(404, …)` so the surrounding `.catch()` can distinguish "product not found" from a genuine database error.
+- **`enqueueIfPending` is fire-and-forget.** A `pendingImageKey` means the upload was already accepted by a broker; the service publishes a queue message and never awaits the worker.
+- **Image URL, thumbnail, and pending key travel as a unit** — all three are set together from a single `readUploadedImage` call on the controller side; `update` only swaps them when `imageUrl` actually changes.

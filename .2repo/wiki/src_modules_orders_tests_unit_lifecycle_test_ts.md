@@ -2,27 +2,30 @@
 
 ## Purpose
 
-Unit tests for the order lifecycle state machine in `src/modules/orders/domain/lifecycle.ts`. They assert the invariants (sentences) the transition table encodes—totality, direction, terminality, actor permissions—rather than restating individual rows. Pure and synchronous: no mocks, no database.
+Unit tests for the order-lifecycle state machine (`ORDER_LIFECYCLE` table and its query helpers). Instead of asserting individual rows, the suite encodes *sentences*—invariant properties over the whole table—so that a table copied with the same mistake in both the fixture and the expectation still fails.
 
 ## Key elements
 
-- **Constants** — `EVERY_STATUS` (all `OrderStatus` values), `EVERY_ACTOR` (`customer | admin | system`), `REQUEST_ACTORS` (excludes `system`), `FULFILMENT_SEQUENCE` (the linear `pending → paid → processing → shipped → delivered` path).
-- **`the table is total over the contract`** — Verifies the table covers every declared status, references only declared destinations, and every edge has ≥ 1 actor.
-- **`who may write paid`** — Only `system` may transition into `paid`; `admin` is explicitly refused.
-- **`who may cancel`** — Customer: `pending` + `paid`. Admin: adds `processing`. No one: `shipped` or beyond.
-- **`terminal states`** — `delivered` and `cancelled` have zero outgoing edges for every actor; reopening is refused.
-- **`direction`** — Property test: no edge moves backwards along `FULFILMENT_SEQUENCE` for any actor.
-- **`canTransition`** — Self-transition always allowed; `statusesReachableFrom` and `statusesLeadingTo` are verified as exact inverses.
-- **`orderActionsFor`** — `transitions` agrees with the table; `cancel` is false on an already-cancelled order; `pay` flag is true only on `pending` and never leaks `paid` into `transitions` for request actors; `pay` withdrawn on `paid`, `delivered`, `cancelled`.
+- **`EVERY_STATUS`** – `Object.values(OrderStatus)`; the full set of declared statuses.
+- **`EVERY_ACTOR`** – `['customer', 'admin', 'system']`; all actors the table recognises.
+- **`REQUEST_ACTORS`** – `['customer', 'admin']`; the two actors reachable over HTTP (excludes `system`).
+- **`FULFILMENT_SEQUENCE`** – the happy-path linear chain `pending → paid → processing → shipped → delivered`, used to assert no backwards edge exists.
+- **`describe('the table is total over the contract')`** – exhaustiveness: every `OrderStatus` appears as a key, every destination is a declared status, every edge has ≥ 1 actor.
+- **`describe('who may write paid')`** – only `system` (payment webhook) can transition into `paid`; `admin` and `customer` cannot.
+- **`describe('who may cancel')`** – cancellation reachability per actor; shipped goods are never cancellable by anyone.
+- **`describe('terminal states')`** – `delivered` and `cancelled` have zero outgoing edges; re-opening is explicitly refused.
+- **`describe('direction')`** – property-based check that no edge moves backwards along `FULFILMENT_SEQUENCE`.
+- **`describe('canTransition')`** – self-transition is allowed (idempotent write); `canTransition` is the logical inverse of `statusesReachableFrom` / `statusesLeadingTo`.
+- **`describe('orderActionsFor')`** – the API-facing action object agrees with the table; `pay` is advertised but never listed in `transitions` for request actors; `cancel` is hidden on already-cancelled orders.
 
 ## Relationships
 
-- **`src/modules/orders/domain/lifecycle.ts`** — The module under test. Provides `ORDER_LIFECYCLE`, `canTransition`, `orderActionsFor`, `statusesLeadingTo`, `statusesReachableFrom`, and the `OrderActor` type.
-- **`src/types/index.ts`** (imported as `@types`) — Source of the `OrderStatus` enum used to enumerate every status in assertions.
+- **`src/modules/orders/domain/lifecycle.ts`** – the module under test. Imports `ORDER_LIFECYCLE`, `canTransition`, `orderActionsFor`, `statusesLeadingTo`, `statusesReachableFrom`, and the `OrderActor` type.
+- **`src/types/index.ts`** – source of the `OrderStatus` enum used to enumerate all statuses and build `EVERY_STATUS`.
 
 ## Notes
 
-- Testing philosophy (stated in the file header): assertions target the *sentences* the table implies, not row-by-row equality, to avoid a copied-table-and-copied-expectation false pass.
-- `system` is excluded from `REQUEST_ACTORS` because it represents moves triggered by external facts (e.g., a payment webhook), not an HTTP caller.
-- `canTransition` returns `true` for self-transitions (a no-op write). `orderActionsFor.cancel` deliberately overrides this for an already-cancelled order—`canTransition` is "is this write legal?" while `cancel` is "should the UI offer it?".
-- Theory rationale for each rule group is pointed to in `docs/theory/tactical-ddd.md` §1.
+- The file header explicitly warns: asserting row-by-row would pass against a table copied wrong because both the data and the expectation repeat the same mistake. All assertions are therefore whole-table invariants.
+- `canTransition(status, status, actor)` is **intentionally** `true` for every actor (idempotent re-write), but `orderActionsFor` correctly suppresses `cancel` when the order is already cancelled—two different callers, two different contracts.
+- `pay` is a *hint* for the client (render a card form), not a transition the client may execute. It appears in `actions.pay` but never in `actions.transitions` for `REQUEST_ACTORS`.
+- References `docs/theory/tactical-ddd.md` §1 for the rationale behind each rule.

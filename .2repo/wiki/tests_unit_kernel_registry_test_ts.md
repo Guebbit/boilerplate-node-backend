@@ -2,22 +2,20 @@
 
 ## Purpose
 
-Unit tests for the kernel module registry's validation and registration logic. The registry decides what "this build" means at boot time, so these tests ensure misconfigurations (duplicates, missing deps, cycles, self-references) are caught immediately with a specific, named error rather than surfacing later as a 500 on the first request.
+Unit tests for `registerModules`, the sole boot-time function the registry exposes. The file asserts exactly two observable contracts: every module that declares a `subscribe` callback has it invoked, and a module that declares none is a valid, non-error path.
 
 ## Key elements
 
-- **`makeModule(name, dependsOn?)`** — Local factory that produces a minimal `AppModule` fixture: a fixed `subdomain: 'supporting'`, a `Router()` instance, and dependency entries with `as: 'conformist'` and a templated `because` string. Used to build small module graphs inline.
-- **`describe('validateModules')`** — Eight cases covering: valid registry accepted; duplicate name rejected; missing dependency named in the error; 2-node and 3-node cycle paths reported; headless module (no `routes`) accepted as a valid entry; self-dependency reported as a distinct "declares a dependency on itself" error (not a cycle); diamond dependency accepted as non-cyclic.
-- **`describe('registerModules')`** — Two cases: `subscribe` is called on every module that provides it; validation runs *before* any `subscribe` call, so a broken registry attaches zero handlers.
+- **Test 1 — "calls subscribe on every module that declares one"**: Passes two `AppModule` objects (both with a `subscribe` jest.fn) to `registerModules`; asserts each spy was called exactly once.
+- **Test 2 — "skips a module with no subscribe…"**: Passes a mixed array (one module with no `subscribe`, one with). Asserts the call does not throw and the single present `subscribe` was still invoked.
+- **Imports**: `registerModules` and the `AppModule` type from `@kernel/registry`.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Source of `registerModules`, `validateModules`, and the `AppModule` type under test. All assertions exercise the public API of that module.
-- The file's header comments note that relationship *kinds* (the `as` / `because` semantics on dependency edges) are tested elsewhere, in `tests/cross-cutting/context-map.test.ts`, against real manifests. This file intentionally ignores them.
+- **`src/kernel/registry.ts`** — sole dependency; provides both the function under test and the `AppModule` type used to construct test fixtures.
 
 ## Notes
 
-- **Self-dependency vs. cycle:** A module listing itself in `dependsOn` is reported as a typo ("declares a dependency on itself"), not folded into cycle detection. The cycle walk would otherwise render it as `products → products`, which reads like a structural finding rather than a one-character mistake.
-- **Headless modules:** A module with no `routes`/`Router` (e.g. `audit-logs`) is a first-class registry entry. Other modules may still declare a dependency on it. The factory `makeModule` always attaches a `Router()`, so the headless case uses an inline object literal instead.
-- **Cycle path ordering:** The 2-node cycle test accepts either starting point (`cart → products → cart` *or* `products → cart → products`) because the implementation may report the cycle from whichever node it encounters first.
-- **`as: 'conformist'` in fixtures:** Always hardcoded. These tests are about graph topology (cycles, duplicates, missing nodes), not about the semantic kind of the relationship.
+- The file-level doc comment records that earlier tests for duplicate-name detection, unknown-dependency resolution, and cycle checking were **removed** together with the `dependsOn` field they validated, because nothing read that field at runtime. The rationale lives in `OVERENGINEERED.md` §1.
+- `subscribe` is **optional** on `AppModule`. Test 2 exists specifically to pin that contract: the registry must treat its absence as ordinary, not as a misconfiguration.
+- There is no `describe` block; both assertions sit at the top level of the file.

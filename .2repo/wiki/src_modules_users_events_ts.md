@@ -2,21 +2,24 @@
 
 ## Purpose
 
-Declares the domain events the `users` module emits by augmenting the kernel's `DomainEventMap` interface. This keeps event definitions colocated with the owning module rather than in a shared catalogue, so the event registry grows organically as modules are added.
+Declares the domain events the users module emits by augmenting the kernel's `DomainEventMap` interface (module augmentation, not a shared edit), and exports typed event-name constants so emitters and subscribers reference a single spelling instead of independent string literals.
 
 ## Key elements
 
-- **`'user.deleted'` (interface member on `DomainEventMap`)** — Augments `@kernel/events` to register a hard-delete event with payload `{ userId: string }`. Soft delete intentionally does *not* emit; the event fires and is awaited **before** the destructive write so listeners (e.g. the cart module) see a consistent DB state.
-- **`USER_DELETED` (exported const)** — The string literal `'user.deleted'`, exported so emitters and listeners reference one shared symbol instead of two independently-typed literals.
+- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with two entries:
+  - `'user.deleted': { userId: string }` — Emitted *before* the hard-delete write; soft deletes do **not** emit (reversible, cleanup would make restore lossy).
+  - `'user.setup-requested': { userId: string }` — Emitted when an admin creates a passwordless user and queues a setup request; the `account` module is the intended subscriber (owns tokens / outbound email).
+- **`USER_DELETED`** — String constant for `'user.deleted'`.
+- **`USER_SETUP_REQUESTED`** — String constant for `'user.setup-requested'`.
 
 ## Relationships
 
-- **`src/modules/users/index.ts`** — Barrel file that re-exports `USER_DELETED` for consumers outside the module.
-- **`src/modules/users/module.ts`** — Module definition; imports this file so the augmented event map is visible (side-effect import) and the module can be associated with its events.
-- **`src/modules/users/service.ts`** — The service that emits `USER_DELETED` (awaits it before performing the hard delete) and is the primary consumer of the event payload shape.
+- **`src/modules/users/service.ts`** — The emitter. The setup-requested doc explicitly points to `userService.create`; the deleted event is fired in the hard-delete path within the same service.
+- **`src/modules/users/index.ts`** — Barrel file through which `USER_DELETED` and `USER_SETUP_REQUESTED` are re-exported to consumers.
+- **`src/modules/users/module.ts`** — Module registration; likely wires listeners/subscribers for these events at module-load time.
 
 ## Notes
 
-- **Soft delete never emits.** The file's doc block explicitly reasons that a soft delete is reversible and that cleaning up on it would make a subsequent restore lossy. If you see code expecting a `user.soft_deleted` event, it does not exist.
-- **Augmentation, not edit.** The event is added via `declare module '@kernel/events'`; do not add events by editing the kernel source.
-- **Ordering contract.** Listeners run *before* the write commits. Any listener that depends on the user row still existing will break if this guarantee changes.
+- Events are typed via interface augmentation, so adding a new user event only touches this file—no shared catalogue needs updating.
+- `user.deleted` is **awaited before** the DB write, guaranteeing listeners observe a still-consistent state. Don't emit it after the write.
+- The `account` module is called out as the subscriber for `user.setup-requested`; keep that contract if you change the event shape.

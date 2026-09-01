@@ -2,27 +2,26 @@
 
 ## Purpose
 
-Stryker mutation-testing configuration for a "deep" run (`npm run test:mutation:deep`) that extends the standard scope with integration suites. It exists because the default run (unit + cross-cutting only) reports files whose tests live in `tests/integration/` as 0% NoCoverage, even when they are well-tested. This file is a slower, second measurement for a broader scope — a nightly diagnostic, not a per-commit gate.
+Stryker Mutator configuration for the project's "deep" mutation-testing run. It defines which source files are mutated, how Jest is invoked as the test runner, where reports land, and the quality thresholds that gate CI. The "deep" suffix distinguishes this configuration from any lighter/faster mutation profile the repo may maintain.
 
 ## Key elements
 
-- **`_comment`** — multi-paragraph in-file rationale covering why the deep run exists, why it is not the default (wall-clock cost), what remains excluded (contract/fuzz tests) and why, and how to interpret the output.
-- **`jest`** — uses a custom Jest config (`jest.config.mutation.js`) with `enableFindRelatedTests: true`. `testPathIgnorePatterns` excludes `tests/contract/`, `tests/fuzz/`, module-level contract tests, and two specific cross-cutting files.
-- **`mutate`** — targets `src/infrastructure/`, `src/kernel/`, and `src/modules/*/**`, explicitly excluding each module's `index.ts` and `tests/` directory.
-- **`reporters`** — `html`, `clear-text`, `progress`, `json`; HTML and JSON reports land under `reports/mutation-deep/`.
-- **`incrementalFile`** — `reports/stryker-incremental-deep.json`, kept separate from the default run's incremental state.
-- **`thresholds`** — `high: 80`, `low: 60`, `break: 60`.
-- **`timeoutMS: 30000`** — generous per-mutant timeout to accommodate integration tests that hit a real in-memory Mongo.
-- **`concurrency: 4`**, **`maxTestRunnerReuse: 5`** — tuning for a heavier test-runner workload.
+- **`mutate`** – Glob patterns targeting `src/infrastructure/**`, `src/kernel/**`, and `src/modules/*/**` (excluding module `index.ts` barrels and in-module `tests/` directories).
+- **`jest`** – Declares a custom Jest project (`projectType: "custom"`) backed by `jest.config.mutation.js`, with `enableFindRelatedTests` on and an extended `testPathIgnorePatterns` that skips contract, fuzz, and two specific cross-cutting tests.
+- **`reporters` / `htmlReporter` / `jsonReporter`** – Emits HTML, clear-text, progress, and JSON output; persistent reports are written under `reports/mutation-deep/`.
+- **`incremental` / `incrementalFile`** – Enables incremental mutation (only re-mutates files changed since the last run), storing state in `reports/stryker-incremental-deep.json`.
+- **`coverageAnalysis: "perTest"`** – Uses per-test (not per-file) coverage to scope which tests run against each mutant.
+- **`thresholds`** – `high: 80`, `low: 60`, `break: 60` — the `break` threshold fails CI when the mutation score drops below 60 %.
+- **`timeoutMS: 30000` / `concurrency: 4` / `maxTestRunnerReuse: 1`** – Per-test timeout, parallel worker count, and test-runner lifecycle (each test run gets a fresh Jest process).
+- **`ignorePatterns`** – Directories Stryker should never scan or report on (coverage, reports, dist, docs, tmp).
 
 ## Relationships
 
-No graph neighbors are recorded for this file. It is a standalone configuration consumed by `@stryker-mutator/core` via the `npm run test:mutation:deep` script; it does not import or depend on other source files at runtime.
+No graph neighbors are registered for this file. It is a leaf configuration consumed by the `stryker` CLI; the Jest config it references (`jest.config.mutation.js`) is the only external file it depends on at runtime.
 
 ## Notes
 
-- **Not a replacement for `stryker.config.json`.** The two files answer different questions at different scopes. Do not merge them.
-- **Feeds no baseline.** The deep run's results must *not* be written into `mutation-baseline.json`; the ratchet compares like-with-like, and a wider-scope baseline would register as a mass regression on every subsequent default run. Compare deep runs against the *previous* deep run.
-- **Contract and fuzz tests are deliberately excluded even here.** Contract tests boot the full app via supertest, which would cause `enableFindRelatedTests` to relate nearly every mutant to the entire suite (full app boot per mutant). Fuzz tests are non-deterministic by design, producing scores that shift run-to-run.
-- **Integration mutants are expensive.** In a measured sample (196 mutants, `src/modules/products/repository.ts`), 45 mutants caused a query hang and each paid the full `timeoutMS` before being recorded as killed. Extrapolated across `src/modules/`, the full run is multi-hour.
-- The `_comment` field is not decorative documentation; it is the project's authoritative explanation of why this configuration exists and how to read its output. Preserve it when editing.
+- The `"deep"` naming is a convention, not a Stryker feature — it simply signals a heavier, more thorough run compared to a potential `stryker.json` or `stryker.fast.json`.
+- `maxTestRunnerReuse: 1` means every test invocation spawns a new Jest process, which is safer for state isolation but slower; this is deliberate given the `perTest` coverage strategy.
+- Contract and fuzz tests are explicitly excluded from mutation runs (both via `testPathIgnorePatterns` and the `mutate` glob excluding `src/modules/*/tests/**`). They are likely validated by separate pipelines.
+- The `incremental` state file lives under `reports/`, which is itself in `ignorePatterns` — the state file persists across runs but is excluded from Stryker's own file scanning.

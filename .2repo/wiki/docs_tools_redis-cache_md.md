@@ -2,30 +2,35 @@
 
 ## Purpose
 
-Documents how the project uses Redis as an **optional** server-side cache for repeated GET responses. The cache is split into a low-level byte-store adapter (get, set, invalidate-by-tag, clear) and an HTTP middleware layer that owns key construction, envelope format, TTL policy, and size limits. If Redis is unreachable the app fails open and continues serving from the database.
+Documents how the codebase uses Redis as an **optional** server-side cache for repeated GET responses. It covers the two-layer design (a tag-aware byte-store adapter and an HTTP middleware), key construction from declared parameters, size and memory caps, the cache-aside invalidation model, and how the design behaves across clustered workers. The page exists so readers understand the invariants (key correctness, bounded storage, graceful degradation) without re-reading both source files.
 
 ## Key elements
 
-- **`src/infrastructure/adapters/cache.ts`** — Low-level byte store with tags: `get`, `set`, `invalidateByTag`, `clearCache`. Stores opaque bytes; has no opinion about response size or HTTP semantics.
-- **`src/infrastructure/http/middlewares/cache.ts`** — `setCache(ttl, { tags, keyParameters })` middleware that builds the cache key from declared parameters, serialises the response envelope, enforces the size limit, and handles tag-based invalidation. Also exports `invalidateCache` and `clearCache`.
-- **`keyParameters`** — Required per-route list of query params that affect the response. Derived from the validation schema (`Object.keys(schema.shape)`) so the key cannot drift from what the controller reads.
-- **`NODE_REDIS_CACHE_MAX_BYTES`** (default 262 144 / 256 KB) — Maximum single-response body the middleware will store. Oversized bodies are still returned; they simply skip caching.
-- **`NODE_REDIS_MAXMEMORY` / `NODE_REDIS_MAXMEMORY_POLICY`** — Container-level Redis memory cap (default 256 MB) and eviction policy (default `allkeys-lru`). Must stay on an `allkeys-` variant so the cap evicts rather than refusing writes.
-- **`NODE_REDIS_CACHE_DEV_TTL_MAX`** (default 30 s) — Clamps every route's TTL outside production to bound staleness from out-of-band writes (seed scripts, mongosh, migrate-mongo). Set to `0` to disable.
-- **`NODE_REDIS_CACHE_PREFIX`** — Key prefix shared by all instances; `clearCache` uses `SCAN` + `DEL` under this prefix (never `FLUSHALL`).
+- **`src/infrastructure/adapters/cache.ts`** — Tag-aware byte store: `get`, `set`, `invalidateByTag`, `clear`. Stores opaque bytes; no opinion about response semantics.
+- **`src/infrastructure/http/middlewares/cache.ts`** — HTTP-level cache middleware:
+  - `setCache(ttl, { tags, keyParameters })` — route decorator that builds the cache key, checks/stores the serialized response, enforces `NODE_REDIS_CACHE_MAX_BYTES`, and sets TTL.
+  - `invalidateCache` — deletes tag-set entries; called by every write handler.
+  - `clearCache()` — `SCAN` + `DEL` under `NODE_REDIS_CACHE_PREFIX`; returns `{ deleted, reachable }` (never throws).
+  - `getCacheScope` — caller/locale discriminator baked into the key.
+- **`keyParameters`** (per-route, required array) — declares which query params affect the response; the key is built from path + scope + locale + declared params only. Search routes export `Object.keys(schema.shape)` to stay in sync with validation.
+- **Env vars** — `NODE_REDIS_CACHE_MAX_BYTES` (default 256 KB), `NODE_REDIS_MAXMEMORY` (default 256 mb), `NODE_REDIS_MAXMEMORY_POLICY` (default `allkeys-lru`), `NODE_REDIS_CACHE_PREFIX`, `NODE_REDIS_CACHE_DEV_TTL_MAX` (default 30 s, non-prod only).
+- **`npm run db:cache:clear`** — standalone script that calls `clearCache()`; exits 1 if Redis was unreachable. `db:seed` calls it automatically when it creates data.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/cache.ts`** — The byte-store layer this doc describes. The middleware in `src/infrastructure/http/middlewares/cache.ts` calls into it for all reads/writes; the adapter exposes no HTTP concepts.
-- **`src/infrastructure/http/middlewares/cache.ts`** — The HTTP-facing layer. Owns key construction, envelope shape, TTL, size guard, and tag invalidation. Routes call `setCache`; write handlers call `invalidateCache`.
-- **`src/cluster.ts`** — Forks one worker per CPU core when `NODE_ENABLE_CLUSTERING=1`. Each worker opens its own Redis connection (via the adapter) but addresses the same keyspace, so invalidation is a shared-state delete rather than a cross-process broadcast.
-- **`src/app/workers.ts`** — Each worker runs the full Express app and holds no local copy of cached data; every cache read is a round-trip to the shared Redis instance.
+- **`docs/reference/src-infrastructure.md`** — The two source files (`adapters/cache.ts`, `http/middlewares/cache.ts`) live in the infrastructure layer documented there.
+- **`docs/theory/clustering.md`** — Explicitly referenced: each cluster worker opens its own Redis connection but shares one keyspace; no in-process L1 cache means no stale-per-worker copies.
+- **`docs/tools/mongodb-mongoose.md`** — Cache-aside pattern: Redis sits in front of MongoDB; a cache miss triggers the Mongo query path documented there.
+- **`docs/tools/package-scripts.md`** — `db:cache:clear` and `db:seed` (which auto-clears cache) are the two scripts that interact with the cache.
+- **`docs/tools/package-dependencies.md`** — The `redis` (node-redis) npm package is the sole client dependency.
+- **`docs/api/asyncapi-workflow.md`** — A pub/sub channel `cache.tags.invalidated` was once defined here and later removed; invalidation now relies on the shared keyspace alone.
+- **`docs/theory/request-flow.md`** — The GET flow (middleware → Redis check → controller → Mongo → store) is the request-path this cache participates in.
 
 ## Notes
 
-- **`keyParameters` is required, not optional.** Omitting a param the controller reads serves one caller's results to another — a correctness bug, not a missed optimisation.
-- **Size guard lives in the middleware, not the adapter.** The limit is measured on a serialised HTTP response; the adapter stores opaque bytes and has no notion of "response."
-- **Out-of-band writes do not invalidate the cache.** `db:seed`, `migrate-mongo`, `mongosh`, and GUI tools mutate Mongo while Redis keeps serving stale entries. Mitigations: `db:seed` calls `db:cache:clear` automatically; `NODE_REDIS_CACHE_DEV_TTL_MAX` caps staleness to seconds in non-production. Production assumes the API is the sole writer.
-- **`clearCache()` never throws.** It resolves `{ deleted, reachable }`. `db:seed` ignores `reachable` (must not block a seed); `db:cache:clear` exits 1 when `reachable` is false so an empty-looking result is distinguishable from a real empty cache.
-- **No pub/sub invalidation broadcast exists.** Because all workers share one keyspace, a delete by any worker is immediately visible to all. A former `cache.tags.invalidated` AsyncAPI channel was removed. A process-local L1 cache would change this calculus.
-- **Redis is optional at runtime.** All cache paths fail open: the app logs a warning and serves from the database. No 500, no retry loop.
+- **`keyParameters` is required, not optional.** Omitting a parameter the controller reads is a correctness bug (serves one user's search to another), not a missed optimisation.
+- **Fails open everywhere.** Redis down → 200s continue; oversized body → served but not stored; `clearCache` unreachable → resolved, not thrown.
+- **Eviction policy matters.** `allkeys-lru` turns the memory cap into a graceful policy; the Redis default `noeviction` would reject writes and log a warning per request.
+- **Out-of-band writes are the weak spot.** `db:seed`, `mongosh`, or a GUI can change Mongo while Redis still serves the old answer. The dev TTL clamp (`NODE_REDIS_CACHE_DEV_TTL_MAX`, default 30 s) is the primary guard; `db:cache:clear` covers writers that remember to call it. Production is assumed to have the API as the sole writer.
+- **No pub/sub broadcast exists (or used to).** A cross-worker `cache.tags.invalidated` channel was implemented and then deleted; the shared keyspace makes it unnecessary as long as there is no process-local L1 cache.
+- **`clearCache` callers disagree on purpose.** `db:seed` ignores `reachable: false` (seeding must not block on a dead cache); `db:cache:clear` exits 1 (a recovery tool that silently no-ops is indistinguishable from an empty cache).

@@ -2,22 +2,26 @@
 
 ## Purpose
 
-Express controller handler for `DELETE /account/tokens/expired`. Performs an admin-only bulk purge of expired tokens (primarily stale refresh tokens) and returns the shared `Success` response. Exists so a scheduler or operator can invoke periodic cleanup of the token store.
+Thin HTTP adapter for `DELETE /account/tokens/expired`. Wires the Express route to `accountService.adminTokenCleanup`, records a success metric, and formats the response — no business logic lives here.
 
 ## Key elements
 
-- **`deleteExpiredTokens(request, response)`** — Exported handler. Calls `accountService.adminTokenCleanup(callerContextOf(request))`, checks the result for a refusal, increments the `authTokenCleanupTotal` Prometheus counter, and sends a `successResponse` (status + message only, no `data` body).
+- **`deleteExpiredTokens(request, response)`** – The sole export; the Express handler for the endpoint.
+  - Extracts caller identity via `callerContextOf(request)` and passes it to `accountService.adminTokenCleanup`.
+  - On a `refused` result (e.g. non-admin caller), short-circuits without incrementing the metric.
+  - On success, increments `authTokenCleanupTotal` and replies with `successResponse(response, undefined, result.status, result.message)`.
+  - Catches and maps any thrown error through `catchAs(response, 'deleteExpiredTokens')`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Imports `catchAs` (uniform error → response mapping) and `refused` (checks whether the service result signals an authorization refusal before proceeding).
-- **`@infrastructure/http/request`** — Imports `callerContextOf` to extract the authenticated caller's context and pass it into the service call.
-- **`@infrastructure/http/response`** — Imports `successResponse` to build the standard success envelope.
-- **`src/modules/account/metrics.ts`** — Imports `authTokenCleanupTotal` counter; incremented once per successful cleanup.
-- **`src/modules/account/services/index.ts`** — Imports `accountService`; calls its `adminTokenCleanup` method which performs the actual DB deletion and returns `{ status, message, /* pruned count */ }`.
-- **`src/modules/account/routes.ts`** — Registers this handler at the `DELETE /account/tokens/expired` route.
+- **`src/modules/account/services/index.ts`** – Imports `accountService`; calls its `adminTokenCleanup(caller)` method for the actual cleanup work.
+- **`src/infrastructure/http/controller.ts`** – Imports `catchAs` (error-to-HTTP mapping) and `refused` (permission-denial short-circuit).
+- **`src/infrastructure/http/request.ts`** – Imports `callerContextOf` to derive the authenticated caller's context from the Express `Request`.
+- **`src/infrastructure/http/response.ts`** – Imports `successResponse` to emit the standard `MessageResponse` envelope.
+- **`src/modules/account/metrics.ts`** – Imports `authTokenCleanupTotal` (a Prometheus counter) and calls `.inc()` once per successful cleanup.
+- **`src/modules/account/routes.ts`** – Registers this handler on the `DELETE /account/tokens/expired` route (inferred from the module doc-comment).
 
 ## Notes
 
-- The pruned-document count returned by `adminTokenCleanup` is **deliberately omitted** from the HTTP response body. The `MessageResponse` schema declares `additionalProperties: false` with no `data` field, so including it would violate the contract. The count is meant for the audit record / log line, not the wire.
-- Admin authorization is enforced inside the service layer (`adminTokenCleanup`), not in this controller. A refusal at the controller level is handled by `refused()` short-circuiting before the success path.
+- The pruned-token count returned by the service is intentionally **not** included in the HTTP body. The `MessageResponse` schema forbids a `data` field; including it would break the API contract. The count is available only in audit logs.
+- The metric is incremented **only** when the operation succeeds (i.e. after the `refused` check passes), so it reflects completed cleanups, not attempts.

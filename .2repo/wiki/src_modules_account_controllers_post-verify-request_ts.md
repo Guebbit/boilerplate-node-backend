@@ -2,23 +2,25 @@
 
 ## Purpose
 
-Handler for `POST /account/verify-request`. Re-sends the email-verification link to the already-authenticated user (use case: the original signup email never arrived). Stateless with respect to *whether* verification is allowed — that decision is delegated entirely to the account service.
+Thin HTTP adapter for `POST /account/verify-request`. It re-sends the email verification link for a user whose original signup email never arrived. All business logic (including which account states are eligible for re-verification) lives in the service layer; this file only extracts auth context, delegates, and shapes the HTTP response.
 
 ## Key elements
 
-- **`postVerifyRequest(request, response)`** (exported) — the sole export. Reads the authenticated user's `id` via `authContextOf`, calls `accountService.requestEmailVerificationFor(id, callerContextOf(request))`, then either short-circuits through `refused()` or sends a `successResponse`. Failures are routed to `catchAs(response, 'postVerifyRequest')`.
+- **`postVerifyRequest`** (exported) — Express handler for `POST /account/verify-request`. Reads the authenticated user's `id` from the request, calls `accountService.requestEmailVerificationFor(id, callerContextOf(request))`, then either writes a refusal or a success response. Errors are funnelled through `catchAs`.
+- **`refused(response, result)`** — imported guard; short-circuits the handler with an appropriate HTTP status when the service rejects the request.
+- **`successResponse(response, undefined, result.status, result.message)`** — standard success envelope with the service's status code and message.
+- **`catchAs(response, 'postVerifyRequest')`** — imported error-catch helper that serialises unexpected throws into a consistent error response.
 
 ## Relationships
 
-- **`src/modules/account/routes.ts`** — registers this controller at the `POST /account/verify-request` path (implied by the doc-comment annotation).
-- **`src/modules/account/services/index.ts`** — provides `accountService`, whose `requestEmailVerificationFor` performs the actual send and the state checks (account exists, not yet verified).
-- **`src/infrastructure/http/request.ts`** — `authContextOf` extracts the verified user ID from the request; `callerContextOf` packages caller metadata for the service call.
-- **`src/infrastructure/http/response.ts`** — `successResponse` formats the happy-path reply.
-- **`src/infrastructure/http/controller.ts`** — `refused` inspects the service result and emits an error response if the action was denied; `catchAs` maps thrown errors to an HTTP error response, tagging the source as `'postVerifyRequest'`.
+- **`src/infrastructure/http/controller.ts`** — provides `catchAs` and `refused`, the two control-flow helpers this handler uses for error/rejection paths.
+- **`src/infrastructure/http/request.ts`** — provides `authContextOf` (extracts authenticated user id) and `callerContextOf` (extracts caller metadata passed to the service).
+- **`src/infrastructure/http/response.ts`** — provides `successResponse`, the canonical success-response writer.
+- **`src/modules/account/routes.ts`** — registers `postVerifyRequest` on the `POST /account/verify-request` route (presumably behind the `isAuth` middleware).
+- **`src/modules/account/services/index.ts`** — re-exports `accountService`, whose `requestEmailVerificationFor` method contains all verification-state logic and the actual email-sending side effect.
 
 ## Notes
 
-- **Auth precondition:** the comment states `isAuth` middleware guarantees a valid auth context before this handler runs. No defensive auth check lives here.
-- **Refusal vs. error:** the service can *refuse* (e.g., account already verified) — that is a business outcome handled by `refused()`, not an exception. Genuine failures (DB down, mail provider down) take the `.catch` path.
-- **Promise style:** the handler uses `.then`/`.catch` rather than `async`/`await`, consistent with the rest of the controller layer.
-- **Idempotency concern:** calling this repeatedly will keep re-sending the link (subject to whatever rate-limiting the service or infra applies). The controller itself imposes no throttle.
+- Authentication is **not** checked here; the `isAuth` middleware upstream guarantees a valid `authContextOf`. Do not add auth logic in this file.
+- The service, not the controller, decides which account states are eligible for re-verification. A caller cannot bypass that check by calling this endpoint.
+- The handler uses a promise chain (`.then`/`.catch`) rather than `async/await`, consistent with the surrounding codebase's controller style.

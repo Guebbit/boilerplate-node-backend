@@ -2,28 +2,27 @@
 
 ## Purpose
 
-Provides two entry points for removing expired authentication tokens from user documents: a fire-and-forget pre-flight sweep invoked on every login and refresh request, and an admin-triggered cleanup that returns the removal count to the caller and emits an audit record.
+Sweeps expired entries from the `tokens` array in user documents. Exposes two entry points that share the same underlying repository call but differ in contract: a fire-and-forget pre-flight step for login/refresh requests, and an admin-triggered action that must return an outcome and emit an audit record.
 
 ## Key elements
 
-- **`runTokenCleanup()`** — Calls `userRepository.tokenRemoveExpired()`, logs the pruned document count, and swallows any error (logs `error.message`). Returns `Promise<void>`; the caller never sees a rejection.
-- **`adminTokenCleanup(context: CallerContext)`** — Same repository call, but returns `ResponseSuccess<{ removed: number }>` on success (after emitting an audit event) or `ResponseReject` (500) on failure. Decides the HTTP status here rather than delegating to the repository layer.
+- **`runTokenCleanup(): Promise<void>`** — Calls `userRepository.tokenRemoveExpired()`, logs the count of pruned documents. Catches all errors internally (logs them, never re-throws) so the calling request is never failed.
+- **`adminTokenCleanup(context: CallerContext): Promise<ResponseSuccess<{removed: number}> | ResponseReject>`** — Calls the same repository method. On success, emits an audit event (`AUTH_TOKEN_EXPIRED_CLEANUP`) and returns the removal count. On failure, logs and returns a `500` reject.
 
 ## Relationships
 
-- **`src/modules/users/repository.ts`** — Source of `userRepository.tokenRemoveExpired()`; the only persistence call in this file.
-- **`src/modules/users/index.ts`** — Re-exports `userRepository` consumed here.
-- **`src/infrastructure/adapters/logger.ts`** — All diagnostic output (info on start/complete, error on failure).
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape the admin endpoint's reply.
-- **`src/infrastructure/http/request.ts`** — `CallerContext` type carries the authenticated caller into `adminTokenCleanup`.
-- **`src/infrastructure/observability/audit.ts`** — `buildAuditEvent` + `emitAuditEvent` record the admin action.
-- **`src/modules/account/audit.ts`** — Supplies `accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP` constant.
-- **`src/modules/account/controllers/post-login.ts`** / **`get-refresh-token.ts`** — Downstream callers of `runTokenCleanup` as a pre-flight step before issuing or refreshing a token.
-- **`src/modules/account/services/index.ts`** — Barrel re-export so controllers can import from the services namespace.
-- **`src/modules/account/tests/unit/token-cleanup.test.ts`** / **`token-cleanup-job.test.ts`** — Unit tests covering both functions' success and error paths.
+- **`src/modules/users/index.ts` → `repository.ts`** — Imports `userRepository`; both functions call `.tokenRemoveExpired()` on it.
+- **`src/infrastructure/adapters/logger.ts`** — Uses `logger.info` / `logger.error` for operational logging in both paths.
+- **`src/infrastructure/http/response.ts`** — Uses `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types to shape the admin response.
+- **`src/infrastructure/http/request.ts`** — Imports the `CallerContext` type used by `adminTokenCleanup`.
+- **`src/infrastructure/observability/audit.ts`** — Uses `emitAuditEvent` and `buildAuditEvent` to record the admin cleanup.
+- **`src/modules/account/audit.ts`** — Imports `accountAuditActions` for the `AUTH_TOKEN_EXPIRED_CLEANUP` action constant.
+- **`src/modules/account/controllers/post-login.ts`** / **`get-refresh-token.ts`** — Call `runTokenCleanup` as a pre-flight step before processing the request.
+- **`src/modules/account/services/index.ts`** — Re-exports the two functions as part of the account services surface.
+- **`src/modules/account/tests/unit/token-cleanup.test.ts`** / **`token-cleanup-job.test.ts`** — Unit tests covering both paths.
 
 ## Notes
 
-- `runTokenCleanup` deliberately swallows errors: it runs inside the login/refresh hot path and a failed sweep must never block the user's request. The log line is the *only* observable output (no alerting, no retry), so it logs `error.message` rather than the `Error` object — the logger JSON-serializes its argument, and `Error` instances have no enumerable properties (would log as `{}`).
-- `adminTokenCleanup` owns the HTTP status decision. The repository reports a count or throws; this layer maps that to 200/500. Previously the status lived on the Mongoose model, which was considered a layering violation.
-- The two functions are intentionally separate despite sharing one repository call: different error-handling contracts, different observability requirements (audit vs. none), and different call sites.
+- **Error serialization gotcha:** Both catch blocks log `error instanceof Error ? error.message : String(error)` explicitly. The logger serializes values as JSON, and `Error` instances have no enumerable own properties — logging the `Error` object directly would produce `"error":{}`.
+- **HTTP status is decided here, not in the repository.** `adminTokenCleanup` maps any thrown error to a `500` reject at this layer. A prior design had the Mongoose model return `{ status: 500 }`; that was removed so the domain layer reports "count or throw" and the HTTP meaning stays in the service.
+- **`runTokenCleanup` never rejects.** Its `.catch` is the terminal handler; the promise always settles. This is intentional and load-bearing for the login/refresh flow.

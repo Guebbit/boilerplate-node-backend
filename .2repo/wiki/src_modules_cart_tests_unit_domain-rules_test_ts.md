@@ -2,23 +2,31 @@
 
 ## Purpose
 
-Unit tests for `evaluateCheckout` in the cart domain rules, focused on the stock-availability and reservation logic. Also contains a duplication-guard suite that verifies the availability subtraction copied into `rules.ts` still agrees with the inventory module's `availabilityOf`.
+Unit tests for `evaluateCheckout` — the pure, dependency-free rule that decides whether a cart's lines can proceed to checkout. Covers empty-cart rejection, product-resolution failure, reservation-aware stock sufficiency, fail-closed handling of missing counters, and the priority order of failure reasons. Also cross-checks that the cart domain's internal availability arithmetic agrees with the inventory module's `availabilityOf`.
 
 ## Key elements
 
-- **`line(quantity, onHand?, reserved?)`** – Fixture builder returning a `CartLineCandidate`. Accepts both `onHand` and `reserved` separately so tests can distinguish "zero on shelf" from "everything reserved".
-- **`describe('evaluateCheckout')`** – Covers: empty cart rejection; valid cart acceptance; `null`/`undefined` product (deleted vs. absent); reason priority (empty > product-unavailable > insufficient-stock); stock boundary (exact fit accepted, one-over refused); the reservation case (`onHand=40, reserved=40` → available 0); partial reservation (`onHand=40, reserved=37` → available 3); absent counters → refuse; resolution outranking availability.
-- **`describe('availability agrees with the inventory authority')`** – Iterates `(onHand, reserved)` pairs (including an intentionally unreachable `reserved > onHand` case), calls `availabilityOf` from inventory, then pins the boundary from both sides through `evaluateCheckout`'s verdict. Catches silent drift in the duplicated subtraction inside `rules.ts`.
+- **`line(quantity, onHand?, reserved)`** — local fixture builder that produces a `CartLineCandidate`. States both counters explicitly so tests can distinguish "zero on shelf" from "all units reserved".
+- **`describe('evaluateCheckout')`** — the main block. Asserts:
+  - Empty cart → `{ ok: false, reason: 'empty' }`
+  - All-lines-resolved → `{ ok: true }`
+  - `null`/`undefined` product → `{ reason: 'product-unavailable' }`
+  - Quantity > available → `{ reason: 'insufficient-stock', shortfalls: [...] }`
+  - Exact-fit (quantity === available) passes
+  - Fully-reserved stock (`onHand === reserved`) → refused with `available: 0`
+  - Absent counters (no `product` object) → treated as 0 available, not unlimited
+  - Priority: `product-unavailable` outranks `insufficient-stock`
+- **`describe('availability agrees with the inventory authority')`** — property-style cross-module check. For a set of `(onHand, reserved)` pairs (including the clamped `reserved > onHand` case), asserts the cart rule's accept/refer boundary matches `availabilityOf` exactly, pinning both sides of each boundary.
 
 ## Relationships
 
-- **`src/modules/cart/domain/rules.ts`** – Imports `evaluateCheckout` and the `CartLineCandidate` type; this file is its primary behavioral spec.
-- **`src/modules/inventory/index.ts`** – Re-exports `availabilityOf`, which the duplication-guard suite imports to act as the reference authority.
-- **`src/modules/inventory/domain/transitions.ts`** – Origin of `availabilityOf` (re-exported through the index above).
+- **`src/modules/cart/domain/rules.ts`** — the module under test. The file imports `evaluateCheckout` and the `CartLineCandidate` type from it.
+- **`src/modules/inventory/index.ts`** — barrel re-export used to import `availabilityOf` via the `@modules/inventory` alias.
+- **`src/modules/inventory/domain/transitions.ts`** — ultimate source of `availabilityOf`; the cross-check block compares the cart's embedded subtraction against this function's output.
 
 ## Notes
 
-- The duplication guard exists because `rules.ts` may not import a sibling domain module (enforced via `eslint.config.ts`), so it carries its own copy of the `onHand - reserved` subtraction. A *test* file is permitted the cross-module import the rule is not; that asymmetry is what makes the guard possible.
-- Absent counters (no `onHand`/`reserved` on the product doc) are treated as **zero availability → refuse**, not as "unconstrained." This is deliberate: the safe default for a rule whose only job is to refuse is to refuse.
-- The reservation case (`line(1, 40, 40)`) is the scenario the old single-count model could not express; it is the key regression test for the two-counter design.
-- The `available > 0` guard in the boundary-pinning loop skips the lower-side assertion when nothing is sellable, because `CartItem.quantity` has `minimum: 1` (a zero-quantity line is not representable). The one-unit-refused assertion still runs and is the meaningful check in that state.
+- **No mocks, no DB.** The file header states this explicitly. The verdict→HTTP-status mapping is intentionally excluded and lives in `service.test.ts`.
+- **Duplication guard rationale.** The cross-check block exists because `rules.ts` must not import a sibling module, so it carries its own copy of the availability subtraction. The test file *may* import the rule the domain layer may not, making it the only place to pin the two implementations together.
+- **Fail-closed on missing data.** A line with no `product` object (undefined counters) is refused, not allowed through. The comment references migration `20260817120000-inventory-counters.js` as the backfill that makes this a defense-in-depth case, not a live path.
+- **Boundary assertions are one-sided per direction.** When `available > 0`, both "exactly `available` passes" and "`available + 1` fails" are asserted. When `available === 0`, only the rejection is asserted (a zero-quantity line is schema-impossible via `minimum: 1`).

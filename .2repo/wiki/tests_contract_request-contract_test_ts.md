@@ -2,29 +2,28 @@
 
 ## Purpose
 
-Contract-derived **request** tests: for every write endpoint, asserts the API accepts every payload its own OpenAPI contract declares legal (2xx) and rejects exactly what it declares illegal (422 + `ValidationErrorResponse` body). This is the mirror image of the rest of `tests/contract/*`, which compare a known-good real **response** against `openapi.yaml`; this file compares spec-derived **requests** against the live API. It exists to catch validator drift in both directions (validator tighter or laxer than the spec) that scenario tests cannot surface.
+Contract-derived **request** tests. For every write endpoint, asserts that the API accepts every payload its own OpenAPI spec declares legal (expect 2xx) and rejects exactly the payloads the spec declares illegal (expect 422 with a `ValidationErrorResponse`-shaped body). This is the mirror image of the rest of `tests/contract/*`, which compare real *responses* against the spec; this file compares spec-derived *requests* against the real API, catching validators that are tighter or looser than their own contract.
 
 ## Key elements
 
-- **`withRealOrderReferences(payload, skipField?)`** — Patches generated `CreateOrderBody` payloads with a real `userId` and `items[].productId`, and creates the product with `onHand: 1_000_000_000` so quantity constraints don't interfere. `skipField` prevents overwriting the very field an invalid-payload case is testing.
-- **`withMatchingPasswordConfirm(payload)`** — Sets `passwordConfirm` to equal `password`, a cross-field business rule the schema itself does not encode.
-- **Seven `describe` blocks** — One per write endpoint: `POST /users`, `POST /products`, `POST /orders`, `POST /cart`, `POST /feedback/contact`, `POST /account/signup`, `POST /account/login`. Each contains a single "accepts valid" assertion and an `it.each(invalidPayloads(…))` loop expecting 422 + `success: false` + `toSatisfyApiSpec()`.
-- **`validPayload` / `invalidPayloads`** (imported from `@tests/contract-data`) — Generate payloads from the Zod schemas in `@api/schemas.zod`; this file never hand-constructs a payload.
+- **`withRealOrderReferences(payload, skipField?)`** – Patches a generated `CreateOrderBody` payload with a real `userId` and `items[].productId` (the schema treats both as opaque strings). `skipField` prevents overwriting the exact field an invalid-payload case is testing. Also creates a product with `onHand: 1_000_000_000` so no generated quantity exhausts stock.
+- **`withMatchingPasswordConfirm(payload)`** – Sets `passwordConfirm` to match `password` on `SignupBody` payloads, since that cross-field rule is a business rule the schema does not encode.
+- **`describe` blocks** (one per write endpoint): `POST /users`, `POST /products`, `POST /orders`, `POST /cart`, `POST /feedback/contact`, `POST /account/signup`, `POST /account/login`. Each contains:
+  - A valid-payload test asserting `2xx` + `toSatisfyApiSpec()`.
+  - An `it.each(invalidPayloads(...))` table asserting `422`, `body.success === false`, and `toSatisfyApiSpec()`.
+- **Zod schemas imported from `@api/schemas.zod`**: `CreateUserBody`, `CreateProductBody`, `CreateOrderBody`, `UpsertCartItemBody`, `CreateFeedbackRequestBody`, `SignupBody`, `LoginBody`.
 
 ## Relationships
 
-- **`tests/support/contract-data.ts`** — Source of `validPayload()` and `invalidPayloads()`; the entire test matrix is driven by whatever the OpenAPI-derived schema declares.
-- **`tests/support/http.ts`** — `api()` and `authenticateAs()` provide the supertest agent and role-based bearer tokens.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets the database before the suite runs.
-- **`src/modules/products/tests/factory.ts`** — `createProduct()` creates a real product for order/cart reference-linking.
-- **`docs/theory/request-input.md`** — Referenced in the file header for the multipart/form-data coercion path (`readInput`) that can mask type errors from the validator.
-- **`docs/tools/contract-request-data.md`** — Documents the `contract-data` module that generates the payloads this file consumes.
-- **`docs/theory/request-flow.md`** — Contextual reference for how requests flow through validation before reaching the handler.
+- **`tests/support/contract-data.ts`** – Source of `validPayload(schema)` and `invalidPayloads(schema)`, the two generators that drive every assertion in this file.
+- **`tests/support/contract.ts`** – Imported via `@tests/contract`; registers the `toSatisfyApiSpec()` matcher used in every expectation.
+- **`tests/support/http.ts`** – Provides `api()` (supertest wrapper) and `authenticateAs(role)` used to build requests and bearer tokens.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module load to prepare a clean database for the suite.
+- **`src/modules/products/tests/fixtures.ts`** – `createProduct()` factory is used to create real product documents (for order/cart reference patching).
 
 ## Notes
 
-- **Skip-field discipline is critical.** For orders, cart, and signup, the "fix up" helpers (`withRealOrderReferences`, `productId` patch, `withMatchingPasswordConfirm`) must be bypassed when the field under test is the one being patched. The previous bug: always patching `userId` silently fixed every "userId missing/wrong-type" case, making it pass trivially.
-- **Opaque reference fields.** The schema has no way to express "must be a real document ID," so `userId`, `productId`, and `items[].productId` are plain strings to the validator. This file patches them to real IDs to avoid a 500 (Mongoose `CastError`) masking the 422 the contract promises.
-- **Quantity is not a schema constraint.** The test product uses `onHand: 1_000_000_000` so that `quantity ≤ available` (a business rule, not a contract rule) cannot cause a spurious failure.
-- **Login block is invalid-payloads only.** The `POST /account/login` describe is annotated "invalid payloads only" — a valid login is covered by scenario tests, not here.
-- **Additive convention.** Generated payloads are additive (same as a module's `tests/factory.ts`); deterministic scenario tests continue to use hand-written factories. This file answers "does the API honour its contract for *any* legal input," not "does this specific scenario work."
+- **`skipField` / conditional patching pattern.** Whenever a generated payload needs a "fix-up" (real IDs, matching `passwordConfirm`), the fix-up must be *skipped* for the field the current invalid case is exercising. Without this, the test silently sends a valid value and the 422 expectation passes vacuously. This pattern appears in the orders, cart, and signup blocks.
+- **Only contract-level validation is tested.** Business rules the schema cannot express (e.g. `quantity ≤ available`, `passwordConfirm === password`) are patched in or excluded; scenario-specific behaviour is the job of dedicated test files.
+- **Four documented drift mechanisms** (in the file header): (1) a spec `format` that misdescribes a field (`imageUrl` as `uri` vs. `uri-reference`), (2) `.extend()` on a generated Zod schema silently replacing a field's constraints, (3) coercion-before-validation in `multipart/form-data` handling, (4) validating a `.pick()` subset of a schema so unchecked fields reach Mongoose and produce 500 instead of 422. Each is annotated with the correct fix (often "fix the spec, not the validator").
+- **`POST /account/login`** block is truncated in the source but follows the same invalid-payloads-only pattern (no valid-payload test, since login inherently requires a pre-existing account).

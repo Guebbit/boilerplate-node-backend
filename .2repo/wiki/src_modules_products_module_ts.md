@@ -2,32 +2,31 @@
 
 ## Purpose
 
-Module manifest for the product catalogue. Declares the `products` app module (routes, seeds, locales, demo shapes) as a single default export satisfying `AppModule`, and side-effect-imports the event registrations. It exists so the kernel can register the catalogue without needing to know its internals.
+Entry-point manifest for the **products** module. It wires together the module's routes, seed data, locale files, and image writeback into a single `AppModule` object that the kernel registry can discover. It also documents the module's position in the dependency graph: a leaf node that everything else (cart, inventory, orders, wishlist) depends on, communicating downstream via events rather than direct imports.
 
 ## Key elements
 
-- **Default export (object `satisfies AppModule`)** — the registration contract:
-  - `name: 'products'` / `subdomain: 'core'` — identity and Bounded-Context label.
-  - `basePath: '/products'` — URL prefix for this module's routes.
-  - `routes: router` — re-exported from `./routes`; mounted under `basePath`.
-  - `seeds: seedProductsCollection` / `seedExport: exportSeededProducts` — imported from `./demo`; used to populate and snapshot the product collection.
-  - `demoShapes: { products: 'response' }` — tells the demo harness to render `GET /products/:id` responses as-is.
-  - `locales` — resolved to `__dirname/locales` for i18n resource loading.
-- **`import './events'`** — pure side-effect import; registers product domain-event handlers (e.g. `product.deleted`) without a named binding.
+- **`export default { … } satisfies AppModule`** — The module manifest. Fields:
+  - `name: 'products'` / `basePath: '/products'` — identity and URL prefix.
+  - `routes: router` — Hono/Fastify router from `./routes`.
+  - `seeds` / `seedExport` — `seedProductsCollection` and `exportSeededProducts` from `./demo`, used by the demo/dev data pipeline.
+  - `demoShapes: { products: 'response' }` — tells the demo harness to shape `GET /products/:id` responses.
+  - `locales` — path to the `locales/` directory (resolved via `path.join(__dirname, 'locales')`).
+  - `imageTargets: { products: { writeback: productRepository.writebackImage } }` — registers the repository method the inventory pipeline calls to persist generated image metadata.
+- **`import './events'`** — Side-effect import; registers `product.deleted` (and likely other) event listeners at module load.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — source of the `AppModule` type; this file satisfies it to participate in kernel registration.
-- **`src/modules.ts`** — upstream aggregator that imports this default export to build the full module list.
-- **`src/modules/products/routes.ts`** — provides the `router` mounted by this manifest.
-- **`src/modules/products/demo.ts`** — provides the two seed helpers referenced here.
-- **`src/modules/products/events.ts`** — side-effect import; its handlers run when the module is loaded.
-- **`src/modules/products/tests/integration/service.test.ts`** — integration tests that exercise the routes/seeds wired through this manifest.
-- **`src/modules/cart/tests/integration/service.test.ts`**, **`stock.test.ts`**, **`delivery/…/service.test.ts`**, **`payments/…/service.test.ts`** — downstream module tests that read seeded product data (via `seedProductsCollection`) or react to product events emitted through `events.ts`.
-- **`docs/theory/reading-path.md`** — documents the intended reading order; this file is the entry point for the products module.
+- **`src/kernel/registry.ts`** — Provides the `AppModule` type that the default export satisfies; the registry iterates collected manifests to mount routes, run seeds, and expose image targets.
+- **`src/modules.ts`** — Aggregates this manifest (via `import` of the default export) so the kernel can discover the module at boot.
+- **`src/modules/products/routes.ts`** — Supplies the `router` consumed by the manifest.
+- **`src/modules/products/repository.ts`** — Supplies `productRepository.writebackImage` for the `imageTargets` field.
+- **`src/modules/products/demo.ts`** — Supplies the two seed functions referenced in the manifest.
+- **`src/modules/products/events.ts`** — Imported for side effects; registers event handlers (e.g. `product.deleted`) that downstream modules (cart, inventory) react to.
+- **Test suites** (`cart/tests/…`, `delivery/tests/…`, `payments/tests/…`, `products/tests/integration/service.test.ts`) — Exercise the routes and service behavior this manifest exposes; they do not import this file directly but depend on the module being registered.
 
 ## Notes
 
-- The module is deliberately a **leaf** in the dependency graph. The cart→product coupling (e.g. "empty the cart when a product is deleted") is expressed entirely through the `product.deleted` event so that this file never imports from `@modules/cart`.
-- `import './events'` has no binding; the import order relative to the object literal is irrelevant, but the events are registered before any request can fire them because the module is loaded at boot.
-- `satisfies AppModule` (not `: AppModule`) is used so the inferred literal type is preserved for downstream tooling while still being checked against the contract.
+- **Inventory ownership of stock fields:** The docblock explicitly states that `onHand` and `reserved` are declared on the product document but written *only* by the inventory module. This module (and its repository) must never mutate those fields; treat them as read-only from here.
+- **Leaf-module discipline:** Downstream modules conform to the product shape rather than this module importing them. Cross-module effects flow through events (`product.deleted`) or image writeback callbacks, not direct service imports.
+- **`satisfies AppModule` (not `: AppModule`):** The default export keeps its literal type for IDE inline hints while still being type-checked against the registry contract. Adding a new field without adding it to `AppModule` will be a compile error.

@@ -2,25 +2,24 @@
 
 ## Purpose
 
-Public barrel for the `users` module. It is the **only** import surface a sibling module is allowed to use; lint rejects any path that reaches into `@modules/users/service`, `./repository`, etc. directly. The surface is deliberately wider than typical because `account` operates as a second service over the same User collection (signup, login, password reset) and needs the repository, not just the service.
+Public barrel for the `users` module. It is the **only** import surface permitted for sibling modules—lint rules reject direct paths into `./service`, `./repository`, etc. It re-exports the handful of symbols other modules (primarily `account`) are allowed to consume.
 
 ## Key elements
 
-- **`userService`** — re-exported from `./service`; the business-logic entry point.
-- **`userRepository`** — re-exported from `./repository`; the sole sanctioned data-access path.
-- **`TokenType`, `zodUserSchema`** — value re-exports from `./model` (enum + Zod schema).
-- **`UserDocument`, `Token`** — type-only re-exports from `./model`.
-- **`USER_DELETED`** — event constant from `./events`. Importing the barrel is also what installs the event payload declaration.
+- **`userService`** – the primary domain service; the main entry point for user operations.
+- **`userRepository`** – data-access layer over the user record. Exported here specifically so `account` can act as a second service on the same record.
+- **`TokenType`** – runtime enum/type discriminant for token kinds.
+- **`zodUserSchema`** – Zod validation schema for user payloads (shared-kernel utility).
+- **`UserDocument`, `Token`** *(types only)* – structural types for persistence and token entities.
+- **`USER_DELETED`, `USER_SETUP_REQUESTED`** – event-name constants. Importing this barrel is what installs the event payload declaration (side-effect of the events module).
 
 ## Relationships
 
-- **`account/module.ts`** — declares the dependency on this barrel as a `shared-kernel` edge; the wide surface here and the label there are the same fact written in two places.
-- **`account/services/authentication.ts`, `profile.ts`, `tokens.ts`, `verification.ts`** — consume `userService` and/or `userRepository` for signup, login, password reset, and profile operations.
-- **`account/session/jwt.ts`, `account/services/token-cleanup.ts`** — previously called `userModel` directly (`findOne`, `updateOne`, `updateMany`); now routed through `userRepository`. Their presence in the graph reflects that history.
-- **`account/tests/integration/*` and `account/tests/contract/*`** — exercise the cross-module flows (JWT lifecycle, persisted locale, self-service, service contracts) that depend on this surface.
+- **`src/modules/account/*`** (controllers, services, session, tests) – the `account` module imports `userRepository`, `userService`, `zodUserSchema`, and the event constants through this barrel. This is the declared `shared-kernel` coupling tracked as `module-coupling-account` in `.dependency-cruiser.cjs`.
+- **`scripts/backfill-image-thumbnails.ts`** – one-off script that reaches into the users domain (likely `userRepository` or `userService`) for bulk thumbnail backfill.
 
 ## Notes
 
-- **`userModel` is intentionally absent.** Its removal closed a second door to the User collection from non-repository files. `published-language.test.ts` guards against re-exporting it.
-- **Width is by design, not oversight.** The barrel is wide because two modules share one entity; the `shared-kernel` label in `account/module.ts` makes that trade-off visible on the context map rather than only to whoever opens this file.
-- Importing this barrel has a side effect: it registers the `USER_DELETED` event payload declaration.
+- `userModel` is intentionally **not** re-exported; nothing outside `users` should touch it.
+- Importing the barrel carries a side-effect: it registers the event payload declaration. Do not tree-shake or partially re-import the events file elsewhere.
+- Adding a new export here widens the public API surface—review against the `module-coupling-account` rule before doing so.

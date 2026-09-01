@@ -2,29 +2,30 @@
 
 ## Purpose
 
-Integration tests that verify two security hardening properties on credential endpoints: (1) rate limiting is applied with separate identity and address budgets so that neither a single account nor a single IP can be used to brute-force credentials beyond a small budget, and (2) the uncaught-error handler never leaks internal error details (connection strings, filesystem paths) to the caller while still surfacing deliberately-chosen error messages.
+Integration tests verifying two security-hardening properties that only manifest under attack: (1) credential endpoints carry a separate, small rate-limit budget distinct from the global API limiter, and (2) the 500 error handler never leaks internal implementation details to unauthenticated callers while still surfacing deliberately chosen error messages.
 
 ## Key elements
 
-- **`limitersWithBudget(identityLimit, addressLimit)`** — async helper that temporarily sets `NODE_AUTH_RATE_LIMIT_MAX` / `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX`, calls `jest.resetModules()`, dynamically re-imports `credentialLimiters` from `security.ts`, then restores the original env vars. Necessary because `rateLimit()` reads its config once at module-evaluation time.
-- **`describe('credential endpoints are rate limited separately')`** — four tests:
-  - *rejects further attempts with 429 once the budget is spent* — confirms the limiter returns 429 after the identity budget is exhausted.
-  - *does not spend the budget on successful attempts* — confirms `skipSuccessfulRequests` means 200s never count against the budget.
-  - *budgets one account separately from another at the same address* — confirms identity and address are independent buckets (not a `email|ip` pair key).
-  - *is mounted on the real login route* — uses the real `POST /account/login` via the `api` helper and asserts the `ratelimit` header is present.
-- **`describe('the 500 handler')`** — two tests:
-  - *tells the client nothing about what actually threw* — asserts internal details (hostnames, credentials) never appear in the 500 response body.
-  - *still returns the copy a deliberate error carries* — asserts a deliberately thrown `ExtendedError` message reaches the client unchanged.
+- **`limitersWithBudget(identityLimit, addressLimit?)`** — Helper that temporarily overrides `NODE_AUTH_RATE_LIMIT_MAX` / `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX`, calls `jest.resetModules()`, dynamically re-imports the rate-limit module, then restores the original env values. Returns a freshly-constructed `credentialLimiters` tuple.
+- **`describe('credential endpoints are rate limited separately')`** — Four tests:
+  - 429 is returned once the per-identity budget (default 3) is exhausted.
+  - Successful (200) responses do not decrement the budget (`skipSuccessfulRequests`).
+  - Two different accounts at the same IP each get their own identity budget until the shared address budget is reached.
+  - The limiter is actually mounted on the real `POST /account/login` route (asserts presence of the `ratelimit` response header).
+- **`describe('the 500 handler')`** — Two tests:
+  - An unhandled `Error` whose message contains a connection string / host name is stripped from the response; the client sees only a generic `INTERNAL_ERROR` code.
+  - An `ExtendedError` with a deliberately chosen message (e.g. `"Pick a shorter name"`) is passed through to the client at its declared status.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/security.ts`** — dynamically imported (after `jest.resetModules()`) to obtain a freshly-constructed `credentialLimiters` object with the test-specific budgets.
-- **`src/modules/users/tests/factory.ts`** — provides `createUser` and `PLAIN_PASSWORD`, used only by the "mounted on the real login route" test to create a valid user and authenticate.
-- **`tests/support/http.ts`** — provides the `api` supertest helper that boots the real Express app for the integration test against `/account/login`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to initialise a clean database before any test runs.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Dynamically imported (via `await import(...)`) after `jest.resetModules()` to obtain `credentialLimiters` built with test-specific budgets. The tests exercise this module's limiter behavior against a bare Express app.
+- **`src/modules/users/tests/fixtures.ts`** — Provides `createUser` and `PLAIN_PASSWORD` used by the "mounted on the real login route" test to seed a user and issue a valid credential.
+- **`tests/support/http.ts`** — Provides the `api()` helper (supertest bound to the full application) used to hit the real login endpoint and inspect its response headers.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to create an isolated database before any test runs.
 
 ## Notes
 
-- The `limitersWithBudget` helper is a workaround for `rateLimit()` reading options once at construction. Without the `jest.resetModules()` + dynamic-import dance, the suite would inherit whatever budget `tests/support/setup.ts` set globally.
-- All limiter tests (except the last) attach `credentialLimiters` to a **trivial** Express handler rather than a real controller, so each HTTP round-trip is cheap and the test isolates limiter behaviour from business logic.
-- The identity/address budget values are deliberately asymmetric in the cross-account test (`3, 50`) so the test observes the identity bucket without the address bucket interfering.
+- The suite relies on `jest.resetModules()` + dynamic `import()` to re-evaluate the rate-limit module with different env-var budgets. The `afterEach(() => jest.resetModules())` in the first `describe` block is required so subsequent tests start from a clean module registry.
+- Most limiter tests use a **trivial inline handler** (a one-liner that returns 401 or 200) rather than the real `postLogin` controller, keeping the assertion focused on the limiter's counting logic without a database round-trip per attempt.
+- The "mounted on the real login route" test is the only one in the rate-limit suite that goes through the full app stack; it asserts only the `ratelimit` header's presence as proof the middleware ran.
+- The 500-handler tests dynamically import `@app/error-handling` and `@infrastructure/http/errors` — these modules are not part of the listed graph neighbors but are resolved at test time.

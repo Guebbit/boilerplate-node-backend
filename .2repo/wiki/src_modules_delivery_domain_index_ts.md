@@ -2,23 +2,24 @@
 
 ## Purpose
 
-Barrel file that exposes the delivery domain's pure business rules (shipping rates, method lookup, pricing) as a single import path, deliberately decoupled from the module's HTTP/service layer.
+Barrel file that exposes the delivery domain's public API (shipping rates) without pulling in the module's HTTP/service surface. It exists so callers can import pure domain rules in isolation, as documented in `docs/theory/domain-layer.md`.
 
 ## Key elements
 
-- **Re-exports from `./rates`:**
-  - `SHIPPING_METHODS` — the static list of available shipping methods.
-  - `findShippingMethod` — lookup a method by identifier.
-  - `priceShipping` — compute a shipping price given a method (and presumably an order context).
+- **`SHIPPING_METHODS`** — re-exported from `./rates`; the set of available shipping method definitions.
+- **`findShippingMethod`** — re-exported from `./rates`; looks up a shipping method (by id or similar key).
+- **`priceShipping`** — re-exported from `./rates`; computes a shipping price given a method and context.
+
+All three are pure re-exports; no logic lives in this file.
 
 ## Relationships
 
-- **`src/modules/delivery/domain/rates.ts`** — sole source of every symbol this file re-exports; no local logic lives here.
-- **`src/modules/delivery/index.ts`** — module root; consumers of the public API reach the domain rules through this barrel via that entry point.
-- **`src/modules/delivery/service.ts`** — the service layer that applies domain rules (pricing, method resolution) to handle delivery operations.
-- **`src/modules/delivery/tests/integration/service.test.ts`** — integration tests exercise the service; they transitively depend on these domain exports.
+- **`src/modules/delivery/domain/rates.ts`** — sole import target; every symbol this file exports originates there.
+- **`src/modules/delivery/index.ts`** — the module's public (HTTP-facing) entry point; this file deliberately avoids depending on it, keeping the domain importable independently.
+- **`src/modules/delivery/service.ts`** — the service layer that likely imports from this barrel to access shipping rules without reaching into `rates.ts` directly.
+- **`src/modules/delivery/tests/integration/service.test.ts`** — integration tests may import shipping helpers through this barrel.
 
 ## Notes
 
-- This file contains no logic of its own — it is purely a re-export facade. If you need to change what's public in the domain, edit the `export { … }` list here (or in `rates.ts` for the declarations).
-- The doc comment makes an architectural contract: importing from `domain/` should never pull in HTTP, DI, or transport concerns. Keep it that way when adding new domain rules.
+- This is a one-line re-export file: if you need to change behavior, edit `./rates`, not here.
+- The module docblock explicitly positions this as the boundary between "domain" (pure rules) and the module's HTTP surface, so avoid adding non-domain (e.g. transport or DI) imports here.

@@ -2,23 +2,22 @@
 
 ## Purpose
 
-Express middleware that emits a single structured access-log entry per HTTP request. It captures method, matched route template, status code, and sub-millisecond duration, then logs at a severity level that distinguishes caller faults (4xx → WARN) from server faults (5xx → ERROR).
+Express access-log middleware that emits exactly one structured log line per completed HTTP request, timed with `process.hrtime.bigint()` for sub-millisecond precision. It derives the log severity from the response status code (5xx → error, 4xx → warn, everything else → info) so infrastructure failures surface at the same level as the code failures they represent.
 
 ## Key elements
 
-- **`requestLogger`** (named export) — the middleware function `(req, res, next) => void`. Records a start timestamp via `process.hrtime.bigint()`, then attaches a one-time `response.once('finish')` handler that computes elapsed time, resolves the route label, picks the log level, and calls `logger.log` with a message string plus structured fields (`request_id`, `trace_id`, `method`, `route`, `status_code`, `duration_ms`). Calls `next()` immediately so downstream handlers run.
+- **`requestLogger`** (exported) — The sole export. An Express `(req, res, next) => void` middleware. On the `response` `finish` event it computes elapsed ms, resolves the matched route label, picks the severity level, and calls `logger.log` with a structured fields object (`request_id`, `trace_id`, `method`, `route`, `status_code`, `duration_ms`).
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** — provides the `logger` instance used to emit the access-log entry.
-- **`src/infrastructure/observability/metrics-http.ts`** — provides `getRouteLabel(request)` to obtain the matched Express route template (e.g. `/users/:id`) rather than the raw URL.
-- **`src/infrastructure/observability/tracer.ts`** — provides `getActiveSpanContext().traceId` so each log line is correlated with its distributed-trace span.
-- **`src/app/request-context.ts`** — upstream middleware that populates `request.requestId`, which this file reads for the `request_id` structured field.
-- **`tests/unit/infrastructure/http/middlewares/request-logger.test.ts`** — unit tests covering the middleware's log output, level selection, and timing.
+- **`src/infrastructure/adapters/logger.ts`** — Provides the `logger` instance used for the final log emission.
+- **`src/infrastructure/observability/metrics-http.ts`** — Provides `getRouteLabel(request)`, which returns the matched route template (e.g. `/users/:id`) rather than the concrete path.
+- **`src/infrastructure/observability/tracer.ts`** — Provides `getActiveSpanContext()` to attach the current `traceId` to the log entry.
+- **`tests/unit/infrastructure/http/middlewares/request-logger.test.ts`** — Unit test covering this middleware's behavior.
 
 ## Notes
 
-- The handler listens on **`finish`**, not `close`, intentionally: it describes a response that was actually sent to the client.
-- `getRouteLabel` is called *inside* the `finish` callback (after `next()`), because Express only populates the matched route once the router handler has run.
-- Severity split is deliberate: 4xx → `warn` (caller's fault), 5xx → `error` (our fault); they must not share a level.
-- Duration is computed with `hrtime.bigint()` (nanosecond resolution) then converted to ms. The message string uses `.toFixed(1)` while the structured `duration_ms` field is rounded to 2 decimal places.
+- Listens on `response.once('finish')`, **not** `'close'` — the log entry describes a response that was actually sent, not a connection that merely closed.
+- `getRouteLabel` is called **inside** the `finish` callback (after `next()`), because Express only populates the matched route after the router has processed the request.
+- `requestId` is read directly off the Express `request` object; it is expected to be set upstream (e.g. by an id-injecting middleware) before this middleware runs.
+- `duration_ms` in the structured fields is rounded to two decimal places, while the human-readable message string uses one decimal place.

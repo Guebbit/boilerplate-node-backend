@@ -2,18 +2,19 @@
 
 ## Purpose
 
-Declares the single audit action used by the delivery module and registers it into the global `AuditActionMap` via a TypeScript module augmentation. It exists so that audit events emitted by delivery code are type-checked against a closed set of allowed action strings, consistent with the pattern established in `modules/account/audit.ts`.
+Declares the set of audit actions the delivery module is allowed to emit, and registers them into the global `AuditActionMap` via TypeScript declaration merging. It exists as a side-effect module (no runtime import needed beyond the type augmentation) so that audit emissions are statically typed rather than free-form strings.
 
 ## Key elements
 
-- **`deliveryAuditActions`** (const object) — The one audit action for this module: `ADMIN_COURIER_ADVANCED` → `'admin.courier.advanced'`. Represents the courier tick, the only request-shaped operation delivery performs.
-- **`declare module '@infrastructure/observability/audit'`** — Augments `AuditActionMap` with a `delivery` key typed as the value union of `deliveryAuditActions`, making the action available to the shared audit infrastructure without a runtime import.
+- **`deliveryAuditActions`** (exported const) — The sole action is `ADMIN_COURIER_ADVANCED` (`'admin.courier.advanced'`). Shipment creation is deliberately *not* listed here because it is audited as part of the admin order-status write, not as a delivery-specific event.
+- **`declare module '@infrastructure/observability/audit'`** — Augments the shared `AuditActionMap` interface so that the key `delivery` maps to the union of values in `deliveryAuditActions`. This gives downstream audit emitters type-safety without a shared enum file.
 
 ## Relationships
 
-- **`src/modules/delivery/service.ts`** — The sole consumer. It imports `deliveryAuditActions` and passes the `ADMIN_COURIER_ADVANCED` action string when emitting audit events for the courier tick. No other delivery operations produce audit records here; shipment creation is audited by the admin order-write path instead.
+- **`src/modules/delivery/service.ts`** — The delivery service is the runtime producer of these audit events. It references `deliveryAuditActions` (or the literal strings) when it emits the courier-advanced audit record.
 
 ## Notes
 
-- The augmentation pattern (rather than a shared enum) is deliberate and mirrors `modules/account/audit.ts`; do not "simplify" it into a common constants file.
-- There is intentionally only **one** action. Shipment creation does not get its own audit action because it rides the order status change already audited by the admin order write.
+- Follows the same augmentation pattern as `src/modules/account/audit.ts`; the comment explicitly points there for the rationale (per-module action declarations instead of a centralized enum).
+- The file has no runtime side effects beyond the `const` export; its primary job is the type-level `declare module` block. Consumers only need to import the type, not the value, in most cases.
+- Adding a new delivery audit action means adding a key to `deliveryAuditActions` — the `AuditActionMap` union picks it up automatically via `keyof typeof`.

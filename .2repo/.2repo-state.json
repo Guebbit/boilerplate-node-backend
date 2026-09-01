@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-08-28T11:25:10.035005+00:00",
-  "head": "4260d99958318fbb1085440b08e81d158e8d8707",
+  "generated_at": "2026-08-31T21:32:45.670364+00:00",
+  "head": "9b841e10776fc2d0e5173c7e6ca17ab735ab8eda",
   "threshold": 5,
   "layers": {
     "execution": {
@@ -15,17 +15,14 @@
     },
     "index": {
       "artifact": ".2repo/repo-index.json",
-      "revision": "b19f9756342d2ede0718560f31b26a372ea755790d27a9b85585b1c36d40a325",
-      "chunk_count": 7465,
-      "artifact_count": 726,
-      "artifact_digest": "917f0001daa72f604da55d494be714efaed48d94bdc2634e887a92f3bf654887"
+      "revision": "90db686269a53b0d0153cc756f7cd598acefabc4ee2d3f735ca409e89ab68786",
+      "chunk_count": 8753,
+      "artifact_count": 804,
+      "artifact_digest": "e4f2d25ed8f70f6c6f98126492ef3af2393ee3f69178c111b306b21460a8ad00"
     },
     "context": {
       "artifact": ".2repo/REPO_CONTEXT.md",
-      "injected": [
-        "/target-repo/.gitattributes",
-        "/target-repo/.gitignore"
-      ],
+      "injected": [],
       "ai_target": "claude",
       "provider": "ollama",
       "model": "qwen3.8:27b",

@@ -2,26 +2,26 @@
 
 ## Purpose
 
-Single controller for searching and paginating feedback tickets. Serves both the cacheable query form (`GET /feedback`) and the admin body form (`POST /feedback/search`) through one function, delegating all data access to the feedback service.
+Controller for the admin feedback-triage queue. Handles two transports for the same search — `GET /feedback` (cacheable query-string form) and `POST /feedback/search` (body form for filters too broad for a URL) — by reading a unified input, validating pagination, and delegating to the feedback service.
 
 ## Key elements
 
-- **`searchFeedbackKeyParameters`** (exported const) — hand-listed array `['page', 'pageSize', 'text', 'email', 'status']` used to build the cache key for the GET route. Must stay in sync with the parameters destructured in `getFeedback`.
-- **`getFeedback`** (exported function) — the controller. Reads filters from query or body via `readInput`, validates pagination with `paginationSchema`, passes `status` as a raw string to the service, and returns the result via `successResponse` / `rejectValidation` / `catchAs`.
+- **`FeedbackQuery`** — type alias: `Partial<Record<keyof SearchFeedbackRequestsRequest, string>>`, i.e. every filter as a raw query-string value.
+- **`searchFeedbackKeyParameters`** (exported) — hand-listed array of query params that affect the endpoint's answer and therefore its cache key: `['page', 'pageSize', 'text', 'email', 'status']`. Not auto-derived; must stay in sync with what `getFeedback` destructures.
+- **`getFeedback`** (exported) — the Express handler. Calls `readInput` to merge body/query filters, validates `page`/`pageSize` via `paginationSchema`, forwards the rest as free text to `feedbackRequestService.search`, and wraps the result in `successResponse`.
 
 ## Relationships
 
+- **`@infrastructure/http/request`** — provides `readInput` (unified body/query extraction) and `callerContextOf` (caller identity passed to the service).
+- **`@infrastructure/http/schemas`** — provides `paginationSchema`, the shared validation for `page`/`pageSize` so every endpoint 422s identically.
+- **`@infrastructure/http/response`** — provides `successResponse` for the happy-path reply.
+- **`@infrastructure/http/controller`** — provides `catchAs` (typed error-to-HTTP mapping) and `rejectValidation` (422 reply with schema error detail).
+- **`src/modules/feedback/service.ts`** — `feedbackRequestService.search` is the downstream data access call; the controller passes parsed pagination plus raw filter strings and the caller context.
 - **`src/modules/feedback/routes.ts`** — registers `getFeedback` on both `GET /feedback` and `POST /feedback/search`.
-- **`src/modules/feedback/service.ts`** — provides `feedbackRequestService.search`, the sole data-access call in this controller.
-- **`src/infrastructure/http/request.ts`** — supplies `readInput` (unified query/body reading) and `callerContextOf` (auth context forwarded to the service).
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse` for shaping the HTTP reply.
-- **`src/infrastructure/http/schemas.ts`** — supplies `paginationSchema`, the only validation applied in this controller.
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs` (error→status mapping) and `rejectValidation` (422 helper).
-- **`src/types/index.ts`** — provides the `SearchFeedbackRequestsRequest` type used in the `Request` generic.
+- **`src/types/index.ts`** — source of the `SearchFeedbackRequestsRequest` type that shapes the expected filter fields.
 
 ## Notes
 
-- **Cache-key coupling:** `searchFeedbackKeyParameters` is deliberately *not* derived from the function's destructuring. If a new parameter is added to `getFeedback` but forgotten here, two different searches will share one cached response for the cache's entire TTL.
-- **Body form is uncached by design:** filters arriving in a request body cannot appear in the URL and therefore cannot be part of the cache key; that is why the body variant lives on a separate, unkeyed route.
-- **Only pagination is validated.** `text`, `email`, and `status` are free-text and passed through unvalidated. An unrecognised `status` value does **not** produce a 422 on this read path — the service's `toFeedbackStatus()` helper narrows the result set to empty instead.
-- **`status` is passed as `string | undefined`**, never as an enum. The string→enum mapping is the service's responsibility.
+- **Cache-key sync is manual.** `searchFeedbackKeyParameters` is not generated from the destructuring; adding a new filter to the controller without also adding it here will silently let two distinct searches share one cached response.
+- **`status` is passed as a string.** `toFeedbackStatus()` (inside the service) maps it. An invalid value narrows the READ result set to nothing rather than returning 422 — deliberately different from the WRITE path, which does validate and reject.
+- **Only pagination is validated.** All other filters (`text`, `email`, `status`) are forwarded as free text; there is no enum or regex check at this layer.

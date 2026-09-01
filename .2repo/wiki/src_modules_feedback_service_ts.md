@@ -2,38 +2,41 @@
 
 ## Purpose
 
-Domain service for feedback-request lifecycle: creating contact submissions, searching/filtering them, and updating their status. It sits between the HTTP controllers and the repository, owning the rules for status mapping, operator notification email, and audit emission so that no controller duplicates that logic.
+Domain service for feedback (contact) tickets: creating a ticket with operator notification, paginated search, and status triage. Sits between the thin HTTP controllers and the repository, owning the one non-trivial mapping rule (raw string → closed `FeedbackRequestStatus` enum) and the "create + notify" pairing that used to be split across layers.
 
 ## Key elements
 
-- **`STATUS_MAP`** — closed-string → `FeedbackRequestStatus` enum lookup. Adding a status means one entry here; no other branch to touch.
-- **`toFeedbackStatus(status?)`** — maps a raw query/body string to the enum, returning `undefined` for anything not in the map. The "narrow-to-nothing, never fall-through" guard for the read path.
-- **`notifyMailbox()`** — resolves the operator notification address from `NODE_CONTACT_NOTIFY_EMAIL` → `NODE_SMTP_SENDER` → `''`, read at call time so deployments can rotate it without restart.
-- **`create(payload)`** — trims/normalizes the payload, persists via `feedbackRequestRepository.create`, then enqueues a single notification email to the support mailbox (built in `NODE_DEFAULT_LOCALE`, *not* the submitter's locale). Email failure is logged, never thrown.
-- **`search(filters?, context?)`** — paginated query. Maps `status` through `toFeedbackStatus` into a scope object. If a `CallerContext` is supplied, emits an `ADMIN_FEEDBACK_VIEWED` audit event.
-- **`updateStatus(feedback, payload)`** — mutates `status`, `adminNotes`, and sets `respondedAt` on first transition to `resolved`. Saves and wraps in `ResponseSuccess`.
-- **`updateStatusById(id, payload, context?)`** — `findById` → `updateStatus` → `404` reject on miss → `ADMIN_FEEDBACK_STATUS_UPDATED` audit event (with `target_id` and the new status in metadata).
-- **`feedbackRequestService`** — aggregated export object (`{ create, search, updateStatus, updateStatusById }`) for convenience import.
+- **`toFeedbackStatus(status?)`** (internal) — Maps a raw string to a `FeedbackRequestStatus` member or `undefined`. An invalid value on a READ narrows the search to zero results (`{ status: undefined }` matches nothing); on a WRITE it is unreachable because the generated Zod enum rejects it with 422 first.
+- **`notifyMailbox()`** (internal) — Resolves the operator notification address from `NODE_CONTACT_NOTIFY_EMAIL` → `NODE_SMTP_SENDER` → `''`. Read per call (not captured at import) so a deployment can change it without a restart.
+- **`create(payload)`** — Persists a new ticket (status `new`, trimmed/lowercased fields) and fires a best-effort operator email via `enqueueEmail`. The email is built in `getDefaultLocale()` (operator's language), not the caller's locale.
+- **`search(filters?, context?)`** — Paginated query with optional status/email/free-text filters. Emits `ADMIN_FEEDBACK_VIEWED` audit event only when a `CallerContext` is supplied.
+- **`updateStatus(feedback, payload)`** — Mutates an already-loaded document: applies new status/adminNotes, stamps `respondedAt` once on first `resolved`, then saves.
+- **`updateStatusById(id, payload, context?)`** — Loads by id (404 reject if missing), delegates to `updateStatus`, emits `ADMIN_FEEDBACK_STATUS_UPDATED` on success when context is present.
+- **`feedbackRequestService`** — Barrel object re-exporting the four functions above; this is what the controllers import.
 
 ## Relationships
 
-- **`./model`** — types `FeedbackRequestDocument` used as the persistence shape throughout.
-- **`./repository`** — `feedbackRequestRepository` is the sole data-access dependency (create, search, save, findById).
-- **`./emails`** — `contactRequestEmail` builds the operator notification template.
-- **`./audit`** — `feedbackAuditActions` supplies the action constants for audit events.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape the controller-facing return values.
-- **`@infrastructure/i18n`** — `getDefaultLocale` and `t` (for the 404 message).
-- **`@infrastructure/adapters/mailer`** — `enqueueEmail` fires the notification without blocking the response.
-- **`@infrastructure/adapters/logger`** — `logger.error` on email-queue failure.
-- **`@infrastructure/observability/audit`** — `emitAuditEvent` / `buildAuditEvent` for the two admin actions.
-- **`@infrastructure/persistence/search`** — `PaginatedMeta` type for the search result shape.
-- **`@infrastructure/http/request`** — `CallerContext` type threaded through `search` and `updateStatusById`.
-- **Controllers** (`get-feedback.ts`, `post-feedback-contact.ts`, `put-feedback-status.ts`) — the only producers of calls into this module; they pass `CallerContext` and receive the typed responses.
+| Neighbor | Interaction |
+|---|---|
+| `./repository` | All persistence (`create`, `search`, `findById`, `save`) goes through `feedbackRequestRepository`. |
+| `./model` | Imports `FeedbackRequestDocument` type used as the read/write shape. |
+| `./emails` | `contactRequestEmail` builds the operator notification template (locale + payload). |
+| `./audit` | `feedbackAuditActions` provides the named action constants for audit events. |
+| `@infrastructure/http/response` | `generateSuccess` / `generateReject` shape the HTTP response objects returned by `updateStatus` / `updateStatusById`. |
+| `@infrastructure/http/request` | `CallerContext` type parameterises `search` and `updateStatusById` for audit correlation. |
+| `@infrastructure/i18n` | `t()` for the 404 message; `getDefaultLocale()` for the operator email locale. |
+| `@infrastructure/adapters/mailer` | `enqueueEmail` queues the operator notification. |
+| `@infrastructure/adapters/logger` | `logger.error` logs a failed email enqueue (fire-and-forget, does not reject the `create` promise). |
+| `@infrastructure/observability/audit` | `emitAuditEvent` / `buildAuditEvent` publish view and status-change events. |
+| `@infrastructure/persistence/search` | `PaginatedMeta` type in the `search` return shape. |
+| `controllers/get-feedback.ts` | Calls `feedbackRequestService.search`. |
+| `controllers/post-feedback-contact.ts` | Calls `feedbackRequestService.create`. |
+| `controllers/put-feedback-status.ts` | Calls `feedbackRequestService.updateStatusById`; its Zod schema guarantees a valid enum before the service sees the value. |
 
 ## Notes
 
-- `STATUS_MAP` is intentionally **lowercase-only**. Uppercase aliases would accept values the OpenAPI contract forbids; the Zod-generated schema 422s them before they reach `updateStatusById`, but the unguarded `search` path would silently fall through if an alias existed.
-- The notification email in `create` is built in `getDefaultLocale()` (the operator's language), **not** the submitter's locale. It deliberately takes no `CallerContext`.
-- `search` accepts `page`/`pageSize` as `string | number` because they arrive from a query string; the repository's `normalizePagination` handles coercion and bounds.
-- `context` is optional on both `search` and `updateStatusById`; omitting it (e.g. in tests or internal reuse) suppresses audit emission entirely.
-- The module re-exports the four functions both individually and as `feedbackRequestService`—import either way; they are the same references.
+- **Invalid-status semantics are asymmetric by design.** On a READ, an unparseable status silently narrows to zero rows. On a WRITE, the caller never reaches `toFeedbackStatus` because the controller's Zod enum rejects it with 422. The service never "falls through to return everything."
+- **Operator email is deliberately caller-agnostic.** It uses `getDefaultLocale()` (server/operator locale), not the submitter's `CallerContext`. The customer's own text (`subject`, `message`) passes through verbatim.
+- **`respondedAt` is idempotent.** It is stamped only when the ticket first transitions to `resolved`; re-resolving does not move the timestamp.
+- **Audit emission is opt-in per call.** A `undefined` `context` suppresses the audit event entirely (intended for tests or future non-HTTP callers).
+- **Email failure is non-fatal.** A failed `enqueueEmail` is caught and logged; `create` still resolves with the created document.

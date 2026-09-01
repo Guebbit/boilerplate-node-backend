@@ -2,33 +2,36 @@
 
 ## Purpose
 
-Defines all HTTP endpoints for user management (list, search, create, update, delete) on an Express `Router`. Every route is gated behind authentication and the admin role. This file is the sole wiring point between the HTTP layer and the user-module controllers.
+Defines the admin-only Express router for the `/users` resource. It composes authorization, response-caching, file-upload, and route-flag middlewares with the user controllers to expose search, read, create, update, and delete (soft + hard) operations.
 
 ## Key elements
 
-- **`router`** (exported) – The Express `Router` instance; the only public export of this file.
-- **Global middleware** – `getAuth`, `isAuth`, `isAdmin` applied via `router.use`, so no individual route needs to repeat them.
-- **Read routes** (`GET /`, `POST /search`, `GET /:id`) – Delegate to `getUsers` or `getUserItem`; wrapped with `setCache(3600, …)` using the `users` cache tag.
-- **Write routes** (`POST /`, `PUT /`, `PUT /:id`) – Delegate to `writeUsers`; wrapped with `invalidateCache(['users','account'])` and `upload.single('imageUpload')` for optional avatar uploads.
-- **Delete routes** (`DELETE /`, `DELETE /:id`, `DELETE /:id/hard`) – Delegate to `deleteUsers`; wrapped with `invalidateCache(['users','account'])`. The `/:id/hard` variant additionally applies `routeFlag('hardDelete')` so the controller can distinguish a hard delete without a query-string check.
+- **`router`** – The exported Express `Router`. All routes inherit `getAuth → isAuth → isAdmin` via `router.use`.
+- **`cacheUsersSearch`** – A `searchCache('users', searchUsersKeyParameters)` middleware; reads cached search results keyed on the same query params the `getUsers` schema accepts.
+- **Read routes** – `GET /` and `POST /search` use `cacheUsersSearch`; `GET /:id` additionally writes into cache via `setCache(3600, { tags: ['users'] })`.
+- **Write routes** – `POST /`, `PUT /`, `PUT /:id` chain `invalidateCache(['users','account'])` → `upload.single('imageUpload')` → `writeUsers`.
+- **Delete routes** – `DELETE /`, `DELETE /:id` perform a soft delete; `DELETE /:id/hard` applies `routeFlag('hardDelete')` before calling the same `deleteUsers` handler.
+- **Route-order comment** – `POST /search` is deliberately registered before any `/:id` pattern so "search" isn't captured as an id.
 
 ## Relationships
 
 | Neighbor | Interaction |
 |---|---|
-| `controllers/get-users.ts` | Provides `getUsers` handler and `searchUsersKeyParameters` for cache-key building. |
-| `controllers/write-users.ts` | Provides `writeUsers` handler used by all create/update routes. |
-| `controllers/delete-users.ts` | Provides `deleteUsers` handler used by all delete routes. |
-| `controllers/get-user-item.ts` | Provides `getUserItem` handler for `GET /:id`. |
-| `@kernel/middlewares/authorizations` | `getAuth`, `isAuth`, `isAdmin` — applied to every route. |
-| `@infrastructure/http/middlewares/cache` | `setCache` (read routes) and `invalidateCache` (write/delete routes). |
-| `@infrastructure/http/middlewares/route-flag` | `routeFlag('hardDelete')` on the `/:id/hard` alias. |
-| `@infrastructure/adapters/storage` | `upload` (multer-based) for single image-file uploads on write routes. |
-| `module.ts` | Graph neighbor; expected to mount this `router` under a `/users` prefix (the file itself does not import it). |
+| `src/kernel/middlewares/authorizations.ts` | Supplies `getAuth`, `isAuth`, `isAdmin` applied globally to every route. |
+| `src/infrastructure/adapters/storage.ts` | Supplies `upload` (single-file multer) on all write routes. |
+| `src/infrastructure/http/middlewares/cache.ts` | Supplies `searchCache`, `setCache`, `invalidateCache` for read/write cache management. |
+| `src/infrastructure/http/middlewares/route-flag.ts` | Supplies `routeFlag('hardDelete')` to mark the path-segment hard-delete variant. |
+| `src/modules/users/controllers/get-users.ts` | Exports `getUsers` handler and `searchUsersKeyParameters` (cache key config). |
+| `src/modules/users/controllers/get-user-item.ts` | Exports `getUserItem` for `GET /:id`. |
+| `src/modules/users/controllers/write-users.ts` | Exports `writeUsers` for create/update. |
+| `src/modules/users/controllers/delete-users.ts` | Exports `deleteUsers` for soft and hard delete. |
+| `src/modules/users/module.ts` | Mounts the exported `router` into the application. |
+| `src/modules/users/tests/unit/routes.test.ts` | Unit-tests the route wiring. |
+| `tests/cross-cutting/authenticated-controllers.test.ts` | Verifies auth middlewares are present on these routes. |
+| `tests/cross-cutting/write-routes-are-guarded.test.ts` | Verifies write/delete routes carry the required guard chain. |
 
 ## Notes
 
-- **Route ordering matters:** `POST /search` is registered before `GET /:id` so that the literal segment `search` is never captured as an `:id` parameter.
-- **Shared cache key:** Both `GET /` and `POST /search` write to the same cache key (`users:search`) with the same tag set, so a search response and a list response are cache-interchangeable.
-- **`PUT /` vs `PUT /:id`:** Both call the same `writeUsers` handler; the distinction is only the HTTP surface (id-in-body vs. id-in-path). The handler must handle both shapes.
-- **Hard-delete alias:** `DELETE /:id/hard` is functionally identical to `DELETE /:id?hardDelete=true`. `routeFlag('hardDelete')` injects the flag into the request so `deleteUsers` can branch on it without parsing the query string.
+- **Hard-delete is reachable two ways:** `DELETE /:id?hardDelete=true` (query-param) and `DELETE /:id/hard` (path-segment). Both invoke the same `deleteUsers` handler; the path variant uses `routeFlag` to set the flag in the request context.
+- **Cache tags:** every mutating route invalidates both `'users'` **and** `'account'` tags, so account-level caches are kept consistent.
+- **No wildcard catch-all** is defined; any unlisted path on this router falls through to 404 (or whatever the parent router handles).

@@ -2,19 +2,23 @@
 
 ## Purpose
 
-A factory for an Express middleware that injects a fixed value into `request.params` under a named key. It exists so that literal path segments (e.g. `DELETE /products/:id/hard`) can be treated as declared boolean inputs by `readInput`, giving controllers a single input-declaration surface instead of special-casing path vs. query flags.
+A single-purpose Express middleware factory that converts a URL path segment (e.g. a `/hard` suffix) into a value in `request.params`, so that an alternate spelling of the same operation (path segment vs. query param) can be consumed by the same `readInput` / controller entry point without duplicating handler code.
 
 ## Key elements
 
-- **`routeFlag(field, value = 'true'): RequestHandler`** – Returns an Express middleware that, on invocation, assigns `value` (a string) to `request.params[field]` and calls `next()`. The caller supplies the param name and an optional literal value.
+- **`routeFlag(field, value?)`** — Exported middleware factory.
+  - `field` (string): the param name to set on `request.params`.
+  - `value` (string, defaults to `'true'`): the value to assign.
+  - Returns a `RequestHandler` that sets `request.params[field] = value` and calls `next()`.
 
 ## Relationships
 
-- **`src/modules/orders/routes.ts`, `src/modules/products/routes.ts`, `src/modules/users/routes.ts`** – These route modules use `routeFlag` as inline middleware on routes that carry a flag in the path (e.g. a `:hard` or `:soft` segment), so the controller's `readInput` declaration covers both the path form and an equivalent query-param form.
-- **`tests/unit/infrastructure/http/middlewares/route-flag.test.ts`** – Unit-tests that the middleware sets the expected key/value on `request.params` and calls `next()`.
+- **`src/modules/products/routes.ts`** — Uses `routeFlag` to map suffix-style routes (e.g. `DELETE /products/:id/hard`) onto the same controller that handles `DELETE /products/:id?hardDelete=true`.
+- **`src/modules/orders/routes.ts`** — Same pattern for order endpoints.
+- **`src/modules/users/routes.ts`** — Same pattern for user endpoints.
+- **`tests/unit/infrastructure/http/middlewares/route-flag.test.ts`** — Unit tests covering the param-setting behavior and the default value.
 
 ## Notes
 
-- Writes to `request.params`, not `request.query`, because Express 5 exposes `query` via a read-only getter. It also matches the semantic intent: the value *is* a route param, just spelled as a literal so that `/products/{id}/false` is impossible at the URL level.
-- The value is always a string at this layer; boolean coercion happens downstream in `readInput`.
-- The factory pattern (outer function returns a handler) is what lets a route declare the flag name inline without repeating middleware logic.
+- Writes to `request.params`, **not** `request.query`. This is intentional: Express 5 exposes `query` via a getter that is not writable, and the path segment is semantically a route param.
+- The middleware is intentionally trivial (one assignment + `next()`); its value is in the *position* it occupies in the route chain (after the URL is matched, before the controller runs), not in any logic of its own.

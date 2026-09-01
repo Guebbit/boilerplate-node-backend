@@ -2,29 +2,32 @@
 
 ## Purpose
 
-Contract tests for the `/orders` HTTP surface. They assert that every response (success and error) satisfies the OpenAPI spec via `toSatisfyApiSpec()`, and that role-specific code paths (admin `findById` vs. scoped aggregate) return the *same* shape. The file exists because prior unit tests never crossed HTTP, leaving two production bugs undetected: the list endpoint emitting `totalItems`/`totalQuantity`/`totalPrice` where the spec demanded a single `total`, and `GET /orders/{id}` returning different bodies depending on caller role.
+Contract tests that assert every `/orders` HTTP response (list, single-fetch, cancel) satisfies the OpenAPI spec via `toSatisfyApiSpec()`. The file exists because the list endpoint historically returned `totalItems`/`totalQuantity`/`totalPrice` while the spec declared a single `total`, and `GET /orders/{id}` returned a different shape per caller role — neither was caught because no prior test exercised the HTTP boundary.
 
 ## Key elements
 
-- **`seedOrderFor(user)`** – local helper; creates a product and a single-item order (qty 2) for the given user, returning the order doc.
-- **`describe('GET /orders — the filters it now publishes')`** – verifies `?status=` and `?notes=` query parameters narrow results correctly. Status is set via `orderRepository.updateStatusIfIn` (transition, not raw column write).
-- **`describe('GET /orders')`** – four tests: admin list, non-admin scoped list, unauthenticated 401, and an assertion that the body carries the three separate totals (`totalItems`, `totalQuantity`, `totalPrice`) and **not** a collapsed `total`.
-- **`describe('GET /orders/{id}')`** – admin-path contract, non-admin-path contract, per-role 404 on malformed ID (`not-an-id`), and the same 404 on the `/invoice` sub-route.
-- **`describe('POST /orders/{id}/cancel')`** – owner cancel, admin cancel of another user's order, stranger gets 404 (no existence leak), 409 `ORDER_NOT_CANCELLABLE` for non-pending, idempotency (second cancel → 409), unauthenticated 401.
+- **`seedOrderFor(user)`** — local helper; creates one product and one order (qty 2) for the given user.
+- **`describe('GET /orders — the filters it now publishes')`** — verifies `?status=` and `?notes=` query params actually narrow results (these were unadvertised in the spec).
+- **`describe('GET /orders')`** — contract checks for the list endpoint as admin, non-admin, unauthenticated (401), and explicit assertion that the three separate total fields exist and `total` does not.
+- **`describe('GET /orders/{id}')`** — contract checks for both the admin (`findById`) and non-admin (scoped aggregate) code paths, plus 404 on malformed id for both roles and the `/invoice` sub-route.
+- **`describe('POST /orders/{id}/cancel')`** — owner cancel, admin cancel, stranger gets 404 (no existence leak), non-cancellable order gets 409 with `ORDER_NOT_CANCELLABLE` code, double-cancel gets 409, unauthenticated gets 401.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** – side-effect import (`import '@tests/contract'`) that registers the `toSatisfyApiSpec()` matcher used in nearly every assertion.
-- **`tests/support/http.ts`** – provides `api()` (supertest-style HTTP client) and `authenticateAs(role)` (returns bearer token + user doc).
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` called once at module level to create/tear down an in-memory database.
-- **`src/modules/orders/tests/factory.ts`** – `createOrder` and `toOrderItem` build seed data.
-- **`src/modules/products/tests/factory.ts`** – `createProduct` supplies the product referenced by order items.
-- **`src/modules/users/tests/factory.ts`** – `createUser` (used for the "stranger" negative test) and `PLAIN_PASSWORD` constant.
-- **`src/modules/orders/index.ts`** – exports `orderRepository`, used directly to drive status transitions (`updateStatusIfIn`) without going through HTTP.
+| Neighbor | Interaction |
+|---|---|
+| `tests/support/contract.ts` | Imported as `@tests/contract`; registers the `toSatisfyApiSpec()` matcher used on every assertion. |
+| `tests/support/http.ts` | Provides `api()` (supertest wrapper) and `authenticateAs(role)` for request setup. |
+| `tests/support/setup-test-db.ts` | `setupTestDb()` is called at module scope to prepare a clean database before any test runs. |
+| `src/modules/orders/index.ts` | Exports `orderRepository`, used directly to drive status transitions (`updateStatusIfIn`) that the API itself cannot perform. |
+| `src/modules/orders/tests/fixtures.ts` | `createOrder` and `toOrderItem` seed order data. |
+| `src/modules/products/tests/fixtures.ts` | `createProduct` seeds a product for each order. |
+| `src/modules/users/tests/fixtures.ts` | `createUser` and `PLAIN_PASSWORD` create the "stranger" account for the existence-leak test. |
 
 ## Notes
 
-- Every assertion pair is `expect(status).toBe(N); expect(response).toSatisfyApiSpec();` — the spec check is the authoritative assertion; the status check is a fast-fail guard.
-- The malformed-ID test is **per role** (`it.each`) because the admin path (Mongoose `CastError` → 404) and the scoped aggregate path (driver `BSONError` → historically 422) hit different error-mapping code. A single-role test would miss a regression in the other branch.
-- Status transitions are performed via `orderRepository.updateStatusIfIn(id, ['pending'], target)` rather than setting the column directly, so the test exercises the same guard the application uses.
-- The `notes` filter test is admin-only by design: notes are staff-written metadata invisible to regular users.
+- `setupTestDb()` runs at **module scope** (not inside `beforeAll`), so it executes exactly once when the file is loaded.
+- Status transitions (pending → paid, pending → shipped) are performed via `orderRepository.updateStatusIfIn` rather than through HTTP, because the application has no public endpoint to set those states directly.
+- The malformed-id test (`/orders/not-an-id`) historically exposed a 404-vs-422 discrepancy between admin and non-admin paths; `it.each` now pins both to 404.
+- The "stranger" cancel test logs in through `/account/login` instead of using `authenticateAs`, because it needs a *different* user than the one who owns the order.
+- `seedOrderFor` always uses quantity 2; tests that assert `totalQuantity` rely on that fixed value.

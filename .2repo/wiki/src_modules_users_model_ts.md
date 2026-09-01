@@ -2,35 +2,36 @@
 
 ## Purpose
 
-Single-file definition of the user record: Mongoose schema, Zod wire validation, token subdocument shape, and document-level methods. It deliberately keeps the password-hash hook, `select: false` guards, token methods, and Zod schema co-located so that the storage contract, the wire contract, and the credential-protection invariant live in one readable unit.
+Defines the Mongoose schema, Zod wire-validation twin, and token subdocument methods for the user record. Kept as a single file deliberately: splitting it would separate the bcrypt pre-save hook from the `select: false` that prevents the password hash from leaking on any read.
 
 ## Key elements
 
-- **`TokenType`** — enum naming the two token kinds the JWT layer recognises (`refresh`, `password`).
-- **`Token`** — interface for the token subdocument; `_id` is the only field safe to expose externally (used as the revocation handle). `lastUsedAt` tracks refresh-token exchanges for idle-vs-active session display.
-- **`UserRecord` / `UserDocument` / `UserMethods` / `UserModel`** — typed layer stack: contract → document (with `password: string`, `tokens: Token[]`) → instance methods (`tokenAdd`, `tokenRemoveAll`) → Mongoose `Model` type.
-- **`zodUserSchema`** — extends the orval-generated `CreateUserBody`; overrides `email`, `username`, `password` with i18n-aware error thunks. Used for request-body validation.
-- **`userSchema`** (Mongoose) — fields: `email` (unique index), `username`, `password` (`select: false`), `imageUrl`, `locale`, `admin`, `active`, `verified`, `tokens` (array, `select: false`), `deletedAt`. `timestamps: true`.
-- **Index declarations** — `users_email` (unique, named explicitly to match existing deployments); a second index for refresh-token lookup (truncated in source).
+- **`TokenType`** — enum (`REFRESH`, `PASSWORD_RESET`) naming the two token types the JWT layer recognises.
+- **`Token`** — interface for a token subdocument (`token`, `type`, `expiration?`, `lastUsedAt?`, plus the Mongoose-assigned `_id`).
+- **`UserRecord` / `UserDocument` / `UserMethods` / `UserModel`** — TypeScript type layer bridging the wire `User` contract (ISO-string dates) to the Mongoose document (real `Date`s), instance methods (`tokenAdd`, `tokenRemoveAll`), and the model type.
+- **`zodUserSchema`** — Zod schema extending the orval-generated `CreateUserBody` with i18n-aware validation messages for `email`, `username`, and `password`.
+- **`userSchema`** — the Mongoose schema: all user fields, `timestamps: true`, indexes, the bcrypt pre-save hook, and atomic token `$push`/`$pull` methods.
+- **Indexes** — `users_email` (unique) and `users_tokens_token`. Explicitly *not* indexed: `deletedAt`.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** (`context.ts`, `index.ts`) — provides the `t()` function; every Zod error message is a *thunk* (`() => t('…')`) so translation resolves at parse time, after `i18next.init()` has run and the request locale is set.
-- **`@infrastructure/persistence/serialize.ts`** — `applySerialization` is imported to convert stored `Date` fields to ISO strings on read, reconciling the document (`Date`) with the wire contract (`string`).
-- **`@modules/account/session/jwt.ts`** — consumes the `TokenType` enum and the `tokens` array to issue/verify JWTs and refresh tokens.
-- **`@modules/account/services/tokens.ts`** — calls `tokenAdd` / `tokenRemoveAll` instance methods.
-- **`@modules/account/services/verification.ts`** — reads/writes the `verified` boolean after the confirm-email flow.
-- **`@modules/account/services/authentication.ts`** — selects `password` via the repository's `*WithCredentials` helpers for login hashing.
-- **`@modules/account/services/profile.ts`** — reads/writes `locale`, `username`, `imageUrl`, etc.
-- **`@modules/account/controllers/post-logout-everywhere.ts`** — triggers `tokenRemoveAll` to revoke all refresh tokens on a user.
-- **Test files** (`jwt.test.ts`, `persisted-locale.test.ts`, `self-service.test.ts`, `service-flows.test.ts`, `service.test.ts`, `session-jwt.test.ts`) — exercise the schema, token methods, and Zod validation in integration and unit contexts.
+- **`@infrastructure/i18n`** (`context.ts`, `index.ts`) — `zodUserSchema` imports `t` to build per-locale error messages.
+- **`@infrastructure/persistence/serialize.ts`** — the model's output is expected to pass through `applySerialization` / `applyUserTransform` before reaching a controller.
+- **`src/modules/account/session/jwt.ts`** — consumes `TokenType` to issue/verify refresh and password-reset JWTs.
+- **`src/modules/account/services/authentication.ts`** — reads the schema's `password` (via `*WithCredentials` helpers) and calls `tokenAdd`/`tokenRemoveAll` on login and logout.
+- **`src/modules/account/services/verification.ts`** — issues and consumes `PASSWORD_RESET`-type tokens stored in `tokens`.
+- **`src/modules/account/services/profile.ts`** — reads/writes the profile fields defined here (`username`, `phone`, `website`, `locale`, `imageUrl`, `thumbnailUrl`).
+- **`src/modules/account/services/tokens.ts`** — manages the `tokens` array (revoke-all, list sessions).
+- **`src/modules/account/controllers/post-logout-everywhere.ts`** — triggers `tokenRemoveAll` across all refresh types.
+- **`scripts/backfill-image-thumbnails.ts`** — writes `thumbnailUrl` and clears `pendingImageKey` on existing rows.
+- **Integration tests** (`jwt.test.ts`, `persisted-locale.test.ts`, `self-service.test.ts`, `service-flows.test.ts`, `service.test.ts`) — exercise the schema, token methods, and serialization end-to-end.
 
 ## Notes
 
-- **`select: false` on `password` and `tokens`** — both are excluded from every read by default. A `.lean()` query still cannot leak them unless it explicitly re-selects. Use the repository's `*WithCredentials` helpers.
-- **Zod error messages must be thunks** (`() => t('…')`), never bare `t('…')`. The module is evaluated at import time, before `i18next.init()`; an eager call returns `undefined` and Zod falls back to English.
-- **Index names are load-bearing** — they are pinned to match existing production databases. Renaming an index causes a Mongo index-options conflict and the app fails to boot.
-- **`email` unique index is a correctness guard** — signup is check-then-insert; only the DB constraint prevents a race. The `E11000` handler in `@infrastructure/http/errors` maps the duplicate to a 409.
-- **`active` and `deletedAt` are independent** — deactivation ≠ soft-delete. Non-admin visibility requires both `active: true` AND `deletedAt: undefined`.
-- **`locale` is not validated against a supported list** — a dropped locale must not make an existing user unreadable; `getFixedT` falls back per-key.
-- **`verified` defaults to `false`** (self-signup path) but existing rows were backfilled to `true` by migration `20260813090000`. No server-side guard reads it; it is informational for the client.
+- **Zod messages are thunks** (`error: () => t(...)`), never eagerly called. This module is evaluated at import time, before `i18next.init()` runs in `app.ts`; an eager call would return `undefined` and Zod would silently fall back to its own English default.
+- **`password` and `tokens` are both `select: false`.** Even a `.lean()` read bypasses `applyUserTransform`, so the schema-level exclusion is the last line of defence. Use the repository's `*WithCredentials` helpers to re-select.
+- **Token writes are atomic** (`$push`/`$pull` evaluated by mongod), never read-modify-write, to avoid lost-session races under concurrent logins.
+- **Index names are load-bearing.** Mongo identifies an index by name as much as by key; renaming one here will make a database holding the old name fail at boot rather than silently no-op.
+- **`active` and `verified` are independent of `deletedAt`.** Deactivation and soft-delete are separate states; admin listings filter on `active`, not `deletedAt`.
+- **`createdAt`/`updatedAt` are redeclared as `Date`** in `UserRecord` because the wire contract carries ISO strings but `timestamps: true` writes real `Date` objects.
+- **`deletedAt` is deliberately not indexed** — nothing searches on it; the one login query that references it also matches on the unique, indexed `email`.

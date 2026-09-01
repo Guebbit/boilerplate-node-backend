@@ -2,24 +2,25 @@
 
 ## Purpose
 
-Central registry that enumerates every contract document this repo produces. It is the single list the CLI (`build-contract-bundles.ts`), the staleness check, and the cross-cutting test iterate over, so adding or removing a bundle is a one-line change here plus its spec file.
+Central registry that enumerates every contract bundle this repo produces. All consumers (the CLI build, the staleness check, and cross-cutting tests) iterate this single list rather than hard-coding bundle names, so adding a new bundle requires one entry here plus its spec file.
 
 ## Key elements
 
-- **`CONTRACT_BUNDLES`** (`readonly ContractBundle[]`): The complete list of eight bundles — `openapiBundle`, `asyncapiBundle`, `asyncapiPublicBundle`, `analyticsEventsBundle`, and the four client-collection bundles (`bruno`, `insomnia`, `mockoon`, `postman`). Declared `as const`.
-- **`findBundle(name)`**: Looks up a single bundle by its CLI handle (the `name` field). Returns `ContractBundle | undefined`.
-- **`export * from './bundle-kinds'`**: Re-exports the `ContractBundle` type and any other kinds so downstream consumers can import from this one path.
+- **`CONTRACT_BUNDLES`** — `readonly ContractBundle[]` containing the seven bundles: `openapiBundle`, `asyncapiBundle`, `asyncapiPublicBundle`, `brunoBundle`, `insomniaBundle`, `mockoonBundle`, `postmanBundle`.
+- **`findBundle(name)`** — lookup helper that returns a bundle by its CLI handle string, or `undefined` if not found.
+- **`export * from './bundle-kinds'`** — re-exports the `ContractBundle` type (and any other kinds) so downstream importers can pull everything from this one module.
 
 ## Relationships
 
-- **`scripts/contracts/bundle-kinds.ts`** — provides the `ContractBundle` type used by the array declaration; re-exported here.
-- **`scripts/contracts/openapi-bundle.ts`**, **`scripts/contracts/asyncapi-bundles.ts`**, **`scripts/contracts/analytics-events-bundle.ts`**, **`scripts/contracts/client-collections-bundle.ts`** — each supplies one or more bundle objects that are collected into `CONTRACT_BUNDLES`.
-- **`scripts/build-contract-bundles.ts`** — the CLI entry point that reads `CONTRACT_BUNDLES` to decide which documents to build and which to validate for staleness.
-- **`tests/cross-cutting/contract-bundles.test.ts`** — iterates `CONTRACT_BUNDLES` to assert invariants across every registered bundle.
+- **`bundle-kinds.ts`** — supplies the `ContractBundle` type used to type the array; this file re-exports its public surface.
+- **`openapi-bundle.ts`** — source of `openapiBundle`.
+- **`asyncapi-bundles.ts`** — source of `asyncapiBundle` and `asyncapiPublicBundle`.
+- **`client-collections-bundle.ts`** — source of the four client-collection bundles (bruno, insomnia, mockoon, postman).
+- **`build-contract-bundles.ts`** — the CLI entry point that iterates `CONTRACT_BUNDLES` to perform the actual build.
+- **`tests/cross-cutting/contract-bundles.test.ts`** — iterates `CONTRACT_BUNDLES` to assert invariants across every bundle uniformly.
 
 ## Notes
 
-- Two bundles publish a *subset* of their source for opposite reasons: `asyncapiPublicBundle` ships the public half of `asyncapi.yaml` to the frontend (the full file is the source of this repo's own types), while `analyticsEventsBundle` publishes only client-facing event names because the backend names are ordinary TS imports.
-- The four client-collection bundles are **GENERATED** (`.gitignore`d); they exist in the list only so the CLI can locate them by name. An uncommitted file cannot be stale, so they skip the staleness guard.
-- The paired frontend repo holds byte-identical copies of the **AUTHORED** bundles and never edits them.
-- Adding a new bundle requires exactly one new entry in `CONTRACT_BUNDLES` plus its spec file; the CLI, staleness check, and cross-cutting test pick it up automatically.
+- The doc comment distinguishes **AUTHORED** bundles (committed, duplicated byte-identically in the paired frontend, never edited there) from **GENERATED** bundles (the four client collections, which are `.gitignore`d). Only the generated ones can go stale in a git sense; the authored ones are guarded by the shared `scripts/spec-identity.ts` file.
+- `asyncapiBundle` publishes the full channel set (this repo's own types derive from it), while `asyncapiPublicBundle` is the subset the frontend receives.
+- The `as const` assertion on the array literal is paired with the `readonly` type, giving callers a narrowed tuple shape when they need one.

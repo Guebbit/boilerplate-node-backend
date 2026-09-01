@@ -2,20 +2,19 @@
 
 ## Purpose
 
-Exports a fixed set of **negative probes** (requests the API must *reject*) for the orders module. Because a contract declares valid calls and their expected answers, there is no place in it for "this URL should 403"; this file fills that gap and is appended to every client collection after the contract-derived requests.
+Defines a small set of authorization-scoping probes for the orders module — requests whose correct behavior (allow vs. refuse) depends on the caller's role and the order's deletion state, details the OpenAPI contract alone cannot express. The probes are consumed by the runnable-collections tooling to augment generated client collections.
 
 ## Key elements
 
-- **`probes: Probe[]`** – the sole export. Each entry has a `name`, a `why` explanation, an HTTP `method`/`path` pair, and an `auth` mode. Paths reference dataset values via `{{seedToken}}` placeholders (e.g. `{{seedDeletedOrderId}}`, `{{seedOrderId}}`) rather than literal IDs.
-- **Probe 1 – soft-deleted order ownership scoping** – `GET /orders/{{seedDeletedOrderId}}`. Distinguishes ownership-only scoping (would return it) from correct role+ownership scoping (must refuse). The non-admin account owns the one soft-deleted order in the seed data.
-- **Probe 2 – cross-tenant read** – `GET /orders/{{seedOrderId}}`. The same URL returns 200 for admin, 403/404 for non-admin; encodes the entire role-scoping contract in one request.
+- **`probes: Probe[]`** — the sole export. An array of two `Probe` objects (type from `@guebbit/openapi-runnable-collections`):
+  - *Soft-deleted order, owner*: `GET /orders/{{seedDeletedOrderId}}`. Verifies that ownership-only scoping is insufficient; the non-admin owner must be refused while an admin succeeds.
+  - *Cross-tenant order*: `GET /orders/{{seedOrderId}}`. The same URL must refuse a non-admin and allow the seeded admin, demonstrating role-based scoping in a single endpoint.
 
 ## Relationships
 
-- **`scripts/contracts/client-collections-bundle.ts`** – declares the set of valid `{{seedToken}}` names. This file's paths must only reference tokens declared there; if a probe invents an unknown token the collection generator fails and prints the list of known ones. The probes are also emitted *after* the contract-derived requests in the final collection.
+- **`scripts/contracts/client-collections-bundle.ts`** — The module doc comment points to this file as the canonical reference for: the definition and purpose of a probe, the emission location for these probes, and the valid `{{seedToken}}` values (e.g. `{{seedDeletedOrderId}}`, `{{seedOrderId}}`) that a probe path may use. This file is the producer; that file is the consumer/spec.
 
 ## Notes
 
-- Tokens are never pasted as literal values. If you add a probe, reference an existing token from the bundle; do not hard-code an ID.
-- The `why` strings double as test-case documentation for a human reviewer—they explain *which* account must execute the request and *what* response is correct, not just what the request is.
-- Probe 1 has an implicit ordering dependency: the non-admin must already be logged in (see the account probes earlier in the collection). There is no programmatic ordering here; it is a collection-level convention.
+- The `why` strings are instructions for the *human* running the collection (e.g. "log in as the non-admin first"). They encode expected outcomes, not assertions — the tooling does not parse them.
+- Both probes use `auth: 'bearer'`; the differentiation between admin and non-admin is driven entirely by which token the collection holds at runtime, not by the probe definition itself.

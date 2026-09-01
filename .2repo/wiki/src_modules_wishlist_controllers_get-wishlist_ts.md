@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Express controller for `GET /wishlist`. It resolves the authenticated user's saved product IDs (not full product objects) and returns them as a JSON success response. The client is expected to join these IDs against its own product store.
+Thin HTTP adapter that exposes the authenticated user's wishlist as a `GET /wishlist` endpoint. It extracts the user ID from the auth context, delegates to the wishlist service, and formats the result into a standard HTTP response. No business logic lives here.
 
 ## Key elements
 
-- **`getWishlist(request, response)`** — sole export; the route handler. Extracts the caller's user ID via `authContextOf`, calls `wishlistService.wishlistGet(id)`, sends the result with `successResponse`, and funnels any rejection through `catchAs`.
+- **`getWishlist(request, response)`** — The sole export. Reads the user ID via `authContextOf(request).id`, calls `wishlistService.wishlistGet(id)`, and on resolution sends the view through `successResponse`. Failures are forwarded to `catchAs(response, 'getWishlist')`.
 
 ## Relationships
 
-- **`src/modules/wishlist/routes.ts`** — imports `getWishlist` and wires it to the `GET /wishlist` route.
-- **`src/modules/wishlist/service.ts`** — provides `wishlistService`, whose `wishlistGet` method performs the actual lookup.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse`, the shared helper for shaping the HTTP reply.
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs`, the shared error-to-response mapper.
-- **`src/infrastructure/http/request.ts`** — supplies `authContextOf`, which extracts the authenticated user ID from the request.
+- **`src/modules/wishlist/service.ts`** — Provides `wishlistService.wishlistGet`, the single business-logic call this controller makes.
+- **`src/infrastructure/http/request.ts`** — Supplies `authContextOf`, used to pull the authenticated user's ID from the incoming request.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, which serializes the service view into the HTTP body.
+- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs`, the shared error-to-HTTP mapping helper.
+- **`src/modules/wishlist/routes.ts`** — Upstream consumer that binds `getWishlist` to the `GET /wishlist` route.
 
 ## Notes
 
-- The response body is an ID list only (mirrors the cart contract); no product details are returned server-side.
-- Uses promise-chain (`.then/.catch`) style rather than `async/await`, consistent with the surrounding controller layer.
+- Returns **product IDs only** (same shape as the cart); the client is expected to join them against its local product store. Do not add product payloads here without updating the contract.
+- Error handling is fully delegated to `catchAs`; there is no try/catch or status-code logic in this file.

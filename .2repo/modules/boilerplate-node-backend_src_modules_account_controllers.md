@@ -6,78 +6,77 @@ tags:
 type: module
 module: src/modules/account/controllers/
 files: 20
-updated: 2026-08-28T11:58:13.191057+00:00
+updated: 2026-08-31T20:52:32.358079+00:00
 ---
 
 # src/modules/account/controllers/
 
 ## Purpose
 
-HTTP controller layer for the account module. Every file here is a thin Express route handler that parses/validates incoming requests, delegates the actual business logic to the account service, and shapes the HTTP response (status code, headers, i18n messages). No persistence, token minting, or email dispatch happens at this level.
+The HTTP controller layer for the Account module. Each file is a thin Express handler that extracts request context (auth, body, params, cookies), delegates the actual business logic to the account service, and shapes the result into an HTTP response. No domain rules, token minting, or persistence logic lives here.
 
 ## Key parts
 
-- **Auth & session lifecycle** — `post-login.ts`, `post-logout.ts`, `post-logout-everywhere.ts`, `get-refresh-token.ts`, `get-sessions.ts`, `delete-session.ts`, `delete-expired-tokens.ts`. Covers the full login → refresh → single/multi-device logout → session listing → stale-token purge flow.
-- **Account CRUD** — `get-account.ts`, `put-account.ts`, `delete-account-request.ts`, `delete-account-confirm.ts`. Profile read/edit and the two-step (token-mint → token-consume) account deletion.
-- **Password & email verification** — `post-password-change.ts`, `post-reset-request.ts`, `post-reset-confirm.ts`, `post-verify-request.ts`, `post-verify-confirm.ts`. Covers password change, password-reset (request + confirm), and email verification (request + confirm). All "confirm" variants are public and use a one-time token as the sole credential.
-- **Signup** — `post-signup.ts`. Registration with avatar upload handling, Prometheus counter, and post-201 verification email.
-- **Address book** — `get-addresses.ts`, `write-addresses.ts` (add + edit), `delete-address.ts`. Single round-trip read/mutation for the caller's address list.
+- **Authentication & sessions** — `post-login.ts`, `post-logout.ts`, `post-logout-everywhere.ts`, `get-refresh-token.ts`, `get-sessions.ts`, `delete-session.ts`. Cover the full session lifecycle: credential login, cookie-based refresh, single/global logout, and session introspection/revocation.
+- **Account lifecycle** — `post-signup.ts`, `post-verify-request.ts`, `post-verify-confirm.ts`, `delete-account-request.ts`, `delete-account-confirm.ts`. The signup → verify → (eventual) delete flow, including one-time-token spend patterns and the two-step delete confirmation.
+- **Password management** — `post-password-change.ts`, `post-reset-request.ts`, `post-reset-confirm.ts`. Self-service change (current-password proof) and the email-token reset flow, both enforcing identical-response semantics to prevent user enumeration.
+- **Profile & addresses** — `get-account.ts`, `put-account.ts`, `get-addresses.ts`, `write-addresses.ts`, `delete-address.ts`. Read/update the caller's own profile and manage the shipping-address book (add, edit, list, remove).
+- **Token housekeeping** — `delete-expired-tokens.ts`. Admin-triggered sweep of expired tokens; records a success metric and returns a flat response.
 
 ## How it connects
 
-- **`src/modules/account/`** — Parent module. Controllers import and call `accountService` (and related service helpers) for all mutations, token minting, and email dispatch. The service layer owns the database writes; controllers never touch the DB directly.
-- **`src/infrastructure/http/`** — Supplies shared HTTP utilities (response envelopes, cookie helpers, i18n middleware, schema parsers) that most controllers use for request validation and response shaping.
-- **`src/infrastructure/`** — Broader infrastructure (Prometheus metrics, audit/analytics emitters, mail transport) consumed by the controllers for observability side-effects (login counters, reset events).
-- **`src/modules/users/`** — The admin-facing user-management routes live there. `put-account.ts` exists specifically because those `/users` write endpoints return 403 to non-admin callers; it is the only self-service profile-edit path.
-- **`src/modules/account/tests/`** — Co-located tests that exercise these handlers, typically mocking the account service and infrastructure boundaries.
+- **`src/modules/account/` (parent)** — Every controller delegates its core operation to a method on `accountService` (e.g. `accountService.refreshAccessToken`, `accountService.signup`). The service owns all token semantics, business rules, and persistence; controllers only translate HTTP ↔ service calls.
+- **`src/infrastructure/adapters/`** — Side-effects that outlive a single request (sending verification/reset emails, recording metrics) are emitted from these controllers via infrastructure adapters, keeping the service layer transport-agnostic.
+- **`src/modules/users/`** — `put-account.ts` exists as the self-service profile-edit path precisely because the `/users` write routes in the Users module are admin-gated; the two modules cover different authorization contexts for the same data.
+- **`src/modules/account/tests/`** — Unit/integration tests that exercise these controllers, typically mocking `accountService` to assert correct request parsing, delegation, and response shaping.
 
 ## Where to start
 
-1. **`post-login.ts`** — It is the most self-contained happy-path handler: one service call, cookie setting, metric/audit emission. Reading it shows the standard controller pattern (parse → delegate → respond) that every other file follows.
-2. **`delete-account-request.ts` / `delete-account-confirm.ts`** (together) — They illustrate the two-step token flow that also underpins password-reset and email-verification, and make the "controller mints nothing, service owns tokens" rule concrete.
+1. **`post-login.ts`** — It's the most involved controller (cookie minting, metrics, audit, analytics) and shows the pattern every other file follows: extract → delegate → shape response → emit cross-cutting concerns.
+2. **`delete-account-confirm.ts`** — A good second read because it demonstrates the one-time-token "spend atomically" pattern that also appears in `post-verify-confirm` and `post-reset-confirm`, making the shared token-validation idiom immediately clear.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_account_controllers["src/modules/account/controllers/"]
     m_src["src/<br/>22 files"]
-    m_src_infrastructure["src/infrastructure/<br/>39 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>14 files"]
+    m_src_infrastructure["src/infrastructure/<br/>43 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>15 files"]
     m_src_modules_account["src/modules/account/<br/>23 files"]
     m_src_modules_account_tests["src/modules/account/tests/<br/>19 files"]
     m_src_modules_users["src/modules/users/<br/>30 files"]
     m_src_modules_account_controllers --- m_src
     m_src_modules_account_controllers --- m_src_infrastructure
-    m_src_modules_account_controllers --- m_src_infrastructure_http
+    m_src_modules_account_controllers --- m_src_infrastructure_adapters
     m_src_modules_account_controllers --- m_src_modules_account
     m_src_modules_account_controllers --- m_src_modules_account_tests
     m_src_modules_account_controllers --- m_src_modules_users
     style m_src_modules_account_controllers stroke-width:3px
 ```
 
-[[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
-- `src/modules/account/controllers/delete-account-confirm.ts` — Handler for the `DELETE /account/delete-confirm` endpoint. Validates a one-time account-deletion token, hard-deletes the account via the service layer, destroys session cookies, and returns an i18n-translated success or refusal message.
-- `src/modules/account/controllers/delete-account-request.ts` — Express handler for `DELETE /account`. Accepts an authenticated user's account-deletion request and delegates to `accountService.requestAccountDeletion`, which mints a one-time token and sends a confirmation email. The controller itself performs no persistence and never exposes the token.
-- `src/modules/account/controllers/delete-address.ts` — Controller handler for `DELETE /account/addresses/:addressId`. Removes a single address entry from the authenticated user's address book and returns the updated book so the caller can see the current state (including any default-promotion) in one round-trip.
-- `src/modules/account/controllers/delete-expired-tokens.ts` — Express controller handler for `DELETE /account/tokens/expired`. Performs an admin-only bulk purge of expired tokens (primarily stale refresh tokens) and returns the shared `Success` response. Exists so a scheduler or operator can invoke periodic cleanup of the token store.
-- `src/modules/account/controllers/delete-session.ts` — Controller for `DELETE /account/sessions/:sessionId` — revokes a single refresh-token session belonging to the authenticated caller ("log out that device"). It exists to let a user terminate any of their own sessions from the account management UI without affecting the current cookie-based session.
-- `src/modules/account/controllers/get-account.ts` — Controller for `GET /account`. Returns the authenticated user's full profile by querying the database, rather than echoing the JWT claims. This exists because the token only carries `id`/`email`/`username`/`admin`, while the API contract's `User` type also requires `verified` and `locale` fields that the frontend's verify-banner and saved-language features depend on.
-- `src/modules/account/controllers/get-addresses.ts` — GET controller for `/account/addresses`. Returns the authenticated caller's full address book in a single response. It also serves as the canonical post-mutation view shared by the write and delete address controllers, so clients never need a follow-up read after a change.
-- `src/modules/account/controllers/get-refresh-token.ts` — Express route handler for `GET /account/refresh`. It reads a refresh token from the `jwt` HttpOnly cookie, optionally triggers a collection-wide token-cleanup sweep, then exchanges the token for a new short-lived access token via `accountService.refreshAccessToken`. It exists so authenticated clients can rotate their access token without a full re-login.
-- `src/modules/account/controllers/get-sessions.ts` — Request handler for `GET /account/sessions`. It extracts the authenticated user's ID and the current `jwt` cookie, delegates to the account service to list live refresh tokens as sessions, and shapes the HTTP response. It exists as the thin controller layer that translates HTTP I/O into a service call.
-- `src/modules/account/controllers/post-login.ts` — Controller handler for `POST /account/login`. Authenticates the user's credentials, issues a long-lived refresh cookie and a short-lived access token, and records login observability (metric, audit log, analytics event) for both success and failure paths.
-- `src/modules/account/controllers/post-logout-everywhere.ts` — Express controller handler for `POST /account/logout-all`. It performs a full multi-device logout: removes every refresh token for the authenticated user from the database, then clears the session and refresh cookies on the response.
-- `src/modules/account/controllers/post-logout.ts` — Handler for `POST /account/logout`. Destroys the **current** session only (identified by its refresh cookie) while leaving sessions on other devices untouched. Treats "not logged in" as success rather than an error, so it always returns 200.
-- `src/modules/account/controllers/post-password-change.ts` — Controller for `POST /account/password`. Changes the authenticated user's password by requiring the current password as proof of credential possession — no email token or round-trip. Delegates the actual mutation to the account service and reports the outcome via i18n'd HTTP responses and a Prometheus counter.
-- `src/modules/account/controllers/post-reset-confirm.ts` — Controller for `POST /account/reset-confirm`. Validates a one-time password-reset token (delivered via email link), verifies the new-password pair, atomically consumes the token, updates the account's password, and destroys all active session cookies so the user must re-authenticate with the new credentials.
-- `src/modules/account/controllers/post-reset-request.ts` — Handler for `POST /account/reset-request`. Accepts an email address, delegates token minting and mail publication to the account service, and returns a single indistinguishable 200 response regardless of whether the account exists — the explicit anti-enumeration design of this endpoint.
-- `src/modules/account/controllers/post-signup.ts` — The sole controller for `POST /account/signup`. It accepts a JSON or multipart (file-upload) signup body, delegates registration to `accountService.signup`, handles avatar image cleanup on failure, emits a Prometheus counter, and fires a verification email after a successful 201.
-- `src/modules/account/controllers/post-verify-confirm.ts` — Handler for `POST /account/verify-confirm`. It validates a one-time email-verification token from the request body, atomically spends it, and marks the account's email as verified. The endpoint is intentionally public (no session auth) because the token in the body *is* the credential — the visitor following the emailed link is not logged in.
-- `src/modules/account/controllers/post-verify-request.ts` — Handler for `POST /account/verify-request`. Re-sends the email-verification link to the already-authenticated user (use case: the original signup email never arrived). Stateless with respect to *whether* verification is allowed — that decision is delegated entirely to the account service.
-- `src/modules/account/controllers/put-account.ts` — Handler for `PUT /account` — the self-service endpoint that lets an authenticated user edit their own profile (email, username, locale, avatar image). It exists because admin-only `/users` write routes return 403 to regular users, so this is the sole path for non-admin profile updates.
-- `src/modules/account/controllers/write-addresses.ts` — Holds the two address-book mutation handlers — add and edit — in one file because they share an identical three-step shape (schema-parse body → call one service method → branch on `result.success`). The read and delete handlers live elsewhere because they skip the body-parsing step and therefore don't share this shape.
+- `src/modules/account/controllers/delete-account-confirm.ts` — Handler for `DELETE /account/delete-confirm`. Validates a one-time account-deletion token, spends it atomically, then delegates the hard-delete to the account service. It is the final step in the "confirm deletion" flow (the earlier step only issues the token/link).
+- `src/modules/account/controllers/delete-account-request.ts` — Controller handler for `DELETE /account`. Accepts an authenticated user's deletion request, looks up the user by email, and delegates to the account service to mint a one-time confirmation token and send it via email. The token never passes through this layer.
+- `src/modules/account/controllers/delete-address.ts` — Thin HTTP adapter for `DELETE /account/addresses/:addressId`. It extracts auth context and the `addressId` param, delegates to `accountService.addressRemove`, and formats the result into an Express response. It exists so the route layer stays declarative while request parsing and response shaping live here.
+- `src/modules/account/controllers/delete-expired-tokens.ts` — Thin HTTP adapter for `DELETE /account/tokens/expired`. Wires the Express route to `accountService.adminTokenCleanup`, records a success metric, and formats the response — no business logic lives here.
+- `src/modules/account/controllers/delete-session.ts` — Thin HTTP adapter for `DELETE /account/sessions/:sessionId`. It extracts the authenticated caller's id and the target session id from the request, delegates the actual revocation to `accountService.sessionRevoke`, and maps the result to a `200` or `404` HTTP response.
+- `src/modules/account/controllers/get-account.ts` — Thin HTTP adapter for the `GET /account` endpoint. It validates the auth context, delegates the actual data fetch to `accountService.getOwnProfile`, and shapes the result into a standard success/reject response. It exists so the route layer stays declarative while the service layer stays transport-agnostic.
+- `src/modules/account/controllers/get-addresses.ts` — Thin HTTP adapter for `GET /account/addresses`. It extracts the authenticated user's ID from the request and delegates to `accountService.addressesGet`, returning the caller's full address book. It exists as the read endpoint that write/delete controllers reuse as their "result" shape so clients never need a follow-up read.
+- `src/modules/account/controllers/get-refresh-token.ts` — Express route handler for `GET /account/refresh`. Reads the refresh token from the `jwt` `HttpOnly` cookie, conditionally triggers a collection-wide expired-token sweep, then delegates to `accountService.refreshAccessToken` to mint a new short-lived access token. Cookie-only by design so the refresh token never appears in URLs, proxy logs, or `Referer` headers.
+- `src/modules/account/controllers/get-sessions.ts` — Thin Express controller for `GET /account/sessions`. It extracts the authenticated user ID and the current refresh-token cookie, then delegates to `accountService.sessionsList` to return the caller's live refresh tokens as a session list. All token semantics (which types count as a session, hiding raw token values, marking the current session) live in the service layer.
+- `src/modules/account/controllers/post-login.ts` — The `POST /account/login` HTTP controller. It authenticates a user's credentials via the account service, then mints the full session (refresh token → cookies → short-lived access token). All observability (metrics, audit, analytics) is emitted here rather than in the service layer, because the success signal must fire only after the tokens and cookies actually exist.
+- `src/modules/account/controllers/post-logout-everywhere.ts` — Thin HTTP adapter for `POST /account/logout-all`. It delegates the actual token invalidation to `accountService.tokenRemoveAll`, then clears the session cookies on the response. No business logic lives here.
+- `src/modules/account/controllers/post-logout.ts` — HTTP controller for `POST /account/logout`. It acts as a thin adapter that reads the refresh token from the request cookie, delegates to `accountService.logoutCurrentSession`, clears the session cookies, and returns a localized success message. It exists to keep the route layer free of business logic while providing a single, predictable logout endpoint.
+- `src/modules/account/controllers/post-password-change.ts` — Thin HTTP adapter for `POST /account/password`. Validates the request body, delegates to the account service's `passwordChangeWithCurrent` method (which requires the current password as proof), and maps the service result onto a standardized HTTP response. Exists so the route layer stays declarative while business logic lives in the service.
+- `src/modules/account/controllers/post-reset-confirm.ts` — Handles `POST /account/reset-confirm`: validates a one-time password-reset token (delivered via email link), verifies the new password pair, atomically spends the token, sets the new password, and invalidates all active sessions.
+- `src/modules/account/controllers/post-reset-request.ts` — Thin HTTP adapter for `POST /account/reset-request`. It validates the request body, delegates to `accountService.requestPasswordReset`, and returns an identical success response regardless of whether the email corresponds to a real account — the core design goal is preventing user enumeration.
+- `src/modules/account/controllers/post-signup.ts` — Thin HTTP adapter for `POST /account/signup`. It extracts form fields and the uploaded-image payload from the Express request, delegates to `accountService.signup`, and owns the cross-cutting concerns that must run on **both** the success and failure paths: uploaded-image cleanup, metrics increment, and the fire-and-forget verification email.
+- `src/modules/account/controllers/post-verify-confirm.ts` — Handles `POST /account/verify-confirm`: validates a one-time email-verification token in the request body, atomically spends it, and marks the account's email as verified. It is deliberately public (no auth middleware) because the token itself is the credential, mirroring the pattern used by `reset-confirm` and `delete-confirm`.
+- `src/modules/account/controllers/post-verify-request.ts` — Thin HTTP adapter for `POST /account/verify-request`. It re-sends the email verification link for a user whose original signup email never arrived. All business logic (including which account states are eligible for re-verification) lives in the service layer; this file only extracts auth context, delegates, and shapes the HTTP response.
+- `src/modules/account/controllers/put-account.ts` — HTTP handler for `PUT /account`: lets an authenticated user update their own profile (email, username, locale, image, phone, website). It is a thin adapter over `accountService.updateProfile`, plus two side-effects that accompany a self-service edit — uploaded-image cleanup on failure and a re-verification email when the address changes. It exists as a separate self-service path because the `/users` write routes are admin-gated.
+- `src/modules/account/controllers/write-addresses.ts` — Handles the two write operations for shipping addresses (add and edit) in a single file because they share an identical three-step shape: parse body → call the account service → branch on `result.success`. Read and delete handlers live in separate files because they do not parse a request body.
 
 ---
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

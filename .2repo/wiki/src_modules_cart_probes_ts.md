@@ -1,22 +1,20 @@
 # src/modules/cart/probes.ts
 
 ## Purpose
-
-Defines API rejection probes for the cart module — requests that prove the API refuses invalid input (empty checkout, dangling product IDs, invisible catalogue items, zero quantities). These exist because an OpenAPI contract declares valid calls and their responses, leaving no place for "this request must fail" cases. The probes are emitted into every generated client collection after the contract-derived requests.
+Provides the cart module's probe collection—concrete API requests that exercise failure paths and boundary conditions the OpenAPI contract cannot express on its own (e.g., "send this body, expect this refusal"). It exists so the runnable-collections runner has cart-specific negative-path scenarios to execute.
 
 ## Key elements
-
-- **`probes: Probe[]`** (exported) — Array of four probe objects. Each carries `name`, `why` (human-readable rationale), `method`, `path`, `auth`, and optionally `body`.
-- **`Probe` type** — Imported from `@guebbit/openapi-runnable-collections`; the structural contract for each entry.
-- **Seed tokens** (`{{seedProductId}}`, `{{seedInactiveProductId}}`) — Placeholder references to dataset values, substituted at generation time.
+- **`probes: Probe[]`** — the sole export. An array of four probe objects:
+  - *Empty-cart checkout* (`POST /cart/checkout`): triggers the `checkout_failed` event.
+  - *Non-existent product* (`POST /cart` with a null-like `productId`): verifies the 404 guard.
+  - *Inactive product via PUT* (`PUT /cart/{{seedInactiveProductId}}`): confirms `cartItemSetById` enforces the catalogue gate.
+  - *Zero quantity* (`POST /cart` with `quantity: 0`): proves the schema minimum is enforced rather than silently removing the line.
+- All probes use `bearer` auth; two embed `{{seedToken}}` placeholders (`seedInactiveProductId`, `seedProductId`) resolved at emission time.
 
 ## Relationships
-
-- **`scripts/contracts/client-collections-bundle.ts`** — Declares the set of valid seed tokens. Probes reference tokens by name; if a probe uses a token not declared there, the generator fails and prints the list of known tokens. The bundle is also where the contract-derived requests are defined, into which these probes are appended.
+- **`scripts/contracts/client-collections-bundle.ts`** — Consumes this `probes` array. That file owns the surrounding machinery: the `Probe` semantics, the emission pipeline, and the valid `{{seedToken}}` vocabulary. This file is purely data; the bundle file is the consumer and context-provider.
 
 ## Notes
-
-- Seed tokens are **never** hardcoded values. Pasting a literal ID defeats the purpose (the probe would drift from the dataset) and breaks the generator's validation.
-- The `why` field is intentional documentation, not a comment — it explains *what invariant* the probe guards, not just what HTTP status to expect.
-- The probes assume the seeded non-admin user starts with an empty cart (relevant to the checkout probe's precondition).
-- `PUT /cart/{productId}` is called out explicitly because a missing catalogue gate there would be invisible (a line naming an unlisted product renders as nothing rather than an error).
+- Probes deliberately target *failure* paths; they are not happy-path examples.
+- `{{seedToken}}` values are opaque here—refer to the bundle file for which tokens exist and what they seed.
+- The inactive-product probe exists because `PUT /cart/{id}` and `POST /cart` are two separate routes that must each enforce the catalogue check; the probe pins the PUT variant specifically.

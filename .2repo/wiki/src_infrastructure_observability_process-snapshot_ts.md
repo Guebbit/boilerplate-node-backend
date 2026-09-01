@@ -2,24 +2,25 @@
 
 ## Purpose
 
-Provides a single atomic reading of process memory and uptime so that every observability payload is built from the same instant. Without it, three independent calls to `process.memoryUsage()` / `process.uptime()` could disagree on rounding or timing across the SSE stream and the two REST endpoints.
+Centralizes a single atomic reading of `process.memoryUsage()` and `process.uptime()` so that the three observability payloads (SSE stream and two REST endpoints) all report numbers taken at the same instant. Without this shared call site, separate reads taken microseconds apart would disagree for no functional reason.
 
 ## Key elements
 
-- **`ProcessMemorySnapshot`** (interface) — four byte-valued fields: `rss`, `heapUsed`, `heapTotal`, `external`. Deliberately excludes `arrayBuffers` and any future Node additions.
-- **`ProcessSnapshot`** (interface) — `{ uptimeSeconds: number; memory: ProcessMemorySnapshot }`. `uptimeSeconds` is a floored integer.
-- **`processSnapshot()`** (exported const) — calls `process.memoryUsage()` and `process.uptime()` back-to-back, maps the four memory fields individually (no spread), floors the uptime, and returns a `ProcessSnapshot`.
+- **`ProcessMemorySnapshot`** (interface) — Four byte-unit fields: `rss`, `heapUsed`, `heapTotal`, `external`. Intentionally narrower than `process.memoryUsage()`'s return type.
+- **`ProcessSnapshot`** (interface) — Wraps `ProcessMemorySnapshot` plus `uptimeSeconds` (integer, floored).
+- **`processSnapshot()`** (const arrow function, exported) — Calls `process.memoryUsage()` and `process.uptime()` back-to-back and returns a `ProcessSnapshot`. Explicitly maps four memory fields rather than spreading, so `arrayBuffers` (and any future Node fields) are excluded from the public shape.
 
 ## Relationships
 
-- **`src/infrastructure/observability/stream.ts`** — consumes `processSnapshot()` to build each SSE frame.
-- **`src/modules/observability/controllers/get-observability-health.ts`** — consumes `processSnapshot()` for the health endpoint payload.
-- **`src/modules/observability/controllers/get-observability-metrics-overview.ts`** — consumes `processSnapshot()` for the metrics-overview endpoint payload.
-- **`src/infrastructure/observability/metrics-http.ts`** — explicitly does **not** use this module. It reads `process.uptime()` inside a prom-client `Gauge.collect()` at scrape time, a different semantic contract. A cross-cutting test (`tests/cross-cutting/process-snapshot.test.ts`) permits that one direct call and forbids all others in `src/`.
+- **`stream.ts`** — SSE stream endpoint; calls `processSnapshot()` to emit the per-tick memory/uptime payload.
+- **`get-observability-health.ts`** — REST health endpoint; calls `processSnapshot()` for its response body.
+- **`get-observability-metrics-overview.ts`** — REST metrics-overview endpoint; calls `processSnapshot()` for its response body.
+
+All three consume the same exported function; none of them call `process.memoryUsage()` or `process.uptime()` directly.
 
 ## Notes
 
-- **Bytes, not megabytes.** The snapshot reports raw bytes. Converting to MB (or any other unit) is a presentation-layer concern; doing it here would lose precision that dashboard differencing depends on.
-- **Floor, not round.** `uptimeSeconds` uses `Math.floor`. The doc comment states this so that endpoints polled simultaneously never report a one-second discrepancy from a rounding mismatch.
-- **No spread of `memoryUsage()`.** Fields are copied one-by-one so that `arrayBuffers` (present in Node ≥16) and any future additions never leak into the wire contract.
-- **Atomicity guarantee.** Both underlying calls execute consecutively inside `processSnapshot()`, so every number in one snapshot describes the same instant — a property three separate call sites cannot offer.
+- **Deliberate field picking over spread.** `process.memoryUsage()` also returns `arrayBuffers`. The function maps fields individually so the public contract stays stable if Node adds further properties.
+- **Uptime is floored to whole seconds** (`Math.floor`) so the value is always an integer, matching the `integer` contract type in all three payloads.
+- **`metrics-http.ts` is the one consumer that does NOT use this file.** Its prom-client `Gauge` must read `process.uptime()` at Prometheus scrape time, so it calls the process API directly.
+- Units are bytes throughout; no conversion to KiB/MiB happens here.

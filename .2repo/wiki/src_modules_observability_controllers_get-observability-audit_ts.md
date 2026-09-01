@@ -2,25 +2,25 @@
 
 ## Purpose
 
-HTTP handler for `GET /observability/audit`. Accepts a paginated, filterable query string (actor, action, outcome, since) and delegates to the audit-log service to return one page of matching audit events.
+Controller handler for `GET /observability/audit`. It provides a filtered, paged read over the `audit-logs` collection — the single point where the observability module reaches outside its own process snapshot, and the sole reason it depends on `audit-logs`.
 
 ## Key elements
 
-- **`getObservabilityAuditLogs(request, response)`** — sole export. Reads the query surface via `readInput` (surface `'list'`, ids: `actor`, `action`, `outcome`, `since`), validates and normalizes pagination with `parseBody(paginationSchema, …)`, validates the `since` date, coerces `outcome` to the `'success' | 'failure'` enum (or `undefined`), then calls `auditLogService.search(…)` and streams the result through `successResponse` / `catchAs`.
+- **`getObservabilityAuditLogs(request, response)`** — exported handler. Reads query-string input (`actor`, `action`, `outcome`, `since`) via `readInput` with `surface: 'list'`, parses pagination via `parseBody(paginationSchema, …)`, validates `since` as a `Date` (422 on `NaN`), whitelists `outcome` to `'success' | 'failure'` (anything else → no filter), then delegates to `auditLogService.search(…)`. Errors are funnelled through `catchAs(response, 'getObservabilityAuditLogs')`.
 
 ## Relationships
 
-- **`@infrastructure/http/request` → `readInput`** — normalizes the raw Express query string into typed, scalar input values.
-- **`@infrastructure/http/controller` → `parseBody`, `catchAs`** — pagination validation (returns 422 early) and async error capture for the service call.
-- **`@infrastructure/http/response` → `successResponse`, `rejectResponse`** — all HTTP responses in this handler go through these helpers.
-- **`@infrastructure/http/schemas` → `paginationSchema`** — defines the `page` / `pageSize` shape and bounds.
-- **`@infrastructure/i18n` → `t`** — localizes the `observability.audit-since-invalid` error message.
-- **`@modules/audit-logs` → `auditLogService`** — the domain service whose `.search()` method performs the actual Mongo query.
-- **`src/modules/observability/routes.ts`** — registers this handler on the `/observability/audit` GET route.
+- **`@infrastructure/http/controller`** (`catchAs`, `parseBody`) — shared HTTP utilities for error handling and schema-parsed input extraction.
+- **`@infrastructure/http/request`** (`readInput`) — canonical input-reading boundary; this handler never touches `request.query` directly.
+- **`@infrastructure/http/response`** (`successResponse`, `rejectResponse`) — uniform JSON envelope for 200 and 422 responses.
+- **`@infrastructure/http/schemas`** (`paginationSchema`) — defines the shape/bounds of `page` / `pageSize`.
+- **`@infrastructure/i18n`** (`t`) — localises the `observability.audit-since-invalid` error message.
+- **`@modules/audit-logs`** (`auditLogService`) — the data-access service whose `.search()` method performs the actual Mongo query.
+- **`src/modules/observability/routes.ts`** — registers this handler on the `GET /observability/audit` route.
 
 ## Notes
 
-- `ids` in `readInput` collapses repeated query params (e.g. `?since=a&since=b`) to the first value, preventing `new Date([…])` from producing `NaN` silently.
-- `outcome` is whitelisted to `'success'` / `'failure'`; any other value is coerced to `undefined` (no filter) rather than passed to the repository, so an unrecognised value never degenerates into "match everything."
-- Invalid pagination or an unparseable `since` date both yield a **422** (broken request), not a silent rewrite.
-- The handler is intentionally thin: it owns input normalization, validation, and response shape, but no domain logic beyond the `outcome` enum guard.
+- `ids: ['actor', 'action', 'outcome', 'since']` in the `readInput` call collapses repeated query params (e.g. `?since=1&since=2`) to the **first** value, preventing `new Date(array)` from producing `NaN` via an unexpected array.
+- `outcome` is explicitly narrowed to the two-enum whitelist before hitting Mongo. An unrecognised value becomes `undefined` (no filter) rather than being passed verbatim, which would otherwise match nothing *or* — depending on Mongo operator misuse — match everything.
+- Pagination failures return **422** (broken request), not a silently-clamped page. `normalizePagination` (inside `parseBody`) still handles the absent-page default.
+- The `ids` declaration makes these four params arrive as plain strings even though `readInput`'s return type is `unknown`; the handler relies on that contract rather than runtime checks.

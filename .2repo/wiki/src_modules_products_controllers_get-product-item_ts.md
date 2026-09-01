@@ -2,26 +2,23 @@
 
 ## Purpose
 
-Express handler for `GET /products/:id`. Resolves a single product by path parameter, applying role-based visibility so that only admins can view inactive or deleted items. Delegates all data access to `productService` and normalises success / error responses.
+Thin HTTP handler for `GET /products/:id`. Wires the shared `createItemController` factory to `productService.getByIdViewed`, passing a caller-scoped visibility filter so that non-admin callers only ever see active products.
 
 ## Key elements
 
-- **`getProductItem(request, response)`** (exported) – The sole export. Reads `request.params.id`, calls `productService.getByIdViewed(id, callerScope, callerContext)`, then returns `200` with the product or `404` with a localised "not found" message.
-- **`productService.callerScope(request.authContext)`** – Derives the visibility scope (active-only vs. all) from the authenticated user's role.
-- **`callerContextOf(request)`** (from `@infrastructure/http/request`) – Extracts caller metadata forwarded to the service layer.
-- **Error path** – Mongoose `CastError` on `ObjectId` kind → `404` (not `400`); any other error → `rejectDatabaseError`.
+- **`getProductItem`** (exported const) — The route handler. Built by `createItemController` with:
+  - `entity: 'product'`
+  - `notFoundKey: 'products.not-found'` — i18n key returned on 404.
+  - `fetch(id, request)` — Calls `productService.getByIdViewed(id, scope, callerCtx)` where scope comes from `productService.callerScope(request.authContext)` and caller context from `callerContextOf(request)`.
 
 ## Relationships
 
-- **`src/modules/products/routes.ts`** – Wires `getProductItem` to the `GET /products/:id` route; must attach the `getAuth` middleware so `request.authContext` is populated before the handler runs.
-- **`src/modules/products/service.ts`** – Provides `getByIdViewed` (data fetch + visibility filter) and `callerScope` (role → scope mapping).
-- **`src/infrastructure/http/response.ts`** – `successResponse` / `rejectResponse` shape the JSON envelope.
-- **`src/infrastructure/http/errors.ts`** – `rejectDatabaseError` produces a standardised 500 payload with a tag (`'getProductItem'`) for tracing.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** – `t('products.not-found')` localises the 404 message.
-- **`src/infrastructure/http/request.ts`** – `callerContextOf` reads caller metadata off the request.
+- **`src/infrastructure/surfaces/create-item-controller.ts`** — Supplies the `createItemController` factory that turns the `fetch` closure into a standard HTTP response handler (status codes, error mapping).
+- **`src/modules/products/service.ts`** — Source of `productService.getByIdViewed` (actual row lookup) and `productService.callerScope` (visibility filter derived from the caller's role).
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, used to extract request-level caller metadata passed as the third argument to `getByIdViewed`.
+- **`src/modules/products/routes.ts`** — Mounts `getProductItem` on `/products/:id` and applies `getAuth` middleware; this is what populates `request.authContext` before the handler runs.
 
 ## Notes
 
-- `request.authContext` is accessed directly with no guard; the **route** is responsible for running `getAuth`. If the route omits that middleware the handler will throw on `undefined`.
-- Invalid `ObjectId` values are intentionally mapped to **404** (not 400) to avoid disclosing expected ID format.
-- The handler is fire-and-forget: it uses `.then`/`.catch` and does **not** return the promise, so Express cannot catch async rejections. All error handling is explicit inside the chain.
+- Visibility is role-gated at the **service** layer, not here: only an admin caller can retrieve inactive or deleted products. The controller itself contains no role checks.
+- `request.authContext` is populated by the route's `getAuth` middleware (in `routes.ts`), not by anything in this file. If the route is ever changed to skip auth, `callerScope` will receive `undefined` and the visibility contract silently breaks.

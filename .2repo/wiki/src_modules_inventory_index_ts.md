@@ -2,25 +2,27 @@
 
 ## Purpose
 
-Public barrel for the inventory module. It is the **only** surface sibling modules may import (enforced by lint), and it exposes a deliberately minimal API: one service handle, one pure availability function, and one event constant. Repositories, models, and counter primitives are intentionally absent so that no external module can mutate a stock number directly.
+Public barrel for the Inventory module. It is the **only** import surface allowed for sibling modules (lint forbids reaching `./service` or `./domain` directly). Its job is to expose a minimal, transition-by-name API while keeping repositories, models, and all counter internals private.
 
 ## Key elements
 
-- **`inventoryService`** (from `./service`) — the single entry point sibling modules call to request a stock transition by name; returns a boolean.
-- **`availabilityOf`** (from `./domain`) — pure function computing `onHand − reserved`, clamped at zero. The one sanctioned exception to the "never compute across the boundary" rule; anything that renders or checks availability should use this rather than subtracting locally.
-- **`RESERVATION_EXPIRED`** (from `./events`) — event constant. Importing the barrel is also what installs the event payload declaration for consumers.
-- **Not exported:** `StockMovementReason`, `StockLine`, repositories, models, and all counter primitives. `StockMovementReason` has a default in `releaseForOrder`; `StockLine` is a wire shape covered by generated contract types; `InventoryLevel` lives in `@types` and is imported by `service.ts` directly.
+- **`inventoryService`** (re-export from `./service`) — the service object sibling modules call to request stock transitions by name. Callers receive a boolean; internal counter costs are hidden.
+- **`availabilityOf`** (re-export from `./domain`) — pure function: `onHand − reserved`, clamped at zero. The single "compute" escape hatch; safe because it operates on plain data, not live counters.
+- **`RESERVATION_EXPIRED`** (re-export from `./events`) — event payload declaration. Importing the barrel is what installs the type for this event.
+- **Deliberately omitted**: repositories, model types, counter primitives, `StockMovementReason`, `StockLine`. Exposing any of these would leak the mutability the module is designed to hide.
 
 ## Relationships
 
-- **`./service`** (`src/modules/inventory/service.ts`) — provides `inventoryService`; also imports `InventoryLevel` from the shared `@types` package.
-- **`./domain`** (`src/modules/inventory/domain/index.ts`) — provides `availabilityOf`.
-- **`./events`** (`src/modules/inventory/events.ts`) — provides `RESERVATION_EXPIRED` and its payload declaration.
-- **`src/modules/cart/…`** (checkout, domain tests) — the cart domain tier cannot import a sibling at all (eslint rule), so it keeps a local copy of the availability formula; its tests compare that copy against this export, which is why the function must remain importable at the barrel level.
-- **`src/modules/orders/…`, `src/modules/payments/service.ts`** — sibling consumers that reach the barrel to request stock transitions; they never touch counters directly.
+- **`src/modules/inventory/service.ts`** — source of `inventoryService`; the file re-exports it without wrapping.
+- **`src/modules/inventory/domain/index.ts`** — source of `availabilityOf`.
+- **`src/modules/inventory/events.ts`** — source of `RESERVATION_EXPIRED`.
+- **`src/modules/cart/…`** (checkout, stock tests, domain-rules tests) — `cart` is the primary sibling consumer; its domain tier maintains a **local copy** of `availabilityOf` (domain tier cannot import a sibling) and its tests verify that copy matches this export.
+- **`src/modules/orders/…`** (module, service, integration tests) — sibling consumer; imports `inventoryService` through this barrel to request reservation/fulfillment transitions.
+- **`src/modules/payments/service.ts`** — sibling consumer in the payment flow.
+- **`src/modules/inventory/tests/integration/ledger.property.test.ts`** — property-based tests that exercise the service behind this barrel.
 
 ## Notes
 
-- A barrel export line is treated as a **stability promise**. `tests/cross-cutting/published-language.test.ts` actively verifies that `StockMovementReason` and `StockLine` are *not* re-exported; adding them would be a public-API change.
-- `availabilityOf` is the sole case where a consumer may *compute* across the boundary. The guard is that it is pure over plain data, not a handle into the counters.
-- The file's own doc block is the canonical statement of the module's boundary contract; lint, not runtime checks, enforces it for external callers.
+- Lint rule: any import that bypasses this barrel (e.g. `import { … } from '…/inventory/service'`) is a hard error. Add a new sibling-facing symbol **here** first.
+- `availabilityOf` exists in two places (here and in `cart`'s domain tier). If you change the formula, update both and keep the cross-test green.
+- Adding a new type export is a contract: the barrel comment states a "barrel line is a promise." Don't add shapes until a caller actually needs them.

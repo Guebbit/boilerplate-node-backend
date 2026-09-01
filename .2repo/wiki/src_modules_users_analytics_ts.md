@@ -1,18 +1,24 @@
 # src/modules/users/analytics.ts
 
 ## Purpose
-Defines the analytics event names emitted by the users module for **administrative** account-lifecycle actions (operator creating or deactivating an account, as opposed to a self-service sign-up). It declares those names locally via module augmentation so the infrastructure observability layer remains domain-agnostic.
+
+Declares the analytics event names for the admin-facing half of the user account lifecycle (operator-initiated creation and deactivation) and registers them into the app-wide `AnalyticsEventMap` via module augmentation, giving the users module a type-safe, self-documenting set of event keys distinct from the self-signup events in the `account` module.
 
 ## Key elements
-- **`usersAnalyticsEvents`** (`as const`) — the two event-name constants: `USER_CREATED` (`'user_created'`) and `USER_DEACTIVATED` (`'user_deactivated'`).
-- **`declare module '@infrastructure/observability/analytics'`** — augments `AnalyticsEventMap` with a `users` key typed to the union of the above values, so type-safe emission is available without a shared central list.
+
+- **`usersAnalyticsEvents`** (`as const`) — the two event-name constants this module emits:
+  - `USER_CREATED` (`'user_created'`) — fires when an admin/operator creates a user record.
+  - `USER_DEACTIVATED` (`'user_deactivated'`) — fires on deactivation; deliberately a dedicated event (not a generic "updated") so churn dashboards can count it.
+- **Module augmentation** (`declare module '@infrastructure/observability/analytics'`) — extends `AnalyticsEventMap` with a `users` key whose type is the union of `usersAnalyticsEvents` values, making every site that dispatches a `users` event checked against this set.
 
 ## Relationships
-- **`src/modules/users/service.ts`** — the users service (and/or its controllers) imports this file directly to reference the event-name constants when emitting analytics events. No re-export or publication layer sits between them.
-- **`scripts/contracts/analytics-events-bundle.ts`** — a build/contract script that aggregates event names across modules. This file's local declaration is one of the inputs that script collects, keeping the catalogue distributed by module ownership.
+
+- **`src/modules/users/service.ts`** — the consumer. The service is where the admin account-creation and deactivation flows live and where these event names are actually dispatched; this file provides the typed vocabulary it imports.
+- **`@infrastructure/observability/analytics`** — supplies the `AnalyticsEventMap` interface that this file augments; the analytics port reads the map to validate/record dispatched events.
+- **`./audit.ts`** (sibling, not a graph neighbor here) — follows the identical augmentation pattern for audit-action names; useful as a reference when adding events.
 
 ## Notes
-- **Do not add a shared event-name registry.** The deliberate pattern (mirrored by `./audit.ts`) is per-module declaration + augmentation; `infrastructure` must never learn a domain name.
-- **`USER_DEACTIVATED` is a dual-purpose event.** It is both an administrative action and a product/churn signal. Do not replace it with a generic "updated" event.
-- **Frontend visibility is separate.** Only `shared/contracts/analytics.frontend.ts` publishes events to the paired frontend. Events defined here are server-observed only; adding them to the frontend contract would cause double-counting.
-- Naming convention is governed by `docs/tools/analytics.md#naming`.
+
+- Event-name strings must follow the convention in `docs/tools/analytics.md#naming` (lowercase, underscore-separated).
+- `USER_DEACTIVATED` is intentionally separate from any generic update signal; do not collapse it into an "updated" event or churn reporting breaks.
+- The `as const` + augmentation pair means adding a new event here is a one-line change: add a key to `usersAnalyticsEvents` and the type-safe union updates everywhere automatically.

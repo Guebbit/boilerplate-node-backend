@@ -2,29 +2,28 @@
 
 ## Purpose
 
-Integration test that verifies user credentials (bcrypt hash, refresh tokens) can never appear in any API response body. It exercises two independent safeguard mechanisms—`select: false` on the Mongoose schema and the `applyUserTransform` (`toJSON`) allowlist—and asserts that the serialized output matches the OpenAPI `User` contract exactly. Both mechanisms are tested because a regression in one could be masked by the other.
+Integration test that verifies user credentials (bcrypt password hash, live tokens) can never leak into a serialized API response. It asserts two independent guards: Mongoose `select: false` prevents the fields from loading in normal queries, and `applyUserTransform`'s allowlist strips them again at serialization time — including on `.lean()` results that bypass `toJSON`.
 
 ## Key elements
 
-- **`expectNoCredentials(payload)`** — Helper that serialises a value to JSON and asserts it contains none of the strings `'password'`, `'tokens'`, or `'$2b$'` (bcrypt prefix). Applied to both single documents and list results.
-- **`withTokens()`** — Creates a user via the factory with one `TokenType.REFRESH` token, giving every test a realistic credential payload to leak.
-- **`describe('select: false (the safety net)')`** — Four tests confirming `findById`, `findOne`, and `findAll` (lean) omit `password`/`tokens`, while `findByIdWithCredentials` still returns them.
-- **`describe('applyUserTransform (the contract boundary)')`** — Tests that `toJSON()` strips credentials even from a document that holds them, replaces `_id`/`__v` with the contract `id`, emits exactly the OpenAPI key set (`active`, `admin`, `createdAt`, `email`, `id`, `imageUrl`, `locale`, `updatedAt`, `username`, `verified`), preserves `active` independently of `deletedAt` (all four combinations), defaults `active` to `true`, exposes `deletedAt` only when set, and that `userService.search` / `getById` produce the same clean shape from lean and non-lean paths respectively.
+- **`expectNoCredentials(payload)`** – Shared guard that JSON-stringifies a payload and asserts it contains no `password`, `tokens`, or bcrypt prefix (`$2b$`).
+- **`withTokens()`** – Seeds a user via `createUser` with one live `REFRESH` token so tests can verify token stripping.
+- **`describe('select: false (the safety net)')`** – Confirms `findById`, `findOne`, `findAll` (lean) omit password/tokens, while `findByIdWithCredentials` intentionally still returns them.
+- **`describe('applyUserTransform (the contract boundary)')`** – Verifies `toJSON()` output: strips credentials, replaces `_id`/`__v` with `id`, emits exactly the OpenAPI `User` key set, keeps `active` independent of `deletedAt`, defaults `active` to `true`, and works correctly through `userService.search` (lean list) and `userService.getById`.
 
 ## Relationships
 
-- **`src/modules/users/model.ts`** — The subject under test: its `select: false` flags and `toJSON` transform (`applyUserTransform`) are the two mechanisms being asserted.
-- **`src/modules/users/repository.ts`** — Imports `userRepository`; tests call `findById`, `findOne`, `findAll`, and `findByIdWithCredentials` directly.
-- **`src/modules/users/service.ts`** — Imports `userService`; tests call `search({})` (lean list path) and `getById(id)` (single-lookup path).
-- **`src/modules/users/index.ts`** — Barrel re-export used to import `userRepository` and `TokenType` without reaching into deeper paths.
-- **`src/modules/users/tests/factory.ts`** — Provides `createUser`, the sole means of seeding users in these tests.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top-level to point Mongoose at the in-memory test database.
-- **`tests/support/stub.ts`** — `asStub<T>()` is used to cast `items[0]` to a typed shape for the id-format assertion.
+- **`src/modules/users/index.ts`** – Source of `userRepository` and `TokenType` enum used throughout.
+- **`src/modules/users/repository.ts`** – The finders under test (`findById`, `findOne`, `findAll`, `findByIdWithCredentials`); the `select: false` guard lives here.
+- **`src/modules/users/service.ts`** – `search` and `getById` are exercised to confirm the transform applies on lean paths.
+- **`src/modules/users/model.ts`** – Owns the schema definition (`select: false` fields) and the `toJSON` / `applyUserTransform` serialization logic that is the primary subject of the second suite.
+- **`src/modules/users/tests/fixtures.ts`** – Provides `createUser` for seeding documents with specific field values.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` called once before all suites to provision the in-memory DB.
+- **`tests/support/stub.ts`** – `asStub` used to type-cast items from `userService.search` for assertions.
 
 ## Notes
 
-- The two mechanisms are deliberately tested in separate `describe` blocks so a regression is attributable to one specific layer.
-- The lean list path (`findAll` → `userService.search`) bypasses `toJSON` entirely; the transform is applied manually in the service, and this file is the regression guard for that manual mapping.
-- `active` and `deletedAt` are independent fields (not derived from each other). The four-combination test exists to prevent someone from collapsing them into a single boolean.
-- `locale` and `verified` are intentionally public (client-visible) and included in the allowed key list—do not remove them when tightening the contract.
-- The `deletedAt` key is absent from the serialised output when the user has not been soft-deleted; it is not emitted as `null`/`undefined`.
+- The `.lean()` path (via `findAll` and `userService.search`) bypasses Mongoose's `toJSON`, so the transform must operate on plain objects. Tests explicitly cover this.
+- `active` and `deletedAt` are independent fields by design; the test asserts all four combinations serialize correctly and that `active` is not derived from `deletedAt`.
+- `locale` and `verified` appear in the allowlist (intentionally public, per the OpenAPI `User` contract) despite looking internal.
+- The test asserts an **exact** sorted key list for the serialized `User` object, making it a contract-boundary test: adding a field to the transform without updating this list (and the OpenAPI spec) will break the build.

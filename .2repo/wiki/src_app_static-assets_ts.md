@@ -1,23 +1,20 @@
 # src/app/static-assets.ts
 
 ## Purpose
-
-Configures Express to serve static files (user uploads and other public assets) directly from the Node process rather than offloading to a reverse proxy. This keeps the serving guarantees (security headers, MIME handling, cache policy) inside the application's testable surface.
+Installs an `express.static` middleware that serves uploaded images and other public assets from a configurable directory. It centralises the caching and security headers for those files in one place rather than delegating to a reverse proxy, so the guarantees are testable within the app itself.
 
 ## Key elements
-
-- **`installStatic(app: Express): void`** — Registers `express.static` on the given app. Serves from `process.env.NODE_PUBLIC_PATH ?? 'public'` with the following options:
-  - `dotfiles: 'ignore'` — dotfiles under the public dir return 404, preventing accidental disclosure (e.g. a stray `.env`).
-  - `index: false` — disables directory listing so upload filenames remain unguessable.
-  - `maxAge: '1y'`, `immutable: true` — filenames are 128 bits of randomness, so cached bytes are permanent.
-  - `setHeaders` — forces `Cross-Origin-Resource-Policy: cross-origin` to override helmet's default `same-origin`, allowing the paired frontend (served on a different port) to load images.
+- **`installStatic(app: Express): void`** — the sole export. Calls `app.use(express.static(...))` with a path taken from `NODE_PUBLIC_PATH` (fallback: `'public'`). Configures:
+  - `dotfiles: 'ignore'` — hidden files (e.g. `.env`) return 404.
+  - `index: false` — no directory listing.
+  - `maxAge: '1y'`, `immutable: true` — aggressive caching, justified by 128-bit random filenames.
+  - `setHeaders` — overrides helmet's default by setting `Cross-Origin-Resource-Policy: cross-origin` so a paired frontend on a different port can load the asset.
 
 ## Relationships
-
-- **`src/app.ts`** — Imports and calls `installStatic` during app bootstrap to wire the static route into the Express instance.
-- **`package.json`** — Provides the `express` dependency that this module imports (both value and type).
+- **`src/app.ts`** — the Express application instance that is passed into `installStatic`. This file is a pure middleware installer; it does not create or own the app.
+- **`package.json`** — declares the `express` (and `@types/express`) dependency used here.
 
 ## Notes
-
-- The doc comment states that `express.static` derives `Content-Type` from the file extension, so it can never emit `text/html` for an upload path. This safety depends on an *upstream* guarantee: `resolveUploadFilename` (lives elsewhere in the codebase) restricts extensions to a closed set and verifies file bytes match. The two invariants are coupled; changing either without the other can break the MIME-safety argument.
-- The `Cross-Origin-Resource-Policy` header is deliberately overridden per-route here rather than configured globally via helmet, because JSON endpoints should keep `same-origin`.
+- Safety against serving arbitrary bytes as `text/html` relies on **upstream** code (`resolveUploadFilename`), not on this file. If that upstream guarantee is weakened, the static handler will happily serve HTML from upload paths.
+- The `NODE_PUBLIC_PATH` env var is read at call time (i.e. when `installStatic` is invoked), not at import time, so it can be set in test setup before the app is built.
+- The `immutable` + 1-year cache is only sound because filenames are content-agnostic random tokens. Do not rename or reuse a path under `public/` expecting new bytes to appear.

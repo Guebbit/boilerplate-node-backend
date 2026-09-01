@@ -2,29 +2,29 @@
 
 ## Purpose
 
-Integration test suite that fires N genuinely concurrent HTTP requests (via supertest) at the account endpoints to verify concurrency invariants—exactly one account per email, all N login tokens survive, one-time tokens are spent once—rather than asserting which request "won." It guards two previously-real race bugs (R1: duplicate signup via non-unique index; R4: token array clobbered by read-modify-write) and confirms the rate limiter remains active.
+Integration tests that fire genuinely concurrent requests (via `raceN`) against the mounted Express app and assert **invariants** (exactly one account, all tokens retained, one-time token consumed once) rather than orderings. They exist to lock in fixes for two real race-condition bugs — R1 (check-then-insert on a non-unique index) and R4 (read-modify-write on the token array) — and to prevent regression.
 
 ## Key elements
 
-- **`describe('R1 — concurrent signups for one address')`** — N concurrent `POST /account/signup` calls; asserts exactly 1 account, 1×201 + (N−1)×409, surviving account can log in, and the serial duplicate path still returns 409.
-- **`describe('R4 — concurrent logins for one account')`** — N concurrent `POST /account/login`; asserts all N tokens are stored, they are distinct values, and `logout-all` removes every refresh token under contention.
-- **`describe('one-time tokens under contention')`** — Two concurrent `POST /account/reset-confirm` with the same token; asserts exactly one 200 and the token is gone.
-- **`describe('the limiter is raised for these suites, not disabled')`** — Temporarily sets `NODE_AUTH_RATE_LIMIT_MAX=3`, rebuilds the app via dynamic imports, and asserts 429s still occur.
-- **`setupTestDb()`** — called once at module level to provision a fresh test database.
+- **`describe('R1 — concurrent signups for one address')`** — Four tests: exactly one document created, status split is 1×201 + (N−1)×409, surviving account can still log in, and the serial duplicate path still returns 409.
+- **`describe('R4 — concurrent logins for one account')`** — Three tests: all N tokens survive (no clobbering), all N token values are distinct, and `logout-all` under contention removes every refresh token.
+- **`describe('one-time tokens under contention')`** — Verifies a password-reset token is consumed by exactly one of two simultaneous `reset-confirm` calls and is then absent from the document.
+- **`describe('the limiter is raised for these suites, not disabled')`** — Rebuilds a minimal Express app with `credentialLimiters` and a small budget (3), then asserts 429s appear, proving the rate limiter is still active rather than silently disabled.
+- **`setupTestDb()`** — called at module top-level to reset the test database before any suite runs.
 
 ## Relationships
 
-- **`tests/support/race.ts`** — provides `raceN` (fire N requests via `Promise.allSettled`), `countStatus`, `expectNoServerErrors`, and `RACE_SIZE`.
-- **`tests/support/http.ts`** — provides `api()` returning a supertest agent wired to the mounted Express app.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises a clean MongoDB instance for the suite.
-- **`src/modules/users/index.ts`** — barrel export; test imports `userRepository` and `TokenType` from here.
-- **`src/modules/users/model.ts`** — `userModel` imported directly (bypassing the barrel) to call `countDocuments` for invariant checks.
-- **`src/modules/users/repository.ts`** — `userRepository.findOneWithCredentials` used to inspect stored token arrays after races.
-- **`src/modules/users/tests/factory.ts`** — `createUser` seeds a known user; `PLAIN_PASSWORD` is the shared test credential.
+- **`tests/support/race.ts`** — supplies `raceN`, `RACE_SIZE`, `countStatus`, and `expectNoServerErrors`; the concurrency harness and assertion helpers for every test in this file.
+- **`tests/support/http.ts`** — provides `api()`, the supertest wrapper used for all account-endpoint calls.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` clears/seeds the test DB before the suite.
+- **`src/modules/users/index.ts`** — barrel export for `userRepository` and `TokenType`.
+- **`src/modules/users/model.ts`** — `userModel` imported **directly** (bypassing the barrel) to call `countDocuments`; the file's comment marks this as a spec-file-only exception.
+- **`src/modules/users/repository.ts`** — `userRepository.findOneWithCredentials` is the read path used to inspect stored tokens after each race.
+- **`src/modules/users/tests/fixtures.ts`** — `createUser` and `PLAIN_PASSWORD` seed the user for the login/token/reset suites.
 
 ## Notes
 
-- The test deliberately imports `userModel` from the model file rather than the barrel; the in-file comment states specs may reach the model but runtime code may not.
-- Assertions are invariant-based ("exactly one account", "N distinct tokens"), never ordering-based. The header records observed hit rates (20/20 runs contended) to prove the tests actually race.
-- The rate-limiter test uses `jest.resetModules()` + dynamic `import()` to rebuild the limiter with a small budget (3) so the 429 check is meaningful without exhausting the real (1000) budget.
-- `expectNoServerErrors` is called on every race result set to catch 5xx responses that would mask a broken error-interpreting branch.
+- Assertions target **invariants**, never "which request won." The header comment explicitly states this principle and records observed hit rates (N=10, 20 runs) so a test that never actually contends is flagged as vacuous.
+- `userModel` is imported from `@modules/users/model` rather than the barrel; the inline comment notes this is allowed for tests but forbidden in runtime code.
+- The rate-limiter test uses `jest.resetModules()` + dynamic `import()` to re-read `NODE_AUTH_RATE_LIMIT_MAX` after mutating the env var — the rest of the module tree already cached the value.
+- The two bugs (R1, R4) are described in the file header with their fix strategy; the tests are the regression gate for those fixes and were landed in the same change.

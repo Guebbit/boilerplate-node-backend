@@ -2,36 +2,37 @@
 
 ## Purpose
 
-Service layer for the wishlist domain. Sits between the wishlist controllers and `wishlistRepository`, enforcing cross-module business rules (product visibility, cart eligibility), shaping the wire response, and emitting analytics. It is the single place where "what a wishlist operation may or may not do" is decided.
+Business-logic layer for the wishlist domain. It resolves each endpoint's intent (get, add, remove, move-to-cart, cascade-delete) into a single response shape — `{ items: [{ productId }] }` — by orchestrating the wishlist repository, product lookups, and the cart service. Controllers import only the `wishlistService` barrel; the bare functions are module-private.
 
 ## Key elements
 
-- **`WishlistView`** — response interface: `{ items: [{ productId: string }] }`. Ids only; the client renders from its own product store.
-- **`toWishlistView(doc)`** — maps a `WishlistDocument | null` into `WishlistView`; treats `null` and empty as equivalent.
-- **`wishlistGet(userId)`** — returns the view; never 404.
-- **`wishlistAdd(userId, productId, context)`** — verifies the product exists **and** is public via `productRepository.findPublicById`; idempotent add (`$addToSet`); emits `WISHLIST_ITEM_ADDED`.
-- **`wishlistRemove(userId, productId, context)`** — removes one line; 404 if the line is absent; emits `WISHLIST_ITEM_REMOVED`.
-- **`wishlistMoveToCart(userId, productId, context)`** — confirms the line exists, asks `cartService.cartItemAddById` first, then removes the line. If the cart write fails the line is **kept** (retryable); the reverse order would risk dropping the line unrecoverably. Emits `WISHLIST_MOVED_TO_CART`.
-- **`wishlistDeleteByUserId(userId)`** — exported for the hard-delete user subscription (see `module.ts`).
-- **`productRemoveFromWishlistsById(productId)`** — exported for the product-deletion subscription (see `module.ts`).
-- **`wishlistService`** — the public object bundling all of the above; this is what controllers import.
+- **`WishlistView`** — interface matching the OpenAPI `WishlistResponse`; the only shape every endpoint returns.
+- **`toWishlistView(doc | null)`** — maps a `WishlistDocument` (or `null`) to the view; normalises `productId` to `string`.
+- **`wishlistGet(userId)`** — returns the view; absence is treated as empty, never 404.
+- **`wishlistAdd(userId, productId, context)`** — validates the product exists *and* is public via `productRepository.findPublicById`; idempotent upsert (`$addToSet`); emits `WISHLIST_ITEM_ADDED`.
+- **`wishlistRemove(userId, productId, context)`** — removes a line; returns 404 if the line is absent (stale-view signal); emits `WISHLIST_ITEM_REMOVED`.
+- **`wishlistMoveToCart(userId, productId, context)`** — the wishlist's exit path. Order is deliberate: cart add first, wishlist remove second, so a cart failure leaves the line intact (retryable). A cart refusal maps to 404. Emits `WISHLIST_MOVED_TO_CART`.
+- **`wishlistDeleteByUserId(userId)`** — cascade helper called from the user-deletion subscription in `module.ts`.
+- **`productRemoveFromWishlistsById(productId)`** — cascade helper called from the product-deletion subscription in `module.ts`.
+- **`wishlistService`** (exported) — object bundling all six functions; the only public entry point for controllers.
 
 ## Relationships
 
-- **`src/modules/wishlist/controllers/*`** (`get-wishlist`, `post-wishlist`, `delete-wishlist-item`, `post-move-to-cart`) — each controller delegates to exactly one method on `wishlistService`.
-- **`src/modules/cart/index.ts` / `src/modules/cart/services/index.ts`** — `wishlistMoveToCart` calls `cartService.cartItemAddById`; the cart is the authority on whether a product may be carted.
-- **`src/modules/products/index.ts` / `src/modules/products/repository.ts`** — `wishlistAdd` calls `productRepository.findPublicById` to gate on visibility.
-- **`src/infrastructure/http/response.ts`** — every write path returns `ResponseSuccess` or `ResponseReject` built with `generateSuccess` / `generateReject`.
-- **`src/infrastructure/http/request.ts`** — `CallerContext` type flows through as the `context` parameter for analytics base-building.
-- **`src/infrastructure/i18n/index.ts`** — `t()` supplies user-facing message strings (e.g. `wishlist.added`, `wishlist.not-found`).
-- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` + `buildAnalyticsBase` called after each successful write.
-- **`src/modules/wishlist/analytics.ts`** — `wishlistAnalyticsEvents` enum providing the event-name constants.
-- **`src/modules/wishlist/model.ts`** — `WishlistDocument` type used by `toWishlistView` and repository calls.
+- **`@infrastructure/http/response`** (`generateSuccess`, `generateReject`, `ResponseSuccess`, `ResponseReject`) — every mutating endpoint returns one of these two envelopes.
+- **`@infrastructure/http/request`** (`CallerContext`) — passed into mutating endpoints to seed the analytics base.
+- **`@infrastructure/i18n`** (`t`) — all user-facing status messages (`wishlist.added`, `wishlist.removed`, `wishlist.moved-to-cart`, etc.) are resolved here.
+- **`@infrastructure/observability/analytics`** (`emitAnalyticsEvent`, `buildAnalyticsBase`) — each mutation fires exactly one analytics event with the context-derived base.
+- **`@modules/products`** (`productRepository.findPublicById`) — add and move-to-cart gate on product existence + public visibility.
+- **`@modules/cart`** (`cartService.cartItemAddById`) — move-to-cart delegates the "is this product buyable" rule to the cart, avoiding a second copy of that invariant.
+- **`./repository`** (`wishlistRepository`) — all reads/writes to the wishlist document go through this data-access layer.
+- **`./analytics`** (`wishlistAnalyticsEvents`) — named event constants for the three mutation events.
+- **`./model`** (`WishlistDocument`) — the document shape the repository returns and `toWishlistView` consumes.
+- **Controllers** (`get-wishlist`, `post-wishlist`, `delete-wishlist-item`, `post-move-to-cart`) — each calls exactly one `wishlistService` method; they contain no business logic of their own.
 
 ## Notes
 
-- **Response shape is ids-only by design.** Shipping full product objects would over-serialize and break the contract suite. `productId` is stored as a Mongo ObjectId but returned as a `String`.
-- **GET never 404s.** A missing wishlist and an empty wishlist are the same state: `{ items: [] }`.
-- **Move-to-cart ordering is deliberate and asymmetric.** Cart write precedes wishlist removal. A cart failure leaves the line intact (recoverable); the inverse could lose the line and then fail to restore it.
-- **`wishlistMoveToCart` does not re-check product visibility.** That rule belongs to the cart; re-deriving it here would be a second copy of the same invariant.
-- **`wishlistDeleteByUserId` / `productRemoveFromWishlistsById`** are not called by any controller. They are consumed by event subscriptions wired up in the wishlist `module.ts`.
+- **Response is IDs only.** The client renders product details from its own store. Shipping full product objects would break the contract suite.
+- **404 vs. empty.** `wishlistGet` treats "no document" as an empty view (200). `wishlistRemove` and `wishlistMoveToCart` return 404 for a missing line — the distinction signals "your view is stale."
+- **Move-to-cart ordering is intentional and documented.** Cart-add → wishlist-remove. Reversing the order risks dropping the line while the cart write fails, an unrecoverable state for the shopper.
+- **The line is intentionally preserved when the cart refuses.** A deactivated product can return to the catalogue; the wishlist outlives the catalogue.
+- **Controllers never import the bare functions** — they go through `wishlistService`, keeping the module's internal composition swappable.

@@ -2,31 +2,29 @@
 
 ## Purpose
 
-Owns the full MongoDB connection lifecycle (resolve URI → connect with retry → disconnect) for the application. It wraps Mongoose's singleton connection so the rest of the codebase can `import mongoose` and assume a live connection without managing handshake, backoff, or teardown themselves.
+Manages the full MongoDB connection lifecycle for the application: resolving the connection URI from environment variables, connecting with bounded exponential-backoff retry, and cleanly disconnecting on shutdown. It centralises the single Mongoose singleton so every other module in the codebase shares one live connection.
 
 ## Key elements
 
-- **`getDatabaseUri()`** – Resolves the connection string from `NODE_DB_URI` (preferred) or `NODE_MONGODB_HOST`/`PORT`/`NAME` fragments. Exported so the CommonJS `migrate-mongo-config.js` script can mirror the logic; a test asserts they stay in sync.
-- **`start()`** – Calls `mongoose.connect()` with up to 10 exponential-backoff retries (1 s → 30 s cap). Returns a promise that resolves `void` on success or throws after the final failure. Uses recursive promise chains (no `async`/`await`).
-- **`stopDatabase()`** – Calls `mongoose.disconnect()`. Catches and logs any rejection instead of rethrowing, so a failing disconnect cannot abort the remaining shutdown chain.
-- **`connection`** – Re-exported reference to `mongoose.connection`. Safe to read at import time; populated once `start()` resolves. Intended for readiness/diagnostics probes reading `readyState`.
-- **`wait(ms)`** – Promisified `setTimeout`; keeps backoff delays off the event loop so health-check endpoints stay responsive during retries.
-- **Constants** – `MAX_RETRIES` (10), `BASE_DELAY_MS` (1000), `DEFAULT_DATABASE_NAME` (`boilerplate-node-backend`).
+- **`getDatabaseUri()`** – Resolves the connection string. A full `NODE_DB_URI` takes precedence; otherwise it assembles `mongodb://host:port/name` from `NODE_MONGODB_HOST`, `NODE_MONGODB_PORT`, and `NODE_MONGODB_NAME` (default name `boilerplate-node-backend`). Uses truthiness (not `!== undefined`) so an *empty* `NODE_DB_URI` intentionally falls through to fragments.
+- **`start()`** – Calls `mongoose.connect(getDatabaseUri())` with up to 10 retries using exponential backoff (1 s → 2 s → 4 s …, capped at 30 s). Implemented as a recursive promise chain (no `async`/`await`) to match the codebase's explicit-promise style. Throws after the final attempt so the boot sequence aborts.
+- **`stopDatabase()`** – Calls `mongoose.disconnect()` to release pooled sockets. Logs and swallows any rejection so it never aborts the remaining shutdown steps.
+- **`connection`** – Re-exports `mongoose.connection` (the singleton). Available at import time; populated once `start()` resolves. Intended for readiness probes and diagnostics via `connection.readyState`.
+- **`wait(ms)`** – Internal promisified `setTimeout`; avoids blocking the event loop during backoff delays.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/logger.ts`** – Imported as `logger`; used to warn on each retry and on disconnect failure.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** – Expected caller of `start()` during boot and `stopDatabase()` during graceful shutdown.
-- **`src/infrastructure/observability/dependency-health.ts`** – Consumes the exported `connection` object to report MongoDB status to health/readiness endpoints.
-- **`src/app.ts` / `src/app/demo.ts`** – App entry points that orchestrate the database lifecycle before/after the HTTP server starts.
-- **`src/modules/account/module.ts`** – Mongoose model definitions in module files rely on the global connection this file establishes; they do not call `connect()` themselves.
-- **`tests/unit/db/host-scripts.test.ts`** – Asserts the CJS re-implementation in `migrate-mongo-config.js` produces the same URI as `getDatabaseUri()`.
-- **`tests/unit/infrastructure/observability/dependency-health.test.ts`** – Exercises the readiness-report path that reads `connection.readyState`.
-- **`src/modules/observability/tests/contract/api.contract.test.ts`** – Contract tests that implicitly require the database to be connected before issuing requests.
+- **`src/infrastructure/adapters/logger.ts`** – Imported as `logger`; used for `warn` messages during retry backoff and disconnect failures.
+- **`src/infrastructure/runtime/server-lifecycle.ts`** – Calls `start()` during boot and `stopDatabase()` during teardown (the "boot sequence" and "shutdown chain" referenced in comments).
+- **`src/infrastructure/observability/dependency-health.ts`** – Reads the exported `connection` (specifically `connection.readyState`) to report MongoDB dependency health.
+- **`tests/unit/db/host-scripts.test.ts`** – Asserts that `getDatabaseUri()` and its CommonJS reimplementation in `migrate-mongo-config.js` always produce the same URI.
+- **`db/demo/index.ts`, `src/modules/account/module.ts`, `scripts/backfill-image-thumbnails.ts`** – Consume the Mongoose singleton indirectly; after `start()` resolves, their models and queries operate against the same live connection.
+- **`src/app.ts` / `src/app/demo.ts`** – Wire the database lifecycle into the application startup/shutdown order.
 
 ## Notes
 
-- **Promise chains, not `async`/`await`.** The retry loop in `start()` is intentionally a recursive `.then()` chain to stay consistent with the codebase's existing style.
-- **Empty `NODE_DB_URI` is meaningful.** The truthiness check (not `!== undefined`) lets the `npm run host` wrapper blank the URI and override only the host, so the database name still comes from `.env` rather than being duplicated in `package.json`.
-- **`connection` is a stable reference, not a value.** It exists at import time; its `readyState` field mutates as the driver connects/disconnects. Grabbing it before `start()` resolves is safe.
-- **`stopDatabase()` never rejects.** A disconnect error is logged and swallowed to protect the rest of the shutdown sequence.
+- The truthiness check on `NODE_DB_URI` is **load-bearing**: an empty string must fall through to the fragment-based URI. This is how `npm run host` blanks the URI and overrides only the host while keeping the database name from `.env`.
+- `migrate-mongo-config.js` **reimplements** the `getDatabaseUri` logic (it is CommonJS and cannot import this ES module). The two copies must stay in sync; `tests/unit/db/host-scripts.test.ts` enforces this.
+- The retry loop is intentionally recursive rather than a `for`/`while` loop to keep the explicit promise-chain style used throughout the codebase.
+- `stopDatabase()` swallows disconnect errors by design—throwing there would abort subsequent shutdown steps.
+- The backoff uses `setTimeout` (not `setImmediate` or a busy-wait) so the event loop stays free for health-check endpoints during containerised startup.

@@ -1,28 +1,31 @@
 # tests/unit/infrastructure/adapters/image-store.test.ts
 
 ## Purpose
-Integration-style unit tests for `filesystemImageStore`, exercising `put` and `remove` against a real temporary directory rather than a mocked `fs`. The file exists to pin down the one code path that translates a client-supplied `imageUrl` into a filesystem path — a translation where a mistake deletes the wrong file or allows path traversal.
+
+Unit tests for `filesystemImageStore` — the sole module that maps a client-supplied `imageUrl` to a filesystem path and performs create/read/delete operations on it. Because a wrong translation deletes the wrong file, these tests use real files in a real temp directory rather than a mocked `fs`, asserting on *which* path is touched rather than that a path was touched.
 
 ## Key elements
-- **`makeImage(name)`** – helper that writes a file at `<root>/images/<name>` and returns both the real path and the expected `/images/<name>` URL.
-- **`stageUpload(name, contents?)`** – helper that creates a file in `<root>/staging/<name>`, simulating an incoming upload outside the public directory.
-- **`describe('filesystemImageStore.put')`** – verifies that `put` moves the staged file into the public images directory, returns a forward-slash URL (never a backslash path), deletes the staged copy, round-trips with `remove`, and rejects when the images directory is missing.
-- **`describe('filesystemImageStore.remove')`** – the bulk of the file. Covers:
-  - Deletion of an existing flat file, and `false` for missing/empty/`undefined` URLs.
-  - **Remote-URL safety** – `https://`, `http://`, and protocol-relative (`//`) URLs must never resolve to a local path.
-  - **Path-traversal rejection** – `../` sequences in the URL must not escape the public root.
-  - **Subdirectory guard** – files under `images/seed/` (or any subdirectory) are not written by this store and must not be deletable.
-  - **Windows-shaped and slashless URLs** – `\images\windows.png` and `images/slashless.png` must still resolve to the correct flat file.
-  - **Late env resolution** – `NODE_PUBLIC_PATH` is read at call time, not import time.
-  - **`./public` fallback** – with `NODE_PUBLIC_PATH` deleted and `process.chdir(root)`, the `?? 'public'` default resolves relative to the working directory.
+
+- **`makeImage(name)`** – helper that writes a file under `<root>/images/` and returns both the absolute path and the stored URL (`/images/<name>`).
+- **`makeThumbnail(stem)`** – helper that creates `images/thumbs/v1/<stem>.webp`, the derivative `remove()` is expected to clean up.
+- **`stageUpload(name, contents?)`** – helper that writes a file into a `staging/` directory outside the public root, simulating an unvalidated upload awaiting quarantine.
+- **`describe('filesystemImageStore.quarantine')`** – verifies the staged file is moved (not copied) into `quarantine/`, that the directory is created on demand, and that the returned key is the bare filename.
+- **`describe('filesystemImageStore.readQuarantined')` / `removeQuarantined`** – round-trip and delete of quarantined entries; rejects/returns `false` for unknown keys.
+- **`describe('filesystemImageStore.promote')`** – writes digested bytes under the public images dir, returns a URL (never a raw path), creates the directory on demand.
+- **`describe('filesystemImageStore.putDerivative')`** – writes a thumbnail to `images/thumbs/v1/<stem>.webp`, always `.webp` regardless of the source extension.
+- **`describe('filesystemImageStore.readImage')`** – reads by stored URL; allows subdirectory reads (e.g. `images/seed/`); rejects URLs outside the public directory and any non-local (http/https/protocol-relative) URL.
+- **`describe('filesystemImageStore.remove')`** – deletes the main image **and** its `thumbs/v1/` derivative; returns `false` (no-op) for missing files, empty/undefined input, remote URLs, and path-traversal attempts that would escape the public directory.
 
 ## Relationships
-- **`src/infrastructure/adapters/image-store.ts`** – the module under test; this file imports `filesystemImageStore` and asserts its observable filesystem and return-value behavior.
-- **`tests/unit/scripts/spec-identity.test.ts`** – listed as a graph neighbor, but no direct import, shared helper, or shared fixture is present in this file. Any relationship is indirect (both test the same infrastructure adapter surface) and not exercised here.
+
+- **`src/infrastructure/adapters/image-store.ts`** – the module under test. This file exercises every public method of `filesystemImageStore` against a real temp filesystem, covering the security-critical URL→path translation and the thumbnail-cleanup coupling in `remove()`.
+
+No direct interaction with `tests/unit/scripts/spec-identity.test.ts` is visible in this file's content.
 
 ## Notes
-- **No `fs` mocking.** The file's own doc comment explains that a mocked `fs` would only prove the code *calls* `unlink`, not that it passes the *correct* string. Real files in `mkdtemp` are intentional.
-- **`NODE_PUBLIC_PATH` is set in `beforeEach` and restored in `afterEach`.** One test (`falls back to ./public`) deliberately *deletes* the variable and calls `process.chdir`; it restores both in a `finally`.
-- **The protocol-relative test (`//images/flat.png`) is the only one that uniquely pins `isRemoteUrl`.** Other remote-URL tests would still pass if that guard were removed, because the containment check catches them as subdirectory paths. The comment in the file calls this out explicitly.
-- **The subdirectory guard protects committed demo fixtures** (`images/seed/`), not just arbitrary subdirs. Deleting them would break re-seeds and remove version-controlled assets.
-- **The `put` test for a missing images directory expects a rejection (thrown error),** not a `false` return — the asymmetry with `remove`'s soft-fail contract is intentional and called out in the inline comment.
+
+- Env vars `NODE_PUBLIC_PATH` and `NODE_QUARANTINE_PATH` are set in `beforeEach` and restored in `afterEach`. Any test that runs in the same process without this setup will see stale values.
+- The file deliberately does **not** mock `node:fs`. The docstring explains that a mock would assert "unlink was called with a string" without verifying *which* string — the property that actually matters.
+- `readImage` and `remove` have **different** subdirectory policies: `readImage` allows reads from `images/seed/` (committed fixtures), while `remove` is strictly limited to the top-level `images/` directory. This asymmetry is intentional and tested.
+- Remote URL rejection (`https://…`, `http://…`, `//…`) is tested for both `readImage` and `remove`. The comments note these correspond to `NODE_DEFAULT_IMAGE_USER` / `NODE_DEFAULT_IMAGE_PRODUCT` values and a future S3-backed store.
+- Path-traversal tests (`/../…`, `/images/../../…`) verify the store resolves and contains the path within the public root before acting.

@@ -2,22 +2,22 @@
 
 ## Purpose
 
-Handler for `POST /cart/reorder/:orderId`. Copies the line items from one of the caller's own orders back into their cart, skipping any lines whose product has since been delisted. Lives in the cart module (not orders) because its write target is the cart; the source order is read-only.
+Thin HTTP adapter for `POST /cart/reorder/:orderId`. It extracts the authenticated user and target order from the request, delegates all business logic to `cartService.reorderIntoCart`, and translates the service result into an Express response (200 or 409). No domain logic lives here.
 
 ## Key elements
 
-- **`postReorder`** (exported) – The sole export. Reads `userId` from the auth context and `orderId` from route params, delegates to `cartService.reorderIntoCart`, then maps the result onto the HTTP response. Returns `200` with the updated cart view and an optional message, or `409` if no line items remained to add.
+- **`postReorder`** (exported const) — The sole controller. Reads `userId` from the auth context, `orderId` from route params, calls `cartService.reorderIntoCart(userId, orderId, callerContext)`, then either short-circuits via `refused()` (409) or sends `successResponse` (200). Errors are funneled through `catchAs`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** – Provides `refused` (short-circuits to an error status when the service signals rejection) and `catchAs` (standard error-to-response mapping keyed by the controller name).
-- **`src/infrastructure/http/request.ts`** – Provides `authContextOf` (extracts the authenticated user's id) and `callerContextOf` (supplies request-scoped context such as locale or client metadata) passed through to the service call.
-- **`src/infrastructure/http/response.ts`** – Provides `successResponse`, the shared helper that serializes `{ data, message }` into the JSON body with the given status code.
-- **`src/modules/cart/services/index.ts`** – Source of `cartService`, whose `reorderIntoCart(userId, orderId, callerContext)` method contains all business logic (ownership check, catalogue filtering, cart write).
-- **`src/modules/cart/routes.ts`** – Registers `postReorder` on the `POST /cart/reorder/:orderId` route.
+- **`src/modules/cart/services/index.ts`** — Supplies `cartService`; the only business-logic call in this file is `cartService.reorderIntoCart`.
+- **`src/infrastructure/http/request.ts`** — Provides `authContextOf` (user identity) and `callerContextOf` (client metadata passed downstream to the service).
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the 200 path.
+- **`src/infrastructure/http/controller.ts`** — Provides `refused` (renders the 409 "nothing to add" case) and `catchAs` (uniform error serialization).
+- **`src/modules/cart/routes.ts`** — Registers `postReorder` on the `POST /cart/reorder/:orderId` route.
 
 ## Notes
 
-- The response body on success is the *current* cart view, not just the copied lines—clients should treat it as the authoritative cart state.
-- A `409` (not `422` or `200-with-empty-array`) signals "order existed but nothing could be re-added," letting clients distinguish "delisted everything" from "invalid request."
-- The controller performs no validation or filtering itself; all domain rules (ownership, catalogue lookup, skip logic) live in `cartService.reorderIntoCart`.
+- The endpoint is a POST (write to cart) even though the source order is only read; the doc comment calls this out explicitly.
+- If every line of the referenced order has been removed from the catalogue, the service signals "refused" and the controller answers **409** rather than returning a 200 with an empty cart.
+- Product-line skipping (catalogue-removed items) is handled inside `reorderIntoCart`; the controller does not filter lines itself.

@@ -2,26 +2,27 @@
 
 ## Purpose
 
-Unit test that verifies `GET /observability/metrics/overview` returns real numeric values for each domain row (auth, business) by incrementing the actual Prometheus counters and reading them back through the shared registry. It exists to catch the silent degradation path where a renamed or unregistered metric name yields zero instead of the true count — a failure no other test in the suite would surface.
+Unit tests for the `GET /observability/metrics/overview` controller. Verifies that each domain row in the response carries real counter values resolved by metric name from the shared Prometheus registry, and that a missing counter degrades to `0` rather than crashing.
 
 ## Key elements
 
-- **`counter(name)`** — resolves a metric by name off `metricsRegistry.getSingleMetric`, typed loosely as `{ inc(...) }` via `asStub`. Mirrors exactly how the controller looks up counters.
-- **`runOverview()`** — calls `getObservabilityMetricsOverview` with dummy args, then extracts the payload object passed to the mocked `successResponse`.
-- **`Overview` interface** — local shape of the expected response body (`auth.loginSuccess`, `auth.loginFailure`, `auth.signupSuccess`, `business.checkoutSuccess`, `business.ordersCreated`).
-- **`describe('observability metrics overview')`** — five tests: one per wired counter (auth login, auth signup, cart checkout, orders created) plus one absent-counter test that removes a metric, asserts the row degrades to `0`, then re-registers it.
+- **`counter(name)`** – Resolves a counter via `metricsRegistry.getSingleMetric(name)` and wraps it in a loose stub exposing only `.inc()`. Typed loosely to avoid asserting the registry's `Metric` union narrowing.
+- **`runOverview()`** – Calls `getObservabilityMetricsOverview` with dummy args, then extracts the payload the controller passed to the mocked `successResponse`.
+- **`Overview`** – Interface describing the subset of the response shape this suite asserts on (`auth`, `business`, `database` rows).
+- **Side-effect imports** (`@modules/account/module`, `@modules/cart/module`, `@modules/orders/module`) – Pull in each module's route/controller/metrics chain so real counters register on the shared registry without the test naming any module's internals.
+- **Six test cases** – One per wired metric row (login, signup, checkout, orders, db queries/errors) plus one absent-counter case that removes a metric from the registry, asserts `0`, and restores it.
 
 ## Relationships
 
-- **`get-observability-metrics-overview.ts`** — the unit under test; `runOverview` invokes it directly.
-- **`metrics-http.ts`** — provides `metricsRegistry`; the test resolves counters by name and uses `removeSingleMetric`/`registerMetric` in the absent-counter case.
-- **`response.ts`** — `successResponse` is mocked so the test can capture the controller's output payload.
-- **`account/module.ts`, `cart/module.ts`, `orders/module.ts`** — imported purely for the side-effect of registering their counters on the shared registry (routes → controllers → `metrics.ts`). No symbols from these modules are used in assertions.
-- **`tests/support/stub.ts`** — provides `asStub` to narrow the registry's `Metric` union to the minimal `Counter`-like shape the test needs.
+- **`get-observability-metrics-overview.ts`** – System under test; called inside `runOverview`.
+- **`metrics-http.ts`** – Source of `metricsRegistry`; the test reads from and mutates it (inc, remove, re-register) to drive counter state.
+- **`response.ts`** – `successResponse` is jest-mocked to capture the controller's output payload.
+- **`account/module.ts`, `cart/module.ts`, `orders/module.ts`** – Imported purely for their side effects (registering counters on the shared registry). No direct API calls into them.
+- **`tests/support/stub.ts`** – Provides `asStub` for the loosely-typed counter handle.
 
 ## Notes
 
-- The registry is **process-global**; the absent-counter test must restore the metric after itself (`metricsRegistry.registerMetric(removed)`) because other suites in the same worker read the same instance.
-- The module-manifest imports are a deliberate boundary trick: they register counters without importing any domain controller or service, keeping this spec independent of domain internals. Removing a domain module is only safe here because the counter degrades to absent, not because the import would fail.
-- `successResponse` and `rejectResponse` are both replaced with `jest.fn()`; the test only ever reads `successResponse`'s call args.
-- `jest.clearAllMocks()` runs in `beforeEach`, so the mocked response's call history is clean per test.
+- The "deleted module" test mutates the process-global registry (`removeSingleMetric` / `registerMetric`). It **must** restore the metric, because other suites in the same worker read the same instance.
+- Assertions use **delta** (after − before) rather than absolute values, making the suite resilient to test ordering and to other tests incrementing the same counters.
+- The controller is called with `{} as never` for both args; the tests rely entirely on the mocked `successResponse` for output capture, so no real HTTP or DI wiring is needed.
+- Side-effect module imports are the *only* way counters land on the registry in this spec—intentionally mirroring the controller's name-based lookup boundary so the test stays valid if a module is deleted.

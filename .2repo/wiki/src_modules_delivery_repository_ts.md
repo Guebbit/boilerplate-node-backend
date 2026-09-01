@@ -1,27 +1,24 @@
 # src/modules/delivery/repository.ts
 
 ## Purpose
-
-Data-access layer for shipment documents. Wraps the shared base-repository factory with standard CRUD, then adds the four domain-specific queries the courier service actually needs: lookup by order, idempotent creation, listing in-transit parcels, and a concurrency-safe status transition.
+Defines the shipment repository for the delivery module: the standard CRUD surface provided by the shared repository factory, plus four domain-specific lookups the courier service relies on (order-based retrieval, idempotent creation, listing in-transit parcels, and atomic conditional status transitions).
 
 ## Key elements
-
-- **`shipmentRepository`** (sole export) — a plain object that spreads `createBaseRepository<ShipmentDocument>` and adds four methods. Its type is written out explicitly (intersection with `BaseRepository<ShipmentDocument>` plus the four method signatures) because Mongoose's inferred generics hit the TS 7056 serialization limit at an export boundary.
-- **`findByOrderId(orderId)`** — `findOne` on `orderId`; returns `null` when no shipment exists yet (order still pre-warehouse).
-- **`upsertForOrder(orderId, trackingCode)`** — `findOneAndUpdate` with `upsert: true` and `$setOnInsert`. Idempotent: a second call for the same order returns the existing parcel without minting a new tracking code.
-- **`findAllShipped()`** — `find({ status: 'shipped' })`; the work-list the courier tick iterates over.
-- **`updateStatusIfIn(orderId, from, to, extra?)`** — `findOneAndUpdate` whose **filter** includes `status: { $in: from }`. Only one concurrent caller can match and write; losers receive `null`. The `extra` field is merged into the `$set` alongside the new status.
+- **`shipmentRepository`** (export) — Typed object spreading `createRepository<ShipmentDocument>` and adding the four custom methods below. Return type is written out explicitly (see Notes).
+- **`findByOrderId(orderId)`** — Returns the single shipment linked to an order, or `null`.
+- **`upsertForOrder(orderId, trackingCode)`** — Creates the shipment idempotently via `findOneAndUpdate` + `$setOnInsert` + `upsert: true`; a re-entering order finds its existing parcel instead of minting a second tracking code.
+- **`findAllShipped()`** — Returns every shipment whose status is `'shipped'` (the courier's active work list).
+- **`updateStatusIfIn(orderId, from, to, extra?)`** — Atomically transitions status only when the current status is in `from`; returns the updated document or `null` if no row matched the filter.
 
 ## Relationships
-
-- **`src/infrastructure/persistence/base-repository.ts`** — provides `createBaseRepository` (spread into the object), the `toObjectId` helper, and the `BaseRepository` type that anchors the explicit annotation.
-- **`src/modules/delivery/model.ts`** — supplies `shipmentModel` (the Mongoose model used by every query) and `applyShipmentTransform` (passed to the base factory for document→domain mapping).
-- **`src/types/index.ts`** — source of the `ShipmentStatus` type used in the `updateStatusIfIn` signature.
-- **`src/modules/delivery/service.ts`** — primary consumer; calls `findByOrderId`, `upsertForOrder`, `findAllShipped`, and `updateStatusIfIn` to drive the courier lifecycle.
-- **`src/modules/delivery/tests/integration/service.test.ts`** — exercises these methods through the service's public API in integration tests.
+- **`src/infrastructure/persistence/create-repository.ts`** — Provides `createRepository` (spread into this object for CRUD), `toObjectId`, and the `Repository<T>` type used in the explicit return annotation.
+- **`src/modules/delivery/model.ts`** — Source of `shipmentModel` (the Mongoose model all queries hit), `applyShipmentTransform` (passed to the factory), and the `ShipmentDocument` type.
+- **`src/modules/delivery/service.ts`** — Primary consumer; the courier service calls `findByOrderId`, `upsertForOrder`, `findAllShipped`, and `updateStatusIfIn` to drive shipment lifecycle.
+- **`src/types/index.ts`** — Provides the `ShipmentStatus` union used in `updateStatusIfIn`'s signature.
+- **`src/modules/delivery/tests/integration/service.test.ts`** — Integration tests that exercise the service (and thus this repository) end-to-end against a real database.
 
 ## Notes
-
-- **Concurrency design of `updateStatusIfIn`:** the status precondition lives in the Mongo *filter*, not in a preceding read. Two racing ticks (operator double-click, demo script) both load the same parcel from `findAllShipped`, but only one passes the filter at write time; the other gets `null`. A read-modify-write sequence would let both stamp `deliveredAt` and the last writer would silently win.
-- **Keyed on `orderId`, not `_id`:** `orderId` carries a unique index and every caller in the module already holds the order, mirroring the convention in `paymentRepository`.
-- **`upsertForOrder` uses `$setOnInsert`, not `$set`:** the `trackingCode` and initial `status` are only written on first creation; a re-shipped order keeps its original tracking code.
+- The return type of `shipmentRepository` is spelled out manually because Mongoose's inferred generics are too large for TypeScript to serialize at an export boundary (error TS7056). This is the same reason the `Repository` type alias exists in the factory.
+- `updateStatusIfIn` deliberately puts the status condition in the **filter**, not in a preceding read. Two concurrent ticks (double-click, demo racing a manual advance) would otherwise both load the same `'shipped'` parcel and both stamp `deliveredAt`; the filter makes mongod evaluate the match atomically, so exactly one writer wins and the loser receives `null`.
+- All order-keyed lookups use `orderId` (unique index) rather than `_id`, consistent with the convention in `paymentRepository` and `orderRepository`.
+- The doc comment references `docs/modules/delivery.md` for broader module context.

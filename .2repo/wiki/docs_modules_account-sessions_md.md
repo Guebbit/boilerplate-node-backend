@@ -2,29 +2,29 @@
 
 ## Purpose
 
-Documents the internal session subsystem of the `account` module: how access and refresh tokens are signed, verified, and carried via cookies. It exists so readers understand the auth-resolution chain without re-deriving it from three source files (`config.ts`, `jwt.ts`, `cookies.ts`).
+Documents the session subsystem: how access/refresh tokens are generated, verified, and stored in cookies, and why the `session/` folder is deliberately sealed off from all other modules.
 
 ## Key elements
 
-- **`config.ts`** — Parses `NODE_TOKEN_ACCESS_TIME` and the three refresh-tier variables (`SHORT`/`MEDIUM`/`LONG`). Sole place a deployment's session duration is resolved. Holds no token, issues none.
-- **`jwt.ts`** — Signs and verifies both token types against the lifetimes in `config.ts`.
-- **`cookies.ts`** — Sets and clears the refresh-token cookie and the non-secure logged-in-hint cookie.
-- **Resolver (installed by `account` at import time)** — Fills `kernel/authentication.ts` port; returns only `id`, `email`, `username`, `admin`, `imageUrl`. No barrel; not importable outside the module.
-- **Two tokens, two transports** — Access token in `Authorization` header (JS-readable); refresh token in `httpOnly` cookie (JS-invisible).
-- **Three refresh tiers** — `short` / `medium` / `long`, mapped to env vars, exposed as a single "remember me" choice.
-- **Cookie flags** — `httpOnly: true`, `secure: prod only`, `sameSite: lax`, `path: /`, `maxAge` tied to the chosen tier.
-- **Logged-in-hint cookie** — Second, non-secure, script-readable cookie carrying no credential; lets the client shell render correct chrome before the first request resolves.
-- **Logout path** — Writes/clears the `tokens` subdocument on the user record in `users`, enabling "logout everywhere" as a single write.
+- **`config.ts`** — Parses the three refresh-tier lifetimes (`NODE_TOKEN_REFRESH_TIME_SHORT/MEDIUM/LONG`) and the access-token lifetime (`NODE_TOKEN_ACCESS_TIME`) into a single config object. Holds no token; issues none.
+- **`jwt.ts`** — Signs and verifies both the access token and the refresh token against the lifetimes from `config.ts`.
+- **`cookies.ts`** — Sets/clears the `httpOnly` refresh-token cookie (flags: `httpOnly`, `secure` in prod only, `sameSite: lax`, `path: /`) and a separate non-secure "logged-in hint" cookie for client-shell rendering.
+- **Resolver (installed at import time by `account`)** — Fills the kernel's `authentication` port so every guard (`getAuth`, `isAuth`, `isAdmin`) can resolve identity before the first request. Returns only the port-declared fields (`id`, `email`, `username`, `admin`, `imageUrl`).
+- **Two-token model** — Access token in the `Authorization` header (JS-readable); refresh token in the `httpOnly` cookie (not script-accessible).
+- **Logout everywhere** — A single write to the user document's `tokens` subdocument (see `users`) invalidates all active sessions without a blocklist.
 
 ## Relationships
 
-- **`docs/modules/account.md`** — Parent module. `account` imports `session/` via relative paths, installs the resolver into the kernel port, and owns the folder. The `account → users` edge is typed `shared-kernel` specifically because this module writes the `users.tokens` array.
-- **`docs/api/endpoints.md`** — The login, refresh, and logout endpoints are the external touchpoints that exercise the three session files. The endpoint contracts (which header/cookie to read or set) depend on the conventions documented here.
+- **`account`** — Parent module. Installs the resolver into the kernel port at import time and owns all token issuance. `session/` is an internal folder of `account`, not a standalone layer.
+- **`users`** — Stores refresh tokens in the user document's `tokens` subdocument. The `account → users` edge is typed `shared-kernel` because `account` writes that array directly.
+- **`cart`** — The only external consumer of `account`'s barrel; receives `addressForCheckout`. It never touches `session/` internals.
+- **`request-flow`** — Documents where the kernel guard sits in the request lifecycle; the guard delegates to the resolver described here.
+- **`strategic-ddd`** — Explains the cost and intent of the `shared-kernel` relationship between `account` and `users`.
+- **`security`** — Covers the broader security context (headers, rate limits, hashing) that the cookie flags and token design must satisfy.
 
 ## Notes
 
-- **Not published.** `session/` has no barrel and must not be imported from outside the module. The only thing `account`'s barrel exports is `addressForCheckout` (for `cart`).
-- **401 vs 403 distinction is intentional.** A bad token → `401`; a valid token whose user record is gone → `403`. Collapsing them would leak account existence.
-- **`secure` is production-only** so local `http://` development still works without weakening deployed cookies.
-- **`path: /`** is set because refresh and logout live on different routes.
-- **`config.ts` name is deliberate** — it contains no token logic and issues nothing; it is purely a lifetime parser.
+- **No barrel, no external imports.** `session/` may not be imported from outside `account`. The only thing the `account` barrel publishes is `addressForCheckout` (for `cart`).
+- **401 ≠ 403.** A bad/expired token → 401. A valid token whose user record no longer exists → 403 (resolver returns `undefined`). Collapsing these two leaks whether an account exists.
+- **`secure` is conditional.** The refresh cookie is `secure` in production but deliberately not in local dev so `http://localhost` works without extra setup.
+- **The hint cookie is intentionally non-secure and JS-readable.** It carries no credential; its sole purpose is letting the client shell render correct chrome before the first auth round-trip completes.

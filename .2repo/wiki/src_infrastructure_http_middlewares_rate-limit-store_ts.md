@@ -2,30 +2,34 @@
 
 ## Purpose
 
-Provides a shared, lazy-initialising Redis-backed store for `express-rate-limit` counters so that rate-limit budgets are enforced across all worker processes and instances rather than per-process. Falls open (passes requests through) when Redis is unreachable, logging the outage once at error severity.
+Provides the storage backend for `express-rate-limit` counters. Because the default in-process `Map` multiplies every budget by the worker count under cluster mode, this file selects a Redis-backed store (shared across workers and instances) when a Redis URL is available, and falls back to `MemoryStore` otherwise. It deliberately uses a **separate** Redis connection from the cache adapter so that disabling the cache never silently disables rate limiting.
 
 ## Key elements
 
-- **`KEY_PREFIX`** – Redis key namespace (`NODE_REDIS_RATE_LIMIT_PREFIX`, default `'rate-limit'`), separate from the cache prefix so a cache flush does not reset budgets.
-- **`redisUrl()`** – Resolves the limiter's Redis URL from `NODE_RATE_LIMIT_REDIS_URL`, `NODE_REDIS_URL`, or a composed host/port. Honours the `NODE_RATE_LIMIT_REDIS_ENABLED` kill switch (defaults `true`). Returns `undefined` when the limiter should use in-memory storage.
-- **`client` / `connecting` / `degraded`** – Module-level state for a single shared node-redis connection, its in-flight `connect()` promise, and a once-per-outage logging flag.
-- **`build(url)`** – Creates a node-redis client with `connectTimeout: 1000`, `reconnectStrategy: false`, and a mandatory `'error'` listener to prevent process crashes.
-- **`send(url, command)`** – Opens the connection on first use, coalesces concurrent `connect()` calls via `connecting`, sends a raw command, logs recovery on success, and on failure discards the client (next command starts fresh) and logs the outage once at `error` level.
-- **`lazyRedisStore(namespace, url)`** – Returns an `express-rate-limit` `Store` whose `RedisStore` is constructed on the first `increment` call rather than at module load. Replays stored `Options` through `init()` (with a `.catch` to avoid unhandled-rejection crashes) and delegates `increment`/`decrement`/`resetKey`/`get` to the inner store.
-- **`createStore(namespace)`** *(truncated in source)* – The public entry point: selects Redis or `MemoryStore` based on whether `redisUrl()` returned a value, passing the result to the limiter middleware.
+- **`rateLimitStore(namespace)`** *(export)* — Entry point. Resolves the Redis URL; returns a lazy `RedisStore` if one is available, or a `MemoryStore` (logging at `error` level when cluster workers > 1).
+- **`stopRateLimitStore()`** *(export)* — Releases the shared Redis connection on shutdown so a restart begins from a clean socket.
+- **`KEY_PREFIX`** — Redis key namespace (default `'rate-limit'`), independent of the cache prefix so a cache flush doesn't reset budgets.
+- **`redisUrl()`** — Resolves the limiter's Redis URL via a fallback chain: explicit `NODE_RATE_LIMIT_REDIS_URL` → inherited `NODE_REDIS_URL` → composed from `NODE_REDIS_HOST`/`NODE_REDIS_PORT`. Honors the `NODE_RATE_LIMIT_REDIS_ENABLED` kill-switch flag.
+- **`build(url)`** — Creates a node-redis client with `reconnectStrategy: false` and a mandatory `error` listener (prevents unhandled-EventEmitter crash).
+- **`connectionFor(url)`** — Memoized `ManagedConnection` shared by all limiters. Fails **closed** (`getOrThrow` rejects) and logs at `error` on unavailability. Reuses the same client across connect attempts (node-redis rejects a second `connect()` on an open socket).
+- **`send(url, command)`** — Executes one raw Redis command. On failure destroys the client, forgets the connection, reports unavailability, and rethrows (caller turns this into fail-open).
+- **`lazyRedisStore(namespace, url)`** — Wraps `RedisStore` so `init` (which loads Lua scripts / opens a connection) is deferred to the first `increment` call, keeping module import side-effect-free. The `init().catch()` is load-bearing to avoid a fatal unhandled rejection.
 
 ## Relationships
 
-- **`security.ts`** – The consumer. Imports the store factory and configures `passOnStoreError: true` on `express-rate-limit`, which turns the `send()` rejection into "allow the request" rather than a 500.
-- **`logger.ts`** – Used for the once-per-outage `error` log, the recovery `info` log, and the `init`-failure `error` log.
-- **`environment.ts`** – Source of `environmentFlag` (for `NODE_RATE_LIMIT_REDIS_ENABLED`) and `environmentNumber` (used elsewhere in the module for numeric config).
-- **`server-lifecycle.ts`** – Governs when the process exits; relevant because this file's no-reconnect / lazy-connection design ensures a process that never serves a request does not hold an open socket or block the event loop.
-- **`rate-limit-store-selection.test.ts`** – Verifies the Redis-vs-memory selection logic (enabled/disabled flag, URL fallback chain).
-- **`rate-limit-store.test.ts`** – Exercises the lazy connection, fail-open behaviour, and single-connection concurrency guard.
+- **`rate-limit.ts`** — The sole consumer. Calls `rateLimitStore(namespace)` per limiter and sets `passOnStoreError: true`, converting the rejections this file throws into "let the request through."
+- **`managed-connection.ts`** — Supplies the `manageConnection` lifecycle (memoised handle, deduped connect, warn-once, `forget`, `stop`) that `connectionFor` delegates to.
+- **`environment.ts`** — Provides `environmentFlag` (the `NODE_RATE_LIMIT_REDIS_ENABLED` kill-switch) and `environmentNumber` (worker-count check for the `MemoryStore` warning).
+- **`logger.ts`** — Emits `info` on Redis recovery and `error` on unavailability / failed store init / per-process counting warning.
+- **`server-lifecycle.ts`** — Calls `stopRateLimitStore()` during graceful shutdown.
+- **`rate-limit-store-selection.test.ts`** — Unit-tests the store-selection logic (Redis vs. Memory, kill-switch, URL fallback).
+- **`rate-limit-store.test.ts`** — Unit-tests store behavior (lazy init, send/fail-open, connection reuse, `stopRateLimitStore`).
 
 ## Notes
 
-- The `connecting` promise exists to prevent a double-`connect()` race: without it, two commands arriving before the handshake completes each call `connect()`, the second receives "Socket already opened", its error path destroys the shared client, and the first command then fails with "The client is closed".
-- `reconnectStrategy: false` is intentional: a background retry loop keeps the event loop alive and prevents clean process exit in scripts that import the limiter but never serve a request.
-- `passOnStoreError` (set in `security.ts`) is the mechanism that converts a `send()` rejection into a pass-through; this file does not itself decide whether to allow or deny.
-- The store is chosen **once** at startup. A store that swapped between Redis and memory mid-window would reset counters on each swap, effectively disabling the limiter.
+- **Fail-open, not fail-closed.** Unlike the cache adapter, an unavailable Redis causes requests to pass through unbudgeted rather than returning 500. The rationale is stated in the module header: an infrastructure blip should not become an authentication outage.
+- **No reconnect loop.** `reconnectStrategy: false` is intentional — a retry loop would keep the event loop alive after the process should exit. One clean try per command; the next command starts from a fresh socket.
+- **Explicit integer reply type.** `sendCommand<RedisReply>` is stated rather than inferred; only `INCR`, `DECR`, `PTTL`, `DEL` are ever issued, all of which return integers.
+- **Client reuse across connect attempts.** Unlike the cache adapter, a new client is *not* created per attempt — node-redis throws `Socket already opened` if a second `connect()` races the first. The existing client is destroyed and a fresh one built only after a definitive failure.
+- **Lazy `init` is critical.** `RedisStore.init` loads Lua scripts (a network round-trip). Deferring it past module load keeps `import` safe in tests and SSR contexts.
+- **`forget()` wrapper.** The memoized `redisConnection.forget` is overridden to also reset the local `redisClient` reference, ensuring the next connect attempt builds a fresh client rather than reusing a destroyed one.

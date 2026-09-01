@@ -2,33 +2,26 @@
 
 ## Purpose
 
-Integration tests that verify the authentication and authorization behavior of the two observability endpoints (`GET /observability/events` and `GET /observability/metrics`). Each endpoint uses a different auth mechanism (cookie vs. bearer token) because of the constraints of its caller (SSE vs. Prometheus scraper), and the tests are split accordingly to confirm that unauthenticated, unprivileged, forged, and revoked credentials are all rejected.
+Integration tests for the two observability endpoints (`GET /observability/events` and `GET /observability/metrics`), verifying that each one's distinct authentication scheme correctly accepts legitimate callers and rejects every form of unauthorized or malformed access.
 
 ## Key elements
 
-- **`signIn(role)`** — Helper that creates a user via the test factory, posts to `/account/login`, and extracts the `jwt` refresh cookie from the `Set-Cookie` header.
-- **`describe('GET /observability/events')`** — Four tests against the SSE endpoint:
-  - No cookie → 401
-  - Non-admin cookie → 403
-  - Forged cookie → 401
-  - Validly-signed but revoked token (tokens array wiped via `userRepository`) → 401
-- **`withToken(token, run)`** — Helper that sets/unsets `NODE_METRICS_TOKEN`, builds a minimal Express app guarded by `isMetricsScraper`, runs a supertest request, then restores the original env value.
-- **`describe('GET /observability/metrics')`** — Tests:
-  - Correct bearer token → 200
-  - Parametrized rejections: no header, wrong token, wrong-length token, malformed header → 401
-  - `NODE_METRICS_TOKEN` unset → 503 (deny-by-default)
+- **`signIn(role)`** — Helper that creates a user (admin or regular) via fixtures, performs a real `POST /account/login`, and returns the user record plus the `jwt=` refresh cookie from the `Set-Cookie` header.
+- **`describe('GET /observability/events')`** — Four tests confirming the SSE endpoint rejects: no cookie (401), non-admin cookie (403), forged cookie (401), and a validly-signed-but-revoked token (401).
+- **`describe('GET /observability/metrics')`** — Tests the scraper-token endpoint: accepts the configured `NODE_METRICS_TOKEN` bearer (200), rejects missing/wrong/length-mismatched/malformed tokens (401), and returns 503 when the env var is unset (deny-by-default).
+- **`withToken(token, run)`** — Saves and restores `process.env.NODE_METRICS_TOKEN`, dynamically imports `isMetricsScraper` from `@infrastructure/http/middlewares/rate-limit`, mounts it on a throwaway Express app, and hands that app to the test callback.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — Provides the `api()` supertest helper used for all `/observability/events` requests.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module level to seed and reset the database before tests run.
-- **`src/modules/users/tests/factory.ts`** — Supplies `createUser`, `createAdminUser`, and `PLAIN_PASSWORD` for the `signIn` helper.
-- **`src/modules/users/index.ts`** — Exports `userRepository`, used directly in the revocation test to clear `stored.tokens` and persist.
-- **`src/modules/users/repository.ts`** — Backing implementation for `findByIdWithCredentials` and `save` called in the revocation test.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is invoked at module top level to prepare the test database before any test runs.
+- **`tests/support/http.ts`** — `api` is imported as the supertest-wrapped application under test for all event-endpoint requests and the login call.
+- **`src/modules/users/tests/fixtures.ts`** — `createUser`, `createAdminUser`, and `PLAIN_PASSWORD` supply the seed credentials used by `signIn`.
+- **`src/modules/users/index.ts`** — Re-exports `userRepository`, which is imported here.
+- **`src/modules/users/repository.ts`** — `userRepository.findByIdWithCredentials` and `.save` are called in the revoked-token test to directly clear `stored.tokens` on the user document (simulating revocation without needing the bearer-token-based logout route).
 
 ## Notes
 
-- The metrics tests build their own Express instance with `cookieParser()` and the `isMetricsScraper` middleware (imported dynamically from `@infrastructure/http/middlewares/security`) rather than hitting the full app. This isolates the auth decision from route-level side effects.
-- The revocation test bypasses `POST /account/logout-all` (which requires a bearer token the SSE client cannot send) and mutates the DB directly—intentionally, to prove that signature validity alone is insufficient.
-- `withToken` restores the original `NODE_METRICS_TOKEN` in a `finally` block; tests that mutate `process.env` in parallel could interfere, but Jest runs test files serially by default here.
-- The deny-by-default 503 (not 401/403) when the token is unset is a deliberate product decision: an unauthenticated metrics endpoint is a misconfiguration that should be loud, not silently open.
+- The events endpoint is tested with cookie auth exclusively because `EventSource` cannot set request headers; the metrics endpoint uses a standard `Authorization: Bearer` header.
+- The metrics tests spin up a **separate** Express instance (not the main app) to isolate the `isMetricsScraper` middleware and the env-var lifecycle.
+- The revoked-token test bypasses `POST /account/logout-all` deliberately — that route requires a bearer token the SSE test client does not possess. The assertion is narrower: a signature that is still cryptographically valid but whose backing record is gone must not grant access.
+- `setupTestDb()` runs at import time (module-level side effect), so test isolation depends on the test runner's per-file isolation.

@@ -2,31 +2,30 @@
 
 ## Purpose
 
-Implements a Server-Sent Events (SSE) endpoint that pushes live process and HTTP metrics to connected dashboard clients every 5 s, with a 15 s heartbeat to survive proxy idle timeouts. SSE was chosen over WebSockets because the data is strictly one-way, requires no protocol upgrade, and browsers reconnect automatically via `EventSource`.
+Implements a Server-Sent Events (SSE) stream that pushes live observability metrics (memory, HTTP counters, connection counts) from the server to a dashboard every 5 seconds. It chooses SSE over WebSockets because the data is strictly one-way, requires no protocol upgrade or extra dependency, and gets free auto-reconnect from the browser's built-in `EventSource`.
 
 ## Key elements
 
-- **`sseClients`** (module-level `Set<Response>`) — tracks every active SSE connection in this worker process; used for leak detection and O(1) cleanup.
-- **`UPDATE_INTERVAL_MS` / `HEARTBEAT_INTERVAL_MS`** — 5 000 ms and 15 000 ms push/heartbeat cadences.
-- **`writeEvent(response, event, payload)`** — internal helper that writes a single SSE frame (`event:` / `data:` / blank-line terminator).
-- **`getActiveSseClients()`** — exported; returns `sseClients.size` so the dashboard can surface its own connection count (self-referential leak detector).
-- **`buildObservabilityPayload()`** — exported async function; merges `processSnapshot()` with `getHttpRequestCounters()` into a single `ObservabilityMetricsPayload` matching the asyncapi.yaml schema. All numeric fields are raw cumulative values (client computes rates).
-- **`writeMetricsEvent(response, eventName)`** — internal fire-and-forget wrapper; swallows all rejections so a dead socket or slow metrics read never crashes the interval loop.
-- **`streamObservabilityMetrics(response)`** — exported entry point; sets SSE headers (`text/event-stream`, `no-cache no-transform`, `keep-alive`), flushes headers immediately, registers the client, sends an initial `METRICS_SNAPSHOT` frame, then schedules the update and heartbeat intervals. Tears down both intervals and removes the client from `sseClients` on the `close` event.
+- **`streamObservabilityMetrics(response)`** — exported entry point. Sets SSE headers, flushes them immediately, sends an initial `METRICS_SNAPSHOT` frame, then schedules a 5 s update interval and a 15 s heartbeat interval. Registers a `close` listener that clears both intervals and removes the response from the client set.
+- **`buildObservabilityPayload()`** — exported. Assembles a single `ObservabilityMetricsPayload` by merging `processSnapshot()` (sync) with `getHttpRequestCounters()` (async). Returns a timestamped object matching the asyncapi.yaml schema.
+- **`getActiveSseClients()`** — exported. Returns `sseClients.size`; used inside the payload so a connection leak is visible on the dashboard that feeds on it.
+- **`writeEvent(response, event, payload)`** — internal. Writes one SSE frame in the strict `event:`/`data:`/`\n\n` wire format.
+- **`writeMetricsEvent(response, eventName)`** — internal. Fire-and-forget wrapper around `buildObservabilityPayload` + `writeEvent`; all errors are silently swallowed so a bad read or a dead socket never crashes the interval.
+- **`sseClients`** — module-level `Set<Response>` tracking connected clients. Per-process (not shared across cluster workers).
 
 ## Relationships
 
-- **`@infrastructure/observability/metrics-http`** — calls `getHttpRequestCounters()` to read cumulative request/error totals for each payload frame.
-- **`@infrastructure/observability/process-snapshot`** — calls `processSnapshot()` for Node.js memory, uptime, and other runtime stats.
-- **`@types`** — imports `OBSERVABILITY_CHANNELS` (channel-name constants shared with `asyncapi.yaml`), `ObservabilityMetricsPayload`, and `ObservabilityChannel`.
-- **`src/modules/observability/routes.ts`** — the Express route handler that invokes `streamObservabilityMetrics(response)` to open the SSE stream.
-- **`tests/unit/infrastructure/observability/stream.test.ts`** — unit tests covering the exported functions and stream lifecycle.
+- **`src/types/index.ts`** — imports the `OBSERVABILITY_CHANNELS` constants and the `ObservabilityMetricsPayload` / `ObservabilityChannel` types that define the on-the-wire contract.
+- **`src/infrastructure/observability/metrics-http.ts`** — imports `getHttpRequestCounters` to fill the `http` section of each payload.
+- **`src/infrastructure/observability/process-snapshot.ts`** — imports `processSnapshot` for uptime and V8/Node memory fields.
+- **`src/modules/observability/routes.ts`** — the Express route handler that calls `streamObservabilityMetrics` to open the SSE endpoint.
+- **`tests/unit/infrastructure/observability/stream.test.ts`** — unit tests for the stream module itself.
+- **`src/modules/observability/tests/unit/routes.test.ts`** — integration-level tests exercising the SSE route (and thus this file) through the router.
 
 ## Notes
 
-- **Per-process scope:** Under `cluster` each worker maintains its own `sseClients` set and its own intervals; there is no cross-worker coordination.
-- **Teardown is on `'close'`, not `'finish'`:** An SSE response never "finishes" normally, so `'close'` is the only reliable disconnect signal. Missing it leaks both the intervals and the `Response` object.
-- **All writes are fire-and-forget:** `writeMetricsEvent` intentionally swallows rejections. An unhandled rejection inside a `setInterval` callback would crash the process.
-- **Channel names are contractual:** They come from `OBSERVABILITY_CHANNELS` in `@types` and must stay in sync with `asyncapi.yaml`; do not hard-code string literals.
-- **Payloads are raw, not pre-formatted:** Memory values are in bytes, HTTP counters are cumulative-since-boot. The dashboard is responsible for differencing consecutive frames to derive rates.
-- **SSE wire format is whitespace-significant:** The trailing `\n\n` in `writeEvent` is the frame delimiter; omitting it causes the client to buffer indefinitely.
+- The response never calls `res.end()`; teardown is driven exclusively by the `'close'` event (a `'finish'` handler would never fire).
+- `void` is placed before the floating promise in `writeMetricsEvent` to signal to lint tooling that the un-awaited Promise is intentional.
+- The heartbeat frame carries a real payload (not an SSE comment line) so the dashboard can double it as a liveness/staleness signal.
+- All metrics in a single frame are cumulative-since-boot; the client is expected to difference consecutive frames to derive rates.
+- Under a cluster (multiple workers), each process tracks only its own `sseClients`; there is no cross-worker aggregation here.

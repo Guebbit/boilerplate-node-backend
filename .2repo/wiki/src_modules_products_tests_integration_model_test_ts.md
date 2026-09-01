@@ -2,24 +2,26 @@
 
 ## Purpose
 
-Integration tests that verify a single invariant: product responses must never expose Mongoose internals (`_id`, `__v`) on any serialization path — both hydrated documents (via `toJSON`) and `.lean()` list results (mapped manually by the service).
+Integration test that verifies the serialization invariant: product responses must never expose Mongoose's `_id` or `__v` fields, regardless of whether the data path goes through a hydrated document (`toJSON`) or a `.lean()` query (plain-object list). It exists to guard against a regression where either path leaks internal MongoDB fields to the API consumer.
 
 ## Key elements
 
-- **`describe('product serialization')`** — top-level suite containing three cases, each targeting a different response path.
-- **Test: "normalizes a hydrated document via toJSON"** — creates a product, calls `product.toJSON()`, asserts `id` is a string form of `_id` and that neither `_id` nor `__v` appear in the JSON.
-- **Test: "normalizes a single lookup via productService.getById (no .lean())"** — exercises the single-fetch path through the service, asserts the returned document's `toJSON()` shape.
-- **Test: "normalizes a lean list via productService.search"** — exercises the list path (`.lean()`), casts the plain object with `asStub`, asserts `id` matches a 24-char hex pattern and that `_id`/`__v` are `undefined`.
+- **Module docblock** — states the invariant and notes that `.lean()` bypasses `toJSON`, so the service must apply its own transform (`applyProductTransform`).
+- **`describe('product serialization')`** — single suite with three `it` blocks:
+  - *hydrated document via `toJSON`* — creates a product through the fixture, calls `product.toJSON()`, asserts `id` is present and `_id`/`__v` are absent from the JSON string.
+  - *single lookup via `productService.getById`* — exercises the non-lean service path; asserts the returned document's `toJSON()` shape.
+  - *lean list via `productService.search`* — exercises the `.lean()` list path; asserts `id` matches a 24-hex-char pattern and `_id`/`__v` are `undefined` on the raw item.
+- **`setupTestDb()`** — called at module top-level to initialize the test database before any test runs.
 
 ## Relationships
 
-- **`src/modules/products/service.ts`** — imports `getById`, `search`, and `callerScope`; the tests call these service functions to verify serialization at the boundary the API actually uses.
-- **`src/modules/products/tests/factory.ts`** — imports `createProduct` to seed known product documents before each assertion.
-- **`tests/support/setup-test-db.ts`** — calls `setupTestDb()` at module scope to provision a clean in-memory test database before the suite runs.
-- **`tests/support/stub.ts`** — imports `asStub` to cast `.lean()` plain objects (which lack Mongoose document typings) so property access can be asserted in TypeScript.
+- **`src/modules/products/service.ts`** — the unit under test. Calls `getById`, `search`, and `callerScope` to exercise both the hydrated and lean serialization paths.
+- **`src/modules/products/tests/fixtures.ts`** — provides `createProduct`, the helper used to seed a document in the test DB before each assertion.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, which configures the in-memory/test database connection for the suite.
+- **`tests/support/stub.ts`** — provides `asStub`, a type-assertion utility used to cast the `.lean()` item to a plain `Record<string, unknown>` for property checks.
 
 ## Notes
 
-- The file's header comment documents *why* two distinct code paths are tested: `.lean()` returns raw objects that bypass `toJSON`, so the service must apply its own transform (`applyProductTransform`). The third test exists specifically to guard that manual mapping.
-- `callerScope({ admin: true })` is passed to every service call; the tests do not exercise non-admin scopes.
-- The `id` field is expected to be the hex string of the original `_id` (24 lowercase hex chars), not an ObjectId instance.
+- The `.lean()` test does **not** go through `toJSON`; it inspects the raw object returned by the service. The transform that replaces `_id`→`id` and strips `__v` in that path lives in the service layer (referenced in the docblock as `applyProductTransform`), not in this test file.
+- `callerScope({ admin: true })` is the required context argument for the service calls; omitting it would likely trigger an authorization failure rather than a serialization issue.
+- The module is marked `@module` (not a named export), so it has no public API surface beyond registering the test suite.

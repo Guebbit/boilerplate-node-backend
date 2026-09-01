@@ -2,27 +2,26 @@
 
 ## Purpose
 
-Implements the `posthog` variant of the `AnalyticsProvider` interface. It exists as an alternative to the default Umami provider for projects that need identity-shaped funnels (stitching a user's timeline by `distinct_id`). Selected via `NODE_ANALYTICS_PROVIDER=posthog`; requires both `NODE_POSTHOG_API_KEY` and `NODE_POSTHOG_HOST` to be set.
+PostHog analytics provider — an alternative to the default `umami` that supports identity-shaped funnels by stitching a user's timeline via `distinct_id`. It exists as an opt-in (selected with `NODE_ANALYTICS_PROVIDER=posthog`) because PostHog is a hosted dependency that Umami is not.
 
 ## Key elements
 
-- **`isPostHogConfigured()`** – Exports a pure check: both env vars must be truthy.
-- **`_client`** (module-private, underscore-prefixed) – Lazily instantiated shared `PostHog` (from `posthog-node`) instance.
-- **`getClient()`** – Creates `_client` on first call using the API key and host from env; configures batch flush (`flushAt: 20`, `flushInterval: 10 000`).
-- **`posthogAnalyticsProvider`** – The exported `AnalyticsProvider` object with:
-  - `configured()` – delegates to `isPostHogConfigured()`.
-  - `capture(event)` – Enqueues the event on the client (non-blocking). Spreads caller properties first so the appended `trace_id` cannot be clobbered. Conditionally includes `trace_id` only when present.
-  - `shutdown()` – Clears `_client` synchronously (so a racing `capture()` gets a fresh client), then calls `shutdown()` on the previous instance to flush and await the in-flight HTTP request.
-- **`warnedAboutConfiguration`** – Module-private flag ensuring the "misconfigured" log warning fires exactly once.
+- **`isPostHogConfigured()`** — Returns `true` only when both `NODE_POSTHOG_API_KEY` and `NODE_POSTHOG_HOST` are set. Used as the guard before any event is captured.
+- **`_client`** (module-private) — Lazily-created singleton `PostHog` (from `posthog-node`). Buffering: `flushAt: 20`, `flushInterval: 10_000`.
+- **`getClient()`** — Creates `_client` on first call; safe to assume env vars are set because it is only reached past the `isPostHogConfigured()` guard.
+- **`warnedAboutConfiguration`** (module-private) — Ensures the "provider selected but unconfigured" warning is logged at most once.
+- **`posthogAnalyticsProvider`** — The exported `AnalyticsProvider` object implementing `configured()`, `capture()`, and `shutdown()`.
+  - `capture()` enqueues locally (non-blocking); spreads caller `properties` first, then appends `trace_id` if present, so the trace id cannot be clobbered.
+  - `shutdown()` clears `_client` *before* awaiting the flush, so a concurrent `capture()` creates a fresh client rather than enqueueing onto a closing one.
 
 ## Relationships
 
-- **`src/infrastructure/observability/analytics/index.ts`** – This file imports the `AnalyticsEvent` and `AnalyticsProvider` types defined there, conforming to the shared provider contract.
-- **`src/infrastructure/adapters/logger.ts`** – Imports the shared `logger` solely to emit the one-time misconfiguration warning inside `capture()`.
+- **`src/infrastructure/observability/analytics/index.ts`** — This file imports the `AnalyticsEvent` and `AnalyticsProvider` types from that index and exports an object conforming to the `AnalyticsProvider` contract.
+- **`src/infrastructure/adapters/logger.ts`** — Imported as `logger`; used for the one-time misconfiguration warning inside `capture()`.
 
 ## Notes
 
-- The host is deliberately explicit (not defaulted) so deploying to the wrong PostHog region is a visible config choice, not a silent fallback.
-- `shutdown()` must be called on process exit; without it, up to 20 buffered events are lost per deploy.
-- The non-null assertion on `NODE_POSTHOG_API_KEY` inside `getClient()` is safe only because the sole caller (`capture`) is guarded by `isPostHogConfigured()` first.
-- `capture()` is fire-and-forget with respect to the caller: the actual HTTP send happens on the next batch flush.
+- Both `NODE_POSTHOG_API_KEY` *and* `NODE_POSTHOG_HOST` must be set; the host is explicit so data is not silently shipped to the wrong region (US vs. EU vs. self-hosted).
+- Without calling `shutdown()`, up to 20 buffered events (or 10 s worth) are lost on every deploy.
+- The API key is a write-only server key; it never appears in client-side code.
+- The underscore-prefixed `_client` follows the project's convention for module-private mutable state.

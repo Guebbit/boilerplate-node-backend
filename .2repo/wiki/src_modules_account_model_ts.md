@@ -1,33 +1,27 @@
 # src/modules/account/model.ts
 
 ## Purpose
-
-Defines the Mongoose schema and model for a user's address book. One document per user (keyed by `userId`), storing an array of address entries. It exists so the `account` module owns a collection in its own right, and so address mutations touch one small document rather than the whole account record.
+Defines the Mongoose schema and compiled model for the user address book — one document per `userId`, holding an array of independently-addressable address entries. It lives in its own collection (mirroring the cart's pattern) so that editing a single address touches one small document rather than rewriting the entire user record.
 
 ## Key elements
-
-- **`AddressItem`** — TypeScript interface for a single stored address entry (`fullName`, `street`, `city`, `zip`, `country`, optional `label`/`phone`, required `default: boolean`).
-- **`AddressBookDocument`** — Mongoose `Document` interface for the top-level book: `userId`, `items: AddressItem[]`, timestamps.
-- **`AddressBookModel`** — `Model<AddressBookDocument>` type alias.
-- **`addressItemSchema`** — Subdocument schema for one entry. Explicitly sets `_id: true` so each entry is individually addressable (unlike cart/wishlist line items). `default` defaults to `false`.
-- **`applySerialization(addressItemSchema)`** — Renames `_id` → `id` in `toJSON()` output. Used by the demo-dataset export script, not by request-path code.
-- **`addressBookSchema`** — Top-level schema. `userId` is `unique: true`; `items` defaults to `[]`; timestamps enabled.
-- **`applyAddressBookTransform`** — Serialization transform for the book-level schema (`_id` → `id`, drops `__v`). Intended for lean reads via the base factory.
-- **`addressBookModel`** — The registered Mongoose model (`'AddressBook'`). All queries live in `./repository`, not here.
+- **`AddressItem`** — TypeScript interface for a single entry (`label`, `fullName`, `street`, `city`, `zip`, `country`, `phone`, `default`). Exactly one entry in a non-empty book has `default: true`; the repository enforces this, never the client.
+- **`AddressBookDocument`** — Interface for the full Mongoose document (`userId`, `items`, `createdAt`, `updatedAt`).
+- **`AddressBookModel`** — Type alias for `Model<AddressBookDocument>`; the shape `./repository` queries against.
+- **`addressItemSchema`** — Subdocument schema. Explicitly sets `{ _id: true }` so each entry is individually addressable (contrast: cart/wishlist line schemas omit this).
+- **`addressBookSchema`** — Top-level schema. `userId` is `unique: true`, making "one book per user" a database-level invariant.
+- **`applyAddressBookTransform`** — Serialization transform (`_id` → `id`, drops `__v`) exported for the repository factory's lean reads.
+- **`addressBookModel`** — The compiled Mongoose model (`'AddressBook'`).
 
 ## Relationships
-
-- **`src/infrastructure/persistence/serialize.ts`** — Provides `applySerialization`, used on both the item and book schemas to wire `_id` → `id` in JSON output.
-- **`src/modules/account/repository.ts`** — Owns all reads/writes against `addressBookModel`. Maintains the invariant that exactly one entry has `default: true` on every non-empty book.
-- **`src/modules/account/factory.ts`** — Creates/hydrates address-book instances from the model.
-- **`src/modules/account/services/addresses.ts`** — Maps `AddressItem` entries to the wire contract by hand; does **not** go through the serialization transforms defined here.
-- **`src/modules/account/index.ts`** — Barrel re-exports for the module.
-- **`src/modules/account/demo.ts`** — Seed/demo data for the address book collection.
-- **`src/modules/cart/services/checkout.ts`** — Reads the user's address book (likely via the repository) to resolve the shipping address during checkout.
+- **`src/infrastructure/persistence/serialize.ts`** — Provides `applySerialization`, applied to both `addressItemSchema` and `addressBookSchema` to wire up `toJSON`/`toObject` transforms.
+- **`src/modules/account/repository.ts`** — Imports `addressBookModel` and `applyAddressBookTransform`; all reads/writes go through `findOneAndUpdate({ userId }, …)`.
+- **`src/modules/account/services/addresses.ts`** — Maps stored entries to the wire-format `Address` by hand; request paths do **not** rely on the `applySerialization` transform (it is only exercised by `scripts/export-demo-dataset.ts` via `toJSON()`).
+- **`src/modules/account/tests/unit/schema-contract.test.ts`** — Validates the schema shape against the contract.
+- **`src/modules/account/fixtures.ts` / `demo.ts`** — Supply sample `AddressItem` data for dev/demo use.
+- **`src/modules/cart/services/checkout.ts`** — Consumes the address book (reads the `default: true` entry) during the checkout flow.
 
 ## Notes
-
-- `default` is the **wire name**; there is no separate mapping layer. The field is server-maintained (repository writes) and must never be trusted from client input.
-- Subdocuments intentionally keep `_id` (`_id: true` is the Mongoose default but is spelled out to contrast with cart/wishlist line schemas, which omit it). This `_id` is the handle every address endpoint accepts.
-- `applySerialization` is applied here only so that `toJSON()` (used by the demo-dataset export script) produces `id` instead of `_id`. Request-path serialization in `services/addresses.ts` bypasses this entirely.
-- `applyAddressBookTransform` is a book-level transform for lean-read normalization (drops `__v`, renames the book's own `_id`). It is not the same call as the item-level serialization above.
+- `default` is the wire name and the schema field name intentionally match; a mapping layer for a single boolean would only create drift.
+- The subdocument `_id` is load-bearing: two entries can be field-identical yet represent "home" vs. "office". Removing it would break update-by-id semantics.
+- `applyAddressBookTransform` exists specifically for lean (non-Mongoose) reads in the repository factory — it is not used in request handlers.
+- The `default: true` invariant (exactly one per non-empty book) is maintained exclusively by repository writes; the schema default is `false`.

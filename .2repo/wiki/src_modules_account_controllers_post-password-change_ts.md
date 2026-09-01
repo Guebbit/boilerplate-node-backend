@@ -2,30 +2,27 @@
 
 ## Purpose
 
-Controller for `POST /account/password`. Changes the authenticated user's password by requiring the current password as proof of credential possession — no email token or round-trip. Delegates the actual mutation to the account service and reports the outcome via i18n'd HTTP responses and a Prometheus counter.
+Thin HTTP adapter for `POST /account/password`. Validates the request body, delegates to the account service's `passwordChangeWithCurrent` method (which requires the current password as proof), and maps the service result onto a standardized HTTP response. Exists so the route layer stays declarative while business logic lives in the service.
 
 ## Key elements
 
-- **`postPasswordChange(request, response)`** — the sole export. Extracts the user id from auth context, validates the body with the `ChangePasswordBody` zod schema, calls `accountService.passwordChangeWithCurrent`, then maps the result (or error) to an HTTP response and a metric increment.
-- **`ChangePasswordBody`** (from `@api/schemas.zod`) — zod schema; `safeParse` gates the request before any service call. Expects `currentPassword`, `password`, and `passwordConfirm`.
-- **`authPasswordChangeTotal`** (from `../metrics`) — Prometheus counter, labeled `{ status: 'success' | 'failure' }`, incremented on every code path (validation failure, service failure, success, uncaught error).
-- **`authContextOf` / `callerContextOf`** (from `@infrastructure/http/request`) — pull the authenticated user id and caller metadata out of the Express request.
+- **`postPasswordChange`** (exported function) — Express handler. Extracts the authenticated user ID from the auth context, Zod-validates the body via `ChangePasswordBody.safeParse`, calls `accountService.passwordChangeWithCurrent`, and emits a success/failure response. Tracks outcomes with the `authPasswordChangeTotal` Prometheus counter.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — the controller's only business-logic dependency; calls `accountService.passwordChangeWithCurrent`.
-- **`src/modules/account/routes.ts`** — registers this handler on the `POST /account/password` route (behind `isAuth` middleware).
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` and `rejectResponse` for shaping the HTTP reply.
-- **`src/infrastructure/http/errors.ts`** — provides `rejectDatabaseError` for the `.catch` path (Mongoose `CastError` or generic `Error`).
-- **`src/infrastructure/http/controller.ts`** — provides `rejectValidation` for zod parse failures.
-- **`src/infrastructure/http/request.ts`** — provides `authContextOf` and `callerContextOf` accessors.
-- **`src/infrastructure/i18n/index.ts`** — provides the `t()` function used for the success message key `account.password-change.success`.
-- **`src/types/index.ts`** — supplies the `ChangePasswordRequest` generic type used in the Express `Request` signature.
+- **`src/infrastructure/http/controller.ts`** — uses `rejectValidation` to short-circuit on Zod parse failure.
+- **`src/infrastructure/http/errors.ts`** — uses `rejectDatabaseError` in the `.catch` path for Mongoose `CastError` / generic errors.
+- **`src/infrastructure/http/request.ts`** — calls `authContextOf` to read the authenticated user ID (set upstream by `isAuth` middleware) and `callerContextOf` to pass through IP/locale metadata.
+- **`src/infrastructure/http/response.ts`** — calls `successResponse` / `rejectResponse` to shape the final JSON payload.
+- **`src/infrastructure/i18n/index.ts`** — calls `t('account.password-change.success')` for the localized success message.
+- **`src/modules/account/metrics.ts`** — increments `authPasswordChangeTotal` with `status: 'success' | 'failure'` on every code path.
+- **`src/modules/account/services/index.ts`** — calls `accountService.passwordChangeWithCurrent(id, currentPassword, password, passwordConfirm, callerCtx)`.
+- **`src/modules/account/routes.ts`** — registers this handler as the `POST /account/password` route (this file is imported *by* routes, not the reverse).
+- **`src/types/index.ts`** — imports the `ChangePasswordRequest` generic type used to type `request.body`.
 
 ## Notes
 
-- Authentication is **not** checked here; it is guaranteed by the `isAuth` middleware applied in `routes.ts`. Do not add a redundant auth check in this file.
-- Other active sessions are **intentionally not revoked** by a password change. Session revocation belongs to `logout-all` or the sessions endpoints. This is a contract decision, not an oversight.
-- Validation uses `safeParse` (non-throwing). A missing/malformed field is treated as a *malformed request* (400-range), distinct from a wrong current password (service-level failure).
-- The `passwordConfirm` value is passed through to the service; the comparison logic lives there, not in the controller.
-- The `.catch` handler types the error as `CastError | Error`; any unhandled rejection from the service will land in `rejectDatabaseError`, which formats a generic 500.
+- Validation is split: **shape** errors (missing fields, wrong types) are caught by Zod *before* the service call and reported as a 400 via `rejectValidation`. **Semantic** errors (wrong current password) are returned by the service as `result.success === false` and surfaced through `rejectResponse`. These are distinct failure modes intentionally.
+- The comment in the source explicitly notes that this endpoint does **not** revoke other sessions — that is the separate `logout-all` endpoint's responsibility.
+- The handler is async-void (returns a promise chain, not `async/await`), so Express will not catch rejections from the `.then` callback; the `.catch` at the end is the sole error boundary.
+- The `id` from `authContextOf` is trusted unconditionally; the `isAuth` middleware is the only gate.

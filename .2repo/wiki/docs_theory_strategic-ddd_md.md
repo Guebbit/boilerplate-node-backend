@@ -2,29 +2,33 @@
 
 ## Purpose
 
-Documents the four strategic DDD patterns adopted in this codebase — bounded contexts, typed context maps, ubiquitous language, and subdomain classification — and how each is declared on the module manifest and enforced by cross-cutting tests. It exists so that architectural claims ("orders owns the order lifecycle", "authentication is generic") remain verifiable in code rather than drifting silently in prose.
+Documents the four strategic-level DDD patterns this repo actually adopts — bounded contexts, context mapping, ubiquitous language, and subdomain distillation — and frames each in terms of where the claim lives (folder, docblock, identifier, barrel) versus where enforcement lives (ESLint, structural import rules). Explicitly scoped to the *strategic* half; tactical patterns (entities, aggregates, domain repositories) are deferred to `tactical-ddd.md` and `TACTICAL_DDD_PLAN.md`.
 
 ## Key elements
 
-- **Bounded context rule** — one module = one context; deletion is `rm -rf` + one manifest line. Covered in depth in `modules.md`.
-- **Context map (`dependsOn` array)** — typed, labelled edges between modules with four kinds (`conformist`, `customer-supplier`, `published-language`, `shared-kernel`). Each edge carries `as` and `because` fields.
-- **Ubiquitous language** — language lives in identifiers; meanings live in per-module glossary sections. The former `language: {}` manifest field was removed.
-- **Subdomain classification** — each module is tagged `core`, `supporting`, or `generic`. Enforced rule: a `generic` module must not carry a `domain/` folder.
-- **Published language / barrel discipline** — a module's `index.ts` exports only what a sibling actually imports; no sibling, no barrel.
-- **Mermaid flowchart** — illustrates the claim-to-test relationship for `subdomain`, `dependsOn`, and language.
+- **Bounded context (§1)** — One module folder = one context; covered in depth in `modules.md`, assumed here.
+- **Context map kinds (§2)** — Four relationship types (`conformist`, `customer-supplier`, `published-language`, `shared-kernel`) with a cost-of-change table. Lives in each module's `module.ts` docblock.
+- **Ubiquitous language (§3)** — Language lives in identifiers; meaning lives in `glossary.md` (one section per module, preserving per-context divergence).
+- **Subdomain distillation (§4)** — Classifies modules as `core` / `supporting` / `generic`; states the rule that a `generic` module should not carry a `domain/` folder (and the deliberate absence of a converse rule).
+- **Published language / barrel (§5)** — `index.ts` as the sole import surface; ESLint enforces it structurally. Convention: publish only what a sibling actually imports; repositories require stronger justification than types.
+- **Mermaid flowchart** — Diagram separating "where the claim lives" (folder, docblock, identifiers) from "what makes it hold" (no barrel, eslint-plugin-boundaries, glossary).
+- **Removal notes** — Documents why `dependsOn`, `language`, and `subdomain` manifest fields were deleted in favor of prose next to code; cross-references `OVERENGINEERED.md` for the full argument.
 
 ## Relationships
 
-- **`TACTICAL_DDD_PLAN.md`** — sibling planning doc that prices adopting tactical DDD (entities, aggregates, repositories). This file explicitly scopes itself to what is *not* in that plan.
-- **`docs/theory/domain-layer.md`** — referenced for the packaging-vs-modelling distinction (§2–3) and for the current state of the `domain/` folder.
-- **`docs/theory/glossary.md`** — carries the per-module ubiquitous-language meanings that this page delegates to.
-- **`docs/theory/modules.md`** — source of the one-module-one-context rule this page assumes.
-- **`docs/theory/tactical-ddd.md`** — documents the two tactical patterns that *did* land (`Money`, order lifecycle table) as exceptions within this strategic framework.
-- **`tests/cross-cutting/context-map.test.ts`** — the enforcement test for the context map: no phantom edges, no undeclared imports, every edge has a human-written reason, `shared-kernel` stays to one allowlisted entry.
+- **`docs/theory/tactical-ddd.md`** — The complementary half; this page defers entities/aggregates/domains to it and links out for the two patterns that did land.
+- **`docs/theory/modules.md`** — Owns the "one folder per context" rule that this page assumes and builds on.
+- **`docs/theory/glossary.md`** — Holds the per-module language sections this page points to as the home for ubiquitous-language meaning.
+- **`docs/theory/domain-layer.md`** — Cited for the folder-vs-DDD distinction (packaging ≠ modelling).
+- **`docs/theory/index.md`** — Parent theory index; this page is one of its children.
+- **`docs/theory/module-lifecycle.md`** — Sibling theory page; the subdomain table and barrel conventions here interact with the lifecycle rules there.
+- **`docs/modules/cart.md`, `docs/modules/delivery.md`, `docs/modules/users.md`, `docs/modules/account.md`, `docs/modules/products.md`, `docs/modules/account-sessions.md`** — Concrete instances of the context-map kinds, barrel conventions, and subdomain classifications described here (e.g. `cart → delivery` as published-language, `account → users` as shared-kernel, `inventory`'s refusal to export repositories).
+- **`docs/reference/src-modules.md`** — The `src/modules/` directory structure that the folder-per-context rule and `rm -rf` test are applied to.
+- **`docs/reference/src-app.md`** — App-level wiring where the barrel/import boundary is ultimately consumed.
 
 ## Notes
 
-- Anticorruption layer is deliberately absent from the edge kinds — every nameable `dependsOn` target is a sibling in this repo; external providers (e.g. `payments` wrapping a PSP) sit behind `./providers`, not the registry.
-- Subdomain values are an *example*, not a finding: the file warns that a boilerplate has no true core domain and that a real project should re-decide every row.
-- No rule forces `core` modules to have a `domain/` folder; `products` is core without one by design.
-- Module specs and a barrel's own re-exports do not count as "consumers" when sizing the published surface.
+- The subdomain classification table is explicitly a **worked example for a boilerplate**, not a finding. A real project is expected to re-decide every row.
+- Several formerly-structural mechanisms (manifest fields, cross-cutting tests) were removed because they self-reported without runtime consumers; the structural enforcement (eslint-plugin-boundaries, no-barrel, `check:dependencies`) remains and is the real guardrail.
+- The file references `TACTICAL_DDD_PLAN.md` as a sibling file in the workspace (not in this repo's `docs/`), and `OVERENGINEERED.md` for the removal arguments.
+- Anticorruption layer is deliberately *not* in the context-map table; the note explains that it applies to external providers (e.g. `payments` → `./providers`), not to sibling modules in this repo.

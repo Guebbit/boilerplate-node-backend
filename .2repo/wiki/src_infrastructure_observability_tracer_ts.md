@@ -2,29 +2,27 @@
 
 ## Purpose
 
-Thin wrapper around the OpenTelemetry API that centralises span creation, span-context reading, and error annotation for the `boilerplate-node-backend` service. It lets any part of the codebase instrument an operation or correlate a log/audit/analytics event to a trace without importing OTel directly or worrying about the no-op fallback when no SDK is registered.
+Thin wrapper around the OpenTelemetry `@opentelemetry/api` interface package, providing a small set of helpers for creating custom spans and reading the active trace context. Exists so that application code never imports the OTel API directly and so that all hand-written spans share a single, consistent tracer name.
 
 ## Key elements
 
-- **`getTracer()`** — Returns the active OTel tracer scoped to the name `boilerplate-node-backend`. Called lazily on each use (not cached at module level) so it always reflects the currently registered provider.
-- **`withSpan<T>(spanName, callback, attributes?)`** — Runs an async callback inside a new child span. Sets OK/ERROR status, records the exception on failure, always ends the span, and re-throws the error. Uses `startActiveSpan` so the span is *current* for the duration of the callback (children attach automatically via async context).
-- **`getActiveSpanContext()`** — Reads the trace ID and span ID from the currently active span via `trace.getActiveSpan()`. Returns `undefined` fields when no span is active or when IDs are the all-zeros sentinel (no-op context). Used to stamp `traceId`/`spanId` onto log lines, audit events, and analytics events for cross-signal correlation.
-- **`recordErrorOnActiveSpan(error)`** — Annotates the currently active span with an ERROR status and a structured exception event. Does **not** call `span.end()`; the span's lifecycle belongs to whoever opened it.
-- **`isValidOtelId`** (internal) — Rejects all-zeros trace/span IDs that OTel emits in no-op contexts, preventing misleading `trace_id: 000…0` values in logs.
+- **`getTracer()`** — Returns the active OTel tracer (name: `boilerplate-node-backend`). Called lazily each time so a no-op tracer grabbed at import time (before the SDK registers) is never cached.
+- **`withSpan(spanName, callback, attributes?)`** — Runs an async callback inside a new *active* child span. Sets status OK/ERROR, records exceptions, calls `span.end()`, and re-throws. Uses `startActiveSpan` (not `startSpan`) so nested work inherits the span automatically.
+- **`getActiveSpanContext()`** — Reads the current `traceId` / `spanId` from OTel's async context. Filters out all-zero (no-op) IDs, returning `undefined` for absent fields.
+- **`recordErrorOnActiveSpan(error)`** — Annotates the currently active span with ERROR status and an exception event. Deliberately does **not** call `span.end()`; the span is owned by whoever opened it.
+- **`isValidOtelId`** (internal) — Rejects empty or all-zero hex strings so no-op spans don't produce fake IDs.
 
 ## Relationships
 
-- **`src/infrastructure/observability/audit.ts`** — Calls `getActiveSpanContext()` to stamp the current `traceId` onto audit events, enabling a log line to be pivoted straight to its trace.
-- **`src/infrastructure/observability/analytics/index.ts`** — Same pattern: reads `getActiveSpanContext()` to attach `traceId` to analytics events.
-- **`src/infrastructure/http/middlewares/request-logger.ts`** — Calls `getActiveSpanContext()` so each HTTP log line carries the active `traceId`/`spanId`.
-- **`src/app/error-handling.ts`** — Calls `recordErrorOnActiveSpan()` in error-handling paths to annotate the request span with the error without altering the span's lifetime.
-- **`src/infrastructure/adapters/mailer.ts`** — Uses `withSpan()` to wrap outbound mail operations in a named child span.
-- **`tests/unit/infrastructure/observability/tracer.test.ts`** — Unit tests for the helpers above; relies on the `@opentelemetry/api` no-op behaviour so no SDK needs to be booted.
+- **`src/infrastructure/observability/audit.ts`** & **`src/infrastructure/observability/analytics/index.ts`** — Call `getActiveSpanContext()` to stamp the same `traceId` onto audit/analytics events, enabling cross-signal correlation with the request span.
+- **`src/app/error-handling.ts`** — Calls `recordErrorOnActiveSpan()` inside its error handlers to annotate the request span without intercepting the error flow.
+- **`src/infrastructure/http/middlewares/request-logger.ts`** — Calls `getActiveSpanContext()` to attach `traceId`/`spanId` to structured log lines.
+- **`tests/unit/infrastructure/observability/tracer.test.ts`** — Unit tests for the exported helpers; relies on the no-op behavior of `@opentelemetry/api` when no SDK is registered.
 
 ## Notes
 
-- **No-op safety by design.** `@opentelemetry/api` is the *interface* package only. Importing it with no SDK registered makes every call a silent no-op, which is what allows tests and pre-startup code to use these helpers freely.
-- **`getTracer()` is intentionally not a module-level constant.** Caching the result at import time would freeze a no-op tracer if `startTracing()` hasn't run yet.
-- **`withSpan` uses the two-callback `.then(onFulfilled, onRejected)` form** (not `.then().catch()`) so the success and failure paths are mutually exclusive and the span can't be ended twice.
-- **`recordErrorOnActiveSpan` never ends the span.** The active span is typically the auto-instrumented HTTP request span; ending it from a downstream error handler would truncate the trace.
-- **Tracer name convention.** The constant `boilerplate-node-backend` is the instrumentation-source identifier that appears on every hand-written span, distinguishing it from spans produced by auto-instrumentations (Express, Mongoose, Redis, etc.).
+- Importing `@opentelemetry/api` is safe without a registered SDK: every call becomes a no-op. This is what lets unit tests run without booting OpenTelemetry.
+- `withSpan` intentionally re-throws; it observes but never swallows. Callers keep their own `try/catch` intact.
+- `recordErrorOnActiveSpan` skips `span.end()` on purpose. Calling it would truncate the auto-instrumented request span that owns the context.
+- The tracer name is a fixed constant (`boilerplate-node-backend`), not configurable at runtime. Change it only if you split the service into multiple instrumentation sources.
+- `getTracer()` is called on every `withSpan` invocation rather than stored in a module-level constant—this avoids capturing a no-op tracer at import time before `startTracing()` registers the real provider.

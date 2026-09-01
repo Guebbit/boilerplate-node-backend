@@ -2,28 +2,34 @@
 
 ## Purpose
 
-Unit tests for the two account-deletion controllers (`deleteAccountRequest` and `deleteAccountConfirm`). Verifies that each controller calls the correct service wrapper with the expected arguments, emits the right metric, and returns the appropriate HTTP response for success, "not found / not live," and service-error paths.
+Unit tests for the two-step account-deletion controllers (`deleteAccountRequest` and `deleteAccountConfirm`) at the wiring level. The primary invariant pinned here is **enumeration prevention**: an unknown email must produce the same 200 as a known one, and a spent token must produce the same 422 as a never-live token, so neither response leaks which case occurred. All collaborators are fully mocked; mail-content assertions live in `emails.test.ts` and `self-service.test.ts`.
 
 ## Key elements
 
-- **`describe('DELETE /account — deleteAccountRequest')`** — Three cases: user found → calls `requestAccountDeletion` + `inc({status:'success'})` + `successResponse`; user not found → skips deletion, `inc({status:'failure'})`, still returns 200 (enumeration prevention); service throws → `rejectResponse(res, 500, [])`.
-- **`describe('DELETE /account/delete-confirm — deleteAccountConfirm')`** — Three cases: live token → calls `findLiveToken('delete', token)` then `removeOwnAccount` + `successResponse`; token not live (undefined) → skips removal, `rejectResponse(res, 422, …)`; service throws → `rejectResponse(res, 500, [])`.
-- **`makeResponse()`** — Minimal `res` stub (`{ locals: {} }`) satisfying the controller's second parameter type.
-- **Mock setup (module-level `jest.mock` calls)** — Stubs for `@modules/users` (`findByEmail`), `@modules/account/services` (`findLiveToken`, `requestAccountDeletion`, `removeOwnAccount`), `@infrastructure/http/response` (`successResponse`, `rejectResponse`), `@modules/account/metrics` (`authAccountDeleteTotal.inc`), and `@modules/account/session/cookies` (`destroyRefreshCookie`, `destroyLoggedCookie`).
+- **`describe('DELETE /account — deleteAccountRequest')`** — three cases:
+  - 200 on existing user (asserts `findByEmail` → `requestAccountDeletion` → `successResponse` + metric `inc({status:'success'})`).
+  - 200 on unknown email (asserts `requestAccountDeletion` never called, metric `inc({status:'failure'})`, `successResponse` still sent — the enumeration-prevention guard).
+  - 500 when `findByEmail` rejects (asserts `rejectResponse(res, 500, [])`).
+- **`describe('DELETE /account/delete-confirm — deleteAccountConfirm')`** — four cases:
+  - 200 for a valid, unspent token (asserts `findLiveToken` → `spendLiveToken` → `removeOwnAccount` → `successResponse`).
+  - 422 when `spendLiveToken` returns `false` (concurrent-spend race; `removeOwnAccount` never called).
+  - 422 when `findLiveToken` returns `undefined` (expired or never-existed — deliberately one path, not two).
+  - 500 when `findLiveToken` rejects.
+- **Mocks** — `userService.findByEmail`, four `accountService` methods, `successResponse` / `rejectResponse`, `authAccountDeleteTotal.inc`, and `destroyRefreshCookie` / `destroyLoggedCookie`.
 
 ## Relationships
 
-- **`@modules/account/controllers/delete-account-request`** — SUT for the first describe block; the test asserts its outbound calls and response.
-- **`@modules/account/controllers/delete-account-confirm`** — SUT for the second describe block; same pattern.
-- **`@modules/account/services/index`** (`accountService`) — All three service methods are mocked so the controller's orchestration logic is tested in isolation.
-- **`@modules/users/index`** (`userService.findByEmail`) — Mocked; only the "user exists?" lookup the controller performs is under test.
-- **`@infrastructure/http/response`** — `successResponse` / `rejectResponse` mocked to assert the exact status and payload the controller returns.
-- **`@modules/account/metrics`** — `authAccountDeleteTotal.inc` mocked to verify the controller records success/failure.
-- **`@modules/account/session/cookies`** (not in the graph-neighbor list but mocked in-file) — `destroyRefreshCookie` / `destroyLoggedCookie`; the inline comment points to `token-cleanup.test.ts` for the reasoning behind this indirect mock.
+- **`controllers/delete-account-request.ts`** — imports and drives `deleteAccountRequest`; every assertion in the first `describe` block validates this controller's call sequence and response mapping.
+- **`controllers/delete-account-confirm.ts`** — imports and drives `deleteAccountConfirm`; every assertion in the second `describe` block validates this controller's token-validation and deletion flow.
+- **`services/index.ts`** — re-exported `accountService` is mocked; the test exercises the four wrappers (`findLiveToken`, `spendLiveToken`, `requestAccountDeletion`, `removeOwnAccount`) the controllers call into.
+- **`users/index.ts`** — re-exported `userService.findByEmail` is mocked; the test only verifies the controller passes the email and branches on the resolved value.
+- **`infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` are mocked to let the test assert *which* status path the controller chose without depending on Express internals.
+- **`metrics.ts`** — `authAccountDeleteTotal.inc` is mocked to assert the controller emits the correct `{ status: 'success' | 'failure' }` label on each branch.
+- **`users/service.ts`** — the concrete implementation behind the mocked `userService`; not directly called in this test.
 
 ## Notes
 
-- **Mail and token-minting are deliberately unasserted here.** `requestAccountDeletion` sends the link and `removeOwnAccount` sends the goodbye mail; those are the services' own unit tests (`self-service.test.ts`) to verify. This file only checks the controller reached the wrapper with the right args.
-- **Token-expiry is not a distinct branch in this suite.** `findLiveToken` returns `undefined` for both expired and never-existed tokens, collapsing the controller to a single 422 path. "Live" semantics are asserted in `self-service.test.ts` against a real document.
-- **The cookies mock is required** because the controllers import the cookie-destroy helpers directly (bypassing a service boundary). See the parallel note in `token-cleanup.test.ts` for context.
-- **`beforeEach(jest.clearAllMocks)`** is scoped inside each `describe`, not at the top level, so the two suites are fully independent.
+- **Mail is intentionally out of scope.** `requestAccountDeletion` both mints the token *and* sends the link; the controller has nothing to publish. The goodbye mail is `removeOwnAccount`'s responsibility. Both are asserted in their respective service tests (`self-service.test.ts`, `emails.test.ts`).
+- **Expired vs. never-existed tokens are one case.** `findLiveToken` collapses both to `undefined`, so the controller has a single 422 path. The "live" semantics are tested in `self-service.test.ts` against a real document, not here.
+- **Cookie mock** (`@modules/account/session/cookies`) is required because the controller imports it directly (relative path); see the analogous note in `token-cleanup.test.ts` for why a module-level `jest.mock` is used instead of a relative import.
+- **Metric label on the 422 path is not asserted** in the confirm tests — the test only checks `rejectResponse(422)` and that `removeOwnAccount` was skipped.

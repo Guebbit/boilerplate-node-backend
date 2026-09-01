@@ -2,28 +2,27 @@
 
 ## Purpose
 
-Express controller handler for `GET /orders/:id/invoice`. It fetches an order (scoped to the caller's role), renders the shared EJS invoice template with localized copy, converts the HTML to a PDF via `renderHtmlToPdf`, and streams the PDF back as a download. It exists so the invoice can be generated on demand in the requesting user's locale, reusing the same template and copy logic as the email path.
+Handles `GET /orders/:id/invoice`. Resolves the order (with caller-scoped access), renders its localized copy into an EJS template, converts the resulting HTML to a PDF, and streams the file back as an attachment. The i18n strings are resolved *in the controller* rather than in the template so the identical render can be re-invoked from `adapters/pdf.worker.ts` where no request context exists.
 
 ## Key elements
 
-- **`getOrderInvoice(request, response)`** – The sole export. Validates the `id` param, calls `orderService.getById` with the caller's scope, renders the EJS template at `shared/views/templates-files/orders.invoice.ejs` through `invoiceDocument(locale, order)`, pipes the HTML to `renderHtmlToPdf`, and sends the result with `Content-Type: application/pdf` and a `Content-Disposition` header naming the file `invoice-<orderId>.pdf`.
+- **`getOrderInvoice(request, response)`** – The sole export. Validates the route param, loads the order via `orderService.getById` scoped to the caller, renders the template, converts to PDF, and sends it with `Content-Disposition: attachment; filename="invoice-<id>.pdf"`.
+- **`orderId` resolution** – Reads `order.id ?? order._id` to handle the polymorphic shape returned by `getById` (hydrated doc vs. transformed plain object). The cast documents that the wire carries `id` in both branches.
 
 ## Relationships
 
-- **`src/modules/orders/service.ts`** – `orderService.getById(id, scope)` loads the order; `orderService.callerScope(authContext)` determines whether the caller sees a hydrated admin document or a transformed owner object.
-- **`src/modules/orders/emails.ts`** – `invoiceDocument(locale, order)` produces the localized copy object passed into the EJS template, shared with the email worker so both paths render identical text.
-- **`src/modules/orders/routes.ts`** – Registers this handler on the `GET /orders/:id/invoice` route.
-- **`src/infrastructure/adapters/pdf.ts`** – `renderHtmlToPdf` performs the HTML → PDF conversion.
-- **`src/infrastructure/http/controller.ts`** – `catchAs` wraps the promise chain to emit a generic 500 with a fixed message.
-- **`src/infrastructure/http/request.ts`** – `isValidObjectId` guards the param before hitting the database.
-- **`src/infrastructure/http/response.ts`** – `rejectResponse` sends structured 404 errors.
-- **`src/infrastructure/i18n/index.ts`** – `getDefaultLocale` supplies a fallback when the request carries no locale.
-- **`src/infrastructure/i18n/catalog.ts`** – `t('orders.not-found')` provides the translated 404 message.
+- **`src/modules/orders/routes.ts`** – Registers the `GET /orders/:id/invoice` route and passes it to this controller.
+- **`src/modules/orders/service.ts`** – `orderService.getById(id, scope)` loads the order; `orderService.callerScope(authContext)` determines admin-vs-owner visibility.
+- **`src/modules/orders/emails.ts`** – `invoiceDocument(locale, order)` produces the already-localized copy (line items, totals, labels) that the EJS template interpolates.
+- **`src/infrastructure/adapters/pdf.ts`** – `renderHtmlToPdf(html)` performs the HTML→PDF conversion.
+- **`src/infrastructure/http/controller.ts`** – `catchAs(response, msg)` normalises the promise rejection into an error response.
+- **`src/infrastructure/http/request.ts`** – `isValidObjectId(param)` guards the route parameter before any DB query.
+- **`src/infrastructure/http/response.ts`** – `rejectResponse(response, 404, msgs)` emits the 404 for a missing/invalid order.
+- **`src/infrastructure/i18n/context.ts` / `catalog.ts`** – `getDefaultLocale()` and `t(key)` supply the locale fallback and the lookup used for the 404 message.
 
 ## Notes
 
-- **`id` vs `_id`**: `getById` is polymorphic — admins get a Mongoose document (with the virtual `id`), owners get a plain object where `_id` was stripped by the serializer but `id` was added by the transform. The handler reads `id` (with a `?? _id` fallback) rather than `_id`, because reading `_id` on the owner branch would yield the literal string `"undefined"` in the filename and the document title.
-- **Images / external links in the PDF**: They will not render. Any embedded images must be pre-converted to base64 before the template is filled.
-- **Template location**: Lives at `shared/views/templates-files/orders.invoice.ejs` (project-relative), not inside the orders module.
-- **Locale resolution**: Copy is resolved *here* in the controller (and in `workers/pdf.worker.ts`) via `invoiceDocument(locale, order)`, so the EJS template itself contains no i18n calls — it only interpolates.
-- **404 on invalid `id`**: Performed *before* the service call; the comment cross-references `get-order-item.ts` for why the check is ordered ahead of the query (the two role branches raise different error classes).
+- **Images and links do not render in the output PDF.** Any visual assets must be embedded as base64 data URIs in the template.
+- **`id`, not `_id`.** `getById` is polymorphic: an admin receives a hydrated Mongoose document (no `id` virtual on the stored shape by convention), while an owner receives a plain object whose `_id` was deleted by the serializer. Reading `_id` unconditionally produced the literal string `"undefined"` in the filename and title for non-admin callers. The controller reads `order.id` first and falls back to `order._id`.
+- **i18n is resolved before the template runs.** This is deliberate: the same `invoiceDocument(locale, order) → ejs.renderFile(…)` pipeline is reused by `adapters/pdf.worker.ts`, which has no `Request` to pull a locale from. Keeping resolution in the caller (controller or worker) keeps the template a pure interpolator.
+- **404 is checked *before* the scope query.** An invalid ObjectID is rejected up front so the two role branches (admin vs. owner) never raise different error classes for the same bad input.

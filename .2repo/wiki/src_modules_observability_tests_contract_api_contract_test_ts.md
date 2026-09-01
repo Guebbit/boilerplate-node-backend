@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Contract tests for the three JSON endpoints under `/observability` (`/health`, `/metrics/overview`, `/audit`). These endpoints build their responses field-by-field in controllers rather than through a shared serializer, making them the most likely to silently drift from the OpenAPI spec. The suite pins their shapes via `toSatisfyApiSpec()` and adds a small number of value-level assertions where the shape alone cannot prove correctness (e.g., the health snapshot reflects the real connection state, the overview tolerates absent counters, the audit page honours its filters).
+Contract tests for the three JSON endpoints under `/observability` (`/health`, `/metrics/overview`, `/audit`). They exist because those response bodies are hand-assembled field-by-field (a health snapshot, a Prometheus overview, an audit page) rather than produced by a shared serializer, making them prone to silent drift from the API spec. `GET /events` (SSE) and `GET /metrics` (requires `NODE_METRICS_TOKEN`) are excluded for transport reasons, not contract gaps.
 
 ## Key elements
 
-- **`pollUntilAudited(bearer, query)`** — Polls `GET /observability/audit` up to 20 times (25 ms apart) until a matching entry appears. Exists because the audit sink (`audit-logs`' `record()`) is fire-and-forget by design; a single read would race on a slow machine.
-- **`describe('GET /observability/health')`** — Six cases: admin 200, real DB readiness check against `connection.readyState`, vocabulary consistency across all three dependencies, analytics provider + configured flag, non-admin 403, anonymous 401.
-- **`describe('GET /observability/metrics/overview')`** — Three cases: admin 200 shape, full-key guarantee even when counters are zero (e.g., `business.checkoutSuccess === 0` proves the endpoint doesn't 500 on an absent metric), non-admin 403.
-- **`describe('GET /observability/audit')`** — Five cases: empty-log 200, populated log filtered by `outcome=failure` (driven by a real failed login via `POST /account/login`), out-of-range `pageSize` → 422, unparseable `since` → 422, non-admin 403.
+- **`pollUntilAudited(bearer, query)`** – Helper that retries `GET /observability/audit` up to 20 times (25 ms apart) until the audit log contains entries. Exists because `audit-logs.record()` is deliberately fire-and-forget (`void` return, swallows failures) so a Mongo hiccup can't turn a rejected login into a 500; the test must tolerate the write lag rather than await the sink.
+- **`describe('GET /observability/health')`** – Verifies shape for admin, cross-checks `connection.readyState === 1` against the reported `database.status`, asserts all three dependency statuses use the same four-value vocabulary (`ready | connecting | unavailable | disabled`) and that top-level `status` is the honest fold of them, checks `analytics.provider` + `analytics.configured` are present, and pins 403/401 error contracts.
+- **`describe('GET /observability/metrics/overview')`** – Verifies shape for admin, asserts that counters owned by *other* modules (`auth.loginSuccess`, `business.checkoutSuccess`) appear as numeric zeros rather than missing keys, and pins the 403 error contract.
+- **`describe('GET /observability/audit')`** – Verifies empty-log shape, drives a *real* failed login (`POST /account/login`) then polls for the resulting `outcome: 'failure'` row (validating `meta.totalItems`, `meta.pageSize`), and pins 422 responses for `pageSize > 100` and unparseable `since`, plus the 403 contract.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — Supplies the `toSatisfyApiSpec()` matcher imported via `import '@tests/contract'`; the primary shape assertion in every case.
-- **`tests/support/http.ts`** — Supplies `api()` (supertest instance) and `authenticateAs(role)` used in every request.
-- **`tests/support/setup-test-db.ts`** — Supplies `setupTestDb()`, called once at module scope to bring the test database online before any health assertion.
-- **`src/infrastructure/runtime/database.ts`** — Exports `connection`; the health test reads `connection.readyState` to confirm the endpoint reports the process's *actual* Mongo state rather than a hard-coded string.
+- **`tests/support/contract.ts`** (`@tests/contract`) – Imported for the `toSatisfyApiSpec` matcher; every assertion block that checks a full body delegates structural conformance to it.
+- **`tests/support/http.ts`** (`@tests/http`) – Provides the `api()` Supertest wrapper and `authenticateAs()` used in every test.
+- **`tests/support/setup-test-db.ts`** (`@tests/setup-test-db`) – `setupTestDb()` is called at module scope to establish a live MongoDB connection before any test runs.
+- **`src/infrastructure/runtime/database.ts`** – Imports `connection` so the health test can assert `connection.readyState === 1` alongside the endpoint's `database.status: 'ready'`, tying the reported value to the actual driver state.
 
 ## Notes
 
-- Two routes are **deliberately absent**: `GET /observability/events` (SSE never completes, so supertest hangs) and `GET /observability/metrics` (Prometheus text behind a static token; the 403 path is covered elsewhere, the 200 requires `NODE_METRICS_TOKEN` in the environment).
-- The cache/queue health test asserts only the *vocabulary* (`ready | connecting | unavailable | disabled`) and the derived `status` fold; it does **not** assert which specific value each dependency reports, because that depends on the runner's `.env`.
-- The audit polling helper is a test-side cost of the production design (void-returning sink). Making the sink awaitable was explicitly rejected as it would change a real availability property.
-- The failed-login test for audit drives `POST /account/login` (owned by the `account` module) rather than inserting a row directly, so it exercises the real emission path.
+- The file deliberately does **not** assert *which* concrete value `cache`/`queue` report (depends on local `.env`); it only asserts the shared vocabulary and the fold rule. The mapping itself is pinned in `dependency-health.test.ts`.
+- `pollUntilAudited` is a conscious trade-off: making the audit sink awaitable to simplify this test would remove a production resilience property. The 20 × 25 ms budget (≤ 500 ms) is the cost accepted.
+- The `audit` test triggers a *real* login failure via `POST /account/login` rather than inserting a synthetic row, so it exercises the full emit → persist → read path.
+- `contract-search-parity.test.ts` (graph neighbor) is not imported here; the shared contract machinery is provided by `tests/support/contract.ts` instead.

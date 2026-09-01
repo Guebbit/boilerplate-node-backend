@@ -2,36 +2,35 @@
 
 ## Purpose
 
-Service layer for the delivery module. It reacts to the order status machine (rather than driving it) to create parcels, mint tracking codes, send notification emails, and simulate courier delivery. It is the single handler behind the `ORDER_STATUS_CHANGED` → `shipped` transition and the manual "courier advance" job.
+Service layer for the delivery module. It owns three responsibilities triggered by the order lifecycle: idempotent parcel creation and email notification when an order transitions to `shipped`, and the "fake courier" tick that moves all shipped parcels to `delivered`. It also exposes a read path for fetching a shipment and a static list of shipping methods. The file never mutates order status itself; it reacts to `ORDER_STATUS_CHANGED` and emits it back after courier delivery.
 
 ## Key elements
 
-- **`trackingCodeFor(orderId)`** — derives a deterministic tracking code (`TRK-<last 8 of orderId, upper>`) so re-shipping re-mints the same code (safe for upsert).
-- **`listMethods()`** — returns the static `SHIPPING_METHODS` array; always a 200.
-- **`getForOrder(orderId, authContext?)`** — resolves the shipment for an order, enforcing order-level ownership scoping via `orderService.callerScope`.
-- **`shipOrder(orderId)`** — idempotent `ORDER_STATUS_CHANGED` listener: upserts the shipment, sends the locale-aware "shipped" email only when the parcel is new, logs the outcome.
-- **`runCourierAdvance(context)`** — the fake-courier tick. For every `shipped` shipment, conditionally moves the order to `delivered` first, then conditionally stamps the shipment's `deliveredAt`. Emits `ORDER_STATUS_CHANGED` per parcel, writes an audit event, returns the count advanced.
-- **`deliveryService`** — the module's public handle bundling all four functions above; controllers import this single object.
+- **`trackingCodeFor(orderId)`** — Private. Derives a deterministic tracking code (`TRK-XXXXXXXX`) from the last 8 chars of the order ID. Re-shipping the same order yields the same code, supporting the upsert pattern.
+- **`listMethods()`** — Returns the static `SHIPPING_METHODS` list wrapped in a success response. No auth, no DB.
+- **`getForOrder(orderId, authContext?)`** — Resolves the caller's scope via `orderService`, verifies the order exists, then fetches the shipment by order ID. Returns 404 reject if either is missing.
+- **`shipOrder(orderId)`** — Event handler for `ORDER_STATUS_CHANGED`. Upserts the shipment (idempotent), and on first creation only, looks up the user for locale/username, builds the email, enqueues it, and logs. Subsequent calls are no-ops for the email.
+- **`runCourierAdvance(context)`** — The fake courier. Iterates all `shipped` shipments, conditionally moves each order `shipped → delivered` first, then stamps `deliveredAt` on the shipment (conditional to avoid double-stamping under a racing tick), emits `ORDER_STATUS_CHANGED`, and records an audit event. Returns the count of parcels delivered.
+- **`deliveryService`** — Named export bundling the four functions above into a single handle. `shipOrder` is consumed via this module's own event subscription, not called directly by controllers.
 
 ## Relationships
 
-- **`src/infrastructure/i18n/*`** (`index`, `catalog`, `context`) — `t()` supplies user-facing strings; `getDefaultLocale()` provides the fallback when a user record is missing.
-- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` dispatches the "shipped" notification.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.info` records the shipment creation and courier-advance summary.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape every API response from this file.
-- **`src/infrastructure/http/request.ts`** — `CallerContext` type parameterised on `runCourierAdvance`.
-- **`src/infrastructure/observability/audit.ts`** — `emitAuditEvent` / `buildAuditEvent` write the admin audit trail for courier advance.
-- **`src/kernel/events.ts`** — `emitDomainEvent` announces each `shipped → delivered` transition back to subscribers.
-- **`src/modules/delivery/audit.ts`** — `deliveryAuditActions.ADMIN_COURIER_ADVANCED` provides the stable action identifier for the audit event.
-- **`src/modules/delivery/domain/index.ts`** (and `domain/rates.ts`) — source of the `SHIPPING_METHODS` constant consumed by `listMethods`.
-- **`src/modules/delivery/controllers/get-shipment-by-order.ts`** — calls `deliveryService.getForOrder`.
-- **`src/modules/delivery/controllers/get-shipping-methods.ts`** — calls `deliveryService.listMethods`.
-- **`src/modules/delivery/controllers/post-courier-advance.ts`** — calls `deliveryService.runCourierAdvance`.
+- **`@infrastructure/i18n` (index/catalog/context)** — Imports `t` for user-facing error strings and `getDefaultLocale` as a fallback when the user record has no locale.
+- **`@infrastructure/adapters/logger`** — Imports `logger`; writes `info` lines on shipment creation and courier advance (the log line is described as a contract).
+- **`@infrastructure/adapters/mailer`** — Imports `enqueueEmail` (fire-and-forget, `void`ed) to dispatch the shipping notification email.
+- **`@infrastructure/http/response`** — Uses `generateSuccess` / `generateReject` and their type aliases for all read-path returns.
+- **`@infrastructure/http/request`** — Imports the `CallerContext` type for `runCourierAdvance`'s audit trail.
+- **`@infrastructure/observability/audit`** — Calls `buildAuditEvent` + `emitAuditEvent` at the end of `runCourierAdvance`.
+- **`src/modules/delivery/audit.ts`** — Imports `deliveryAuditActions.ADMIN_COURIER_ADVANCED` for the audit action key.
+- **`src/modules/delivery/domain/index.ts`** — Imports `SHIPPING_METHODS` (the static catalog exposed by `listMethods`).
+- **`src/kernel/events.ts`** — Calls `emitDomainEvent(ORDER_STATUS_CHANGED, …)` after each parcel is delivered in the courier tick.
+- **Controllers (`get-shipment-by-order`, `get-shipping-methods`, `post-courier-advance`)** — Upstream callers that invoke `deliveryService.getForOrder`, `.listMethods`, and `.runCourierAdvance` respectively.
+- **`@modules/orders` (orderService, orderRepository, ORDER_STATUS_CHANGED)** — `shipOrder` subscribes to the event; `getForOrder` delegates ownership checks to `orderService`; `runCourierAdvance` uses `orderRepository.updateStatusIfIn` for the conditional order move.
 
 ## Notes
 
-- **No scheduler by design.** `runCourierAdvance` is a plain job function exposed behind an admin endpoint; an operator or demo click acts as the cron trigger. Do not expect automatic invocation.
-- **Idempotency of `shipOrder`.** The `existing` check before enqueuing the email means an admin re-triggering the same status change will not re-notify the customer.
-- **Two-phase conditional write in `runCourierAdvance`.** The order is moved to `delivered` *before* the shipment is stamped. A race between two concurrent ticks is resolved by the `updateStatusIfIn` filter on the shipment: the first tick to read `shipped` wins the stamp, the second gets `null` (no-op). The `advanced` counter still increments on the order transition, not on the shipment write, so the count reflects "orders delivered" not "shipment rows touched."
-- **Ownership is inherited from the order.** A shipment carries no independent `ownerId`; `getForOrder` delegates visibility to `orderService.callerScope`.
-- **Email locale fallback chain:** `user.locale → getDefaultLocale()`. The recipient address is always the order's `email` field, not the user profile's.
+- **Idempotency by design:** `shipOrder` checks `existing` before sending email, so an admin re-toggling `shipped` cannot spam the customer. The upsert in `shipmentRepository.upsertForOrder` is what makes the re-entrant case safe.
+- **Order-before-shipment ordering:** In `runCourierAdvance`, the order status is moved first via a conditional write; the shipment stamp follows. A `null` return from the shipment conditional is expected under a concurrent tick and is *not* an error.
+- **No scheduler:** `runCourierAdvance` is a plain function invoked behind an admin endpoint (the "fake courier"). There is no cron or queue in this repo.
+- **`shipOrder` is not directly importable by controllers** — it is wired through the module's event subscription. The `deliveryService` handle exists so no caller needs to know which internal export to reach for.
+- **Email locale fallback chain:** user record `locale` → `getDefaultLocale()`. The recipient address is always `order.email`, never the user record's.

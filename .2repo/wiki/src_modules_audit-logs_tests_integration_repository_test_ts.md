@@ -2,26 +2,27 @@
 
 ## Purpose
 
-Integration tests for `auditLogRepository` covering `create` (validation, field persistence) and `search` (filtering, pagination, sorting, serialization). Exists to pin the repository's contract against a real database so that service-layer policy concerns (`since` scoping, sort order) are exercised through the actual query path rather than mocks.
+Integration tests for `auditLogRepository`, executed against the in-memory MongoDB that `setupTestDb` provisions. Covers entry creation, multi-filter search, the exclusive `since` boundary, pagination metadata, response shaping (stripping `_id`/`__v`, ISO-8601 timestamps), and a deep-paging regression guard for the former 200-row read cap.
 
 ## Key elements
 
-- **`makeEntry(overrides?)`** — Factory that produces a fully-populated `AuditLogDocument` partial using `coreAuditActions.SECURITY_UNAUTHORIZED` as the default action, so every fixture is valid regardless of which feature modules are enabled.
-- **`search(filters?, since?)`** — Thin wrapper that calls `auditLogRepository.search` with an explicit `sinceScope` and `AUDIT_SORT`, mirroring how the service layer invokes the base method.
-- **`describe('create')`** — Verifies optional context fields round-trip and that a missing required field rejects.
-- **`describe('search')`** — Covers unfiltered newest-first ordering, actor/action/outcome filters, exclusive `since` lower bound, `since`-as-Date (not coerced via `Number()`), combined filters, page vs. total accounting, `_id`/`__v` stripping, ISO-8601 timestamp serialization, and empty-result shape.
-- **`describe('deep paging')`** — Seeds 205 rows and asserts that page 21 (rows 201–205) is actually served with correct `totalItems`/`totalPages`, and that three concurrent pages of 100 never duplicate an entry (relying on `AUDIT_SORT`'s `_id` tiebreaker).
+- **`makeEntry(overrides?)`** – Factory returning a `Partial<AuditLogDocument>` pre-filled with core security-action fields; all fixtures in the file derive from it.
+- **`search(filters?, since?)`** – Local wrapper that calls `auditLogRepository.search` with the service-level `sinceScope(since)` and `AUDIT_SORT` applied explicitly, mirroring how the service layer invokes the repository.
+- **`describe('create')`** – Verifies optional context fields are persisted and that a missing required field rejects the write.
+- **`describe('search')`** – Covers unfiltered ordering, actor/action/outcome filters, exclusive `since` bound, Date-vs-Number coercion, combined filters, page-size vs. total count, response shape, and empty-result pages.
+- **`describe('deep paging')`** – Seeds 205 entries (1 min apart) and asserts page 21 is served, that `totalPages` is correct, and that three parallel 100-row pages partition all entries with zero overlap.
 
 ## Relationships
 
-- **`src/modules/audit-logs/repository.ts`** — The system under test; provides `auditLogRepository` (create, search, sinceScope) and the `AUDIT_SORT` constant.
-- **`src/infrastructure/observability/audit.ts`** — Source of `coreAuditActions` (the three security actions used in every fixture) and the `AuditEntry` type.
-- **`src/modules/audit-logs/model.ts`** — Supplies the `AuditLogDocument` type that shapes all fixtures and assertions.
-- **`tests/support/setup-test-db.ts`** — Called once at module level (`setupTestDb()`) to spin up a per-suite test database.
-- **`tests/support/stub.ts`** — Provides `asStub`, used to cast a returned item to `Record<string, unknown>` for the `_id`/`__v`-absence assertion.
+- **`src/modules/audit-logs/repository.ts`** – The system under test; imports `auditLogRepository` and `AUDIT_SORT`.
+- **`src/infrastructure/observability/audit.ts`** – Source of `coreAuditActions` (the only action constants used as fixtures) and the `AuditEntry` type that shapes `makeEntry` output.
+- **`src/modules/audit-logs/model.ts`** – Provides the `AuditLogDocument` type for casts and field-shape assertions.
+- **`tests/support/setup-test-db.ts`** – Called once at module top (`setupTestDb()`) to spin up and wire the in-memory Mongo instance before any test runs.
+- **`tests/support/stub.ts`** – Provides `asStub`, used to cast a returned item to `Record<string, unknown>` so internal keys (`_id`, `__v`) can be asserted as absent.
 
 ## Notes
 
-- Fixtures deliberately use only `coreAuditActions` (security-namespace actions) so the suite compiles in any module configuration; a domain-specific action like `admin.product.created` would break compilation if that module is removed.
-- The `since` parameter is passed through `auditLogRepository.sinceScope(since)` rather than embedded in the filter object, because the search spec's range coercion (`Number()`) would corrupt a `Date` value — a regression the "keeps the `since` bound a Date" test guards against.
-- The deep-paging suite exists because a prior implementation capped reads at 200 rows while still reporting the true total, making pages beyond row 200 unreachable; these tests fail against any cap-instead-of-page implementation.
+- **Action vocabulary is deliberately core-only.** Fixtures use `coreAuditActions.*` rather than any domain's actions, so the test file compiles regardless of which feature modules are enabled.
+- **`since` rides in `scope`, not in the filter spec.** The shared search-spec range helper coerces bounds with `Number()`, which would turn a `Date` into a value Mongo cannot compare against a stored `Date`. Passing it through `sinceScope` preserves the `Date` type.
+- **`AUDIT_SORT` includes `_id` as a tiebreaker.** Without it, entries sharing a timestamp (e.g., a bulk write) could appear in both the count and the page in a different order, producing duplicate or missing rows across pages.
+- **Deep-paging entries are spaced 60 s apart.** This guarantees a unique, deterministic "newest first" ordering and lets the test assert *which* rows a page returns via `request_id`, rather than relying on timestamp equality.

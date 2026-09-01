@@ -2,33 +2,34 @@
 
 ## Purpose
 
-Single-entry HTTP controller for admin-side order mutations: creating a new order from an explicit payload or updating an existing order by ID. It validates the request body against Zod schemas, delegates to `orderService`, and shapes the HTTP response. It exists as a thin translation layer between Express routing and the order domain service.
+Admin controller that handles order creation (POST) and update (PUT) in a single exported handler. It exists to give administrators a direct way to create or modify orders by supplying the full item list in the request body, bypassing the cart/checkout flow used by end users.
 
 ## Key elements
 
-- **`writeOrders`** — The sole export. Accepts an Express `Request`/`Response` pair and branches on the presence of an order `id`:
-  - **No `id` (POST):** Validates body with `CreateOrderBody`, calls `orderService.create`, increments the `orderCreatedTotal` metric, and returns `201`. A `PUT` without an `id` short-circuits with `422`.
-  - **`id` present (PUT):** Chooses `UpdateOrderByIdBody` (path-param id) or `UpdateOrderBody` (body id) based on `request.params.id`, validates, calls `orderService.updateById`, and returns the updated order.
-- Both branches use `callerContextOf(request)` to pass locale/auth context into the service and `orderService.withActions(...)` to attach permitted action metadata to the response payload.
+- **`writeOrders`** (exported controller function) — Branches on the presence of an `id`:
+  - *No id (POST):* validates body with `CreateOrderBody`, calls `orderService.create`, increments `orderCreatedTotal`, responds 201 with action-enriched data.
+  - *No id (PUT):* immediately rejects with 422 + i18n message.
+  - *With id (PUT):* picks `UpdateOrderByIdBody` (id from path) or `UpdateOrderBody` (id in body), calls `orderService.updateById`, responds 200.
+- **`readInput(request, …)`** — single-point extraction of the `id` param (no separate `request.params` access).
+- **`callerContextOf(request)`** — passes caller/locale context into the service for i18n-aware side-effects (e.g. confirmation e-mail).
+- **`refused(response, result)`** — guard that short-circuits the success path when the service signals a refusal.
+- **`catchAs(response, …)`** — wraps the `.catch` to map thrown errors to a consistent HTTP error response.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@modules/orders/service` | Calls `orderService.create`, `orderService.updateById`, `orderService.withActions`. |
-| `@modules/orders/metrics` | Increments `orderCreatedTotal` on successful creation. |
-| `@infrastructure/http/controller` | Uses `catchAs` (error mapping), `refused` (result short-circuit), `rejectValidation` (Zod error → 422). |
-| `@infrastructure/http/request` | Uses `readInput` to unify path-param and body id extraction; `callerContextOf` for locale context. |
-| `@infrastructure/http/response` | Uses `successResponse` and `rejectResponse` for all HTTP output. |
-| `@infrastructure/i18n` | Calls `t('generic.error-missing-data')` for the 422 message. |
-| `@types` | Types the `Request` generic with `CreateOrderRequest`, `UpdateOrderRequest`, `UpdateOrderByIdRequest`. |
-| `@modules/orders/routes` | Expected consumer that wires `writeOrders` to the `POST /orders` and `PUT /orders` routes (not visible in this file). |
+- **`@infrastructure/http/controller`** — supplies `catchAs`, `refused`, `rejectValidation` used for uniform error/refusal handling.
+- **`@infrastructure/http/request`** — supplies `readInput` (param extraction) and `callerContextOf` (locale/auth context forwarding).
+- **`@infrastructure/http/response`** — supplies `successResponse` and `rejectResponse` for building HTTP replies.
+- **`@infrastructure/i18n`** — supplies the `t()` translator used in the 422 message.
+- **`@modules/orders/service`** — the `orderService` instance whose `create`, `updateById`, and `withActions` methods perform the actual business logic.
+- **`@modules/orders/metrics`** — provides the `orderCreatedTotal` Prometheus counter incremented on successful creation.
+- **`@modules/orders/routes`** — registers `writeOrders` as the POST/PUT handler for `/orders(/:id)`.
+- **`@types`** — provides the request-tuple types (`CreateOrderRequest`, `UpdateOrderRequest`, `UpdateOrderByIdRequest`) used in the Express `Request` generic.
 
 ## Notes
 
-- **Two Zod schemas for one route:** `UpdateOrderBody` (id in body) vs. `UpdateOrderByIdBody` (id in path) are selected at runtime via `request.params.id`. They share the same update fields but differ in where the id lives.
-- **PUT without id is 422, not 400 or 404.** This is an intentional semantic choice: the method is correct, the payload is simply incomplete.
-- **Metric increment lives here, not in the service.** `orderCreatedTotal.inc()` sits in the controller's `.then()` chain, meaning it only fires when the HTTP call succeeds and the result is not `refused`.
-- **Early-exit returns use `Promise.resolve()`.** This keeps every code path returning a `Promise`, which matters for the caller (Express async handling / route wrappers).
-- **Admin vs. checkout:** The file's docblock notes that items come straight from the request body, bypassing the cart flow in `@modules/cart`. Do not conflate this with the user-facing checkout path.
-- **`readInput` single-declaration pattern:** The id is read once via `readInput(request, { surface: 'write', ids: ['id'] })` rather than separately from `request.params.id` and `request.body`. See `docs/theory/request-input.md` referenced in the source comment.
+- This is explicitly the **admin** path. Items are taken from the body, not from a cart; it does not touch `@modules/cart` at all.
+- Two distinct Zod schemas guard the update branch: `UpdateOrderByIdBody` when the id is a path param, `UpdateOrderBody` when it is in the body. The switch is driven by `request.params.id` truthiness.
+- The confirmation e-mail is emitted inside `orderService.create`, not here. The controller only forwards `callerContextOf` so the service can pick the right locale.
+- Orders carry no multipart fields, so `readInput` is called without a decode step.
+- `orderCreatedTotal.inc()` is called *after* the `refused` check, so refused creations do not increment the counter.

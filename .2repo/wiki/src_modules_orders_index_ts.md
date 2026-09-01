@@ -2,38 +2,33 @@
 
 ## Purpose
 
-Public barrel (single import surface) for the Orders module. It curates *what* sibling modules are allowed to pull in and documents *why* each export is published or withheld. By convention (mirroring `modules/products/index.ts`), this is the only path another module should use to import order functionality.
+Public barrel for the **orders** module. It is the *only* import surface available to sibling modules (cart, delivery, payments). Internal types (`Money`, `ORDER_LIFECYCLE`, `OrderDocumentItem`) and the raw schema/transform are deliberately excluded so external code can never reach past the intended API.
 
 ## Key elements
 
-- **`orderService`** — the standard service entry point for order operations.
-- **`orderRepository`** — exported so `cart/checkout` can write the order row inside its own transaction and roll it back if clearing the cart fails. Cart deliberately bypasses the service layer here to avoid unwrapping a response envelope.
-- **`ORDER_CANCELLED`, `ORDER_STATUS_CHANGED`** — event constants for listeners (e.g., payments, delivery) to subscribe to lifecycle changes.
-- **`orderConfirmEmail`** — the confirmation-email function, called by `cart/checkout` after it has confirmed the order stood (only checkout knows that; only the service has the recipient record in scope).
-- **`OrderDocument`** (type) — the serialized order shape exposed to consumers.
-- **`sumLineItems`, `orderTotal`** — the single-owner arithmetic for order money. Exported as *rules*, not utilities, so no sibling module re-derives a total independently.
-- **`canTransition`, `statusesLeadingTo`** — status-transition predicates published so `payments` doesn't form its own opinion on which statuses are payable.
-
-**Deliberately excluded:**
-
-- Schema / serialization transform — tests reach `@modules/orders/model` directly; no sibling embeds an order.
-- `Money` and `ORDER_LIFECYCLE` — internal to the module; no external caller needs them.
-- `OrderDocumentItem` — removed from the public surface; tests now build lines via `tests/factory.ts` → `toOrderItem` instead of casting a partial shape.
+- **`orderService`** (from `./service`) — the main orders service; the primary entry point for any module that needs order operations.
+- **`orderRepository`** (from `./repository`) — exposed separately so `cart`'s checkout can perform its own transactional writes (e.g. clearing the cart) and roll back without going through the service.
+- **`retractOrder`** (from `./service`) — shared compensation routine used both by this module's own `create` and by `cart`'s checkout when a later step refuses an already-written order.
+- **`ORDER_CANCELLED` / `ORDER_STATUS_CHANGED`** (from `./events`) — event name constants so consumers subscribe without importing the events module directly.
+- **`orderConfirmEmail`** (from `./emails`) — the email-builder; `cart` invokes it from its own checkout because only checkout has the recipient's locale in scope.
+- **`OrderDocument`** (type, from `./model`) — the read-only document shape. `OrderDocumentItem` is *not* re-exported; tests use a fixture (`toOrderItem` in `tests/fixtures.ts`) instead.
+- **`sumLineItems` / `orderTotal` / `canTransition` / `statusesLeadingTo`** (from `./domain`) — arithmetic and lifecycle helpers published so `cart`/`payments` reuse the module's single source of truth rather than duplicating logic.
 
 ## Relationships
 
-- **`cart/services/checkout.ts`, `reorder.ts`, `view.ts`** — import `orderRepository`, the event constants, and `orderConfirmEmail` through this barrel. Checkout performs the write + rollback transaction directly against the repository.
-- **`delivery/module.ts`, `delivery/service.ts`** — consume `orderService` and/or the transition helpers to react to status changes (e.g., shipping on `paid`).
-- **`orders/domain/index.ts`** — source of `sumLineItems`, `orderTotal`, `canTransition`, `statusesLeadingTo`; this barrel re-exports them unchanged.
-- **`orders/emails.ts`** — source of `orderConfirmEmail`.
-- **`orders/events.ts`** — source of `ORDER_CANCELLED`, `ORDER_STATUS_CHANGED`.
-- **`orders/model.ts`** — source of the `OrderDocument` type (and the internal schema/transform kept private).
-- **`orders/repository.ts`** — source of `orderRepository`.
-- **`orders/service.ts`** — source of `orderService`.
-- **`cart/tests/integration/*`** — exercise the full checkout → order-creation path that flows through the repository export.
+- **`src/modules/orders/service.ts`** — source of `orderService` and `retractOrder`.
+- **`src/modules/orders/repository.ts`** — source of `orderRepository`; consumed directly by `cart/services/checkout.ts` for transactional cart-clearing.
+- **`src/modules/orders/domain/index.ts`** — source of the four exported arithmetic/lifecycle functions.
+- **`src/modules/orders/emails.ts`** — source of `orderConfirmEmail`.
+- **`src/modules/orders/events.ts`** — source of the two exported event constants.
+- **`src/modules/orders/model.ts`** — source of the `OrderDocument` type.
+- **`src/modules/cart/services/checkout.ts`** — the primary consumer; imports `orderRepository`, `retractOrder`, `orderConfirmEmail`, and the domain helpers to run its own checkout transaction.
+- **`src/modules/cart/services/reorder.ts`** — reorders an existing order; relies on the barrel for service/domain access.
+- **`src/modules/delivery/service.ts` / `module.ts`** — consume `orderService` and event constants to react to order status changes.
 
 ## Notes
 
-- The barrel is a **policy document as much as an import list**: the block comments explain the ownership rationale for every inclusion/exclusion. When adding or removing an export, the accompanying justification comment is expected.
-- `cart` calling `orderService.recordCreated` (rather than the service emitting the event itself) is intentional: only checkout knows the order actually stood, so the event is reported from the caller's side.
-- Do **not** widen this surface to satisfy a test-only need; the established pattern is for tests to import the concrete path (e.g., `@modules/orders/model`) directly.
+- `Money` and `ORDER_LIFECYCLE` are intentionally **not** re-exported; only tests may reach `./model` directly for them.
+- `OrderDocumentItem` is withheld on purpose: forcing tests through the `toOrderItem` fixture prevents ad-hoc casting of order lines.
+- The compensation path (`retractOrder`) is exported *once* rather than duplicated in `cart`; the two failure paths (orders `create` failure, cart checkout refusal) are treated as a single concern.
+- `cart` reports `order_created` itself; this module never reaches up for a `Request` object.

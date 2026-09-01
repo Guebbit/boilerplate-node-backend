@@ -2,23 +2,23 @@
 
 ## Purpose
 
-Request handler for `GET /account/sessions`. It extracts the authenticated user's ID and the current `jwt` cookie, delegates to the account service to list live refresh tokens as sessions, and shapes the HTTP response. It exists as the thin controller layer that translates HTTP I/O into a service call.
+Thin Express controller for `GET /account/sessions`. It extracts the authenticated user ID and the current refresh-token cookie, then delegates to `accountService.sessionsList` to return the caller's live refresh tokens as a session list. All token semantics (which types count as a session, hiding raw token values, marking the current session) live in the service layer.
 
 ## Key elements
 
-- **`getSessions(request, response)`** – Sole export. Reads the user `id` from the auth context and the `jwt` cookie, calls `accountService.sessionsList(id, cookieToken)`, then responds with `successResponse` on success or short-circuits via `refused`. Errors are funneled through `catchAs(response, 'getSessions')`.
+- **`getSessions(request, response)`** — The sole export. Reads `authContextOf(request)` for the user ID, pulls the `jwt` cookie from `request.cookies`, calls `accountService.sessionsList(id, cookieToken)`, and writes the response via `successResponse` or lets `refused` short-circuit on a non-success result. Errors are funneled through `catchAs(response, 'getSessions')`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** – Supplies the `refused` guard (checks for a refused/error result and sends the appropriate status) and `catchAs` (unified error-to-response mapping).
-- **`src/infrastructure/http/request.ts`** – Supplies `authContextOf`, which extracts the authenticated user's `id` from the request (set upstream by `isAuth` middleware).
-- **`src/infrastructure/http/response.ts`** – Supplies `successResponse`, the standard 200 JSON envelope wrapper.
-- **`src/modules/account/routes.ts`** – Registers `getSessions` on the `GET /account/sessions` route.
-- **`src/modules/account/services/index.ts`** – Exposes `accountService.sessionsList`, which performs the actual token-to-session mapping and enforces the "token value never reaches the wire" rule.
+- **`src/modules/account/routes.ts`** — Registers `getSessions` at the `GET /account/sessions` route (behind `isAuth` middleware).
+- **`src/modules/account/services/index.ts`** — Exports `accountService`; this controller calls its `sessionsList` method, the only business logic step.
+- **`src/infrastructure/http/controller.ts`** — Supplies the `catchAs` (error → standard error response) and `refused` (service-level refusal → early return) helpers.
+- **`src/infrastructure/http/request.ts`** — Supplies `authContextOf`, which reads the pre-validated auth payload off the Express request.
+- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` for the standard success envelope.
 
 ## Notes
 
-- Authentication is **not** verified in this file; it relies on `isAuth` middleware running earlier in the route chain.
-- The `jwt` cookie is read here specifically because it identifies *which* session the current request belongs to (a request-level fact). The service layer receives it as an opaque string and decides what to surface.
-- The cookie key is literally `"jwt"` (not `"refresh"` or similar). The cast to `Record<string, string | undefined>` is the only runtime access to `request.cookies` in this file.
-- The doc comment notes that the rule "token value never reaches the wire" lives in `services/tokens.ts`, not here — this controller just passes the raw cookie value downstream.
+- Auth is guaranteed upstream by `isAuth` middleware; this file never validates credentials.
+- The `jwt` cookie is read only to pass down so the service can flag the caller's *current* session. The controller does not parse or validate it.
+- Token-type filtering and value-redaction are explicitly the service's job (see `services/tokens.ts`), not this adapter's.
+- The cookie is accessed via a `Record<string, string | undefined>` cast on `request.cookies`, so the token may be `undefined` if the cookie is absent — the service must handle that case.

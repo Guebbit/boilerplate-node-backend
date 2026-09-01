@@ -2,23 +2,22 @@
 
 ## Purpose
 
-Pure domain-rule module for order-line validation. It takes candidate lines as data in and returns a discriminated-union verdict out — no HTTP status codes, no i18n strings. The caller (`service.ts`) is responsible for mapping verdicts to user-facing responses.
+Pure validation rules for order lines. Given a set of candidate lines, it produces a typed verdict (`ok` or a specific refusal reason) with no side effects, no HTTP status codes, and no i18n strings. The separation ensures business logic stays testable in isolation while `service.ts` handles presentation concerns.
 
 ## Key elements
 
-- **`OrderLineCandidate`** (interface) — the minimal shape the rules inspect per line. `product` is `unknown` and *optional*; its absence signals the product reference no longer resolves.
-- **`OrderLinesVerdict`** (type) — discriminated union: `{ ok: true }`, or `{ ok: false; reason: 'no-lines' | 'product-missing' }`.
-- **`checkOrderLines`** (function) — validates a readonly array of candidates. Checks are ordered: empty array → `no-lines`; any line with a nullish `product` → `product-missing`; otherwise `ok`.
+- **`OrderLineCandidate`** — minimal shape the rules operate on: an optional `quantity` and an optional `product` (absence of `product` signals a failed reference lookup).
+- **`OrderLinesVerdict`** — discriminated union: `{ ok: true }` or `{ ok: false; reason: 'no-lines' | 'product-missing' }`.
+- **`checkOrderLines(lines)`** — the single rule. Returns `no-lines` if the array is empty, `product-missing` if any line's `product` is `undefined`/`null`, otherwise `ok`.
 
 ## Relationships
 
-- **`src/modules/orders/domain/index.ts`** — barrel file; re-exports the types and `checkOrderLines` so consumers import from the domain package root rather than this file directly.
-- **`src/modules/orders/service.ts`** — the sole production caller. Maps `OrderLinesVerdict` reasons to status codes / i18n messages; this file deliberately avoids doing that mapping.
-- **`src/modules/orders/tests/unit/domain-rules.test.ts`** — unit tests covering the `checkOrderLines` decision table (empty, missing product, valid set).
+- **`src/modules/orders/domain/index.ts`** — barrel file that re-exports `OrderLineCandidate`, `OrderLinesVerdict`, and `checkOrderLines` so callers import from the domain entry point rather than reaching into individual rule files.
+- **`src/modules/orders/service.ts`** — calls `checkOrderLines` and maps each `reason` string to the corresponding HTTP status code / error response. This file must never import from `service.ts` (dependency flows one way: service → domain).
+- **`src/modules/orders/tests/unit/domain-rules.test.ts`** — unit-tests `checkOrderLines` against the three verdict outcomes.
 
 ## Notes
 
-- **Check order is intentional.** `no-lines` is tested before `product-missing` because the two reasons map to *different* status codes downstream. Reordering would change the HTTP response for an empty cart.
-- **`product` is `unknown`, not a typed entity.** The rules layer never inspects product internals; it only tests for presence. Any deeper product validation belongs elsewhere.
-- **Immutability contract.** The function accepts `readonly OrderLineCandidate[]` and mutates nothing; callers can pass a shared array without copy concerns.
-- See `docs/theory/domain-layer.md` for the layering rules that keep this file free of transport/i18n concerns.
+- Evaluation order in `checkOrderLines` is intentional: `no-lines` is checked before `product-missing` because the two reasons map to *different* status codes downstream. Reordering the guards would silently change API behavior.
+- `product` is typed `unknown`, not a concrete product interface — the rules deliberately avoid depending on the product domain type; they only need to know "present or not."
+- The module docblock references `docs/theory/domain-layer.md` for the broader rationale behind the pure-verdict pattern.

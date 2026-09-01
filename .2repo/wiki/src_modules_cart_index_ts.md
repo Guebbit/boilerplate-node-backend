@@ -2,20 +2,20 @@
 
 ## Purpose
 
-Public barrel (the single import surface) for the cart module. Sibling modules must import only through this file; it exists to enforce the module-boundary rule and to keep the internal repository, model, and document type inaccessible to the rest of the codebase.
+Public barrel file for the cart module. It is the **only** import surface available to sibling modules, re-exporting a single symbol (`cartService`) to enforce the rule that cross-module access must go through the service layer.
 
 ## Key elements
 
-- **`cartService`** — re-exported from `./services`. The sole thing this barrel exposes. All cross-module cart interaction (add, get, validate) flows through this one object.
+- **`cartService`** (re-export from `./services`) — the sole public API of the cart module. Sibling modules interact with cart logic exclusively through this service.
+- **Intentionally omitted:** `cartRepository` and the cart model are *not* re-exported. The inline comment explains the rationale: exposing the repository would let a sibling bypass service-layer rules, and no sibling embeds a cart, so the model shape is not needed externally.
 
 ## Relationships
 
-- **`src/modules/cart/services/index.ts`** — the sole re-export source. All logic lives behind `cartService` here.
-- **`src/modules/wishlist/service.ts`** — calls `cartService` to move a saved wishlist line into the cart. Through that call it inherits the product-eligibility rules defined in `services/items.ts`.
+- **`src/modules/cart/services/index.ts`** — the source of the `cartService` re-export; this barrel is a thin pass-through to that file.
+- **`src/modules/wishlist/service.ts`** — a sibling module that may import `cartService` through this barrel to coordinate wishlist ↔ cart behavior.
+- **`src/modules/cart/tests/integration/stock.test.ts`** — integration test exercising cart stock behavior; likely imports `cartService` via this barrel or its service layer.
 
 ## Notes
 
-- `cartRepository` is **deliberately not exported**. Publishing it would give every sibling module a raw write path that bypasses the service layer and its validation. `tests/cross-cutting/published-repositories.test.ts` enforces its absence.
-- The cart model and its document type stay internal — nothing embeds a cart, so no sibling needs its shape.
-- A former cross-module reader (a SPEC in `products`) previously poked the repository directly to observe deletion side-effects; it now uses `cartService.cartGet`, going through the same public door as everyone else.
-- The module-boundary rule referenced here is documented in `modules/products/index.ts`.
+- The header comment points to `modules/products/index.ts` as the canonical example of the barrel-file rule. If you're adding a new module, mirror this pattern: one barrel, service-level exports only.
+- Do **not** add `cartRepository` or model types to this file. The exclusion is deliberate and documented.

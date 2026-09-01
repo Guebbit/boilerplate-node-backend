@@ -2,26 +2,26 @@
 
 ## Purpose
 
-Property-based tests (via `fast-check`) for the `Money` domain module. They verify the module's total invariant — that no arithmetic path can produce `NaN`, `Infinity`, or a sub-cent fraction — against both hostile and realistic inputs. The file exists because these guarantees hold for *every* input, not just hand-picked examples.
+Property-based tests (via `fast-check`) for the `Money` domain module. The invariant under test is that no monetary arithmetic produces `NaN`, `Infinity`, or a sub-cent fraction **for every possible input**, so the generators are deliberately hostile (garbage strings, booleans, overflow values) rather than just realistic. The file exists to give the team a single reproducible, seeded proof surface for those invariants.
 
 ## Key elements
 
-- **`RUN`** — Single `fc` options object (`seed: 20_260_819`, `numRuns: 300`, `endOnFailure: true`). Changing the seed here is the only place to alter reproducibility.
-- **`anything()`** — Arbitrary that generates `double`, `integer`, `string`, `boolean`, `null`, `undefined`, `±MAX_VALUE`, and the string `'1e400'`. Models "anything a malformed document or hostile client can put where a price goes."
-- **`realisticPrice()`** — Arbitrary for plausible catalogue prices (finite double, 0 to 1 000 000).
-- **`toMinorUnits — totality`** (describe block) — Asserts the function is total: finite integer output for any input; junk collapses to `NO_MONEY`; overflow (`±MAX_VALUE`) is dropped rather than carried as `Infinity`.
-- **`toMinorUnits ↔ toDecimalAmount`** (describe block) — Round-trip fidelity to the cent, ≤ 2 decimal places, and idempotency.
-- **`addMoney`** (describe block) — Exactness, associativity, order-independence, empty-fold identity, and finiteness under hostile terms.
-- **`scaleMoney`** (describe block) — Agreement with repeated `addMoney`, zero-count identity, finiteness for any count.
-- **`wholeCount`** (describe block) — Integer output for any input; passthrough for genuine non-negative integers.
+- **`RUN`** — single seed (`20_260_819`), `numRuns: 300`, `endOnFailure: true` shared by every `fc.assert` call in the file.
+- **`anything()`** — `fc.oneof` generator producing `double`, `integer`, `string`, `boolean`, `null`, `undefined`, `Number.MAX_VALUE`, `-Number.MAX_VALUE`, and the string `'1e400'`. The "hostile" half of the input space.
+- **`realisticPrice()`** — `fc.double` in `[0, 1e6]` with no NaN/Infinity. The "realistic" half.
+- **`describe('toMinorUnits — totality')`** — asserts `toMinorUnits` returns a finite `Integer` for *any* input; pins specific junk values to `NO_MONEY`; verifies overflow (±`MAX_VALUE`) collapses to `NO_MONEY`.
+- **`describe('toMinorUnits ↔ toDecimalAmount')`** — round-trip fidelity to the cent, ≤ 2 decimal places for any input, and idempotence.
+- **`describe('addMoney')`** — exactness / associativity / commutativity via reversed arrays; empty-list fold to `NO_MONEY`; finiteness under hostile terms.
+- **`describe('scaleMoney')`** — equivalence to repeated addition (catches `+`-where-`*`-belongs bugs); zero-quantity → `NO_MONEY`; finiteness for any price × count.
+- **`describe('wholeCount')`** — totality (finite integer for any input) and pass-through for genuine non-negative integers.
 
 ## Relationships
 
-- **`src/modules/orders/domain/money.ts`** — Sole dependency. This file imports `addMoney`, `NO_MONEY`, `scaleMoney`, `toDecimalAmount`, `toMinorUnits`, and `wholeCount` from it. Every assertion in this file is a specification of one of those exports' contract.
+- **`src/modules/orders/domain/money.ts`** — sole import target. The file exercises six exports: `toMinorUnits`, `toDecimalAmount`, `addMoney`, `scaleMoney`, `wholeCount`, and the `NO_MONEY` sentinel. No other module is referenced at runtime.
 
 ## Notes
 
-- Seeded runs: a failing property will print the counterexample; per the file header, that counterexample is then written back as a plain `it()` in this file. The property states the rule; the example remembers the bug.
-- The `anything()` arbitrary intentionally includes non-numeric types (`string`, `boolean`, objects). The tested functions are expected to handle (reject) them gracefully — this is a total-function test, not a type-safety test.
-- `Number.MAX_VALUE` is finite, so a naïve "is the input finite?" check passes, but multiplying by 100 overflows to `Infinity`. The test targets that specific edge.
-- References `docs/theory/tactical-ddd.md` §3 for the design rationale behind the Money type's invariants.
+- **Seeded & reproducible.** A single `RUN` constant governs every property test; change the seed in one place. If a counterexample is found, the convention (stated in the file header) is to pin it as an ordinary `it()` block so it doesn't disappear on re-seed.
+- **`toMinorUnits` is the gatekeeper.** The first test explicitly notes "every other function takes its input from this one," so its totality test runs first and is the broadest.
+- **`Number.MAX_VALUE` edge.** A dedicated test exists because the value is finite *on its own* but overflows once multiplied by 100 (the minor-unit conversion) — a property that a naive "check the input" assertion would miss.
+- **Convention reference.** The file header points to `docs/theory/tactical-ddd.md` §3 for the design rationale behind the totality requirement.

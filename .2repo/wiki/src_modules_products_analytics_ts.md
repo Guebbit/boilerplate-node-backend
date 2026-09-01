@@ -2,22 +2,20 @@
 
 ## Purpose
 
-Declares the analytics event names emitted by the products module (`products_searched`, `product_viewed`) and registers them into the shared `AnalyticsEventMap` via a TypeScript module augmentation. This keeps the catalogue's event vocabulary co-located with the module that owns it, while `infrastructure` stays domain-agnostic.
+Declares the analytics event names for the products module and merges them into the app-wide `AnalyticsEventMap` type via module augmentation. It exists so the products service can emit typed, discoverable funnel events (`products_searched`, `product_viewed`) without hard-coding string literals at call sites.
 
 ## Key elements
 
-- **`productsAnalyticsEvents`** — `as const` object exporting two event-name strings: `PRODUCTS_SEARCHED` (`'products_searched'`) and `PRODUCT_VIEWED` (`'product_viewed'`). Controllers that fire these events import this constant directly.
-- **`declare module '@infrastructure/observability/analytics'`** — Augments the `AnalyticsEventMap` interface with a `products` key typed as the union of the two values above. Same pattern used by `./audit.ts` for audit actions.
+- **`productsAnalyticsEvents`** — `as const` object exporting two event-name strings: `PRODUCTS_SEARCHED` (`'products_searched'`) and `PRODUCT_VIEWED` (`'product_viewed'`). Both represent top-of-funnel discovery actions, not purchase intent.
+- **`declare module '@infrastructure/observability/analytics'`** — augments the `AnalyticsEventMap` interface with a `products` key typed to the union of the values in `productsAnalyticsEvents`, giving callers compile-time exhaustiveness.
 
 ## Relationships
 
-- **`src/modules/products/service.ts`** — The service (and its controllers) in this module import `productsAnalyticsEvents` to name the events it emits.
-- **`scripts/contracts/analytics-events-bundle.ts`** — Aggregates module-level event-name constants (like this one) into the generated contract bundle.
-- **`tests/unit/infrastructure/observability/analytics.test.ts`** — Validates the analytics port contract, which includes the augmented `AnalyticsEventMap` this file contributes to.
+- **`src/modules/products/service.ts`** — sibling in the same module; the comment ("the analytics event names this module emits") indicates the service layer is the caller that fires these events.
+- **`tests/unit/infrastructure/observability/analytics.test.ts`** — exercises the analytics port whose `AnalyticsEventMap` this file extends; changes to the shape of the map here can surface as type errors in that test's fixture setup.
 
 ## Notes
 
-- Event names are **not** published to the paired frontend. Only `shared/contracts/analytics.frontend.ts` is published, and it covers moments this service never observes—this separation prevents a single event from being counted twice.
-- Naming rule is governed externally: see `docs/tools/analytics.md#naming`.
-- The two events are intentionally top-of-funnel (discovery). Their ratio to `CART_ITEM_ADDED` (defined elsewhere) is the catalogue-health metric.
-- Do not add a second export that "re-publishes" these names; the sole reader is the module's own controllers.
+- Naming for new events must follow the convention documented at `docs/tools/analytics.md#naming` (referenced in the file's module JSDoc).
+- The `declare module` augmentation is purely a type-level operation; at runtime this file exports only the `productsAnalyticsEvents` constant.
+- The events are intentionally scoped to discovery (search + view). The module-level comment notes their ratio to `CART_ITEM_ADDED` (defined elsewhere) is the signal that the catalogue is converting attention into intent—do not add purchase-stage events here.

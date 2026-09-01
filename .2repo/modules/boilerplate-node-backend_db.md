@@ -6,52 +6,49 @@ tags:
 type: module
 module: db/
 files: 21
-updated: 2026-08-27T17:59:49.363455+00:00
+updated: 2026-08-31T20:48:59.695107+00:00
 ---
 
 # db/
 
 ## Purpose
 
-The `db/` module contains all database-facing tooling that lives outside the application server: MongoDB migrations, the demo seed pipeline, and operational one-shot scripts (cache clearing, script runner). It exists so that database schema evolution, local/CI data provisioning, and manual data hygiene can each be performed without starting the API.
+The `db/` module owns every database-side operation that runs outside the HTTP request lifecycle: seeding a deterministic demo dataset, applying one-way schema migrations, clearing stale Redis cache entries, and providing a shared script runner with guaranteed cleanup. It is the surface an operator touches directly (`npm run db:seed`, `migrate-mongo`, manual Redis surgery) rather than something the API calls per-request.
 
 ## Key parts
 
-- **`db/migrations/`** — Timestamped `migrate-mongo` scripts that evolve the schema (add columns, create/drop indexes, reshape collections, backfill data). Each migration targets a single concern: `users` fields (`locale`, `active`, `verified`, email uniqueness), `products` stock splitting, the `carts` extraction, `orders` soft-delete and shipping-cost backfill, and the `locales`/`localemessages` uniqueness and tenancy evolution.
-
-- **`db/demo/`** — The demo-data pipeline. `index.ts` is the thin orchestrator that connects, calls every enabled module's `seeds()`, and flushes cache. `assemble.ts` serialises the full dataset back through each module's serializer to produce a validated, deterministic JSON string. `demo-data.json` is the resulting static seed file consumed by local dev, CI, and the client-collections bundle.
-
-- **`db/run-script.ts`** — Shared entry-point wrapper that adds non-zero exit codes, guaranteed resource cleanup, and structured error logging to any one-shot script under `db/`.
-
-- **`db/cache-clear.ts`** — Standalone Redis purger for the app's response-cache prefix, intended for use after out-of-band database writes (manual seeding, ad-hoc `mongosh`) that bypass the API's write-path invalidation.
+- **`db/demo/`** – The demo seeder. `index.ts` is the orchestrator (opens Mongo, gates against production, calls each enabled module's `seeds()` concurrently, flushes the in-memory cache). `assemble.ts` derives the canonical dataset by reading rows back through every module's serializer and validating referential integrity. `demo-data.json` is the static, deterministic seed payload shared by local dev, CI, and the client-collections bundle.
+- **`db/migrations/`** – The complete, ordered migration history (initial indexes → locale/cart/inventory schema evolution → unique-constraint backfills → soft-delete surfaces → unused-index pruning). Each file is a one-way, idempotent step; new index declarations live on schemas, not here.
+- **`db/cache-clear.ts`** – Standalone script that deletes all cached responses owned by this app from Redis. Needed because writes that bypass the HTTP API (seeding, raw `mongosh`, `migrate-mongo`) skip the per-request `invalidateCache` middleware.
+- **`db/run-script.ts`** – Thin entry-point wrapper guaranteeing non-zero exit on failure, resource cleanup on both paths, and structured error logging. Individual scripts stay focused on their work.
 
 ## How it connects
 
-- **`src/`** — Each demo module's `seeds()` and serializer is implemented in `src/`; migrations reference the collections and field shapes defined by `src/` schemas. `assemble.ts` imports those serializers directly.
-- **`src/infrastructure/`** — Provides the MongoDB connection factory and Redis client that `db/demo/index.ts` and `db/cache-clear.ts` consume at runtime.
-- **`scripts/`** and **`/` (root)** — The root `package.json` exposes `db:seed`, `migrate-mongo`, and cache-clear npm scripts that invoke the entry points in this module.
-- **`tests/integration/`** — The migration integration test reuses `db/demo/assemble.ts` to derive the expected dataset, ensuring the test and the export script agree on what the data should look like.
-- **`tests/unit/`** / **`tests/cross-cutting/`** — Unit and cross-cutting tests rely on the deterministic `demo-data.json` fixture so they never depend on a live database.
-- **`docs/`** — Documents the migration strategy and the demo/seed workflow for operators.
+- **`src/` / `src/infrastructure/` / `src/infrastructure/adapters/`** – The demo seeder (`demo/index.ts`) walks `enabledModules` and calls each module's optional `seeds()` method; `assemble.ts` reads back through each module's serializer. Migrations create the indexes and collections that the infrastructure adapters query at runtime. `cache-clear.ts` targets the same Redis keys the API middleware writes.
+- **`scripts/`** – The npm scripts that invoke `db:seed`, `migrate-mongo`, and `cache-clear` live here; they are the operator-facing entry points that delegate into this module.
+- **`tests/` / `tests/cross-cutting/` / `tests/support/` / `tests/unit/`** – The migration integration test derives its expected dataset from `db/demo/assemble.ts` (the single shared implementation). Test support code may seed via `demo/index.ts` or rely on the static `demo-data.json` as a known starting state.
 
 ## Where to start
 
-Read **`db/demo/index.ts`** first — it is short, names no collections, and shows the full orchestration shape (connect → seed → flush → close). Then read **`db/migrations/20260808120000-cart-collection.js`**; it is the most self-contained migration and demonstrates the typical pattern (backfill + schema change + index update) used by the rest of the directory.
+1. **`db/demo/index.ts`** – The shortest end-to-end path: it shows how the module discovers enabled modules, calls their seeds, flushes the cache, and shuts down. Reading it first gives you the orchestration pattern every other script follows.
+2. **`db/run-script.ts`** – Two-file context for *any* script you'll run by hand: it shows the lifecycle contract (exit codes, cleanup, error shape) that wraps your work.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_db["db/"]
-    m_scripts["scripts/<br/>22 files"]
+    m_scripts["scripts/<br/>25 files"]
     m_src["src/<br/>22 files"]
-    m_src_infrastructure["src/infrastructure/<br/>39 files"]
+    m_src_infrastructure["src/infrastructure/<br/>43 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>15 files"]
     m_tests["tests/<br/>19 files"]
-    m_tests_cross_cutting["tests/cross-cutting/<br/>38 files"]
+    m_tests_cross_cutting["tests/cross-cutting/<br/>28 files"]
     m_tests_support["tests/support/<br/>20 files"]
     m_tests_unit["tests/unit/<br/>14 files"]
     m_db --- m_scripts
     m_db --- m_src
     m_db --- m_src_infrastructure
+    m_db --- m_src_infrastructure_adapters
     m_db --- m_tests
     m_db --- m_tests_cross_cutting
     m_db --- m_tests_support
@@ -59,10 +56,10 @@ flowchart LR
     style m_db stroke-width:3px
 ```
 
-[[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_tests|tests/]] · [[boilerplate-node-backend_tests_cross-cutting|tests/cross-cutting/]] · [[boilerplate-node-backend_tests_support|tests/support/]] · [[boilerplate-node-backend_tests_unit|tests/unit/]]
+[[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_tests|tests/]] · [[boilerplate-node-backend_tests_cross-cutting|tests/cross-cutting/]] · [[boilerplate-node-backend_tests_support|tests/support/]] · [[boilerplate-node-backend_tests_unit|tests/unit/]]
 
 ## Files
-- `db/cache-clear.ts` — Standalone script that removes all cached responses scoped to this app's Redis prefix. It exists because the API only invalidates its own cache on writes it handles; manual database operations (`db:seed`, `migrate-mongo`, ad-hoc `mongosh`) bypass that logic, leaving stale responses served until TTL expiry.
+- `db/cache-clear.ts` — Standalone script that deletes every cached response owned by this app from Redis. It exists because writes that bypass the HTTP API (`db:seed`, `migrate-mongo`, a raw `mongosh` session) skip the API's per-request `invalidateCache` middleware, leaving stale responses in place until their TTL expires. It is invoked automatically by `db:seed` and can be run by hand after any manual database surgery.
 - `db/demo/assemble.ts` — Assembles the demo dataset (`db/demo/demo-data.json`) by reading rows back through every enabled module's serializer, validating internal consistency (no dangling references, shape labels in bijection with collections), and returning a deterministically ordered JSON string. It is a shared module so that the export script and the migration integration test both derive the dataset from a single implementation, eliminating the risk of two callers disagreeing about what the dataset is.
 - `db/demo/demo-data.json` — Static seed data for the demo environment. It provides a fixed, deterministic set of records across all supported collections so that local development, CI tests, and the client-collections bundle have a known starting dataset without requiring a live database or random generation.
 - `db/demo/index.ts` — The runner for the demo-data seeder. It opens a Mongo connection, gates against production, walks every entry in `enabledModules` calling each module's optional `seeds()` method concurrently, flushes the in-memory cache, and closes both connections. It owns no domain logic and names no collection; its sole job is orchestration.

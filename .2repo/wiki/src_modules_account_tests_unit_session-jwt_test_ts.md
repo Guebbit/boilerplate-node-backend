@@ -2,31 +2,31 @@
 
 ## Purpose
 
-Unit-level tests for the JWT token layer in `account/session/jwt.ts`. While integration suites prove the flows work end-to-end, this file pins down the safety properties that fail silently: secret separation between access and refresh tokens, revocation enforcement (a token is only valid while stored), uniqueness of issued tokens via `jti`, and correct algorithm/expiry wiring. It exercises those invariants in isolation with the users module fully replaced.
+Unit-level security-property tests for the token layer (`src/modules/account/session/jwt.ts`). Asserts the invariants that keep JWTs safe: the access and refresh secrets never cross-verify, a refresh token is only valid while its record is still stored, `jti: randomUUID()` prevents same-second mutual revocation, and HS256 is pinned at signing time. The `@modules/users` dependency is **replaced** (module-level `jest.mock`) rather than driven with real data.
 
 ## Key elements
 
-- **`verifyAccessToken` tests** — asserts payload resolution, rejection of refresh-secret tokens, bad signatures, expired tokens, and malformed input.
-- **`verifyRefreshToken` tests** — asserts the dual check (signature *and* storage lookup via `findByTokenValue`), that DB errors reject rather than resolving `null`, and that a failed signature never reaches the database.
-- **`createRefreshToken` tests** — asserts `tokenAdd` is called with `TokenType.REFRESH`, the refresh secret is used, `alg` is pinned to `HS256`, consecutive tokens have distinct `jti` values, remember-me seconds vs. milliseconds are consistent, and a missing user rejects.
-- **`createAccessToken` tests** — asserts it mints a valid access token from a still-stored refresh token and refuses otherwise (truncated in source).
-- **`recordRefreshTokenUse`** — imported from the SUT; tests present (truncated in source).
-- **`userDouble()`** — minimal object exposing `tokenAdd` (a `jest.fn` resolving `'stored'`) and `select: undefined`, standing in for the users model.
-- **`findByIdReturning(user)`** — convenience helper that sets `mockedUsers.findByIdWithCredentials` to resolve with a given user.
-- **`beforeEach`** — calls `jest.resetAllMocks()` (not `clearAllMocks`, to avoid leaking rejected implementations between tests) and sets all `NODE_TOKEN_*` env vars.
+- **`beforeEach`** — resets all mocks (via `jest.resetAllMocks`, not `clearAllMocks`) and sets the five `NODE_TOKEN_*` env vars (access/refresh secrets, short/long TTLs).
+- **`describe('verifyAccessToken')`** — happy-path decode, rejection of refresh-secret tokens, wrong-signature, expired, and garbage inputs.
+- **`describe('verifyRefreshToken')`** — requires storage lookup (`findByTokenValue`) in addition to signature check; rejects revoked, cross-secret, invalid-signature (without hitting DB), and DB-failure cases.
+- **`describe('createRefreshToken')`** — verifies `tokenAdd` is called with `TokenType.REFRESH`, HS256 header, unique `jti` across calls, correct unit pairing (seconds on `exp`, ms on stored expiry), and `User not found` rejection.
+- **`describe('createAccessToken')`** — mints only from a still-stored refresh token; signs with the access secret, HS256, short TTL.
+- **`userDouble()`** — factory returning a minimal user document double (`tokenAdd` mock + `select: undefined`) matching the shape `createRefreshToken` touches.
+- **`findByIdReturning(user)`** — one-line helper to set the `findByIdWithCredentials` mock resolution.
+- **`mockedUsers`** — `asStub<{...}>(userRepository)` giving typed `.mock` access to the three repository methods.
 
 ## Relationships
 
-- **`src/modules/account/session/jwt.ts`** — the system under test. All five exported functions are imported and driven.
-- **`src/modules/users/index.ts`** — mocked via `jest.mock('@modules/users', …)`. The test imports `userRepository` and `TokenType` from it; the mock replaces `userRepository` with three `jest.fn()` stubs.
-- **`src/modules/users/repository.ts`** — the concrete implementations of `findByTokenValue`, `findByIdWithCredentials`, and `tokenTouch` that the mock substitutes. The test asserts *which* method is called and with what arguments, not how the query is shaped.
-- **`src/modules/users/model.ts`** — the shape of the user document (specifically the `tokenAdd` method) that `userDouble()` mirrors.
-- **`tests/support/stub.ts`** — provides `asStub`, used to cast `userRepository` to a type whose fields are `jest.Mock`, enabling type-safe assertion on call counts and arguments.
+- **`src/modules/account/session/jwt.ts`** — the module under test; the suite imports its five exported functions (`verifyAccessToken`, `verifyRefreshToken`, `createRefreshToken`, `createAccessToken`, `recordRefreshTokenUse`).
+- **`src/modules/users/index.ts`** — mocked at the module level via `jest.mock('@modules/users', …)`, overriding `userRepository` with three `jest.fn()` stubs while preserving other exports; also supplies the `TokenType` enum.
+- **`src/modules/users/repository.ts`** — the three stubbed methods (`findByTokenValue`, `findByIdWithCredentials`, `tokenTouch`) correspond to this repository's interface; the actual query shapes are asserted separately in the repository's integration spec.
+- **`src/modules/users/model.ts`** — indirectly referenced: `userDouble()` mirrors the user document surface (`tokenAdd`, `select`) that the model provides to the code under test.
+- **`tests/support/stub.ts`** — provides `asStub`, the typed wrapper that lets the test access `.mock` members of the repository stubs without `as` casts.
 
 ## Notes
 
-- The mock replaces the **repository**, not the model. The file explicitly documents that raw Mongoose queries (`.select('+tokens')`, positional `tokens.$` updates) moved into the repository layer and are asserted in `users/tests/integration/repository.test.ts` against a real store.
-- `jest.resetAllMocks()` is used deliberately over `clearAllMocks()`: `clear` preserves the `mockResolvedValue`/`mockRejectedValue` implementation, so a rejection set in one test would leak into the next.
-- The `asStub` helper is used instead of `jest.spyOn` on the module namespace; the file's header comment references `tests/support/ports.ts` for the rationale.
-- `TokenType.REFRESH` is asserted on the first argument to `tokenAdd` to catch a misfiled token type that would cause the wrong revocation path to target it.
-- Environment variables (`NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, `NODE_TOKEN_ACCESS_TIME`, `NODE_TOKEN_REFRESH_TIME_SHORT`, `NODE_TOKEN_REFRESH_TIME_LONG`) are set in `beforeEach`; tests depend on these exact values (e.g., `exp − iat === 2_592_000`).
+- **`resetAllMocks` vs `clearAllMocks`**: the suite deliberately uses `reset` (wipes both call log *and* implementation) in `beforeEach`. A `clear` would leave a `mockResolvedValue`/`mockRejectedValue` set in one test leaking into the next.
+- **Refactored surface**: comments note that `session/jwt.ts` previously ran three raw `Users` queries inline; those are now repository methods, so this suite doubles the repository instead of the model.
+- **Unit pairing gotcha**: JWT `exp` is in **seconds**, the stored record expiry is a **JavaScript timestamp (ms)**. The `remember-me` test asserts both halves (`exp - iat === 2_592_000` and `tokenAdd` arg `=== 2_592_000 * 1000`) to catch drift.
+- **Algorithm pinning is tested at signing time only**; the complementary verification-side guard lives in the library's defaults and is not independently asserted here.
+- The file is truncated in the provided content; the `createAccessToken` describe block and any trailing helpers (`recordRefreshTokenUse` tests, etc.) may contain additional cases not listed above.

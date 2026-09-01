@@ -2,24 +2,24 @@
 
 ## Purpose
 
-HTTP controller for `GET /inventory/movements`. It reads and validates query-string parameters (pagination, `productId`, `reason`), delegates to the inventory service, and returns a single page of stock-movement records (newest first).
+Builds the `GET /inventory/movements` list controller, returning a paginated, newest-first page of stock-movement ledger entries that can be narrowed by `productId` and `reason`. It is a thin adapter between the HTTP layer and the inventory service.
 
 ## Key elements
 
-- **`movementsQuerySchema`** (module-level constant) — Extends `ListStockMovementsQueryParams` (from `@api/schemas.zod`) with shared `pageSchema` / `pageSizeSchema`, then calls `.partial()`. Used as the Zod validator for the request input.
-- **`getStockMovements`** (exported) — Express handler. Calls `readInput` with `surface: 'list'` and `ids: ['productId']`, validates via `movementsQuerySchema.safeParse`, then calls `inventoryService.listMovements`. On failure returns early with `rejectValidation`; on success sends `successResponse`; errors are handled by `catchAs`.
+- **`getStockMovements`** (exported const) — The single public export. Created via `createListController` with:
+  - `entity: 'stockMovements'` — identifies the resource for the list-controller harness.
+  - `schema` — `ListStockMovementsQueryParams` extended with `page` / `pageSize` (both optional via `.partial()`), producing the full query-string contract.
+  - `input.ids: ['productId']` — flags `productId` as the id field the harness resolves/validates.
+  - `runList` — delegates to `inventoryService.listMovements(parsed)`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs` (async error wrapper) and `rejectValidation` (400 response helper) used in the handler's error paths.
-- **`src/infrastructure/http/request.ts`** — Supplies `readInput`, which extracts and normalizes the query payload in one call.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` for the 200 reply.
-- **`src/infrastructure/http/schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema` so this endpoint stays consistent with every other paged endpoint in the project.
-- **`src/modules/inventory/routes.ts`** — Registers `getStockMovements` as the handler for the `GET /inventory/movements` route.
-- **`src/modules/inventory/service.ts`** — Provides `inventoryService.listMovements`, which performs the actual data fetch and pagination.
+- **`src/infrastructure/surfaces/create-list-controller.ts`** — Supplies the `createListController` factory that wires schema validation, id extraction, and list execution into a ready-to-mount HTTP handler.
+- **`src/infrastructure/http/schemas.ts`** — Source of `pageSchema` and `pageSizeSchema`, injected into the query-param schema to add pagination.
+- **`src/modules/inventory/service.ts`** — Provides `inventoryService.listMovements`, the domain operation that actually fetches and orders the movements.
+- **`src/modules/inventory/routes.ts`** — Registers `getStockMovements` on the `GET /inventory/movements` path, making it reachable by clients.
 
 ## Notes
 
-- `readInput` is called with `surface: 'list'` (not `'search'`) because this is a bodyless GET; the query string is the sole input source. See `docs/theory/request-input.md` for the convention.
-- The schema is `.partial()` on purpose: absent pagination fields remain absent here. Default values are applied downstream by `normalizePagination` in the service layer, keeping a single owner of defaults.
-- `productId` is declared in the `ids` array of `readInput`, signalling it is a resource identifier rather than a free-text filter.
+- The query-param schema is built with `.extend(...).partial()`, meaning **every** field—including the ones inherited from `ListStockMovementsQueryParams`—is optional at the query-string level. Filtering by `productId` or `reason` is therefore always optional.
+- `input.ids` is declared as `['productId']` even though the endpoint lists *movements* (not products). This tells the list-controller harness which query param to treat as a foreign-key id for resolution/authorization; it does not mean the list is scoped to a single product.

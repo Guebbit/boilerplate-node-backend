@@ -2,30 +2,25 @@
 
 ## Purpose
 
-Express controller that handles `GET /products` and `POST /products/search`. It validates incoming query-string or body parameters through a zod schema, coerces string-typed query values into their proper types, then delegates the actual lookup to `productService.searchViewed` with the caller's scope and context.
+Builds the validation schema and cache-key parameter list for the products list/search endpoints, then hands both to the shared `createSearchController` factory to produce the single controller that serves `GET /products` and `POST /products/search`.
 
 ## Key elements
 
-- **`GetProductsQuery`** — Exported type alias: `Partial<Record<keyof SearchProductsRequest, string>>`, representing the raw query-string shape before validation.
-- **`searchProductsQuerySchema`** (module-private) — Extends the orval-generated `SearchProductsBody` with `page`, `pageSize`, `minPrice`, `maxPrice`, and `active`. Uses `z.preprocess` to coerce empty strings → `undefined` and text → number/boolean, since GET params arrive as strings.
-- **`searchProductsKeyParameters`** — Exported `string[]` derived from `Object.keys(searchProductsQuerySchema.shape)`. Serves as the canonical list of query params that affect the response (and therefore the cache key).
-- **`getProducts`** — The Express handler. Reads input via `readInput`, parses it with `parseBody`, calls `productService.searchViewed(parsed, scope, context)`, and writes the result with `successResponse` / errors with `catchAs`.
+- **`searchProductsQuerySchema`** (module-local) — Zod schema that extends the orval-generated `SearchProductsBody` with type coercion for query-string inputs: `page`/`pageSize` via shared schemas, `minPrice`/`maxPrice` via `z.coerce.number()` (empty string → `undefined`), and `active` via a string-to-boolean preprocess.
+- **`searchProductsKeyParameters`** (exported) — `Object.keys(schema.shape)`; the exact set of query parameters that affect the response and therefore must appear in the cache key. Derived from the schema so the two can't drift.
+- **`getProducts`** (exported) — The controller instance returned by `createSearchController`. Accepts a coerced `extendInput` (picks first element of `category`/`tag` arrays) and a `runSearch` callback that delegates to `productService.searchViewed` with the caller's scope and context.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Supplies `parseBody` (schema validation with early-exit error response) and `catchAs` (unified async error → HTTP response).
-- **`src/infrastructure/http/request.ts`** — Supplies `readInput` (unified body/query extraction) and `callerContextOf` (resolves per-request caller metadata for auditing/tracing).
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` for the standard 200 envelope.
-- **`src/infrastructure/http/schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema` so pagination validation is shared across all four search endpoints.
-- **`src/modules/products/service.ts`** — `productService.searchViewed` performs the actual query; `productService.callerScope` maps `request.authContext` to an admin/public scope (admin sees inactive/deleted, public sees active only).
-- **`src/modules/products/routes.ts`** — Registers `getProducts` as the handler for the product list/search routes.
-- **`src/types/index.ts`** — Provides the `SearchProductsRequest` type used in the `GetProductsQuery` alias and the Express generic for the handler signature.
-- **`@api/schemas.zod`** — Source of `SearchProductsBody` and the `minPrice`/`maxPrice` lower-bound constants; kept in sync with `openapi.yaml`.
+- **`src/infrastructure/surfaces/create-search-controller.ts`** — Provides the `createSearchController` factory that `getProducts` is built with; the factory handles HTTP plumbing, validation, and caching.
+- **`src/infrastructure/http/schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema` so this endpoint shares pagination rules with other search endpoints.
+- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf(request)` passed into `productService.searchViewed` at call time.
+- **`src/modules/products/service.ts`** — Supplies `productService`, whose `searchViewed` and `callerScope` methods are the actual data-access calls.
+- **`src/modules/products/routes.ts`** — Upstream consumer; imports `getProducts` to attach it to the route table.
 
 ## Notes
 
-- **String coercion is intentional and non-trivial.** GET query params are always strings; the `z.preprocess` steps map `''`/`null` → `undefined` (so absent stays absent) and then `z.coerce.number()` / `z.boolean()` handle the conversion. The `active` field specifically checks `value === 'true'` because a query string can only express booleans as text.
-- **Cache-key coupling.** `searchProductsKeyParameters` is derived from the schema shape, not hand-listed. If you add a field to the schema, it automatically enters the key; if you read a param in the handler but forget to add it to the schema, the validator strips it and it never reaches the key. The two are kept in sync by construction.
-- **`category` / `tag` take only the first value** when an array or CSV is supplied (`coerceStringArray(...)[0]`), because the OpenAPI spec models them as single-value filters.
-- **Pagination defaults are not set here.** `page`/`pageSize` are optional in the schema; `normalizePagination` (lived elsewhere) owns applying defaults. This controller passes them through as-is or `undefined`.
-- The inline comment references `docs/theory/request-input.md` for the rationale behind `readInput`'s single-declaration pattern.
+- GET query params arrive as strings; the schema's `preprocess`/`coerce` steps handle conversion. Empty strings for `minPrice`/`maxPrice` are intentionally mapped to `undefined` (absent), not `0`, so the service treats them as "no filter."
+- `category` and `tag` are single-value in the OpenAPI contract, but clients may send arrays or CSV; `extendInput` silently picks the first element rather than rejecting.
+- `searchProductsKeyParameters` is derived from the schema shape, not hand-maintained. Adding a new field to the schema automatically extends the cache key.
+- Admin callers see inactive/deleted products; public callers see only active ones. This distinction is resolved inside `productService.searchViewed` via `callerScope`, not in this controller.

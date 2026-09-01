@@ -1,26 +1,28 @@
 # src/infrastructure/http/errors.ts
 
 ## Purpose
-Defines the HTTP-layer error vocabulary: a custom `ExtendedError` class for throwing typed, status-carrying errors from any layer, and a set of helpers that translate raw Mongoose/driver failures into the correct HTTP status and a safe client message. It exists so that status codes are derived in one place, driver messages never leak to clients, and operational vs. programmer errors are handled (logged or not) consistently.
+
+Defines the HTTP-layer error types and the single mapping point for database-driver failures to HTTP responses. It lets controllers `throw` a structured error (or delegate to a helper) instead of hand-rolling status codes, and guarantees that all twelve Mongoose models interpret a duplicate key, a bad ObjectId, or a validator rejection identically.
 
 ## Key elements
-- **`ExtendedError`** — `Error` subclass carrying `httpCode`, `isOperational`, and a user-facing `errors: string[]`. Non-operational instances are logged in the constructor (under the `error` key, so `serializeError` in the logger can strip the stack). `Object.setPrototypeOf(this, new.target.prototype)` restores `instanceof` for ES5 targets.
-- **`isDuplicateKey(error)`** — Type guard for Mongo E11000, checked by `.code === 11000` (never by message).
-- **`databaseErrorInterpreter(error)`** — Maps a Mongoose/driver error to a `[httpCode, message]` tuple. Branches: `CastError` (422), duplicate key (409), `BSONError` by name (422), `ValidationError` by name (422), fallback (500). Uses `name`-based checks rather than `instanceof` to avoid dual-copy `bson` issues.
-- **`rejectDatabaseError(response, context, error)`** — Controller-side: logs with operation context, then calls `rejectResponse` from `./response`.
-- **`rejectDatabaseEnvelope(context, error)`** — Service-side: logs the same way but returns a `generateReject(status)` envelope instead of writing to an Express `Response`.
+
+- **`ExtendedError`** (class, extends `Error`) — Carries `httpCode`, `isOperational`, and user-facing `errors[]`. Non-operational (unexpected) errors are logged in the constructor via `logger.error`, so a record exists even if a caller swallows the throw. Uses `Object.setPrototypeOf` to preserve `instanceof` across subclasses under ES5 transpilation.
+- **`isDuplicateKey`** (function) — Type-guards for Mongo E11000 by checking `code === 11_000`. Exported separately so the cart repository can use it as a retry signal while the interpreter maps it to 409.
+- **`databaseErrorInterpreter`** (function) — Pure mapping from a `CastError | Error` to a `[httpCode, message]` tuple. Branches: `CastError` (422), duplicate key (409), `BSONError` (422), `ValidationError` (422), fallback (500). Detects BSON/Validation errors by `name` string, not `instanceof`, to avoid transitive-dependency copy mismatches.
+- **`rejectDatabaseError`** (function) — Entry point for controller `.catch` blocks. Calls the interpreter, logs with a developer-facing `context` string, and sends the response via `rejectResponse`.
+- **`rejectDatabaseEnvelope`** (function) — Same logic as above but returns a `generateReject(status)` envelope instead of writing to an Express `Response`, for services that have no `res` object.
 
 ## Relationships
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger`; every non-operational `ExtendedError` and both `reject*` helpers emit `logger.error` calls.
-- **`src/infrastructure/http/response.ts`** — Imports `rejectResponse` and `generateReject` to build the actual HTTP/envelope payload.
-- **`src/app/error-handling.ts`** — The central Express error middleware that catches thrown `ExtendedError` instances and derives the response from `httpCode` / `errors`.
-- **`src/infrastructure/http/controller.ts` / `delete-controller.ts`** — Call `rejectDatabaseError` in `.catch` handlers and `throw new ExtendedError(…)` for validation failures.
-- **`src/modules/account/services/authentication.ts` / `profile.ts`** — Call `rejectDatabaseEnvelope` because services lack an Express `Response`.
-- **`src/modules/cart/controllers/post-checkout.ts`** — Uses `isDuplicateKey` to distinguish a retryable race from a plain 409.
-- **`docs/theory/request-flow.md`** — Referenced in the `databaseErrorInterpreter` docstring as the canonical explanation of where each status originates.
+
+- **`src/infrastructure/adapters/logger.ts`** — Imports `logger`; used by `ExtendedError`'s constructor and by both `reject*` helpers to write server-side log lines.
+- **`src/infrastructure/http/response.ts`** — Imports `generateReject` and `rejectResponse`; the two `reject*` helpers delegate actual response construction to these.
+- **`src/app/error-handling.ts`** — The central Express error middleware that catches thrown `ExtendedError` instances and serialises them into an HTTP response using the `httpCode`/`errors` fields.
+- **`src/modules/cart/repository.ts`** — Consumes `isDuplicateKey` as a retry signal (distinct from the interpreter's 409 mapping).
+- **Controllers & services** (e.g. `post-login.ts`, `get-refresh-token.ts`, `create-item-controller.ts`, `authentication.ts`, `profile.ts`) — Call `rejectDatabaseError` or `rejectDatabaseEnvelope` in their `.catch` paths, or throw `ExtendedError` for expected business failures.
 
 ## Notes
-- `isOperational` defaults to **`false`**, meaning an unannotated `ExtendedError` is treated as a programmer error and logged immediately. Set it to `true` for expected failures (404, wrong password, etc.) to suppress that log.
-- `databaseErrorInterpreter` identifies `BSONError` and `ValidationError` by the `.name` string, **not** `instanceof`, because `bson` can appear as a transitive dependency of two different packages and a cross-copy `instanceof` check silently returns `false`.
-- The interpreter checks `CastError` via `hasOwnProperty('kind')` (using `Object.prototype.hasOwnProperty.call`) to stay safe on null-prototype objects.
-- `ExtendedError` composes `name` and `errors` into the base `Error.message` so a bare log of `.message` is still human-readable.
+
+- `isOperational` defaults to **false**, so a bare `throw new ExtendedError('X', 500)` is treated as a bug and logged immediately. Pass `true` explicitly for expected outcomes (wrong password, validation).
+- The interpreter checks `name` strings (`'BSONError'`, `'ValidationError'`) rather than `instanceof` because `bson` and Mongoose internals can resolve to different copies in `node_modules`; `instanceof` across copies silently fails.
+- `databaseErrorInterpreter` is intentionally a closed list of branches. The doc comment states a new driver-error case should add a branch *here*, not in individual controllers.
+- The `errors[]` array on `ExtendedError` is the only user-facing content safe to return to clients; the raw driver `message` and `stack` are logged but never sent in the response body.

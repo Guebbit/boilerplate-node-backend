@@ -2,24 +2,24 @@
 
 ## Purpose
 
-Defines the two Prometheus gauges the inventory module owns: `products_low_stock_total` and `inventory_reserved_units_total`. Both are scrape-time-computed (via `collect`) so they always reflect the current DB state rather than accumulating events. They live in the module (not infrastructure) so the observability layer never needs to import domain logic back in — the same pattern as `modules/account/metrics.ts`.
+Defines two Prometheus `Gauge` metrics that the inventory module owns: one tracking low-availability product count and one tracking total reserved units. The file is imported purely for its side effect of registering the gauges; no consumer reads the exported (underscore-prefixed) variables.
 
 ## Key elements
 
-- **`productsLowStockTotal`** (Gauge, `products_low_stock_total`) — Count of products whose *available* units (on-hand minus reserved) are at or below `lowStockThreshold()`. Computed at scrape time via `productRepository.countLowAvailability()`. Deliberately measures availability, not raw stock: a product with 40 units all reserved reads as 0 available.
-- **`inventoryReservedUnitsTotal`** (Gauge, `inventory_reserved_units_total`) — Total units held by open (unpaid) reservations across the catalogue. Computed at scrape time via `productRepository.sumReserved()`. Intended to surface runaway holds (abandoned checkouts, stuck payment confirmations) that a simple stock counter would hide.
+- **`_productsLowStockTotal`** — `Gauge` named `products_low_stock_total`. Its `collect` callback calls `productRepository.countLowAvailability(lowStockThreshold())` at scrape time to count products whose *available* units (on-hand minus reserved) are at or below the configured threshold.
+- **`_inventoryReservedUnitsTotal`** — `Gauge` named `inventory_reserved_units_total`. Its `collect` callback calls `productRepository.sumReserved()` to sum units currently held by open reservations.
+- Both gauges register into the shared `metricsRegistry` and rely on `async collect()` rather than a static value, so the underlying query runs on each Prometheus scrape.
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-http.ts`** — Provides `metricsRegistry`; both gauges register into it so the shared HTTP `/metrics` endpoint can scrape them without this file knowing about the transport.
-- **`src/modules/inventory/config.ts`** — Exports `lowStockThreshold()`, consumed inside `productsLowStockTotal`'s `collect` callback.
-- **`src/modules/products/index.ts`** — Re-exports `productRepository`, the sole data source for both gauges.
-- **`src/modules/products/repository.ts`** — Implements `countLowAvailability(threshold)` and `sumReserved()` (the two DB queries these gauges delegate to).
-- **`src/modules/inventory/module.ts`** — Not imported here. The module wires up this file's exports for the broader module lifecycle, but the dependency direction is one-way (module → metrics, never the reverse).
+- **`src/infrastructure/observability/metrics-http.ts`** — Supplies the shared `metricsRegistry` into which both gauges register.
+- **`src/modules/products/index.ts`** — Re-exports `productRepository`, which is the sole data source for both gauge `collect` callbacks.
+- **`src/modules/products/repository.ts`** — Implements `countLowAvailability` and `sumReserved` (the two methods actually awaited by this file, reached via the index re-export).
+- **`src/modules/inventory/config.ts`** — Provides `lowStockThreshold()`, read inside the low-stock gauge's `collect` to pass the current threshold to the repository query.
+- **`src/modules/inventory/module.ts`** — Sibling entry point in the same module; this file is expected to be imported for its registration side effect (no symbol is consumed).
 
 ## Notes
 
-- Both gauges use **`collect()`**, not `inc`/`dec`. The value is always recomputed against the database at scrape time; there is no accumulated state. This avoids drift but means each Prometheus scrape triggers a Mongo query.
-- `lowStockThreshold()` is called **inside** `collect`, not at module-load time. If the threshold is environment-variable-backed or configurable at runtime, it will be re-read on every scrape.
-- The file header explicitly cross-references `modules/account/metrics.ts` for the placement rationale. If you move or rename this file, keep that comment consistent or the convention explanation is lost.
-- `productsLowStockTotal` counts **products**, not units. `inventoryReservedUnitsTotal` counts **units**. They measure different dimensions of the same inventory state.
+- The underscore-prefixed bindings (`_productsLowStockTotal`, `_inventoryReservedUnitsTotal`) are intentionally never read; the constructor is the only work done. Linters that flag unused variables should be configured to tolerate this pattern (same convention as `metrics-http.ts`).
+- The low-stock gauge measures **availability**, not `onHand`. A product with units on hand but fully reserved reports as low/out of stock. Do not replace the query with a simpler `onHand <= threshold` check.
+- Because `collect` is `async`, a failing database query during a scrape will surface as a metric-collection error in Prometheus rather than throwing in-process.

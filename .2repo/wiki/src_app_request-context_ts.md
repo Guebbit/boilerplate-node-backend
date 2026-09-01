@@ -2,24 +2,24 @@
 
 ## Purpose
 
-Installs the set of per-request context middlewares (request ID, access logging, observability, locale) on the Express app. All of these attach data that downstream route handlers read, so this function must be called before any routes are mounted. The internal ordering of the three middlewares is load-bearing: the request ID must exist before the logger and any audit entry records it.
+Installs the per-request context middleware (correlation ID, access logging, observability, locale) in a single, ordered block that must run before any route is registered. It exists to keep all "attach-then-read" setup in one place so the ordering contract is explicit and maintained alongside the routes it guards.
 
 ## Key elements
 
-- **`installRequestContext(app: Express): void`** — sole export. Registers three middlewares in strict order:
-  1. Inline request-ID middleware — reuses the inbound `x-request-id` header or generates a `crypto.randomUUID()`, stamps it onto `request.requestId` and the response header.
-  2. `requestLogger` (imported from `@infrastructure/http/middlewares/request-logger`) — Winston access log plus OpenTelemetry trace injection.
-  3. `attachLocale` (imported from `@infrastructure/http/middlewares/locale`) — resolves `Accept-Language` and binds the negotiated locale to the request so all downstream copy resolution uses it.
+- **`installRequestContext(app: Express): void`** — the sole export. Registers three middleware in a fixed sequence:
+  1. **Request-ID middleware** (inline): reads `x-request-id` from the incoming request; falls back to `crypto.randomUUID()`. Stamps `request.requestId` and echoes the value in the `x-request-id` response header.
+  2. **`requestLogger`** (from `request-logger.ts`): Winston access-log line + OpenTelemetry trace injection. Relies on `request.requestId` already being set.
+  3. **`attachLocale`** (from `locale.ts`): negotiates `Accept-Language` and stores the resolved locale on the request for downstream i18n lookups.
 
 ## Relationships
 
-- **`src/app.ts`** — the calling site; invokes `installRequestContext(app)` before any route mounting.
-- **`src/infrastructure/http/middlewares/request-logger.ts`** — provides the `requestLogger` middleware consumed as the second step.
-- **`src/infrastructure/http/middlewares/locale.ts`** — provides the `attachLocale` middleware consumed as the third step.
-- **`package.json`** — declares the `express` type dependency used by this file.
+- **`src/app.ts`** — the caller. Invokes `installRequestContext(app)` before wiring routers, which is why this module "must precede the routes."
+- **`src/infrastructure/http/middlewares/request-logger.ts`** — supplies `requestLogger`; expects `request.requestId` to already exist (set by the inline middleware above it).
+- **`src/infrastructure/http/middlewares/locale.ts`** — supplies `attachLocale`; runs last so that any locale-dependent logging inside `requestLogger` sees the negotiated locale.
+- **`package.json`** — declares the `express` and `node:crypto` dependencies this file imports.
 
 ## Notes
 
-- The comment block explicitly flags the ordering as load-bearing. Reordering the middlewares (e.g., putting `requestLogger` before the ID middleware) would break log correlation.
-- The request ID is set as a *mutable property* on the Express request object (`request.requestId`), not via `req.headers`. Downstream code that reads it should use the property, not the header.
-- The client-supplied `x-request-id` is trusted as-is (no validation or sanitisation visible here).
+- **Order is load-bearing.** The module doc-comment and the inline comment both call out that reordering (e.g., moving `attachLocale` before the logger, or generating the ID after the logger) will silently break audit-log correlation or locale-aware log lines.
+- **`request.requestId` is a dynamic property**, not part of the Express `Request` type. Downstream code accessing it should expect an untyped property (or a local type augmentation); there is no `declare global` in this file.
+- **Client-supplied IDs are trusted as-is.** If a caller sends an arbitrary `x-request-id` header, it is used verbatim without sanitisation.

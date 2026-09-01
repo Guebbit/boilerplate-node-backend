@@ -2,20 +2,24 @@
 
 ## Purpose
 
-Registers Mongoose connection and per-test database clearing hooks for any test suite that touches MongoDB. It exists so every test starts against a guaranteed-empty database, letting assertions use absolute counts instead of relative deltas, and eliminating order-dependent failures.
+Registers Jest lifecycle hooks (`beforeAll` / `afterAll` / `beforeEach`) that connect to the run's shared in-memory mongod and wipe every collection before each test case. It exists so that any suite touching Mongo gets an isolated, empty database per `it()` without each test file repeating the boilerplate.
 
 ## Key elements
 
-- **`setupTestDb()`** — the sole export. Calls `beforeAll(connect)`, `afterAll(disconnect)`, and `beforeEach(clearAll)`, all imported from `./database`. Intended to be invoked once at the **top level** of a test file (outside any `describe`).
+- **`setupTestDb`** (the sole export) — a zero-arg function that calls:
+  - `beforeAll(connect)` — opens the connection to the in-memory mongod.
+  - `afterAll(disconnect)` — closes it after the suite finishes.
+  - `beforeEach(clearAll)` — deletes all documents in all collections before every test, guaranteeing absolute-count assertions.
+- Imports `connect`, `disconnect`, `clearAll` from `./database`.
 
 ## Relationships
 
-- **`./database`** (sibling in `tests/support/`) — provides the `connect`, `disconnect`, and `clearAll` primitives that `setupTestDb` wraps into Jest lifecycle hooks.
-- **~15 test files across modules** (`account`, `audit-logs`, `cart`, `delivery`, `feedback`) — each calls `setupTestDb()` at the top level to inherit the connect/clear/disconnect lifecycle. No module-specific logic lives here; all callers get identical behavior.
+- **`./database`** (sibling in `tests/support/`) — provides the three primitives (`connect`, `disconnect`, `clearAll`) that `setupTestDb` wires into Jest hooks.
+- **Consumer test files** across `src/modules/{account,audit-logs,cart,delivery,feedback}/tests/` — every contract, integration, and service test file in those modules imports and calls `setupTestDb()` at the top level of the file to obtain the described lifecycle.
 
 ## Notes
 
-- **Top-level only.** Calling `setupTestDb()` inside a `describe` block scopes the hooks to that block; the file's own docstring warns against this.
-- **No seeding.** The file deliberately does not insert fixture data. Tests that need documents are expected to create them via the module's `tests/factory.ts`, keeping fixtures visible in the test body.
-- **Per-test wipe, not per-file.** `beforeEach(clearAll)` runs a `deleteMany` per collection before every `it()`. This is a deliberate trade-off: microseconds of overhead on an in-memory mongod in exchange for eliminating any dependency on test execution order.
-- **Shared mongod.** All suites in a run share one in-memory mongod instance; this file does not start or configure the server itself — that responsibility belongs to `./database`.
+- **Call at top level only.** The function registers hooks via bare `beforeAll` / `beforeEach`. If invoked inside a `describe` block, the hooks wrap only that block; the JSDoc explicitly warns against this.
+- **No seeding.** By design `setupTestDb` inserts nothing. Tests that need data must create it locally (typically via a module's `tests/fixtures.ts`), keeping each case self-contained.
+- **Per-test clearing, not per-file.** The `deleteMany` cost is microseconds against an in-memory server but eliminates order-dependent failures (e.g., a passing suite that breaks when a case is inserted above another, or when run via `it.only`).
+- **In-memory mongod assumption.** The implementation expects a single shared in-memory instance for the entire run; it does not manage the mongod process itself (that is presumably handled by a global Jest setup or the `./database` module).

@@ -2,24 +2,18 @@
 
 ## Purpose
 
-Barrel file for the cart **domain layer**. It re-exports the public API of `./rules` so that consumers can import from `cart/domain` without reaching into submodules. The domain layer is intended to be pure, framework-free logic (enforced by lint rules); this index file is the single entry point for that contract.
+Barrel entry point for the cart **domain layer**. It exists to give consumers a single stable import path while re-exporting the pure, framework-free rules defined in `rules.ts`. No logic lives here.
 
 ## Key elements
 
-- **`evaluateCheckout`** — Re-exported function (from `./rules`). Performs the core checkout evaluation logic.
-- **`CartLineCandidate`** (type) — Re-exported from `./rules`. Represents a line item under consideration during checkout.
-- **`CheckoutVerdict`** (type) — Re-exported from `./rules`. The result/outcome of a checkout evaluation.
-- **`CheckoutShortfall`** (type) — Re-exported from `./rules`. Describes a shortfall detected during evaluation.
-
-All four exports originate from `./rules`; this file adds no logic of its own.
+- **`evaluateCheckout`** — Re-exported from `./rules`. The sole public symbol of the domain layer; callers import it from this index rather than reaching into `rules.ts` directly.
 
 ## Relationships
 
-- **`src/modules/cart/domain/rules.ts`** — Sole source of every export in this file. The index simply re-exports its named function and types.
-- **`src/modules/cart/services/checkout.ts`** — Downstream consumer in the services layer that imports from this barrel (or the domain layer) to invoke `evaluateCheckout` and work with the exported types.
+- **`src/modules/cart/domain/rules.ts`** — Defines `evaluateCheckout`; this file is a thin re-export of that symbol.
+- **`src/modules/cart/services/checkout.ts`** — Service-layer consumer; imports `evaluateCheckout` from this barrel (the service orchestrates, the domain evaluates).
 
 ## Notes
 
-- The header comment states the domain layer is **lint-guaranteed framework-free**. Any new export added here must come from code that satisfies that constraint; the barrel does not relax it.
-- For architectural rationale, see `docs/theory/domain-layer.md` (referenced in the file comment).
-- Because this is a pure re-export barrel, there is no runtime state or side effect to worry about—importing from `cart/domain` is equivalent to importing from `cart/domain/rules`.
+- The module docblock states the domain layer is **lint-guaranteed framework-free**. Keep any future re-exports here pure (no side effects, no framework imports) to preserve that invariant.
+- The design rationale is documented in `docs/theory/domain-layer.md` (referenced in the file's JSDoc).

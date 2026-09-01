@@ -2,26 +2,28 @@
 
 ## Purpose
 
-Models the delivery domain: shipping rates (as pure functions), shipment records, and a fake courier that transitions parcels from `shipped` to `delivered`. Exists so the shop can price and track deliveries per order without an external integration.
+Documents the delivery module: shipping rates, shipment (parcel) records, and the fake courier that transitions shipments through `shipped → delivered`. Exists to centralize how the shop prices and tracks physical shipping of an order.
 
 ## Key elements
 
-- **`findShippingMethod`** – Pure function (in `domain/`) that selects an applicable shipping method. Called by `cart` during checkout pricing.
-- **`priceShipping`** – Pure function (in `domain/`) that computes the cost for a chosen method. Called by `cart` during checkout pricing.
-- **Shipment record** – Persisted parcel tied to an order (`unique: true` on `orderId` enforces one parcel per order).
-- **Fake courier** – Advances a shipment through `shipped → delivered`. Exists so tests and the demo profile can complete the flow without a real carrier integration.
-- **Shipped email notification** – Outbound email addressed in the recipient's language (language read from the user account).
+- **`findShippingMethod`** — pure function in `domain/`; selects a shipping method. Called by cart during checkout pricing.
+- **`priceShipping`** — pure function in `domain/`; returns the cost for a selected method. Called by cart during checkout pricing.
+- **Shipment record** — DB entity tied to one order (`unique: true` on `orderId`). Carries the `shippingCost` back onto the order.
+- **Fake courier** — stub that advances a shipment from `shipped` to `delivered` without any external integration (mirrors the fake payment provider).
+- **Shipped notification** — email rendered in the recipient's language (read from the `users` account).
 
 ## Relationships
 
-- **`cart.md`** – Prices a shipping method through `findShippingMethod` and `priceShipping` without touching this module's HTTP surface or shipment records. This is a *published-language* edge: the cart receives vocabulary (rates), not state. The arrow is dashed on the dependency map.
-- **`orders.md`** – A shipment is *about* an order; orders carry a `shippingCost` sourced from this module.
-- **`users.md`** – Narrow dependency: reads the account solely to resolve the recipient's language for the shipped email.
-- **`cart-checkout.md`** – The cart's checkout step calls through `findShippingMethod` / `priceShipping` to obtain the delivery line item (see `cart.md` for the pricing path).
+- **`orders`** — a shipment is *about* an order; removing this module means orders simply stop carrying `shippingCost`.
+- **`cart` / `cart-checkout`** — prices a method via `findShippingMethod` + `priceShipping` without touching delivery's HTTP surface or learning that a shipment record exists. This is a `published-language` (dashed) edge.
+- **`users`** — narrow dependency: reads the account solely to choose the language of the shipped-notification email.
+- **`domain-layer`** — the shipping-rate functions live in `domain/` as pure functions; see that page for the rationale.
+- **`email-and-rendering`** — owns the actual rendering/sending of the shipped notification that this module triggers.
+- **`strategic-ddd`** — explains the `published-language` boundary that makes the cart→delivery arrow dashed.
 
 ## Notes
 
-- **Breaking risk:** Changing the signatures or semantics of `findShippingMethod` or `priceShipping` directly breaks the cart's checkout pricing.
-- **Published-language edge:** Because the rates live in `domain/` as pure functions, the cart never learns that a shipment record exists. This is the strongest (and most fragile) coupling on the map—treat the function contracts as a public API.
-- **One parcel per order:** Enforced by `unique: true` on `orderId`. Do not add a second shipment for the same order without revising this constraint.
-- **Clean removal:** Deleting this module simply drops `shippingCost` from orders; the build does not break. This was the shop's state before the module existed.
+- **One parcel per order.** The `unique: true` constraint on `orderId` is the only cardinality guard; there is no multi-parcel path.
+- **Breaks if you change** `findShippingMethod` or `priceShipping` signatures — the cart calls both at checkout and will fail at the type/contract level.
+- **Clean removal.** Deleting the module removes the selector, parcel records, and cost, but the build stays green; orders revert to the pre-module state.
+- The courier is deliberately fake in both test and demo profiles; there is no real carrier integration behind it.

@@ -2,27 +2,26 @@
 
 ## Purpose
 
-Provides the wishlist module's slice of the demo dataset: two seeded wishlists (one per demo user) plus the seed and export functions that `db/demo/index.ts` calls to populate and inspect the collection. The file exists so that the storefront has non-empty wishlist pages for the admin and regular demo users without manual data entry.
+Defines the wishlist module's slice of the demo dataset: one seeded wishlist per demo account, each containing only publicly visible products. It also exposes the seed and export functions that `db/demo/index.ts` orchestrates.
 
 ## Key elements
 
-- **`wishlistFixtures`** — Array of two wishlist objects built via `makeWishlist`. One belongs to the admin (single product, out-of-stock) and one to the regular user (two products, one of which is also absent from their cart so a "move to cart" demo is possible).
-- **`upsertByOwner`** *(internal)* — Looks up an existing wishlist by `userId` via `wishlistRepository.findByUserId`. Returns `'skipped'` if one exists; otherwise calls `wishlistRepository.create` and returns `'created'`.
-- **`seedWishlistsCollection`** — Maps `upsertByOwner` over all fixtures and returns the array of `SeedOutcome`s. This is the entry point the demo runner invokes.
-- **`exportSeededWishlists`** — Calls `exportCollection(wishlistModel, { userId: 1 })` and returns the stored rows under the key `wishlists`.
+- **`wishlistFixtures`** – Array of two wishlist objects built via `makeWishlist`. The admin (`SEED_ADMIN_ID`) holds one product (`micionaOutOfStock`); the user (`SEED_USER_ID`) holds two (`panino`, `pufettino`).
+- **`seedWishlistsCollection`** – Upserts every fixture through `wishlistRepository` using `upsertByOwner`, returning `SeedOutcome[]`.
+- **`exportSeededWishlists`** – Reads wishlists back from the store (filtered to `userId: 1`) via `exportCollection` on `wishlistModel`, returning a plain record for snapshot/verification.
 
 ## Relationships
 
-- **`@modules/wishlist/factory.ts`** — `makeWishlist` constructs the fixture objects.
-- **`@modules/wishlist/model.ts`** — `wishlistModel` is passed to `exportCollection` for the read-back export.
-- **`@modules/wishlist/repository.ts`** — `wishlistRepository` is the persistence interface used for the existence check (`findByUserId`) and the create call.
-- **`@modules/wishlist/module.ts`** — Declares/exposes `seedWishlistsCollection` so the top-level demo runner can call it.
-- **`@modules/products/demo.ts`** — Supplies `SEED_PRODUCT_IDS` used as the `productIds` in each fixture.
-- **`@kernel/seed-accounts.ts`** — Supplies `SEED_ADMIN_ID` and `SEED_USER_ID` as the `userId` values.
-- **`@infrastructure/persistence/seed.ts`** — Supplies `SEED_SAVE_OPTIONS`, the `SeedOutcome` type, and the generic `exportCollection` helper.
+- **`@kernel/seed-accounts`** – Provides the well-known `SEED_ADMIN_ID` and `SEED_USER_ID` used to tie wishlists to demo accounts.
+- **`@modules/products/demo`** – Supplies `SEED_PRODUCT_IDS` so wishlist entries reference the canonical demo product identifiers.
+- **`./fixtures`** – `makeWishlist` factory that assembles a wishlist object in the expected shape.
+- **`./model`** – `wishlistModel` is passed to `exportCollection` for the read-back query.
+- **`./repository`** – `wishlistRepository` is the persistence target for `upsertByOwner`.
+- **`@infrastructure/persistence/seed`** – Provides the `SeedOutcome` type and the generic `upsertByOwner` / `exportCollection` helpers.
+- **`./module.ts`** – Declares `seedWishlistsCollection` as this module's seed entry point (invoked by `db/demo/index.ts`).
 
 ## Notes
 
-- The upsert is keyed by **owner** (`userId`), not by wishlist `id`. This mirrors the convention in `../cart/demo` and means re-seeding is idempotent per user regardless of the fixture's hardcoded ObjectId.
-- The docstring explicitly warns that referencing soft-deleted or inactive products (e.g. `carinoSoftDeleted`, `bundleInactive`) would create visible gaps in the storefront because scoping rules refuse to return those products. Stick to publicly visible product IDs when editing the fixtures.
-- `exportSeededWishlists` filters on `{ userId: 1 }`—a numeric literal. Verify this matches the actual `SEED_USER_ID` value if the seed accounts change.
+- Only **publicly visible** products are seeded. Pointing a wishlist line at a soft-deleted or inactive product (e.g. `carinoSoftDeleted`, `bundleInactive`) would surface as an empty slot in the storefront wishlist page because scoping rules would refuse to return it.
+- `panino` is deliberately chosen for the user account because it is **not** in their cart, making the "move to cart" demo transition a real state change.
+- `exportSeededWishlists` filters to `userId: 1` (the demo user only), not the admin — see the sibling `../cart/demo` for the same convention.

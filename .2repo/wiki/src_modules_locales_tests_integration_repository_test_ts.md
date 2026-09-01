@@ -2,34 +2,34 @@
 
 ## Purpose
 
-Integration tests for the locales module that exercise every write path against a real MongoDB instance. They exist because the properties under test—atomic revision-counter increments, cross-collection cascade deletes, and import side-effects on rows *not* included in the request body—would all pass trivially against an in-memory fake and therefore need a real database to be meaningful.
+Integration tests for the locale repository and service write paths, run against a real MongoDB instance. They verify behaviors that an in-memory fake would satisfy by construction: the revision counter moving (and moving exactly once) on each write path, cascade deletion across two collections, import semantics (replace vs. merge), and key-collision rules. No HTTP or auth is involved.
 
 ## Key elements
 
-- **`givenLanguage(tag, entries?, overrides?)`** — Creates a locale document via `localeRepository.create` and optionally seeds `localeMessageRepository` rows. The shared setup for every case.
-- **`givenEntry(locale, tenant, key, value)`** — Writes a single message row directly through the repository.
-- **`revisionOf(tag)`** — Reads and returns the stored revision number (or −1 if the language is gone).
-- **`describe('the revision counter')`** — Six cases asserting that each of the five write paths (add, edit, remove, import, …) increments the revision by exactly 1, that reads do *not* increment it, and that sibling languages are untouched.
-- **`describe('importEntries')`** — Covers created/updated/removed counts, `replace: true` vs `replace: false` semantics (asserted as a deliberate pair), empty-body replace emptying the language, and language isolation.
-- **`describe('deleting a language')`** — Active-language refusal (409, no data destroyed), successful cascade (entries removed, document deleted), isolation from other languages, and 404 for unknown tags.
-- **`describe('readMessages')`** — Validates the nested tree shape and revision in the response body; confirms inactive languages return 404 indistinguishable from unknown ones.
-- **`describe('createEntry')`** — Collision (409), prefix-ancestor collision (409), unsafe/prototype key (422, intentionally a different status), and prefix-sharing-without-ancestor (accepted).
-- **`describe('importEntries, through the service')`** — Batch self-collision rejection before any write occurs.
+- **`givenLanguage`** – helper that creates a locale via `localeRepository.create` and optionally seeds entries via `localeMessageRepository.create`. Returns the created language document.
+- **`givenEntry`** – helper that writes a single entry for a specific tenant, bypassing the service layer.
+- **`revisionOf`** – reads the current `revision` counter for a language tag; returns `-1` if the language is absent.
+- **`describe('the revision counter')`** – six tests asserting the revision increments on add / edit / remove / import, does *not* increment on read, and does not leak into sibling languages.
+- **`describe('importEntries')`** – tests for the `counts` return shape, `replace: true` deleting un-named rows, `replace: false` preserving them, empty-replace emptying the language, and cross-language isolation.
+- **`describe('deleting a language')`** – tests that an active language is refused (409) with no side-effects, an inactive one cascades its entries, other languages are untouched, and an unknown tag yields 404.
+- **`describe('readMessages')`** – verifies the nested-key tree shape and revision stamp in the response, and that an inactive language returns 404 indistinguishably from an unknown tag.
+- **`describe('createEntry')`** – collision (409), prefix-ancestor collision (409), unsafe key like `__proto__.*` (422), and a non-ancestor shared prefix (`cart.title` vs `cart.titlebar`) which is allowed.
+- **`describe('importEntries, through the service')`** – batch self-collision rejection (file truncated at this point).
 
 ## Relationships
 
-- **`src/modules/locales/repository.ts`** — Primary subject under test; `localeRepository` and `localeMessageRepository` are called directly for most assertions.
-- **`src/modules/locales/services/index.ts`** — `localeService` is the subject for higher-level paths (deleteLanguage, readMessages, createEntry, importEntries) where business rules and status codes live.
-- **`src/modules/locales/factory.ts`** — Supplies `makeLocale` and `makeLocaleEntry` for constructing valid document fixtures.
-- **`src/modules/locales/model.ts`** — Provides the `LocaleDocument` type (imported as a type-only import for typing the `givenLanguage` return).
-- **`src/modules/locales/tests/unit/tenants.fixture.ts`** — Provides the `BACKEND` and `FRONTEND` tenant string constants used throughout.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to establish the real Mongo connection before any test runs.
+- **`@modules/locales/fixtures`** – provides `makeLocale` and `makeLocaleEntry` factory functions used by every helper in this file.
+- **`@modules/locales/repository`** – the primary SUT; `localeRepository` and `localeMessageRepository` are exercised directly for most cases.
+- **`@modules/locales/services`** – `localeService` is used for service-level paths: `readMessages`, `searchEntries`, `deleteLanguage`, `createEntry`, `importEntries`.
+- **`@modules/locales/model`** – `LocaleDocument` type imported for typing (visible in the import list).
+- **`../unit/tenants.fixture`** – supplies the `BACKEND` / `FRONTEND` tenant string constants used throughout.
+- **`@tests/setup-test-db`** – `setupTestDb()` is invoked at module top-level to provision a real Mongo before any test runs.
 
 ## Notes
 
-- The file's header comment explicitly states *why* a real DB is required: an in-memory fake would satisfy the revision-atomicity, cascade, and import-side-effect properties by construction, making the assertions vacuous.
-- The revision counter is asserted per write path (five separate cases) rather than as a single "writing bumps it" test, so a regression in any one path is caught individually.
-- The replace/merge pair in `importEntries` is asserted as a deliberate pair: the author notes that either assertion alone would pass against an implementation that simply ignores the flag.
-- Inactive languages return **404**, not 403 or empty-200, to avoid leaking existence to anonymous callers—a security property pinned by the `readMessages` test.
-- `createEntry` distinguishes 409 (collision with existing rows) from 422 (structurally unsafe key like `__proto__.title`); the comment explains this is intentional because the remediation differs.
-- The empty-body `replace: true` case is annotated as an admin-only destructive operation (guarded by auth and audit at the route level, not in this test).
+- The file header calls these "unit tests in this repo's sense" despite living under `tests/integration/` — the distinction is the real-DB requirement, not HTTP or auth.
+- `setupTestDb()` runs at import time (module scope), not inside a `beforeAll` hook.
+- The revision-counter tests are deliberately split one-per-write-path so a regression in any single path is isolated; a single "writing bumps it" test would mask which path forgot.
+- The replace/merge pair in `importEntries` is asserted as two adjacent tests on purpose: either assertion alone would still pass against an implementation that ignores the `replace` flag.
+- The inactive-language 404 in `readMessages` is a security-adjacent assertion: the response must be byte-identical to an unknown tag so an anonymous caller cannot probe which drafts exist.
+- The `__proto__.*` key returns **422** (not 409) intentionally — a collision says "something else is there," an unsafe key says "the key itself is broken," and the client must fix them differently.

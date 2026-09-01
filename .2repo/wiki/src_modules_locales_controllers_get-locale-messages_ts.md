@@ -2,21 +2,20 @@
 
 ## Purpose
 
-HTTP handler for `GET /locales/:locale/messages`. Returns the nested translation dictionary for a given language (and optional tenant) so that a frontend can lazy-load messages it was not bundled with at build time. This is the primary read endpoint the locales module exists to serve.
+Thin HTTP adapter for `GET /locales/:locale/messages`. It translates the Express request into a `localeService.readMessages` call, maps the result onto a standard success/reject response shape, and delegates error formatting to `catchAs`. No business logic lives here.
 
 ## Key elements
 
-- **`getLocaleMessages`** (exported) — Express-style handler. Calls `localeService.readMessages(locale, tenant?)`, then maps the service result to a `successResponse` or `rejectResponse`. Any thrown error is routed through `catchAs`.
+- **`getLocaleMessages`** (exported function) — Accepts an Express `Request` (locale from `params.locale`, optional `tenant` from `query`) and a `Response`. Calls `localeService.readMessages(locale, tenant?)`, then returns `successResponse` or `rejectResponse` depending on the result's `success` flag. The trailing `.catch(catchAs(response, 'getLocaleMessages'))` handles thrown/rejected errors uniformly.
 
 ## Relationships
 
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` used to shape the HTTP reply.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the module's uniform error-capture helper (bound to the label `'getLocaleMessages'`).
-- **`src/modules/locales/services/index.ts`** — Exports `localeService`; this controller delegates all data access to its `readMessages` method.
-- **`src/modules/locales/routes.ts`** — Registers `getLocaleMessages` on the `GET /locales/:locale/messages` route.
+- **`src/modules/locales/services/index.ts`** — Imports `localeService` and calls its `readMessages(locale, tenant)` method; this is the sole source of data for the endpoint.
+- **`src/infrastructure/http/response.ts`** — Imports `successResponse` and `rejectResponse` to shape the JSON reply (status + payload or status + errors).
+- **`src/infrastructure/http/controller.ts`** — Imports `catchAs`, a generic catch-handler factory used in the `.catch()` tail.
+- **`src/modules/locales/routes.ts`** — Wires `getLocaleMessages` to the `GET /locales/:locale/messages` route.
 
 ## Notes
 
-- `request.query.tenant` is passed through `trim() || undefined`, so an empty `?tenant=` param is treated as "no tenant" (falls back to the deployment default).
-- The response body is **nested**, deliberately mirroring the shape of `GET /locales/:locale` so a client needs only one merge path for both tiers.
-- The endpoint is public and cacheable (no user-specific data). Freshness is guaranteed by invalidating the shared `locales` cache tag on every admin write.
+- The `tenant` query parameter is optional. When present it is trimmed; an empty string is coerced to `undefined`, letting the service fall back to the deployment's default frontend copy.
+- The endpoint is public and cacheable. Admin writes invalidate the `locales` cache tag, so a re-fetch after an edit picks up the new dictionary without manual cache busting.

@@ -2,21 +2,22 @@
 
 ## Purpose
 
-A no-op analytics provider selected via `NODE_ANALYTICS_PROVIDER=none`. It makes "this deployment collects no product analytics" an explicit, stated choice rather than a silent side effect of leaving credentials blank. Unlike the other providers (which warn when selected but unconfigured), this one is intentionally silent because collecting nothing is its entire purpose.
+A no-op analytics provider that satisfies the `AnalyticsProvider` port while collecting nothing. It exists so that "no analytics" is an explicit, deliberate choice (`NODE_ANALYTICS_PROVIDER=none`) rather than a silent side effect of missing credentials. Unlike the other providers, it emits no warnings when selected because the empty state *is* the configuration.
 
 ## Key elements
 
-- **`noneAnalyticsProvider`** (exported constant) — the sole export; an object conforming to the `AnalyticsProvider` type.
-  - `name: 'none'` — provider identifier.
-  - `capture()` — deliberately empty; discards all analytics events.
-  - `configured()` — always returns `true`, because "collecting nothing" is the complete configuration; there is no unconfigured state to warn about.
-  - `shutdown()` — returns an already-resolved promise; no resources to release.
+- **`noneAnalyticsProvider`** (exported const) — The single export. An object conforming to the `AnalyticsProvider` interface with:
+  - `name: 'none'` — identifier for selection/logging.
+  - `capture()` — intentionally empty; records nothing.
+  - `configured()` — always returns `true`; "collecting nothing" is considered a fully valid configuration.
+  - `shutdown()` — resolves immediately with no cleanup.
 
 ## Relationships
 
-- **`src/infrastructure/observability/analytics/index.ts`** — provides the `AnalyticsProvider` type that this file implements. The index module is the registry/entry point that likely reads `NODE_ANALYTICS_PROVIDER` and returns the appropriate provider instance (including this one when the value is `"none"`).
+- **`./index.ts`** — Provides the `AnalyticsProvider` type that this module implements. The index file is also the likely selection point that instantiates `noneAnalyticsProvider` when `NODE_ANALYTICS_PROVIDER` is set to `'none'`.
 
 ## Notes
 
-- `configured()` unconditionally returning `true` is a deliberate design decision, not an oversight. It prevents startup warnings that would be misleading since there is nothing to configure.
-- All three methods are trivially safe to call in any order or frequency; there is no internal state.
+- The file is marked `@module` — it has no default export; consumers must import the named `noneAnalyticsProvider` binding.
+- Because `configured()` always returns `true`, any downstream logic that gates on configuration state will treat this provider as "ready" and never trigger unconfigured-warnings.
+- Referenced documentation lives at `docs/tools/analytics.md` (path noted in the module JSDoc).

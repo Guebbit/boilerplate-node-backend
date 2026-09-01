@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Defines the audit-action string constants for admin-initiated user-record writes (create, update, delete) and registers them in the shared `AuditActionMap` via module augmentation. This file exists so that audit events emitted by the users module are type-safe and use a consistent `admin.user.*` vocabulary, distinct from the `account.*` vocabulary used for self-service actions in `modules/account`.
+Declares the audit-action vocabulary for the users module and registers it into the app-wide `AuditActionMap` via TypeScript module augmentation. It exists so that every admin-facing write to a user record emits a typed, centrally-known action string.
 
 ## Key elements
 
-- **`usersAuditActions`** (exported `const`): Object with three keys — `ADMIN_USER_CREATED`, `ADMIN_USER_UPDATED`, `ADMIN_USER_DELETED` — mapping to the string literals `'admin.user.created'`, `'admin.user.updated'`, `'admin.user.deleted'`. The `as const` makes the values literal-typed.
-- **Module augmentation of `@infrastructure/observability/audit`**: Declares `users: (typeof usersAuditActions)[keyof typeof usersAuditActions]` on the `AuditActionMap` interface, allowing the observability layer to reference these actions in a type-safe manner without a shared enum.
+- **`usersAuditActions`** (exported const) — Three string literals identifying admin writes to the user record: `admin.user.created`, `admin.user.updated`, `admin.user.deleted`. The `as const` assertion preserves literal types for downstream `satisfies` / type narrowing.
+- **`declare module '@infrastructure/observability/audit'`** — Augments the shared `AuditActionMap` interface with a `users` key whose type is the union of the three literals. This is the registration point that makes the actions visible to the observability layer without a central enum.
 
 ## Relationships
 
-- **`src/modules/users/service.ts`** — The service layer that performs user CRUD operations; expected to emit these audit actions when a user is created, updated, or deleted by an admin.
-- **`src/modules/users/controllers/delete-users.ts`** — Controller that triggers the deletion flow; the resulting audit event would use `ADMIN_USER_DELETED`.
-- **`src/modules/users/tests/unit/audit.test.ts`** — Unit test covering the constant values and/or the module-augmentation typing.
+- **`src/modules/users/service.ts`** — Consumes `ADMIN_USER_CREATED` / `ADMIN_USER_UPDATED` when performing the corresponding writes.
+- **`src/modules/users/controllers/delete-users.ts`** — Consumes `ADMIN_USER_DELETED` when a user is removed.
+- **`src/modules/users/tests/unit/audit.test.ts`** — Unit-tests the exported constants and the augmentation.
 
 ## Notes
 
-- The `admin.` prefix is deliberate: this module's vocabulary covers *admin-facing* writes to the user record. Self-service account actions (a person editing their own profile) belong to the `account` module's vocabulary, not here.
-- Actions are declared by **module augmentation** rather than a shared enum, per the convention established in `modules/account/audit.ts`. Adding a new user audit action requires extending both the object literal and the augmentation in the same file.
-- Because the values are plain string literals (not an enum), string-comparison sites outside this module will not get compile-time narrowing unless they go through the augmented `AuditActionMap`.
+- All actions carry the `admin.` prefix by convention: they represent an administrator acting *on* a user record. Self-service account actions (e.g. a user changing their own password) live under the `account` vocabulary in `modules/account/audit.ts`.
+- The augmentation pattern (rather than a shared enum) is deliberate; the rationale is documented in the sibling `modules/account/audit.ts` file header.
+- See `docs/modules/users.md` for broader module context.

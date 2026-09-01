@@ -2,38 +2,38 @@
 
 ## Purpose
 
-Defines and exports Prometheus counters for the auth/account domain. These are registered on the shared `metricsRegistry` so a single `/metrics` scrape includes them alongside HTTP metrics. They exist as cheap, always-on aggregates suitable for alerting (e.g., "signup failure ratio above 20% for 5 min")—a use case distinct from audit logs or analytics pipelines.
+Defines the set of Prometheus `Counter` metrics for the account/auth domain (login, sign-up, password reset, refresh, verify, cleanup, deletion). All counters register onto the shared `metricsRegistry`, so a single `/metrics` scrape returns them alongside HTTP-level metrics. No consumer imports these to *read* values; the overview endpoint resolves them by name off the registry.
 
 ## Key elements
 
-- **`authLoginTotal`** – `auth_login_total` counter, labelled `status`. Tracks login attempts; the failure series is the credential-stuffing signal.
-- **`authSignupTotal`** – `auth_signup_total` counter, labelled `status`. Top-of-funnel sign-up volume and failure rate.
-- **`authPasswordResetTotal`** – `auth_password_reset_total` counter, labelled `status`. Counts the *initial* reset-link request only (not the confirmation step).
-- **`authRefreshTotal`** – `auth_refresh_total` counter, labelled `status`. Token-refresh attempts; failures indicate unexpected session drops.
-- **`authPasswordChangeTotal`** – `auth_password_change_total` counter, labelled `status`. Authenticated password change (current-password flow), kept separate from the reset flow.
-- **`authEmailVerifyTotal`** – `auth_email_verify_total` counter, labelled `status`. Token-spending confirmation step; proxies for link-deliverability.
-- **`authTokenCleanupTotal`** – `auth_token_cleanup_total` counter, **no labels**. Maintenance-job ran-or-didn't; confirms the expired-token sweeper is alive.
-- **`authAccountDeleteTotal`** – `auth_account_delete_total` counter, labelled `status`. Account-deletion requests (GDPR erasure).
+- **`authLoginTotal`** – Login attempts, labelled `status` (success/failure). Failure spike = credential-stuffing signal.
+- **`authSignupTotal`** – Sign-up attempts, labelled `status`.
+- **`authPasswordResetTotal`** – Password-reset *request* attempts (the link-request step only, not the confirm step), labelled `status`.
+- **`authRefreshTotal`** – Refresh-token operations, labelled `status`. Failure rise = silent session drops.
+- **`authPasswordChangeTotal`** – Authenticated (current-password) change attempts, labelled `status`. Deliberately separate from `authPasswordResetTotal` to keep the funnel readable.
+- **`authEmailVerifyTotal`** – Email-verification *confirmation* (token-spending) attempts, labelled `status`. Does not count the send.
+- **`authTokenCleanupTotal`** – Expired-token cleanup runs. **No `labelNames`** — a bare counter for "did the job run at all."
+- **`authAccountDeleteTotal`** – Account-deletion request attempts, labelled `status`.
 
-All counters use `labelNames: ['status'] as const` (except `authTokenCleanupTotal`) so that `inc({ status })` calls are type-checked against the literal `'success' | 'failure'` strings.
+All counters use the `labelNames: ['status'] as const` pattern (except cleanup) for compile-time label validation.
 
 ## Relationships
 
-- **Imports** `metricsRegistry` from `src/infrastructure/observability/metrics-http.ts` — the shared registry that the `/metrics` endpoint scrapes.
-- **Imported by** the account controllers that emit the corresponding events:
-  - `post-login.ts` → increments `authLoginTotal`
-  - `post-signup.ts` → increments `authSignupTotal`
-  - `post-reset-request.ts` → increments `authPasswordResetTotal`
-  - `get-refresh-token.ts` → increments `authRefreshTotal`
-  - `post-password-change.ts` → increments `authPasswordChangeTotal`
-  - `post-verify-confirm.ts` → increments `authEmailVerifyTotal`
-  - `delete-expired-tokens.ts` → increments `authTokenCleanupTotal`
-  - `delete-account-request.ts` → increments `authAccountDeleteTotal`
-- **Tested indirectly** via `tests/unit/delete-account.test.ts` (asserts the counter increments on the delete flow).
+- **`src/infrastructure/observability/metrics-http.ts`** — Provides the `metricsRegistry` instance that every counter in this file registers into (`registers: [metricsRegistry]`).
+- **`src/modules/account/controllers/post-login.ts`** — Increments `authLoginTotal` with the outcome label.
+- **`src/modules/account/controllers/post-signup.ts`** — Increments `authSignupTotal`.
+- **`src/modules/account/controllers/post-reset-request.ts`** — Increments `authPasswordResetTotal`.
+- **`src/modules/account/controllers/get-refresh-token.ts`** — Increments `authRefreshTotal`.
+- **`src/modules/account/controllers/post-password-change.ts`** — Increments `authPasswordChangeTotal`.
+- **`src/modules/account/controllers/post-verify-confirm.ts`** — Increments `authEmailVerifyTotal`.
+- **`src/modules/account/controllers/delete-expired-tokens.ts`** — Increments `authTokenCleanupTotal`.
+- **`src/modules/account/controllers/delete-account-request.ts`** — Increments `authAccountDeleteTotal`.
+- **`src/modules/account/tests/unit/delete-account.test.ts`** — Exercises the delete-account flow, covering the `authAccountDeleteTotal` increment path.
 
 ## Notes
 
-- Counters are **write-only** from the domain side; the `GET /observability/metrics/overview` endpoint reads values by name off the registry. Deleting this file removes the counters from the scrape (overview reports zero) but does not break compilation.
-- `authPasswordResetTotal` and `authPasswordChangeTotal` are deliberately separate: conflating the two email-reset steps (request + confirm) or mixing them with the authenticated change flow would make funnel math ambiguous.
-- `authTokenCleanupTotal` intentionally has no `status` label—there is no meaningful success/failure axis for a cron-style job.
-- Prometheus naming convention used: `<domain>_<subject>_total` for counters.
+- **Naming convention:** `auth_<subject>_total` for counters; the `_total` suffix follows Prometheus convention for monotonically-increasing counters (the `/metrics` exposition strips it per the OpenMetrics spec).
+- **`status` label as the universal dimension:** Every labelled counter in this module uses `status` as its sole label. This means the same metric serves as both a volume gauge and a success/failure ratio — no separate `_success` / `_failure` series are needed.
+- **`authPasswordResetTotal` vs `authPasswordChangeTotal`:** These are intentionally split. Merging them would make it impossible to read the reset funnel (request → confirm) independently of the authenticated change flow.
+- **`authTokenCleanupTotal` has no labels** — it's a maintenance heartbeat, not a user-facing operation.
+- **Registration is one-way:** These counters are *written* by controllers; nothing in this file reads them. The observability layer resolves by metric name at scrape time.

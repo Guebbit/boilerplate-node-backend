@@ -2,32 +2,32 @@
 
 ## Purpose
 
-Cross-cutting guard that catches metric-name drift — the failure mode where renaming a counter compiles, lints, and passes every unit test, yet silently breaks the overview endpoint, Prometheus dashboards, and alerts. It does this by reading `metrics.ts` files and the overview controller as **source text** (via `node:fs`), never importing them, so no database, no Mongoose, no domain boot is triggered.
+Cross-cutting test that guarantees metric name consistency between three places that must agree: module `metrics.ts` declarations, the observability overview controller (which reads names as raw strings to avoid importing domain modules), and external Prometheus/Grafana dashboards. It works by parsing **source text** rather than importing modules, because importing would boot Mongoose and execute aggregation queries. Its job is to catch the silent failure mode where a renamed counter still compiles, lints, and passes unit tests but quietly disappears from the overview endpoint and goes flat on dashboards.
 
 ## Key elements
 
-- **`withoutComments(source)`** — strips block and line comments so a note between `new Counter({` and its `name:` field cannot hide a declaration from the regex sweep.
-- **`metricFiles()`** — discovers every `src/modules/<name>/metrics.ts` by directory listing rather than a hardcoded list.
-- **`declarations()`** — extracts `{ module, name, kind, help }` tuples via a single `matchAll` over `new (Counter|Gauge|Histogram|Summary)({…})` blocks, keeping the three facts attached to one metric.
-- **`nameAssignments()`** — pulls every line matching `name:` (literal or not) to enforce the literal-only convention.
-- **`namesReadByLiteral()`** — extracts the string arguments of `readCounter('…')` in the overview controller.
-- **`describe('metric names')`** — seven cases:
-  - *Canary*: at least 5 files, 12 declarations, 5 literal reads exist (prevents vacuous passes).
-  - *Resolution*: every literal read by the overview endpoint is declared by some module.
-  - *Literal-only*: no `name:` assignment is a variable or template string.
-  - *Shared registry*: declaration count equals `registers: [metricsRegistry]` count per file.
-  - *Naming*: names match Prometheus `snake_case` (`^[a-z][\da-z]*(?:_[\da-z]+)*$`).
-  - *Counter suffix*: `Counter` kinds must end in `_total`.
-  - *Help text*: every `help` string is ≥ 15 trimmed characters.
+- **`withoutComments(source)`** — strips block and line comments so the regex sweep doesn't skip or misread declarations hiding behind inline notes.
+- **`INFRASTRUCTURE_METRIC_FILES`** — hardcoded list of non-domain metric files (e.g. `src/infrastructure/persistence/metrics.ts`) whose counters are shared across all repositories.
+- **`metricFiles()`** — discovers every `src/modules/<name>/metrics.ts` on disk, appends the infrastructure files, returns `{ module, file }` pairs.
+- **`declarations()`** — regex-extracts every `new (Counter|Gauge|Histogram|Summary)({ name: '…', help: '…' })` block from all metric files; returns `{ module, name, kind, help }`.
+- **`nameAssignments()`** — finds every line containing `name:` in a metric file (literal or computed), used to enforce the "must be a string literal" rule.
+- **`namesReadByLiteral()`** — extracts every `readCounter('…')` argument from `get-observability-metrics-overview.ts`.
+- **Test cases (7):**
+  - *Canary / existence* — asserts at least 5 files, 12 declarations, 5 literal reads, so a silent file rename doesn't make every assertion pass over an empty list.
+  - *Name resolution* — every string the controller reads must match a declared name.
+  - *Literal enforcement* — every `name:` must be a quoted string, not a variable or template.
+  - *Shared-registry registration* — the count of `new <Kind>(` calls must equal the count of `registers: [metricsRegistry]` in each file.
+  - *Naming convention* — names must be lowercase `snake_case` per the Prometheus exposition format.
+  - *Counter suffix* — `Counter` instances must end in `_total` (OpenMetrics monotonic-series marker).
+  - *Help text* — every metric's `help` must be ≥ 15 characters so a 3 am pager can interpret it.
 
 ## Relationships
 
-No dependency-graph neighbors are recorded. The file interacts with `src/modules/*/metrics.ts` and `src/modules/observability/controllers/get-observability-metrics-overview.ts` **only through `readFileSync`** — it never imports them. The design deliberately mirrors `outbox-names.test.ts` (referenced in the header comment) as a sibling pattern for "read source text, don't boot the module."
+No graph neighbors. The test imports only `node:fs` and `node:path`; it has no runtime dependency on the files it reads. The files it **reads as text** (every `src/modules/*/metrics.ts`, `src/infrastructure/persistence/metrics.ts`, and `src/modules/observability/controllers/get-observability-metrics-overview.ts`) are its subjects but not its imports.
 
 ## Notes
 
-- **No duplicate-name check.** `prom-client` itself throws on duplicate registration; asserting it here would test the library, not this repo.
-- **Regex is the contract.** The `declarations()` regex expects `name` and `help` as single-quoted string literals in a specific order. A reformat that swaps field order or uses double quotes will silently drop a declaration from the sweep.
-- **`withoutComments` handles block comments only via non-greedy `[\S\s]*?`** — a comment containing `*/` inside a string literal would be mis-stripped, though no known file triggers this.
-- **The `_total` suffix rule applies to `Counter` only.** Gauges, Histograms, and Summaries are exempt; the test filters on `kind === 'Counter'`.
-- **The canary test is load-bearing.** Without it, a rename of `metrics.ts` to `metrics.tsx` (or a move) would make every sweep iterate over an empty list and all assertions pass vacuously.
+- The test intentionally does **not** assert uniqueness of metric names — `prom-client` itself throws on duplicate registration, so a collision cannot survive to a running process.
+- Reading source text is only sound under two invariants the test enforces: every name is a **literal** (not computed) and every metric registers on the **shared** registry. If either invariant is violated, the sweep becomes unsound.
+- The `withoutComments` helper exists because `account/metrics.ts` has a comment line sitting exactly where the regex expects the first field of a counter block; without stripping it, the sweep misses that counter.
+- Infrastructure metrics (`db_queries_total`, `db_errors_total`) are not owned by any single domain module but are still read by name in the overview controller, so they are included in the sweep via `INFRASTRUCTURE_METRIC_FILES`.

@@ -2,19 +2,19 @@
 
 ## Purpose
 
-Defines the sole Prometheus counter for cache-invalidation failures. It exists to make alertable a failure mode where a write succeeds but the cached predecessor is not removed, leaving a stale response in service for the full TTL — a condition a log line cannot surface to monitoring.
+Defines a single Prometheus counter that makes cache-invalidation failures observable. When a successful write cannot invalidate its predecessor in Redis, the stale response is already served; this counter is the only actionable signal, turning a silent correctness gap into an alertable metric.
 
 ## Key elements
 
-- **`cacheInvalidationFailuresTotal`** (`Counter`) — exported Prometheus counter (`cache_invalidation_failures_total`). Labeled by `tag` (a route-declared literal, never request data). Registered against the shared `metricsRegistry`.
+- **`cacheInvalidationFailuresTotal`** (Counter) — Exported counter (`cache_invalidation_failures_total`) with a single label `tag`. Incremented per failed Redis invalidation. Label values are route-declared literals, so cardinality is bounded by construction.
 
 ## Relationships
 
-- **`./metrics-http`** — imports `metricsRegistry`, the shared registry all infrastructure metrics register into. This file does not define its own registry.
-- **`src/infrastructure/http/middlewares/cache.ts`** — the cache middleware is the expected caller that increments this counter when a Redis invalidation call fails. (Inferred from the metric's purpose and the middleware's role; the import direction is middleware → this file.)
+- **`src/infrastructure/observability/metrics-http.ts`** — Imports `metricsRegistry`, the shared registry into which this counter registers itself. This is the same pattern used by other infrastructure metric modules.
+- **`src/infrastructure/http/middlewares/cache.ts`** — The expected consumer: the middleware that attempts Redis invalidation after a write and increments this counter when that call fails.
 
 ## Notes
 
-- The `tag` label is intentionally low-cardinality: values are compile-time literals declared on routes, not dynamic request data. Do not widen this to unbounded strings.
-- There is exactly one metric in this file by design. If a second cache-related metric is needed, reconsider whether it belongs here or in a sibling module.
-- The counter is *informational only* — the response has already been sent by the time the failure is detected, so incrementing it is the sole remediation action.
+- The `tag` label is deliberately restricted to compile-time literals from route definitions (never request-derived), keeping Prometheus label cardinality bounded.
+- The counter is *additive only*; there is no gauge or reset logic. A non-zero rate indicates stale data is being served until natural TTL expiry.
+- See `docs/tools/prometheus.md` for alerting rules and dashboard references.

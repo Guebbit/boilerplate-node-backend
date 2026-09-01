@@ -2,23 +2,26 @@
 
 ## Purpose
 
-Express route handler for `POST /wishlist/:productId/move-to-cart`. It validates the product ID, extracts the authenticated user, and delegates to the wishlist service to move one product from the wishlist into the cart (quantity 1, or incremented if already present) while removing it from the wishlist.
+Thin Express controller for `POST /wishlist/:productId/move-to-cart`. It validates the `productId` param, extracts auth/caller context, and delegates the actual move-to-cart business logic to `wishlistService.wishlistMoveToCart`. The file contains no domain logic itself — it is purely the HTTP adapter layer.
 
 ## Key elements
 
-- **`postMoveToCart`** *(exported function)* — The sole handler. Reads `userId` from the auth context and `productId` from route params, performs early validation, calls the service, and writes the HTTP response (success or refusal).
+- **`postMoveToCart`** (exported const) — The sole export. Accepts an Express `Request<{ productId: string }>` and `Response`. Performs:
+  1. `productId` validation via `isValidObjectId`; rejects with **422** (not 404) when malformed.
+  2. Delegation to `wishlistService.wishlistMoveToCart(userId, productId, callerContext)`.
+  3. Result handling via `refused` / `successResponse` and error handling via `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/request`** — Provides `authContextOf` (extracts the user ID) and `callerContextOf` (forwards caller metadata into the service call).
-- **`@infrastructure/http/response`** — Provides `successResponse` to shape the 200 reply with the service's `data` and `message`.
-- **`@infrastructure/http/controller`** — Provides `refused` (detects domain-level rejection results) and `catchAs` (uniform error-to-HTTP mapping on the `.catch` branch).
-- **`./shared/product-id`** — `malformedProductId` short-circuits the handler with a 400 before any service call if the param is not a valid UUID.
-- **`../service`** — `wishlistService.wishlistMoveToCart(userId, productId, callerContext)` is the sole business-logic call; all ordering guarantees (cart write → wishlist removal) live there.
-- **`../routes.ts`** — Registers this handler on the `POST /wishlist/:productId/move-to-cart` path.
+- **`src/infrastructure/http/request.ts`** — Source of `authContextOf`, `callerContextOf`, and `isValidObjectId` used to extract identity and validate the param.
+- **`src/infrastructure/http/response.ts`** — Source of `successResponse` and `rejectResponse` for structured JSON replies.
+- **`src/infrastructure/http/controller.ts`** — Source of `catchAs` (standard error-to-HTTP mapping) and `refused` (short-circuit for service-level rejections).
+- **`src/infrastructure/i18n/index.ts`** — Provides the `t` function for localised error messages.
+- **`src/modules/wishlist/service.ts`** — The sole business-logic dependency; `wishlistMoveToCart` performs the cart write → wishlist removal sequence.
+- **`src/modules/wishlist/routes.ts`** — Expected consumer that registers `postMoveToCart` as the handler for the `POST /wishlist/:productId/move-to-cart` route.
 
 ## Notes
 
-- The handler uses a `.then / .catch` chain rather than `async/await`; the `catchAs` wrapper is the only error path, so any thrown error in the service is funneled through it.
-- The deliberate write ordering (cart first, wishlist second) is a **service-layer** invariant, not something the controller enforces. The JSDoc here documents *why* that order matters (recoverability for the shopper) to prevent a future refactor from "optimizing" it away.
-- `malformedProductId` writes its own error response and returns `true`; the handler must `return` immediately after a truthy check (it does). Forgetting that guard would fall through to the service call.
+- **422 for malformed IDs, not 404.** The convention here is deliberate: the request is syntactically valid but the value is unusable. Callers rely on this distinction to signal "malformed" vs. "not found" back to the client.
+- **Operation order lives in the service, not here.** The cart write happens before wishlist removal; the controller only passes data through. Do not reorder or add side-effects in this file.
+- **`refused` short-circuit.** If the service returns a "refused" result (e.g. product no longer in wishlist), the controller returns early via `refused` without calling `successResponse`. Check that helper's contract before modifying the `.then` block.

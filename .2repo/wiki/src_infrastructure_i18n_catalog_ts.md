@@ -2,32 +2,36 @@
 
 ## Purpose
 
-Boot-time translation catalog: discovers which locales exist, deep-merges the shared dictionary with each module's contribution, and hands the assembled `i18next` `Resource` object to `i18next.init()`. It is the single place that answers "where do translation files live?" so no consumer of the request-scoped `t` function ever touches the filesystem.
+Discovers, merges, and loads the JSON translation dictionaries that `i18next.init()` consumes at boot. It is the single file to edit if a project relocates where its shared or per-module locale files live. The database overlay in `./overrides` layers on top of what this produces; the flow is one-directional.
 
 ## Key elements
 
-- **`LOCALES_DIRECTORY`** – Resolved via `__dirname`, pointing to `src/locales`. Independent of `process.cwd()`, so Jest workers and the cluster entry point see the same path.
-- **`getDefaultLocale()` / `getFallbackLocale()`** – Lazily read `NODE_DEFAULT_LOCALE` / `NODE_FALLBACK_LOCALE` (default `'en'`). Read at call time so tests can mutate the env after import.
-- **`listSupportedLocales()`** – Returns the supported locale codes. Source is `NODE_SUPPORTED_LOCALES` (comma-separated) if set, otherwise the `.json` file listing in `LOCALES_DIRECTORY`. **Read once, then cached**; `resetSupportedLocales()` clears the cache for tests.
-- **`registerLocaleDirectories(directories)`** – Inversion-of-control hook: `app.ts` passes each enabled module's `locales/` path here *before* `i18next.init()`. Unregistered is a valid state (unit tests get shared keys only).
-- **`readLocaleDictionary(locale)`** – Loads the shared `<locale>.json`, then deep-merges each registered module's file on top in registration order. Exported so `GET /locales/:locale` returns the same merged view.
-- **`loadLocaleResources()`** – Maps `listSupportedLocales()` × `readLocaleDictionary()` into the `{ locale: { translation: … } }` shape `i18next.init()` expects.
-- **`deepMerge` / `isPlainObject`** (private) – Recursive merge that recurses only into plain objects; arrays and scalars are replaced wholesale. Prevents two modules writing to the same top-level namespace from clobbering each other.
+- **`LOCALES_DIRECTORY`** (internal) — resolved from `__dirname` so the path is identical regardless of entry point (`src/cluster.ts`, Jest worker, migration).
+- **`getDefaultLocale()` / `getFallbackLocale()`** — read `NODE_DEFAULT_LOCALE` / `NODE_FALLBACK_LOCALE` lazily (default `'en'`), so tests can set env after import.
+- **`listSupportedLocales()`** — returns the list of locales the API can serve. Sourced from `NODE_SUPPORTED_LOCALES` env (comma-separated) or the directory listing of `*.json` files. **Memoised** after first call; safe because `i18next.init()` reads it once at boot.
+- **`resetSupportedLocales()`** — clears the memoised list. Intended for tests that mutate `NODE_SUPPORTED_LOCALES`.
+- **`registerLocaleDirectories(directories)`** — sets the ordered list of module-locale directories to merge. Must be called **before** `i18next.init()`. Called by `app.ts` with each enabled module's `locales` path.
+- **`readLocaleDictionary(locale)`** — deep-merges the shared dictionary with every registered module's `<locale>.json` (registration order = collision priority). Exported so `GET /locales/:locale` returns the merged view.
+- **`loadLocaleResources()`** — builds the `i18next` `Resource` object (`{ locale: { translation: … } }`) for all supported locales.
+- **`deepMerge` / `isPlainObject`** (internal) — recursive merge that only descends into plain-object pairs; arrays and scalars are replaced by the source.
 
 ## Relationships
 
-- **`src/app.ts`** – Calls `registerLocaleDirectories(…)` with enabled modules' locale paths, then passes `loadLocaleResources()` to `i18next.init()`. This is the only production caller of both.
-- **`src/infrastructure/i18n/negotiate.ts`** – Calls `listSupportedLocales()` to validate `Accept-Language` / `Content-Language` headers against the same cached list, ensuring it never offers a locale `i18next` cannot resolve.
-- **`src/infrastructure/i18n/overrides.ts`** – Layers a database-sourced overlay *on top of* what this file produces. One-directional; overrides never flow back into the file-based catalog.
-- **`src/infrastructure/i18n/context.ts`** – The request-scoped `t` function that 36+ module files import. It reads resources that `i18next` registered from this catalog at boot.
-- **`src/infrastructure/i18n/index.ts`** – Barrel that re-exports the public API (locale helpers, `registerLocaleDirectories`, `readLocaleDictionary`).
-- **`src/modules/locales/controllers/get-locales.ts`** – Calls `readLocaleDictionary` to expose a locale's merged dictionary to clients.
-- **Module controllers/services** (account, cart, delivery, feedback) – Indirectly depend on this file: their `t(…)` calls resolve against resources loaded via `loadLocaleResources()` at boot. They never import this module directly.
-- **`src/modules/account/tests/integration/persisted-locale.test.ts`** – Uses `resetSupportedLocales()` to re-read env between test cases.
+- **`src/app.ts`** — calls `registerLocaleDirectories()` with the enabled modules' locale paths before invoking `i18next.init()`.
+- **`src/infrastructure/i18n/context.ts`** — owns the `i18next` instance; receives the `Resource` from `loadLocaleResources()` at initialisation.
+- **`src/infrastructure/i18n/overrides.ts`** — applies a database overlay on top of the merged dictionaries this file produces (one-directional, never back).
+- **`src/infrastructure/i18n/negotiate.ts`** — consumes `listSupportedLocales()` to validate a requested locale against what the server can actually serve.
+- **`src/infrastructure/i18n/index.ts`** — barrel re-export of this module's public API.
+- **`src/modules/locales/controllers/get-locales.ts`** — calls `readLocaleDictionary()` to return the merged dictionary for `GET /locales/:locale`.
+- **`src/modules/locales/services/capabilities.ts`** — reads `listSupportedLocales()` to report which languages the API supports.
+- **Module services** (`account/authentication`, `account/profile`, `account/verification`, `cart/checkout`, `delivery/service`, `feedback/service`) — each owns a `locales/<locale>.json` file that gets registered via `registerLocaleDirectories()`; they do not import this file directly.
+- **`src/modules/account/tests/integration/persisted-locale.test.ts`** — exercises the locale-persistence path; may call `resetSupportedLocales()` between scenarios.
+- **`src/modules/locales/tests/contract/api.contract.test.ts`** — contract test asserting the `GET /locales` response shape against what this module produces.
 
 ## Notes
 
-- **Cache is load-bearing.** `listSupportedLocales()` memoises on first call. A per-request re-read would let middleware negotiate a locale that `i18next` has no resources for, producing a `Content-Language` response the client cannot consume. Only `resetSupportedLocales()` (test-only) invalidates it.
-- **Registration order = collision priority.** If two modules *did* write the same key, the later-registered directory wins. `tests/cross-cutting/locale-namespaces.test.ts` is the guard that fails if a collision is introduced.
-- **`registerLocaleDirectories` replaces, not appends.** Calling it twice sets the full list; `app.ts` passes the complete set in one call.
-- **Shared keys are loaded with `readFileSync` (synchronous, at boot).** This is intentional: it happens once during `i18next.init()`, not per request.
+- **Cache is intentionally sticky.** `listSupportedLocales()` memoises on first call because `i18next` captures the list at `init()` time. A locale added to the directory after boot is *not* resolvable until the process restarts; `resetSupportedLocales()` exists solely for test isolation.
+- **Collision policy.** A module dictionary *can* shadow a shared key (last writer wins in registration order), but `tests/cross-cutting/locale-namespaces.test.ts` enforces that no module actually collides.
+- **Deep merge, not shallow.** Two modules may contribute keys under the same top-level namespace (e.g. `account` and `users`); a shallow assign would let the later load erase the earlier.
+- **`LOCALES_DIRECTORY` is `__dirname`-relative**, not `process.cwd()`-relative, so it resolves correctly under `src/cluster.ts`, Jest workers, and migrations alike.
+- **Docs:** see `docs/tools/i18n.md` for the broader i18n architecture.

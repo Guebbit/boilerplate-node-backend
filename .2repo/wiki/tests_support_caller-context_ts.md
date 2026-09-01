@@ -2,19 +2,18 @@
 
 ## Purpose
 
-Provides a minimal `CallerContext` fixture so that service-level tests (which invoke service functions directly, bypassing the HTTP controller) can supply the required caller argument without constructing a full request object. Keeps those tests focused on service logic rather than plumbing.
+Provides a minimal `CallerContext` fixture for tests that invoke service functions directly, bypassing the HTTP controller layer that would normally construct one from an incoming request. Most service-level tests don't need a meaningful caller identity—only that the field is present so the code path doesn't throw on a missing value.
 
 ## Key elements
 
-- **`testCallerContext`** (`CallerContext`) — A pre-built anonymous context (`{ caller: {} }`). Use when the test doesn't care *who* is calling, only that the emit/caller-lookup code paths don't throw on a missing identity.
-- **`testCallerContextFor(id: string, admin = false)`** (`(id, admin?) → CallerContext`) — Factory that returns a context for a specific authenticated caller. Pass an ID and optionally set `admin: true` when the service under test branches on caller identity or role.
+- **`testCallerContext`** (exported const, type `CallerContext`) — A static object `{ caller: {} }` representing an anonymous caller. Intended to be passed as the caller-context argument when calling service methods in unit/integration tests.
 
 ## Relationships
 
-- **`src/infrastructure/http/request.ts`** — Source of the `CallerContext` type imported here. This file is a pure consumer of that type; it does not re-export it.
-- **All listed test files** (account, cart, delivery, orders, payments, products, users integration/unit tests) — Import `testCallerContext` or `testCallerContextFor` to satisfy the `CallerContext` parameter when calling services directly in test bodies.
+- **`src/infrastructure/http/request.ts`** — Source of the `CallerContext` type that this file imports. This is the only production-code dependency.
+- **Test files across modules** (account, cart, delivery, orders, payments, products, users) — All listed integration and unit test files import `testCallerContext` as the default caller-identity argument when calling service functions directly.
 
 ## Notes
 
-- The import uses the `@infrastructure/http/request` path alias, not a relative path — consistent with the project's tsconfig aliases.
-- The object is a plain literal, not a class instance, so structural typing is all that matters. Tests can spread or override individual fields if they need a partial variant rather than picking one of the two exports.
+- The `caller` property is an empty object, not `null` or `undefined`. If a service method accesses nested properties on `caller` (e.g. `caller.email`), those will be `undefined`—that is expected and by design for the "anonymous" default.
+- This is a test-only module (lives under `tests/support/`); it should not be imported from production code.

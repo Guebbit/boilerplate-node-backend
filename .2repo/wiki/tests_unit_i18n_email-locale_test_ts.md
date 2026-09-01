@@ -1,24 +1,27 @@
 # tests/unit/i18n/email-locale.test.ts
 
 ## Purpose
-Guards the "translate at the producer, render at the worker" email architecture: the enqueueing side must resolve all copy into a concrete language before the job hits the queue, and the worker must render whatever strings it is given regardless of any ambient locale context. Both halves are asserted with mocked SMTP and queue adapters.
+
+Guards the split-responsibility contract for localized email: the **producer** must fully resolve all copy (subject, body, footer, `<html lang>` value) before a job is published to the queue, and the **worker** must render only what it was handed without ever consulting a locale store. The tests assert both halves against the `reset-confirm` account email in English and Italian.
 
 ## Key elements
-- **`BODY`** — Pre-extracted English and Italian strings for the `registration-confirm` email, loaded from the account module's locale JSON files. Serves as the single source of truth for copy assertions.
-- **`jobFor(locale)`** — Builds a queue-job object exactly as `enqueueEmail` would publish it (template + data from `registrationConfirmEmail`), with no locale attached.
-- **`sentHtml()`** — Reads the rendered HTML from the first call to the mocked `sendMail`.
-- **`describe('the producer resolves the copy before publishing')`** — Three tests verifying that the enqueued payload contains finished text (correct language, no `locale` key to resolve, `data.locale` is just the `<html lang>` string).
-- **`describe('the email worker renders the copy it was given')`** — Five tests verifying that `handleEmailJob` sends the pre-resolved copy even under a deliberately wrong ambient locale, plus nack/ack contract (missing fields → `false`; SMTP failure → rejection for retry).
-- **Mocks** — `nodemailer` (the repo's render-and-send wrapper, not the npm package) and `@infrastructure/adapters/queue` are both replaced with jest mocks before the dynamic imports.
+
+- **`BODY`** – Pre-extracted `reset-confirm` body strings for `en` and `it`, pulled from the locale JSON files. Used as the single ground-truth string asserted throughout.
+- **`jobFor(locale)`** – Calls `resetConfirmEmail(locale, 'Ada')` and wraps the result in the exact shape `enqueueEmail` would publish (`{ request, templateName, data }`). Simulates the queue job without going through the queue.
+- **`sentHtml()`** – Reads the first argument of the mocked `nodemailer` `sendMail` call and returns its `html` property.
+- **`describe('the producer resolves the copy before publishing')`** – Three tests confirming the queued payload contains finished Italian strings, carries no `locale` key for the worker to look up, and is unaffected by an ambient `runWithLocale('en')` scope.
+- **`describe('the email worker renders the copy it was given')`** – Five tests confirming the worker sends the correct language regardless of ambient locale, rejects malformed jobs (missing recipient or template) with `false`, and propagates SMTP failures as rejections (so the queue retries rather than dead-letters).
 
 ## Relationships
-- **`src/infrastructure/adapters/mailer.ts`** — Source of the `EmailRequest` type and the `enqueueEmail` function under test (imported dynamically to respect mock hoisting).
-- **`src/infrastructure/i18n/index.ts`** — Exports `runWithLocale`, used to simulate an ambient locale store for both producer-side and worker-side tests.
-- **`src/infrastructure/i18n/context.ts`** — Underlying AsyncLocalStorage context that `runWithLocale` binds to; the tests exercise the case where this store is absent or wrong.
-- **`src/modules/account/emails.ts`** — Provides `registrationConfirmEmail`, the concrete email builder whose output (template + data) feeds both the enqueue and worker paths.
+
+- **`src/infrastructure/adapters/mailer.ts`** – Source of `enqueueEmail`, the producer under test. The tests verify the payload it publishes to the queue.
+- **`src/infrastructure/i18n/index.ts`** / **`src/infrastructure/i18n/context.ts`** – Provide `runWithLocale`, used in several tests to establish a deliberately *wrong* ambient locale and prove the code under test ignores it.
+- **`src/modules/account/emails.ts`** – Provides `resetConfirmEmail`, the email builder whose output (template name + data) is the subject of every assertion.
+- **`src/infrastructure/adapters/email.worker.ts`** (imported dynamically in tests) – The worker under test on the consumer side; not a static graph neighbor but a test target.
 
 ## Notes
-- Dynamic `import()` is used for every SUT call (`enqueueEmail`, `handleEmailJob`) so that `jest.mock` hoisting is respected; a static import would bypass the mocks.
-- `payload.data.locale` is **not** a runtime lookup key — it is a finished string (the `<html lang="…">` attribute). Tests assert it equals the literal locale code to prevent a future refactor from turning it into a resolution target.
-- The nack contract mirrors `pdf.worker.ts`: `false` means "unprocessable, dead-letter"; a thrown rejection means "transient failure, retry." Confusing the two would either drop a valid email or spin a poison job forever.
-- The file's block comment is the authoritative design rationale; the tests are secondary. If behavior changes, update the comment first.
+
+- All modules under test (`mailer`, `email.worker`) are imported via dynamic `await import(…)` inside tests to ensure the `jest.mock` hoisting for `nodemailer` and `queue` takes effect first.
+- `nodemailer` here is the repo's own render-and-send wrapper (not the npm package); the mock targets `createTransport().sendMail`.
+- The `data.locale` field in the payload is **not** a lookup key for the worker — it is a finished string the template prints as `<html lang="…">`. Tests explicitly assert it equals `'it'` or `'en'` as a literal, not as a resolvable token.
+- Nack semantics are pinned: missing recipient/template → resolves `false` (dead-letter); SMTP rejection → throws (requeue). This mirrors the contract documented on `pdf.worker.ts`.

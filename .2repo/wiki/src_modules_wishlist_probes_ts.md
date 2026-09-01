@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Exports a set of API rejection probes for the wishlist module. Because a contract can only declare valid calls and their declared answers, these probes cover the cases where the API must *reject* a request (404, 422) and have no natural home in the contract-derived collection. They are emitted into every client collection after the contract-derived requests.
+Exports the wishlist module's list of contract-uncoverable edge-case requests (probes). These are requests whose failure modes a standard OpenAPI contract cannot express—stale references, malformed ids, or actions on rows the caller does not hold—each with a human-readable `why` explaining the exact gap in the contract.
 
 ## Key elements
 
-- **`probes: Probe[]`** — exported array (typed from `@guebbit/openapi-runnable-collections`) of four probe definitions:
-  - *Save a hidden/inactive product* (`POST /wishlist`) — exercises the visibility gate on write; expects 404.
-  - *Move an unsaved product to cart* (`POST /wishlist/{id}/move-to-cart`) — exercises the "not-in-list" branch of the move path; expects 404.
-  - *Delete an unsaved product* (`DELETE /wishlist/{id}`) — same contract as above but a different code path (repository filter vs. list read); expects 404.
-  - *Malformed ObjectId* (`DELETE /wishlist/not-an-object-id`) — exercises the controller-level Mongo-shaped validation; expects 422, distinct from 404.
+- **`probes: Probe[]`** (exported const) — The full probe collection for the wishlist. Four entries:
+  - *POST /wishlist* with `{{seedInactiveProductId}}` — saves a hidden product; exercises the 404 visibility gate on write.
+  - *POST /wishlist/{{seedSoftDeletedProductId}}/move-to-cart* — moves a product the caller never saved; exercises the 404 on the "exit" path.
+  - *DELETE /wishlist/000000000000000000000000* — unsaves a valid-but-absent ObjectId; distinct code path from the move (repository filter vs. list read).
+  - *DELETE /wishlist/not-an-object-id* — malformed id; expects 422, not 404, because the Mongo-shape check lives in the controller, not the contract.
 
-Each probe carries `name`, `why` (human rationale), `method`, `path`, `auth`, and optional `body`.
+- **`Probe`** (type import from `@guebbit/openapi-runnable-collections`) — The shape each entry conforms to (`name`, `why`, `method`, `path`, `auth`, optional `body`).
 
 ## Relationships
 
-- **`scripts/contracts/client-collections-bundle.ts`** — Declares the seed tokens referenced in probe paths and bodies (e.g. `{{seedInactiveProductId}}`, `{{seedSoftDeletedProductId}}`). The probe file is injected into the client collections produced by that bundle, *after* the contract-derived requests.
+- **`scripts/contracts/client-collections-bundle.ts`** — The module doc explicitly delegates to this file the definition of what a probe is for, where probe arrays are emitted into the runnable bundle, and which `{{seedToken}}` values are available. This file only *consumes* that infrastructure by supplying the wishlist-specific array.
 
 ## Notes
 
-- Seed tokens are **never** written as literal values in this file. They are `{{…}}` placeholders resolved at generation time against the dataset.
-- Inventing a token that is not declared in the bundle causes the generator to fail and print the list of known tokens.
-- The 422 probe uses a hardcoded string (`not-an-object-id`), not a seed token, because it tests *shape* validation, not a record's existence.
-- The `why` fields are intentional documentation: they explain *why* the probe exists and why the contract cannot express the scenario. Keep them when adding probes.
+- `{{seedToken}}` placeholders in `path` and `body` are resolved by the bundle emitter (in the contracts script), not by this file. The tokens used here (`seedInactiveProductId`, `seedSoftDeletedProductId`) must already be registered there.
+- The zero-ObjectId probe uses a literal 24-char string rather than a seed token; this is intentional—it needs a well-formed but guaranteed-absent id.
+- The `why` strings are the source of truth for *why* a probe exists; they are expected to be rendered into the runnable collection output, not just developer documentation.
+- Auth is always `bearer` across all probes; there are no anonymous variants here.

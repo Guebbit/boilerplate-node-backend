@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Pins the exact string values emitted by the cart module's audit actions. Because these strings are a **wire contract** consumed by external log queries, dashboards, and alert rules (not refactored alongside this repo), a whole-object equality assertion guards against silent drift that would still type-check and pass all other tests while breaking downstream tooling.
+Locks down the exact string values of cart audit actions. These strings are a **wire contract** consumed by log queries and alert rules, so a rename would type-check cleanly and pass every other test while silently breaking observability tooling. This test asserts the values by their literal strings to catch that class of regression.
 
 ## Key elements
 
-- **`describe('the cart audit vocabulary')`** – the single test suite in this file.
-- **Test: "spells every action exactly as the log tooling expects"** – asserts `cartAuditActions` with whole-object `toEqual` against the two expected entries (`user.cart.item_removed`, `user.cart.reordered`). Fails on a changed value *and* on an action added or removed without a deliberate update here.
-- **Test: "registers its actions in the app-wide union"** – assigns a cart action to a variable typed as `AuditAction`, proving the `declare module` augmentation in `cart/audit.ts` includes cart's actions in the global union. Validated at type-check time, not at jest runtime.
+- **`describe('the cart audit vocabulary')`** — single test suite with two assertions.
+- **`it('spells every action exactly as the log tooling expects')`** — compares `cartAuditActions` to a literal object (`{ USER_CART_ITEM_REMOVED: 'user.cart.item_removed', USER_CART_REORDERED: 'user.cart.reordered' }`) using `toEqual`, catching both value changes and actions added/removed.
+- **`it('registers its actions in the app-wide union')`** — assigns one action to a variable typed `AuditAction` (the infrastructure-level union), verifying the `declare module` augmentation in `audit.ts` actually registers cart actions into that union. Runs only at type-check time; jest never executes the type assertion.
 
 ## Relationships
 
-- **`src/modules/cart/audit.ts`** – source of `cartAuditActions`, the object under test. Its `declare module` augmentation is what makes the second test's assignment type-check.
-- **`src/infrastructure/observability/audit.ts`** – defines the `AuditAction` type (a union across all modules) that the second test references.
+- **`src/modules/cart/audit.ts`** — provides `cartAuditActions` (the object under test) and contains the `declare module` augmentation that merges cart action keys into `AuditAction`.
+- **`src/infrastructure/observability/audit.ts`** — defines the `AuditAction` type imported here; the second test is the compile-time check that the augmentation is effective.
 
 ## Notes
 
-- The second test is a **type-level** assertion: jest does not type-check, but `tsconfig.json` includes the whole `src` tree, so removing the augmentation breaks compilation, not a runtime test.
-- Cross-cutting shape validation (dotted lower_snake_case, uniqueness across modules) lives in `tests/cross-cutting/audit-actions.test.ts`; this file deliberately only asserts *values*, because asserting values requires naming the domain and would couple all modules together.
-- Deleting this directory removes the only in-repo guard on the cart action strings.
+- The second test is a **type-level** check. Jest compiles the file but does not enforce the type; the real gate is the TypeScript compiler. If the `declare module` block in `audit.ts` is removed, this line fails `tsc` while jest still passes.
+- Use `toEqual` (deep equality), not `toStrictEqual`, so that adding a new key to `cartAuditActions` without updating the expected object will fail the test.
+- The values use dot-notation namespaced strings (`user.cart.*`), not the PascalCase constant names. Do not "clean up" the casing in the test — the string is the contract.

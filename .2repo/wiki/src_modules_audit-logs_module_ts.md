@@ -2,22 +2,22 @@
 
 ## Purpose
 
-Headless module that installs the audit-log sink into the observability layer at import time. It owns the `audit-logs` domain collection but declares no router; the single read endpoint (`GET /observability/audit`) lives in the dashboard module that renders the data. Enabling this module without `observability` is a valid build — the trail is stored but nothing exposes it.
+Wires the audit-logs module into the application by registering its persistence sink at import time. It is a headless module (no router): its sole job is to call `registerAuditSink` so that every `emitAuditEvent` call from the observability layer is persisted. The single read endpoint (`GET /observability/audit`) lives on the dashboard side, not here.
 
 ## Key elements
 
-- **`registerAuditSink(auditLogService.record)`** — executed at import time (top-level). Wires `service.record` as the active sink in the observability infrastructure. Not a DB call; `record` is fire-and-forget and only touches Mongo when an event actually fires (i.e., during a served request).
-- **`export default { name: 'audit-logs', subdomain: 'generic' } satisfies AppModule`** — the module manifest. `subdomain: 'generic'` reflects that "who did what, kept for N days" is a cross-cutting requirement, not a business subdomain. The `AppModule` type is the shared contract the registry expects.
+- **`registerAuditSink(auditLogService.record)`** — top-level side-effect call executed on import. Binds the observability layer's sink to the service's `record` method. Deleting this file simply stops persistence; no other code changes.
+- **`export default { name: 'audit-logs' } satisfies AppModule`** — the module manifest entry. Contains only a name; no `router`, no `middleware`, no lifecycle hooks.
 
 ## Relationships
 
-- **`src/infrastructure/observability/audit.ts`** — provides `registerAuditSink`. This file calls it once at import to install the sink. The ~53 `emitAuditEvent` call sites across the app talk to this infrastructure module, never to this file directly.
-- **`src/modules/audit-logs/service.ts`** — provides `auditLogService.record`, the function actually passed as the sink. This module is its only consumer.
-- **`src/kernel/registry.ts`** — defines the `AppModule` type that the default export satisfies.
-- **`src/modules.ts`** — the assembly/manifest aggregator that imports this module's default export; deleting this file stops audit storage without breaking that assembly.
+- **`src/infrastructure/observability/audit.ts`** — Provides `registerAuditSink`. This module consumes it to plug itself in as the sink. Call sites elsewhere in the app import *that* file, never this one.
+- **`src/modules/audit-logs/service.ts`** — Provides `auditLogService.record`, the function actually bound as the sink. This module does not otherwise interact with the service.
+- **`src/kernel/registry.ts`** — Supplies the `AppModule` type used in the `satisfies` clause on the default export.
+- **`src/modules.ts`** — The aggregation point that imports this module (for the side effect of sink registration). No other file imports this module.
 
 ## Notes
 
-- Registration is deliberately at import time, not in `app.ts`, so the assembly file never names a domain. Deleting this file is the cleanest way to disable audit persistence.
-- The TTL index (enforced elsewhere, presumably in the service or schema) governs retention; this module does not manage it.
-- There is no router, no middleware, and no request-handling logic here — it is purely a wiring + manifest file.
+- **Side-effect import pattern.** This file is imported purely for the `registerAuditSink` call. It exports no runtime values beyond the manifest object. If you remove the import from `src/modules.ts`, audit events are still emitted but never persisted.
+- **Retention is a DB-level TTL index**, not TypeScript code (lives in `./model`). Changing the retention window requires no code change here.
+- **No router is declared.** Do not expect a route definition in this file or look for one when debugging the audit endpoint.

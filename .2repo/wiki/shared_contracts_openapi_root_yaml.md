@@ -2,29 +2,27 @@
 
 ## Purpose
 
-Root OpenAPI 3.0.3 specification for the Ecommerce Demo API (v2.0.0). It defines the shared building blocks — security schemes, reusable parameters, standard responses, and cross-module schemas — that every per-module spec inherits via `$ref`. Designed explicitly for code-generation (Orval/Zod, client/server stubs, DTOs) across multiple projects and languages.
+The root OpenAPI 3.0.3 contract for the Ecommerce Demo API. It is a codegen-oriented, multi-language spec that defines the shared vocabulary — security schemes, reusable parameters, standard responses, and cross-module schemas (pagination, IDs, envelope shapes) — that every per-module `openapi.yaml` composes against. It exists so that generated client/server stubs, DTOs, and SDKs have a single, stable source of truth for anything more than one module references.
 
 ## Key elements
 
-- **`info.description`** — Doubles as the contract for `Accept-Language` handling. Documents that the header applies to all 33 operations, selects only user-facing copy (never shape/status/machine codes), falls back silently on unsupported tags, and sets `Content-Language` + `Vary: Accept-Language`.
-- **`components.securitySchemes.bearerAuth`** — JWT bearer scheme available to any operation (global `security` is commented out by default).
-- **`components.parameters`** — Reusable params: `PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `UserIdParam`, `ProductIdParam`, `HardDeleteParam`, `IdPathParam`, `ProductIdPathParam`. The hard-delete param documents the three-spelling convention (path `/hard`, query `?hardDelete=true`, body `hardDelete`) and precedence order.
+- **`info.description`** — Carries the i18n contract: every endpoint honours `Accept-Language` for user-facing copy only (`errors[].message`, success `message`); it never changes shape, status code, or machine-readable fields. The header is deliberately *not* declared per-operation to avoid a redundant argument in every generated function.
+- **`components.securitySchemes.bearerAuth`** — JWT bearer auth; the global `security` block is commented out, so auth is opt-in per operation.
+- **`components.parameters`** — Reusable query/path params: `PageParam`, `PageSizeParam`, `TextParam`, `IdParam`, `UserIdParam`, `ProductIdParam`, `HardDeleteParam`, `IdPathParam`, `ProductIdPathParam`. `HardDeleteParam` documents the three-spelling rule (`/hard` path, `?hardDelete` query, body flag) with a fixed precedence.
 - **`components.responses`** — Standard error/success envelopes: `Success`, `Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `ValidationError`, `InternalError`.
-- **`components.schemas`** — Shared scalars (`Page`, `PageSize`, `Id`, `Text`, `Email`, `Password`, `Locale`, `ImageUrl`), `PaginationMeta`, envelope primitives (`EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`), `MessageResponse`, and `ErrorItem` (with stable `code` + localizable `message` + optional `details`).
-- **Multipart `imageUpload` fields** — Deliberately left as bare `type: string, format: binary` with no `maxLength`/`contentMediaType`; see Notes.
+- **`components.schemas` (shared)** — `Page`, `PageSize`, `Id`, `Text`, `Email`, `Password`, `Locale`, `ImageUrl`, `ThumbnailUrl`, `PaginationMeta`, `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `MessageResponse`, `ErrorItem`.
+- **Multipart `imageUpload` fields** — Declared as bare `format: binary` with no `maxLength`/`contentMediaType`; limits live exclusively in the backend (see Notes).
 
 ## Relationships
 
-- **`src/modules/*/openapi.yaml`** (account, cart, delivery, feedback, inventory, locales, observability, orders, payments, products, users) — Each module spec is a standalone OpenAPI document that `$ref`s the shared parameters, responses, and schemas defined here (e.g. `#/components/schemas/Id`, `#/components/responses/ValidationError`).
-- **`openapi.yaml`** — Project-level OpenAPI entry point that aggregates or points to the module specs.
-- **`shared/contracts/asyncapi.root.yaml`** — Sibling contract for event-driven (async) interfaces; this file covers only synchronous REST.
-- **`spectral.modules.yaml`** — Spectral linting rules applied to this spec and the module specs to enforce structural conventions.
-- **`src/infrastructure/adapters/storage.ts`** — Backend authority for image-upload limits (allowed MIME types, `NODE_MAX_UPLOAD_BYTES` size cap). The spec intentionally does not duplicate those constraints; this file is the enforcement point.
+- **`src/modules/*/openapi.yaml`** (account, cart, delivery, feedback, inventory, locales, observability, orders, payments, products, users, wishlist) — Each module spec is a standalone document that `$ref`s the shared parameters, responses, and schemas defined here. They do not import via a `servers` or `components` merge; they re-declare or reference the root definitions.
+- **`shared/contracts/asyncapi.root.yaml`** — Sibling contract covering the async/event side of the system; shares the same codegen pipeline and team ownership but models message flows rather than HTTP operations.
+- **`src/infrastructure/adapters/storage.ts`** — Referenced in inline comments as the single authority for image-upload limits (accepted MIME types, `NODE_MAX_UPLOAD_BYTES`). The spec intentionally omits those limits; storage.ts is where they are enforced.
 
 ## Notes
 
-- **`Accept-Language` is never declared per-operation.** The `info.description` paragraph is its contractual definition. Declaring it 33 times would add a redundant argument to every generated function; clients set it once via an interceptor.
-- **Upload limits are backend-only.** Orval's Zod generator short-circuits `format: binary` to `zod.instanceof(File)` and the `zodSchemas` target has no `splitByContentType`, so any `maxLength` added here would reach no generated artefact. The real limits live in `storage.ts` and are restated in the frontend's `src/infrastructure/uploads.ts`. Changing them requires touching both files — nothing in the spec will announce the drift.
-- **YAML anchors for envelope preamble.** `EnvelopeSuccess`, `EnvelopeStatus`, and `EnvelopeMessage` were originally YAML anchors (`&envelopeSuccess` etc.) during a concatenation-based assembly. They are now plain schemas because anchors cannot cross file boundaries, and each module is a standalone document.
-- **`ImageUrl` uses `format: uri-reference`, not `uri`.** Uploaded images are stored and returned as server-relative paths (e.g. `/uploads/abc.jpg`), which are not valid absolute URIs.
-- **Global `security` is commented out.** Authentication is opt-in per operation; the `bearerAuth` scheme is available but not enforced by default.
+- **`Accept-Language` is absent from `components.parameters`.** This is a deliberate design choice documented in `info.description` and a comment in `parameters`. Adding it as a parameter would inject a redundant argument into every generated function.
+- **Image-upload constraints are not in the spec.** A `maxLength` or `contentMediaType` on `format: binary` would not reach any generated artefact (orval's zod generator short-circuits to `zod.instanceof(File)`, and the multipart body is excluded from the `zodSchemas` target). The real limits live in `src/infrastructure/adapters/storage.ts` and are restated in the frontend's `src/infrastructure/uploads.ts`. If limits change, those two files must change in lockstep — nothing in the spec will signal the drift.
+- **`EnvelopeSuccess` / `EnvelopeStatus` / `EnvelopeMessage`** are standalone schemas (not YAML anchors) so that module files in separate documents can `$ref` them. They exist because the document is no longer assembled by concatenation; anchors cannot cross files.
+- **`OrderIdParam`** is commented out in `parameters` but may still be referenced by the orders module spec.
+- **`security` is commented out at the top level.** Operations must explicitly opt in; do not assume global auth.

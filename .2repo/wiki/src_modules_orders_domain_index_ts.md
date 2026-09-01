@@ -2,25 +2,26 @@
 
 ## Purpose
 
-Selective re-export (barrel) for the orders domain layer. It curates the public API surface of the three domain modules—`totals`, `rules`, and `lifecycle`—while deliberately omitting internal helpers that should not be consumed by outside code. It exists so callers import from a single entry point and the domain layer stays free of Express, Mongoose, and any upper-tier concerns.
+Barrel (public API) for the **orders domain layer**. It exposes a curated, minimal set of pure rules—no Express, Mongoose, HTTP, or DB dependencies—so that consumers import a single entry point instead of reaching into individual rule files. It also encodes *what is off-limits* by intentionally omitting internal helpers.
 
 ## Key elements
 
-- **`sumLineItems`, `orderTotal`** (from `./totals`) — compute line-item and order-level monetary totals.
-- **`LineItem`, `LineItemTotals`, `OrderTotalInput`** (type re-exports from `./totals`) — input/output shapes for the totals functions.
-- **`checkOrderLines`** (from `./rules`) — validates a set of order line candidates and returns a verdict.
-- **`OrderLineCandidate`, `OrderLinesVerdict`** (type re-exports from `./rules`) — shapes for the rules check.
-- **`canTransition`, `statusesReachableFrom`, `statusesLeadingTo`, `orderActionsFor`** (from `./lifecycle`) — query the order state machine for allowed transitions and actor-scoped actions.
-- **`OrderActor`** (type re-export from `./lifecycle`) — identifies which role (e.g. customer, merchant) is performing an action.
+- **`sumLineItems`, `orderTotal`** (re-exported from `./totals`) — the only arithmetic primitives exposed from the totals module.
+- **`checkOrderLines`** (re-exported from `./rules`) — validation of order line items.
+- **`canTransition`, `statusesReachableFrom`, `statusesLeadingTo`, `orderActionsFor`** (re-exported from `./lifecycle`) — state-machine queries over the order lifecycle.
+- **`OrderActor`** (type, re-exported from `./lifecycle`) — the actor union used by the lifecycle functions.
 
 ## Relationships
 
-- **`./totals`** — source of the `sumLineItems` / `orderTotal` functions and their types; this barrel is the only re-export point for them.
-- **`./rules`** — source of `checkOrderLines` and its associated types.
-- **`./lifecycle`** — source of the four transition/action functions and the `OrderActor` type.
+- **`src/modules/orders/domain/totals.ts`** — source of `sumLineItems` and `orderTotal`. The barrel re-exports these two symbols and *nothing else* from that file.
+- **`src/modules/orders/domain/rules.ts`** — source of `checkOrderLines`.
+- **`src/modules/orders/domain/lifecycle.ts`** — source of the four lifecycle functions and the `OrderActor` type.
+
+Downstream consumers (e.g. `src/modules/orders/index.ts`, `src/modules/orders/service.ts`) import from this file rather than from the individual sibling modules, keeping the dependency graph shallow.
 
 ## Notes
 
-- **`toCents` is intentionally absent.** Its sole caller is `sumLineItems` inside `totals.ts`; re-exporting it here would signal that other modules may call it directly.
-- **`ORDER_LIFECYCLE` is intentionally absent.** Consumers should call the named helpers (`canTransition`, `orderActionsFor`, etc.) rather than read the raw transition table, so the "why" of a decision stays in one place.
-- The header comment defines the domain layer's boundary: anything testable without a database belongs here; queries, transactions, HTTP envelopes, and translated copy do not. See `docs/theory/domain-layer.md` for the full rationale.
+- **Deliberate omissions are load-bearing.** Two symbols that exist in sibling modules are *intentionally not* re-exported:
+  - `toCents` (in `totals.ts`) — its only caller is `sumLineItems`; exposing it here would signal it is a general-purpose utility. Property tests reach it via `totals.ts` directly.
+  - `ORDER_LIFECYCLE` (in `lifecycle.ts`) — callers are expected to use the named transition queries (`canTransition`, etc.) instead of reading the raw table.
+- The module doc-comment states the design contract: anything testable without a database belongs in this layer; queries, transactions, HTTP envelopes, and translated copy do not. See `docs/theory/domain-layer.md` for the rationale.

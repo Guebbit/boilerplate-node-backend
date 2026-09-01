@@ -2,30 +2,30 @@
 
 ## Purpose
 
-The sole controller for `POST /account/signup`. It accepts a JSON or multipart (file-upload) signup body, delegates registration to `accountService.signup`, handles avatar image cleanup on failure, emits a Prometheus counter, and fires a verification email after a successful 201.
+Thin HTTP adapter for `POST /account/signup`. It extracts form fields and the uploaded-image payload from the Express request, delegates to `accountService.signup`, and owns the cross-cutting concerns that must run on **both** the success and failure paths: uploaded-image cleanup, metrics increment, and the fire-and-forget verification email.
 
 ## Key elements
 
-- **`postSignup`** (exported) — The Express request handler. Destructures `email`, `username`, `password`, `passwordConfirm` from `request.body`; resolves an avatar image (uploaded file takes priority over a body-supplied `imageUrl`); calls `accountService.signup`; on success responds **201** via `successResponse` and fires `sendVerificationEmail` (fire-and-forget); on failure or Mongoose `CastError` removes the uploaded image, increments the failure metric, and responds with an appropriate error.
-- **`deleteUpload`** (closure) — Calls `imageStore.remove(imageUrlFile)`. Deliberately targets only the file this request uploaded, not the merged `imageUrl`, so a body-supplied URL (another user's asset) is never deleted.
-- **`authSignupTotal.inc({ status })`** — Prometheus counter (from `../metrics`) tagged `'success'` or `'failure'`, incremented on every terminal path.
-- **`callerContextOf(request)`** — Extracted from the inbound request and forwarded into both `signup` and `sendVerificationEmail` as locale/audit context.
+- **`postSignup(request, response)`** — the sole export. Destructures `email`, `username`, `password`, `passwordConfirm` from `request.body`, calls `readUploadedImage` for the image trio (`imageUrl`, `thumbnailUrl`, `pendingImageKey`, `deleteUpload`), then chains `accountService.signup`:
+  - **Success path:** increments `authSignupTotal` with `status: 'success'`, fires `sendVerificationEmail` via `void` (non-blocking), and returns `201` with the created document.
+  - **Failure path (`!result.success`):** calls `deleteUpload()`, increments the metric as `'failure'`, and sends `rejectResponse`.
+  - **Catch path (DB errors):** increments the metric as `'failure'`, sends `rejectDatabaseError`, then calls `deleteUpload()`.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — Source of `accountService` (performing the actual signup) and `sendVerificationEmail`.
-- **`src/modules/account/routes.ts`** — Wires `postSignup` to the `POST /account/signup` route (this file is the route's handler).
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` / `rejectResponse` for all terminal HTTP replies.
-- **`src/infrastructure/http/uploads.ts`** — `resolveImageUrl` extracts a multipart upload from the request.
-- **`src/infrastructure/adapters/image-store.ts`** — `imageStore.remove` is the cleanup call when signup fails.
-- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseError` formats Mongoose `CastError` / generic `Error` into the standard error envelope.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf` pulls locale/audit metadata off the request.
-- **`src/types/index.ts`** — `SignupRequest` and `SignupRequestMultipart` shape the Express typed body.
-- **`src/modules/account/services/verification.ts`** — Implementation of `sendVerificationEmail`; reached indirectly through the services index import.
+- **`src/modules/account/services/index.ts`** — imports `accountService` (the business logic) and `sendVerificationEmail` (triggered after a successful signup).
+- **`src/modules/account/routes.ts`** — the route definition that wires this controller to the `/signup` path.
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` and `rejectResponse` used to shape the HTTP reply.
+- **`src/infrastructure/http/errors.ts`** — provides `rejectDatabaseError` for the `catch` path.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf`, passed into both `signup` and `sendVerificationEmail`.
+- **`src/infrastructure/adapters/image-store.ts`** — provides `readUploadedImage` to extract image URLs and the `deleteUpload` cleanup closure from the request.
+- **`src/types/index.ts`** — supplies the `SignupRequest` / `SignupRequestMultipart` body types for the Express `Request` generic.
+- **`src/modules/account/metrics.ts`** — supplies the `authSignupTotal` Prometheus counter.
 
 ## Notes
 
-- **No Zod validation at the controller layer is deliberate.** `accountService.signup` validates via `zodUserSchema` with localized (dictionary) error messages. Running a generated Zod schema here would respond first in untranslated English, which `tests/integration/locale.test.ts` explicitly forbids. One endpoint must not double-validate.
-- **`sendVerificationEmail` is `void`-fired.** The 201 is returned before the email task completes; the account is fully functional regardless of `verified` status.
-- **Password stripping relies on Mongoose's `toJSON` transform.** The in-memory document returned by `create()` still carries the hash; the transform removes it before `res.json` serializes. Do not bypass by returning a raw object.
-- **Image cleanup is tied to `imageUrlFile`, not `imageUrl`.** If the body supplied an `imageUrl` and the upload also succeeded, only the upload is deleted on failure — the body URL may reference another user's asset.
+- **No Zod validation at this layer.** The body is read raw; `accountService.signup` validates via `zodUserSchema`, whose error messages are locale-translated. Validating here with the generated schema would preempt the translated messages (asserted by `tests/integration/locale.test.ts`).
+- **`imageUrl` defaults to `''`.** `zodUserSchema` expects a string, so a missing image becomes an empty string rather than `undefined`/`null`.
+- **Verification email is fire-and-forget.** `void sendVerificationEmail(...)` means the `201` is returned immediately; the account is usable regardless of whether the email is queued.
+- **`deleteUpload()` is called on every non-success path** (business-logic failure *and* thrown/caught DB error). It is **not** called on success — the uploaded file is retained.
+- The `201` body is the in-memory Mongoose document; the schema's `toJSON` transform strips the hashed password before it reaches the response.

@@ -2,32 +2,28 @@
 
 ## Purpose
 
-Contract tests for all six `/cart` endpoints. Each test makes a real HTTP call and asserts that the response envelope matches the declared API spec (`toSatisfyApiSpec`). The cart is deliberately built through API calls (not a factory) because `CartResponse` is a computed view over stored lines and live product prices, not a serialization of the cart document. Behavioural logic (whose cart, which products are valid) is covered in the service suites; these tests exist to pin the wire format.
+Contract tests that assert every `/cart` route's response shape matches the declared OpenAPI spec via `toSatisfyApiSpec()`. The cart is a computed view rather than a serialized document, so these tests build state through the API (not fixtures) and verify each declared status-code branch (200, 401, 404, 422) is reachable and well-shaped.
 
 ## Key elements
 
-- **`MISSING_ID`** – A well-formed ObjectId guaranteed to have no matching document; exercises the 404 branch (as opposed to 422 for a malformed id).
-- **`authenticateWithCart(quantity?)`** – Local helper that authenticates a user, creates a product, and POSTs it into the cart via the API; returns `{ bearer, product }`.
-- **`describe('GET /cart')`** – Empty cart, cart with items, unauthenticated (401).
-- **`describe('POST /cart')`** – Add item (200), invalid body (422), non-existent product (404), inactive product (404 via scope), unauthenticated (401).
-- **`describe('DELETE /cart')`** – Clear all items, remove one product via request body, unauthenticated.
-- **`describe('PUT /cart/{productId}')`** – Set quantity, invalid quantity (422), non-existent product (404), inactive product (404), unauthenticated.
-- **`describe('DELETE /cart/{productId}')`** – Remove one item (200), malformed id (422), unauthenticated.
-- **`describe('GET /cart/summary')`** – Empty cart, cart with items, unauthenticated.
-- **`describe('POST /cart/checkout')`** – Success (201) and cart-emptied assertion, empty-cart conflict (409), insufficient stock, unauthenticated.
+- **`MISSING_ID`** — a well-formed ObjectId guaranteed absent from the DB; distinguishes the 404 "not found" branch from the 422 "invalid id" branch.
+- **`authenticateWithCart(quantity?)`** — logs in as `user`, creates a product, adds it to the cart via `POST /cart`, and returns `{ bearer, product }`.
+- **`describe` blocks** — one per endpoint (`GET /cart`, `POST /cart`, `DELETE /cart`, `DELETE /cart/all`, `PUT /cart/{productId}`, `DELETE /cart/{productId}`, `GET /cart/summary`, `POST /cart/checkout`). Each contains a success case plus one or more error-contract cases.
+- **`toSatisfyApiSpec()`** — the contract matcher (from `@tests/contract`) that validates the full response envelope against the OpenAPI definition.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** – Provides the `toSatisfyApiSpec()` expectation matcher used on every assertion.
-- **`tests/support/http.ts`** – Provides `api()` (supertest wrapper) and `authenticateAs(role)` used for all requests and auth setup.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module load to ensure a clean test database.
-- **`src/modules/products/tests/factory.ts`** – `createProduct()` creates the product rows needed for cart operations.
-- **`src/modules/orders/tests/factory.ts`** – `createOrder` / `toOrderItem` are imported (used in the truncated portion of the suite, likely for checkout-related fixtures).
-- **`src/modules/users/tests/factory.ts`** – `createUser` is imported (likely consumed by `authenticateAs` or the truncated section).
+- **`tests/support/contract.ts`** — provides the `toSatisfyApiSpec()` matcher registered by the side-effect import `import '@tests/contract'`.
+- **`tests/support/http.ts`** — provides `api()` (supertest-style client) and `authenticateAs(role)` used in every test.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module level to seed an isolated database.
+- **`src/modules/products/tests/fixtures.ts`** — `createProduct()` (optionally with `{ active: false }`) supplies real catalogue rows for cart operations.
+- **`src/modules/orders/tests/fixtures.ts`** — `createOrder` and `toOrderItem` are imported for the checkout test (file is truncated; usage is in the `POST /cart/checkout` block).
+- **`src/modules/users/tests/fixtures.ts`** — `createUser` is imported; likely used in the truncated checkout section.
 
 ## Notes
 
-- **409 vs 422 on empty-cart checkout:** An empty cart at checkout returns **409** (state conflict), not 422. The API spec was updated to declare this when this suite was written; the implementation had always returned 409.
-- **404 ambiguity on `POST /cart`:** Two distinct 404 cases are tested: a nonexistent id (scope returns "not found") vs. an inactive product (valid id, but scope filters it out). The test for the latter creates a real row with `active: false`.
-- **PUT 404 origin:** The 404 on `PUT /cart/{productId}` is gated by `cartItemSetById`, not by the route handler itself — noted in an inline comment to prevent confusion when reading the service layer.
-- **No factory for cart state:** The file intentionally avoids a cart factory; all cart state is created through `POST /cart` over HTTP so the response shape is the one the application actually produces.
+- The doc comment explicitly warns that a hand-written `CartResponse` fixture would assert a shape the app never produces; always go through the API to build state.
+- Two distinct 404 cases are tested on `POST /cart` and `PUT /cart/{productId}`: (1) valid id, no matching row → "not found"; (2) valid id, row exists but `active: false` → "outside the public catalogue" (a scope-level refusal). Both return 404 but exercise different code paths.
+- `DELETE /cart` (single-item remove) requires a `productId` in the body; omitting it yields 422. The route is aliased (`x-alias-of: removeCartItem`) to distinguish it from `DELETE /cart/all`.
+- The file is truncated in the source; the `POST /cart/checkout` test is incomplete here.
+- All six+ endpoints share one `CartResponseEnvelope`; the tests exist specifically because a single shared shape is where serialization drift hides.

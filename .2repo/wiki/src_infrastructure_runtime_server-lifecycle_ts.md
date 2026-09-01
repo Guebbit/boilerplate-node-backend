@@ -2,31 +2,31 @@
 
 ## Purpose
 
-Single-responsibility module for graceful server startup sequencing and shutdown orchestration. It owns the shutdown ordering, the signal-handling wiring, and the forced-exit deadline—deliberately kept separate from Express middleware and route mounting so that the "how to stop" logic is isolated from the "what to serve" logic.
+Orchestrates graceful shutdown of the Node.js process: stops accepting traffic, drains in-flight connections, then tears down infrastructure adapters in a fixed sequence. Introduces a hard deadline so a hung teardown cannot block the orchestrator's restart cycle. Decoupled from Express routing — it only sequences the `stop*` calls each adapter already exposes.
 
 ## Key elements
 
-- **`getShutdownTimeoutMs()`** — Reads `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` from the environment; falls back to 15 000 ms. Guards against `NaN` (garbage env values) that would otherwise make the safety timer fire instantly.
-- **`closeServer(server)`** — Promisifies `http.Server.close()`, resolving only after all in-flight keep-alive sockets have drained. Rejects if the server was never listening.
-- **`shutdownInfra(server?)`** — Sequential teardown chain (server → locale-override refresh → cache → rate-limit store → queue → database → analytics → tracing). Each step swallows its own errors so a failure in one adapter never blocks the rest. Works with or without a `Server` argument (workers / CLI entry points).
-- **`registerSignalHandlers(stopFunction)`** — Installs `SIGTERM` and `SIGINT` listeners. On signal it runs `stopFunction()`, exits 0 on success / 1 on failure, and sets an unref'd `setTimeout` deadline (from `getShutdownTimeoutMs()`) that forces `process.exit(1)` if teardown hangs. Skipped entirely when `NODE_ENV === 'test'`.
+- **`getShutdownTimeoutMs()`** — Reads `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` env var; falls back to 15 s and guards against `NaN` from malformed input.
+- **`closeServer(server)`** — Promisifies `http.Server.close()`, resolving once all in-flight sockets are drained.
+- **`shutdownInfra(server?)`** — Chains the full teardown in order: close server → `stopLocaleOverrideRefresh` → `stopCache` → `stopRateLimitStore` → `stopQueue` → `stopDatabase` → `shutdownAnalytics` → `shutdownTracing`. Accepts an optional server so non-HTTP entry points (workers, CLI) can call the same path.
+- **`registerSignalHandlers(stopFunction)`** — Attaches `SIGTERM`/`SIGINT` listeners that invoke the supplied stop function, enforce the timeout via a `setTimeout` + `unref()` guard, and explicitly call `process.exit(0|1)`. Skips registration entirely when `NODE_ENV === 'test'`.
 
 ## Relationships
 
-- **`@infrastructure/adapters/logger`** — Emits structured info/error logs at every lifecycle transition (signal received, timeout fired, success, failure).
-- **`@infrastructure/runtime/database`** — Calls `stopDatabase()` as the fifth teardown step.
-- **`@infrastructure/adapters/cache`** — Calls `stopCache()` (third step); the comment notes the Redis subscriber must stop before the client.
-- **`@infrastructure/adapters/queue`** — Calls `stopQueue()` (fourth step).
-- **`@infrastructure/http/middlewares/rate-limit-store`** — Calls `stopRateLimitStore()` between cache and queue.
-- **`@infrastructure/i18n`** — Calls `stopLocaleOverrideRefresh()` first after the server closes.
-- **`@infrastructure/observability/analytics`** — Calls `shutdownAnalytics()` (second-to-last) so in-memory event buffers flush *after* the services they observed have stopped.
-- **`@infrastructure/runtime/otel-sdk`** — Calls `shutdownTracing()` last, capturing spans that span the entire teardown.
-- **`src/app.ts`** — Expected consumer: creates the `Server`, calls `registerSignalHandlers` with a closure over `shutdownInfra`, and passes the bound server into `shutdownInfra`.
+- **`src/infrastructure/adapters/logger.ts`** — Imports `logger` for structured info/error logging at every shutdown milestone.
+- **`src/infrastructure/runtime/database.ts`** — Calls `stopDatabase()` after all traffic-facing stores are closed.
+- **`src/infrastructure/adapters/cache.ts`** — Calls `stopCache()` early in the chain (before queue and database).
+- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — Calls `stopRateLimitStore()` between cache and queue.
+- **`src/infrastructure/adapters/queue.ts`** — Calls `stopQueue()` after rate-limit store, before database.
+- **`src/infrastructure/i18n/index.ts`** — Calls `stopLocaleOverrideRefresh()` immediately after server drain, before any data-store teardown.
+- **`src/infrastructure/observability/analytics/index.ts`** — Calls `shutdownAnalytics()` near the end so in-memory buffers capture the teardown steps above them.
+- **`src/infrastructure/runtime/otel-sdk.ts`** — Calls `shutdownTracing()` last in the chain (same buffering rationale as analytics).
+- **`src/app.ts`** — Expected caller: constructs the `stopFunction` closure (wrapping `shutdownInfra` + the bound `Server`) and passes it to `registerSignalHandlers`.
 
 ## Notes
 
-- **Timeout vs. platform grace period.** The shutdown deadline must stay *below* the orchestrator's grace window (Kubernetes `terminationGracePeriodSeconds` defaults to 30 s; Docker `stop_grace_period` defaults to 10 s). If it exceeds that, the platform sends `SIGKILL` mid-drain and the graceful path is never observed.
-- **Shutdown order is intentional.** Resources that other resources depend on (subscriber → client, request stores → analytics/tracing buffers) are stopped first; in-memory buffers are stopped last so they can record the teardown of everything else.
-- **`forcedExitTimer.unref()`** prevents the pending timeout from keeping the event loop alive after a clean exit.
-- **Explicit `process.exit(0)`** is required after successful shutdown because Otel SDK timers and driver sockets may otherwise hold the event loop open indefinitely.
-- **Test safety.** `registerSignalHandlers` is a no-op under `NODE_ENV === 'test'` to avoid killing the Jest runner with `process.exit` calls.
+- **Timeout vs. platform grace period:** The 15 s default must stay below the orchestrator's kill deadline (K8s `terminationGracePeriodSeconds` default 30 s; Docker `stop_grace_period` default 10 s). If it exceeds that, the container is SIGKILLed before the local timer fires.
+- **Failure isolation:** Each `.then()` step is expected to swallow its own errors internally; a broken adapter (e.g., Redis down) should not prevent subsequent steps (e.g., database close) from running.
+- **Explicit `process.exit`:** `exit(0)` is called after successful shutdown because Otel timers, driver sockets, and other handles can keep the event loop alive indefinitely otherwise. `unref()` on the forced-exit timer prevents that timer from being the reason the process stays alive during a clean shutdown.
+- **`server?.listening` guard:** `closeServer` is skipped when the server was never bound or already closed, avoiding a spurious rejection.
+- **Test mode:** `registerSignalHandlers` is a no-op under `NODE_ENV === 'test'` to prevent `process.exit` calls from killing the Jest worker.

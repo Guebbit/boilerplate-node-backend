@@ -2,27 +2,23 @@
 
 ## Purpose
 
-Handler for `GET /orders/:id`. Validates the path parameter, fetches the order through the order service with a role-scoped caller context, and returns it (or a 404) with a set of actions the requesting caller may perform.
+Single-order read controller for `GET /orders/:id`. It scopes the result by caller role (admin sees any order; non-admins only their own) and attaches the set of actions the current caller is allowed to perform, so the client can render its controls from the server's answer rather than duplicating lifecycle logic.
 
 ## Key elements
 
-- **`getOrderItem`** (exported) — The sole handler. Accepts Express `Request<{ id?: string }>` / `Response`, performs the full request lifecycle: validate → query → respond or error.
-- **ObjectId pre-check** — Calls `isValidObjectId` *before* invoking the service. This is deliberate: the admin branch (`findById`) raises a Mongoose `CastError`, while the scoped branch (an aggregate with `$match`) raises a driver `BSONError` that the response layer would map to 422. Checking up front guarantees a consistent 404 regardless of which branch would have run.
-- **Role-scoped fetch** — `orderService.getById(id, orderService.callerScope(request.authContext))` lets the service decide whether the caller sees all orders (admin) or only their own.
-- **Action-augmented response** — On success the order is wrapped with `orderService.withActions(order, request.authContext)`, so the client renders its available controls from the server's answer rather than a static client-side lifecycle.
-- **i18n** — All user-facing messages go through `t('orders.not-found')`.
+- **`getOrderItem(request, response)`** — the sole export. Validates the path-param `id` up front, delegates the fetch to `orderService.getById` with a caller scope, maps a missing order to 404, and on success returns the order wrapped through `orderService.withActions` so the payload includes role-specific permitted actions.
 
 ## Relationships
 
-- **`src/modules/orders/routes.ts`** — Registers this handler on `GET /orders/:id`.
-- **`src/modules/orders/service.ts`** — Provides `getById`, `callerScope`, and `withActions`; this controller delegates all data access and authorization logic to it.
-- **`src/infrastructure/http/request.ts`** — Source of `isValidObjectId`, used for the pre-query guard.
-- **`src/infrastructure/http/response.ts`** — Source of `successResponse` / `rejectResponse`, the standard response emitters.
-- **`src/infrastructure/http/controller.ts`** — Source of `catchAs`, which converts service rejections into an HTTP error response and logs under the `'getOrderItem'` label.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Source of the `t` translation function used for the 404 message.
+- **`../service` (`orderService`)** — provides `getById`, `callerScope`, and `withActions`; all data access and role logic lives there.
+- **`@infrastructure/http/response`** — `successResponse` / `rejectResponse` shape the JSON envelope and status codes.
+- **`@infrastructure/http/request`** — `isValidObjectId` performs the pre-query id validation.
+- **`@infrastructure/http/controller`** — `catchAs` is the standard `.catch` handler for unhandled errors.
+- **`@infrastructure/i18n`** — `t` supplies the user-facing "not found" message.
+- **`../routes`** — registers this handler for the `GET /orders/:id` path.
 
 ## Notes
 
-- The 404 is returned for *both* "malformed id" and "no matching order" — intentionally indistinguishable to the client.
-- The pre-check exists solely because the two role branches fail with *different* error classes for the same bad input; without it the status code would depend on whether the caller is admin.
-- The handler never touches Mongoose or the database directly; all persistence and scoping live in `orderService`.
+- **Why the id check is pre-query, not post-query:** Other single-item reads let a malformed id produce a driver `CastError` (422) and map it in `.catch`. Here, the admin branch (`findById`) and the scoped branch (aggregate) throw *different* error classes for the same bad id. Validating first guarantees a uniform 404 regardless of caller role.
+- The function is promise-based (`.then`/`.catch`), consistent with the rest of the orders module, rather than `async`/`await`.
+- The response body is **not** the raw order document; it is `orderService.withActions(order, authContext)`, which adds a permissions/actions field the UI consumes directly.

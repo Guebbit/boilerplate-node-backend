@@ -2,28 +2,30 @@
 
 ## Purpose
 
-Integration tests that exercise concurrent (racy) access to the cart and checkout endpoints, covering two documented bug classes: **R2** (double-checkout producing two orders from one cart, fixed by a conditional `__v`-based cart clear) and **R3** (the cart upsert retry path in `repositories/carts.ts` being completely untested). The file also covers the edge case of account deletion racing a cart write.
+Integration tests that fire N concurrent HTTP requests at the cart and checkout endpoints to verify race-condition invariants. Two historical bugs are covered: **R2** (two parallel checkouts both reading the same lines and double-charging) and **R3** (the cart upsert retry logic that was correct but entirely untested). A final case guards against an orphaned cart surviving account deletion.
 
 ## Key elements
 
-- **`describe('R3 — concurrent writes of the SAME product')`** — Fires N concurrent `POST /cart` for one product; asserts exactly one cart, one line, quantity 1, and all participants receive 2xx.
-- **`describe('R3 — concurrent adds of DIFFERENT products')`** — Fires N concurrent `POST /cart` for N distinct products; asserts one cart, N lines, no duplicate product IDs. This is the case that distinguishes a working `$ne`-in-filter guard from a broken one.
-- **`describe('R3 — concurrent quantity writes to the same line')`** — Pre-creates a line, then races N `PUT /cart/:productId` with distinct quantities; asserts the surviving quantity is one of the sent values (not a merge artefact) and the cart count stays at 1.
-- **`describe('R2 — concurrent checkouts of one cart')`** — Five sub-tests: exactly one order created; exactly one 2xx and N−1 409s; cart items emptied to zero; no orphan order for a losing request (loser retracts its order); uncontested checkout still succeeds.
-- **`describe('account deletion racing a cart write')`** — Races one `DELETE /account` against three `POST /cart`; asserts no 5xx and that a surviving cart implies a surviving user.
+- **`setupTestDb()`** (top-level) — resets the test database before any suite runs.
+- **`describe('R3 — concurrent writes of the SAME product')`** — N parallel `POST /cart` for one product; asserts exactly one cart document with one line.
+- **`describe('R3 — concurrent adds of DIFFERENT products')`** — N parallel `POST /cart` for N distinct products; asserts one cart with N unique lines. This is the only case that can detect a broken `$ne`-in-filter (single-product race would look identical to correct behaviour).
+- **`describe('R3 — concurrent quantity writes to the same line')`** — N parallel `PUT /cart/:productId` with distinct quantities in *set* mode; asserts the surviving quantity is one of the values actually sent (not a merge artefact).
+- **`describe('R2 — concurrent checkouts of one cart')`** — five sub-tests: exactly one order created; losers receive 409; cart emptied to zero items; the losing request's order is retracted (no orphan); uncontended checkout still succeeds.
+- **`describe('account deletion racing a cart write')`** — a `DELETE /account` racing three `POST /cart` calls; asserts no orphaned cart survives (dynamic-imports `@modules/users/model` for the cross-check).
 
 ## Relationships
 
-- **`tests/support/race.ts`** — Supplies `raceN` (concurrent request fan-out), `RACE_SIZE`, `countStatus`, and `expectNoServerErrors`; the entire concurrency orchestration depends on this helper.
-- **`tests/support/http.ts`** — Provides `api()` (supertest-style client) and `authenticateAs()` (creates a user and returns a bearer token); every HTTP call in the file goes through these.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at the top to provision an isolated test database before the `describe` blocks run.
-- **`src/modules/products/tests/factory.ts`** — `createProduct()` creates a product document for each test scenario.
-- **`src/modules/cart/model.ts`** — `cartModel` is queried directly (via Mongoose) to assert post-race cart state: document count, item length, item quantities.
-- **`src/modules/orders/model.ts`** — `orderModel` is queried directly to assert post-checkout order count and item contents.
+- **`tests/support/race.ts`** — supplies `RACE_SIZE`, `raceN`, `countStatus`, and `expectNoServerErrors`, the core primitives for firing N parallel requests and asserting on their status-code distribution.
+- **`tests/support/http.ts`** — supplies `api()` (supertest-style HTTP client) and `authenticateAs()` (test user + bearer token).
+- **`tests/support/setup-test-db.ts`** — supplies `setupTestDb()` to start each run against a clean database.
+- **`src/modules/products/tests/fixtures.ts`** — supplies `createProduct()` to seed the product documents that cart/checkout operations reference.
+- **`src/modules/cart/model.ts`** — supplies `cartModel` (Mongoose model) used in assertions to count cart documents and inspect `items`.
+- **`src/modules/orders/model.ts`** — supplies `orderModel` (Mongoose model) used in assertions to count orders and inspect their line items.
 
 ## Notes
 
-- The R3 "same product" and "different products" cases look superficially identical (both fire N concurrent adds) but test different invariants. Only the multi-product case can expose a broken `$ne`-in-filter, because a single-product race cannot distinguish "one line appended twice" from "one line appended once."
-- Cart upserts use **set** semantics (not increment), so the quantity invariant is "one of the sent values," not a sum. The test comments explicitly warn against asserting a sum.
-- The R2 loser-order test asserts the **compensation path**: a checkout that fails the conditional cart clear must delete the order it already wrote. Without this, the order count assertion would still pass (cart is empty) while N orders silently persist.
-- The file is intentionally the **reference implementation** for the R3 retry tests that were previously missing; it is not expected to change behavior, only to lock it in.
+- The file's leading comment documents the R2 fix mechanism: `clearLinesIfUnchanged` performs a conditional `__v`-keyed update so only one concurrent checkout matches; the loser deletes its already-written order and returns 409. Understanding the test expectations requires knowing this two-phase pattern (write order → conditional cart clear → retract on failure).
+- Cart upsert uses **set** semantics, not increment. The R3 assertions therefore check for exactly one line / one quantity, never a sum. Asserting a sum would validate semantics the API does not implement.
+- The R3 suite is explicitly described as "the tests that were missing" for the retry branch in `repositories/carts.ts` (`attemptsLeft` bound, `isDuplicateKey` check). No production code is changed here; the tests *are* the regression guard.
+- The account-deletion test uses a **dynamic `import('@modules/users/model')`** inside the assertion to avoid a hard dependency on the users module at the top of the file.
+- `RACE_SIZE` is imported from the shared race helper; its value is not defined in this file.

@@ -2,34 +2,33 @@
 
 ## Purpose
 
-Service layer for the language (locale) lifecycle — creating, updating, and cascade-deleting a registered language — plus the two shared tenant-validation helpers (strict for writes, lenient for reads) that every other route in the locales module reuses.
+Service-layer CRUD for language records: registering a new language, editing its display/visibility fields, and deleting it with a cascade. Also the single home for the module's shared tenant-validation rules — strict rejection on writes (422) versus silent drop on reads (treat as "no filter").
 
 ## Key elements
 
-- **`languageNotFound()`** – Shared 404 `ResponseReject` with the module's canonical "language not found" message.
-- **`rejectUnknownTenant(tenant)`** – Write-path guard; returns a 422 reject if the tenant id is not in the known-tenant set, otherwise `undefined` (meaning "proceed").
-- **`readableTenant(tenant?)`** – Read-path filter; returns the tenant if known, `undefined` otherwise (i.e. "no filter / every tenant").
-- **`createLanguage(payload, context?)`** – Normalises the tag (`trim().toLowerCase()`), checks for an existing tag (409), persists a new `LocaleDocument`, and emits an `ADMIN_LOCALE_CREATED` audit event when a `CallerContext` is supplied.
-- **`updateLanguage(tag, payload, context?)`** – Loads by tag (404 if absent), applies only the fields that are non-`undefined`, saves, and emits `ADMIN_LOCALE_UPDATED`.
-- **`deleteLanguage(tag, context?)`** – Refuses with 409 while the language is still `active`; otherwise cascades deletion via the repository and emits `ADMIN_LOCALE_DELETED` with the removed-entry count.
+- **`languageNotFound()`** — Shared 404 `ResponseReject` with a single localized message; every route in the module uses this one phrasing.
+- **`rejectUnknownTenant(tenant)`** — Write-path guard. Returns a 422 reject if the tenant id isn't registered in this deployment; returns `undefined` (meaning "proceed") if it is.
+- **`readableTenant(tenant?)`** — Read-path counterpart. Returns the tenant id only if it is known; otherwise `undefined`, which callers interpret as "filter by nothing / show all tenants."
+- **`createLanguage(payload, context?)`** — Validates the tag is new (409 if it exists), inserts via `localeRepository.create`, returns 201. Emits an `ADMIN_LOCALE_CREATED` audit event when `context` is supplied.
+- **`updateLanguage(tag, payload, context?)`** — Fetches by tag, applies each field only if the caller provided it (`!== undefined`), saves, returns 200. Emits `ADMIN_LOCALE_UPDATED` with `active` in metadata.
+- **`deleteLanguage(tag, context?)`** — Refuses with 409 if the language is still `active`. Otherwise calls `localeRepository.deleteLocaleCascade` and returns the count of removed entries. Emits `ADMIN_LOCALE_DELETED`.
 
 ## Relationships
 
-- **`../repository`** (`localeRepository`) – All persistence calls (`findByTag`, `create`, `save`, `deleteLocaleCascade`) go through this singleton.
-- **`../tenants`** (`isKnownTenant`) – Backs both `rejectUnknownTenant` and `readableTenant`.
-- **`../audit`** (`localeAuditActions`) – Provides the action-constant strings passed to `buildAuditEvent`.
-- **`../model`** – Supplies the `LocaleDocument` type used for persistence and return values.
-- **`@infrastructure/http/response`** – `generateReject` / `generateSuccess` build every return value; the `ResponseReject` / `ResponseSuccess` types shape the public API.
-- **`@infrastructure/http/request`** – `CallerContext` type is the optional audit-identity parameter on all three mutating functions.
-- **`@infrastructure/observability/audit`** – `buildAuditEvent` + `emitAuditEvent` fire the audit trail.
-- **`@infrastructure/i18n`** – `t()` provides localised error strings.
-- **`@types`** – `LocaleDirection`, `CreateLocaleRequest`, `LocaleTenant`, `UpdateLocaleRequest` type definitions.
-- **`services/index.ts`** – Barrel that re-exports this module so callers import from `@modules/locales/services`.
+- **`@types`** — Source of `LocaleDirection`, `CreateLocaleRequest`, `LocaleTenant`, `UpdateLocaleRequest`.
+- **`@infrastructure/i18n`** — `t()` for every user-facing error string in this file.
+- **`@infrastructure/http/response`** — `generateReject` / `generateSuccess` and the `ResponseReject` / `ResponseSuccess` union types that every function returns.
+- **`@infrastructure/http/request`** — `CallerContext` type (optional param on all three CRUD functions).
+- **`../model`** — `LocaleDocument` shape used when constructing and mutating the persisted record.
+- **`../repository`** — `localeRepository` provides `findByTag`, `create`, `save`, `deleteLocaleCascade`.
+- **`../tenants`** — `isKnownTenant` is the sole check behind both `rejectUnknownTenant` and `readableTenant`.
+- **`@infrastructure/observability/audit`** — `emitAuditEvent` / `buildAuditEvent` for the three admin audit actions.
+- **`../audit`** — `localeAuditActions` enum values (`ADMIN_LOCALE_CREATED/UPDATED/DELETED`).
 
 ## Notes
 
-- **Write vs. read tenant asymmetry is intentional.** Writes reject an unknown tenant (422) so no orphaned copy is stored; reads drop it (no filter) so a stale admin screen can still list languages. The two helpers live side-by-side in this file to keep the decision visible in one place.
-- **`deleteLanguage` is two-step by design.** A 409 is returned if `active` is still `true`; the admin must deactivate first. This costs a toggle rather than irreversible work.
-- **`updateLanguage` treats `undefined` as "unchanged."** Each field is individually guarded before assignment; a blanket spread would zero out fields the caller didn't touch.
-- **Duplicate-tag race.** The app-level check gives a friendly 409; the database unique index (E11000) is the true guard for concurrent creates and is translated to the same 409 by the shared HTTP interpreter.
-- **Audit emit is conditional.** When `context` is omitted (e.g. unit tests calling the helper directly), no audit event is produced.
+- **Write/read tenant asymmetry is intentional.** Writes get a 422 because storing copy under an unknown tenant would make it invisible to every consumer; reads silently widen to "all tenants" so a bad query-string param never blanks the UI.
+- **`updateLanguage` is field-wise, not a bulk assign.** Each property is tested against `undefined` before assignment so that a partial update never zeroes out fields the caller omitted.
+- **Delete is two-step by design.** The caller must set `active: false` first; the 409 on an active language is the guard against an accidental `DELETE` destroying translated content.
+- **Duplicate-tag race.** `createLanguage` checks `findByTag` for a friendly 409, but the real guarantee is a DB unique index — a concurrent insert that slips past the check surfaces as `E11000`, which the shared error interpreter maps to 409 as well.
+- **Audit is conditional.** All three CRUD functions skip the audit emit when `context` is `undefined`, which is how tests exercise the logic as a plain helper without requiring an HTTP caller.

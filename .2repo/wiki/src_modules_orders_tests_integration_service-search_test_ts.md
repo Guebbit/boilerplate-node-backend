@@ -2,27 +2,27 @@
 
 ## Purpose
 
-Integration tests for `orderService.search`, verifying that the derived fields (`totalItems`, `totalQuantity`, `totalPrice`) are present on every result and that all filter, pagination, and scope parameters work correctly against a real database.
+Integration tests for the read half of `orderService.search`: filtering, pagination, and the three computed totals (`totalItems`, `totalQuantity`, `totalPrice`). The write half (`create`, `update`, `remove`) is covered in `service-crud.test.ts`. This file exists to guarantee that every search result passes through the repository's `normalize` step, which is the only mechanism that attaches the derived totals.
 
 ## Key elements
 
-- **`OrderWithTotals`** — local type alias extending `OrderDocument` with the three computed fields; used to type-cast `result.items` in assertions.
-- **`describe('orderService.search — derived totals')`** — four tests asserting that `totalItems` (distinct product lines), `totalQuantity` (sum of quantities), and `totalPrice` (Σ price × qty) are present and correct, including a multi-product composite case.
-- **`describe('orderService.search')`** — tests covering default pagination, filtering by `userId` / `email` / `id` / `productId` (embedded doc), `page`/`pageSize` pagination, computed-field presence in the general path, a raw Mongoose `scope` filter (second argument), and the empty-result edge case.
+- **`setupTestDb()`** — initializes an isolated test database before all suites run.
+- **`OrderWithTotals`** — local type extending `OrderDocument` with the three computed fields; used to type-assert results because the base type doesn't include them.
+- **`describe('orderService.search — derived totals')`** — four tests asserting `totalItems` (distinct product lines), `totalQuantity` (sum of quantities), `totalPrice` (Σ price × qty), including a multi-product combination case.
+- **`describe('orderService.search')`** — covers default pagination, filters (`userId`, `email` exact-match, `id`, `productId` on embedded items), page/pageSize slicing, the `scope` parameter (raw Mongoose filter merged into `$match`), and the empty-result edge case.
 
 ## Relationships
 
-- **`src/modules/orders/service.ts`** — the module under test; calls `orderService.search(params?, scope?)`.
-- **`src/modules/orders/index.ts`** — provides the `OrderDocument` type imported at the top.
-- **`src/modules/orders/model.ts`** — not imported directly, but the tests guard behavior defined here (`applyOrderTransform` / schema `toJSON` / repository `normalize`) that populates the derived fields.
-- **`src/modules/orders/tests/factory.ts`** — supplies `createOrder` and `toOrderItem` test-data helpers.
-- **`src/modules/products/tests/factory.ts`** — supplies `createProduct`.
-- **`src/modules/users/tests/factory.ts`** — supplies `createUser`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to seed/clean the test database before any test runs.
+- **`src/modules/orders/service.ts`** — the module under test; the file imports and calls `orderService.search` exclusively.
+- **`src/modules/orders/index.ts`** — source of the `OrderDocument` type used in the local `OrderWithTotals` definition.
+- **`src/modules/orders/tests/fixtures.ts`** — provides `createOrder` and `toOrderItem` helpers for seeding orders with embedded product lines.
+- **`src/modules/products/tests/fixtures.ts`** — provides `createProduct` for seeding the products referenced by order items.
+- **`src/modules/users/tests/fixtures.ts`** — provides `createUser` for seeding users that own orders.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, called once at module scope to prepare the database.
 
 ## Notes
 
-- The leading comment block explains the *why*: `.aggregate()` bypasses Mongoose's `toJSON` transform, so the only mechanism that attaches the derived fields to a result is the repository's `normalize` step. These tests exist to catch regressions in that pipeline.
-- `setupTestDb()` is invoked at the top level of the module (not inside a `beforeAll` hook), so it runs once when the file is loaded by the test runner.
-- The second argument to `search` (`scope`) is a raw Mongoose filter object merged into the `$match` stage — distinct from the `params` object which uses the service's own filter keys (`userId`, `email`, `id`, `productId`).
-- Independent entity creation (e.g., two products) uses `Promise.all` to keep the test fast; sequential `await` chains are used when order matters.
+- The three totals are **never persisted** on the order document. They are derived by the aggregate pipeline's `normalize` step (see `model.ts` / `applyOrderTransform`). Because `.aggregate()` bypasses Mongoose's `toJSON`, the only way they appear on a result is through that normalization pass — these tests exist to catch its absence on any new read path.
+- The `scope` parameter (second argument to `search`) is a raw Mongoose filter object, not a typed search criteria; it is merged directly into the `$match` stage.
+- The type assertion `items as OrderWithTotals[]` is required in every test that reads a total; without it TypeScript will not recognize the computed fields.
+- Filtering by `email` is an **exact match**, not a substring search.

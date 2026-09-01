@@ -1,32 +1,28 @@
 # src/modules/orders/tests/integration/model.test.ts
 
 ## Purpose
-
-Integration tests that guarantee order serialization never leaks Mongoose internals (`_id`, `__v`) across every response path — hydrated documents (`toJSON`), `.aggregate()` results (mapped via `applyOrderTransform`), and scoped lookups — and that embedded product snapshots are normalized the same way. Also asserts that `productSchema` indexes do not bleed into the order collection via Mongoose's nested-schema index inheritance.
+Integration tests verifying that orders never leak `_id` or `__v` in any serialization path—hydrated `toJSON`, `.aggregate()` results, and scoped lookups—and that embedded product snapshots are normalized (id → `_id` stripped, items carry no `_id`). Also guards against Mongoose silently copying product-schema indexes onto the order schema.
 
 ## Key elements
-
-- **`describe('order serialization')`** — four tests covering:
-  - Hydrated document via `order.toJSON()` (top-level `id` present, `__v` absent, item `_id` absent, embedded product `id` present / `_id` absent).
-  - `orderService.search()` aggregate output (raw hex `id`, no `_id`, item and embedded-product `_id` absent).
-  - `orderService.search({})` aggregate output (redundant shape check on `id`/`_id`).
-  - `orderService.getById(id, { userId })` scoped aggregate (raw `id` matches expected, `_id` absent).
-- **`describe('embedded product snapshot indexes')`** — single test that reads `orderSchema.indexes()` and asserts no index path contains `product`, catching the case where Mongoose copies `productSchema` indexes onto `orderItemSchema`'s embedded `product` field.
-- **`asStub<Record<string, unknown>>(…)`** — cast helper used to inspect the actual runtime shape of service results rather than relying on the TypeScript return type.
+- **`describe('order serialization')`** — four tests asserting `_id`/`__v` absence and `id` presence across:
+  - `order.toJSON()` (hydrated document path)
+  - `orderService.search()` (aggregate path, no args)
+  - `orderService.search({})` (aggregate path, empty query)
+  - `orderService.getById(id, { userId })` (scoped aggregate path)
+- **`describe('embedded product snapshot indexes')`** — one test that inspects `orderSchema.indexes()` and asserts no index path contains `product` (prevents Mongoose from inheriting `productSchema` indexes via nested embedding).
+- **`setupTestDb()`** — called once at module level to create/tear down a fresh MongoDB instance for the suite.
+- **`asStub<T>()`** — type-assert helper (from `tests/support/stub.ts`) to cast the aggregate result into a plain `Record` for key inspection without a full type.
 
 ## Relationships
-
-- **`src/modules/orders/model.ts`** — imports `orderSchema` solely to inspect its `.indexes()` in the snapshot-index test.
-- **`src/modules/orders/service.ts`** — imports the namespace to exercise `search()` and `getById()` and verify their serialized output.
-- **`src/modules/orders/tests/factory.ts`** — provides `createOrder` and `toOrderItem` for fixture setup.
-- **`src/modules/products/tests/factory.ts`** — provides `createProduct` for the embedded-snapshot fixture.
-- **`src/modules/users/tests/factory.ts`** — provides `createUser` (orders require an owner).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` seeds a clean in-memory DB before all tests.
-- **`tests/support/stub.ts`** — `asStub` cast for raw-shape assertions.
+- **`src/modules/orders/model.ts`** — imports `orderSchema` to inspect its declared indexes in the snapshot-index test.
+- **`src/modules/orders/service.ts`** — imports `orderService.search()` and `orderService.getById()` as the system under test for aggregate/lookup serialization.
+- **`src/modules/orders/tests/fixtures.ts`** — provides `createOrder` and `toOrderItem` to build realistic order documents in the test DB.
+- **`src/modules/products/tests/fixtures.ts`** — provides `createProduct` for the embedded product snapshot.
+- **`src/modules/users/tests/fixtures.ts`** — provides `createUser` as the order owner.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` bootstraps the in-memory/Mongo test database.
+- **`tests/support/stub.ts`** — `asStub` type-assertion helper for inspecting untyped aggregate output.
 
 ## Notes
-
-- Tests 2 and 3 in the serialization block share the same `it` title ("normalizes aggregate results (search) the same way") and exercise nearly identical paths (`search()` vs `search({})`); they may have been intended as a single case.
-- The header comment documents *why* both `toJSON` and aggregation paths must be tested: aggregation output is plain JS and bypasses the Mongoose `toJSON` transformer entirely.
-- The index test intentionally lives here (module-specific schema fact) rather than in a generic cross-model index suite.
-- `orderItemSchema` sets `_id: false` by design — the OpenAPI contract for `OrderItem` is only `{ product, quantity }`.
+- Two tests in the serialization block share the identical `it` title `"normalizes aggregate results (search) the same way"` (one calls `search()`, the other `search({})`). Intentional duplication to cover the no-arg vs. empty-object code paths, but easy to overlook when running a single test by name.
+- The index-smuggling test lives here rather than in a generic index suite because it asserts a fact specific to *this module's* schema composition (`excludeIndexes` on `items.product`).
+- Aggregation results bypass Mongoose's `toJSON` virtuals entirely (plain JS objects), so normalization relies on the service's manual `applyOrderTransform` mapping—these tests pin that contract down.

@@ -2,22 +2,21 @@
 
 ## Purpose
 
-Declares the inventory module's domain event(s) by augmenting the kernel's `DomainEventMap`, so the event catalogue grows per-module without a shared enumeration file. Currently contains a single event, `inventory.reservation_expired`, plus its shared string-constant export.
+Declares the single domain event the inventory module emits (`inventory.reservation_expired`) by augmenting the kernel's `DomainEventMap`. It exists to give emitters and listeners a shared, type-safe spelling for the event name and its payload, while avoiding a circular import between `inventory` and `orders`.
 
 ## Key elements
 
-- **`DomainEventMap['inventory.reservation_expired']`** — Module-augmentation entry on `@kernel/events`. Payload is `{ orderId: string }`. Emitted *after* held stock is released, one per expired hold, by `runReservationSweep`.
-- **`RESERVATION_EXPIRED`** — Exported constant holding the literal `'inventory.reservation_expired'`. Re-exported through the barrel so emitters and listeners share one spelling instead of two independent string literals.
+- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with the `'inventory.reservation_expired'` entry (payload: `{ orderId: string }`). This is the only event in the module's catalogue.
+- **`RESERVATION_EXPIRED`** (const, exported) — The literal string `'inventory.reservation_expired'`, exported through the barrel so emitters and listeners reference one symbol instead of duplicating the string.
 
 ## Relationships
 
-- **`src/modules/inventory/service.ts`** — Contains `runReservationSweep`, which emits `inventory.reservation_expired` after freeing held units.
-- **`src/modules/inventory/index.ts`** — Barrel file; re-exports `RESERVATION_EXPIRED` so consumers import the name from the package root.
-- **`src/modules/inventory/module.ts`** — Registers the inventory module in the kernel; the event declaration here is the contract that registration surfaces to listeners.
-- The `orders` module is the intended listener (cancels the order), but it is *not* a direct import target of this file — the event exists precisely to avoid an `inventory → orders` import cycle.
+- **`src/modules/inventory/index.ts`** — Barrel file; re-exports `RESERVATION_EXPIRED` so external modules (e.g. `orders`) import the name from the module root.
+- **`src/modules/inventory/module.ts`** — Registers the module with the kernel; the natural place where the `inventory.reservation_expired` event is wired for emission.
+- **`src/modules/inventory/service.ts`** — Contains the hold-timeout logic that releases reserved units and then emits the event (the event is fired *after* the release, in past tense).
 
 ## Notes
 
-- The event is intentionally in the **past tense** (`expired`, not `expiring`): stock is already released by the time a listener runs. Listeners compensate for a completed fact; they do not approve a pending one.
-- Stock counter changes and their explanatory row are a single write (see `products/events.ts`) and are **not** modelled as events. Only the hold-timeout case is, because the cancellation action belongs to another module that already imports inventory.
-- The file declares exactly one event. If you add a second, follow the same pattern: augment `DomainEventMap`, export a `SCREAMING_SNAKE` constant, re-export through `index.ts`.
+- Stock quantity changes are intentionally **not** events here; they are a single atomic write (counter + row), so a separate event would be redundant. See `products/events.ts` for the contrast.
+- The event name uses past tense (`expired`, not `expiring`) on purpose: the listener (`orders`) reacts by *cancelling* the order, so the reservation is already gone at the moment of delivery.
+- The event exists to break an import cycle: `orders` already imports `inventory`, so `orders` listens via the kernel bus rather than importing back.

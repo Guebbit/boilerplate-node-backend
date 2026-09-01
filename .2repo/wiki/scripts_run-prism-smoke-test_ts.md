@@ -2,24 +2,25 @@
 
 ## Purpose
 
-Boots a Prism mock server against `openapi.yaml` and issues a single GET to a probe endpoint to confirm the spec is complete enough to mock. It is a contract smoke test (verifying the OpenAPI document, not application logic), run via `npm run test:prism`. It owns the lifecycle of the child `prism` process so a failed probe never leaves a dangling server.
+Boots the Prism mock server against `openapi.yaml` on a real port and issues a single HTTP probe to confirm the OpenAPI document is complete enough to serve. Run via `npm run test:prism`. It is a contract smoke test (not an app test) and is deliberately kept outside the pre-commit gate because it binds a port and owns a child process.
 
 ## Key elements
 
-- **`prism` (child process)** — Spawns `prism mock openapi.yaml --errors --port <PORT>` from the repo root. stdout/stderr are piped and accumulated into `output` for failure diagnostics.
-- **`stop()`** — Sends `SIGTERM` to the prism process if it is still running. Registered on both `process.on('exit')` and `SIGINT` (exits with code 130).
-- **`finish(code, message)`** — Always calls `stop()`, logs the result (and captured server output on failure), then calls `process.exit(code)`.
-- **`waitForBoot()`** — Polls `http://127.0.0.1:<PORT><PROBE>` every 250 ms until a response arrives or a 30 s deadline elapses. Avoids a hard-coded sleep.
-- **`main()`** — Awaits boot, issues the real probe GET, and calls `finish` with success (2xx) or failure.
-- **Configurable env vars** — `PRISM_PORT` (default `4010`) and `PRISM_PROBE` (default `/products`).
+- **`prism` (spawned child process)** — runs `prism mock openapi.yaml --errors --port <PORT>` from `REPO_ROOT` with `stdio: ['ignore','pipe','pipe']` so output is captured for diagnostics rather than streamed to the terminal.
+- **`stop()`** — sends `SIGTERM` to the Prism process if it is still running; registered on `process.exit` and `SIGINT` to guarantee cleanup.
+- **`finish(code, message)`** — single exit path: stops the server, logs the message (and captured server output on failure), then calls `process.exit`.
+- **`waitForBoot()`** — polls `http://127.0.0.1:<PORT><PROBE>` every 250 ms up to `BOOT_TIMEOUT_MS` (30 s). Returns the **first** successful `Response` rather than discarding it, since that response *is* the assertion.
+- **`main()`** — async wrapper around `waitForBoot()` + status check (`response.ok`). Wrapped in a function (not top-level `await`) because the package is CommonJS and esbuild rejects top-level await.
+- **Config constants** — `PORT` (env `PRISM_PORT`, default 4010), `PROBE` (env `PRISM_PROBE`, default `/products`), `BOOT_TIMEOUT_MS` (30 000).
 
 ## Relationships
 
-No direct imports or code-level interactions with the listed graph neighbors (`src/modules/account/module.ts`, `tests/cluster/support/cluster.ts`) are present in this file. The script's only external dependency is the `openapi.yaml` file at the repo root and the `prism` CLI binary (from `@stoplight/prism-cli`).
+No direct import or runtime dependency on the listed graph neighbors is visible in this file. Its only imports are `node:child_process` and `node:path`.
 
 ## Notes
 
-- **CommonJS constraint:** The package is CJS, where esbuild rejects top-level `await`. The entire flow is therefore wrapped in an async `main()` called with `void main()`.
-- **Piped (not inherited) stdio:** Prism's stdout/stderr are captured into a buffer so that, on failure, the accumulated output is printed alongside the error message. With `inherit`, that diagnostic context would be lost.
-- **Not in the pre-commit gate:** The script binds a real TCP port and spawns a long-lived process, so it is deliberately excluded from fast pre-commit checks.
-- **Process ownership:** The script guarantees cleanup on every exit path (success, failure, `^C`, unexpected throw) so no orphaned prism server remains.
+- **CommonJS constraint:** the top-level-await guard (`void main()`) is mandatory; removing it will break the build under esbuild.
+- **Process ownership:** the script is responsible for killing Prism on every exit path (success, failure, `SIGINT`). A failed `curl`/`fetch` will not leak the child process.
+- **Output capture trade-off:** because stdio is `pipe`, Prism logs are invisible in real time during a successful run; they are only printed via `finish()` on failure.
+- **Single-probe semantics:** only one HTTP request is made. The first `2xx` response is both the readiness signal *and* the pass assertion—there is no separate "warm-up" request.
+- **Excluded from pre-commit:** binding port 4010 makes it unsuitable for the fast, hermetic pre-commit hook.

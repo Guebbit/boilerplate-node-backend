@@ -2,41 +2,33 @@
 
 ## Purpose
 
-OpenAPI 3.0.3 contract (v2.0.0) defining the public HTTP API for the cart module: reading/updating cart lines, computing summaries, checking out into an order, and reordering from a past order. It is the single source of truth for endpoint shapes, status codes, and request/response schemas that the cart implementation must satisfy.
+OpenAPI 3.0.3 contract (v2.0.0) for the cart module. It defines the full HTTP surface a client can use to read, mutate, clear, and act on a user's shopping cart, including checkout and reorder operations. Serves as the machine-readable specification from which client SDKs, server-side validation, and documentation are generated.
 
 ## Key elements
 
-- **Paths & operations**
-  - `GET /cart` — `getCart`; returns the full cart with a computed summary.
-  - `POST /cart` — `upsertCartItem`; add or update a line (product + quantity in body).
-  - `DELETE /cart` — `clearCart`; optional `RemoveCartItemRequest` body targets one product; omitting it empties the whole cart.
-  - `PUT /cart/{productId}` — `updateCartItemById`; quantity-only update. Annotated `x-alias-of: upsertCartItem` to signal it is functionally equivalent to the POST variant.
-  - `DELETE /cart/{productId}` — `removeCartItem`; remove a single line.
-  - `GET /cart/summary` — `getCartSummary`; lightweight aggregate (no full line list).
-  - `POST /cart/checkout` — `checkout` (tag `Orders`); converts cart → order, clears cart on success. Returns `201` with `CheckoutResponseEnvelope`.
-  - `POST /cart/reorder/{orderId}` — `reorder`; copies a past order's lines back into the caller's cart, re-resolving products against the live catalogue.
-
-- **Local component schemas** (under `components/schemas`)
-  - `CartResponseEnvelope` / `CartSummaryResponseEnvelope` — envelope wrappers (`success`, `status`, `message`, `data`) around `CartResponse` / summary data.
-  - `UpsertCartItemRequest`, `UpdateCartItemByIdRequest`, `RemoveCartItemRequest` — request bodies.
-  - `CheckoutRequest`, `CheckoutResponseEnvelope` — checkout-specific shapes.
-  - (Further schemas are present in the truncated remainder of the file.)
-
-- **Security** — every operation requires `bearerAuth`.
+- **`GET /cart`** (`getCart`) — returns the full cart with computed summary.
+- **`POST /cart`** (`upsertCartItem`) — adds or updates a product line; the canonical "write a line" endpoint.
+- **`DELETE /cart`** (`removeCartItemByBody`, `x-alias-of: removeCartItem`) — removes a line by `productId` carried in the request body.
+- **`DELETE /cart/all`** (`clearCart`) — bodyless; empties the entire cart. Deliberately a separate URL so a missing body on `DELETE /cart` yields 422 instead of silently clearing.
+- **`PUT /cart/{productId}`** (`updateCartItemById`, `x-alias-of: upsertCartItem`) — sets a line's quantity by path parameter; functionally equivalent to `POST /cart`.
+- **`DELETE /cart/{productId}`** (`removeCartItem`) — removes a line by path parameter (the canonical spelling; `DELETE /cart` body form is its alias).
+- **`GET /cart/summary`** (`getCartSummary`) — lightweight cart summary without full line items.
+- **`POST /cart/checkout`** (`checkout`) — converts the cart into a new order; clears the cart on success; optional `addressId` and notes in the body.
+- **`POST /cart/reorder/{orderId}`** (`reorder`) — copies a past order's lines back into the caller's cart, re-resolving each against the current catalogue.
+- **Schemas (local `#/components/schemas/…`)** — `CartResponseEnvelope`, `UpsertCartItemRequest`, `RemoveCartItemRequest`, `UpdateCartItemByIdRequest`, `CartSummaryResponseEnvelope`, `CheckoutRequest`, `CheckoutResponseEnvelope` (content truncated; full definitions live in the file's components block).
+- **`x-alias-of` extension** — marks `removeCartItemByBody` → `removeCartItem` and `updateCartItemById` → `upsertCartItem` as alternate spellings of a single logical operation.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — the primary dependency. The cart spec `$ref`s it for:
-  - Common error responses (`401 Unauthorized`, `404 NotFound`, `422 ValidationError`, `409 Conflict`, `500 InternalError`).
-  - The `ProductIdPathParam` parameter (used on `/cart/{productId}`).
-  - Envelope base types (`EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`) and the `Id` schema (used on the `orderId` path param).
-- **`src/modules/account/openapi.yaml`** — checkout references the caller's saved addresses (`addressId`); a `404` with code `CART_ADDRESS_NOT_FOUND` is returned when the address belongs to a different user. No direct YAML `$ref` between the two files; the coupling is via the authenticated identity and address data.
-- **`src/modules/delivery/openapi.yaml`** — checkout produces an order that downstream delivery consumes. Again no direct `$ref` in this file; the relationship is sequential (cart → order → delivery) and reflected in the `CheckoutResponseEnvelope` shape.
+- **`shared/contracts/openapi.root.yaml`** — every error response (401 Unauthorized, 404 NotFound, 409 Conflict, 422 ValidationError, 500 InternalError) is `$ref`'d from this shared file, as are the `ProductIdPathParam` parameter and the `Id` schema used by `/cart/reorder/{orderId}`. This is the single source of truth for cross-module response and parameter shapes.
+- **`src/modules/account/openapi.yaml`** — graph neighbor via the checkout flow: the 404 comment references "the caller's saved addresses," tying `CheckoutRequest.addressId` to the account module's address collection. No direct `$ref` into account's spec; the link is semantic.
+- **`src/modules/delivery/openapi.yaml`** — graph neighbor in the checkout → delivery hand-off. No direct `$ref` visible in this file; the relationship is downstream (an order created here is consumed by delivery).
 
 ## Notes
 
-- `PUT /cart/{productId}` is an **alias** of `POST /cart` (see `x-alias-of`), not a distinct operation. Clients should treat them interchangeably; the PUT form is a convenience for RESTful quantity updates.
-- `DELETE /cart` is overloaded: it clears the whole cart **or** removes a single item depending on whether the (optional) request body names a `productId`. Clients must send the body explicitly to target one line.
-- `POST /cart/checkout` returns **201** (not 200) on success and **409 Conflict** when the cart is empty — a status the implementation always returned but the spec historically never declared.
-- `POST /cart/reorder/{orderId}` silently **skips** products no longer in the catalogue (removed, deactivated, hidden) and returns the cart as actually filled; if *every* line is unavailable it returns **409** with code `REORDER_UNAVAILABLE`.
-- All error responses reuse the shared-envelope pattern from `openapi.root.yaml`; module-specific error codes are carried in `errors[].code` within the shared `ValidationError` / `NotFound` / `Conflict` bodies rather than in bespoke schemas.
+- **Alias pairs, not duplicates.** `x-alias-of` exists so tooling can deduplicate; the two spellings share identical semantics. Treat `removeCartItem` (path form) and `upsertCartItem` (POST body form) as the canonical operations.
+- **404 vs 422 distinction is intentional.** A well-formed id that matches nothing → 404. A malformed/missing id (e.g. not a valid ObjectId, or a stripped body) → 422. The controller validates before querying.
+- **`DELETE /cart/all` is separate on purpose.** Prevents a body stripped in transit on `DELETE /cart` from silently clearing the entire cart.
+- **Checkout returns 201**, not 200 — it creates a new resource (the order).
+- **Reorder skips unavailable products silently.** The returned cart is the authoritative record of what actually landed; no separate "skipped items" list is declared in the visible portion.
+- **All endpoints require `bearerAuth`**; there is no public/unauthenticated surface.

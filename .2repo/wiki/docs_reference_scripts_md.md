@@ -2,27 +2,37 @@
 
 ## Purpose
 
-Reference catalog of every file in `scripts/` (the repo's own `npm run` tooling), `eslint/rules/`, and `.husky/`. It explains what each file does, how they are named, and which page to read next for workflow details. None of these scripts ship in the image.
+Reference catalogue of every file in `scripts/`, `eslint/rules/`, and `.husky/`. It explains *what each file is* (its role, its output, whether it is a CLI or a library), complementing `tools/package-scripts.md`, which explains *when* to run each `npm run` entry.
 
 ## Key elements
 
-- **Naming convention table** — Prefix encodes behavior: `check-` (verify, write nothing), `build-` (committed artifact), `generate-` (gitignored artifact), `run-` (start process), `report-` (human summary, never fails), `export-` (write data file), `sync-` (write into paired repo), no-verb (library, imported only). Abbreviations are a lint error.
-- **Contract generation** — `build-contract-bundles.ts` (CLI + CI gate), `bundle-registry.ts` (catalogue of produced documents), `bundle-kinds.ts` (two kinds + staleness logic, builds nothing), `openapi-bundle.ts`, `asyncapi-bundles.ts`, `analytics-events-bundle.ts`, `client-collections-bundle.ts`, `generate-asyncapi-types.ts`, `regenerate-artifacts.ts` (runs all generators in order).
-- **Cross-repo pairing** — `paired-frontend-path.ts` (sibling path resolution), `spec-identity.ts` (which files must match + comparison), `check-spec-identity.ts` (CLI, CI-wired, degrades to warning locally), `sync-shared-files-to-frontend.ts` (write side of identity check).
-- **Data and demo** — `run-demo-server.ts` (in-memory MongoDB demo), `export-demo-dataset.ts` (publishes dataset as API serves it).
-- **Checks** — `run-prism-smoke-test.ts` (boots Prism against `openapi.yaml`).
+- **Naming convention table** — maps verb prefixes (`check-`, `build-`, `generate-`, `run-`, `report-`, `export-`, `sync-`, no-verb) to a file's behaviour: exit-code-only, committed artifact, gitignored artifact, process driver, human summary, data write, cross-repo write, or library import.
+- **Contract generation** — `build-contract-bundles.ts` (CLI + CI gate), `bundle-registry.ts` (document catalogue), `bundle-kinds.ts` (two bundle kinds + staleness comparison), `openapi-bundle.ts`, `asyncapi-bundles.ts`, `client-collections-bundle.ts`, `generate-asyncapi-types.ts` (writes `src/types/asyncapi.generated.ts`), `regenerate-artifacts.ts` (ordered top-level generator).
+- **Cross-repo pairing** — `paired-frontend-path.ts` (sibling path resolution), `spec-identity.ts` (which files must match + comparison), `check-spec-identity.ts` (CI CLI), `sync-shared-files-to-frontend.ts` (write side).
+- **Data & demo** — `run-demo-server.ts` (in-memory MongoDB demo), `export-demo-dataset.ts` (publishes the demo dataset with a check mode).
+- **Checks** — `run-prism-smoke-test.ts` (Prism smoke test against `openapi.yaml`).
 - **Mutation testing** — `run-mutation-tests.ts` (Stryker wrapper), `mutation-baseline.ts` (per-file ratchet), `check-mutation-baseline.ts` (compare / record CLI).
-- **Diagnostics** — `report-test-results.ts` (failure → module mapping), `report-heap-summary.ts` (V8 heap by object kind), `report-heap-retainers.ts` (retainer edges for one object kind).
-- **Repo lint rules** — Two custom ESLint rules (content truncated in source; were previously tests, now enforce at keystroke).
+- **Diagnostics** — `report-test-results.ts`, `report-heap-summary.ts`, `report-heap-retainers.ts` (all `report-` prefix; never fail, never gate).
+- **Repo lint rules** — two custom rules in `eslint/rules/` promoted from former tests to fix-at-keystroke enforcement.
 
 ## Relationships
 
-No graph neighbors are listed. The page cross-references several sibling docs (`contracts.md`, `package-scripts.md`, `pairing-and-ports.md`, `asyncapi-workflow.md`, `openapi-workflow.md`, `analytics.md`, `regenerating.md`, `demo-profile.md`, `data.md`, `contract-testing.md`, `mutation-testing.md`, `testing-and-docs.md`) as "read next" targets, but those are documentation links, not code dependencies.
+- **`tools/package-scripts.md`** — the companion page; this page is "what each file is," that page is "what the user types and when."
+- **`api/openapi-workflow.md`** / **`api/asyncapi-workflow.md`** — `openapi-bundle.ts` and `asyncapi-bundles.ts` / `generate-asyncapi-types.ts` are the implementation of the workflows described there.
+- **`api/contract-fragmentation.md`** — `build-contract-bundles.ts` and `bundle-kinds.ts` implement the fragmentation model.
+- **`api/regenerating.md`** — `regenerate-artifacts.ts` is the single entry point described on that page.
+- **`reference/contracts.md`** — `bundle-registry.ts` and `client-collections-bundle.ts` operate on the documents catalogued there.
+- **`reference/data.md`** — `export-demo-dataset.ts` produces the dataset described there.
+- **`tools/mutation-testing.md`** — the three mutation-test scripts are the mechanism behind that tool page.
+- **`tools/contract-testing.md`** — `run-prism-smoke-test.ts` is the response-side smoke test.
+- **`tools/demo-profile.md`** — `run-demo-server.ts` and `export-demo-dataset.ts` implement the demo profile.
+- **`reference/src-modules.md`** — `generate-asyncapi-types.ts` writes into `src/types/`, tying script output to the source tree.
+- **`reference/index.md`** — this page is one entry in the reference section index.
 
 ## Notes
 
-- This file is a **documentation page**, not an executable script. It mirrors the `npm run` entry names so the mapping between CLI command and implementation file is unambiguous.
-- The `report-` prefix scripts are explicitly documented as "never fail" — they are diagnostic aids, not gates.
-- `check-spec-identity.ts` degrades to a warning (not an error) when the paired frontend is absent locally, to avoid blocking commits on a half-cloned pair.
-- `regenerate-artifacts.ts` is the single entry point to run all generators in the correct dependency order; individual generators should not be invoked directly after editing sources.
-- The paired frontend and `boilerplate-php-laravel-backend` use the same words for equivalent operations (Artisan commands are the StudlyCase form of these script names).
+- `report-` scripts **never fail** (exit 0 regardless); they exist solely to produce a human-readable summary. Do not wire them into CI as gates.
+- The frontend's corresponding Artisan/CLI commands use the same verb nouns in StudlyCase; keeping names aligned across repos is a convention, not an automatic mechanism.
+- Abbreviated filenames are a lint error (`unicorn/prevent-abbreviations`); use full words (`directory`, not `dir`).
+- `build-` and `generate-` differ only in whether the output is committed or gitignored; choosing the wrong prefix misclassifies the artifact in CI.
+- `check-spec-identity.ts` degrades to a warning (not a failure) locally when the sibling checkout is missing, so a half-cloned pair can still commit.

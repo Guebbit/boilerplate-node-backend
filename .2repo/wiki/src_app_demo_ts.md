@@ -2,24 +2,28 @@
 
 ## Purpose
 
-HTTP control surface for the demo profile, mounted only when `NODE_DEMO=true` (i.e. under `npm run demo`). Exposes two unauthenticated routes that the frontend e2e suite calls to obtain a deterministic starting state (`POST /__demo/reset`) and to read simulated outbound email (`GET /__demo/emails`).
+Control surface for the demo profile, mounted exclusively when `NODE_DEMO=true` (via `npm run demo`). Exposes two unauthenticated Express routes used by the paired frontend's e2e suite: one to reseed the in-memory database from module fixtures and clear the email outbox, and one to read back captured "sent" emails.
 
 ## Key elements
 
-- **`runDemoSeed(reset: boolean)`** – Drops the in-memory database (when `reset` is true), then runs every enabled module's `seeds()` in parallel, and finally clears the demo outbox.
-- **`installDemo(app: Express)`** – Registers the two `/__demo/*` routes on an Express instance.
-- **`isDemoMode`** – Re-exported from `@infrastructure/adapters/demo-outbox` for downstream consumers.
+- **`runDemoSeed(reset: boolean)`** — If `reset` is true, drops the database via `connection.dropDatabase()`; then runs every enabled module's `seeds?.()` in parallel; finally calls `clearDemoOutbox()`. Returns a `Promise<void>`.
+- **`installDemo(app: Express)`** — Registers the two demo routes on the given Express app. Only ever called in demo mode.
+- **`POST /__demo/reset`** — Calls `runDemoSeed(true)`; responds `204` on success or `500 { success: false }` on failure (logged via `logger.error`).
+- **`GET /__demo/emails`** — Responds with `{ emails: readDemoOutbox() }`.
+- **`isDemoMode`** (re-export) — Convenience re-export from `demo-outbox` so consumers can import from this module.
 
 ## Relationships
 
-- **`src/modules.ts`** – Imports `enabledModules`; `runDemoSeed` iterates that list to collect and invoke each module's optional `seeds()`.
-- **`src/infrastructure/adapters/demo-outbox.ts`** – Imports `clearDemoOutbox` / `readDemoOutbox` for the reset and email-reading routes; source of the re-exported `isDemoMode`.
-- **`src/infrastructure/runtime/database.ts`** – Imports `connection` to call `dropDatabase()` during reset.
-- **`src/infrastructure/adapters/logger.ts`** – Imports `logger` to log a `demo reset failed` error on the 500 path.
-- **`package.json`** – The `npm run demo` script (which sets `NODE_DEMO=true`) is the only context in which this module is mounted.
+- **`src/modules.ts`** — Imports `enabledModules`; `runDemoSeed` iterates over this array to invoke each module's `seeds`.
+- **`src/infrastructure/runtime/database.ts`** — Imports `connection` to call `dropDatabase()` during a reset.
+- **`src/infrastructure/adapters/demo-outbox.ts`** — Imports `clearDemoOutbox` and `readDemoOutbox`; re-exports `isDemoMode`.
+- **`src/infrastructure/adapters/logger.ts`** — Imports `logger` to record reset failures.
+- **`src/app.ts`** — Upstream caller that invokes `installDemo(app)` when the demo profile is active (this file lives under `src/app/` as its mount point).
+- **`package.json`** — Defines the `demo` script that sets `NODE_DEMO=true` and starts the server in demo mode.
 
 ## Notes
 
-- Routes are deliberately unauthenticated; the profile only ever binds beside an in-memory database created seconds earlier by the demo script, so there is no external exposure to protect.
-- The demo profile runs with the cache disabled, so `runDemoSeed` skips the cache flush that the CLI counterpart (`db/demo/index.ts --reset`) performs.
-- `runDemoSeed(false)` is the first-boot path: it seeds without dropping, leaving whatever schema the runtime created intact.
+- Routes are intentionally unauthenticated: the demo profile binds only beside a database that `npm run demo` just created, so there is no pre-existing state to protect.
+- The `_request` parameter is unused (underscore-prefixed) in both handlers; the routes carry no per-request context.
+- `runDemoSeed(false)` skips the `dropDatabase()` step, supporting a first-boot seed where no schema exists yet.
+- The docstring references `db/demo/index.ts --reset` as the CLI equivalent; the two paths share the same seed-walk logic but the demo route omits the cache flush because the demo profile runs with caching disabled.

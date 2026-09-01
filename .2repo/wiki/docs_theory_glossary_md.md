@@ -2,24 +2,23 @@
 
 ## Purpose
 
-Defines the ubiquitous language of every bounded context (module) in the codebase, with each term scoped to the module that owns it. It exists to make explicit the meaning and constraints behind domain terms that identifiers alone cannot carry, and to enforce the DDD principle that the same word may legitimately mean different things in different contexts.
+Defines the ubiquitous-language terms **per bounded context** (module), capturing the meaning and constraint behind each identifier that the code itself cannot express. It exists to make cross-module divergence of terminology explicit and intentional, rather than hidden in a shared dictionary.
 
 ## Key elements
 
-- **Per-module term tables** — Each section (`account`, `audit-logs`, `cart`, `delivery`, `feedback`, `inventory`, `locales`, `observability`, `orders`, `payments`, `products`, …) presents a two-column table: the term and its meaning *in that module only*.
-- **Deliberate divergence** — The same word is intentionally given different definitions across modules (e.g., "Soft delete" in `products` vs `users`) rather than being collapsed into one entry.
-- **Tip callout** — Points out that the real ubiquitous language lives in code identifiers; this page supplies the semantic layer an identifier cannot express.
-- **Cross-reference** — Links to `strategic-ddd.md#_3-ubiquitous-language-per-context-not-per-app` for the rationale behind per-context (not per-app) language boundaries.
+- **Per-module term tables** — Each section (`account`, `audit-logs`, `cart`, `delivery`, `feedback`, `inventory`, `locales`, `observability`, `orders`, `payments`, `products`, …) lists the identifiers that module uses with a module-specific definition and the constraint behind it.
+- **Framing tip** — A callout establishing that the identifiers in code *are* the ubiquitous language; this page carries only the meaning and constraint an identifier cannot.
+- **Explicit divergence examples** — e.g. `softDelete` means "withdrawal from sale" in `products` but "destroyed account" in `users`; `Availability` is a pre-flight check in `cart` and a re-check inside the write in `inventory`.
+- **Cross-references within definitions** — Terms reference sibling modules (e.g. `cart` → `inventory`, `orders` → `payments` → `inventory`, `delivery` → `cart`).
 
 ## Relationships
 
-- **`docs/theory/index.md`** — This glossary is listed as one of the theory pages in the section index; it is a leaf document that the index points to.
-- **`docs/theory/strategic-ddd.md`** — The glossary explicitly defers to this file for *why* language is scoped per bounded context. The strategic DDD page provides the theoretical justification; the glossary is the concrete application of that rule.
-- **`docs/theory/layers.md`** — The glossary's module list (`account`, `cart`, `inventory`, `orders`, `payments`, `products`, etc.) mirrors the layer/context boundaries that `layers.md` describes structurally. The glossary is the language-level counterpart to the structural documentation.
+- **`docs/theory/strategic-ddd.md`** — This page links out to the *Ubiquitous Language* section of that document to justify *why* the glossary is split per context rather than shared. The strategic doc provides the architectural rationale; this page is the concrete vocabulary.
+- **`docs/theory/domain-layer.md`** — The domain-layer doc describes the structural layout of `domain/` subdirectories (e.g. `domain/rates.ts`, `domain/lifecycle.ts`, `domain/transitions.ts`) that several glossary entries reference as the source-of-truth location for closed sets and transition tables.
 
 ## Notes
 
-- The glossary is **not** a code artifact; it has no exports, classes, or runtime behavior. It is purely a reference document.
-- The `products` section is truncated in the current content snapshot; additional modules may be present in the full file.
-- Conventions used in definitions: bold for the term, backticks for code identifiers, and parenthetical file pointers (e.g., `domain/rates.ts`, `domain/transitions.ts`, `domain/lifecycle.ts`) to anchor a definition to a specific source file.
-- The file uses the `::: tip` callout syntax (VitePress / Docusaurus), so it is expected to be rendered in a documentation framework, not read as raw Markdown in isolation.
+- The glossary is **deliberately not a flat list**. The same word may appear in multiple modules with different definitions; that is the design, not a bug.
+- Several entries encode invariants that are otherwise only visible in code (e.g. `Available` is "derived everywhere, stored nowhere"; `Account deletion` is always two steps; `Confirm` can only be set by `system` in the lifecycle table). Treat these as design constraints, not just descriptions.
+- The `products` section is truncated in the stored copy; verify against the full file before relying on a complete product vocabulary.
+- `locales` distinguishes *Language* (a DB registration) from *Scope* (what the API actually does with it) — a language row in the DB does not by itself enable API responses in that language.

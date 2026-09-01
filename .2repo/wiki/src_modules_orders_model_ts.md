@@ -2,40 +2,36 @@
 
 ## Purpose
 
-Defines the Mongoose schema, document interface, and serialization transform for order documents. It is the single source of truth for what an order persists (product snapshots, shipping snapshot, status, soft-delete flag) and how it is shaped for the API (derived totals, `_id` cleanup) before every response leaves the module.
+Defines the Mongoose schema and model for persisted order documents, plus the serialization transform that derives wire-only totals (`totalItems`, `totalQuantity`, `totalPrice`) from embedded line items. Products and shipping addresses are stored as embedded snapshots (no `ref`) so that later catalogue or address-book edits never rewrite purchase history.
 
 ## Key elements
 
-- **`OrderDocumentItem`** — interface for one embedded line item: `product: ProductSnapshot` + `quantity`. Product is a snapshot (embedded, no ref) so an order records what was bought, not the current catalogue.
-- **`OrderDocument`** — the Mongoose document type. Omit-lists wire-only fields (`totalItems`, `totalQuantity`, `totalPrice`, `id`) and redeclares `userId` as `ObjectId`, `status` as `OrderStatus`, `items` as `OrderDocumentItem[]`, and date fields as `Date`.
-- **`OrderModel`** — `Model<OrderDocument, unknown, unknown>` alias for typed model usage.
-- **`orderItemSchema`** — embedded sub-schema (`_id: false`), stores `product` (via `productSchema`, `excludeIndexes: true`) and `quantity`.
-- **`orderSchema`** — top-level schema: `userId`, `email`, `items`, `status` (enum, default `pending`), `notes`, `shippingMethod`/`shippingCost` (frozen at checkout), `shippingAddress` (inline snapshot sub-schema), `deletedAt` (soft-delete), `timestamps: true`.
-- **`orderSchema.index(...)` × 3** — explicit index definitions: `(userId, createdAt↓)`, `(email)`, `(userId, deletedAt)`. Names are hard-coded to match existing DB indexes.
-- **`applyOrderItems`** (internal) — strips residual `_id` from items and calls `applyProductTransform` on each embedded product.
-- **`applyOrderTotals`** (internal) — computes `totalItems`, `totalQuantity`, `totalPrice` via `sumLineItems` / `orderTotal`.
-- **`applyOrderTransform`** — exported; wraps `applySerialization(orderSchema, …)` with an `after` hook that runs the two functions above. Used by every order response path and by aggregate results that bypass `toJSON`.
-- **`orderModel`** — the registered Mongoose model (`'Order'`).
+- **`OrderDocumentItem`** — interface for a single embedded order item: `{ product: ProductSnapshot, quantity: number }`.
+- **`OrderDocument`** — Mongoose document interface; overrides `userId` (ObjectId), `status`, `items`, `deletedAt` (Date, not ISO string), and omits the three total fields that are derived, not stored.
+- **`OrderModel`** — `Model<OrderDocument, …>` alias for typing the registered model.
+- **`orderItemSchema`** — sub-document schema with `_id: false` and `excludeIndexes: true` on the embedded `product` field to prevent catalogue indexes from leaking onto every order's items.
+- **`orderSchema`** — top-level schema: `userId`, `email`, `items`, `status` (enum, default `pending`), `notes`, `shippingMethod`, `shippingCost` (default 0, min 0), `shippingAddress` (inline sub-schema, `_id: false`), `deletedAt`, plus `timestamps: true`.
+- **`applyOrderItems`** — strips residual `_id` from embedded items (pre-`_id:false` documents) and normalizes each product snapshot via `applyProductTransform`.
+- **`applyOrderTotals`** — computes `totalItems`, `totalQuantity`, and `totalPrice` (via `orderTotal`) and attaches them to the serialized object.
+- **`applyOrderTransform`** — composes the shared `applySerialization(orderSchema, …)` with the two above as the `after` hook. Exported so aggregate pipelines (which bypass `toJSON`) can route through the same logic.
+- **`orderModel`** — the registered Mongoose model (`model('Order', orderSchema)`).
 
 ## Relationships
 
-- **`@infrastructure/persistence/serialize`** — provides `applySerialization`, the shared base that handles `_id → id` and `__v` removal; `applyOrderTransform` layers order-specific work on top.
-- **`@modules/products`** — imports `productSchema` (embedded into `orderItemSchema`), `applyProductTransform` (called per-item during serialization), and the `ProductSnapshot` type.
-- **`./domain/totals`** — imports `sumLineItems`, `orderTotal`, and the `LineItem` type used by `applyOrderTotals`. The same `orderTotal` function is also called by the payment intent and confirmation email, keeping the three in agreement.
-- **`@types`** — imports `OrderStatus` (enum for the schema) and `Order` (the API contract type that `OrderDocument` extends-and-overrides).
-- **`./service` / `./repository` / `./factory`** — consume `orderModel`, `OrderDocument`, `OrderModel`, and `applyOrderTransform` for CRUD, queries, and test fixtures.
-- **`@modules/cart/services/checkout`** — creates order documents (via the factory/service) with the shipping snapshot fields defined here.
-- **`@modules/payments/service`** — reads `orderTotal` from `./domain/totals` (same source `applyOrderTotals` uses) to create payment intents.
-- **`./tests/unit/serialization-guards.test.ts`** — unit-tests `applyOrderTransform` output shape.
-- **`./tests/integration/model.test.ts`** — integration-tests the schema against a real Mongo instance.
+- **`@infrastructure/persistence/serialize.ts`** — supplies `applySerialization`, the wrapper that performs the generic `_id`→`id` / `__v` strip and then calls this file's `after` hook.
+- **`./domain/totals.ts`** — provides `sumLineItems`, `orderTotal`, and the `LineItem` type used by `applyOrderTotals`.
+- **`@modules/products`** — supplies `productSchema` (embedded, no ref), `applyProductTransform`, and the `ProductSnapshot` type.
+- **`./repository.ts`** — consumes `orderModel` and `applyOrderTransform` for queries and result normalization.
+- **`./service.ts`** — owns business logic; receives the model from the repository layer.
+- **`src/modules/cart/services/checkout.ts`** — creates order documents (the source of the "frozen at checkout" snapshots).
+- **`src/modules/payments/service.ts`** — calls `orderTotal` (via `./domain/totals`) for the same amount that the transform derives, keeping the payment intent and the response consistent.
+- **`./tests/integration/model.test.ts`, `./tests/unit/serialization-guards.test.ts`, `./tests/unit/schema-contract.test.ts`** — verify schema shape, transform output, and contract conformance.
 
 ## Notes
 
-- **Product is a snapshot, never a reference.** `orderItemSchema` declares `product: productSchema` with no `ref`, so `populate()` is irrelevant and no "un-joined" state exists. Changing a product in the catalogue does not retroactively alter existing orders.
-- **`excludeIndexes: true`** on the embedded `product` field prevents Mongoose from copying the catalogue's indexes onto `items.product.*` in the orders collection. Without it, every order write would maintain catalogue search indexes it never uses.
-- **Totals are never stored.** `totalItems`, `totalQuantity`, `totalPrice` are derived at serialization time in `applyOrderTotals`. They are omitted from `OrderDocument` to avoid implying a stored field.
-- **`shippingMethod` is optional, `shippingCost` defaults to 0.** Shipping is not required to buy; the cost is always a number. This keeps `orderTotal`'s optional-argument tolerance a guard against malformed docs, not a live contract.
-- **Soft delete via `deletedAt` only.** Orders have no `active` flag. Non-admin reads exclude rows where `deletedAt` is set (`visibleScope` in the repository); admin reads pass no scope.
-- **Index names are explicit.** Mongo identifies indexes by name as much as by key; using auto-derived names would collide with existing DB indexes and fail at startup.
-- **`_id: false`** on `orderItemSchema` and the inline `shippingAddress` sub-schema — neither needs its own id (OpenAPI `additionalProperties: false`). Pre-existing documents may still carry a BSON `_id` on items, which `applyOrderItems` strips.
-- **`totalItems` name collision** with `PaginationMeta.totalItems` is pre-existing and unrelated: here it is line-item count per order, there it is the order count in a paginated list.
+- **Totals are never persisted.** They are computed at serialization time so every code path (list, get, create, update, aggregates) agrees on one formula. Declaring them on `OrderDocument` would falsely imply a stored column.
+- **`excludeIndexes: true`** on `product` is load-bearing: without it Mongoose would replicate the catalogue's indexes into every order's `items.product.*`, bloating collections with indexes on frozen data.
+- **`deletedAt` is the sole soft-delete mechanism.** There is no `active` boolean. The repository's `visibleScope` filters on its absence; admins omit the scope entirely.
+- **`shippingCost` defaults to 0** while `shippingMethod` may be absent. This asymmetry is intentional: the cost is always a number (keeps `orderTotal`'s optional-argument check as a guard, not a contract), but the method id is only present when one was chosen.
+- **Index names are explicit** (`orders_userId_createdAt`, `orders_email`, `orders_userId_deletedAt`) rather than Mongoose-derived, so that a key change with the same name fails at startup instead of silently creating a duplicate.
+- **`applyOrderTransform` is exported** specifically for aggregate pipelines, which skip Mongoose's `toJSON` hook and therefore need the transform applied manually (see `create-repository`'s `normalize`).

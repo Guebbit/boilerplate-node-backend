@@ -2,25 +2,22 @@
 
 ## Purpose
 
-Jest configuration consumed exclusively by Stryker (`npm run test:mutation`). It extends the base `jest.config.js` but swaps the ts-jest transform for `@swc/jest` so that repeated in-process Jest invocations (one per mutant) do not accumulate TypeScript LanguageService caches in memory. The goal is to make the mutation run finish without OOM-killing workers.
+Jest configuration consumed exclusively by Stryker mutation testing (`npm run test:mutation`). It exists to swap the ts-jest transform for `@swc/jest` so that Stryker's repeated in-process runs don't accumulate ts-jest's TypeScript LanguageService cache in memory, which would OOM the worker. The mutation run is the primary quality signal for the test suite; the coverage floors in `jest.config.js` are only a fast proxy.
 
 ## Key elements
 
-- **`...baseConfig`** — spreads the shared settings from `jest.config.js` (testMatch, moduleFileExtensions, setup files, etc.), then overrides only what mutation needs.
-- **`preset: undefined`** — explicitly clears the ts-jest preset so no ts-jest transform is registered under a different key.
-- **`maxWorkers: 1`** — collapses the worker pool. Stryker already runs multiple test runners in parallel (`STRYKER_CONCURRENCY`); nesting a multi-worker pool under each runner multiplies load and memory. One worker per runner keeps the memory budget honest and removes a level of parallelism that `coverageAnalysis: "perTest"` makes unnecessary (each mutant touches only one or two test files).
-- **`transform`** — replaces ts-jest with `@swc/jest`:
-  - `jsc.parser.syntax: 'typescript'` — strips types, emits JS. No type-checking, no cross-file state.
-  - `jsc.target: 'es2022'` — matches the app's compile target.
-  - `module.type: 'commonjs'` — downlevels `import()` to `require()` for Jest's CJS runtime.
+- **`baseConfig`** — `require('./jest.config')`; the shared base this file extends.
+- **`preset: undefined`** — explicitly nullifies the ts-jest preset inherited from the base so no ts-jest transform is re-installed under a different key.
+- **`maxWorkers: 1`** — forces a single Jest worker per Stryker runner. Stryker's `STRYKER_CONCURRENCY` is the only intended parallelism axis; the base config's `logicalCPUs - 2` would be *multiplied* by Stryker's runner count, causing context-switch thrash (measured: load 31.8, ~55 s/mutant on 32 cores vs. 78 s for the whole suite single-threaded).
+- **`transform`** — replaces the ts-jest entry with `@swc/jest`, configured for TypeScript syntax, `es2022` target, and CommonJS module output (so dynamic `import()` calls work under Jest's CJS runtime).
 
 ## Relationships
 
-- **`jest.config.js`** (required via `require('./jest.config')`): this file is a thin overlay. Every setting not explicitly overridden here comes from that file. If the base config adds a new transform, preset, or worker-count assumption, this file must be re-audited to confirm it still makes sense under Stryker's single-process, many-invocation model.
+- **`jest.config.js`** — sole graph neighbor. This file spreads it as its base and overrides `preset`, `maxWorkers`, and `transform`. Everything else (test paths, coverage settings, reporters, etc.) is inherited unchanged.
 
 ## Notes
 
-- **Type-safety is not lost.** `npm run ts-check` (in `npm run complete`) type-checks the whole project before any mutation run. A mutant changes an expression, not a signature, so per-mutant type-checking would be redundant.
-- **`import type` is mandatory.** swc transpiles file-by-file with no cross-file type information; a bare `import { SomeType }` will emit a real `require` for a value that doesn't exist at runtime. The codebase already enforces this via `verbatimModuleSyntax` in `tsconfig.json` — preserve that convention when adding files.
-- **Frontend mirror.** `vitest.config.mutation.ts` plays the identical role on the frontend. Keep the two in sync when Stryker or the test-runner setup changes.
-- **Tuning knob.** Parallelism lives in `STRYKER_CONCURRENCY` (`.env`), not here. Do not raise `maxWorkers` to "speed things up"; the measured failure mode (4 × 30 workers, load 31.8, ~55 s/mutant vs. 78 s for the whole suite single-threaded) is exactly what this file prevents.
+- **`import type` is mandatory.** swc transpiles file-by-file with no cross-file type knowledge. A type-only import written as a plain `import` will emit a real `require()` for a symbol that doesn't exist at runtime. The codebase already enforces this via `verbatimModuleSyntax` in `tsconfig.json`; keep it that way.
+- **No type-safety cost.** `npm run ts-check` runs once before mutation testing. A mutant changes an expression, not a signature, so per-mutant re-type-checking is pure overhead.
+- **Frontend mirror.** The equivalent config on the frontend lives at `vitest.config.mutation.ts` for the same reason.
+- **`coverageAnalysis: "perTest"`** (inherited) narrows each mutant to the tests that actually reach it, which is why a single worker is sufficient — there is no sub-file parallelism to exploit.

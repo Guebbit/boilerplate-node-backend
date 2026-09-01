@@ -2,35 +2,34 @@
 
 ## Purpose
 
-Service-layer functions for the account module's address book. Every mutating endpoint returns the **full** book (`{ addresses }`) rather than a single entry, because the invariant "exactly one default" is a property of the list. Also provides the address-resolution helper that cart checkout consumes.
+Service layer for the account's address book: CRUD operations plus a checkout lookup, all scoped to a single user. It exists as a slice of the account service (`./index`) rather than a standalone namespace so the account's two aggregates (auth + addresses) share one service handle. The file owns the "exactly one default" invariant at the list level and maps the repository's document shape to the OpenAPI wire contract.
 
 ## Key elements
 
-- **`AddressesView`** — interface matching the OpenAPI `AddressesResponse` shape: `{ addresses: Address[] }`.
-- **`toAddress`** / **`toView`** — internal mappers from DB `AddressItem` → public `Address`, and from `AddressBookDocument | null` → `AddressesView`. Omit `label`/`phone` keys entirely when undefined (not set to `null`).
-- **`addressesGet`** — fetches the user's book. Absence is the same as emptiness: always resolves to an empty view, never 404.
-- **`addressAdd`** — inserts an entry; `default` defaults to `false` if the caller omits it. The repository owns the default-slot logic.
-- **`addressUpdate`** — patches one entry by id. A foreign or bogus id is indistinguishable → 404 reject.
-- **`addressRemove`** — deletes one entry; repository re-assigns the default slot.
-- **`addressForCheckout(userId, addressId?)`** — resolves the ship-to address. Returns `AddressItem | null | undefined`: `undefined` = "no addresses, none named" (valid, address not required); `null` = "named an address that isn't theirs / doesn't exist" (checkout must refuse). Consumed by `cart/services/checkout.ts`.
-- **`addressesDeleteByUserId`** — cascade-delete hook subscribed by `module.ts` on account removal.
+- **`AddressesView`** — The response shape (`{ addresses: Address[] }`) matching the `AddressesResponse` schema in `openapi.yaml`.
+- **`toAddress` / `toView`** (internal) — Mappers from `AddressItem` → `Address` (rewrites `_id` → `id`, omits optional fields rather than emitting `undefined`) and `AddressBookDocument | null` → `AddressesView`.
+- **`addressesGet(userId)`** — Returns the full book; absence and empty book are the same state (empty array, never 404).
+- **`addressAdd(userId, entry)`** — Inserts an entry; repository decides the default slot. Returns `ResponseSuccess<AddressesView> | ResponseReject`.
+- **`addressUpdate(userId, addressId, changes)`** — Modifies one entry in the caller's book; foreign or bogus ids produce the same 404 reject.
+- **`addressRemove(userId, addressId)`** — Deletes one entry; repository maintains the one-default invariant.
+- **`addressForCheckout(userId, addressId?)`** — Resolves the ship-to address for checkout. Returns `AddressItem | null | undefined`: `undefined` = no book / no named id (not required); `null` = caller named an id that doesn't exist or isn't theirs (checkout must refuse).
+- **`addressesDeleteByUserId(userId)`** — Hard-delete hook called by the module's account-deletion subscription.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `account/repository.ts` | All six exported functions call `addressBookRepository` for the actual read/write. |
-| `account/model.ts` | Imports `AddressBookDocument` and `AddressItem` (DB-level shapes). |
-| `@types/index.ts` | Imports public `Address`, `AddressInput`, `UpdateAddressRequest`. |
-| `@infrastructure/http/response.ts` | Wraps results with `generateSuccess` / `generateReject`. |
-| `@infrastructure/i18n/index.ts` | Calls `t('account.addresses.*')` for localized success/error messages. |
-| `account/services/index.ts` | Re-exports these six functions as members of the single `accountService` handle. |
-| `account/module.ts` | Subscribes `addressesDeleteByUserId` to the account-deletion event. |
-| `cart/services/checkout.ts` | Calls `addressForCheckout` (via the `accountService` barrel) to resolve the shipping address. |
+- **`src/modules/account/repository.ts`** — Sole data-access dependency (`addressBookRepository`); all reads/writes go through it.
+- **`src/modules/account/model.ts`** — Imports `AddressBookDocument` and `AddressItem` (the stored shape this file maps from).
+- **`src/types/index.ts`** — Imports `Address`, `AddressInput`, `UpdateAddressRequest` (the wire/API shapes).
+- **`src/infrastructure/http/response.ts`** — Uses `generateSuccess` / `generateReject` for the standard success/reject envelope.
+- **`src/infrastructure/i18n/index.ts` + `context.ts`** — Pulls `t` for user-facing messages (`account.addresses.*`).
+- **`src/modules/account/services/index.ts`** — Re-exports the six public functions as members of `accountService`; this file has no standalone namespace object.
+- **`src/modules/account/module.ts`** — Subscribes `addressesDeleteByUserId` to the account-deletion event.
+- **`src/modules/cart/services/checkout.ts`** — Consumes `addressForCheckout` to resolve the ship-to address.
 
 ## Notes
 
-- **No standalone namespace object.** The six exports are flat; they are grouped into `accountService` in `./index` rather than living under an `addressesService` sub-object. This is a deliberate one-layer-over-two-collections design (see the doc-comment in `./index`).
-- **`addressesGet` never rejects / 404s.** A user with no book and a user whose book is empty both get `{ addresses: [] }`.
-- **`addressForCheckout` tri-state is load-bearing.** Collapsing `null` and `undefined` would let a stale address id silently downgrade to "no address," causing a mis-shipment.
-- **Default slot is the repository's concern.** The service never reassigns `default` itself; `addEntry` / `removeEntry` in the repository enforce the one-default rule.
+- **`undefined` vs `null` in `addressForCheckout` is intentional and load-bearing.** Collapsing them would let a stale address id silently downgrade to "no address" instead of forcing checkout to refuse. Callers must branch on both.
+- **Optional fields are omitted, not set to `undefined`, in the wire output** (conditional spread in `toAddress`). This matters for JSON serialization: the key is absent rather than present-with-undefined.
+- **`addressAdd` defaults `default` to `false`** if the caller omits it; the repository still owns the one-default slot decision.
+- **No 404 on GET.** An absent book and an empty book are indistinguishable by design; only `update` and `remove` can 404.
+- **These exports are not meant to be imported directly** — they live under `accountService` in `./index`. Importing from this file path is possible but bypasses the module's single service handle.

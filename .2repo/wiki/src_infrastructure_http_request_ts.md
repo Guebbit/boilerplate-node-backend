@@ -1,32 +1,29 @@
 # src/infrastructure/http/request.ts
 
 ## Purpose
-
-Owns the multi-source input-resolution rules for HTTP endpoints so controllers don't re-assemble them. A single endpoint may accept the same field from a route param, query string, or JSON/form body; this module centralises the precedence, decoding, and collapse rules behind one entry point, `readInput`, keyed by a named "surface" declaration per route.
+Defines the single entry point (`readInput`) and all supporting rules for extracting and decoding a route's input from the three possible transport locations (URL params, query string, JSON/multipart body). It exists so that controllers never re-assemble source-precedence, type-coercion, or `anyTrue` logic themselves — one declaration object per route fully describes what is read, from where, and how it is decoded.
 
 ## Key elements
-
-- **`RequestSurface`** (exported type) — closed set of route shapes: `'search' | 'list' | 'write' | 'delete' | 'path'`. Determines which sources are read and in what order.
-- **`SURFACE_SOURCES`** — maps each surface to its ordered source list (e.g. `search → ['body','query']`, `delete → ['params','query','body']`).
-- **`RequestInputDeclaration<TId>`** (exported interface) — per-route config: `surface`, `ids`, `booleans`, `anyTrue`, `numbers`, `stringArrays`. Describes *what* to decode, not *where* (surface handles that).
-- **`anyTrue`** (field on declaration) — fields resolved by OR across all sources rather than by precedence. Exists for flags like `hardDelete` where a default-shaped `false` must not outrank an explicit `true`.
-- **`readInput<TId>`** (exported function) — the single entry point. Takes an Express `Request` + a declaration, returns a `Record<string, unknown>` (with declared ids typed as `string`). Handles precedence fallback, explicit-`undefined` stripping, per-source type decoding, and `anyTrue` OR logic.
-- **`parseFormBoolean` / `parseFormNumber`** (internal) — decode string-transported values. Unrecognisable values are returned untouched so the downstream Zod schema produces the contract's own 422 message.
-- **`getRequestBody`** (internal) — reads `request.body` as `Record<string, unknown>`, guarding against Express 5 leaving it `undefined`.
-- **`isMultipartRequest`** (internal) — boolean check used to decide whether body decoding applies (JSON bodies are never coerced).
+- **`readInput<TId>(request, declaration)`** — The sole public function. Reads the declared surface's sources in precedence order, decodes string-transport values (booleans, numbers, string arrays), resolves `ids` via first-non-empty `||` chain, resolves `anyTrue` fields by OR across sources, strips explicit `undefined` keys, and returns a flat `RequestInput<TId>` record.
+- **`RequestSurface`** — Closed union (`'search' | 'list' | 'write' | 'delete' | 'path'`) that determines which sources are read and in what order.
+- **`SURFACE_SOURCES`** — Maps each `RequestSurface` to its ordered source list (e.g. `search → ['body', 'query']`, `path → ['params']`).
+- **`RequestInputDeclaration<TId>`** — The per-route config object: `surface`, optional `ids`, `booleans`, `anyTrue`, `numbers`, `stringArrays`.
+- **`RequestInput<TId>`** — Return type: `Record<string, unknown> & Partial<Record<TId, string>>`.
+- **`parseFormBoolean` / `parseFormNumber`** — Internal decoders for string-transport values; return the input untouched when it is not a recognisable form of the target type, so downstream schema validation owns the error.
+- **`getRequestBody`** — Safe read of `req.body` (Express 5 leaves it `undefined` when absent).
+- **`isMultipartRequest`** — Content-type check used to decide whether the body needs string-transport decoding.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — imports `rejectResponse`; `readInput` can short-circuit to a rejection when input is malformed.
-- **`src/infrastructure/i18n/index.ts`** — imports `t` for localised error messages surfaced during input resolution.
-- **`src/infrastructure/http/delete-controller.ts`** — primary consumer of the `'delete'` surface and the `anyTrue` mechanism (e.g. `hardDelete` arriving via `routeFlag`, query, or body).
-- **`src/modules/account/controllers/*`** (get-account, get-addresses, delete-session, delete-address, etc.) — consume `readInput` with their respective surface declarations.
+- **`src/infrastructure/http/response.ts`** — Imports `rejectResponse` (used by callers that follow up on a failed read; the module itself does not invoke it in the visible code).
+- **`src/infrastructure/i18n/index.ts`** — Imports the `t` translation function; available for controller-level error messages but not called inside `readInput` itself.
+- **`src/infrastructure/surfaces/create-search-controller.ts` / `create-list-controller.ts` / `create-delete-controller.ts`** — Factory functions that build controllers calling `readInput` with the appropriate `surface` value (`'search'`, `'list'`, `'delete'`).
+- **`src/modules/account/controllers/delete-*.ts`** — Individual route handlers that declare their `RequestInputDeclaration` (typically `surface: 'delete'` or `'path'`, with `anyTrue: ['hardDelete']` in the account-deletion case) and pass it to `readInput`.
+- **`src/kernel/middlewares/authorizations.ts`** — Runs before controllers; does not import this file but sets up the `AuthContext` that a controller may attach after reading input.
 
 ## Notes
-
-- **JSON bodies are never coerced.** Only multipart/form-data, route params, and query strings go through `parseFormBoolean`/`parseFormNumber`. Coercing a JSON body would swallow type violations (`!!'not-a-boolean'` → `true`) and turn a 422 into a 201.
-- **`absent ≠ empty`.** A field no source supplied stays absent. Defaulting here would turn a partial `PATCH`/`PUT` into a full overwrite at the service layer.
-- **`anyTrue` fields are implicitly booleans.** They are folded into the boolean decode set inside `readInput`; callers do not need to also list them in `booleans`.
-- **The `SURFACE_SOURCES` map is intentionally closed.** Adding a new combination requires a deliberate, reviewable change rather than being inferred from whichever helper a controller reaches for.
-- **`docs/theory/request-input.md`** holds the resolved endpoint × parameter table and documents known discrepancies with `openapi.yaml`.
-- **Express 5 quirk:** `req.body` is `undefined` (not `{}`) when no body is sent. `getRequestBody` guards this; any code that bypasses it will 500 on body-less requests (e.g. `DELETE /cart/:productId`).
+- **`anyTrue` is not a precedence override in the usual sense.** It ORs across all sources: any single stated `true` wins. An undecodable value in *any* source is passed through intact so the schema can reject it (422) rather than a `true` elsewhere silently deciding the outcome.
+- **Decoding is per-source, not on the merged result.** Whether a value needs string-transport decoding depends on where it came from (`?active=false` is always a string; `{"active": false}` is not). Only multipart bodies in the body source are treated as string transport; a JSON body is left as-is.
+- **Absent ≠ empty.** Keys whose value is `undefined` in every source are dropped from the result. A blank query parameter (`?hardDelete=`) is treated as "not stated" for `anyTrue` purposes.
+- **`ids` resolution uses a `||` chain, not simple precedence.** The first *truthy* entry wins; an empty string in a higher-precedence source does not block a non-empty value in a lower one.
+- **Express 5 body is `undefined` by default.** `getRequestBody` guards against this; code that assumes `req.body` is always an object will throw on body-less requests (e.g. `DELETE`).
+- **The `t` import from i18n is present but not called in the visible code.** It is available for extension or for controller-level messages that reference this module's helpers.

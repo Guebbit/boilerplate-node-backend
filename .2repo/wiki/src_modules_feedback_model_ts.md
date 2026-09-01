@@ -1,27 +1,28 @@
 # src/modules/feedback/model.ts
 
 ## Purpose
-Defines the Mongoose schema, document type, and model for the `FeedbackRequest` collection. It exists to bridge the API-generated `FeedbackRequest` type (string dates) with MongoDB's native `Date` handling and to centralize the serialization transform used whenever feedback records are returned to callers.
+
+Defines the Mongoose schema, document type, and model for the `FeedbackRequest` collection. It bridges the API-generated TypeScript type (which uses ISO strings for timestamps) and Mongoose's native `Date` storage, and exposes a serialization transform so lean query results can be shaped identically to hydrated documents.
 
 ## Key elements
 
-- **`FeedbackRequestDocument`** – Interface extending `Omit<FeedbackRequest, …>` with `Date`-typed `respondedAt`/`createdAt`/`updatedAt`, plus Mongoose `Document`.
-- **`FeedbackRequestModel`** – Type alias: `Model<FeedbackRequestDocument>`.
-- **`feedbackRequestSchema`** – Mongoose `Schema` with fields `name`, `email` (required), `subject` (required), `message` (required), `status` (enum of `FeedbackRequestStatus`, defaults to `new`), `adminNotes`, `respondedAt`, and automatic `timestamps: true`.
-- **Compound index** – `{ status: 1, createdAt: -1 }`, supporting the admin list's filter-by-status / sort-newest-first query. Deliberately **no** index on `email` (see Notes).
-- **`applyFeedbackRequestTransform`** – Serialization transform produced by `applySerialization(feedbackRequestSchema)`; renames `_id` → `id` and strips `__v`. Exported for use on lean query results.
-- **`feedbackRequestModel`** – The Mongoose model entrypoint (`model('FeedbackRequest', …)`).
+- **`FeedbackRequestDocument`** – Mongoose document interface; overrides `respondedAt`, `createdAt`, `updatedAt` from `string` to `Date` (and adds Mongoose's `Document`).
+- **`FeedbackRequestModel`** – Convenience type alias: `Model<FeedbackRequestDocument>`.
+- **`feedbackRequestSchema`** – The schema definition (fields, required/optional, `status` enum defaulting to `new`, `timestamps: true`). Registers a single compound index `{ status: 1, createdAt: -1 }`.
+- **`applyFeedbackRequestTransform`** – A function (derived via `applySerialization`) that normalizes a lean/serialized doc: maps `_id → id` and strips `__v`. Exported so the service can apply it to lean query results without `toJSON`.
+- **`feedbackRequestModel`** – The registered Mongoose model instance; the primary import target for repositories and services.
 
 ## Relationships
 
-- **`src/types/index.ts`** – Supplies the `FeedbackRequest` type and `FeedbackRequestStatus` enum used in the schema and document interface.
-- **`src/infrastructure/persistence/serialize.ts`** – Provides `applySerialization`, which this file calls to derive `applyFeedbackRequestTransform`.
-- **`src/modules/feedback/service.ts`** – Consumes `applyFeedbackRequestTransform` (noted in its `search()` method) and the model for queries.
-- **`src/modules/feedback/repository.ts`** – Graph neighbor that builds persistence queries against `feedbackRequestModel`.
-- **`src/modules/feedback/tests/integration/service.test.ts`** – Integration tests that exercise the service, thereby hitting this model and schema.
+- **`src/types/index.ts`** – Provides the `FeedbackRequest` type and `FeedbackRequestStatus` enum consumed here.
+- **`src/infrastructure/persistence/serialize.ts`** – Supplies `applySerialization`, which is called on the schema to produce `applyFeedbackRequestTransform`.
+- **`src/modules/feedback/service.ts`** – Imports `applyFeedbackRequestTransform` to shape lean results in `search()`.
+- **`src/modules/feedback/repository.ts`** – Imports `feedbackRequestModel` to run queries against the collection.
+- **`src/modules/feedback/tests/unit/schema-contract.test.ts`** – Asserts the schema's field/enum/index contract.
+- **`src/modules/feedback/tests/integration/service.test.ts`** – Exercises the service (and thus the model) against a real or mocked Mongo.
 
 ## Notes
 
-- `FeedbackRequestDocument` intentionally re-declares `respondedAt`/`createdAt`/`updatedAt` as `Date` because the API-generated type marks them as `string`; the `Omit` prevents a conflicting re-declaration.
-- No index on `email` is a deliberate choice: the only email query is case-insensitive and unanchored, so no B-tree index can satisfy it—adding one would only increase write cost.
-- `applyFeedbackRequestTransform` must be applied manually to lean query results, since they bypass Mongoose's `toJSON` pipeline.
+- **No index on `email`** — intentional. The only email query is case-insensitive and unanchored (regex), which a B-tree index cannot serve; adding one would only add write cost.
+- **Timestamps are `Date` in the model, `string` on the wire.** The `applySerialization`-based transform handles the conversion; do not expect ISO strings on raw Mongoose documents.
+- The `id` field on the wire is derived from `_id` via the transform; there is no separate `id` column in the schema.

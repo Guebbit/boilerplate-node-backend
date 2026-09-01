@@ -1,26 +1,22 @@
 # src/modules/cart/controllers/put-cart-item.ts
 
 ## Purpose
-
-HTTP handler for `PUT /cart/:productId`. It validates the request body and `productId`, then delegates to `cartService.cartItemUpdateQuantity` to set (or create) a cart line for the authenticated user, returning the updated cart.
+Thin HTTP adapter for `PUT /cart/:productId`. Validates the incoming request, extracts the user and product identifiers, and delegates all business logic to `cartService.cartItemUpdateQuantity`. It exists solely to translate between Express's request/response lifecycle and the cart service's domain API.
 
 ## Key elements
-
-- **`putCartItem`** (exported) — The sole handler. Reads the auth user, parses the body against `UpdateCartItemByIdBody` (Zod), resolves `productId` via `readInput` (path param or body), validates it as an ObjectId, calls the service, and writes either a success or rejection response.
+- **`putCartItem`** (exported) — The route handler. Resolves `userId` from auth context, parses and validates the body against `UpdateCartItemByIdBody` (Zod), reads `productId` (path param or body) via `readInput`, checks it is a valid ObjectId, then calls `cartService.cartItemUpdateQuantity(userId, productId, quantity, callerContext)`. Responds with `successResponse` on success, `rejectResponse(422)` for a malformed ObjectId, and delegates error handling to `catchAs`.
+- **`refused(response, result)`** — Checked after the service call; if the service signalled a refusal (e.g. product not visible in storefront), the response is short-circuited before `successResponse`.
 
 ## Relationships
-
-- **`src/modules/cart/routes.ts`** — Registers this handler as the target of the `PUT /cart/:productId` route.
-- **`src/modules/cart/services/index.ts`** — Provides `cartService`, whose `cartItemUpdateQuantity` performs the actual quantity set / line creation.
-- **`src/infrastructure/http/controller.ts`** — Supplies `parseBody` (Zod validation + early return), `refused` (service-level rejection short-circuit), and `catchAs` (unified error mapping).
-- **`src/infrastructure/http/request.ts`** — Supplies `authContextOf` (user id), `readInput` (param/body extraction), `isValidObjectId`, and `callerContextOf` (forwarded to the service).
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` and `rejectResponse` for consistent response shaping.
-- **`src/infrastructure/i18n/index.ts`** / **`context.ts`** — Provides `t()` for the `generic.error-missing-data` message used in the 422 path.
-- **`src/types/index.ts`** — Defines the `UpdateCartItemByIdRequest` type used in the handler signature.
+- **`src/modules/cart/services/index.ts`** — Imports `cartService` and calls its `cartItemUpdateQuantity` method; this is the sole business-logic dependency.
+- **`src/infrastructure/http/controller.ts`** — Provides `parseBody`, `refused`, and `catchAs` helpers that structure the request-parsing / service-call / error-handling flow.
+- **`src/infrastructure/http/request.ts`** — Provides `authContextOf`, `callerContextOf`, `readInput`, and `isValidObjectId` used to extract and validate inputs.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` for uniform HTTP responses.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Provides the `t()` function used to localise the 422 error message.
+- **`src/modules/cart/routes.ts`** — Registers `putCartItem` as the handler for the `PUT /cart/:productId` route.
+- **`src/types/index.ts`** — Supplies the `UpdateCartItemByIdRequest` type used in the Express `Request` generic.
 
 ## Notes
-
-- Semantically equivalent to `POST /cart` for a product that is no longer in the storefront: both 404 from the same service method (`cartItemSetById`), so "upsert" is the real behavior here.
-- `productId` is accepted from either the path param or the body (`readInput` with `surface: 'write'`); the path param is the expected channel but the helper tolerates body fallback.
-- The handler uses `.then`/`.catch` rather than `async/await`; the `catchAs` callback is keyed on `'updateCartItemById'` for centralized error-to-status mapping.
-- A 422 (not 400) is returned when `productId` is present but not a valid ObjectId.
+- `productId` is resolved via `readInput` with `surface: 'write'`, meaning it may arrive in **either** the path parameter or the request body — not just the path.
+- The doc comment notes that a 404 for a product the storefront wouldn't show is raised by the same code path (`cartItemSetById`) that `POST /cart` uses, so PUT and POST share that guard rather than duplicating it.
+- The controller performs **no** business logic itself; quantity semantics, stock checks, and cart-state mutations all live in the service.

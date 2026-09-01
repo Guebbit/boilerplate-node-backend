@@ -2,24 +2,25 @@
 
 ## Purpose
 
-Holds the two address-book mutation handlers — add and edit — in one file because they share an identical three-step shape (schema-parse body → call one service method → branch on `result.success`). The read and delete handlers live elsewhere because they skip the body-parsing step and therefore don't share this shape.
+Handles the two write operations for shipping addresses (add and edit) in a single file because they share an identical three-step shape: parse body → call the account service → branch on `result.success`. Read and delete handlers live in separate files because they do not parse a request body.
 
 ## Key elements
 
-- **`postAddress`** — `POST /account/addresses`. Parses the body against `AddAddressBody`, calls `accountService.addressAdd(id, data)`, and responds with the full book (or a 422 / error).
-- **`putAddress`** — `PUT /account/addresses/:addressId`. Parses the body against `UpdateAddressBody`, calls `accountService.addressUpdate(id, addressId, data)`, and responds the same way. Returns 404 for both "not found" and "not yours" to avoid confirming another user's address id.
+- **`postAddress`** — `POST /account/addresses` handler. Extracts the authenticated user id, validates the body against `AddAddressBody` (Zod), delegates to `accountService.addressAdd`, then responds with the service's data/message or a refusal.
+- **`putAddress`** — `PUT /account/addresses/:addressId` handler. Same flow but also reads `addressId` from route params and delegates to `accountService.addressUpdate`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — imports the `catchAs`, `refused`, and `rejectValidation` helpers that both handlers use for uniform error/validation/exception handling.
-- **`@infrastructure/http/request`** — imports `authContextOf` to extract the authenticated user id from the request.
-- **`@infrastructure/http/response`** — imports `successResponse` for the happy-path reply.
-- **`src/modules/account/services/index.ts`** — imports `accountService`; calls its `addressAdd` and `addressUpdate` methods.
-- **`src/modules/account/routes.ts`** — the route table that binds these two exports to their HTTP methods/paths (and gates them behind `isAuth`).
-- **`src/types/index.ts`** — imports the `AddressInput` and `UpdateAddressRequest` types used in the Express `Request` generics.
+- **`@infrastructure/http/controller`** — supplies the three helpers every handler uses: `parseBody` (Zod validation + 400 on failure), `refused` (uniform error response for non-success service results), and `catchAs` (unhandled-promise rejection → 500 with a tagged label).
+- **`@infrastructure/http/request`** — `authContextOf` pulls the authenticated user identity off the request (set upstream by `isAuth` middleware).
+- **`@infrastructure/http/response`** — `successResponse` emits the standard `{ data, message }` envelope.
+- **`../services`** (`src/modules/account/services/index.ts`) — `accountService.addressAdd` / `addressUpdate` perform the actual read-modify-write; the controller is a thin dispatch layer.
+- **`@types`** (`src/types/index.ts`) — `AddressInput` and `UpdateAddressRequest` are the typed body shapes bound to Express's `Request` generics.
+- **`src/modules/account/routes.ts`** — registers `postAddress` and `putAddress` on the router (graph neighbor; the import direction is routes → this file).
 
 ## Notes
 
-- The "first address becomes default / later address claims slot only by saying so" invariants are **not** enforced here; they live in `repository.ts` (the read-modify-write owner) and are documented in `services/addresses.ts`.
-- Co-location rationale mirrors `products/controllers/write-products.ts`: one shape, one file, so a shape change lands in exactly one place.
-- Auth is guaranteed by the `isAuth` middleware upstream; the handler trusts `authContextOf` unconditionally.
+- **Ownership is invisible to the caller.** `putAddress` returns the same 404 for "not yours" and "doesn't exist"; the check lives in the service layer so the API never confirms that an id belongs to someone else.
+- **Default-address demotion is a single atomic write.** Adding a new entry that explicitly claims the default slot demotes the current holder in the same transaction — no separate step in the controller.
+- **Auth is assumed, not checked.** Both handlers read `authContextOf(request)` without a guard; the `isAuth` middleware is responsible for ensuring the context exists before the request reaches this file.
+- **Shape symmetry is intentional.** If the parse→service→branch pattern changes, it changes once here (mirroring `products/controllers/write-products.ts`).

@@ -2,33 +2,32 @@
 
 ## Purpose
 
-Unit tests for the `runTokenCleanup` scheduled job and its `adminTokenCleanup` service counterpart. Rather than asserting "the repository method was called" (true in both branches), the tests assert on **log output** — which level, which message — because the log line is the job's only observable contract for an unattended process. The two branches (resolve vs. reject from `tokenRemoveExpired`) are pinned as mutually exclusive: exactly one of "completed at info" or "failure at error" may appear.
+Unit tests for `runTokenCleanup` (the scheduled, unattended job) and `adminTokenCleanup` (its admin-triggered, audited counterpart). Because the job's only observable output is its log line, every test asserts on `logger` calls rather than (or in addition to) repository invocations, and explicitly pins the success and failure branches as mutually exclusive.
 
 ## Key elements
 
-- **`jest.mock('@modules/users')`** — Spreads the real barrel (required so sibling services like `profile.ts` can evaluate their module-scope zod schemas) and replaces only `userRepository.tokenRemoveExpired` with a `jest.fn()`.
-- **`jest.mock('@infrastructure/adapters/logger')`** — Replaces `logger.info`/`.error`/`.warn` with `jest.fn()` so tests can assert on call count, level, and message content.
-- **`jest.mock('@infrastructure/observability/audit')`** — Replaces `emitAuditEvent` at module level (avoids the `__importStar` non-configurable-getter problem that blocks `jest.spyOn` on namespace imports, especially under Stryker).
-- **`infoMessages()` / `errorMessages()` helpers** — Flatten mock call args into strings for substring assertions.
-- **`describe('runTokenCleanup — the work')`** — Verifies the repository is called exactly once and that a "starting" line is logged before the outcome is known.
-- **`describe('… — the success branch')`** — Asserts an info-level "completed" line and *absence* of any error-level call.
-- **`describe('… — the failure branch')`** — Asserts an error-level call carrying the rejection reason, no "completed" line, and that `runTokenCleanup()` still resolves (does not throw to the caller, which may be a login pre-flight).
-- **`describe('… — the two branches are mutually exclusive')`** — `it.each` over `[true, false]`; asserts `completed + failed === 1`. This is the case that fails if `if (success)` is forced to either constant.
-- **`describe('adminTokenCleanup — …')`** — Exercises `accountService.adminTokenCleanup(testCallerContext)`: on success expects `{ success: true, data: { removed: n } }` and an audit event with `accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP` / `outcome: 'success'`; on failure expects `{ success: false, status: 500 }` and **no** audit event.
+- **`describe('runTokenCleanup — the work')`** — verifies the repository is called once and that a "starting" info line is emitted before the outcome is known.
+- **`describe('runTokenCleanup — the success branch')`** — asserts an info-level "completed" message appears and that **no** error-level message is emitted.
+- **`describe('runTokenCleanup — the failure branch')`** — asserts an error-level message (carrying the cause, e.g. "db failure") is emitted, that the function still resolves (never throws), and that no "completed" info message appears.
+- **`describe('… mutually exclusive')`** — a single `it.each([[true],[false]])` case that asserts exactly one of the two log paths fires per run (`completed + failed === 1`).
+- **`describe('adminTokenCleanup …')`** — exercises `accountService.adminTokenCleanup(testCallerContext)` and asserts the audit event (`accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP`) fires on success and is absent on failure; also pins the `{ success: false, status: 500 }` shape.
+- **`infoMessages()` / `errorMessages()`** — local helpers that flatten the mocked logger call args into a string array for substring assertions.
+- **Mocks** — `userRepository.tokenRemoveExpired` (jest.fn), `logger.{info,error,warn}`, `auditPort.emitAuditEvent`.
 
 ## Relationships
 
-- **`src/modules/account/services/token-cleanup.ts`** — The implementation under test (`runTokenCleanup`, and the `adminTokenCleanup` method on the account service).
-- **`src/modules/account/services/index.ts`** — Barrel through which both the job and `accountService` are imported; its module-scope evaluation of sibling services is why the `@modules/users` mock must spread the real module.
-- **`src/infrastructure/adapters/logger.ts`** — The primary assertion target; every test case inspects its `info`/`error` call history.
-- **`src/infrastructure/observability/audit.ts`** — `emitAuditEvent` is the audited side-effect of the admin path; mocked so tests can verify it was or wasn't called.
-- **`src/modules/account/audit.ts`** — Source of the `accountAuditActions` enum used in the admin audit assertions.
-- **`src/modules/users/index.ts` / `src/modules/users/repository.ts`** — Provide `userRepository.tokenRemoveExpired`, the single external dependency of the job.
-- **`tests/support/caller-context.ts`** — Supplies the `testCallerContext` argument required by `adminTokenCleanup`.
+- **`src/modules/account/services/token-cleanup.ts`** — the module under test; provides `runTokenCleanup` and `accountService.adminTokenCleanup`.
+- **`src/modules/account/services/index.ts`** — barrel through which the test imports both functions (importing here forces evaluation of sibling services at load time, which constrains how the users module can be mocked).
+- **`src/modules/users/index.ts` / `src/modules/users/repository.ts`** — source of `userRepository`; only `tokenRemoveExpired` is replaced, the rest is spread from the real module.
+- **`src/infrastructure/adapters/logger.ts`** — fully mocked; the test's primary assertion target.
+- **`src/infrastructure/observability/audit.ts`** — `emitAuditEvent` is module-mocked (see Notes) to verify the audit trail on the admin path.
+- **`src/modules/account/audit.ts`** — provides `accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP` used in the audit assertion.
+- **`tests/support/caller-context.ts`** — provides `testCallerContext` passed to `adminTokenCleanup`.
 
 ## Notes
 
-- **Why mock the whole `@modules/users` barrel instead of spying on the repository method?** The services barrel evaluates `profile.ts` at import time, which builds a zod schema from `zodUserSchema`. A bare mock that omits that symbol throws before any test runs. Spreading `requireActual` preserves loadability.
-- **Why mock `audit` at module level rather than `jest.spyOn`?** TypeScript's `__importStar` interop copies namespace properties as non-configurable getters; `jest.spyOn` cannot redefine them. Module-level mocking yields a plain, always-replaceable `jest.fn()`. This matters under Stryker's instrumented sandbox.
-- **Branch observability strategy:** The tests are structured so that mutating `if (success)` to a constant breaks at least one assertion in each branch (the "no error" / "no completed" negative assertions), rather than relying on the positive assertion alone.
-- **The `500` status in the failure case is set by the service** (`token-cleanup.ts`), not replayed from a Mongoose static — the comment explicitly notes this decoupling.
+- **Barrel-load constraint:** `jest.mock('@modules/users')` must spread `jest.requireActual` because the services barrel (`index.ts`) eagerly evaluates `profile.ts`, which builds a zod schema from `zodUserSchema` at module scope. A bare mock would throw before any test runs.
+- **Why `emitAuditEvent` is module-mocked, not `jest.spyOn`'d:** TypeScript's `__importStar` interop copies namespace-import properties as non-configurable getters, which `jest.spyOn` cannot redefine (works under some transpile paths but fails under Stryker's mutation sandbox). A full `jest.mock` gives a plain, configurable `jest.fn()`.
+- **Assertions target logs, not just repo calls:** the file's header explicitly states that the log line *is* the observable behaviour for an unattended job; a test that only checks the repo call passes in both branches (near-zero mutation coverage).
+- **Non-throwing contract:** the "does not let the sweep fail" test encodes the requirement that `runTokenCleanup` always resolves, because login and refresh invoke it as a pre-flight step.
+- **Audit-only-on-success:** `adminTokenCleanup` is expected to emit an audit event on success and emit **none** on failure — a deliberate "nothing to report" policy.

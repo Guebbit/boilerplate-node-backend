@@ -2,40 +2,43 @@
 
 ## Purpose
 
-Service layer for reading a user's cart and mutating its contents (add, set, remove). Every mutating operation follows the same shape: one write to the repository, then the join that prices the result into a `CartView`. It also houses the shared "catalogue gate" that ensures a cart line can only reference a product the storefront actually serves.
+Service layer for reading and mutating cart lines. Every exported operation performs a single write (or read) against `cartRepository` and then joins the result with product data to produce a priced `CartView`. Single-product mutations carry a `ResponseSuccess | ResponseReject` envelope; `cartRemove` and the badge/view reads do not, because they cannot fail.
 
 ## Key elements
 
-- **`cartGet(userId)`** — Read cart lines joined with their products. No analytics.
-- **`cartViewOf(userId)`** *(internal)* — Read cart and compute the summary view (item count, total quantity, total price).
-- **`cartGetForBadge`** — Alias for `cartViewOf`; header-badge polling. Deliberately emits no `cart_viewed` event.
-- **`cartGetForView(userId, context)`** — Same read as badge, but emits the `cart_viewed` analytics event.
-- **`upsertCartItem`** *(internal)* — Shared write path for "set" and "add" modes. Calls `productRepository.findPublicById` as the catalogue gate (404 if product is not public), then delegates to `cartRepository.upsertLine`.
-- **`cartItemSetById(userId, id, quantity?)`** — Set a line's quantity. Returns a response envelope; no analytics.
-- **`cartItemAdd(userId, id, quantity, context)`** — `POST /cart` wrapper around `cartItemSetById`; emits `cart_item_added` on success.
-- **`cartItemUpdateQuantity(userId, id, quantity, context)`** — `PUT /cart/{productId}` wrapper; emits `cart_item_updated` on success.
-- **`cartItemAddById(userId, id, quantity?)`** — Increment an existing line's quantity (`'add'` mode). No analytics.
-- **`cartItemRemoveById(userId, id, context)`** — Remove one line. Returns 404 if the cart or line does not exist. Emits both an audit event and an analytics event.
-- **`cartRemove(userId, context)`** — Clear all lines. Idempotent (no cart → already empty). Returns `CartView` directly with **no** response envelope, since it cannot fail.
+- **`cartGet(userId)`** — Reads cart lines joined with their product. Returns `CartLine[]`.
+- **`cartViewOf(userId)`** *(private)* — Reads cart and computes summary (item count, total quantity, total price) via `toCartView`.
+- **`cartGetForBadge`** — Alias of `cartViewOf`. No analytics; used by the header badge poll.
+- **`cartGetForView(userId, context)`** — Same read as badge but emits `CART_VIEWED` analytics.
+- **`upsertCartItem(userId, id, quantity, mode)`** *(private)* — Shared write path. Gate-keeps via `productRepository.findPublicById` (404 if not public), then calls `cartRepository.upsertLine`.
+- **`cartItemSetById(userId, id, quantity?)`** — Sets quantity (mode `'set'`). No analytics; the analytics-free core.
+- **`cartItemAdd(userId, id, quantity, context)`** — Wraps `cartItemSetById`; on success emits `CART_ITEM_ADDED`.
+- **`cartItemUpdateQuantity(userId, id, quantity, context)`** — Wraps `cartItemSetById`; on success emits `CART_ITEM_UPDATED`.
+- **`cartItemAddById(userId, id, quantity?)`** — Increments quantity (mode `'add'`). No analytics.
+- **`cartItemRemoveById(userId, id, context)`** — Removes a line. Returns 404 reject if the line is absent. Emits audit + `CART_ITEM_REMOVED` analytics on success.
+- **`cartRemove(userId, context)`** — Clears all lines. Idempotent (empty cart → empty view, no error). Emits `CART_CLEARED`. Returns bare `CartView`.
 
 ## Relationships
 
-- **`src/modules/cart/services/view.ts`** — Provides `readCartLines`, `toCartView`, and the `CartLine`/`CartView` types that every read and write in this file resolves to.
-- **`src/modules/cart/repository.ts`** — `cartRepository` supplies `findByUserId`, `upsertLine`, `removeLine`, and `clearLines`; this file is its sole business-logic caller.
-- **`src/modules/products/index.ts`** — Exports `productRepository`; this file calls `findPublicById` as the catalogue gate before any write.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` envelope types used by every product-naming operation.
-- **`src/infrastructure/http/request.ts`** — `CallerContext` type passed to analytics/audit emitters.
-- **`src/infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` and `buildAnalyticsBase` for route-specific events.
-- **`src/infrastructure/observability/audit.ts`** — `emitAuditEvent` and `buildAuditEvent` (used only by `cartItemRemoveById`).
-- **`src/modules/cart/analytics.ts`** — `cartAnalyticsEvents` enum for event-name constants.
-- **`src/modules/cart/audit.ts`** — `cartAuditActions` enum for audit-action constants.
-- **`src/infrastructure/i18n/index.ts`** — `t()` used for the 404 "not found" message.
-- **`src/modules/cart/tests/integration/service.test.ts`** — Integration tests exercise the exported functions in this file.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/cart/repository.ts` | Primary data access: `findByUserId`, `upsertLine`, `removeLine`, `clearLines`. |
+| `src/modules/cart/services/view.ts` | `readCartLines`, `toCartView`, `CartLine`, `CartView` — shapes raw cart documents into priced views. |
+| `src/modules/products/index.ts` | `productRepository.findPublicById` — catalogue/availability gate before any single-product write. |
+| `src/infrastructure/http/response.ts` | `generateSuccess` / `generateReject` / `ResponseSuccess` / `ResponseReject` — response envelopes for mutating ops. |
+| `src/infrastructure/http/request.ts` | `CallerContext` type — passed into analytics/audit emitters. |
+| `src/infrastructure/i18n/index.ts` | `t()` for the 404 "product not found" message. |
+| `src/infrastructure/observability/analytics/index.ts` | `emitAnalyticsEvent`, `buildAnalyticsBase` — all cart analytics emissions. |
+| `src/infrastructure/observability/audit.ts` | `emitAuditEvent`, `buildAuditEvent` — audit trail for `cartItemRemoveById`. |
+| `src/modules/cart/analytics.ts` | `cartAnalyticsEvents` — event-name constants. |
+| `src/modules/cart/audit.ts` | `cartAuditActions` — audit action constants. |
+| `src/modules/cart/services/index.ts` | Barrel that re-exports these functions. |
 
 ## Notes
 
-- **Catalogue gate lives in the service, not the route.** `findPublicById` is the single predicate for "is this product on the storefront shelf." The `./reorder` caller applies the same rule but with a *skip* (not *refuse*) semantics, so it resolves products itself and writes survivors directly through the repository.
-- **Stock is intentionally absent from the gate.** A sold-out product may still be held in a cart; stock is checked at checkout (`./checkout`) when units are actually reserved.
-- **Envelope vs. no envelope.** The three operations that name a product (`cartItemSetById`, `cartItemAddById`, `cartItemRemoveById`) return a `ResponseSuccess | ResponseReject` because they can 404. `cartRemove` and `cartGet`/`cartGetFor*` return bare `CartView`/`CartLine[]` because they cannot fail.
-- **Analytics are applied at the route-level wrappers, not in the shared write.** `cartItemAdd` and `cartItemUpdateQuantity` wrap the identical `cartItemSetById` call so that unit tests and other internal callers remain free of a `CallerContext` they do not need.
-- The file's doc block explicitly references `docs/theory/layers.md` for the rationale behind placing cross-caller invariants in the service layer.
+- **Stock is deliberately not checked here.** Availability is gated by `findPublicById`; actual stock is enforced at checkout only.
+- **`cartItemAdd` vs `cartItemUpdateQuantity`** differ *only* in the analytics event name (`ADDED` vs `UPDATED`); both call the same `'set'` upsert.
+- **`cartItemAddById`** uses mode `'add'` (increment), while `cartItemSetById` / `cartItemAdd` / `cartItemUpdateQuantity` use `'set'` (replace).
+- **`cartRemove` has no envelope** — clearing an already-empty cart is a valid state, so it returns a plain `CartView` rather than a success/reject pair.
+- **Success envelopes carry no message.** The caller (controller) is responsible for any user-facing text.
+- **`cartItemRemoveById` returns 404** when the line is absent rather than silently succeeding, so a client can detect a stale view.

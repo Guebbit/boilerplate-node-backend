@@ -2,23 +2,22 @@
 
 ## Purpose
 
-Exhaustive unit tests for the three environment-readers in `src/infrastructure/runtime/environment.ts`. The file exists to close a coverage gap left when the source moved from `src/infrastructure/` into `runtime/` and the coverage glob no longer matched it. Because the source is a fail-fast boot check, the tests emphasise every failure mode (missing, blank, whitespace-only, partially-numeric, unrecognised) rather than the happy path.
+Exhaustive unit tests for the two shared environment-variable coercions (`environmentNumber` and `environmentFlag`). The suite focuses on failure modes — unset, blank, partial, and unrecognised inputs — because those are the silent regressions (NaN leaking into `Date`/`maxAge`, `parseInt` reading a prefix, inconsistent flag vocabulary) the helpers exist to prevent.
 
 ## Key elements
 
-- **`KEYS`** – the four required env vars (`NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, `NODE_DB_URI`, `NODE_MONGODB_PORT`) saved/restored around each `validateRequiredEnvironment` test.
-- **Top-level `it` blocks** – verify `validateRequiredEnvironment` accepts valid configs, reports *all* missing keys in one error, treats whitespace-only values as missing, and refuses boot when neither `NODE_DB_URI` nor `NODE_MONGODB_PORT` is usable.
-- **`withValue` helper** – sets a canary env var (`NODE_TEST_CANARY`) to a given value (or deletes it), runs a callback, then restores the original. Used by both coercion test suites.
-- **`describe('environmentNumber')`** – covers integer parsing, base-10 (not octal) handling, whitespace trimming, fallback for unset/blank/prose, rejection of partial-numeric strings (`30m`, `1.5`, `9 0 0`), and the `min` parameter.
-- **`describe('environmentFlag')`** – covers both on/off vocabularies (`1`/`true`/`yes`/`on` vs `0`/`false`/`no`/`off`), case-insensitivity, and default fallback for unset/blank/unrecognised values.
+- **`CANARY`** – A dedicated env-var name (`NODE_TEST_CANARY`) so every test case mutates the same variable without colliding with other tests.
+- **`withValue(value, read)`** – Local helper (not exported). Saves the prior value of `CANARY`, sets or deletes it, runs `read()`, then restores the original state in a `finally` block.
+- **`describe('environmentNumber')`** – Covers: base-10 parsing (rejects octal read of `0900`), surrounding-whitespace tolerance, fallback-to-default for unset / blank / whitespace / prose, refusal of partially-numeric strings (`30m`, `5mb`, `1.5`, `9 0 0`), acceptance of zero and negatives when no minimum is set, and fallback when the parsed value is below the declared minimum.
+- **`describe('environmentFlag')`** – Covers: both on-vocabulary (`1`, `true`, `TRUE`, `yes`, `on`) and off-vocabulary (`0`, `false`, `FALSE`, `no`, `off`) with whitespace, dual-vocabulary acceptance for a single flag, and default fallback for unset / blank / unrecognised values.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/environment.ts`** (sibling, source under test) — imports `environmentFlag`, `environmentNumber`, and `validateRequiredEnvironment`. Every assertion in this file exercises one of those three exports; no other modules are touched.
+- **`src/infrastructure/runtime/environment.ts`** – The sole import. The test file calls `environmentNumber` and `environmentFlag` (exported from that module) and asserts their return values against the expected defaults or parsed results. No other project files are referenced.
 
 ## Notes
 
-- The tests deliberately target *failure* inputs (NaN-producing strings, octal-looking values, `5mb`-style partials) because those were the historical bugs; the happy path is exercised only to confirm it still works.
-- `withValue` uses a single fixed canary key (`NODE_TEST_CANARY`), not one of the four required keys, so coercion tests don't interfere with the `validateRequiredEnvironment` setup.
-- `beforeEach` sets `NODE_MONGODB_PORT` to *deleted* (not just empty) to ensure the "URI or port" test exercises the true-absent branch.
-- The file was added specifically to plug a coverage-glob drift after a directory rename; if the source moves again, this file needs its import path updated or the same gap reappears.
+- All tests mutate a **single** env var (`CANARY`) via `withValue`, which saves and restores state. This avoids cross-test pollution but means the suite cannot run truly in parallel on the same process — a standard Jest/Node constraint, not a bug.
+- The test names and inline comments document *historical* bugs (e.g. `!== '0'` kill-switches, `parseInt` prefix reads). When refactoring the helpers, treat those comments as regression rationale, not style notes.
+- `environmentNumber`'s third argument is a **minimum**: values parsed below it fall back to the default rather than returning a clamped number. The tests pin this at minimum = 1.
+- No mocking or spies are used; the helpers are pure functions of `process.env` + arguments, so the `withValue` wrapper is the entire harness.

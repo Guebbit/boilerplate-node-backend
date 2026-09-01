@@ -2,23 +2,27 @@
 
 ## Purpose
 
-Assembly point that registers all RabbitMQ queue consumers at app startup. It is the single place where the application decides *which* queues this build drains, wiring them to infrastructure-level handlers. No-ops cleanly when the queue is disabled.
+Assembly-time registration of all queue consumers for this build. It decides *which* queues the application drains and wires each to its handler, acting as the single startup hook that connects `infrastructure` workers (email, PDF, image) to the `queue` adapter. It exists because the choice of queues is a per-build decision that belongs at the application layer, not inside any individual worker.
 
 ## Key elements
 
-- **`registerWorkers`** (export) — Guards on `isQueueEnabled()`; if enabled, calls `consumeFromQueue` for both `EMAIL_QUEUE` (prefetch 5) and `PDF_QUEUE` (prefetch 2) in parallel via `Promise.all`. Logs start/finish through `logger`.
+- **`registerWorkers()`** — The sole export. Called once during app startup. Resolves image writeback targets from `enabledModules`, then (if RabbitMQ is enabled) registers three consumers via `consumeFromQueue`. Returns a `Promise` that resolves when all consumers are connected.
+- **Image writeback resolver** — `registerImageWritebackResolver` is called *unconditionally* (before the `isQueueEnabled()` guard) so the resolver is available even in non-queue contexts. It maps a collection name to its writeback handler using `resolveImageTargets(enabledModules)`.
+- **Prefetch settings** — `EMAIL_QUEUE: 5` (I/O-bound), `PDF_QUEUE: 2` (producerless, kept low), `IMAGE_QUEUE: 1` (CPU-bound decode/re-encode).
 
 ## Relationships
 
-- **`src/app.ts`** — Calls `registerWorkers` once during startup.
-- **`src/infrastructure/adapters/queue.ts`** — Supplies `consumeFromQueue` and `isQueueEnabled`, which this file delegates to.
-- **`src/infrastructure/adapters/email.worker.ts`** — Exports `EMAIL_QUEUE` and `handleEmailJob`, consumed here.
-- **`src/infrastructure/adapters/pdf.worker.ts`** — Exports `PDF_QUEUE` and `handlePdfJob`, consumed here.
-- **`src/infrastructure/adapters/logger.ts`** — Provides the `logger` used for startup logging.
-- **`docs/tools/rabbitmq.md`** — Referenced in the file's doc comment for operational RabbitMQ details.
+- **`src/app.ts`** — Calls `registerWorkers()` during application startup.
+- **`src/infrastructure/adapters/queue.ts`** — Supplies `consumeFromQueue` (the consumer factory) and `isQueueEnabled` (the feature gate).
+- **`src/infrastructure/adapters/email.worker.ts`** — Provides `EMAIL_QUEUE` and `handleEmailJob`.
+- **`src/infrastructure/adapters/pdf.worker.ts`** — Provides `PDF_QUEUE` and `handlePdfJob`.
+- **`src/infrastructure/adapters/image.worker.ts`** — Provides `IMAGE_QUEUE`, `handleImageDigestJob`, and `registerImageWritebackResolver`.
+- **`src/infrastructure/adapters/logger.ts`** — Used for startup info logs.
+- **`src/kernel/registry.ts`** — Provides `resolveImageTargets`, which maps enabled modules to their image writeback descriptors.
+- **`src/modules.ts`** — Supplies `enabledModules`, the list of active modules whose image targets are resolved.
 
 ## Notes
 
-- **`PDF_QUEUE` has no producer.** The invoice endpoint renders PDFs synchronously on the request path. The consumer is registered deliberately as a working example of the async queue pattern.
-- Prefetch values differ by workload (email 5 vs. PDF 2); adjust only if concurrency needs change.
-- The file is classified as *app* (assembly) while its handlers live in *infrastructure* — the distinction is that choosing which queues to drain is a build-level decision, not a reusable adapter concern.
+- **`PDF_QUEUE` is producerless.** Nothing in the codebase publishes to it; the invoice endpoint renders synchronously. The consumer is intentionally kept registered as a worked example of the async pattern.
+- **The image writeback resolver registration is not gated behind `isQueueEnabled()`.** This is deliberate: it is the one code path allowed to see every module's `imageTargets`, and it costs nothing when no broker is present. Do not move it inside the guard.
+- **This file is the "app" layer.** Per the module doc-comment, it is the assembly decision point — individual workers in `infrastructure` do not know *which* queues a build uses.

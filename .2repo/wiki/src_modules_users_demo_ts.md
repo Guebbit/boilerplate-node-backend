@@ -2,26 +2,25 @@
 
 ## Purpose
 
-Holds the user module's slice of the demo/seed dataset: two pre-built accounts (one admin, one customer) used to populate the database for local development and to export a reference dataset. It exists so the user directory owns its own seed rows rather than reaching into shared fixtures.
+Defines the users module's slice of the demo dataset: two seeded accounts (one admin, one customer) that other modules and routes reference during development. Provides the fixtures, the seed routine, and a read-back export used by the demo-dataset publishing script.
 
 ## Key elements
 
-- **`userFixtures`** (exported const) — Array of two user objects created via `makeUser`: a `root` admin and a `ginopinoshow` customer. Both have `verified: true` to bypass the email-verification flow in the demo.
-- **`seedUsersCollection`** (exported function) — Upserts every fixture through `userRepository` using `upsertById`; returns `Promise<SeedOutcome[]>`. Called by `db/demo/index.ts` during demo seeding.
-- **`exportSeededUsers`** (exported function) — Reads the `users` collection via `exportCollection` and returns a `Record<string, unknown[]>` shaped the same as the API response (passwords excluded by the model's `applyUserTransform`).
+- **`userFixtures`** — Array of two user objects built via `makeUser` (`./fixtures`): `root` (admin, `verified: true`) and `ginopinoshow` (customer). IDs, emails, and passwords are pulled from `@kernel/seed-accounts` so other modules can reference the same identities.
+- **`seedUsersCollection()`** — Upserts every entry in `userFixtures` through `userRepository` using `upsertById` from `@infrastructure/persistence/seed`. Declared in `module.ts`; invoked by `db/demo/index.ts`.
+- **`exportSeededUsers()`** — Reads the seeded user collection back via `exportCollection(userModel, { _id: 1 })`. Returns only IDs; passwords are intentionally excluded and published separately from `@kernel/seed-accounts`.
 
 ## Relationships
 
-- **`src/kernel/seed-accounts.ts`** — Source of all six shared literals (ids, emails, passwords). This file consumes them so no other module hardcodes user credentials.
-- **`src/modules/users/factory.ts`** — Provides `makeUser`, the constructor used to build each fixture object.
-- **`src/modules/users/model.ts`** — Provides `userModel`, passed to `exportCollection` so the export respects the model's field projection/transforms.
-- **`src/modules/users/repository.ts`** — Provides `userRepository`, the persistence handle used by `upsertById` during seeding.
-- **`src/modules/users/module.ts`** — Declares `seedUsersCollection` in the module's seed contract; this file supplies the implementation.
-- **`src/infrastructure/persistence/seed.ts`** — Provides `upsertById`, `SeedOutcome`, and `exportCollection`, the generic persistence primitives both seeding and export rely on.
+- **`src/kernel/seed-accounts.ts`** — Source of the six `SEED_*` constants (IDs, emails, passwords). This file and other modules (cart, etc.) share these constants to reference the same two identities.
+- **`src/modules/users/fixtures.ts`** — Supplies the `makeUser` factory that shapes each fixture object.
+- **`src/modules/users/model.ts`** — Supplies `userModel`, used by `exportSeededUsers` to query the raw collection.
+- **`src/modules/users/repository.ts`** — Supplies `userRepository`, the upsert target in `seedUsersCollection`.
+- **`src/infrastructure/persistence/seed.ts`** — Provides the `upsertById`, `exportCollection` primitives and the `SeedOutcome` type.
+- **`src/modules/users/module.ts`** — Registers/declares this module's seed function in the broader demo-orchestration flow.
 
 ## Notes
 
-- Cart line items are intentionally **not** in this file. They were previously attached to each user object but were moved to `src/modules/cart/demo.ts` to avoid cross-module ownership of records.
-- `verified` is explicitly set to `true` on both fixtures, overriding the schema default of `false`. This is deliberate: seed accounts exist to be logged into, not to trigger the verification UX.
-- `seedUsersCollection` is declared in `module.ts` (the module's public surface) but *implemented* here; callers go through the module, not this file directly.
-- Passwords never appear in `exportSeededUsers` output. That enforcement lives in the model's `applyUserTransform`, not in this file. Credentials for `scripts/export-demo-dataset.ts` are read separately from `@kernel/seed-accounts`.
+- `verified` is explicitly set to `true` on both fixtures, overriding the schema default of `false`. The default is correct for self-signup (unverified email) but wrong for seed accounts that must be immediately loggable.
+- Passwords never appear in `exportSeededUsers` output. The projection is `{ _id: 1 }`. Credentials are published out-of-band by `scripts/export-demo-dataset.ts` reading directly from `@kernel/seed-accounts`.
+- Cart-line fixtures for these two users live in `src/modules/cart/demo.ts`, not here.

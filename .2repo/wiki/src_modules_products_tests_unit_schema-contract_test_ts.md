@@ -2,22 +2,22 @@
 
 ## Purpose
 
-Unit tests that pin down the product schema's contract: which fields are required, what defaults each field carries, what constraints guard stock counters, which indexes are declared, and how `applyProductTransform` derives the shopper-facing `available` value. The inline comments document the *reason* each default exists so future changes to `model.ts` are made with full awareness of downstream impact.
+Locks down the product schema's public contract and the derived `available` field produced by `applyProductTransform`. It ensures that defaults, required-ness, min-bounds, indexes, and the availability computation behave exactly as the storefront and catalogue APIs assume, catching regressions before they surface as broken product listings.
 
 ## Key elements
 
-- **`serialize(onHand, reserved)`** — local helper that builds a minimal document and runs it through `applyProductTransform`, returning only the computed `.available`.
-- **`describe('productSchema — what a product must carry')`** — asserts required paths are exactly `['price','title']`; `onHand`/`reserved` have `min: 0`; defaults for `onHand` (100), `reserved` (0), `active` (true), `description` (`''`), `categories`/`tags` (`[]`), `imageUrl` (env-overridable placeholder), and `deletedAt` (undefined); and that `timestamps` is enabled.
-- **`describe('productSchema — indexes')`** — asserts exactly two named indexes: `products_active_deletedAt` (active+1, deletedAt+1) and `products_createdAt` (createdAt-1).
-- **`describe('applyProductTransform — the derived availability')`** — verifies `available = max(0, onHand - reserved)`, that missing counters are treated as zero (not `NaN`), and that non-number types are treated as zero rather than coerced.
+- **`serialize(onHand, reserved)`** — small local helper that builds a minimal document (`{ _id, onHand, reserved }`) and returns the `.available` value from `applyProductTransform`. Used by every transform assertion.
+- **`describe('productSchema — what a product must carry')`** — asserts required fields (`title`, `price` only), `min: 0` on both stock counters, the full set of defaults (`onHand: 100`, `reserved: 0`, `active: true`, empty string/array for text/list fields, env-overridable `imageUrl`), `deletedAt` left undefined, and `timestamps: true`.
+- **`describe('productSchema — indexes')`** — pins the exact two compound indexes (`products_active_deletedAt`, `products_createdAt`) and their directions.
+- **`describe('applyProductTransform — the derived availability')`** — verifies `available = max(onHand − reserved, 0)`, that missing counters are treated as `0` (not `NaN`), and that non-numeric values are treated as `0` rather than coerced.
 
 ## Relationships
 
-- **`src/modules/products/model.ts`** — provides `productSchema` (the Mongoose schema under test) and `applyProductTransform` (the discriminator transform that computes `available`). Every assertion in this file is a contract on those two exports.
-- **`tests/support/schema.ts`** — provides the introspection helpers (`requiredPaths`, `pathOptions`, `defaultOf`, `optionsOf`, `indexSpecs`) that let tests read schema metadata declaratively rather than inspecting raw Mongoose internals.
+- **`src/modules/products/model.ts`** — the module under test. The file imports `productSchema` (Joi/Mongoose schema definition) and `applyProductTransform` (the projection hook that adds the derived `available` field) and asserts their contract.
+- **`tests/support/schema.ts`** — provides the introspection helpers used throughout: `requiredPaths`, `defaultOf`, `pathOptions`, `optionsOf`, and `indexSpecs`. These let the test read schema metadata declaratively instead of re-implementing Joi traversal.
 
 ## Notes
 
-- The `imageUrl` default reads `process.env.NODE_DEFAULT_IMAGE_PRODUCT` at test-run time; a deployment that sets this env var will cause this test to pass with a different expected string.
-- The "wrong type" test (`serialize('12', 2) → 0`) encodes a deliberate non-coercion policy: a string counter is treated as zero, not parsed. Changing `applyProductTransform` to use `Number()` would break this contract.
-- The `deletedAt` default test asserts `undefined` (not `null`); the soft-delete check downstream is the *absence* of the key, so a `null` default would change visibility semantics.
+- The `imageUrl` default depends on `process.env.NODE_DEFAULT_IMAGE_PRODUCT`; tests will pass with whatever value that env var holds in the test environment, falling back to a placekitten URL.
+- The transform tests for `undefined` counters exist to protect legacy documents written before schema defaults were added — they are a guard against `NaN → null → "out of stock"` in serialization, not a case the schema should normally produce.
+- Index names and directions are asserted as exact strings; renaming or reordering an index in `model.ts` will break this test even if the query performance impact is neutral.

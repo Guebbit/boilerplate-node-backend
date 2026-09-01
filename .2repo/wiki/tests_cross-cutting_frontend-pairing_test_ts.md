@@ -1,29 +1,24 @@
 # tests/cross-cutting/frontend-pairing.test.ts
 
 ## Purpose
-
-Cross-repo pairing test that verifies the hand-written `FRONTEND_PAIRING` map stays consistent with both this backend's enabled modules and the actual module folders in the paired `boilerplate-vue-frontend` checkout. It catches drift in either direction (renamed, added, or removed modules on either side) and forces a written justification wherever the two repos do not use the same name for a domain.
+Cross-repo pairing test that verifies the hand-maintained `FRONTEND_PAIRING` map stays consistent with both this repository's enabled modules **and** the actual module folders in the paired `boilerplate-vue-frontend` checkout. It exists because a simple name-matcher gets the mapping wrong (e.g. `audit-logs` → `admin`) and because drift in either direction — a renamed, added, or removed module — is otherwise invisible to either repo's own test suite.
 
 ## Key elements
-
-- **`Pairing` interface** — shape of one entry: `counterparts` (array of frontend module names) and optional `why` (one-sentence explanation, required when names differ or list is empty).
-- **`FRONTEND_PAIRING`** — the authoritative mapping from backend module names to frontend counterparts; thirteen entries covering all enabled backend modules.
-- **`FRONTEND_ONLY`** — records frontend modules (`demo`) that have no backend counterpart, with a standing explanation.
-- **`moduleNames()`** — derives the enabled backend module name list from `enabledModules`.
-- **`frontendModules()`** — reads directory entries under the sibling's `src/modules/` folder.
-- **`claimedNames()`** — union of all frontend names referenced in both maps, used for the cross-repo "accounts for every module" check.
-- **`describe('the two repositories, module by module', …)`** — self-consistency suite: every enabled module has an entry, no entry references a disabled module, divergent names carry a `why`, and every `FRONTEND_ONLY` entry has a non-empty explanation.
-- **`describe('the paired frontend at …', …)`** — cross-repo suite (skipped when the sibling is absent): asserts every claimed name exists over there and every folder over there is claimed.
+- **`FRONTEND_PAIRING`** — `Readonly<Partial<Record<string, Pairing>>>` mapping each backend module name to its frontend counterpart(s) and an optional `why` sentence. Encodes the two non-1:1 cases (`audit-logs` → `admin`; `observability` → `admin` + `realtime`).
+- **`FRONTEND_ONLY`** — Frontend modules with no backend module (currently just `demo`).
+- **`Pairing` interface** — Shape of each map entry: `counterparts: readonly string[]` and optional `why: string`.
+- **`moduleNames()`** — Projects `enabledModules` (from `src/modules.ts`) to a string array.
+- **`frontendModules()`** — Reads the sibling's `src/modules` directory, returns sub-directory names.
+- **`claimedNames()`** — Union of every frontend name referenced in `FRONTEND_PAIRING` and `FRONTEND_ONLY`.
+- **First `describe` block** — Completeness checks: every enabled module has a map entry; no entry references a disabled module; at least one module is found.
+- **Second `describe` block** — Live cross-repo checks (gated on sibling presence): every claimed frontend name exists in the sibling; every sibling module folder is claimed by the map.
 
 ## Relationships
-
-- **`src/modules.ts`** — imports `enabledModules` to obtain the canonical list of backend module names that must each appear in `FRONTEND_PAIRING`.
-- **`scripts/paired-frontend-path.ts`** — imports `resolveFrontendPath()` to locate the sibling frontend checkout; the result drives both the `describe` label and the existence check that gates the cross-repo half.
-- **`docs/theory/module-lifecycle.md`** — referenced in the file's header comment as background reading on the two-repository model; the test encodes the pairing decisions that doc describes.
+- **`src/modules.ts`** — Source of `enabledModules`; the test asserts 1-to-1 coverage between that list and `FRONTEND_PAIRING`'s keys.
+- **`scripts/paired-frontend-path.ts`** — Provides `resolveFrontendPath()` to locate the sibling `boilerplate-vue-frontend` checkout; without a valid path the second half is skipped with a visible warning (or a CI assertion failure).
 
 ## Notes
-
-- **Stated, not derived.** The pairing is a written architectural decision, not something a name-matcher can infer. The `why` field exists precisely because a reader cannot guess the mapping (e.g. `audit-logs` → `admin`).
-- **Conditional cross-repo half.** If the sibling checkout is missing the second `describe` block degrades to a single warning (non-CI) or a no-op assertion (CI). The file deliberately makes the absence visible rather than passing silently — same convention as `tests/unit/scripts/spec-identity.test.ts`.
-- **`console.warn` is intentional.** An `eslint-disable-next-line no-console` suppresses the lint rule because the warning must reach a bare terminal where no logger is configured.
-- **`FRONTEND_ONLY` is a one-way declaration.** It exists only in this file; nothing in the backend module list can discover a frontend-only module, so the "accounts for every module over there" test is the only guard against an unlisted frontend folder appearing.
+- **Conditional sibling check:** The second `describe` block is guarded by `existsSync`. In CI the skip is surfaced as a failing assertion (`expect(message).toBe('')`); locally it prints a `console.warn` and the remaining tests are absent. This mirrors the same guard pattern in `tests/unit/scripts/spec-identity.test.ts`.
+- **`why` is unasserted prose:** No test validates its shape, length, or regex. It is documentation, not a contract.
+- **Asymmetry is intentional:** `audit-logs` → `admin` and `observability` → `admin` + `realtime` are architectural decisions, not naming drift. A naive name-matcher would flag `audit-logs` as unpaired, which is explicitly called out as the wrong answer in the file's header comment.
+- **`FRONTEND_ONLY` participates in the "accounts for every module over there" check** via `claimedNames()`, so adding a new frontend-only module requires an entry here or the test fails.

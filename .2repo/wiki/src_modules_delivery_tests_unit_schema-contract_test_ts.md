@@ -1,24 +1,26 @@
 # src/modules/delivery/tests/unit/schema-contract.test.ts
 
 ## Purpose
-Contract tests that pin down the shape, constraints, and options of `shipmentSchema` (the Mongoose schema for a parcel). They exist so that any unintended change to field requirements, index uniqueness, enum values, defaults, or references is caught immediately — without running the full application.
+
+Contract test that pins the Mongoose `shipmentSchema` to its intended shape: required fields, the exactly-once unique index on `orderId`, the ObjectId reference to `Order`, the `ShipmentStatus` enum with its default, the absence of a default on `deliveredAt`, and the `timestamps` option. It exists so that any future schema change that breaks the one-parcel-per-order guarantee or the status lifecycle is caught in unit tests rather than in production dispatch.
 
 ## Key elements
-- **`describe('shipmentSchema')`** — single test suite containing six assertions:
-  - Required paths are exactly `['orderId', 'trackingCode']`.
-  - `orderId` carries a database-level unique index (`orderId_1: unique=true`).
-  - `orderId` is typed `ObjectId` and references the `Order` model.
-  - `status` is constrained to `Object.values(ShipmentStatus)` and defaults to `ShipmentStatus.shipped`.
-  - `deliveredAt` has **no** default (absence means "in transit").
-  - `timestamps` option is enabled.
-- **Test helpers** (all imported from `@tests/schema`): `requiredPaths`, `indexOptionSpecs`, `typeOf`, `refOf`, `enumOf`, `defaultOf`, `optionsOf`.
+
+- **`describe('shipmentSchema')`** — single test suite; all assertions target the exported `shipmentSchema`.
+- **Required-paths check** — asserts `['orderId', 'trackingCode']` are the only required fields; `deliveredAt` is intentionally optional (absence = in transit).
+- **Unique-index check** — asserts the index spec `orderId_1: unique=true` is present, the database-level exactly-once constraint.
+- **ObjectId / ref check** — asserts `orderId` is typed `ObjectId` and references the `Order` model.
+- **Status enum & default check** — asserts the enum matches `Object.values(ShipmentStatus)` and the default is `ShipmentStatus.shipped`.
+- **`deliveredAt` default check** — asserts `defaultOf` returns `undefined` (no default is set).
+- **Timestamps check** — asserts the schema-level `timestamps` option is `true`.
 
 ## Relationships
-- **`src/modules/delivery/model.ts`** — the file under test; `shipmentSchema` is imported and every assertion operates on it.
-- **`src/types/index.ts`** — provides the `ShipmentStatus` enum used to assert the allowed values and default of the `status` field.
-- **`tests/support/schema.ts`** — supplies the seven schema-inspection helpers that make each assertion a one-liner.
+
+- **`src/modules/delivery/model.ts`** — the file under test; exports `shipmentSchema`.
+- **`src/types/index.ts`** — supplies the `ShipmentStatus` enum used in the status/default assertions.
+- **`tests/support/schema.ts`** — provides the schema-introspection utilities (`requiredPaths`, `indexOptionSpecs`, `typeOf`, `refOf`, `enumOf`, `defaultOf`, `optionsOf`) that let tests assert on Mongoose schema internals without instantiating the model.
 
 ## Notes
-- These are **shape-only** assertions (field presence, index options, enum membership). They do not exercise Mongoose runtime behavior such as pre/post hooks or validation callbacks.
-- The file-level doc comment encodes the business invariant: one shipment per order, enforced at the DB level to prevent duplicate tracking codes on retried dispatches. The `shipped` default is intentional — there is no "pending parcel" state in the domain.
-- `deliveredAt` being `undefined` by default is a deliberate contract, not an oversight; the absence *is* the "in transit" signal.
+
+- The file's module-level JSDoc and inline comments encode domain intent (exactly-once dispatch, no "pending" parcel state, absence of `deliveredAt` *is* the "in transit" signal). If you change the schema, update those comments alongside the test assertions.
+- Assertions use the shared `@tests/schema` helpers rather than raw Mongoose introspection; keep new schema-contract tests in this file and use the same helper set for consistency across the codebase.

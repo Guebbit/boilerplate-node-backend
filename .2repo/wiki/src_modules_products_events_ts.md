@@ -2,21 +2,21 @@
 
 ## Purpose
 
-Declares the domain events owned by the products module. Uses TypeScript module augmentation (`declare module '@kernel/events'`) so the event catalogue grows organically with each module rather than being centralized in a shared file. Also exports the canonical string constant for the event name.
+Declares the products module's domain events by augmenting the kernel's `DomainEventMap` interface, so the event catalogue grows per-module without a shared enumeration file. Also exports the single event-name constant to keep emitters and listeners in agreement on the spelling.
 
 ## Key elements
 
-- **`DomainEventMap['product.deleted']`** — Module-augmented event type; payload is `{ productId: string }`. Emitted and *awaited before* the write (soft-delete, hard-delete, or restore) so listeners that drop references still see a consistent DB. Also fires on restore because re-adding cart lines is the user's decision, not the catalogue's.
-- **`PRODUCT_DELETED`** — Exported constant equal to `'product.deleted'`. Serves as the single source of truth for the event name so emitters and listeners share one spelling instead of two independent string literals.
+- **Module augmentation of `@kernel/events`** — adds the `'product.deleted'` key (payload: `{ productId: string }`) to the `DomainEventMap` interface. Emitted and awaited *before* the write; also fires on restore.
+- **`PRODUCT_DELETED`** — exported constant (`'product.deleted'`) so emitters and listeners reference one symbol instead of duplicating the string literal.
+- **Deliberate absence of a stock event** — a comment documents that `product.stock_moved` was removed because it caused rollback paths to skip the audit row; that row is now written atomically with the counter in `@modules/inventory`.
 
 ## Relationships
 
-- **`src/modules/products/index.ts`** — Barrel file; re-exports `PRODUCT_DELETED` so consumers of the module don't import from the events file directly.
-- **`src/modules/products/service.ts`** — Emitter of the `product.deleted` event; calls and awaits it before performing the product state transition.
-- **`src/modules/products/module.ts`** — Registers the module's event list (including `PRODUCT_DELETED`) with the kernel so listeners can subscribe.
+- **`src/modules/products/index.ts`** — barrel file that re-exports `PRODUCT_DELETED` so other modules import the constant through a single entry point.
+- **`src/modules/products/module.ts`** — module registration point that wires listeners for `PRODUCT_DELETED` into the kernel's event bus.
+- **`src/modules/products/service.ts`** — emits the `product.deleted` event (awaited before the write) and is the primary consumer of the `DomainEventMap` typing this file augments.
 
 ## Notes
 
-- **No stock event.** A former `product.stock_moved` event was removed: it turned the ledger row into a *reaction* rather than half of the write, and rollback paths failed to announce it, corrupting the audit trail. Stock counter + ledger row are now written atomically in `@modules/inventory`.
-- **Why `product.deleted` stays an event (unlike stock):** the listener (e.g., cart cleanup) is genuinely optional—a shop that simply never drops its cart references still functions, just with stale lines.
-- **Convention:** augment `DomainEventMap` in the owning module's `events.ts`; never edit the kernel file directly.
+- The event is emitted on **restore** as well as soft/hard delete. The comment explains this is intentional: re-adding cart lines after a restore is left to the user, not the catalogue.
+- The module augmentation pattern means adding a new event here is all that's needed to make it type-safe across the codebase — no shared registry file to edit.

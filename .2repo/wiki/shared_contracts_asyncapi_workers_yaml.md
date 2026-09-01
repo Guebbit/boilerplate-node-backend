@@ -2,30 +2,29 @@
 
 ## Purpose
 
-A standalone AsyncAPI 2.6.0 document that contracts the two cross-cutting job queues (`worker.email.send`, `worker.pdf.generate`) owned by the application rather than any single domain. It exists beside `asyncapi.root.yaml` so that queue definitions can be linted independently and so the `rabbitmqLocal` server stays out of the public AsyncAPI bundle shared with API clients.
+Standalone AsyncAPI 2.6.0 document that declares the three application-level job queues (`worker.email.send`, `worker.pdf.generate`, `worker.image.digest`) which do not belong to any domain. It sits beside `asyncapi.root.yaml` so that `npm run lint:asyncapi:modules` can validate it independently, and it is the single place that binds those channels to the `rabbitmqLocal` broker.
 
 ## Key elements
 
-- **`servers.rabbitmqLocal`** — the AMQP broker (localhost:5672) both channels bind to; declared here solely to keep it out of `asyncapi.public.yaml`.
-- **`channels.worker.email.send`** — publish/subscribe pair for email delivery. Publish (`workerEmailPublish`) enqueues a render-and-send job; subscribe (`workerEmailConsume`) is consumed by the email worker.
-- **`channels.worker.pdf.generate`** — publish/subscribe pair for PDF rendering. Publish (`workerPdfPublish`) enqueues a template-render job; subscribe (`workerPdfConsume`) is consumed by the PDF worker.
-- **`components.schemas.EmailJobPayload`** — `{ request, templateName, data, from? }`. `templateName` is a logical outbox name (no file extension); `data` is fully pre-translated by the producer.
-- **`components.schemas.PdfJobPayload`** — `{ templatePath, templateData, outputPath }`. `templatePath` is consumer-specific (file path here, Blade view name in the twin backend); `templateData` follows the same pre-translated contract.
-- **Message definitions** (`EmailJobMessage`, `PdfJobMessage`, `EmailJobConsumeMessage`, `PdfJobConsumeMessage`) — publish and consume variants share the same payload schema but carry distinct `messageId` values.
+- **`servers.rabbitmqLocal`** — Local AMQP broker endpoint. Declared *here* (not in the root) so that no shared channel references it, which keeps it out of the merged `asyncapi.public.yaml` bundle.
+- **`channels.worker.email.send`** — Publish/subscribe pair for async email delivery. Producers call `enqueueEmail`; the email worker consumes and sends. Acknowledges only after the transport accepts the message; rendering failures are *not* retried.
+- **`channels.worker.pdf.generate`** — Publish/subscribe pair for CPU-bound PDF rendering. Producer hands off template + data + output path; worker renders off the request thread.
+- **`channels.worker.image.digest`** — Publish/subscribe pair for image quarantine → digest → promote. Worker strips metadata, re-encodes, builds a WebP thumbnail, and writes back URLs conditional on `pendingImageKey` still matching.
+- **`components.messages.*`** — Six message wrappers (publish + consume for each queue) that bind a payload schema to a `messageId`.
+- **`components.schemas.EmailJobPayload`** — Nodemailer `SendMailOptions` subset, `templateName` (outbox name, no extension), and pre-translated `data`. No locale travels with the job.
+- **`components.schemas.PdfJobPayload`** — `templatePath` (file path), `templateData` (pre-translated), `outputPath`.
+- **`components.schemas.ImageDigestJobPayload`** — `collection` (registry key, not raw Mongo name), `documentId`, `key` (opaque quarantine key, never a filesystem path).
 
 ## Relationships
 
-- **`asyncapi.root.yaml`** — sibling document in the same contracts directory; the root covers domain-specific queues, this file covers the "no-domain" queues. Both are merged into the shared sections of the public bundle.
-- **`asyncapi.yaml`** — the top-level AsyncAPI entry point that assembles shared sections; this file's `rabbitmqLocal` server is deliberately excluded from the public output because no shared channel references it.
-- **`src/infrastructure/adapters/email.worker.ts`** — the sole consumer of `worker.email.send`; publishes on the channel's `publish` side are produced by whichever module needs to send mail.
-- **`src/infrastructure/adapters/pdf.worker.ts`** — the sole consumer of `worker.pdf.generate`; the producer hands off `templatePath` + `templateData` and returns immediately.
-- **`shared/contracts/analytics.frontend.ts`** — co-resident contract in the same directory; no direct schema or channel reference between the two files is visible here.
+- **`shared/contracts/asyncapi.root.yaml`** — This file is its sibling in the shared contract layer. The root holds domain-scoped channels; this file holds the "no-domain" queues. The `rabbitmqLocal` server exists only in this file so the public bundle (which merges shared sections) never exposes the broker to API clients.
+- **`src/infrastructure/adapters/email.worker.ts`** — Consumer of `worker.email.send` (subscribe side). Implements the `workerEmailConsume` operation: renders the named outbox template, sends via transport, acknowledges on success.
+- **`src/infrastructure/adapters/pdf.worker.ts`** — Consumer of `worker.pdf.generate` (subscribe side). Implements the `workerPdfConsume` operation: resolves `templatePath`, renders with `templateData`, writes PDF to `outputPath`.
 
 ## Notes
 
-- **Email fallback:** if the broker is unavailable, the adapter sends the email inline over SMTP rather than dropping the message. The queue is an optimisation, not the system of record.
-- **No retry on render failure (email):** a broken template fails identically on every redelivery; requeueing would starve the queue behind an unresolvable job.
-- **`templateName` / `templatePath` are backend-agnostic identifiers.** The file intentionally does not encode which rendering engine consumes them; the twin backend uses a different engine.
-- **No locale in payloads.** The producer translates all display strings (including `<html lang>` and footer) before enqueueing, so the consumer interpolates blindly.
-- **Both schemas set `additionalProperties: false`**, so adding a field without updating this contract will fail validation.
-- The `info` block exists only to satisfy the AsyncAPI spec for standalone validation via `npm run lint:asyncapi:modules`; it is not a versioned API surface.
+- **Standalone by design.** The `info` block exists solely to make this a valid AsyncAPI document on its own; it carries no runtime significance.
+- **Fallback semantics differ per queue.** Email: if the broker is down the adapter sends inline (queue is an optimisation, not the system of record). PDF and image digest have no inline fallback — they *must* run off-thread.
+- **No locale in any payload.** Producers translate before enqueuing; consumers interpolate but never resolve translations. This is intentional and shared across the email and PDF payloads.
+- **`collection` in `ImageDigestJobPayload` is a registry key** (see `kernel/registry.ts`), not a raw Mongo collection name — the consumer maps it to the correct `imageTargets` entry.
+- **`key` in the image payload is opaque** — the consumer calls back into `imageStore`; the payload never contains a filesystem path, so the storage backend is swappable without a contract change.

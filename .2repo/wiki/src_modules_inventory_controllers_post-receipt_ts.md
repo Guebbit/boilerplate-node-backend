@@ -2,22 +2,26 @@
 
 ## Purpose
 
-Express controller for `POST /inventory/receipts`. Handles the arrival of units from a supplier by validating the request body, delegating to the inventory service, and returning a structured HTTP response. It is one of only two entry points for stock to enter the shop and is audited (the receipt row records which admin added how many).
+HTTP controller for `POST /inventory/receipts`. Validates the inbound request body, delegates to the inventory service to record a stock receipt, and shapes the HTTP response. Exists as a thin layer between Express routing and domain logic so the service stays transport-agnostic.
 
 ## Key elements
 
-- **`postReceipt(request, response)`** — The sole export. Validates the body against the `ReceiveStockBody` Zod schema, extracts `productId`, `quantity`, and `note`, then calls `inventoryService.receive(...)` with the caller context. Responds with a success payload or an error/refusal via the shared HTTP helpers.
+- **`postReceipt` (exported)** – Express handler that:
+  1. Parses and validates `request.body` against the `ReceiveStockBody` Zod schema (via `parseBody`).
+  2. Calls `inventoryService.receive(productId, quantity, note, callerContextOf(request))`.
+  3. Sends `200` on success, or a refusal/error response via `refused` / `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Supplies the `parseBody`, `refused`, and `catchAs` utilities used for validation, rejection handling, and error serialization.
-- **`@infrastructure/http/request`** — Supplies `callerContextOf(request)` to attach the authenticated admin's identity to the service call.
-- **`@infrastructure/http/response`** — Supplies `successResponse` for the happy-path reply.
-- **`src/modules/inventory/routes.ts`** — Registers `postReceipt` as the handler for the `POST /inventory/receipts` route.
-- **`src/modules/inventory/service.ts`** — Provides `inventoryService.receive(productId, quantity, note, callerContext)` which performs the actual stock-in write and returns a result discriminated union (success vs. refusal).
+- **`src/modules/inventory/service.ts`** – calls `inventoryService.receive(...)`; the service performs the actual stock mutation.
+- **`src/modules/inventory/routes.ts`** – registers `postReceipt` as the handler for the `POST /inventory/receipts` route.
+- **`src/infrastructure/http/controller.ts`** – supplies the shared helpers `parseBody`, `refused`, and `catchAs` used for validation, error mapping, and exception handling.
+- **`src/infrastructure/http/request.ts`** – supplies `callerContextOf`, which extracts the authenticated admin's context for the audit row.
+- **`src/infrastructure/http/response.ts`** – supplies `successResponse`, the canonical way to emit a typed success payload.
 
 ## Notes
 
-- The controller is intentionally thin: no business logic lives here. All domain rules (availability, permissions, idempotency) belong to `inventoryService.receive`.
-- `refused(response, result)` short-circuits the promise chain with `return` when the service signals a domain-level rejection (e.g. insufficient quantity), so the caller never reaches `successResponse`.
-- The audit requirement (admin + quantity recorded) is enforced inside the service via the `callerContextOf` value passed in; the controller does not inspect or modify it.
+- Returns **200**, not 201, on successful receipt creation. Match this convention if adding sibling controllers.
+- Early-returns (without a `response` send) when body validation fails—`parseBody` is responsible for sending the 400 itself.
+- The JSDoc calls a receipt "one of only two ways units can enter the shop"; the other entry point is presumably a different module/route.
+- `callerContextOf(request)` is forwarded to the service, so the service layer is expected to persist *who* added the stock, not just *how much*.

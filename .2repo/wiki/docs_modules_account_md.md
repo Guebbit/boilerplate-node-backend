@@ -2,24 +2,28 @@
 
 ## Purpose
 
-Documents the `account` module, which owns session lifecycle (signup, login, refresh, password reset, logout-everywhere, two-step deletion) and the per-account address book. It registers the application's single auth resolver at import time, answering the kernel's "who is making this request?" question for every guard.
+Documents the `account` module, which answers the kernel's "who is making this request?" question. It owns session lifecycle (signup, login, refresh, password reset, logout-everywhere, two-step deletion) and the per-account address book, and it is the repo's only `shared-kernel` consumer.
 
 ## Key elements
 
-- **Auth resolver** — installed at module import (not a boot step); every request guard resolves through it.
-- **Address book** — the module's sole owned collection; one document per account, destroyed on the shared `user.deleted` event.
-- **`addressForCheckout`** — the only barrel export; returns the single shipping address for an order. Serves as the cart's `customer-supplier` arrow.
-- **`session/` internals** — JWT signing, cookie shape, and token lifetimes. Deliberately private to this module; no sibling imports them.
-- **Own routes** — address CRUD and all auth flows are served by this module's routes, not a shared controller layer.
+- **Auth resolver** — registered at import time into `kernel/authentication.ts`; every guard in the app resolves through it. No boot step involved.
+- **Address book** — one document per account; the only collection this module owns outright. CRUD is internal (served by this module's own routes).
+- **`addressForCheckout`** — the single barrel export; the one function the cart uses as its `customer-supplier` arrow.
+- **`session/` internals** (JWT signing, cookie shape, lifetimes) — consumed only by this module via relative imports; deliberately not published.
+- **`user.deleted` event** — cascading deletion: a destroyed account removes its address book; cart and wishlist listen to the same event.
+- **User record** — does NOT belong here; it lives in [`users`](./users.md) and is reached through that module's barrel.
 
 ## Relationships
 
-- **`docs/modules/account-sessions.md`** — detail reference for the token mechanics (lives, cookie flags, refresh flow) that this module's internals implement. This page treats them as an opaque unit; the sessions page unpacks each.
-- **`docs/api/endpoints.md`** — the auth and address CRUD routes owned by this module appear in the endpoint catalog. Changes to route shapes or auth middleware flow through both pages.
+- **`users`** — account authenticates against the User record owned by `users`. This is the repo's only `shared-kernel` edge.
+- **`account-sessions`** — deep-dive on the token mechanics (signing, rotation, lifetimes) that this module uses internally.
+- **`cart-checkout`** — consumes `addressForCheckout`; the sole cross-module arrow out of this module's barrel.
+- **`security` (tools)** — hashing, cookie flags, and response headers that surround the tokens this module issues.
+- **`request-flow` (theory)** — shows where the guard installed by this module sits in the per-request pipeline.
+- **`strategic-ddd` (theory)** — explains what the `shared-kernel` cost means for the account↔users boundary.
 
 ## Notes
 
-- The barrel is intentionally one line wide (`addressForCheckout`). The `session/` files are reached only by relative import inside the module—no external consumer should touch them.
-- Token lifetimes and cookie flags are the module's blast radius: every guard in the app resolves through them, so a change here is an app-wide breaking change.
-- This module is the repo's only `shared-kernel` edge, via its dependency on `users` for the User record. It does not own the user; it authenticates through it.
-- Address book deletion is event-driven (`user.deleted`), not a direct cascade—same mechanism cart and wishlist use.
+- The barrel is intentionally one line wide. The `session/` files were once published "for authorization" but no sibling ever imported them; keep them internal.
+- Changing token lifetimes or cookie flags silently breaks every guard in the app — there is no central "auth config" to audit.
+- The resolver is registered at **import time**, not in a startup hook. Reordering imports can break it.

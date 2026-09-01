@@ -2,40 +2,39 @@
 
 ## Purpose
 
-RabbitMQ (AMQP 0-9-1) adapter providing publish and consume primitives over a single shared channel. Every public function degrades to a safe no-op when the broker is unconfigured, so callers (e.g. `enqueueEmail` in `mailer.ts`) can fall back to doing work inline without try/catch gymnastics.
+RabbitMQ (AMQP 0-9-1) adapter that exposes publish and consume primitives over a single shared channel. Every public function degrades to a safe no-op when the broker is unconfigured or unreachable — `publishToQueue` resolves `false` so callers (e.g. `mailer.ts → enqueueEmail`) can fall back to doing the work inline. Queue names are sourced from the generated `WORKER_CHANNELS` constant to keep producers and consumers in lock-step.
 
 ## Key elements
 
-- **`isQueueEnabled()`** — Exported gate: returns `true` only when an AMQP URL can be built *and* `NODE_RABBITMQ_ENABLED` is not set to false. Callers check this *before* constructing a job payload.
-- **`queueConnection`** — A `manageConnection<Channel>` instance. Memoises the connect, shares in-flight attempts, and owns the two-step open (TCP connection → channel). Both halves are supervised by `superviseHandle` so an unhandled `error` never crashes the process.
-- **`superviseHandle(handle, onClose)`** — Attaches `error` (→ `reportUnavailable`) and `close` (→ `onClose`) listeners to any `EventEmitter` (connection or channel). The `onClose` callback calls `queueConnection.forget()`, which is the entire reconnect strategy: demand-driven, no timers.
-- **`startQueue()` / `stopQueue()`** — Lifecycle hooks. `startQueue` pays the handshake cost at boot; `stopQueue` flushes and closes the connection (implicitly closing its channel).
-- **`queueState()`** — Returns a `DependencyStatus` for the health endpoint. No I/O; simply reports the managed-connection's current state.
-- **`EMAIL_QUEUE` / `PDF_QUEUE`** — Queue-name constants sourced from `WORKER_CHANNELS` (generated from `asyncapi.yaml`).
-- **`DEAD_LETTER_EXCHANGE` / `deadLetterQueueOf(queue)`** — Dead-letter naming convention. A `direct` exchange routes refusals to `<queue>.dead`, so `nack(msg, false, false)` means "moved for a human."
-- **`assertJobQueue(ch, queue, durable)`** — Idempotent declaration of the DLQ exchange → DLQ queue → binding → work queue (with `x-dead-letter-*` args). Called on both publish and consume paths so producer/consumer can start in any order.
-- **`PublishOptions<TPayload>` / `publishToQueue`** — Publishes to the default exchange (routing key = literal queue name). Returns `true` on acceptance, `false` when unavailable. Generic payload type is checked at the call site so producer and consumer share one contract.
-- **`consumeFromQueue`** (truncated) — Consumes from a queue with a low `prefetch` to limit unacked messages on the consumer side.
+- **`isQueueEnabled()`** – exported guard; checks that an AMQP URL can be built *and* the `NODE_RABBITMQ_ENABLED` flag isn't `false`. Callers branch on it before building a payload.
+- **`queueConnection`** – the `manageConnection<Channel>` instance. Encapsulates memoised connect, shared in-flight promise, and one-time unavailable warning. The `connect` step is two-phase (TCP connection → channel); both are supervised via `superviseHandle`.
+- **`superviseHandle(handle, onClose)`** – attaches mandatory `error` and `close` listeners to any amqplib `EventEmitter`. Without this, an unhandled `error` event crashes the process.
+- **`queueState()`** – returns a `DependencyStatus` for the health endpoint. Reads cached state only; performs no I/O.
+- **`startQueue()` / `stopQueue()`** – boot-time warm-up and graceful shutdown (flush + close connection, which implicitly closes channels).
+- **`EMAIL_QUEUE`, `PDF_QUEUE`, `IMAGE_QUEUE`** – re-exported from `WORKER_CHANNELS`; the single source of truth for queue spelling.
+- **`DEAD_LETTER_EXCHANGE` / `deadLetterQueueOf(queue)`** – naming convention: `direct` exchange `dead-letter`, per-queue DLQ named `<queue>.dead`.
+- **`assertJobQueue(ch, queue, durable)`** – idempotent declaration of the DLX → DLQ → work-queue binding. Called on both publish and consume paths so either side may start first.
+- **`PublishOptions<TPayload>` / `publishToQueue<TPayload>()`** – publishes to the default exchange with the queue name as routing key. `durable` and `persistent` default to `true`. Returns `boolean` (accepted vs. unavailable) so callers can choose inline fallback.
+- **`getAmqpUrl()`** – internal; assembles `amqp://…` from `NODE_RABBITMQ_*` env vars. Returns `undefined` when the required port is absent.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/managed-connection.ts`** — Supplies the `manageConnection` factory that provides memoisation, shared in-flight connect, `forget`, `state`, and `stop` semantics. This adapter is a consumer of that pattern (same as `cache.ts`).
-- **`src/infrastructure/runtime/environment.ts`** — `environmentFlag('NODE_RABBITMQ_ENABLED', true)` gates `isQueueEnabled`.
-- **`src/infrastructure/observability/dependency-health.ts`** — Consumes `queueState()` to include RabbitMQ in the `GET /observability/health` payload.
-- **`src/infrastructure/adapters/logger.ts`** — Import for structured logging (used via `queueConnection.reportUnavailable` path).
-- **`src/infrastructure/adapters/mailer.ts`** — Primary producer: checks `isQueueEnabled`, then calls `publishToQueue<EmailJob>`; falls back to inline send on `false`.
-- **`src/infrastructure/adapters/pdf.ts`** — Producer for `PDF_QUEUE`, same inline-fallback pattern.
-- **`src/infrastructure/adapters/email.worker.ts` / `pdf.worker.ts`** — Consumers: call `consumeFromQueue` against their respective queue.
-- **`src/app.ts` / `src/app/workers.ts` / `src/infrastructure/runtime/server-lifecycle.ts`** — Orchestrate `startQueue`/`stopQueue` during boot and graceful shutdown.
-- **`src/types/index.ts`** — Exports `WORKER_CHANNELS`, the single source of truth for queue names.
-- **`docs/tools/rabbitmq.md`** — Operational runbook (upgrading broker, `PRECONDITION_FAILED` recovery, dead-letter inspection).
-- **`tests/unit/infrastructure/adapters/queue.test.ts`** — Unit tests for the adapter's no-op, enablement, and publish/consume paths.
+- **`@infrastructure/adapters/managed-connection`** – provides `manageConnection`, the shared memoise-and-warn wrapper around the two-step AMQP connect.
+- **`@infrastructure/adapters/logger`** – imported for structured log output (used in the truncated portion for warnings/errors).
+- **`@infrastructure/observability/dependency-health`** – supplies the `DependencyStatus` type that `queueState()` returns; consumed by the `/observability/health` endpoint.
+- **`@types` (`WORKER_CHANNELS`)** – generated from `asyncapi.yaml`; the sole source for queue-name constants.
+- **`@infrastructure/runtime/environment`** – `environmentFlag` gates the `isQueueEnabled` check.
+- **`@infrastructure/adapters/mailer`** – primary caller; branches on `isQueueEnabled` / `publishToQueue` result to decide inline vs. queued send.
+- **`@infrastructure/adapters/{email,image,pdf}.worker`** – consumers that `assertJobQueue` and `consumeFromQueue` on the queues this module publishes to.
+- **`@app.ts` / `@app/workers.ts` / `@infrastructure/runtime/server-lifecycle`** – orchestrate `startQueue` / `stopQueue` during process boot and shutdown.
+- **`tests/unit/infrastructure/adapters/queue.test.ts`** – unit tests for this module.
+- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** – exercises queue interactions indirectly via the image worker.
 
 ## Notes
 
-- **`isQueueEnabled` is exported, the URL builder is not.** This is intentional: callers need the boolean *before* deciding whether to build a payload, but should never assemble their own AMQP URL.
-- **Channel vs. connection lifetime.** The managed-connection's "handle" is the channel, but the file keeps a separate `connection` reference because closing the connection is the only way to release the TCP socket. `stopQueue` closes the connection, not the channel.
-- **Reconnect is demand-driven.** There is no back-off timer or reconnection loop. `forget()` on close simply drops the cached handle; the next `getChannel()` call re-opens. Under sustained outages this means every request pays the connect cost until the broker returns.
-- **`assertJobQueue` ordering matters.** The DLQ binding is created *before* the work queue references the exchange. A work queue whose `x-dead-letter-exchange` points at a non-existent exchange silently drops refused messages.
-- **`PRECONDITION_FAILED` kills the channel.** If the queue already exists with different arguments (e.g. after a code change), `assertQueue` throws and the channel is dead. See `docs/tools/rabbitmq.md` for the recovery procedure.
-- **Publishes to the default exchange.** No custom exchanges are used for the inbound path; the only declared exchange (`dead-letter`) is broker-side outbound routing.
+- **Two handles, one socket.** The `ChannelModel` (connection) is stored separately because a `Channel` has no back-reference to its connection, and only closing the connection releases the TCP socket. `close()` must close the connection, not the channel.
+- **Unsupervised EventEmitters are fatal.** Both connection and channel emit `error`; an unhandled one terminates the process. `superviseHandle` exists so the pair can't be attached on one and forgotten on the other.
+- **Channel death ≠ connection death.** A channel can die (e.g. `PRECONDITION_FAILED` from a mismatched `assertQueue`) while the connection stays open. Without per-channel `close` supervision, the cached handle becomes a corpse and `queueState()` keeps reporting `ready`.
+- **Dead-letter ordering matters.** The DLQ must be bound to the DLX *before* the work queue names that exchange; otherwise `x-dead-letter-exchange` resolves to nothing and the message is silently dropped.
+- **`assertQueue` is not idempotent across different arguments.** If a queue already exists with different options (e.g. `durable` flipped), the broker throws `PRECONDITION_FAILED` and kills the channel. See `docs/tools/rabbitmq.md` for upgrade steps.
+- **Prefetch is intentionally low** (set in the truncated `consumeFromQueue`) so that unacked messages are requeued promptly on consumer death rather than piling up.

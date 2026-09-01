@@ -1,20 +1,25 @@
 # src/modules/inventory/controllers/post-adjustment.ts
 
 ## Purpose
-Express handler for `POST /inventory/adjustments` — the audited stocktake-correction endpoint. It validates the request body, rejects zero-delta no-ops, and delegates to `inventoryService.adjust`, recording the caller, the signed quantity change, and a free-text reason in the ledger.
+
+Controller handler for `POST /inventory/adjustments` — a stocktake correction. This is the module's primary audited endpoint: an unexplained stock correction is indistinguishable from shrinkage, so the handler enforces a non-zero signed delta and a human-written reason before delegating to the inventory service.
 
 ## Key elements
-- **`postAdjustment(request, response)`** — the sole export. Parses the body against the `AdjustStockBody` Zod schema, returns **422** if `delta === 0`, then calls `inventoryService.adjust(productId, delta, note, callerContextOf(request))`. Responds **200** on success, uses `refused` to surface soft rejections, and funnels errors through `catchAs`.
+
+- **`postAdjustment(request, response)`** (exported) — the sole handler. Validates the body against the `AdjustStockBody` Zod schema, rejects `delta === 0` with a `422` and an i18n error code, then calls `inventoryService.adjust(productId, delta, note, callerContext)`. Resolves with `successResponse` or a refusal; errors are routed through `catchAs`.
+- **Zero-delta guard** — explicit `422` check *after* schema parsing (not expressible as a Zod constraint). A no-op ledger row is treated as an error, not silently accepted.
+- **`callerContextOf(request)`** — extracted from the request and passed to the service so the resulting ledger row records *who* made the adjustment.
 
 ## Relationships
-- **`@infrastructure/http/controller`** (`catchAs`, `parseBody`, `refused`) — provides the shared guard/parse/error-capture utilities used throughout the handler.
-- **`@infrastructure/http/response`** (`successResponse`, `rejectResponse`) — shapes the JSON envelope for both the 422 zero-delta rejection and the 200 success path.
-- **`@infrastructure/http/request`** (`callerContextOf`) — extracts the authenticated admin/actor context forwarded to the service for the audit row.
-- **`@infrastructure/i18n`** (`t`) — localises the `inventory.adjust-zero` message returned in the 422 body.
-- **`../service`** (`inventoryService.adjust`) — performs the actual stock mutation and ledger write; this controller is a thin transport layer over it.
-- **`../routes.ts`** — registers `postAdjustment` on the `POST /inventory/adjustments` path.
+
+- **`../routes.ts`** — registers `postAdjustment` as the handler for the `POST /inventory/adjustments` route.
+- **`../service.ts`** — calls `inventoryService.adjust(...)`; the service owns the actual ledger write and any authorization checks.
+- **`@infrastructure/http/controller`** — provides `parseBody` (Zod validation), `refused` (service-level rejection check), and `catchAs` (error → HTTP mapping).
+- **`@infrastructure/http/request`** — provides `callerContextOf` to identify the acting admin.
+- **`@infrastructure/http/response`** — provides `successResponse` / `rejectResponse` for uniform reply shaping.
+- **`@infrastructure/i18n`** — provides `t` for the localized error message on zero-delta rejection (`inventory.adjust-zero`).
 
 ## Notes
-- **Zero-delta rejection lives in the controller, not the schema.** The comment explains that Zod's `minimum`/`maximum` cannot express "any integer ≠ 0", so the 422 guard is hard-coded here. A no-op correction is refused rather than accepted to avoid writing a meaningless ledger row.
-- **Audit sensitivity.** The JSDoc calls this "THE audited endpoint of this module." Every successful call writes a row containing the admin identity, the signed `delta`, and the admin-supplied `note`. Treat changes here as audit-impacting.
-- **`refused` is a soft-fail path.** If the service returns a refusal (e.g. product not found, concurrent stocktake lock), `refused` writes the error response and the `.then` chain short-circuits — it is *not* thrown to `.catch`.
+
+- The zero-delta check lives in the controller, not the schema, because Zod has no clean "non-zero number" primitive here; the `422` response is intentional to distinguish "you sent a no-op" from a generic validation failure.
+- The service is expected to return a refusal object (checked via `refused`) for business-rule failures (e.g., product not found, insufficient permission) rather than throwing, so the handler branches on `refused` before `catchAs` handles unexpected errors.
