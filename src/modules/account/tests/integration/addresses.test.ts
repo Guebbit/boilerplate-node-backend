@@ -172,7 +172,7 @@ describe('checkout and the address', () => {
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
-        expect(result.success === false && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
+        expect(!result.success && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
         // Nothing moved — the address check runs before anything is held.
         const stored = await productRepository.findById(String(product._id));
         expect(stored?.onHand).toBe(10);
@@ -194,11 +194,15 @@ describe('checkout and the address', () => {
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
         const product = await cartWith(stranger.id);
 
-        const result = await cartService.orderConfirm(stranger.id, testCallerContext, ownersEntryId);
+        const result = await cartService.orderConfirm(
+            stranger.id,
+            testCallerContext,
+            ownersEntryId
+        );
 
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
-        expect(result.success === false && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
+        expect(!result.success && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
         await expect(orderRepository.count({ userId: stranger._id })).resolves.toBe(0);
         const stored = await productRepository.findById(String(product._id));
         expect(stored?.onHand).toBe(10);

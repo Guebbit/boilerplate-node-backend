@@ -217,7 +217,8 @@ describe('R2 — concurrent checkouts of one cart', () => {
         expectNoServerErrors(results);
         const losers = results
             .filter(
-                (result): result is PromiseFulfilledResult<Response> => result.status === 'fulfilled'
+                (result): result is PromiseFulfilledResult<Response> =>
+                    result.status === 'fulfilled'
             )
             .map((result) => result.value)
             .filter((response) => response.status === 409);
