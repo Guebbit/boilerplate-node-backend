@@ -147,6 +147,7 @@ flowchart LR
 ## Good starting points
 
 - Never run this repo before? Start at [Getting Started](./getting-started.md) — four commands to a browsable API.
+- Deploying instead of developing? [Getting Started — Production](./getting-started-production.md).
 - Not a developer, or explaining this to someone who is not? [Demo Shop](./demo-ecommerce/) — the whole application in five short pages.
 - Want to know what one domain does, end to end? [Modules](./modules/) — one page each, same nine blocks every time.
 - Found a file and have no idea what it is? [File Glossary](./reference/) — one hop to an answer.

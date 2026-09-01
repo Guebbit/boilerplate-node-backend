@@ -117,7 +117,7 @@ Four ideas carry the whole repository:
 | Look up a script              | [Package Scripts](./docs/tools/package-scripts.md)                                                                      |
 | Understand a dependency       | [Tools Explained](./docs/tools/tools-explained.md)                                                                      |
 | Test something                | [Testing overview](./docs/tools/testing-and-docs.md)                                                                    |
-| Deploy it                     | `.docker/Dockerfile.production` · `docker-compose.production.yml`                                                       |
+| Deploy it                     | [Getting Started — Production](./docs/getting-started-production.md)                                                    |
 
 ---
 

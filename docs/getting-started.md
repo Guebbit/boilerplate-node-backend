@@ -114,3 +114,4 @@ minutes), `npm run test:fuzz`, `npm run test:prism` (boots a mock server on a re
 | Find out what a dependency is doing here    | [Tools Explained](./tools/tools-explained.md)                         |
 | Look up a script                            | [Package Scripts](./tools/package-scripts.md)                         |
 | Run the paired frontend too                 | [Pairing & Ports](./tools/pairing-and-ports.md)                       |
+| Deploy this instead of running it locally   | [Getting Started — Production](./getting-started-production.md)       |

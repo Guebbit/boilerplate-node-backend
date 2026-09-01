@@ -12,6 +12,7 @@ export default withMermaid(
             nav: [
                 { text: 'Home', link: '/' },
                 { text: 'Start', link: '/getting-started' },
+                { text: 'Start (Production)', link: '/getting-started-production' },
                 { text: 'Demo Shop', link: '/demo-ecommerce/' },
                 { text: 'Theory', link: '/theory/' },
                 { text: 'Modules', link: '/modules/' },

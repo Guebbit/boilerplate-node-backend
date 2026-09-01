@@ -71,29 +71,29 @@ flowchart LR
 
 ### App runtime
 
-| Container | Image                                            | Port(s)                      | Role                                                                                                                         |
-| --------- | ------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `app`     | `.docker/Dockerfile` (node:25-alpine + Chromium) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `redis`, `rabbitmq`, `otel-collector`. |
+| Container | Image                                            | Port(s)                      | Role                                                                                                                         | Read next               |
+| --------- | ------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `app`     | `.docker/Dockerfile` (node:25-alpine + Chromium) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `redis`, `rabbitmq`, `otel-collector`. | [Runtime](./runtime.md) |
 
 ### Core data
 
-| Container  | Image                   | Port(s)                                | Role                                                                                       |
-| ---------- | ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `database` | `mongo:8`               | `27017`                                | Primary datastore. Persists data in a named Docker volume (`boilerplate_mongodb_volume`).  |
-| `redis`    | `redis:7`               | `6379`                                 | Server-side response cache. Cache is intentionally ephemeral — data is lost on restart.    |
-| `rabbitmq` | `rabbitmq:3-management` | `5672` (AMQP), `15672` (management UI) | Message broker for async jobs (email, PDF generation). Management UI available in browser. |
+| Container  | Image                   | Port(s)                                | Role                                                                                       | Read next                                   |
+| ---------- | ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------- |
+| `database` | `mongo:8`               | `27017`                                | Primary datastore. Persists data in a named Docker volume (`boilerplate_mongodb_volume`).  | [MongoDB & Mongoose](./mongodb-mongoose.md) |
+| `redis`    | `redis:7`               | `6379`                                 | Server-side response cache. Cache is intentionally ephemeral — data is lost on restart.    | [Redis Cache](./redis-cache.md)             |
+| `rabbitmq` | `rabbitmq:3-management` | `5672` (AMQP), `15672` (management UI) | Message broker for async jobs (email, PDF generation). Management UI available in browser. | [RabbitMQ](./rabbitmq.md)                   |
 
 ### Observability stack
 
-| Container        | Image                                          | Port(s)                      | Role                                                                                                                       |
-| ---------------- | ---------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `otel-collector` | `otel/opentelemetry-collector-contrib:0.114.0` | `4317` (gRPC), `4318` (HTTP) | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                                      |
-| `tempo`          | `grafana/tempo:2.6.1`                          | internal only                | Stores distributed traces received from the OTel Collector. Queried by Grafana.                                            |
-| `prometheus`     | `prom/prometheus:v2.55.1`                      | `9090`                       | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.                          |
-| `alertmanager`   | `prom/alertmanager:v0.27.0`                    | `9093`                       | Receives firing alerts from Prometheus. Routes/groups notifications. Null receiver by default in local dev.                |
-| `loki`           | `grafana/loki:3.3.2`                           | `3100`                       | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                                       |
-| `promtail`       | `grafana/promtail:3.3.2`                       | internal only                | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman. |
-| `grafana`        | `grafana/grafana:11.4.0`                       | `3001`                       | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.            |
+| Container        | Image                                          | Port(s)                      | Role                                                                                                                       | Read next                                  |
+| ---------------- | ---------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `otel-collector` | `otel/opentelemetry-collector-contrib:0.114.0` | `4317` (gRPC), `4318` (HTTP) | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                                      | [OpenTelemetry](./opentelemetry.md)        |
+| `tempo`          | `grafana/tempo:2.6.1`                          | internal only                | Stores distributed traces received from the OTel Collector. Queried by Grafana.                                            | [Tempo](./tempo.md)                        |
+| `prometheus`     | `prom/prometheus:v2.55.1`                      | `9090`                       | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.                          | [Prometheus](./prometheus.md)              |
+| `alertmanager`   | `prom/alertmanager:v0.27.0`                    | `9093`                       | Receives firing alerts from Prometheus. Routes/groups notifications. Null receiver by default in local dev.                | [Prometheus](./prometheus.md#alertmanager) |
+| `loki`           | `grafana/loki:3.3.2`                           | `3100`                       | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                                       | [Loki](./loki.md)                          |
+| `promtail`       | `grafana/promtail:3.3.2`                       | internal only                | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman. | [Loki](./loki.md)                          |
+| `grafana`        | `grafana/grafana:11.4.0`                       | `3001`                       | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.            | [Grafana](./grafana.md)                    |
 
 ## Service groups
 
