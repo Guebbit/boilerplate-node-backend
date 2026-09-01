@@ -67,7 +67,7 @@ One config per service in the chain. Each is mounted into its container by the c
 
 ## Data retention
 
-Two collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
+Three collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
 job — this repo has no scheduler, so a TTL index is the one form of cleanup that costs nothing to
 run.
 
@@ -75,14 +75,27 @@ run.
 | ------------------ | ------------------------------ | ------- | ------------------------------------------- |
 | `auditlogs`        | `NODE_AUDIT_RETENTION_DAYS`    | 90      | [Winston & Audit Logs](../tools/winston.md) |
 | `feedbackrequests` | `NODE_FEEDBACK_RETENTION_DAYS` | 730     | [feedback](../modules/feedback.md)          |
+| `carts`            | `NODE_CART_RETENTION_DAYS`     | 365     | [cart](../modules/cart.md)                  |
 
-Both windows share one caveat, worth stating once rather than twice: **Mongo will not modify an
-existing TTL index's `expireAfterSeconds` when the value changes.** Raising or lowering either
-variable on a database that already holds the index does nothing until the index is dropped and
-recreated — a migration under `db/migrations/` (`collMod`), not a restart. `feedback`'s window is
-the longer of the two on purpose: a contact request can be evidence in a commercial dispute, and 24
-months sits inside the common limitation periods, while an audit entry is an operational signal
-with a much shorter useful life.
+All three share one caveat, worth stating once rather than three times: **Mongo will not modify an
+existing TTL index's `expireAfterSeconds` when the value changes.** Raising or lowering any of
+these variables on a database that already holds the index does nothing until the index is dropped
+and recreated — a migration under `db/migrations/` (`collMod`), not a restart. `feedback`'s window
+is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
+sits inside the common limitation periods. `carts` ties to `updatedAt`, so any edit restarts the
+clock — only a genuinely abandoned cart is ever removed.
+
+Two collections that must NOT be removed on a timer — `orders` and `payments` are invoices, kept
+for tax and commercial-law reasons — instead have their PII scrubbed in place by
+`npm run reap:orders` past `NODE_ORDER_PII_RETENTION_DAYS` (default 3650 days). See GDPR_FIX.md G2.
+
+`users` has no TTL either — `npm run reap:inactive-accounts` warns, then soft-deletes, then
+hard-deletes an account after `NODE_INACTIVE_ACCOUNT_DAYS` of no login, **disabled by default**
+(`0`). See GDPR_FIX.md G5 and the script's own header for the three-stage design.
+
+Log lines are Loki's retention, not Mongo's: `.docker/observability/loki.config.yaml` sets
+`retention_period: 168h` (7 days) for the local stack. A production deployment tunes this
+independently — it is the one retention window this repo does not read from `.env`.
 
 ## CI
 

@@ -80,6 +80,14 @@ export interface UserRecord extends Omit<User, 'createdAt' | 'updatedAt' | 'dele
     // soft delete
     deletedAt?: Date;
 
+    /**
+     * Stamped by `scripts/reap-inactive-accounts.ts` (GDPR_FIX.md G5) the first time it warns
+     * this account about impending removal — never set anywhere else. Absent means "never
+     * warned"; it is also how the script tells its OWN soft-deletes apart from an admin's when
+     * deciding what is safe to hard-delete next, since `deletedAt` alone doesn't say who set it.
+     */
+    inactivityWarnedAt?: Date;
+
     /*
      * Redeclared as `Date`, like `ProductDocument` and `OrderDocument`: the contract carries ISO
      * strings, `timestamps: true` writes real `Date`s. This model missed that treatment until a
@@ -266,6 +274,9 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         },
         deletedAt: {
             type: Date
+        },
+        inactivityWarnedAt: {
+            type: Date
         }
     },
     {
@@ -374,7 +385,8 @@ userSchema.methods.tokenRemoveAll = function (type: Token['type']) {
 export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
-    omit: ['password', 'tokens', 'pendingImageKey']
+    // `inactivityWarnedAt` is the reaper's own bookkeeping (GDPR_FIX.md G5), same treatment.
+    omit: ['password', 'tokens', 'pendingImageKey', 'inactivityWarnedAt']
 });
 
 /** The compiled Mongoose model. */

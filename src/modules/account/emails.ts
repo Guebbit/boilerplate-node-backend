@@ -139,3 +139,27 @@ export const deleteConfirmEmail = (locale: string, name: string): EmailContent =
         }
     };
 };
+
+/**
+ * Inactivity, stage one: `scripts/reap-inactive-accounts.ts` (GDPR_FIX.md G5) warning that the
+ * account will be deactivated, then erased, unless the owner signs back in.
+ */
+export const inactivityWarningEmail = (
+    locale: string,
+    name: string,
+    graceDays: number
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.inactivity-warning',
+        subject: t('account.email.inactivity-warning.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.inactivity-warning.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.inactivity-warning.greeting', { name }),
+            body: t('account.email.inactivity-warning.body', { days: graceDays }),
+            footer: t('email.footer')
+        }
+    };
+};

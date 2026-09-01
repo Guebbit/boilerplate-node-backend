@@ -26,6 +26,10 @@
             "wrong-current": "The current password is incorrect.",
             "success": "Password changed."
         },
+        "reauth": {
+            "wrong-password": "The password is incorrect.",
+            "success": "Identity confirmed."
+        },
         "logout": {
             "success": "Logged out."
         },
@@ -88,6 +92,12 @@
                 "greeting": "Hello, {{name}}!",
                 "body": "Your account has been permanently deleted.",
                 "farewell": "We're sorry to see you go. If this was a mistake, please contact support."
+            },
+            "inactivity-warning": {
+                "subject": "Your account has been inactive",
+                "meta-title": "Inactivity warning",
+                "greeting": "Hello, {{name}}!",
+                "body": "We haven't seen you sign in for a while. To keep your account, sign in within the next {{days}} days — after that it will be deactivated, and eventually permanently deleted."
             }
         },
         "addresses": {

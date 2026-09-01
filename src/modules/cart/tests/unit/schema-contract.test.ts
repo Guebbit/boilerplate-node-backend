@@ -21,6 +21,9 @@ import {
     typeOf
 } from '@tests/schema';
 
+/** The retention window the schema was built with, in seconds. Mirrors the model's own default. */
+const RETENTION_SECONDS = Number(process.env.NODE_CART_RETENTION_DAYS ?? 365) * 24 * 60 * 60;
+
 describe('cartSchema', () => {
     it('requires an owner and nothing else', () => {
         expect(requiredPaths(cartSchema)).toEqual(['userId']);
@@ -43,8 +46,20 @@ describe('cartSchema', () => {
         // Deleting a product must find every cart holding it; without this it reads the whole
         // collection.
         expect(indexSpecs(cartSchema)).toEqual([
+            'carts_updatedAt_ttl: updatedAt+1',
             'items.productId_1: items.productId+1',
             'userId_1: userId+1'
+        ]);
+    });
+
+    it('expires an abandoned cart at the configured retention window, and only that index', () => {
+        // GDPR_FIX.md G5: asserted against the configured window rather than a literal, so
+        // changing `NODE_CART_RETENTION_DAYS` moves the policy and the test together — and so a
+        // TTL appearing on a different index fails here.
+        expect(indexOptionSpecs(cartSchema)).toEqual([
+            'carts_updatedAt_ttl: expireAfterSeconds=' + RETENTION_SECONDS,
+            'items.productId_1: (none)',
+            'userId_1: unique=true'
         ]);
     });
 

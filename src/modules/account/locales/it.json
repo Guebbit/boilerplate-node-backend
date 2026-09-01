@@ -26,6 +26,10 @@
             "wrong-current": "La password attuale non è corretta.",
             "success": "Password modificata."
         },
+        "reauth": {
+            "wrong-password": "La password non è corretta.",
+            "success": "Identità confermata."
+        },
         "logout": {
             "success": "Disconnessione effettuata."
         },
@@ -88,6 +92,12 @@
                 "greeting": "Ciao, {{name}}!",
                 "body": "Il tuo account è stato eliminato definitivamente.",
                 "farewell": "Ci dispiace vederti andare via. Se si è trattato di un errore, contatta l'assistenza."
+            },
+            "inactivity-warning": {
+                "subject": "Il tuo account è inattivo",
+                "meta-title": "Avviso di inattività",
+                "greeting": "Ciao, {{name}}!",
+                "body": "Non ti vediamo accedere da un po'. Per mantenere il tuo account, accedi entro i prossimi {{days}} giorni — trascorsi i quali verrà disattivato e, in seguito, eliminato definitivamente."
             }
         },
         "addresses": {

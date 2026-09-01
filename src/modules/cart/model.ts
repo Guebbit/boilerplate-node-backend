@@ -11,6 +11,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
  * A stored cart line.
@@ -105,6 +106,27 @@ export const cartSchema = new Schema<CartDocument>(
  * unnamed since nothing else creates it.
  */
 cartSchema.index({ 'items.productId': 1 });
+
+/**
+ * How long an untouched cart survives, in days, before Mongo's TTL index removes it — read at
+ * import time since a TTL index is created once, at startup, from whatever value is configured
+ * then (same caveat as `audit-logs/model.ts`'s).
+ */
+const cartRetentionDays = environmentNumber('NODE_CART_RETENTION_DAYS', 365, 1);
+
+/*
+ * TTL index, GDPR_FIX.md G5: an abandoned cart is convenience state with no legal basis for
+ * indefinite storage, unlike an order. `updatedAt`, not `createdAt` — any change to the cart
+ * (a quantity bump, an added line) restarts the clock, which is what "abandoned" means.
+ *
+ * Same caveat as every other TTL index here: Mongo will not modify an existing index's
+ * `expireAfterSeconds` when `NODE_CART_RETENTION_DAYS` changes — a migration (`collMod`) is
+ * needed, not a restart.
+ */
+cartSchema.index(
+    { updatedAt: 1 },
+    { name: 'carts_updatedAt_ttl', expireAfterSeconds: cartRetentionDays * 24 * 60 * 60 }
+);
 
 /**
  * Normalizes a serialized cart: the shared `_id` → `id` and `__v` removal, nothing else.

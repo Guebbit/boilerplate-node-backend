@@ -61,6 +61,7 @@
         "db:cache:clear": "tsx db/cache-clear.ts",
         "db:bootstrap": "npm run db:migrate:up && npm run db:seed",
         "reap:quarantine": "tsx scripts/reap-quarantine.ts",
+        "reap:inactive-accounts": "tsx scripts/reap-inactive-accounts.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",
         "compose:rebuild": "npm run compose -- down -v && npm run compose -- build --no-cache && npm run compose -- up -d",

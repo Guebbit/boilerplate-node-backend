@@ -126,14 +126,16 @@ it('publishes the set the pair agreed on', () => {
      * Stated rather than derived, because the point is agreement with a repository this test cannot
      * read.
      *
-     * `account.setup-request` is new here as of 2026-08-28 and is **not yet** in
-     * `tests/CrossCutting/OutboxNamesTest.php` in boilerplate-php-laravel-backend — the admin
-     * "create a user, let them set their own password" flow only exists on this backend so far. See
-     * `HANDOFF.md` §2.22 for what porting it needs. The other eight are the agreed, mirrored set.
+     * `account.setup-request` is new here as of 2026-08-28 and `account.inactivity-warning` as of
+     * GDPR_FIX.md G5 — neither is **yet** in `tests/CrossCutting/OutboxNamesTest.php` in
+     * boilerplate-php-laravel-backend: the admin "create a user, let them set their own password"
+     * flow and the inactive-account reaper only exist on this backend so far. See `HANDOFF.md`
+     * §2.22 for what porting the first one needs. The other eight are the agreed, mirrored set.
      */
     const agreed = [
         'account.delete-confirm',
         'account.delete-request',
+        'account.inactivity-warning',
         'account.reset-confirm',
         'account.reset-request',
         'account.setup-request',

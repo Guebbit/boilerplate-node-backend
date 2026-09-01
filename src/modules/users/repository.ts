@@ -31,6 +31,20 @@ const CREDENTIAL_FIELDS = '+password +tokens';
 const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: undefined };
 
 /**
+ * A user's last proof of life, as an aggregation `$expr`: the latest refresh-token exchange
+ * (`tokens[].lastUsedAt`, already stamped on every refresh — see `model.ts`'s `Token`), or
+ * `createdAt` for an account that has never come back to redeem one. Shared by every
+ * `findInactive*` query below (GDPR_FIX.md G5) so "how recently was this account used" is
+ * answered once rather than reimplemented per query and drifting.
+ *
+ * `tokens` is `select: false` on the schema — irrelevant here, since that only trims what a
+ * QUERY RETURNS, not what a `$expr` filter may read from the stored document.
+ */
+const LAST_ACTIVE_EXPR = {
+    $max: { $concatArrays: [{ $ifNull: ['$tokens.lastUsedAt', []] }, ['$createdAt']] }
+};
+
+/**
  * Standard CRUD via the repository factory, plus credential reads and soft-delete scoping. The
  * type is written out because Mongoose's generics are too large for TypeScript to serialize an
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
@@ -52,6 +66,9 @@ export const userRepository: Repository<UserDocument> & {
     tokenSupersede: (token: string) => Promise<boolean>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
     writebackImage: ImageWriteback;
+    findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
+    findWarnedStillInactive: (cutoff: Date) => Promise<UserDocument[]>;
+    findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
 } = {
     ...createRepository<UserDocument>(userModel, {
         transform: applyUserTransform,
@@ -282,5 +299,35 @@ export const userRepository: Repository<UserDocument> & {
                 { timestamps: false }
             )
             .exec()
-            .then(({ matchedCount }) => matchedCount > 0)
+            .then(({ matchedCount }) => matchedCount > 0),
+
+    findInactiveUnwarned: (cutoff: Date) =>
+        userModel
+            .find({
+                active: { $ne: false },
+                deletedAt: { $exists: false },
+                inactivityWarnedAt: { $exists: false },
+                $expr: { $lt: [LAST_ACTIVE_EXPR, cutoff] }
+            })
+            .exec(),
+
+    findWarnedStillInactive: (cutoff: Date) =>
+        userModel
+            .find({
+                deletedAt: { $exists: false },
+                inactivityWarnedAt: { $exists: true },
+                $expr: { $lt: [LAST_ACTIVE_EXPR, cutoff] }
+            })
+            .exec(),
+
+    findReaperSoftDeletedPastGrace: (cutoff: Date) =>
+        userModel
+            .find({
+                deletedAt: { $exists: true, $lt: cutoff },
+                // `inactivityWarnedAt` is the marker that THIS reaper made the soft delete —
+                // an admin's own soft delete never sets it, so it is never a hard-delete
+                // candidate here. See the field's own doc comment on `UserRecord`.
+                inactivityWarnedAt: { $exists: true }
+            })
+            .exec()
 };
