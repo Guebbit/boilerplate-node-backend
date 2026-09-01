@@ -306,10 +306,9 @@ describe('isAdmin', () => {
         expect(response.status).toHaveBeenCalledWith(403);
     });
 
-    it('answers 403, not 401, for an unauthenticated caller', () => {
-        // Deliberate: this middleware runs after `isAuth`, so reaching it without a context is a
-        // routing mistake rather than a missing credential, and 401 would invite a pointless
-        // re-login attempt.
+    it('answers 401, not 403, for an unauthenticated caller', () => {
+        // No `authContext` at all means no credentials were presented — 401, distinct from the
+        // case above (authenticated, just not admin), which is 403.
         const next = jest.fn();
         const response = makeResponseStub();
 

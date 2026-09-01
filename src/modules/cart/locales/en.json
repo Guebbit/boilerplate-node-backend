@@ -13,6 +13,7 @@
         },
         "insufficient-stock": "Some items are no longer available in the quantity you asked for — see `details.lines`.",
         "address-not-found": "The selected shipping address was not found.",
-        "shipping-method-not-found": "The chosen shipping method does not exist."
+        "shipping-method-not-found": "The chosen shipping method does not exist.",
+        "shipping-not-applicable": "Your cart contains only digital products, which do not need a shipping method."
     }
 }

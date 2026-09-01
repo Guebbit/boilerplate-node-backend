@@ -34,6 +34,12 @@ describe('productSchema — what a product must carry', () => {
         expect(defaultOf(productSchema, 'active')).toBe(true);
     });
 
+    it('assumes a product is physical unless told otherwise', () => {
+        // Matches `openapi.yaml`'s default: an undeclared default here is one `cart` would have
+        // to guess at when deciding whether a checkout needs a shipping method.
+        expect(defaultOf(productSchema, 'requiresShipping')).toBe(true);
+    });
+
     it('defaults the text and list fields to empty rather than absent', () => {
         // `categories` and `tags` feed the facet endpoint, which counts array members: `undefined`
         // there is a different code path in every consumer, and one of them will forget it.

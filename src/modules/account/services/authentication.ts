@@ -416,7 +416,9 @@ export const tokenRemoveAll = (
                 | ResponseSuccess<UserDocument>
                 | ResponseReject
                 | Promise<ResponseSuccess<UserDocument>> => {
-                if (!user) return generateReject(404, []);
+                // Gone-but-verified is 401 here too — `openapi.yaml` declares no 404 for
+                // `logoutAll`, and the caller's session is exactly what no longer exists.
+                if (!user) return generateReject(401, []);
                 // `$pull` rather than filter-and-save: `user.tokens = user.tokens.filter(...)`
                 // rebuilds the array, writing it back whole and erasing anything added between
                 // this function's read and write. That race window is hard to assert in a test —

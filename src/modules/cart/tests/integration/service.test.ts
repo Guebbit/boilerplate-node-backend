@@ -628,7 +628,7 @@ describe('orderConfirm', () => {
         expect(stored!.reserved).toBe(0);
     });
 
-    it('an omitted method leaves the order with no method and nothing owed for shipping', async () => {
+    it('an omitted method leaves both shipping fields absent', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
@@ -636,12 +636,61 @@ describe('orderConfirm', () => {
         await orderConfirm(user.id, testCallerContext);
 
         const order = await orderRepository.findOne({ userId: user._id });
-        // The two columns answer different questions and are absent for different reasons. No
-        // method WAS chosen, so `shippingMethod` stays absent — inventing one would be a claim.
-        // What the customer owes for shipping is always a number, and here it is zero: the schema
-        // defaults it, so `orderTotal` never has to read absence as a price.
+        // Both absent together, per `shared/contracts/openapi.root.yaml`: "shipping is not
+        // required to buy". A chosen method that happens to cost 0 (`pickup`, or `standard`
+        // above `freeAbove`) is a DIFFERENT state — `shippingMethod` present, cost legitimately 0.
         expect(order!.shippingMethod).toBeUndefined();
+        expect(order!.shippingCost).toBeUndefined();
+    });
+
+    it('a chosen method that costs nothing still freezes the method, unlike no method at all', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 500 });
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        // `standard` (5, freeAbove: 100) — a 500 line total clears the threshold.
+        await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+
+        const order = await orderRepository.findOne({ userId: user._id });
+        expect(order!.shippingMethod).toBe('standard');
         expect(order!.shippingCost).toBe(0);
+    });
+
+    it('refuses a shipping method for a cart made entirely of digital products', async () => {
+        const user = await createUser();
+        const ebook = await createProduct({ requiresShipping: false });
+        await cartItemSetById(user.id, String(ebook._id), 1);
+
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_NOT_APPLICABLE');
+        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+    });
+
+    it('checks out a digital-only cart with no method at all, same as any other', async () => {
+        const user = await createUser();
+        const ebook = await createProduct({ requiresShipping: false });
+        await cartItemSetById(user.id, String(ebook._id), 1);
+
+        await orderConfirm(user.id, testCallerContext);
+
+        const order = await orderRepository.findOne({ userId: user._id });
+        expect(order!.shippingMethod).toBeUndefined();
+        expect(order!.shippingCost).toBeUndefined();
+    });
+
+    it('still allows a shipping method when only SOME lines are digital', async () => {
+        const user = await createUser();
+        const ebook = await createProduct({ requiresShipping: false });
+        const mug = await createProduct({ requiresShipping: true, price: 500 });
+        await cartItemSetById(user.id, String(ebook._id), 1);
+        await cartItemAddById(user.id, String(mug._id), 1);
+
+        await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+
+        const order = await orderRepository.findOne({ userId: user._id });
+        expect(order!.shippingMethod).toBe('standard');
     });
 
     it('sends the customer a confirmation email listing the bought lines', async () => {

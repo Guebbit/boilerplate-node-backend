@@ -429,6 +429,11 @@ components:
                 active:
                     type: boolean
                     default: true
+                # Default true: most products are physical. false is a digital good — checkout
+                # never needs a shipping method for a cart made entirely of these.
+                requiresShipping:
+                    type: boolean
+                    default: true
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 categories:
@@ -472,6 +477,9 @@ components:
                 active:
                     type: boolean
                     default: true
+                requiresShipping:
+                    type: boolean
+                    default: true
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
@@ -503,6 +511,8 @@ components:
                     minimum: 0
                 active:
                     type: boolean
+                requiresShipping:
+                    type: boolean
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 categories:
@@ -530,6 +540,8 @@ components:
                     format: double
                     minimum: 0
                 active:
+                    type: boolean
+                requiresShipping:
                     type: boolean
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
@@ -560,6 +572,8 @@ components:
                     minimum: 0
                 active:
                     type: boolean
+                requiresShipping:
+                    type: boolean
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 categories:
@@ -585,6 +599,8 @@ components:
                     format: double
                     minimum: 0
                 active:
+                    type: boolean
+                requiresShipping:
                     type: boolean
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.

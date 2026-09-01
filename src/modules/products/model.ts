@@ -151,6 +151,15 @@ export const productSchema = new Schema<ProductDocument, ProductModel, ProductMe
             type: Boolean,
             default: true
         },
+        /*
+         * Default `true`, matching `openapi.yaml`: most products are physical. `false` marks a
+         * digital good — `cart` reads this to decide whether a checkout even needs a shipping
+         * method, not this module's own concern.
+         */
+        requiresShipping: {
+            type: Boolean,
+            default: true
+        },
         deletedAt: {
             type: Date
         }

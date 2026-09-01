@@ -116,19 +116,17 @@ export const orderSchema = new Schema<OrderDocument>(
         },
         /*
          * The shipping choice, frozen at checkout: the method's id and what it COST THEN, so a
-         * later rate change can't re-price history. `shippingMethod` is absent when none was
-         * chosen. `shippingCost` is NOT — it defaults to 0, since what's owed for shipping is
-         * always a number, keeping `orderTotal`'s tolerance of an absent value a defence, not a
-         * live contract. `db/migrations/20260820140000-order-shipping-cost.js` backfills rows
-         * written before this default existed.
+         * later rate change can't re-price history. Both fields are absent together when no
+         * method was chosen (free-above-threshold or a genuinely free method like `pickup` still
+         * freezes `shippingMethod` — it is present, `shippingCost` is legitimately `0`; only "no
+         * method at all" leaves both unset) — `orderTotal` already tolerates an absent value.
          */
         shippingMethod: {
             type: String
         },
         shippingCost: {
             type: Number,
-            min: 0,
-            default: 0
+            min: 0
         },
         /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in

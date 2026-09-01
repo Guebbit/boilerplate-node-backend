@@ -231,7 +231,10 @@ export const updateProfile = (
               // `sendVerificationEmail`, which pushes a token onto this same document.
               .findByIdWithCredentials(userId)
               .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                  if (!user) return generateReject(404, []);
+                  // A verified token for a since-deleted account is unauthenticated, not a
+                  // 404 — `openapi.yaml` declares no 404 here, and `isAuth` treats this exact
+                  // case (token valid, user gone) as 401 for every other route.
+                  if (!user) return generateReject(401, []);
 
                   if (parseResult.data.email !== undefined && parseResult.data.email !== user.email)
                       user.verified = false;
@@ -276,7 +279,9 @@ export const passwordChangeWithCurrent = (
                   // `password` is select:false — comparing against it is this flow's whole point.
                   .findByIdWithCredentials(userId)
                   .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                      if (!user) return generateReject(404, []);
+                      // Same rule as `updateProfile`: gone-but-verified is 401, not a 404
+                      // `openapi.yaml` never declares here.
+                      if (!user) return generateReject(401, []);
 
                       return bcrypt.compare(currentPassword, user.password).then((doMatch) => {
                           if (!doMatch)

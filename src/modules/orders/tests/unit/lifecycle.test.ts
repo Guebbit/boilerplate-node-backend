@@ -133,7 +133,17 @@ describe('canTransition', () => {
         // An admin editing an email sends the status the order already has.
         for (const status of EVERY_STATUS)
             for (const actor of EVERY_ACTOR)
-                expect(canTransition(status, status, actor)).toBe(true);
+                if (status !== OrderStatus.paid)
+                    expect(canTransition(status, status, actor)).toBe(true);
+    });
+
+    it('refuses an echo write onto `paid` from anyone but the payment confirmation', () => {
+        // The one status where "changes nothing" must not bypass who may write it — an admin
+        // resending `status: 'paid'` on an already-paid order is not a free pass.
+        for (const actor of EVERY_ACTOR)
+            expect(canTransition(OrderStatus.paid, OrderStatus.paid, actor)).toBe(
+                actor === 'system'
+            );
     });
 
     it('agrees with both directions of the table', () => {

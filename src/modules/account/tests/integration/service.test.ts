@@ -444,7 +444,8 @@ describe('tokenRemoveAll', () => {
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['refresh-a', 'refresh-b']);
     });
 
-    it('answers 404 for a user that does not exist', async () => {
+    it('answers 401, not 404, for a user that does not exist', async () => {
+        // `openapi.yaml` declares no 404 for `logoutAll` — a gone user is unauthenticated.
         const response = asReject(
             await accountService.tokenRemoveAll(
                 '64b7f2a1c2d3e4f5a6b7c8d9',
@@ -453,7 +454,7 @@ describe('tokenRemoveAll', () => {
             )
         );
 
-        expect(response.status).toBe(404);
+        expect(response.status).toBe(401);
     });
 
     it('cannot be undone by a write holding an older copy of the token array', async () => {

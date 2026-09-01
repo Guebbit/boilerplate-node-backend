@@ -45,10 +45,15 @@ export const ORDER_LIFECYCLE: Readonly<
  * @param from - current status
  * @param to - status being written
  * @param actor - who is writing it
- * @returns whether the move is allowed — always true when `from === to` (not a transition)
+ * @returns whether the move is allowed — `from === to` is not a transition and always allowed,
+ * EXCEPT into `paid`: the contract restricts that destination to `system` in absolute terms, so an
+ * echo write must not let a non-system actor pass. `system` still gets the no-op, for the payment
+ * webhook's own retries.
  */
 export const canTransition = (from: OrderStatus, to: OrderStatus, actor: OrderActor): boolean =>
-    from === to || Boolean(ORDER_LIFECYCLE[from][to]?.includes(actor));
+    from === to
+        ? to !== OrderStatus.paid || actor === 'system'
+        : Boolean(ORDER_LIFECYCLE[from][to]?.includes(actor));
 
 /**
  * @param from - current status

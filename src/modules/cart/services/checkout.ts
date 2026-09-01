@@ -151,6 +151,19 @@ const runCheckout = async (
 
     const joined = lines.filter((line) => isJoined(line));
 
+    /*
+     * A method was named, but nothing in the basket needs one — every line is a digital good
+     * (`requiresShipping: false`). Refused rather than silently ignored: a client that thinks it
+     * is paying for shipping on a purchase that never ships should not proceed uncorrected.
+     */
+    if (shippingMethod && joined.every(({ product }) => product.requiresShipping === false))
+        return generateReject(409, [
+            {
+                code: 'CART_SHIPPING_NOT_APPLICABLE',
+                message: t('cart.shipping-not-applicable')
+            }
+        ]);
+
     const orderItems = joined.map(({ product, quantity }) => ({
         product,
         quantity

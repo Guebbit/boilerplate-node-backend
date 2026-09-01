@@ -475,6 +475,11 @@ components:
                     type: string
                 active:
                     type: boolean
+                # Default true: most products are physical. false is a digital good — checkout
+                # never needs a shipping method for a cart made entirely of these.
+                requiresShipping:
+                    type: boolean
+                    default: true
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
                 thumbnailUrl:

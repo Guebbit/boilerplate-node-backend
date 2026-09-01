@@ -86,6 +86,26 @@ were removed and are kept out by a test.
   a saved product that had since been withdrawn, a wishlist outliving the catalogue being the
   ordinary case rather than the exotic one. All three now answer the `404` each operation already
   declared. No contract change.
+- `canTransition`'s "a write that changes nothing is always allowed" no-op path ignored `actor`
+  entirely, so an admin resending `status: 'paid'` on an already-`paid` order was accepted as a
+  200 — `orders/openapi.yaml`'s "`paid` on anything (only a confirmed payment writes that)" makes
+  no exception for an echo write. The no-op path now still requires `system` for `paid`; every
+  other status is unaffected, and the payment webhook's own idempotent retry (`paid` → `paid` as
+  `system`) still succeeds.
+- `PUT /account`, `POST /account/password` and `POST /account/logout-all` answered `404` for a
+  token whose account had been deleted mid-session — a code none of the three declare, and
+  inconsistent with the rest of the app: `GET /account` (whoami) has answered `401` for exactly
+  this case since 3.0.0 ("a valid token for a deleted user answers `401`", above). All three now
+  answer the `401` they already declare instead.
+- An order that chose no shipping method got `shippingMethod: undefined` but `shippingCost: 0` —
+  the schema defaulted the number while leaving the string genuinely absent, so the two fields
+  disagreed about whether a method was chosen at all. `shared/contracts/openapi.root.yaml` states
+  both absent together ("shipping is not required to buy"); `shippingCost` no longer defaults.
+  A chosen method that happens to cost nothing (`pickup`, or `standard` above its `freeAbove`) is
+  unaffected — `shippingMethod` is still frozen onto the order, only the no-method case changes.
+  `db/migrations/20260820140000-order-shipping-cost.js` is removed with it: its one-time backfill
+  existed to give every order the number the schema was about to start defaulting, and would now
+  incorrectly zero a modern order that simply chose no method if it ever ran again.
 
 ### Changed
 
@@ -177,5 +197,10 @@ were removed and are kept out by a test.
 - `docker-compose.yml` passes `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX` through like its two siblings. The
   credential budget is a pair — per account named, per address calling — so a live E2E run that
   raised only the global limit merely moved which bucket it tripped over.
+- `Product.requiresShipping` (default `true`). `false` marks a digital good; `POST /cart/checkout`
+  now refuses a `shippingMethodId` (`409 CART_SHIPPING_NOT_APPLICABLE`) when every line in the
+  cart is one — naming a method for a purchase that never ships is a client error, not a lookup
+  that might resolve. A cart mixing digital and physical lines is unaffected. Non-breaking:
+  additive and defaulted, so an existing client sending nothing still gets today's behaviour.
 
 [3.0.0]: https://github.com/Guebbit/boilerplate-node-backend/releases/tag/v3.0.0

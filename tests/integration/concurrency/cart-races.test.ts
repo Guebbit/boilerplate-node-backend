@@ -241,7 +241,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
 
         const response = await api().post('/cart/checkout').set('Authorization', bearer);
 
-        expect(response.status).toBeLessThan(300);
+        expect(response.status).toBe(201);
     });
 });
 

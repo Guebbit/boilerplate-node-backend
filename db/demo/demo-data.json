@@ -292,6 +292,7 @@
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                             "onHand": 100,
                             "price": 100,
+                            "requiresShipping": true,
                             "reserved": 0,
                             "tags": [],
                             "title": "Sallyno Panino",
@@ -310,6 +311,7 @@
                             "imageUrl": "/images/seed/60de15db7aed7174ef2d53d21e1f57a5.jpg",
                             "onHand": 100,
                             "price": 1,
+                            "requiresShipping": true,
                             "reserved": 0,
                             "tags": [],
                             "title": "Miciona inutile",
@@ -318,7 +320,6 @@
                         "quantity": 10
                     }
                 ],
-                "shippingCost": 0,
                 "status": "pending",
                 "totalItems": 2,
                 "totalPrice": 110,
@@ -342,6 +343,7 @@
                             "imageUrl": "/images/seed/f12ba2e44fe347010397f1dcba399808.jpg",
                             "onHand": 100,
                             "price": 77,
+                            "requiresShipping": true,
                             "reserved": 0,
                             "tags": [],
                             "title": "Micino pufettino",
@@ -384,6 +386,7 @@
                             "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                             "onHand": 100,
                             "price": 100,
+                            "requiresShipping": true,
                             "reserved": 0,
                             "tags": [],
                             "title": "Sallyno Panino",
@@ -392,7 +395,6 @@
                         "quantity": 4
                     }
                 ],
-                "shippingCost": 0,
                 "status": "pending",
                 "totalItems": 1,
                 "totalPrice": 400,
@@ -414,6 +416,7 @@
                 "imageUrl": "/images/seed/ad2e01890eebf72d06481c4fac3522ac.jpg",
                 "onHand": 25,
                 "price": 100,
+                "requiresShipping": true,
                 "reserved": 0,
                 "tags": [
                     "sallyno",
@@ -435,6 +438,7 @@
                 "imageUrl": "/images/seed/96346b77daf138a279677cb75c400ee9.jpg",
                 "onHand": 10,
                 "price": 50,
+                "requiresShipping": true,
                 "reserved": 0,
                 "tags": [
                     "sallyno",
@@ -455,6 +459,7 @@
                 "imageUrl": "/images/seed/60de15db7aed7174ef2d53d21e1f57a5.jpg",
                 "onHand": 0,
                 "price": 1,
+                "requiresShipping": true,
                 "reserved": 0,
                 "tags": [
                     "micini",
@@ -475,6 +480,7 @@
                 "imageUrl": "/images/seed/f12ba2e44fe347010397f1dcba399808.jpg",
                 "onHand": 40,
                 "price": 77,
+                "requiresShipping": true,
                 "reserved": 0,
                 "tags": [
                     "micini",
@@ -497,6 +503,7 @@
                 "imageUrl": "/images/seed/043cf5b2517fc99ce9a2c2f84288416d.jpg",
                 "onHand": 15,
                 "price": 40,
+                "requiresShipping": true,
                 "reserved": 0,
                 "tags": [
                     "micini",
@@ -515,6 +522,7 @@
                 "imageUrl": "https://placekitten.com/400/400",
                 "onHand": 100,
                 "price": 5,
+                "requiresShipping": true,
                 "reserved": 0,
                 "tags": [],
                 "title": "Scatolone",
