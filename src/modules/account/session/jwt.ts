@@ -34,7 +34,10 @@ export interface TokenData {
 export const verifyAccessToken = (token: string): Promise<TokenData> =>
     new Promise((resolve, reject) => {
         // jsonwebtoken: callback-style verify — signature and expiry only, no DB round trip.
-        verify(token, getAccessTokenSecret(), (error, data) => {
+        // `algorithms: ['HS256']` pins the accepted algorithm: without it a token whose header
+        // claims `alg: none` or an asymmetric algorithm can pass verification under some library
+        // configurations (the classic JWT "algorithm confusion" attack).
+        verify(token, getAccessTokenSecret(), { algorithms: ['HS256'] }, (error, data) => {
             if (error) {
                 reject(error);
                 return;
@@ -52,7 +55,8 @@ export const verifyAccessToken = (token: string): Promise<TokenData> =>
  */
 export const verifyRefreshToken = (token: string): Promise<TokenData> =>
     new Promise((resolve, reject) => {
-        verify(token, getRefreshTokenSecret(), (error, data) => {
+        // `algorithms: ['HS256']` — same rationale as `verifyAccessToken` above.
+        verify(token, getRefreshTokenSecret(), { algorithms: ['HS256'] }, (error, data) => {
             if (error) {
                 reject(error);
                 return;

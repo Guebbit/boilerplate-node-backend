@@ -11,6 +11,7 @@
 
 import type { Router } from 'express';
 import type { SeedOutcome } from '@infrastructure/persistence/seed';
+import { isDemoMode } from '@infrastructure/adapters/demo-outbox';
 
 /**
  * What a published collection is to the consumer reading it.
@@ -51,6 +52,21 @@ type DemoExport =
           demoShapes: Readonly<Record<string, DemoShape>>;
       }
     | { seedExport?: never; demoShapes?: never };
+
+/**
+ * One environment variable a module cannot run without — BETTER_SECURITY.md wave 2.2. Declared on
+ * the manifest rather than asserted inside the module itself: only the app tier can refuse to
+ * boot, and collecting every module's list in one place ({@link registerModules}) reports every
+ * offending variable at once, not one restart per mistake.
+ */
+export interface RequiredConfig {
+    /** The env var name. */
+    key: string;
+    /** The shortest acceptable value — catches an empty or drastically truncated secret. */
+    minLength: number;
+    /** The `.env-example` placeholder this value must never still equal in a real deployment. */
+    placeholder: string;
+}
 
 /**
  * A module's writeback for the image digest pipeline — how the worker (or the no-broker inline
@@ -133,6 +149,12 @@ export type AppModule = {
      * uploaded image registers one entry per such collection.
      */
     imageTargets?: Readonly<Record<string, ImageTarget>>;
+
+    /**
+     * Env vars this module cannot run without — see {@link RequiredConfig}. Most modules have
+     * none; `account` and `observability` each hold a secret that must not boot on a placeholder.
+     */
+    requiredConfig?: readonly RequiredConfig[];
 } & DemoExport;
 
 /**
@@ -156,13 +178,48 @@ export const resolveImageTargets = (
     );
 
 /**
+ * Refuse to boot when a declared {@link RequiredConfig} is missing, too short, or still its
+ * `.env-example` placeholder — BETTER_SECURITY.md wave 2.2. Skipped under `NODE_ENV=test`
+ * (`tests/support/setup.ts` sets its own values, and a suite that has to satisfy a production
+ * config assertion is a suite that gets weakened until it passes) and under the demo profile
+ * (`npm run demo`, `isDemoMode()`) for the same reason: an ephemeral, local-only, in-memory
+ * deployment that developers routinely boot straight off a copied `.env-example` is not the
+ * placeholder-in-production risk this exists to catch, and blocking it breaks the paired
+ * frontend's e2e/visual suites, which start this profile with no env of their own. Throws ONCE,
+ * listing every offending variable across every module — not the first one, which would mean N
+ * restarts to find N mistakes.
+ *
+ * @param appModules - the enabled module list
+ * @throws when any required variable fails its check outside `NODE_ENV=test`/the demo profile
+ */
+const assertRequiredConfig = (appModules: AppModule[]): void => {
+    if (process.env.NODE_ENV === 'test' || isDemoMode()) return;
+
+    const offending = appModules
+        .flatMap((appModule) => appModule.requiredConfig ?? [])
+        .filter(({ key, minLength, placeholder }) => {
+            const value = process.env[key] ?? '';
+            return value.length < minLength || value === placeholder;
+        })
+        .map(({ key }) => key);
+
+    if (offending.length > 0)
+        throw new Error(
+            `Refusing to boot: these environment variables are missing, too short, or still set to their .env-example placeholder — ${offending.join(', ')}`
+        );
+};
+
+/**
  * Let every module attach its domain-event handlers.
  *
  * Subscription is separated from mounting because a handler may fire for an event another module
  * emits while serving a request, so every subscription has to exist before the first route does.
+ * Config is asserted first, for the same "before the first route" reason.
  *
  * @param appModules - the enabled module list
+ * @throws when {@link assertRequiredConfig} refuses to boot
  */
 export const registerModules = (appModules: AppModule[]): void => {
+    assertRequiredConfig(appModules);
     for (const appModule of appModules) appModule.subscribe?.();
 };

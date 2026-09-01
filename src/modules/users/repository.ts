@@ -24,6 +24,13 @@ import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 const CREDENTIAL_FIELDS = '+password +tokens';
 
 /**
+ * The clause every login-adjacent lookup filters on: `active` may be absent on a row written
+ * before `db/migrations/20260808120000-user-active-column.js`, so `{ $ne: false }` rather than
+ * `true`. Shared by `findAuthenticatableById` and `findByTokenValue` so the two can't drift.
+ */
+const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: undefined };
+
+/**
  * Standard CRUD via the repository factory, plus credential reads and soft-delete scoping. The
  * type is written out because Mongoose's generics are too large for TypeScript to serialize an
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
@@ -36,6 +43,7 @@ export const userRepository: Repository<UserDocument> & {
     findByIdWithCredentials: (id: string) => Promise<UserDocument | null>;
     findOneWithCredentials: (where: QueryFilter<UserDocument>) => Promise<UserDocument | null>;
     findByToken: (token: string, type: Token['type']) => Promise<UserDocument | null>;
+    findAuthenticatableById: (id: string) => Promise<UserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveExpired: () => Promise<number>;
@@ -96,6 +104,17 @@ export const userRepository: Repository<UserDocument> & {
             .exec(),
 
     /**
+     * Fetch a user by id, but only if the account may still authenticate — `active` is not
+     * `false` and `deletedAt` is unset. The narrower sibling of `findById`: `resolve()` in
+     * `account/module.ts` is the only caller, since every OTHER `findById` call in the codebase
+     * deliberately needs the unscoped read (a deactivated account in the admin panel, a payer who
+     * no longer exists, historical work attached to a gone user). Named for the question it
+     * answers, like `findByIdWithCredentials`.
+     */
+    findAuthenticatableById: (id: string) =>
+        userModel.findOne({ _id: toObjectId(id), ...AUTHENTICATABLE_FILTER }).exec(),
+
+    /**
      * Spend one token by value, atomically via `$pull` rather than loading `tokens` and calling
      * `save()`. The reset-confirm flow saves the same document twice (password, then token), so
      * two simultaneous confirms both loaded version V and the second `save()` raised a
@@ -152,9 +171,11 @@ export const userRepository: Repository<UserDocument> & {
      * The holder of this token value, whatever kind it is. Deliberately untyped by kind, unlike
      * `findByToken`: this is the REVOCATION lookup the refresh flow runs, asking only whether the
      * credential still exists — narrowing by type would depend on a field the JWT itself doesn't
-     * carry.
+     * carry. Carries `AUTHENTICATABLE_FILTER` too, so a refresh cookie that survives a
+     * deactivation or soft delete stops working on its very next exchange, same clause as `login`.
      */
-    findByTokenValue: (token: string) => userModel.findOne({ 'tokens.token': token }).exec(),
+    findByTokenValue: (token: string) =>
+        userModel.findOne({ 'tokens.token': token, ...AUTHENTICATABLE_FILTER }).exec(),
 
     /**
      * Stamp a token as used, so `GET /account/sessions` can show which device is idle. A

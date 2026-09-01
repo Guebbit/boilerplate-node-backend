@@ -381,8 +381,10 @@ export const login = (
 
     return (
         userRepository
-            // `password` is select:false — this is one of the few flows that legitimately needs it
-            .findOneWithCredentials({ email, deletedAt: undefined })
+            // `password` is select:false — this is one of the few flows that legitimately needs it.
+            // `active: { $ne: false }` — not `true`, since a pre-migration row has no field at all —
+            // blocks a deactivated account at the front door, same clause `findAuthenticatableById` uses.
+            .findOneWithCredentials({ email, active: { $ne: false }, deletedAt: undefined })
             .then((user) => {
                 if (!user) return generateReject(401, [t('account.login.wrong-data')]);
 

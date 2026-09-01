@@ -15,6 +15,14 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import { logger } from '@infrastructure/adapters/logger';
+
+/**
+ * `express.json()`/`express.urlencoded()`'s own default (`100kb`) is already a bound, but an
+ * implicit one nobody reading this file would find — BETTER_SECURITY.md 3.3e. Explicit and
+ * configurable, same shape as `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
+ */
+const JSON_BODY_LIMIT = process.env.NODE_JSON_BODY_LIMIT ?? '100kb';
 
 /**
  * Origins allowed to call this API with credentials, from `NODE_CORS_ORIGIN`.
@@ -45,7 +53,20 @@ export const installSecurity = (app: Express): void => {
      *
      * See: docs/tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong
      */
-    app.set('trust proxy', environmentNumber('NODE_TRUST_PROXY_HOPS', 0, 0));
+    const trustProxyHops = environmentNumber('NODE_TRUST_PROXY_HOPS', 0, 0);
+    app.set('trust proxy', trustProxyHops);
+
+    /*
+     * BETTER_SECURITY.md 2.3: `0` is legitimate for the compose stack, which publishes the API
+     * directly — so this warns rather than refusing to boot. But a production deployment behind a
+     * reverse proxy with hops left at the default is either correct or catastrophic for the rate
+     * limiter, and today that's silent either way.
+     */
+    if (trustProxyHops === 0 && process.env.NODE_ENV === 'production')
+        logger.warn({
+            message:
+                'NODE_TRUST_PROXY_HOPS=0 in production. Correct only if this API is reached directly, with no reverse proxy in front of it — otherwise the rate limiter is bucketing every caller together.'
+        });
 
     /**
      * Secure headers
@@ -84,11 +105,12 @@ export const installSecurity = (app: Express): void => {
 
     app.use(
         express.urlencoded({
-            extended: true
+            extended: true,
+            limit: JSON_BODY_LIMIT
         })
     );
 
-    app.use(express.json());
+    app.use(express.json({ limit: JSON_BODY_LIMIT }));
 
     app.use(cookieParser());
 

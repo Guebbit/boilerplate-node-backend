@@ -25,5 +25,14 @@ export default {
     name: 'observability',
     basePath: '/observability',
     routes: router,
+    /*
+     * BETTER_SECURITY.md wave 2.1: `.env-example` ships `change-me-dev-metrics-token`, which
+     * scrapes `/observability/metrics` if left as-is. `minLength: 0` on purpose — UNSET is a
+     * supported, already-fail-closed state (`isMetricsScraper` denies by default, 503), so this
+     * only refuses to boot on the one dangerous state: the token SET to the known placeholder.
+     */
+    requiredConfig: [
+        { key: 'NODE_METRICS_TOKEN', minLength: 0, placeholder: 'change-me-dev-metrics-token' }
+    ],
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

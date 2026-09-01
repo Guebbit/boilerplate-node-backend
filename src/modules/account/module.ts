@@ -36,7 +36,9 @@ import { router } from './routes';
 /** Builds a `fromAccessToken`/`fromRefreshToken` resolver from either verifier. */
 const resolve = (verify: (token: string) => Promise<{ id: string }>) => (token: string) =>
     verify(token)
-        .then(({ id }) => userRepository.findById(id))
+        // Scoped, not `findById`: a deactivated or soft-deleted account must stop authenticating
+        // on its very next request, not merely at its next login. See `findAuthenticatableById`.
+        .then(({ id }) => userRepository.findAuthenticatableById(id))
         /* Only the fields the port declares: the kernel must not learn the document shape. */
         .then((user) =>
             user
@@ -61,6 +63,17 @@ export default {
     name: 'account',
     basePath: '/account',
     routes: router,
+    /*
+     * BETTER_SECURITY.md wave 2.1: `.env-example` ships both as literal placeholders that sign
+     * and verify perfectly — `getAccessTokenSecret`/`getRefreshTokenSecret` (`session/config.ts`)
+     * read `process.env.X ?? ''` with no validation of their own. 16 rather than a stricter
+     * minimum: this rejects empty and drastically truncated values without pretending to assess
+     * real secret strength, which is an operator's job, not a boot-time character count.
+     */
+    requiredConfig: [
+        { key: 'NODE_TOKEN_ACCESS', minLength: 16, placeholder: 'your-access-token-secret-here' },
+        { key: 'NODE_TOKEN_REFRESH', minLength: 16, placeholder: 'your-refresh-token-secret-here' }
+    ],
     subscribe: () => {
         // A destroyed account takes its address book with it — the same event cart and wishlist listen for.
         onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));

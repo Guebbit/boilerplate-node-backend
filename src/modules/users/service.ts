@@ -16,7 +16,7 @@ import {
     type ResponseErrorItem,
     validationErrors
 } from '@infrastructure/http/response';
-import { zodUserSchema } from './model';
+import { zodUserSchema, TokenType } from './model';
 import type { UserDocument } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
 import { userRepository } from './repository';
@@ -164,9 +164,21 @@ export const update = (
     if (data.website !== undefined) user.website = data.website;
     if (data.password && data.password.trim().length > 0) user.password = data.password;
 
-    return userRepository
-        .save(user)
-        .then((savedUser) => generateSuccess(enqueueIfPending(savedUser)));
+    return userRepository.save(user).then((savedUser) => {
+        /*
+         * Deactivation ends every live session. Defense in depth on top of
+         * `findAuthenticatableById` (BETTER_SECURITY.md wave 1.2), which already blocks a
+         * deactivated account's next request — this also makes `GET /account/sessions` honest
+         * and drops credentials with no live account behind them. Chained after the save, not
+         * blocking it: a revoke failure here must not turn a successful deactivation into a
+         * reported failure — 1.2 is the backstop either way.
+         */
+        const revoke =
+            data.active === false
+                ? savedUser.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
+                : Promise.resolve();
+        return revoke.then(() => generateSuccess(enqueueIfPending(savedUser)));
+    });
 };
 
 /** Update an existing user by ID. Fetches the document then delegates to update(). */
@@ -222,10 +234,17 @@ export const remove = (
 
     // A FLIP, not an assignment: run against an already soft-deleted user this restores it,
     // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
+    const isNewSoftDelete = !user.deletedAt;
     user.deletedAt = user.deletedAt ? undefined : new Date();
-    return userRepository
-        .save(user)
-        .then((saved) => generateSuccess(saved, 200, t('users.soft-deleted')));
+    return userRepository.save(user).then((saved) => {
+        // Soft delete revokes every refresh token too — same defense-in-depth reasoning as
+        // `update`'s deactivation branch above. Only on the delete half of the flip: a restore
+        // should not log anyone out.
+        const revoke = isNewSoftDelete
+            ? saved.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
+            : Promise.resolve();
+        return revoke.then(() => generateSuccess(saved, 200, t('users.soft-deleted')));
+    });
 };
 
 /**
