@@ -8,9 +8,8 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { accountService } from '../services';
-import { createRefreshToken, createAccessToken } from '../session/jwt';
 import { RefreshTokenExpiryTime } from '../session/config';
-import { createRefreshCookie, createLoggedCookie } from '../session/cookies';
+import { issueSession } from '../session/session';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
@@ -116,21 +115,10 @@ export const postLogin = (
                 return;
             }
             const userId = data._id.toString();
-            return createRefreshToken(userId, remember)
-                .then((refreshToken) => {
-                    createRefreshCookie(response, refreshToken, remember);
-                    createLoggedCookie(response, remember);
-                    return createAccessToken(refreshToken);
-                })
-                .then((accessToken) => {
-                    recordLoginSuccess(request, userId, !!data.admin);
-                    successResponse(
-                        response,
-                        { token: accessToken },
-                        200,
-                        'Authentication successful'
-                    );
-                });
+            return issueSession(response, userId, remember).then((accessToken) => {
+                recordLoginSuccess(request, userId, !!data.admin);
+                successResponse(response, { token: accessToken }, 200, 'Authentication successful');
+            });
         })
         .catch((error: Error) => {
             // Covers the token cleanup, the credential check and the three token/cookie steps

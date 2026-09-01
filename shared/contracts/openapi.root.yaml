@@ -183,8 +183,9 @@ components:
         Page:
             type: integer
             minimum: 1
+            maximum: 10000
             default: 1
-            description: 1-based page index
+            description: 1-based page index. Bounded so page × pageSize cannot ask for an unbounded Mongo skip.
         PageSize:
             type: integer
             default: 10

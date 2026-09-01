@@ -15,7 +15,7 @@
  */
 
 import * as generated from '@api/schemas.zod';
-import { pageSizeSchema, hardDeleteSchema } from '@infrastructure/http/schemas';
+import { pageSchema, pageSizeSchema, hardDeleteSchema } from '@infrastructure/http/schemas';
 
 /** Every generated constant whose name ends in the given suffix. */
 const constantsEndingIn = (suffix: string): [name: string, value: unknown][] =>
@@ -25,6 +25,7 @@ describe('contract scalars', () => {
     it('finds the generated constants it means to compare against', () => {
         // A canary: if orval's naming changes, an empty sweep would pass over nothing.
         expect(constantsEndingIn('PageSizeMax').length).toBeGreaterThan(5);
+        expect(constantsEndingIn('PageMax').length).toBeGreaterThan(5);
         expect(constantsEndingIn('HardDeleteDefault').length).toBeGreaterThan(2);
     });
 
@@ -42,6 +43,24 @@ describe('contract scalars', () => {
         // lowered `maximum` would pass unnoticed.
         const tooPermissive = constantsEndingIn('PageSizeMax')
             .filter(([, value]) => pageSizeSchema.safeParse((value as number) + 1).success)
+            .map(([name]) => name);
+
+        expect(tooPermissive).toEqual([]);
+    });
+
+    // BETTER_SECURITY.md 3.3a: `Page` gained a `maximum` alongside `PageSize`'s — same guarantee,
+    // same shape, so a raised bound in the contract moves here without anyone remembering to.
+    it('agrees with every operation on the maximum page', () => {
+        const disagreeing = constantsEndingIn('PageMax')
+            .filter(([, value]) => !pageSchema.safeParse(value).success)
+            .map(([name, value]) => `${name} = ${String(value)}`);
+
+        expect(disagreeing).toEqual([]);
+    });
+
+    it('rejects one above every operation’s maximum page', () => {
+        const tooPermissive = constantsEndingIn('PageMax')
+            .filter(([, value]) => pageSchema.safeParse((value as number) + 1).success)
             .map(([name]) => name);
 
         expect(tooPermissive).toEqual([]);

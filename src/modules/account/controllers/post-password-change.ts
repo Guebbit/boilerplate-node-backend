@@ -12,13 +12,16 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ChangePasswordRequest } from '@types';
 import { accountService } from '../services';
+import { issueSession } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/password — changes the password by proving the current one (no email
- * round-trip, unlike the reset flow). Other sessions stay live; revoking them is `logout-all`'s job.
+ * round-trip, unlike the reset flow). BETTER_SECURITY.md wave 1.1: the service revokes every
+ * OTHER session, and this controller re-mints the caller's own — signing them out of the tab
+ * they are typing in would be a bug, not a security win.
  */
 export const postPasswordChange = (
     request: Request<unknown, unknown, ChangePasswordRequest>,
@@ -51,8 +54,22 @@ export const postPasswordChange = (
                 return;
             }
 
-            authPasswordChangeTotal.inc({ status: 'success' });
-            successResponse(response, undefined, 200, t('account.password-change.success'));
+            /*
+             * The password write and the revoke have both already succeeded by this point —
+             * only the re-mint is left. If IT fails, the response must still say success: the
+             * caller's password DID change, and every prior session is already gone either way.
+             * A 500 here would tell them the opposite of what happened, so a failed re-mint
+             * degrades to "no new token" rather than "the change failed".
+             */
+            return issueSession(response, id)
+                .then((token) => {
+                    authPasswordChangeTotal.inc({ status: 'success' });
+                    successResponse(response, { token }, 200, t('account.password-change.success'));
+                })
+                .catch(() => {
+                    authPasswordChangeTotal.inc({ status: 'success' });
+                    successResponse(response, undefined, 200, t('account.password-change.success'));
+                });
         })
         .catch((error: CastError | Error) => {
             authPasswordChangeTotal.inc({ status: 'failure' });

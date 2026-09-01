@@ -23,7 +23,13 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { zodUserSchema, userRepository, userService, type UserDocument } from '@modules/users';
+import {
+    zodUserSchema,
+    userRepository,
+    userService,
+    TokenType,
+    type UserDocument
+} from '@modules/users';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -66,7 +72,15 @@ export const validatePasswordChange = (
 };
 
 /**
- * Change user password with validation.
+ * Change user password with validation, then revoke every refresh token on the account.
+ * BETTER_SECURITY.md wave 1.1: the funnel both `passwordResetChange` and
+ * `passwordChangeWithCurrent` end at, so a future third caller gets the revoke for free. Order
+ * matters — save first, revoke second: a revoke landing against a password write that then fails
+ * would log everyone out for nothing. The revoke's own failure is swallowed rather than turned
+ * into a rejection: the password write already succeeded, and a lost revoke is defense in depth
+ * this codebase can afford to lose once, not a reason to tell the caller their change failed.
+ * `passwordChangeWithCurrent`'s caller re-mints its own session on top of this — see
+ * `postPasswordChange` and `../session/session`'s `issueSession`.
  */
 export const passwordChange = (
     user: UserDocument,
@@ -80,7 +94,12 @@ export const passwordChange = (
     user.password = password;
     return userRepository
         .save(user)
-        .then((savedUser) => generateSuccess<UserDocument>(savedUser))
+        .then((savedUser) =>
+            savedUser
+                .tokenRemoveAll(TokenType.REFRESH)
+                .catch(() => undefined)
+                .then(() => generateSuccess<UserDocument>(savedUser))
+        )
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 };
 

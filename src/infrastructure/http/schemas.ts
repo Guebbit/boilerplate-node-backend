@@ -21,6 +21,17 @@ import { z } from 'zod';
 const PAGE_SIZE_MAX = 100;
 
 /**
+ * Largest `page` a caller may request — BETTER_SECURITY.md 3.3a. Same shared-component situation
+ * as {@link PAGE_SIZE_MAX}: `Page` is one `openapi.yaml` component, orval flattens it into a
+ * per-operation constant each, so this is the one place that owns the number.
+ *
+ * At `PAGE_SIZE_MAX` items per page, this bounds the deepest Mongo `skip` a request can ask for
+ * to 10,000 × 100 = 1,000,000 documents — expensive, but not unbounded. A caller past this is not
+ * paging through a UI; that isn't what `page` is for.
+ */
+const PAGE_MAX = 10_000;
+
+/**
  * Default for `hardDelete` when a caller sends nothing: soft delete.
  *
  * Same shared-component situation as {@link PAGE_SIZE_MAX} — `hardDelete` is one shared `openapi.yaml`
@@ -56,12 +67,17 @@ export const hardDeleteSchema = z.preprocess(
 
 /**
  * `page` as a caller sends it: coerced because a query string carries numbers as text,
- * integer-only because `?page=1.5` produced a fractional `skip`.
+ * integer-only because `?page=1.5` produced a fractional `skip`. Bounded because `openapi.yaml`
+ * declares `maximum: 10000` ({@link PAGE_MAX}) — an unbounded `page` times `pageSize` is an
+ * unbounded Mongo `skip`, and this is the endpoint's own declared bound, not a new rule.
  *
  * Absent stays absent — `normalizePagination` (`@infrastructure/persistence/search`) is the single
  * authority on defaults, and defaulting here too would just add numbers it always overwrites.
  */
-export const pageSchema = z.preprocess(blankToUndefined, z.coerce.number().int().min(1).optional());
+export const pageSchema = z.preprocess(
+    blankToUndefined,
+    z.coerce.number().int().min(1).max(PAGE_MAX).optional()
+);
 
 /**
  * `pageSize` as a caller sends it.

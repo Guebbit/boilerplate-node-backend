@@ -65,7 +65,7 @@ paths:
         post:
             tags: [Auth]
             summary: Change password
-            description: Changes the authenticated user's password. Unlike the reset flow this proves possession of the current password rather than of the mailbox, so it needs no email round-trip. Other sessions stay live — revoke them with `POST /account/logout-all` or per session via `DELETE /account/sessions/{sessionId}`.
+            description: Changes the authenticated user's password. Unlike the reset flow this proves possession of the current password rather than of the mailbox, so it needs no email round-trip. Every OTHER session is revoked; the response carries a fresh access token for this one, and sets fresh session cookies.
             operationId: changePassword
             security:
                 - bearerAuth: []
@@ -76,7 +76,12 @@ paths:
                         schema:
                             $ref: '#/components/schemas/ChangePasswordRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '200':
+                    description: Password changed; a fresh access token for this session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A wrong current password is a 422 with a translated message, NOT a 401: a 401
                 # here would read as "your token expired" to every client interceptor and log
