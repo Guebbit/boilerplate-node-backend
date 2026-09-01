@@ -1,7 +1,7 @@
 const { createHash } = require('node:crypto');
 
 /*
- * Hash every stored token value in place — BETTER_SECURITY.md wave 3.1.
+ * Hash every stored token value in place.
  *
  * `users.tokens[].token` held live refresh JWTs, password-reset tokens and delete-confirmation
  * tokens IN THE CLEAR. `select: false` on the schema keeps them off ordinary reads, which is not
@@ -44,8 +44,7 @@ module.exports = {
 
     async down() {
         /*
-         * NOT REVERSIBLE. A sha256 digest cannot be turned back into the token it hashed — see
-         * BETTER_SECURITY.md "Things that will bite: hashing tokens is a one-way migration". The
+         * NOT REVERSIBLE. A sha256 digest cannot be turned back into the token it hashed. The
          * down migration can only truncate every stored token, which signs everyone out; that is
          * not something to do silently as a side effect of `migrate-mongo down`.
          */

@@ -579,7 +579,7 @@ describe('isAdminViaCookie', () => {
 });
 
 /**
- * `requireFreshAuth`/`requireFreshAuthWhen` — BETTER_SECURITY.md wave 4's step-up gate. MUST run
+ * `requireFreshAuth`/`requireFreshAuthWhen` — the step-up gate. MUST run
  * after `isAuth`, so every case here starts from an already-authenticated `authContext` carrying
  * `authTime`.
  */

@@ -22,9 +22,8 @@ import {
 import type { RefreshTokenExpiryTime } from './config';
 
 /**
- * The claims this app puts in every access/refresh JWT. Wire names are OIDC's
- * (BETTER_SECURITY.md wave 4), so a future external identity provider's tokens would satisfy the
- * same guards unchanged.
+ * The claims this app puts in every access/refresh JWT. Wire names are OIDC's, so a future
+ * external identity provider's tokens would satisfy the same guards unchanged.
  */
 export interface TokenData {
     id: string;
@@ -152,7 +151,7 @@ export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
  * Exchange a valid refresh token for a short-lived access token.
  *
  * `auth_time`/`amr` are COPIED from the refresh token's own claims, never read from the clock —
- * this is the single most likely way BETTER_SECURITY.md wave 4 breaks: get it wrong and
+ * this is the single most likely way the step-up freshness gate breaks: get it wrong and
  * everything still works, every test but one still passes, and the freshness gate quietly stops
  * firing, because a client refreshing every ten minutes is never more than ten minutes from
  * "fresh". See `TokenData`'s doc.
@@ -171,7 +170,7 @@ export const createAccessToken = (refreshToken: string) =>
 
 /**
  * A refresh token was presented that this document does not currently hold LIVE — genuinely
- * unknown, or superseded outside the grace window — BETTER_SECURITY.md wave 3.2. Carries the
+ * unknown, or superseded outside the grace window. Carries the
  * owning user's id so the caller can decide what to do about it without a second lookup; this
  * module has already revoked every refresh token on the account by the time it throws.
  */
@@ -230,7 +229,7 @@ const reissueRotated = (
 
 /**
  * Exchange a refresh token for a NEW refresh token and a fresh access token, ROTATING the
- * refresh token's value — BETTER_SECURITY.md wave 3.2. Unlike `createAccessToken`, which re-signs
+ * refresh token's value. Unlike `createAccessToken`, which re-signs
  * an access token off a refresh token that stays valid indefinitely, this REPLACES it on every
  * exchange: a stolen cookie becomes detectable (a later presentation of the spent value) rather
  * than silently reusable for as long as it has left to live.

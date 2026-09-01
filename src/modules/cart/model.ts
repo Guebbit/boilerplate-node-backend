@@ -115,7 +115,7 @@ cartSchema.index({ 'items.productId': 1 });
 const cartRetentionDays = environmentNumber('NODE_CART_RETENTION_DAYS', 365, 1);
 
 /*
- * TTL index, GDPR_FIX.md G5: an abandoned cart is convenience state with no legal basis for
+ * TTL index: an abandoned cart is convenience state with no legal basis for
  * indefinite storage, unlike an order. `updatedAt`, not `createdAt` — any change to the cart
  * (a quantity bump, an added line) restarts the clock, which is what "abandoned" means.
  *

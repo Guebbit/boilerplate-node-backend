@@ -16,8 +16,8 @@ setupTestDb();
 /**
  * A user carrying one reset token and one delete token, so the type half of each filter counts.
  * Seeded with `hashToken`'s output, not the plaintext: this fixture writes `tokens` directly
- * (bypassing `tokenAdd`), so it has to store what production actually stores — a digest
- * (BETTER_SECURITY.md wave 3.1) — or `consumeToken`'s hashed lookup would never match it.
+ * (bypassing `tokenAdd`), so it has to store what production actually stores — a digest —
+ * or `consumeToken`'s hashed lookup would never match it.
  */
 const createUserWithTokens = () =>
     createUser({

@@ -21,7 +21,7 @@
  *        successful login followed by an unauthenticated next request. Closed by `$push`/`$pull`
  *        against mongod rather than against a stale in-memory copy.
  *
- * R5 is not a bug fix — it PROVES a design decision BETTER_SECURITY.md 3.2 makes explicitly:
+ * R5 is not a bug fix — it PROVES a design decision made explicitly:
  * refresh-token rotation must not turn "two tabs woke up and refreshed within the same instant"
  * into "this looks like theft". `tokenSupersede` (`users/repository.ts`) lets exactly one
  * concurrent exchange of one token WIN atomically; every other exchange within
@@ -260,7 +260,7 @@ describe('one-time tokens under contention', () => {
 
         // And the token is spent, whichever request spent it.
         const stored = await userRepository.findOneWithCredentials({ email: user.email });
-        // `tokens[].token` is a `hashToken` digest at rest (BETTER_SECURITY.md wave 3.1) — the
+        // `tokens[].token` is a `hashToken` digest at rest — the
         // stored value is never the literal token, so the comparison has to hash it too, or this
         // assertion is vacuously true regardless of whether the token was actually spent.
         expect(

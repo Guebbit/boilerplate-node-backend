@@ -213,7 +213,7 @@ describe('PUT /users/{id}', () => {
     });
 });
 
-describe('DELETE /users/{id} — the audit action names which discharge happened (GDPR_FIX.md G3)', () => {
+describe('DELETE /users/{id} — the audit action names which discharge happened', () => {
     it('soft delete audits admin.user.soft_deleted, not an erasure', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const { bearer } = await authenticateAs('admin');

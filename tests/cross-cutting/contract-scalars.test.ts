@@ -48,7 +48,7 @@ describe('contract scalars', () => {
         expect(tooPermissive).toEqual([]);
     });
 
-    // BETTER_SECURITY.md 3.3a: `Page` gained a `maximum` alongside `PageSize`'s — same guarantee,
+    // `Page` carries a `maximum` alongside `PageSize`'s — same guarantee,
     // same shape, so a raised bound in the contract moves here without anyone remembering to.
     it('agrees with every operation on the maximum page', () => {
         const disagreeing = constantsEndingIn('PageMax')

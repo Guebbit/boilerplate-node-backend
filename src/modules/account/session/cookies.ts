@@ -13,7 +13,7 @@ import { type RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config
  * Set a secure httpOnly cookie containing the refresh token.
  *
  * @param remember - a tier (looked up against env), OR a raw `maxAge` in milliseconds — a
- *   rotated token (BETTER_SECURITY.md wave 3.2) carries its OWN remaining lifetime, copied
+ *   rotated token carries its OWN remaining lifetime, copied
  *   forward from the token it replaced rather than any configured tier.
  */
 export const createRefreshCookie = (

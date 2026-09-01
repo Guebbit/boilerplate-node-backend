@@ -268,8 +268,8 @@ describe('createAccessToken', () => {
         expect(payload.id).not.toBe(String(other._id));
     });
 
-    // BETTER_SECURITY.md wave 4.7 — "the one that matters most": if this regresses, the whole
-    // wave silently degrades to nothing, because a client that refreshes every ten minutes is
+    // "The one that matters most": if this regresses, the step-up freshness gate silently
+    // degrades to nothing, because a client that refreshes every ten minutes is
     // never more than ten minutes from "fresh". Everything else keeps working; nothing else fails.
     it('COPIES auth_time forward from the refresh token — never re-stamps it from the clock', async () => {
         const user = await createUser();

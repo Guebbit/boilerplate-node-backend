@@ -19,7 +19,7 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/password — changes the password by proving the current one (no email
- * round-trip, unlike the reset flow). BETTER_SECURITY.md wave 1.1: the service revokes every
+ * round-trip, unlike the reset flow). The service revokes every
  * OTHER session, and this controller re-mints the caller's own — signing them out of the tab
  * they are typing in would be a bug, not a security win.
  */

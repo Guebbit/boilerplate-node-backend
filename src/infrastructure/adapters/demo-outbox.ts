@@ -28,8 +28,8 @@ export interface DemoOutboxEmail {
 }
 
 /**
- * `npm run demo` sets `NODE_DEMO`; nothing else does. Two conditions, not one — BETTER_SECURITY.md
- * wave 2.3: `NODE_DEMO=true` alone must never be enough to mount `POST /__demo/reset`, an
+ * `npm run demo` sets `NODE_DEMO`; nothing else does. Two conditions, not one:
+ * `NODE_DEMO=true` alone must never be enough to mount `POST /__demo/reset`, an
  * unauthenticated `dropDatabase()`. `NODE_ENV !== 'production'` closes it even if a copied env
  * file carries `NODE_DEMO` somewhere it shouldn't. Logs at `error` when the flag is set but
  * production still refused it — a fact whoever owns that deployment needs to hear, not swallow.

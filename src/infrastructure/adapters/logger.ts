@@ -48,7 +48,7 @@ export const SENSITIVE_FIELDS = new Set([
 const REDACTED = '[REDACTED]';
 
 /**
- * Personal-data field names — GDPR_FIX.md gap G6. A DIFFERENT policy from
+ * Personal-data field names. A DIFFERENT policy from
  * {@link SENSITIVE_FIELDS}: these are not credentials, so hashing rather than dropping them is
  * the right default — data minimisation applies to logs the same as to collections, but a log
  * line that can no longer be correlated to a user is a log line nobody can debug with either.

@@ -230,7 +230,7 @@ describe('accountService.passwordChange', () => {
 /**
  * A user holding one real, stored refresh token — what the refresh cookie would have carried.
  * `createRefreshToken`'s OWN return value, not a re-read from storage: `tokens[].token` is a
- * `hashToken` digest at rest (BETTER_SECURITY.md wave 3.1), never the plaintext JWT.
+ * `hashToken` digest at rest, never the plaintext JWT.
  */
 const issueRefreshToken = async () => {
     const user = await createUser({ email: 'refresh@example.com', username: 'refresher' });
@@ -284,7 +284,7 @@ describe('accountService.refreshAccessToken', () => {
         );
     });
 
-    // BETTER_SECURITY.md wave 3.2 — the whole point: the refresh token's VALUE changes on every
+    // The whole point of rotation: the refresh token's VALUE changes on every
     // exchange, so a stolen cookie stops being silently reusable for as long as it has left to live.
     it('rotates the refresh token — the new value replaces the old one, which stops working', async () => {
         const refreshToken = await issueRefreshToken();
@@ -298,7 +298,7 @@ describe('accountService.refreshAccessToken', () => {
         ).resolves.toBeDefined();
     });
 
-    // BETTER_SECURITY.md wave 4.7 — the property this wave's freshness gate depends on. Ten
+    // The property the step-up freshness gate depends on. Ten
     // rotations in a row, and `auth_time` on the access token stays byte-identical to the one the
     // very first login stamped: a client that refreshes on every 401 must never be "freshened" by
     // that alone.

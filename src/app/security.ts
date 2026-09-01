@@ -19,7 +19,7 @@ import { logger } from '@infrastructure/adapters/logger';
 
 /**
  * `express.json()`/`express.urlencoded()`'s own default (`100kb`) is already a bound, but an
- * implicit one nobody reading this file would find — BETTER_SECURITY.md 3.3e. Explicit and
+ * implicit one nobody reading this file would find. Explicit and
  * configurable, same shape as `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
  */
 const JSON_BODY_LIMIT = process.env.NODE_JSON_BODY_LIMIT ?? '100kb';
@@ -57,7 +57,7 @@ export const installSecurity = (app: Express): void => {
     app.set('trust proxy', trustProxyHops);
 
     /*
-     * BETTER_SECURITY.md 2.3: `0` is legitimate for the compose stack, which publishes the API
+     * `0` is legitimate for the compose stack, which publishes the API
      * directly — so this warns rather than refusing to boot. But a production deployment behind a
      * reverse proxy with hops left at the default is either correct or catastrophic for the rate
      * limiter, and today that's silent either way.

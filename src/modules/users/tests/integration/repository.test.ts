@@ -225,7 +225,7 @@ describe('userRepository', () => {
     });
 
     // Every fixture below seeds `tokens` directly rather than through `tokenAdd`, so it stores
-    // `hashToken(...)` explicitly — BETTER_SECURITY.md wave 3.1 hashes at rest, and a plaintext
+    // `hashToken(...)` explicitly — tokens are hashed at rest, and a plaintext
     // seed here would describe a document production never actually writes.
     describe('token methods', () => {
         it('tokenRemoveAll removes all tokens of the selected type', async () => {
@@ -287,7 +287,7 @@ describe('userRepository', () => {
             expect(refreshed!.tokens[0].token).toBe(hashToken('valid-token'));
         });
 
-        // BETTER_SECURITY.md wave 3.2: a rotated-away token keeps its ORIGINAL `expiration` (up
+        // A rotated-away token keeps its ORIGINAL `expiration` (up
         // to a year, for `remember: long`), so without this half of the sweep it would sit in
         // `tokens` until then instead of clearing out once its grace window has passed.
         it('tokenRemoveExpired also sweeps tokens superseded past the grace window, but not within it', async () => {

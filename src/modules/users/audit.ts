@@ -11,7 +11,7 @@ export const usersAuditActions = {
     ADMIN_USER_CREATED: 'admin.user.created',
     ADMIN_USER_UPDATED: 'admin.user.updated',
     /*
-     * GDPR_FIX.md G3: split from one `ADMIN_USER_DELETED` so the audit trail can answer "was an
+     * Split from one `ADMIN_USER_DELETED` so the audit trail can answer "was an
      * erasure request actually discharged" — only the hard path scrubs the record; a soft delete
      * is a restore waiting to happen. `audit-logs/model.ts` types `action` as a widened `string`
      * precisely so a renamed action does not invalidate stored history.

@@ -41,7 +41,7 @@ beforeEach(() => jest.clearAllMocks());
 
 describe('tokenAdd', () => {
     it('pushes the HASH of the token onto the user, in the database', async () => {
-        // BETTER_SECURITY.md wave 3.1: `tokens[].token` is `hashToken(token)` at rest, never
+        // `tokens[].token` is `hashToken(token)` at rest, never
         // the plaintext handed to `tokenAdd`.
         const document = documentDouble([]);
 

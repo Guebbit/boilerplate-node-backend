@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Three-stage inactivity reaper — `npm run reap:inactive-accounts`. GDPR_FIX.md G5: Art. 5(1)(e)
+ * Three-stage inactivity reaper — `npm run reap:inactive-accounts`. Art. 5(1)(e)
  * allows keeping personal data only as long as the purpose needs it, and an account nobody has
  * touched in years has no live purpose.
  *
@@ -25,13 +25,12 @@
  * fresh on each run, not read off the stale warning, so signing back in undoes the clock. The one
  * gap this leaves: someone who returns and later goes inactive AGAIN keeps their old
  * `inactivityWarnedAt` and so gets no fresh warning email before stage two — acceptable for a
- * disabled-by-default safety net, not for a paragraph pretending to be the "own plan" the source
- * document says this deserves.
+ * disabled-by-default safety net, not a substitute for a fuller design if this ever needs one.
  *
  * Meant to run periodically (the same cron container that runs `reap:quarantine` and
  * `reap:orders`), never on every boot.
  *
- * See: GDPR_FIX.md G5, docs/reference/ops.md
+ * See: docs/reference/ops.md
  */
 import 'dotenv/config';
 import i18next from 'i18next';

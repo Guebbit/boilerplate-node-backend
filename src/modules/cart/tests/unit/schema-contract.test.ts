@@ -53,7 +53,7 @@ describe('cartSchema', () => {
     });
 
     it('expires an abandoned cart at the configured retention window, and only that index', () => {
-        // GDPR_FIX.md G5: asserted against the configured window rather than a literal, so
+        // Asserted against the configured window rather than a literal, so
         // changing `NODE_CART_RETENTION_DAYS` moves the policy and the test together — and so a
         // TTL appearing on a different index fails here.
         expect(indexOptionSpecs(cartSchema)).toEqual([

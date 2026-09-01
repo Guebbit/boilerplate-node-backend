@@ -87,11 +87,12 @@ clock — only a genuinely abandoned cart is ever removed.
 
 Two collections that must NOT be removed on a timer — `orders` and `payments` are invoices, kept
 for tax and commercial-law reasons — instead have their PII scrubbed in place by
-`npm run reap:orders` past `NODE_ORDER_PII_RETENTION_DAYS` (default 3650 days). See GDPR_FIX.md G2.
+`npm run reap:orders` past `NODE_ORDER_PII_RETENTION_DAYS` (default 3650 days). See the script's
+own header.
 
 `users` has no TTL either — `npm run reap:inactive-accounts` warns, then soft-deletes, then
 hard-deletes an account after `NODE_INACTIVE_ACCOUNT_DAYS` of no login, **disabled by default**
-(`0`). See GDPR_FIX.md G5 and the script's own header for the three-stage design.
+(`0`). See the script's own header for the three-stage design.
 
 Log lines are Loki's retention, not Mongo's: `.docker/observability/loki.config.yaml` sets
 `retention_period: 168h` (7 days) for the local stack. A production deployment tunes this

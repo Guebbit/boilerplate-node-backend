@@ -34,7 +34,7 @@ const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: undefined };
  * A user's last proof of life, as an aggregation `$expr`: the latest refresh-token exchange
  * (`tokens[].lastUsedAt`, already stamped on every refresh — see `model.ts`'s `Token`), or
  * `createdAt` for an account that has never come back to redeem one. Shared by every
- * `findInactive*` query below (GDPR_FIX.md G5) so "how recently was this account used" is
+ * `findInactive*` query below so "how recently was this account used" is
  * answered once rather than reimplemented per query and drifting.
  *
  * `tokens` is `select: false` on the schema — irrelevant here, since that only trims what a
@@ -236,7 +236,7 @@ export const userRepository: Repository<UserDocument> & {
             .exec(),
 
     /**
-     * Claim a refresh token for rotation — BETTER_SECURITY.md wave 3.2. Atomically stamps
+     * Claim a refresh token for rotation. Atomically stamps
      * `supersededAt` on the matched entry, but ONLY if it doesn't already carry one: `$elemMatch`
      * requires both conditions on the SAME array element, so of two concurrent callers presenting
      * the identical token, exactly one sees `modifiedCount: 1` — mongod serializes the two writes

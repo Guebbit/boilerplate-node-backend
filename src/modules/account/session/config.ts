@@ -58,7 +58,7 @@ export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
 export const getAccessTokenTTL = () => environmentNumber('NODE_TOKEN_ACCESS_TIME', 0);
 
 /**
- * How long a just-rotated refresh token is still honoured — BETTER_SECURITY.md wave 3.2. Long
+ * How long a just-rotated refresh token is still honoured. Long
  * enough that two requests firing within the same page-load race (two tabs waking together, an
  * interceptor retrying) both land inside it; short enough that a token replayed well after its
  * rotation reads as what it is. Milliseconds, since it is compared against a `Date` difference,

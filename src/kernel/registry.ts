@@ -54,7 +54,7 @@ type DemoExport =
     | { seedExport?: never; demoShapes?: never };
 
 /**
- * One environment variable a module cannot run without — BETTER_SECURITY.md wave 2.2. Declared on
+ * One environment variable a module cannot run without. Declared on
  * the manifest rather than asserted inside the module itself: only the app tier can refuse to
  * boot, and collecting every module's list in one place ({@link registerModules}) reports every
  * offending variable at once, not one restart per mistake.
@@ -179,7 +179,7 @@ export const resolveImageTargets = (
 
 /**
  * Refuse to boot when a declared {@link RequiredConfig} is missing, too short, or still its
- * `.env-example` placeholder — BETTER_SECURITY.md wave 2.2. Skipped under `NODE_ENV=test`
+ * `.env-example` placeholder. Skipped under `NODE_ENV=test`
  * (`tests/support/setup.ts` sets its own values, and a suite that has to satisfy a production
  * config assertion is a suite that gets weakened until it passes) and under the demo profile
  * (`npm run demo`, `isDemoMode()`) for the same reason: an ephemeral, local-only, in-memory

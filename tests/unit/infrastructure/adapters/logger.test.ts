@@ -297,7 +297,7 @@ describe('the sensitive-field policy, entry by entry', () => {
     });
 });
 
-describe('the personal-data policy — GDPR_FIX.md G6', () => {
+describe('the personal-data policy', () => {
     const originalMode = process.env.NODE_LOG_PERSONAL_FIELDS;
 
     afterEach(() => {

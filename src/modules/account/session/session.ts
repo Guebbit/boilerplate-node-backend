@@ -2,7 +2,7 @@
  * @module
  * `issueSession` — the three-step tail every flow that mints or re-mints a live session runs: a
  * refresh token, its cookies, and the access token handed back to the caller. Extracted from
- * `postLogin` (BETTER_SECURITY.md wave 1.1) so `postPasswordChange` reuses it instead of
+ * `postLogin` so `postPasswordChange` reuses it instead of
  * re-implementing cookie minting a second time. See docs/modules/account-sessions.md.
  */
 

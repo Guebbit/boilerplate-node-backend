@@ -21,7 +21,7 @@ import { z } from 'zod';
 const PAGE_SIZE_MAX = 100;
 
 /**
- * Largest `page` a caller may request — BETTER_SECURITY.md 3.3a. Same shared-component situation
+ * Largest `page` a caller may request. Same shared-component situation
  * as {@link PAGE_SIZE_MAX}: `Page` is one `openapi.yaml` component, orval flattens it into a
  * per-operation constant each, so this is the one place that owns the number.
  *

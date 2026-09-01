@@ -1,6 +1,6 @@
 /**
  * @module
- * The TTL retention this module's collection is configured with — GDPR_FIX.md G5. Mirrors
+ * The TTL retention this module's collection is configured with. Mirrors
  * `audit-logs/tests/unit/retention.test.ts`: a TTL index is created once, at startup, from
  * whatever `NODE_CART_RETENTION_DAYS` is then, so this re-imports the model to force that
  * import-time read to run again.

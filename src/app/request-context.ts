@@ -14,7 +14,7 @@ import { attachLocale } from '@infrastructure/http/middlewares/locale';
 
 /**
  * Matches a canonical UUID (any RFC 4122 version/variant) — the only shape `x-request-id` is
- * trusted in from a client. BETTER_SECURITY.md 3.3d: this value reaches Winston and every audit
+ * trusted in from a client. This value reaches Winston and every audit
  * entry verbatim, so an unvalidated one is a log-injection vector (newlines, control characters,
  * an arbitrarily long string) rather than just a correlation id.
  */

@@ -46,7 +46,7 @@ export interface DeleteControllerSpec {
     /**
      * The module's own audit action for a successful delete — a fixed action, or a function of
      * `hardDelete` for a module where soft and hard delete are different enough facts to want
-     * different action strings (GDPR_FIX.md G3: `users` splits them so the audit trail can answer
+     * different action strings (`users` splits them so the audit trail can answer
      * "was this erasure request actually discharged" — only `hardDelete: true` scrubs the record;
      * the soft path is reversible and does not).
      */
