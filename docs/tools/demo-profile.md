@@ -43,8 +43,9 @@ name a person without taking on the shape of a user.
 
 ::: warning Two things not to change
 **The credentials must stay fixed.** `cy.loginAs()` in the paired frontend types them into a real
-login form, and both READMEs quote them. Everything else about the dataset can move; these are the
-part a human reads off a page and types.
+login form. Everything else about the dataset can move; these are the part a human reads off a
+page and types. The passwords are overridable via `NODE_SEED_ADMIN_PASSWORD`/
+`NODE_SEED_USER_PASSWORD` — change both `.env` files together, never one alone.
 
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
