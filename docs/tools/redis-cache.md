@@ -228,36 +228,42 @@ Two consequences worth keeping in mind:
 
 ### Queue workers
 
-`src/infrastructure/adapters/` (email, PDF) is a different meaning of the word: those are RabbitMQ consumers, and
-`registerWorkers()` runs them **inside every cluster worker**, so N processes consume from the
-same queues. They do not touch the cache at all.
+`src/infrastructure/adapters/` (email, PDF, image digest) is a different meaning of the word:
+those are RabbitMQ consumers, and `registerWorkers()` runs them **inside every cluster worker**,
+so N processes consume from the same queues.
 
 ```mermaid
 flowchart LR
     subgraph W["Each cluster worker process"]
         E["Express routes"] --> Cache[("Redis cache")]
-        Q["Queue consumers<br/>src/infrastructure/adapters/*.worker.ts"] --> Rabbit[("RabbitMQ")]
+        Q["Mail + PDF consumers"] --> Rabbit[("RabbitMQ")]
+        I["Image digest consumer"] --> Rabbit
+        I -. invalidates on a<br/>matched writeback .-> Cache
     end
     Q -. no cache access .-x Cache
 ```
 
-That is fine for the two shipped workers — sending mail and rendering a PDF change no cached
-resource. A worker that _writes to Mongo_, though, is one of the
-[writes that bypass the API](#writes-that-bypass-the-api) described above: it never passes through
-the `invalidateCache` middleware, so it must call `invalidateCacheTags` itself.
+That is fine for two of the three shipped workers — sending mail and rendering a PDF change no
+cached resource. The image digest worker is the exception, and it is one of the
+[writes that bypass the API](#writes-that-bypass-the-api) described above: the write that enqueues
+its job already cleared the target's cache tag, before the digest ran, so the response that write
+re-warmed still carries the pre-digest placeholder. The worker clears the same tag a second time
+once its writeback actually matches a document — never passing through the `invalidateCache`
+middleware, so it calls `invalidateCacheTagsLogged` itself, same as that middleware does. See
+`settleWriteback` in `infrastructure/adapters/image.worker.ts`.
 
 ### When invalidation cannot reach Redis
 
-`invalidateCacheTags` never rejects — the write it follows has already succeeded in Mongo, and
-rejecting would turn a completed write into an error response the client would retry. It reports
-instead, with the same `{ deleted, reachable }` `clearCache` returns.
+`invalidateCacheTagsLogged` wraps `invalidateCacheTags`, which never rejects — the write (or
+digest) it follows has already succeeded in Mongo, and rejecting would turn a completed write into
+an error response the client would retry. `invalidateCacheTags` reports instead, with the same
+`{ deleted, reachable }` `clearCache` returns.
 
 `reachable: false` means the pre-write response is still cached and will be served until its TTL
 expires: a customer edits a product, gets a 200, and the catalogue shows the old one for up to an
-hour. The response has already been sent by then, so observability is the only move left — the
-`invalidateCache` middleware logs at `error` and increments
-`cache_invalidation_failures_total{tag}`. A non-zero rate on that counter means some endpoint is
-serving a stale answer to somebody.
+hour. The response has already been sent by then, so observability is the only move left —
+`invalidateCacheTagsLogged` logs at `error` and increments `cache_invalidation_failures_total{tag}`.
+A non-zero rate on that counter means some endpoint is serving a stale answer to somebody.
 
 ## Works with
 

@@ -19,6 +19,8 @@ import {
     setCache
 } from '@infrastructure/http/middlewares/cache';
 import * as cache from '@infrastructure/adapters/cache';
+import { logger } from '@infrastructure/adapters/logger';
+import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
 
 jest.mock('@infrastructure/adapters/cache', () => ({
     getCacheValue: jest.fn(),
@@ -32,6 +34,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 }));
 
 const mockedCache = jest.mocked(cache);
+const mockedLogger = jest.mocked(logger);
 
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 const ORIGINAL_TTL_MAX = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
@@ -773,5 +776,44 @@ describe('invalidateCache', () => {
         listeners.get('finish')?.();
 
         expect(mockedCache.invalidateCacheTags).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `invalidateCacheTagsLogged` (the shared body behind this middleware and the image digest
+     * worker, see its own docblock) had no direct test: `reachable: false` only ever fed a mock
+     * that swallowed the value. This is the observability contract itself — a stale-serving write
+     * must show up as a metric and a log line, not disappear silently.
+     */
+    it('logs and counts the failure when invalidation could not reach Redis', async () => {
+        mockedCache.invalidateCacheTags.mockResolvedValue({ deleted: 0, reachable: false });
+        const incSpy = jest.spyOn(cacheInvalidationFailuresTotal, 'inc');
+        const middleware = invalidateCache(['orders']);
+        const { response, listeners } = createResponse();
+
+        middleware({} as Request, response, jest.fn() as NextFunction);
+        response.statusCode = 204;
+        listeners.get('finish')?.();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(incSpy).toHaveBeenCalledWith({ tag: 'orders' });
+        expect(mockedLogger.error).toHaveBeenCalledWith(
+            expect.objectContaining({ tags: ['orders'] })
+        );
+    });
+
+    it('logs and counts nothing when invalidation reaches Redis', async () => {
+        const incSpy = jest.spyOn(cacheInvalidationFailuresTotal, 'inc');
+        const middleware = invalidateCache(['orders']);
+        const { response, listeners } = createResponse();
+
+        middleware({} as Request, response, jest.fn() as NextFunction);
+        response.statusCode = 204;
+        listeners.get('finish')?.();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(incSpy).not.toHaveBeenCalled();
+        expect(mockedLogger.error).not.toHaveBeenCalled();
     });
 });
