@@ -57,7 +57,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                     id: user.id,
                     email: user.email,
                     username: user.username,
-                    admin: user.admin ?? false,
+                    admin: user.admin,
                     imageUrl: user.imageUrl,
                     authTime: user.authTime,
                     amr: user.amr,

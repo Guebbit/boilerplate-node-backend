@@ -13,7 +13,7 @@ export interface AuthenticatedUser {
     id: string;
     email: string;
     username: string;
-    admin?: boolean;
+    admin: boolean;
     imageUrl?: string;
     /**
      * Epoch seconds this session last actually proved itself — carried from the token's own

@@ -51,7 +51,7 @@ export const addressAdd = (
     entry: AddressInput
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository
-        .addEntry(userId, { ...entry, default: entry.default ?? false })
+        .addEntry(userId, entry)
         .then((book) => generateSuccess(toView(book), 200, t('account.addresses.added')));
 
 /** Update one entry of the caller's own book; someone else's id is the same 404 as a bogus one. */

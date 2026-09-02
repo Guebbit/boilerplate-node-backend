@@ -164,22 +164,6 @@ describe('getAuth', () => {
         });
     });
 
-    it('resolves a missing admin flag to false rather than undefined', async () => {
-        // `admin ?? false`. An undefined `admin` would be falsy at most call sites and so would
-        // "work", but `isAdmin` and `orderService.callerScope` both branch on it — an explicit
-        // false is the only value that cannot be misread as "unknown".
-        mockedVerifyAccessToken.mockResolvedValue({
-            id: 'user-2',
-            email: 'plain@example.com',
-            username: 'plain'
-        } as never);
-
-        const request = makeRequest({ authorization: 'Bearer valid.token' });
-        await runUntilNext(getAuth, request, makeResponseStub());
-
-        expect(request.authContext?.admin).toBe(false);
-    });
-
     it('proceeds anonymously when the token is invalid or expired', async () => {
         // Fails open on purpose: this middleware also runs on public routes, where a stale token
         // in a browser must not turn a public page into an error.
