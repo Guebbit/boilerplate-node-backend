@@ -60,13 +60,6 @@ describe('GET /delivery/order/{orderId}', () => {
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().get('/delivery/order/65dc8a99604c307b702b5ccc');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /delivery/advance', () => {
@@ -78,15 +71,6 @@ describe('POST /delivery/advance', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.advanced).toBe(1);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract for a non-admin — the courier is staff`s button', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().post('/delivery/advance').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
 });

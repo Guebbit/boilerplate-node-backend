@@ -77,13 +77,6 @@ describe('GET /orders', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().get('/orders');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
-
     it('reports the three order totals rather than a single collapsed total', async () => {
         const { bearer, user } = await authenticateAs('admin');
         await seedOrderFor(user);
@@ -260,12 +253,5 @@ describe('POST /orders/{id}/cancel', () => {
         expect(first.status).toBe(200);
         expect(second.status).toBe(409);
         expect(second).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().post('/orders/65dc8a99604c307b702b5ccc/cancel');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 });

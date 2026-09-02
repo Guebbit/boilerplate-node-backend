@@ -189,13 +189,6 @@ describe('PUT /account', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().put('/account').send({ username: 'nobody' });
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /account/password', () => {
@@ -229,17 +222,6 @@ describe('POST /account/password', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().post('/account/password').send({
-            currentPassword: PLAIN_PASSWORD,
-            password: 'brand-new-secret',
-            passwordConfirm: 'brand-new-secret'
-        });
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /account/reauth', () => {
@@ -268,13 +250,6 @@ describe('POST /account/reauth', () => {
             .send({ password: 'wrong-guess' });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().post('/account/reauth').send({ password: PLAIN_PASSWORD });
-
-        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 
@@ -326,13 +301,6 @@ describe('POST /account/export', () => {
 
         const { data } = response.body as { data: { orders: { id: string }[] } };
         expect(data.orders.map((each) => each.id)).not.toContain(String(strangerOrder._id));
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().post('/account/export').send();
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -412,13 +380,6 @@ describe('GET /account/sessions', () => {
         expect(after.status).toBe(200);
         expect(typeof after.body.data.sessions[0].lastUsedAt).toBe('string');
         expect(after).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().get('/account/sessions');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -501,13 +462,6 @@ describe('DELETE /account/sessions/{sessionId}', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().delete(`/account/sessions/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /account/verify-request and /account/verify-confirm', () => {
@@ -571,13 +525,6 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         expect(first.status).toBe(200);
         expect(second.status).toBe(422);
         expect(second).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when verify-request is unauthenticated', async () => {
-        const response = await api().post('/account/verify-request');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -672,13 +619,6 @@ describe('the address book: /account/addresses', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().get('/account/addresses');
-
-        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 

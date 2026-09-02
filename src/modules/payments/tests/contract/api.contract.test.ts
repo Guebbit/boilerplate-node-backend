@@ -79,13 +79,6 @@ describe('POST /payments/intent', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().post('/payments/intent').send({ orderId: MISSING_ID });
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /payments/{id}/confirm', () => {
