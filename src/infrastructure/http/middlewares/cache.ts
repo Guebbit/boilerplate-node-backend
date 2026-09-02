@@ -355,6 +355,31 @@ export const searchCache = (entity: string, keyParameters: readonly string[], se
     setCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
 
 /**
+ * Clears Redis cache groups, and logs plus counts the failure when Redis could not be reached —
+ * the shared body behind {@link invalidateCache} (the route middleware, below) and the image
+ * digest worker's own writeback-completion invalidation (`infrastructure/adapters/image.worker.ts`
+ * — a write and the async digest it kicks off are two separate mutations of the same document,
+ * and each clears the cache the same way).
+ *
+ * @param tags - the cache tags to clear, e.g. `['products']`
+ * @returns a promise resolving once the attempt, successful or not, is logged
+ */
+export const invalidateCacheTagsLogged = (tags: string[]): Promise<void> =>
+    invalidateCacheTags(tags).then(({ reachable }) => {
+        if (reachable) return;
+        /*
+         * The write (or digest) landed but its cached predecessor did not, so the endpoint serves
+         * a stale response until the TTL expires. The response may already be sent, so logging
+         * plus a counter — reachable from an alert, not just grep — is the only move left.
+         */
+        for (const tag of tags) cacheInvalidationFailuresTotal.inc({ tag });
+        logger.error({
+            message: 'Cache invalidation could not reach Redis; stale responses survive.',
+            tags
+        });
+    });
+
+/**
  * Clear Redis cache groups after successful write operations — e.g. after writing a product,
  * clear the `products` tag.
  *
@@ -370,19 +395,7 @@ export const invalidateCache =
             // Only clear cache after a successful write; failed writes should not wipe valid cache.
             if (response.statusCode < 200 || response.statusCode >= 300) return;
 
-            void invalidateCacheTags(tags).then(({ reachable }) => {
-                if (reachable) return;
-                /*
-                 * The write landed but its cached predecessor did not, so this endpoint serves a
-                 * stale response until the TTL expires. The response is already sent, so logging
-                 * plus a counter — reachable from an alert, not just grep — is the only move left.
-                 */
-                for (const tag of tags) cacheInvalidationFailuresTotal.inc({ tag });
-                logger.error({
-                    message: 'Cache invalidation could not reach Redis; stale responses survive.',
-                    tags
-                });
-            });
+            void invalidateCacheTagsLogged(tags);
         });
 
         next();

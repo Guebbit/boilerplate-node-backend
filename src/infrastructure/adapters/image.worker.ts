@@ -17,6 +17,7 @@ import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 import { identifyImage } from '@infrastructure/adapters/image-signatures';
 import { IMAGE_QUEUE, isQueueEnabled, publishToQueue } from '@infrastructure/adapters/queue';
+import { invalidateCacheTagsLogged } from '@infrastructure/http/middlewares/cache';
 
 /* Queue name for image digest jobs — owned by the adapter, re-exported for the worker registry. */
 export { IMAGE_QUEUE } from '@infrastructure/adapters/queue';
@@ -101,36 +102,46 @@ export const digestQuarantinedImage = (key: string): Promise<DigestedImageUrls> 
     });
 
 /**
- * Call a module's writeback, and clean up after it when it matches nothing.
+ * Call a module's writeback, and either clean up (nothing matched) or invalidate the cache
+ * (something did) — the two outcomes a finished digest can have.
  *
  * Shared by {@link handleImageDigestJob} and {@link enqueueImageDigest}'s inline fallback, so a
- * stale job or a deleted-mid-flight document is handled identically on both paths.
+ * stale job, a deleted-mid-flight document, and a completed digest are all handled identically on
+ * both paths.
+ *
+ * The invalidation half exists because the write that enqueued this job already cleared the
+ * `collection` cache tag — before the digest ran, so the response it re-warmed still carries the
+ * pre-digest placeholder (`imageUrl`/`thumbnailUrl` not yet set). This is the only place a
+ * FINISHED digest becomes visible to anything, so it is the only place that can clear the tag a
+ * second time; without it, a cached response can serve that placeholder for the tag's whole TTL.
  *
  * @param writeback - the module's own writeback
  * @param documentId - the target document's id
  * @param key - the quarantine key this digest was produced from
  * @param urls - the promoted image and thumbnail urls
- * @param logContext - fields to attach to the cleanup log line (e.g. `collection`)
+ * @param collection - the job's target collection — the cache tag to clear once it matches
  */
 const settleWriteback = (
     writeback: ImageWriteback,
     documentId: string,
     key: string,
     urls: DigestedImageUrls,
-    logContext: Record<string, unknown>
+    collection: string
 ): Promise<void> =>
     writeback(documentId, key, urls).then((matched) => {
-        if (matched) return;
+        if (!matched) {
+            // Stale job or deleted document: nobody will ever read these urls, so they are
+            // unlinked rather than left as orphans nothing can find again.
+            logger.info({
+                message: 'Image digest writeback matched no document; cleaning up promoted files.',
+                collection,
+                documentId,
+                key
+            });
+            return imageStore.remove(urls.imageUrl).then(() => undefined);
+        }
 
-        // Stale job or deleted document: nobody will ever read these urls, so they are unlinked
-        // rather than left as orphans nothing can find again.
-        logger.info({
-            message: 'Image digest writeback matched no document; cleaning up promoted files.',
-            ...logContext,
-            documentId,
-            key
-        });
-        return imageStore.remove(urls.imageUrl).then(() => undefined);
+        return invalidateCacheTagsLogged([collection]);
     });
 
 /**
@@ -159,7 +170,7 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
 
     return digestQuarantinedImage(key)
         .then((urls) =>
-            settleWriteback(writeback, documentId, key, urls, { collection }).then(() => true)
+            settleWriteback(writeback, documentId, key, urls, collection).then(() => true)
         )
         .catch((error: Error) => {
             // A bad decode is permanent — every redelivery decodes the same bytes the same way —
@@ -188,9 +199,7 @@ export const enqueueImageDigest = (
 ): Promise<void> => {
     const runInline = () =>
         digestQuarantinedImage(payload.key).then((urls) =>
-            settleWriteback(writeback, payload.documentId, payload.key, urls, {
-                collection: payload.collection
-            })
+            settleWriteback(writeback, payload.documentId, payload.key, urls, payload.collection)
         );
 
     if (!isQueueEnabled()) return runInline();
