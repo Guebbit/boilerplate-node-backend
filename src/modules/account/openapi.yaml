@@ -763,7 +763,7 @@ components:
                     type: string
                     minLength: 3
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 passwordConfirm:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
                 imageUrl:
@@ -780,7 +780,7 @@ components:
                     type: string
                     minLength: 3
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 passwordConfirm:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
                 imageUpload:
@@ -806,7 +806,7 @@ components:
                     type: string
                     description: One-time password reset token (NOT a JWT).
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 passwordConfirm:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
 
@@ -878,7 +878,7 @@ components:
                 currentPassword:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 passwordConfirm:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
 

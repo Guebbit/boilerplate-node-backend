@@ -47,7 +47,7 @@ setupTestDb();
 afterEach(() => jest.restoreAllMocks());
 
 const CURRENT_PASSWORD = 'correct-horse-battery';
-const NEW_PASSWORD = 'staple-gun-tuesday';
+const NEW_PASSWORD = 'Staple-Gun-Tuesday1';
 
 /** The stored tokens of a user, credentials re-selected. */
 const readTokens = async (userId: string) => {

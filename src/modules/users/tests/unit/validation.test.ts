@@ -1,6 +1,6 @@
 /**
  * @module
- * `zodUserSchema`'s six message thunks — exercised here because import-time coverage lies about
+ * `zodUserSchema`'s ten message thunks — exercised here because import-time coverage lies about
  * them: the schema is a declaration, so it reports 100% covered whether or not a thunk ever runs.
  * The case that matters most: `error: t('…')` instead of `error: () => t('…')` resolves at import
  * time, before `i18next.init()`, so Zod silently falls back to English — these cases catch that,
@@ -88,13 +88,45 @@ describe('password messages', () => {
         expect(messages).not.toContain(copy('field-password-required'));
     });
 
-    it('accepts a password of exactly the contract minimum', () => {
+    it('accepts a password of exactly the contract minimum, complexity included', () => {
+        expect(messagesFor({ ...validUser, password: 'Aa1!aaaa' }, 'password')).toEqual([]);
+    });
+
+    // An 8-char all-lowercase password used to pass here with zero validation errors — the exact
+    // gap TEST_AUDIT_CORRELATED_BLIND_SPOTS.md's X-2 found: the paired frontend's `usersPasswordSchema`
+    // enforced this, nothing server-side did. `PasswordNew` (`shared/contracts/openapi.root.yaml`)
+    // documents the rule; this and the four cases below pin the server-side enforcement of it.
+    it('rejects a password the contract minimum accepts on length alone', () => {
         expect(
             messagesFor(
                 { ...validUser, password: 'a'.repeat(createUserBodyPasswordMin) },
                 'password'
             )
-        ).toEqual([]);
+        ).not.toEqual([]);
+    });
+
+    it('uses the lowercase copy for a password with none', () => {
+        expect(messagesFor({ ...validUser, password: 'AA1!AAAA' }, 'password')).toContain(
+            copy('field-password-lowercase')
+        );
+    });
+
+    it('uses the uppercase copy for a password with none', () => {
+        expect(messagesFor({ ...validUser, password: 'aa1!aaaa' }, 'password')).toContain(
+            copy('field-password-uppercase')
+        );
+    });
+
+    it('uses the digit copy for a password with none', () => {
+        expect(messagesFor({ ...validUser, password: 'Aa!aaaaa' }, 'password')).toContain(
+            copy('field-password-digit')
+        );
+    });
+
+    it('uses the symbol copy for a password with none', () => {
+        expect(messagesFor({ ...validUser, password: 'Aa1aaaaa' }, 'password')).toContain(
+            copy('field-password-symbol')
+        );
     });
 });
 

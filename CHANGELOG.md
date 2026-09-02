@@ -106,6 +106,18 @@ were removed and are kept out by a test.
   `db/migrations/20260820140000-order-shipping-cost.js` is removed with it: its one-time backfill
   existed to give every order the number the schema was about to start defaulting, and would now
   incorrectly zero a modern order that simply chose no method if it ever ran again.
+- **No server-side password complexity policy existed** — the shared `Password` schema was
+  `minLength: 8` with no other rule, so an 8-char all-lowercase password passed signup, admin
+  user-create, password change and reset-confirm alike, even though the paired frontend's
+  `usersPasswordSchema` already enforced upper+lower+digit+symbol and had done so unnoticed for a
+  while: BE's own test suite proved the weak password was ACCEPTED, and nothing server-side ever
+  drove a client through the check FE only ever performs in the browser. A new `PasswordNew`
+  schema carries the rule in prose (no `pattern`: a lookahead-based one breaks
+  `tests/support/spec-arbitraries.ts`'s fuzz generator) on every password-SETTING field — signup,
+  reset-confirm, change, admin user create/update — while `Password` stays permissive on the three
+  password-PROVING fields (login, the current-password leg of a change, re-auth), so no existing
+  account is locked out. Enforced server-side by `zodUserSchema` (`src/modules/users/model.ts`),
+  mirroring the frontend's four rules message-for-message.
 
 ### Changed
 

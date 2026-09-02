@@ -105,8 +105,8 @@ describe('POST /account/signup', () => {
         const response = await api().post('/account/signup').send({
             username: 'newcomer',
             email: 'newcomer@example.com',
-            password: 'password123',
-            passwordConfirm: 'password123'
+            password: 'Password1!',
+            passwordConfirm: 'Password1!'
         });
 
         expect(response.status).toBe(201);
@@ -119,8 +119,8 @@ describe('POST /account/signup', () => {
         const payload = {
             username: 'duplicate',
             email: 'duplicate@example.com',
-            password: 'password123',
-            passwordConfirm: 'password123'
+            password: 'Password1!',
+            passwordConfirm: 'Password1!'
         };
         await api().post('/account/signup').send(payload);
         const response = await api().post('/account/signup').send(payload);

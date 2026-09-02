@@ -30,7 +30,7 @@ jest.mock('@infrastructure/observability/analytics', () => ({
 
 setupTestDb();
 
-const VALID_PASSWORD = 'correct-horse-battery';
+const VALID_PASSWORD = 'Correct-Horse-Battery1';
 
 describe('signup', () => {
     it('creates the account and returns it', async () => {

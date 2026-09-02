@@ -165,10 +165,26 @@ export const zodUserSchema = CreateUserBody.extend({
         .min(1, { error: () => t('users.field-username-required') })
         .min(3, { error: () => t('users.field-username-min') }),
 
+    // Complexity beyond length duplicates `PasswordNew`'s contract pattern in translated form —
+    // the generated schema (`CreateUserBody`) would answer first in English, same reason as the
+    // length check above. One `.refine()` per rule so each gets its own message, matching the
+    // paired frontend's `usersPasswordSchema` rule-for-rule (`schemas.ts`).
     password: z
         .string()
         .min(1, { error: () => t('users.field-password-required') })
         .min(createUserBodyPasswordMin, { error: () => t('users.field-password-min') })
+        .refine((password) => /[a-z]/.test(password), {
+            error: () => t('users.field-password-lowercase')
+        })
+        .refine((password) => /[A-Z]/.test(password), {
+            error: () => t('users.field-password-uppercase')
+        })
+        .refine((password) => /\d/.test(password), {
+            error: () => t('users.field-password-digit')
+        })
+        .refine((password) => /[^\dA-Za-z]/.test(password), {
+            error: () => t('users.field-password-symbol')
+        })
 });
 
 /**

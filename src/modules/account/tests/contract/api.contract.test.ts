@@ -197,8 +197,8 @@ describe('POST /account/password', () => {
 
         const response = await api().post('/account/password').set('Authorization', bearer).send({
             currentPassword: PLAIN_PASSWORD,
-            password: 'brand-new-secret',
-            passwordConfirm: 'brand-new-secret'
+            password: 'Brand-New-Secret1',
+            passwordConfirm: 'Brand-New-Secret1'
         });
 
         expect(response.status).toBe(200);
@@ -206,7 +206,7 @@ describe('POST /account/password', () => {
 
         const relogin = await api()
             .post('/account/login')
-            .send({ email: user.email, password: 'brand-new-secret' });
+            .send({ email: user.email, password: 'Brand-New-Secret1' });
         expect(relogin.status).toBe(200);
     });
 
@@ -215,8 +215,8 @@ describe('POST /account/password', () => {
 
         const response = await api().post('/account/password').set('Authorization', bearer).send({
             currentPassword: 'wrong-guess',
-            password: 'brand-new-secret',
-            passwordConfirm: 'brand-new-secret'
+            password: 'Brand-New-Secret1',
+            passwordConfirm: 'Brand-New-Secret1'
         });
 
         expect(response.status).toBe(422);

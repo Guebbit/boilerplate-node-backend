@@ -205,6 +205,25 @@ components:
         Password:
             type: string
             minLength: 8
+            description: >-
+                An EXISTING password, being proved rather than set — login, the current-password
+                leg of a change, and re-auth. No complexity pattern: a password created before
+                `PasswordNew` existed must still be provable, and a login attempt is not the place
+                to also announce the site's password policy to whoever is guessing it.
+        PasswordNew:
+            type: string
+            minLength: 8
+            # No `pattern` here on purpose: expressing "all four character classes present, any
+            # order" needs lookahead, which `tests/support/spec-arbitraries.ts`'s fuzz generator
+            # (fast-check `stringMatching`) cannot build strings against — see its own comment.
+            # Enforced instead in translated form by `zodUserSchema` (`src/modules/users/model.ts`)
+            # and the paired frontend's `usersPasswordSchema`, both by hand for the same reason the
+            # length check above already is: a generated schema would answer first in English.
+            description: >-
+                A password being SET — signup, reset, change, and every admin-issued user
+                password. Must contain a lowercase letter, an uppercase letter, a digit and a
+                symbol, on top of `Password`'s length floor — enforced server-side, not just by
+                the paired frontend's form.
         Locale:
             type: string
             description: >-

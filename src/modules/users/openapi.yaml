@@ -336,7 +336,7 @@ components:
                 # themselves), or leave it out and use `sendSetupEmail` to have the user pick their
                 # own instead.
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 # Only meaningful when `password` is omitted. Queues the same email as
                 # "forgot your password", worded for "you have no password yet" instead, carrying a
                 # token the user completes their own registration with — see
@@ -368,7 +368,7 @@ components:
                     type: string
                 # Same as `CreateUserRequest.password` — optional, see `sendSetupEmail` below.
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 # Same as `CreateUserRequest.sendSetupEmail`.
                 sendSetupEmail:
                     type: boolean
@@ -399,7 +399,7 @@ components:
                 username:
                     type: string
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 admin:
                     type: boolean
                 active:
@@ -425,7 +425,7 @@ components:
                 username:
                     type: string
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 admin:
                     type: boolean
                 active:
@@ -449,7 +449,7 @@ components:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 username:
                     type: string
                 admin:
@@ -472,7 +472,7 @@ components:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 username:
                     type: string
                 admin:
