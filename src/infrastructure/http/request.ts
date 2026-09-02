@@ -295,10 +295,10 @@ export interface CallerContext {
      */
     locale?: string;
     /**
-     * The caller's analytics consent choice. For an authenticated caller this is
-     * the stored, just-read `AuthContext.analyticsConsent`; for anonymous traffic it is whatever
-     * `X-Analytics-Consent` header the frontend forwarded from a pre-login visitor's own choice.
-     * `undefined` means "never asked", read by `emitAnalyticsEvent`'s own gate, nowhere else.
+     * The caller's analytics consent choice — the stored `AuthContext.analyticsConsent`, else the
+     * `X-Analytics-Consent` header the frontend forwards from the visitor's own banner choice.
+     * `undefined` means "never asked" and captures nothing: `emitAnalyticsEvent`'s gate is opt-in,
+     * and it is the only reader.
      */
     analyticsConsent?: 'granted' | 'denied';
 }
@@ -340,8 +340,9 @@ export const callerContextOf = (request: {
         // default belongs at the point of use, where `getDefaultLocale()` is the last term of a
         // precedence chain whose first term is the recipient's own stored preference.
         locale: request.locale,
-        // The stored account preference wins when there is one; a pre-login visitor has none to
-        // read, only whatever they told the frontend this specific request.
+        // The stored account preference wins over the header — but only when the account HAS one.
+        // An authenticated caller who was never asked falls through to the header too, so a
+        // banner choice made before logging in still counts until `PUT /account` records it.
         analyticsConsent:
             request.authContext?.analyticsConsent ??
             (isConsentValue(consentHeader) ? consentHeader : undefined)

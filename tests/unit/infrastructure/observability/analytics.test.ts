@@ -528,14 +528,15 @@ describe('emitAnalyticsEvent — consent gate', () => {
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
-    it('coarsens rather than drops when consent is unasked — no clientIp, distinctId anonymised', () => {
+    // The gate is opt-in: never-asked is not a weaker yes, and there is no coarsened middle
+    // capture — see the reasoning under `emitAnalyticsEvent`.
+    it('drops the event when consent was never asked', () => {
         process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
         configureUmami();
 
         emitAnalyticsEvent({ ...baseEvent, analyticsConsent: undefined });
 
-        expect('X-Forwarded-For' in sentRequest().headers).toBe(false);
-        expect(sentRequest().body.payload.data.user_id).toBe('anonymous');
+        expect(globalThis.fetch).not.toHaveBeenCalled();
     });
 
     it('never lets the internal consent field itself reach the provider', () => {
