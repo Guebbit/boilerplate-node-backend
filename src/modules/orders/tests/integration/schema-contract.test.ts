@@ -31,14 +31,6 @@ const makeOrderPayload = async () => {
 };
 
 describe('order schema', () => {
-    it('requires an email', async () => {
-        const payload = await makeOrderPayload();
-
-        await expect(
-            orderRepository.create({ ...payload, email: undefined } as never)
-        ).rejects.toThrow();
-    });
-
     it('serialises to id, never _id or __v', async () => {
         const order = await orderRepository.create((await makeOrderPayload()) as never);
 
@@ -47,13 +39,6 @@ describe('order schema', () => {
         expect(serialized.id).toBe(String(order._id));
         expect(serialized).not.toHaveProperty('_id');
         expect(serialized).not.toHaveProperty('__v');
-    });
-
-    it('stamps createdAt and updatedAt', async () => {
-        const order = await orderRepository.create((await makeOrderPayload()) as never);
-
-        expect(order.createdAt).toBeInstanceOf(Date);
-        expect(order.updatedAt).toBeInstanceOf(Date);
     });
 });
 

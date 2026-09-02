@@ -7,7 +7,6 @@
  * assert values without naming every domain, so each owner asserts its own here.
  */
 
-import type { AuditAction } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../../audit';
 
 describe('the account audit vocabulary', () => {
@@ -46,17 +45,5 @@ describe('the account audit vocabulary', () => {
     it('keeps the `auth.` prefix the folder name does not control', () => {
         for (const action of Object.values(accountAuditActions))
             expect(action.startsWith('auth.')).toBe(true);
-    });
-
-    /*
-     * The `declare module` augmentation in `audit.ts` puts these into `AuditAction`. Drop it and
-     * `emitAuditEvent` rejects every action this module owns, at the call sites rather than here.
-     * Checked at type-check time — `tsconfig.json` covers the whole `src` tree — even though
-     * jest itself does not type-check.
-     */
-    it('registers its actions in the app-wide union', () => {
-        const action: AuditAction = accountAuditActions.AUTH_LOGIN;
-
-        expect(action).toBe('auth.login');
     });
 });

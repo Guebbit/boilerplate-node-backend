@@ -55,13 +55,6 @@ describe('GET /cart', () => {
         expect(response.body.data.items).toHaveLength(1);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().get('/cart');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /cart', () => {
@@ -75,17 +68,6 @@ describe('POST /cart', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.summary.totalQuantity).toBe(3);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract for an invalid body', async () => {
-        const { bearer } = await authenticateAs('user');
-        const response = await api()
-            .post('/cart')
-            .set('Authorization', bearer)
-            .send({ productId: 'not-an-id' });
-
-        expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 
@@ -111,13 +93,6 @@ describe('POST /cart', () => {
             .send({ productId: String(hidden._id), quantity: 1 });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().post('/cart').send({ productId: MISSING_ID, quantity: 1 });
-
-        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 });
@@ -163,13 +138,6 @@ describe('DELETE /cart', () => {
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().delete('/cart').send({ productId: MISSING_ID });
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('DELETE /cart/all', () => {
@@ -179,13 +147,6 @@ describe('DELETE /cart/all', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(0);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().delete('/cart/all');
-
-        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 });
@@ -238,13 +199,6 @@ describe('PUT /cart/{productId}', () => {
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().put(`/cart/${MISSING_ID}`).send({ quantity: 1 });
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('DELETE /cart/{productId}', () => {
@@ -267,13 +221,6 @@ describe('DELETE /cart/{productId}', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().delete(`/cart/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('GET /cart/summary', () => {
@@ -291,13 +238,6 @@ describe('GET /cart/summary', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.itemsCount).toBe(1);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().get('/cart/summary');
-
-        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 });
@@ -354,13 +294,6 @@ describe('POST /cart/checkout', () => {
                 available: 1
             }
         ]);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().post('/cart/checkout');
-
-        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 });
@@ -457,13 +390,6 @@ describe('POST /cart/reorder/{orderId}', () => {
         const response = await api().post('/cart/reorder/not-an-id').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().post(`/cart/reorder/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 });

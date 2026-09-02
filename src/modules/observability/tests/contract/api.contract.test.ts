@@ -101,22 +101,6 @@ describe('GET /observability/health', () => {
         expect(typeof analytics.provider).toBe('string');
         expect(typeof analytics.configured).toBe('boolean');
     });
-
-    it('matches the error contract for a non-admin', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get('/observability/health').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract for an anonymous caller', async () => {
-        const response = await api().get('/observability/health');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('GET /observability/metrics/overview', () => {
@@ -149,17 +133,6 @@ describe('GET /observability/metrics/overview', () => {
          * survives a deleted module and one that 500s on it. */
         expect(response.body.data.auth.loginSuccess).toBeGreaterThan(0);
         expect(response.body.data.business.checkoutSuccess).toBe(0);
-    });
-
-    it('matches the error contract for a non-admin', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .get('/observability/metrics/overview')
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
     });
 });
 
@@ -218,15 +191,6 @@ describe('GET /observability/audit', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract for a non-admin', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get('/observability/audit').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
 });

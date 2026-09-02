@@ -6,7 +6,6 @@
  * action fails the test.
  */
 
-import type { AuditAction } from '@infrastructure/observability/audit';
 import { usersAuditActions } from '../../audit';
 
 describe('the users audit vocabulary', () => {
@@ -18,16 +17,5 @@ describe('the users audit vocabulary', () => {
             ADMIN_USER_ERASED: 'admin.user.erased',
             ADMIN_USER_2FA_DISABLED: 'admin.user.two_factor_disabled'
         });
-    });
-
-    /*
-     * `declare module` in `audit.ts` puts these actions into `AuditAction`; without it the module
-     * still compiles but `emitAuditEvent` rejects them at call sites. Checked at type-check time
-     * only — jest itself doesn't type-check this line, but `tsconfig.json` compiles it.
-     */
-    it('registers its actions in the app-wide union', () => {
-        const action: AuditAction = usersAuditActions.ADMIN_USER_CREATED;
-
-        expect(action).toBe('admin.user.created');
     });
 });

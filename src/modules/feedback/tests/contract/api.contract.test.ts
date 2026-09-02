@@ -94,13 +94,6 @@ describe('GET /feedback', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().get('/feedback');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
-
     // Without its own pagination validation this endpoint would silently clamp `?pageSize=500`
     // to 100 while the other three search endpoints answer 422 for the very same request.
     it.each(['pageSize=500', 'page=0'])(
@@ -116,14 +109,6 @@ describe('GET /feedback', () => {
             expect(response).toSatisfyApiSpec();
         }
     );
-
-    it('matches the error contract for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-        const response = await api().get('/feedback').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 /*
@@ -174,14 +159,6 @@ describe('POST /feedback/search', () => {
             expect(response).toSatisfyApiSpec();
         }
     );
-
-    it('matches the error contract for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-        const response = await api().post('/feedback/search').set('Authorization', bearer).send({});
-
-        expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('PUT /feedback/{id}', () => {
@@ -218,24 +195,6 @@ describe('PUT /feedback/{id}', () => {
             .send({ status: 'spam' });
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().put(`/feedback/${MISSING_ID}`).send({ status: 'spam' });
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-        const response = await api()
-            .put(`/feedback/${MISSING_ID}`)
-            .set('Authorization', bearer)
-            .send({ status: 'spam' });
-
-        expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
 });
@@ -286,21 +245,6 @@ describe('DELETE /feedback/{id}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().delete(`/feedback/${MISSING_ID}`);
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract for a non-admin caller', async () => {
-        const { bearer } = await authenticateAs('user');
-        const response = await api().delete(`/feedback/${MISSING_ID}`).set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
 });

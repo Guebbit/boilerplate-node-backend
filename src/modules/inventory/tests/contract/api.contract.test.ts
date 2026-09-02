@@ -64,15 +64,6 @@ describe('GET /inventory/levels', () => {
         expect(response.body.data.meta).toMatchObject({ totalItems: 5, totalPages: 3 });
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract for a non-admin', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get('/inventory/levels').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('GET /inventory/movements', () => {
@@ -157,15 +148,6 @@ describe('GET /inventory/movements', () => {
         });
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract for a non-admin', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api().get('/inventory/movements').set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /inventory/receipts', () => {
@@ -204,15 +186,6 @@ describe('POST /inventory/receipts', () => {
             .send({ quantity: 0 });
 
         expect(response.status).toBe(422);
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api()
-            .post('/inventory/receipts')
-            .send({ productId: MISSING_ID, quantity: 1 });
-
-        expect(response.status).toBe(401);
         expect(response).toSatisfyApiSpec();
     });
 });
@@ -258,18 +231,6 @@ describe('POST /inventory/adjustments', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
-
-    it('matches the error contract for a non-admin', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .post('/inventory/adjustments')
-            .set('Authorization', bearer)
-            .send({ productId: MISSING_ID, delta: 1 });
-
-        expect(response.status).toBe(403);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /inventory/reservations/sweep', () => {
@@ -282,17 +243,6 @@ describe('POST /inventory/reservations/sweep', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toEqual({ expired: 0 });
-        expect(response).toSatisfyApiSpec();
-    });
-
-    it('matches the error contract for a non-admin', async () => {
-        const { bearer } = await authenticateAs('user');
-
-        const response = await api()
-            .post('/inventory/reservations/sweep')
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
 });

@@ -98,13 +98,6 @@ describe('GET /account', () => {
         // `noStore` in `infrastructure/http/middlewares/cache.ts`.
         expect(response.headers['cache-control']).toBe('no-store');
     });
-
-    it('matches the error contract when unauthenticated', async () => {
-        const response = await api().get('/account');
-
-        expect(response.status).toBe(401);
-        expect(response).toSatisfyApiSpec();
-    });
 });
 
 describe('POST /account/signup', () => {

@@ -634,7 +634,7 @@ components:
                     type: string
                     description: Short-lived signed token naming this login attempt. Submit it, with a code, to POST /account/login/2fa. Expires after five minutes.
 
-        LoginResult:
+        LoginOutcome:
             oneOf:
                 - $ref: '#/components/schemas/AuthTokens'
                 - $ref: '#/components/schemas/MfaChallenge'
@@ -652,7 +652,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '#/components/schemas/LoginResult'
+                    $ref: '#/components/schemas/LoginOutcome'
 
         LoginTwoFactorRequest:
             type: object

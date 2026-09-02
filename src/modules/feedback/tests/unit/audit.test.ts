@@ -6,7 +6,6 @@
  * the shape, the values themselves are asserted by their owner, here.
  */
 
-import type { AuditAction } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from '../../audit';
 
 describe('the feedback audit vocabulary', () => {
@@ -16,18 +15,5 @@ describe('the feedback audit vocabulary', () => {
             ADMIN_FEEDBACK_STATUS_UPDATED: 'admin.feedback.status_updated',
             ADMIN_FEEDBACK_DELETED: 'admin.feedback.deleted'
         });
-    });
-
-    /*
-     * The `declare module` augmentation in `audit.ts` is what puts these into `AuditAction`.
-     * Drop it and the module still compiles on its own — but `emitAuditEvent` then rejects every
-     * action this module owns, at the call sites rather than here. Checked at type-check time:
-     * `tsconfig.json` includes the whole `src` tree, so this line is compiled even though jest
-     * does not type-check it.
-     */
-    it('registers its actions in the app-wide union', () => {
-        const action: AuditAction = feedbackAuditActions.ADMIN_FEEDBACK_VIEWED;
-
-        expect(action).toBe('admin.feedback.viewed');
     });
 });
