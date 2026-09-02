@@ -638,7 +638,8 @@ describe('callerContextOf', () => {
                     username: 'a',
                     admin: false,
                     authTime: 0,
-                    amr: []
+                    amr: [],
+                    analyticsConsent: false
                 },
                 requestId: 'req-111'
             })
@@ -651,12 +652,14 @@ describe('callerContextOf', () => {
                 username: 'a',
                 admin: false,
                 authTime: 0,
-                amr: []
+                amr: [],
+                analyticsConsent: false
             },
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
             host: 'shop.example.com',
-            requestId: 'req-111'
+            requestId: 'req-111',
+            analyticsConsent: false
         });
     });
 
@@ -676,5 +679,41 @@ describe('callerContextOf', () => {
         expect(context.userAgent).toBeUndefined();
         expect(context.host).toBeUndefined();
         expect(context.requestId).toBeUndefined();
+        expect(context.analyticsConsent).toBe(false);
+    });
+
+    it('reads analytics consent off the header for an anonymous caller, decoding boolean spellings', () => {
+        expect(
+            callerContextOf(makeCallerRequest({ headers: { 'x-analytics-consent': 'true' } }))
+                .analyticsConsent
+        ).toBe(true);
+        expect(
+            callerContextOf(makeCallerRequest({ headers: { 'x-analytics-consent': 'false' } }))
+                .analyticsConsent
+        ).toBe(false);
+        // Anything unrecognised is `false`, matching an absent header.
+        expect(
+            callerContextOf(makeCallerRequest({ headers: { 'x-analytics-consent': 'maybe' } }))
+                .analyticsConsent
+        ).toBe(false);
+    });
+
+    it('prefers the stored consent over the header once the account has granted it', () => {
+        const context = callerContextOf(
+            makeCallerRequest({
+                headers: { 'x-analytics-consent': 'false' },
+                authContext: {
+                    id: 'user-1',
+                    email: 'a@b.c',
+                    username: 'a',
+                    admin: false,
+                    authTime: 0,
+                    amr: [],
+                    analyticsConsent: true
+                }
+            })
+        );
+
+        expect(context.analyticsConsent).toBe(true);
     });
 });

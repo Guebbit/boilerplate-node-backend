@@ -6,4 +6,4 @@
  */
 import type { CallerContext } from '@infrastructure/http/request';
 
-export const testCallerContext: CallerContext = { caller: {} };
+export const testCallerContext: CallerContext = { caller: {}, analyticsConsent: false };

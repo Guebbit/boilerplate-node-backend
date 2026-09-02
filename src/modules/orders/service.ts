@@ -539,7 +539,7 @@ export const cancelById = (
                 // actor rather than skipped — see the docblock above — and reported under its own
                 // analytics name so a timeout is never counted as a customer's choice to cancel.
                 const isSystemExpiry = !context;
-                const emitContext = context ?? { caller: {} };
+                const emitContext = context ?? { caller: {}, analyticsConsent: false };
 
                 emitAuditEvent(
                     buildAuditEvent(emitContext, {

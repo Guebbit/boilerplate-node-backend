@@ -4193,6 +4193,7 @@
             {
                 "active": true,
                 "admin": true,
+                "analyticsConsent": false,
                 "createdAt": "2024-02-27T00:24:59.000Z",
                 "email": "root@root.it",
                 "id": "65dd2bdb923652b7800fe180",
@@ -4206,6 +4207,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2024-02-27T22:38:34.000Z",
                 "email": "gino@pino.it",
                 "id": "65de646a44f861fd83c13f13",
@@ -4219,6 +4221,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "amelia.clarke@example.com",
                 "id": "67f0c2000000000000000000",
@@ -4232,6 +4235,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "benjamin.hughes@example.com",
                 "id": "67f0c2000000000000000001",
@@ -4245,6 +4249,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "chloe.whitfield@example.com",
                 "id": "67f0c2000000000000000002",
@@ -4258,6 +4263,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "daniel.osei@example.com",
                 "id": "67f0c2000000000000000003",
@@ -4271,6 +4277,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "grace.sutton@example.com",
                 "id": "67f0c2000000000000000004",
@@ -4284,6 +4291,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "felix.moreno@example.com",
                 "id": "67f0c2000000000000000005",
@@ -4297,6 +4305,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "priya.kapoor@example.com",
                 "id": "67f0c2000000000000000006",
@@ -4310,6 +4319,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "marcus.bellamy@example.com",
                 "id": "67f0c2000000000000000007",
@@ -4323,6 +4333,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "harper.quinn@example.com",
                 "id": "67f0c2000000000000000008",
@@ -4336,6 +4347,7 @@
             {
                 "active": true,
                 "admin": false,
+                "analyticsConsent": false,
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "isla.fenwick@example.com",
                 "id": "67f0c2000000000000000009",

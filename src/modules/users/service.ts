@@ -152,7 +152,7 @@ export const update = (
          * Rides along the same way `thumbnailUrl` does, from the one caller (`account`'s
          * `updateProfile`) that actually has one to pass.
          */
-        analyticsConsent?: 'granted' | 'denied';
+        analyticsConsent?: boolean;
     }
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
@@ -170,8 +170,8 @@ export const update = (
     if (data.locale !== undefined) user.locale = data.locale;
     if (data.phone !== undefined) user.phone = data.phone;
     if (data.website !== undefined) user.website = data.website;
-    // A tri-state write: absent leaves the stored choice alone, same as every field above; only
-    // an explicit 'granted'/'denied' changes it.
+    // Absent leaves the stored choice alone, same as every field above; only an explicit boolean
+    // changes it.
     if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
     if (data.password && data.password.trim().length > 0) user.password = data.password;
 

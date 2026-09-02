@@ -57,9 +57,10 @@ const FORM_BOOLEANS: Record<string, boolean> = {
  * `!!value` cannot do this: `!!'false'` is `true`, so a form that unchecked a box still turned
  * the flag on, and `?hardDelete=false` permanently deleted the record. Anything not recognisable
  * as a boolean is returned untouched (hence `unknown`) so the validator downstream rejects it
- * rather than this helper inventing a value for it.
+ * rather than this helper inventing a value for it. Exported for `schemas.ts`'s multipart
+ * boolean schemas, which need the same decode ahead of their own `z.boolean()`.
  */
-const parseFormBoolean = (value: unknown): unknown => {
+export const parseFormBoolean = (value: unknown): unknown => {
     if (typeof value !== 'string') return value;
     const normalized = value.trim().toLowerCase();
     return normalized in FORM_BOOLEANS ? FORM_BOOLEANS[normalized] : value;
@@ -297,15 +298,19 @@ export interface CallerContext {
     /**
      * The caller's analytics consent choice — the stored `AuthContext.analyticsConsent`, else the
      * `X-Analytics-Consent` header the frontend forwards from the visitor's own banner choice.
-     * `undefined` means "never asked" and captures nothing: `emitAnalyticsEvent`'s gate is opt-in,
-     * and it is the only reader.
+     * `false` covers both "denied" and "never asked": `emitAnalyticsEvent`'s gate is opt-in, and
+     * it is the only reader.
      */
-    analyticsConsent?: 'granted' | 'denied';
+    analyticsConsent: boolean;
 }
 
-/** The only two values `X-Analytics-Consent` may carry — anything else is treated as absent. */
-const isConsentValue = (value: unknown): value is 'granted' | 'denied' =>
-    value === 'granted' || value === 'denied';
+/**
+ * `X-Analytics-Consent` as a boolean, the way `environmentFlag` reads an env var — never
+ * `Boolean(value)`, which would make the string `'false'` truthy. Anything unrecognised (absent
+ * header included) is `false`, matching the stored field's own default.
+ */
+const parseConsentHeader = (value: string | undefined): boolean =>
+    value !== undefined && parseFormBoolean(value) === true;
 
 /**
  * Build the `CallerContext` for the current request. Call once per controller, at the top, and
@@ -315,7 +320,7 @@ const isConsentValue = (value: unknown): value is 'granted' | 'denied' =>
  * for more than the minimum a helper reads is what breaks Express' contravariant handler typing.
  */
 export const callerContextOf = (request: {
-    authContext?: Caller & { analyticsConsent?: 'granted' | 'denied' };
+    authContext?: Caller & { analyticsConsent?: boolean };
     ip?: string;
     headers?: {
         'user-agent'?: string | string[];
@@ -340,12 +345,11 @@ export const callerContextOf = (request: {
         // default belongs at the point of use, where `getDefaultLocale()` is the last term of a
         // precedence chain whose first term is the recipient's own stored preference.
         locale: request.locale,
-        // The stored account preference wins over the header — but only when the account HAS one.
-        // An authenticated caller who was never asked falls through to the header too, so a
-        // banner choice made before logging in still counts until `PUT /account` records it.
+        // The stored account preference wins over the header — but only when the account has
+        // granted it. A logged-in caller who hasn't granted it falls through to the header too,
+        // so a banner choice made before logging in still counts until `PUT /account` records it.
         analyticsConsent:
-            request.authContext?.analyticsConsent ??
-            (isConsentValue(consentHeader) ? consentHeader : undefined)
+            request.authContext?.analyticsConsent === true || parseConsentHeader(consentHeader)
     };
 };
 

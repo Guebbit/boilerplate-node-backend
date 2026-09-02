@@ -434,13 +434,11 @@ components:
                     type: string
                 website:
                     type: string
-                # A tri-state, and absent IS the third one: `granted`/`denied` are the only two a
-                # client may ever WRITE, and "never asked" is not a value anyone sends, it is what
-                # an account looks like before they have. The gate is opt-in — only `granted`
-                # captures anything (`observability/analytics/index.ts`).
+                # "Never asked" and "denied" are the same answer, arrived at differently — the
+                # gate is opt-in, so only `true` captures anything
+                # (`observability/analytics/index.ts`).
                 analyticsConsent:
-                    type: string
-                    enum: [granted, denied]
+                    type: boolean
                 # Present only once POST /account/2fa/confirm has armed a secret — a pending,
                 # unconfirmed one never reaches here. The secret and backup codes themselves are
                 # never part of this schema; see `users/model.ts`'s asymmetric storage.

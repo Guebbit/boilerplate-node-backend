@@ -24,11 +24,8 @@ export interface AuthenticatedUser {
     authTime: number;
     /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. */
     amr: readonly string[];
-    /**
-     * The account's analytics consent choice, read fresh from the document on every request.
-     * `undefined` means "never asked", a real third state, not "not yet loaded".
-     */
-    analyticsConsent?: 'granted' | 'denied';
+    /** The account's analytics consent choice, read fresh from the document on every request. */
+    analyticsConsent: boolean;
 }
 
 /** Turns a signed token into the user it names. Implemented by `account`. */

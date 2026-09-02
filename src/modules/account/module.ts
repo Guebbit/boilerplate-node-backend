@@ -78,8 +78,9 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       amr: claims.amr ?? [],
                       // Read fresh off the document every request, unlike `authTime`/`amr`: a
                       // consent WITHDRAWAL has to apply to the very next event, not wait for the
-                      // caller to log in again.
-                      analyticsConsent: user.analyticsConsent
+                      // caller to log in again. `?? false` for the same reason as `admin` above —
+                      // the schema defaults it, but the contract-derived type doesn't know that.
+                      analyticsConsent: user.analyticsConsent ?? false
                   }
                 : undefined
         );

@@ -21,11 +21,10 @@ export interface AuthContext {
     /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. Same source as `authTime`. */
     amr: readonly string[];
     /**
-     * The account's analytics consent choice, read fresh on every request. `undefined` means
-     * "never asked", carried through to `CallerContext` for `emitAnalyticsEvent`'s own gate;
-     * nothing else should need to read it.
+     * The account's analytics consent choice, read fresh on every request. Carried through to
+     * `CallerContext` for `emitAnalyticsEvent`'s own gate; nothing else should need to read it.
      */
-    analyticsConsent?: 'granted' | 'denied';
+    analyticsConsent: boolean;
 }
 
 /**

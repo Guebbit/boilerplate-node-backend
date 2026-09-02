@@ -14,6 +14,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { resetConfirmEmail, deleteConfirmEmail } from '../emails';
 import type { CastError } from 'mongoose';
 import { UpdateAccountBody } from '@api/schemas.zod';
+import { analyticsConsentSchema } from '@infrastructure/http/schemas';
 import {
     generateSuccess,
     generateReject,
@@ -220,9 +221,10 @@ const zodProfileSchema = zodUserSchema
         imageUrl: UpdateAccountBody.shape.imageUrl,
         phone: UpdateAccountBody.shape.phone,
         website: UpdateAccountBody.shape.website,
-        // The tri-state write; absence still means "leave it alone", same as every other field
-        // here, not "withdraw consent".
-        analyticsConsent: UpdateAccountBody.shape.analyticsConsent,
+        // Absence still means "leave it alone", same as every other field here, not "withdraw
+        // consent". `analyticsConsentSchema`, not `UpdateAccountBody.shape` directly: a multipart
+        // request carries this as a string, and `'false'` is truthy.
+        analyticsConsent: analyticsConsentSchema,
         // Not on `UpdateAccountBody` — both are `readOnly`/absent from the contract because the
         // server, not the client, produces them. They ride along here only because the controller
         // passes them from its own `readUploadedImage` call, the same way `imageUrl` does when an

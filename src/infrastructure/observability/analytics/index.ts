@@ -68,8 +68,8 @@ export interface AnalyticsEvent {
  * `AnalyticsProvider.capture` takes the narrower type and structurally cannot receive it.
  */
 export type AnalyticsEventInput = AnalyticsEvent & {
-    /** `granted` is the only value that captures; see {@link emitAnalyticsEvent}. */
-    analyticsConsent?: 'granted' | 'denied';
+    /** `false` never captures; see {@link emitAnalyticsEvent}. Required so a call site that skips it is a compile error, not a silently dropped event. */
+    analyticsConsent: boolean;
 };
 
 // ─── The port ────────────────────────────────────────────────────────────────
@@ -188,7 +188,7 @@ const requireAnalyticsConsent = (): boolean =>
 export const emitAnalyticsEvent = (event: AnalyticsEventInput): void => {
     const { analyticsConsent, ...capturable } = event;
 
-    if (requireAnalyticsConsent() && analyticsConsent !== 'granted') return;
+    if (requireAnalyticsConsent() && !analyticsConsent) return;
 
     resolveAnalyticsProvider().capture(capturable);
 };

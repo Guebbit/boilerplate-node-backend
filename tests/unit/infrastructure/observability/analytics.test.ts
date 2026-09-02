@@ -16,7 +16,8 @@ import {
     emitAnalyticsEvent,
     buildAnalyticsBase,
     shutdownAnalytics,
-    type AnalyticsEvent
+    type AnalyticsEvent,
+    type AnalyticsEventInput
 } from '@infrastructure/observability/analytics';
 // A real name rather than a string literal: the transport is what is under test here, but the
 // event it carries should still be one the app can actually emit.
@@ -156,7 +157,11 @@ describe('resolveAnalyticsProvider', () => {
 describe('the umami provider', () => {
     it('posts the event to the ingest host', () => {
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
 
         expect(sentRequest().url).toBe('http://umami:3000/api/send');
     });
@@ -164,7 +169,11 @@ describe('the umami provider', () => {
     it('tolerates a trailing slash on the host, because someone will paste one', () => {
         configureUmami();
         process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000/';
-        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
 
         expect(sentRequest().url).toBe('http://umami:3000/api/send');
     });
@@ -175,14 +184,22 @@ describe('the umami provider', () => {
         process.env.NODE_ANALYTICS_PROVIDER = 'umami';
         process.env.NODE_UMAMI_HOST = 'https://analytics.example.com';
         process.env.NODE_UMAMI_WEBSITE_ID = 'site-uuid';
-        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
 
         expect(sentRequest().url).toBe('https://analytics.example.com/api/send');
     });
 
     it('sends the website id and the event name', () => {
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'u1', event: cartAnalyticsEvents.CART_ITEM_ADDED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: cartAnalyticsEvents.CART_ITEM_ADDED
+        });
 
         const { body } = sentRequest();
         expect(body.type).toBe('event');
@@ -192,7 +209,11 @@ describe('the umami provider', () => {
 
     it('ALWAYS sends a User-Agent, because Umami discards the event without one and still says 200', () => {
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'u1', event: ordersAnalyticsEvents.ORDER_CREATED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: ordersAnalyticsEvents.ORDER_CREATED
+        });
 
         expect(sentRequest().headers['User-Agent']).toBeTruthy();
     });
@@ -200,6 +221,7 @@ describe('the umami provider', () => {
     it("forwards the caller's user-agent so the event attributes to their visitor", () => {
         configureUmami();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'u1',
             event: ordersAnalyticsEvents.ORDER_CREATED,
             userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/131.0.0.0'
@@ -213,6 +235,7 @@ describe('the umami provider', () => {
     it("forwards the caller's address, which is half of Umami's visitor hash", () => {
         configureUmami();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'u1',
             event: ordersAnalyticsEvents.ORDER_CREATED,
             clientIp: '203.0.113.9'
@@ -224,7 +247,11 @@ describe('the umami provider', () => {
     it('omits X-Forwarded-For entirely when there is no client address', () => {
         // Sending the header empty would have Umami hash an empty address as if it were one.
         configureUmami();
-        emitAnalyticsEvent({ distinctId: 'u1', event: ordersAnalyticsEvents.ORDER_CREATED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: ordersAnalyticsEvents.ORDER_CREATED
+        });
 
         expect('X-Forwarded-For' in sentRequest().headers).toBe(false);
     });
@@ -232,6 +259,7 @@ describe('the umami provider', () => {
     it('carries distinctId as a queryable `user_id`, the only place a user id can live here', () => {
         configureUmami();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'user-42',
             event: cartAnalyticsEvents.CHECKOUT_COMPLETED
         });
@@ -242,6 +270,7 @@ describe('the umami provider', () => {
     it('carries the trace id, and omits the key entirely when untraced', () => {
         configureUmami();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'u1',
             event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
             traceId: 'abc123'
@@ -249,13 +278,18 @@ describe('the umami provider', () => {
         expect(sentRequest().body.payload.data.trace_id).toBe('abc123');
 
         jest.clearAllMocks();
-        emitAnalyticsEvent({ distinctId: 'u1', event: cartAnalyticsEvents.CHECKOUT_COMPLETED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: cartAnalyticsEvents.CHECKOUT_COMPLETED
+        });
         expect('trace_id' in sentRequest().body.payload.data).toBe(false);
     });
 
     it('keeps caller properties, and does not let one of them overwrite user_id', () => {
         configureUmami();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'real-user',
             event: cartAnalyticsEvents.CART_ITEM_ADDED,
             properties: { product_id: 'prod-7', user_id: 'spoofed' }
@@ -271,6 +305,7 @@ describe('the umami provider', () => {
         // local development case — was refused outright until this was stripped.
         configureUmami();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'u1',
             event: productsAnalyticsEvents.PRODUCT_VIEWED,
             hostname: 'localhost:3000'
@@ -282,6 +317,7 @@ describe('the umami provider', () => {
     it('leaves a bracketed IPv6 host intact, port or no port', () => {
         configureUmami();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'u1',
             event: productsAnalyticsEvents.PRODUCT_VIEWED,
             hostname: '[::1]:3000'
@@ -290,6 +326,7 @@ describe('the umami provider', () => {
 
         jest.clearAllMocks();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'u1',
             event: productsAnalyticsEvents.PRODUCT_VIEWED,
             hostname: '[::1]'
@@ -301,8 +338,16 @@ describe('the umami provider', () => {
         process.env.NODE_ANALYTICS_PROVIDER = 'umami';
         process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000';
 
-        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
-        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
 
         expect(globalThis.fetch).not.toHaveBeenCalled();
         // Once, not twice: a misconfigured provider would otherwise fill the log with itself.
@@ -312,7 +357,11 @@ describe('the umami provider', () => {
     it('warns when Umami rejects the event, because every later one fails the same way', () => {
         configureUmami();
         (globalThis.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404 });
-        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
 
         return settle().then(() => {
             expect(mockLoggerWarn).toHaveBeenCalledWith(
@@ -326,7 +375,11 @@ describe('the umami provider', () => {
         (globalThis.fetch as jest.Mock).mockRejectedValue(new Error('ECONNREFUSED'));
 
         expect(() =>
-            emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED })
+            emitAnalyticsEvent({
+                analyticsConsent: true,
+                distinctId: 'u1',
+                event: productsAnalyticsEvents.PRODUCT_VIEWED
+            })
         ).not.toThrow();
 
         return settle().then(() => {
@@ -343,8 +396,16 @@ describe('the umami provider', () => {
 describe('the posthog provider', () => {
     it('instantiates the client once and reuses it', () => {
         configurePostHog();
-        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
-        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: accountAnalyticsEvents.USER_LOGGED_IN
+        });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
 
         expect(mockedPostHog).toHaveBeenCalledTimes(1);
         expect(mockedPostHog).toHaveBeenCalledWith(
@@ -355,10 +416,11 @@ describe('the posthog provider', () => {
 
     it('captures the event with its distinctId and properties', () => {
         configurePostHog();
-        const event: AnalyticsEvent = {
+        const event: AnalyticsEventInput = {
             distinctId: 'user-42',
             event: cartAnalyticsEvents.CART_ITEM_ADDED,
-            properties: { product_id: 'prod-7', quantity: 2 }
+            properties: { product_id: 'prod-7', quantity: 2 },
+            analyticsConsent: true
         };
         emitAnalyticsEvent(event);
 
@@ -374,6 +436,7 @@ describe('the posthog provider', () => {
     it('includes trace_id when traced, and omits the key when not', () => {
         configurePostHog();
         emitAnalyticsEvent({
+            analyticsConsent: true,
             distinctId: 'u1',
             event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
             traceId: 'abc123'
@@ -382,7 +445,11 @@ describe('the posthog provider', () => {
         expect(traced.properties.trace_id).toBe('abc123');
 
         mockCapture.mockClear();
-        emitAnalyticsEvent({ distinctId: 'u1', event: productsAnalyticsEvents.PRODUCT_VIEWED });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
         const untraced = mockCapture.mock.calls[0][0] as { properties: Record<string, unknown> };
         expect('trace_id' in untraced.properties).toBe(false);
     });
@@ -390,8 +457,16 @@ describe('the posthog provider', () => {
     it('sends nothing, and warns once, when the credentials are missing', () => {
         process.env.NODE_ANALYTICS_PROVIDER = 'posthog';
 
-        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
-        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: accountAnalyticsEvents.USER_LOGGED_IN
+        });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: accountAnalyticsEvents.USER_LOGGED_IN
+        });
 
         expect(mockedPostHog).not.toHaveBeenCalled();
         expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
@@ -407,7 +482,11 @@ describe('the none provider', () => {
         process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000';
         process.env.NODE_UMAMI_WEBSITE_ID = 'site-uuid';
 
-        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: accountAnalyticsEvents.USER_LOGGED_IN
+        });
 
         expect(globalThis.fetch).not.toHaveBeenCalled();
         expect(mockedPostHog).not.toHaveBeenCalled();
@@ -422,7 +501,11 @@ describe('the none provider', () => {
      */
     it('shuts down cleanly, so selecting it cannot break process exit', () => {
         process.env.NODE_ANALYTICS_PROVIDER = 'none';
-        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_LOGGED_IN });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: accountAnalyticsEvents.USER_LOGGED_IN
+        });
 
         return expect(shutdownAnalytics()).resolves.toBeUndefined();
     });
@@ -433,7 +516,11 @@ describe('the none provider', () => {
 describe('shutdownAnalytics', () => {
     it('flushes a PostHog client that buffered events', () => {
         configurePostHog();
-        emitAnalyticsEvent({ distinctId: 'u1', event: accountAnalyticsEvents.USER_SIGNED_UP });
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: accountAnalyticsEvents.USER_SIGNED_UP
+        });
 
         return shutdownAnalytics().then(() => {
             expect(mockShutdown).toHaveBeenCalledTimes(1);
@@ -457,7 +544,8 @@ describe('buildAnalyticsBase', () => {
             caller: { id: 'user-9' },
             ip: '198.51.100.4',
             userAgent: 'Chrome/131',
-            host: 'api.example.com'
+            host: 'api.example.com',
+            analyticsConsent: true
         });
 
         expect(base).toMatchObject({
@@ -469,25 +557,28 @@ describe('buildAnalyticsBase', () => {
     });
 
     it("falls back to 'anonymous' for unauthenticated traffic", () => {
-        expect(buildAnalyticsBase({ caller: {} }).distinctId).toBe('anonymous');
-        expect(buildAnalyticsBase({ caller: { admin: false } }).distinctId).toBe('anonymous');
+        expect(buildAnalyticsBase({ caller: {}, analyticsConsent: false }).distinctId).toBe(
+            'anonymous'
+        );
+        expect(
+            buildAnalyticsBase({ caller: { admin: false }, analyticsConsent: false }).distinctId
+        ).toBe('anonymous');
     });
 
     it('leaves attribution undefined rather than inventing it', () => {
-        const base = buildAnalyticsBase({ caller: { id: 'u1' } });
+        const base = buildAnalyticsBase({ caller: { id: 'u1' }, analyticsConsent: false });
 
         expect(base.clientIp).toBeUndefined();
         expect(base.userAgent).toBeUndefined();
     });
 
     it('carries the consent choice through', () => {
-        expect(
-            buildAnalyticsBase({ caller: {}, analyticsConsent: 'granted' }).analyticsConsent
-        ).toBe('granted');
-        expect(
-            buildAnalyticsBase({ caller: {}, analyticsConsent: 'denied' }).analyticsConsent
-        ).toBe('denied');
-        expect(buildAnalyticsBase({ caller: {} }).analyticsConsent).toBeUndefined();
+        expect(buildAnalyticsBase({ caller: {}, analyticsConsent: true }).analyticsConsent).toBe(
+            true
+        );
+        expect(buildAnalyticsBase({ caller: {}, analyticsConsent: false }).analyticsConsent).toBe(
+            false
+        );
     });
 });
 
@@ -504,7 +595,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
         process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'false';
         configureUmami();
 
-        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'denied' });
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });
 
         expect(sentRequest().body.payload.data.user_id).toBe('user-42');
     });
@@ -513,7 +604,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
         process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
         configureUmami();
 
-        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'granted' });
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: true });
 
         expect(sentRequest().headers['X-Forwarded-For']).toBe('203.0.113.9');
         expect(sentRequest().body.payload.data.user_id).toBe('user-42');
@@ -523,18 +614,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
         process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
         configureUmami();
 
-        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'denied' });
-
-        expect(globalThis.fetch).not.toHaveBeenCalled();
-    });
-
-    // The gate is opt-in: never-asked is not a weaker yes, and there is no coarsened middle
-    // capture — see the reasoning under `emitAnalyticsEvent`.
-    it('drops the event when consent was never asked', () => {
-        process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
-        configureUmami();
-
-        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: undefined });
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });
 
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });
@@ -543,7 +623,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
         process.env.NODE_ANALYTICS_REQUIRE_CONSENT = 'true';
         configureUmami();
 
-        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'granted' });
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: true });
 
         expect('analyticsConsent' in sentRequest().body.payload.data).toBe(false);
     });
@@ -552,7 +632,7 @@ describe('emitAnalyticsEvent — consent gate', () => {
         delete process.env.NODE_ANALYTICS_REQUIRE_CONSENT;
         configureUmami();
 
-        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: 'denied' });
+        emitAnalyticsEvent({ ...baseEvent, analyticsConsent: false });
 
         expect(globalThis.fetch).not.toHaveBeenCalled();
     });

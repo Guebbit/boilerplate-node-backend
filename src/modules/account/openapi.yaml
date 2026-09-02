@@ -943,10 +943,9 @@ components:
                 website:
                     type: string
                 # Absent means "leave it alone" like every other field here — a client withdraws
-                # consent by sending `denied` explicitly, never by omission.
+                # consent by sending `false` explicitly, never by omission.
                 analyticsConsent:
-                    type: string
-                    enum: [granted, denied]
+                    type: boolean
 
         UpdateAccountRequestMultipart:
             type: object
@@ -969,8 +968,7 @@ components:
                 website:
                     type: string
                 analyticsConsent:
-                    type: string
-                    enum: [granted, denied]
+                    type: boolean
 
         ChangePasswordRequest:
             type: object

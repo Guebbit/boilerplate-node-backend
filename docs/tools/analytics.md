@@ -73,11 +73,11 @@ flowchart LR
     B --> C{"NODE_ANALYTICS_REQUIRE_CONSENT"}
     C -->|false| G[capture]
     C -->|true| D{"caller's analyticsConsent"}
-    D -->|granted| G
-    D -->|denied, or never asked| H[drop]
+    D -->|true| G
+    D -->|false, denied or never asked| H[drop]
 ```
 
-The gate is **opt-in**: only an explicit `granted` captures. There is deliberately no partial,
+The gate is **opt-in**: only `true` captures. There is deliberately no partial,
 "anonymised" capture in between — an event's `properties` carry keys like `order_id` and
 `product_id`, and its `traceId` joins to a trace whose audit event names the actor, so dropping
 `clientIp` and forcing `distinctId` to `anonymous` would remove the labels while leaving every
@@ -87,8 +87,9 @@ own address, collapsing all such traffic onto one "visitor". If you want counts 
 depend on consent, add a Prometheus counter next to the emit — see `docs/tools/prometheus.md`.
 
 Consent travels through `CallerContext` the same way `ip`/`userAgent` do. For a logged-in caller
-it is the stored `users.analyticsConsent` (tri-state: `granted` / `denied` / unset — read fresh
-from the account on every request, via `AuthContext`), settable through `PUT /account`. Anonymous
+it is the stored `users.analyticsConsent` (boolean, `false` covering both "denied" and "never
+asked" — read fresh from the account on every request, via `AuthContext`), settable through
+`PUT /account`. Anonymous
 traffic has no account to read, so the frontend forwards the visitor's own banner choice on the
 `X-Analytics-Consent` request header — which also applies to a logged-in caller whose account was
 never asked, so a choice made before login counts until `PUT /account` records it. A header-borne

@@ -168,7 +168,8 @@ describe('extractRequestContext', () => {
             caller: {},
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
-            requestId: 'req-111'
+            requestId: 'req-111',
+            analyticsConsent: false
         });
 
         expect(ctx.ip).toBe('10.0.0.1');
@@ -179,7 +180,7 @@ describe('extractRequestContext', () => {
     });
 
     it('returns undefined for missing fields', () => {
-        const ctx = extractRequestContext({ caller: {} });
+        const ctx = extractRequestContext({ caller: {}, analyticsConsent: false });
 
         expect(ctx.ip).toBeUndefined();
         expect(ctx.user_agent).toBeUndefined();

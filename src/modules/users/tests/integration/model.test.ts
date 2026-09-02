@@ -97,6 +97,9 @@ describe('user credential exposure', () => {
             expect(Object.keys(user.toJSON() as object).toSorted()).toEqual([
                 'active',
                 'admin',
+                // Now defaulted like `active`/`admin` rather than tri-state, so it is always
+                // present rather than omitted when unset.
+                'analyticsConsent',
                 'createdAt',
                 'email',
                 'id',

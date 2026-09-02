@@ -37,12 +37,23 @@ export const putAccount = (
      * `post-signup` gives: `accountService.updateProfile` validates these fields with translated
      * messages, and the generated schema would answer first in English.
      */
-    const { email, username, locale, phone, website } = request.body as UpdateAccountRequest;
+    const { email, username, locale, phone, website, analyticsConsent } =
+        request.body as UpdateAccountRequest;
 
     return accountService
         .updateProfile(
             id,
-            { email, username, locale, imageUrl, thumbnailUrl, pendingImageKey, phone, website },
+            {
+                email,
+                username,
+                locale,
+                imageUrl,
+                thumbnailUrl,
+                pendingImageKey,
+                phone,
+                website,
+                analyticsConsent
+            },
             callerContextOf(request)
         )
         .then((result) => {

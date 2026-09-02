@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { parseFormBoolean } from '@infrastructure/http/request';
 
 /**
  * Largest `pageSize` a caller may request, declared here rather than imported from the generated
@@ -93,3 +94,17 @@ export const pageSizeSchema = z.preprocess(
 
 /** The pair, for an endpoint that validates nothing else. */
 export const paginationSchema = z.object({ page: pageSchema, pageSize: pageSizeSchema });
+
+/**
+ * `analyticsConsent` as `PUT /account`'s multipart body may carry it: `multipart/form-data`
+ * types every value as a string, and `'false'` is truthy, the same trap {@link hardDeleteSchema}
+ * guards against. Decodes the recognised spellings via `parseFormBoolean`; anything else reaches
+ * `z.boolean()` unchanged and fails validation (422) rather than being guessed at.
+ *
+ * Optional and undefaulted, unlike `hardDeleteSchema`: this is PATCH semantics — absent means
+ * "leave the stored consent alone", never "withdraw it".
+ */
+export const analyticsConsentSchema = z.preprocess(
+    (value) => parseFormBoolean(blankToUndefined(value)),
+    z.boolean().optional()
+);
