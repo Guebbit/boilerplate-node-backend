@@ -2,24 +2,26 @@
 
 ## Purpose
 
-Public barrel for the `users` module. It is the **only** import surface permitted for sibling modules—lint rules reject direct paths into `./service`, `./repository`, etc. It re-exports the handful of symbols other modules (primarily `account`) are allowed to consume.
+Public barrel for the `users` module. It is the **only** entry point a sibling module may import from (enforced by lint); reaching into `@modules/users/service` or other internals is a compile-time error. It re-exports the subset of the module's API that other modules legitimately need, and importing it also installs the event-payload type declarations.
 
 ## Key elements
 
-- **`userService`** – the primary domain service; the main entry point for user operations.
-- **`userRepository`** – data-access layer over the user record. Exported here specifically so `account` can act as a second service on the same record.
-- **`TokenType`** – runtime enum/type discriminant for token kinds.
-- **`zodUserSchema`** – Zod validation schema for user payloads (shared-kernel utility).
-- **`UserDocument`, `Token`** *(types only)* – structural types for persistence and token entities.
-- **`USER_DELETED`, `USER_SETUP_REQUESTED`** – event-name constants. Importing this barrel is what installs the event payload declaration (side-effect of the events module).
+- **`userService`** (`./service`) — business-logic service for user records.
+- **`userRepository`** (`./repository`) — data-access layer; the `account` module imports this as a second service over the same record.
+- **`TokenType`, `zodUserSchema`, `hashToken`** (`./model`) — model-level constants, validation schema, and token-hashing utility.
+- **`UserDocument`, `Token`** (`./model`, types only) — document/token type shapes for consumers.
+- **`USER_DELETED`, `USER_SETUP_REQUESTED`** (`./events`) — event-name constants emitted by this module; importing the barrel registers their payload declarations.
+- **Not exported:** `userModel` — intentionally private to the module.
 
 ## Relationships
 
-- **`src/modules/account/*`** (controllers, services, session, tests) – the `account` module imports `userRepository`, `userService`, `zodUserSchema`, and the event constants through this barrel. This is the declared `shared-kernel` coupling tracked as `module-coupling-account` in `.dependency-cruiser.cjs`.
-- **`scripts/backfill-image-thumbnails.ts`** – one-off script that reaches into the users domain (likely `userRepository` or `userService`) for bulk thumbnail backfill.
+- **`src/modules/account/*`** (controllers, services, `module.ts`): The `account` module is the primary consumer. It imports `userRepository` (and likely `userService`, token utilities) through this barrel. This is the single `shared-kernel` coupling tracked as `module-coupling-account` in `.dependency-cruiser.cjs`.
+- **`scripts/reap-inactive-accounts.ts`**: Consumes this module's exports (e.g. `userRepository`, `userService`) to find and act on stale user records.
+- **`src/modules/account/tests/*`** (contract, integration): Import the barrel to exercise `account` flows that depend on `users` types and services.
 
 ## Notes
 
-- `userModel` is intentionally **not** re-exported; nothing outside `users` should touch it.
-- Importing the barrel carries a side-effect: it registers the event payload declaration. Do not tree-shake or partially re-import the events file elsewhere.
-- Adding a new export here widens the public API surface—review against the `module-coupling-account` rule before doing so.
+- The barrel is deliberately wider than a typical one: exporting `userRepository` alongside `userService` is an acknowledged exception driven by the `account` module's need for direct record access.
+- Event constants (`USER_DELETED`, `USER_SETUP_REQUESTED`) are exported *from* the barrel so that importing it is the single action required to pick up payload type declarations—do not import them from `./events` directly in sibling modules.
+- `userModel` is intentionally absent from the exports; if a new consumer needs it, that is a design smell to push back on.
+- Full module docs live at `docs/modules/users.md`.

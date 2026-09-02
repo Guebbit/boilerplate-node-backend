@@ -2,43 +2,38 @@
 
 ## Purpose
 
-Implements the two token writes that every account flow depends on—issuing (`tokenAdd`) and revoking (`sessionRemove` / `tokenRemoveByValue`)—plus the user-facing endpoints built on them: signup, login, password reset, account-deletion request, session logout, and token refresh. Credential *values* (hashing, JWT signing, password change) are deliberately excluded; they live on the model hook, `../session/jwt`, and `./profile` respectively.
+Handles the write-side of identity: issuing and revoking opaque tokens (password-reset, account-deletion, session refresh) and the login/logout endpoints that surround them. It deliberately does **not** store or verify credential values — hashing lives in the model's pre-save hook, JWT signing in `../session/jwt`, and password changes in `./profile`.
 
 ## Key elements
 
-- **`tokenAdd(user, type, expirationTime?)`** – Generates a 32-hex-char token and delegates to the user document's own `tokenAdd` method (a `$push`). The single write-path for all token issuance.
-- **`requestAccountDeletion(user, context)`** – Issues a 1-hour `delete` token, queues the confirmation email, and emits an audit event. Token value never leaves this function.
-- **`PASSWORD_RESET_TOKEN_TYPE`** (`'password'`) / **`PASSWORD_RESET_TOKEN_TTL_MS`** (`3_600_000`) – Policy constants shared by reset and setup flows.
-- **`requestPasswordReset(email, context)`** – Looks up the user by email, issues a reset token, queues the email, returns `boolean` (true = mail queued). Always resolves; the caller always answers 200 to prevent address enumeration.
-- **`requestAccountSetup(user)`** – Same token mechanics as reset, different email copy. Called from the `users` module's admin-creation event; no `CallerContext` so no audit here.
-- **`sessionRevoke(userId, sessionId, context)`** – Removes one session by id. Audits only when `modifiedCount > 0`.
-- **`logoutCurrentSession(refreshToken?, context)`** – Revokes the caller's refresh token if present, always emits audit + analytics. A missing cookie is not an error.
-- **`refreshAccessToken(refreshToken?, context)`** – Exchanges a refresh token for a new access token (via `createAccessToken`), records the use, and distinguishes `missing_token` from `invalid_token` in audit metadata.
-- **`MissingRefreshTokenError`** – Internal sentinel so the single `.catch` can tell "no cookie" apart from "bad token" without branching the happy path.
-- **`signup(email, username, password, passwordConfirm, imageUrl?, thumbnailUrl?, pendingImageKey?, callerContext)`** – Validates input (zod), hashes password with bcrypt, creates the user, sends verification email, emits audit + analytics. *(Implementation truncated in source.)*
+- **`tokenAdd(user, type, expirationTime?)`** — Core token writer. Generates a random hex token and delegates the `$push` to the user document's own method. All higher-level flows call this; it is the single mutation point for the `tokens` array.
+- **`requestAccountDeletion(user, context)`** — Issues a 1-hour `delete` token, emails the link (high priority), and audits the request. Token value never leaves this function.
+- **`requestPasswordReset(email, context)`** — Looks up the user by email; if found, issues a 1-hour `password` token and emails it. Returns a boolean (mail sent?) for the caller's metrics only — the HTTP response is always 200 to prevent address enumeration.
+- **`requestAccountSetup(user)`** — Same token type/TTL as reset, but emails `setupRequestEmail` copy. Called from the `users` module's `USER_SETUP_REQUESTED` event; no `CallerContext` and no audit (already recorded upstream).
+- **`sessionRevoke(userId, sessionId, context)`** — Removes a specific session by id. Emits an audit event **only** when `modifiedCount > 0` (the token actually existed).
+- **`logoutCurrentSession(refreshToken?, context)`** — Revokes the refresh token named by the cookie (if present) and always audits + emits an analytics event. A missing cookie is not an error.
+- **`refreshAccessToken(refreshToken?, context)`** — Calls `rotateRefreshToken` to exchange a valid refresh token for a fresh access/refresh pair. Distinguishes three audit outcomes: missing, invalid, and **reuse** of an already-rotated token (separate audit action + `metadata.reason`).
+- **`PASSWORD_RESET_TOKEN_TYPE`** / **`PASSWORD_RESET_TOKEN_TTL_MS`** — Named constants (`'password'` / 1 hour) so the type and its TTL stay co-located as policy.
+- **`DUMMY_PASSWORD_HASH`** — A one-time `bcrypt.hashSync` of random bytes, computed at import. Used by `login` (not shown in excerpt) to equalize response timing for unknown vs. known emails.
+- **`MissingRefreshTokenError`** — Internal sentinel so the single `.catch` in `refreshAccessToken` can tell "no cookie" apart from "bad token" without branching twice on the happy path.
 
 ## Relationships
 
-- **`@infrastructure/adapters/mailer`** – `enqueueEmail` publishes all outbound emails (reset, delete, setup) as finished templates; the worker needs no further locale resolution.
-- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` / `validationErrors` shape the HTTP envelopes returned by `signup` and error paths.
-- **`@infrastructure/http/errors`** – `rejectDatabaseEnvelope` wraps Mongoose `CastError` into a standard 400 response.
-- **`@infrastructure/http/request`** – `CallerContext` (locale, actor id, role) is threaded into every audit/analytics call.
-- **`@infrastructure/i18n`** – `t`, `getCurrentLocale`, `getDefaultLocale` drive email copy and user-facing validation messages.
-- **`@infrastructure/observability/audit`** – `emitAuditEvent` / `buildAuditEvent` record every security-relevant action (login, logout, token refresh, deletion request, session revoke).
-- **`@infrastructure/observability/analytics`** – `emitAnalyticsEvent` / `buildAnalyticsBase` feed product analytics (e.g. `USER_LOGGED_OUT`).
-- **`../analytics`** – `accountAnalyticsEvents` provides the canonical event-name constants.
-- **`../audit`** – `accountAuditActions` provides the canonical action-name constants.
-- **`../emails`** – `deleteRequestEmail`, `resetRequestEmail`, `setupRequestEmail` render locale-resolved email templates with the token embedded.
-- **`../session/jwt`** – `createAccessToken` and `recordRefreshTokenUse` handle the actual JWT work; this file orchestrates *when* they run and what to audit around them.
-- **`../verification`** – Sibling service; shares the `tokenAdd` pattern and its own token-type/TTL constants for email verification.
-- **`./index`** – Barrel that re-exports this file's public API to the module router.
-- **`../module`** – Wires the exported handlers into the account HTTP module.
+- **`../emails`** (`src/modules/account/emails.ts`) — Supplies the three mail builders (`deleteRequestEmail`, `resetRequestEmail`, `setupRequestEmail`) that render finished, locale-resolved copy before the job is queued.
+- **`@infrastructure/adapters/mailer`** — `enqueueEmail` is the sole egress for all token-bearing links; always passed `'high'` priority.
+- **`@infrastructure/observability/audit`** + **`../audit`** — Every user-visible action emits an audit event; `accountAuditActions` provides the stable action strings.
+- **`@infrastructure/observability/analytics`** + **`../analytics`** — `logoutCurrentSession` (and likely `login`) emits analytics via `accountAnalyticsEvents`.
+- **`@infrastructure/http/request`** — `CallerContext` carries `locale`, `actor` info, and is threaded into every audit/analytics call.
+- **`@infrastructure/http/response`** / **`@infrastructure/http/errors`** — Response envelopes (`generateSuccess`, `generateReject`, `rejectDatabaseEnvelope`) shape the controller-facing return values.
+- **`@infrastructure/i18n`** — `getDefaultLocale` provides the fallback when neither the user's stored locale nor the request locale is available.
+- **`../session/jwt`** — `rotateRefreshToken` and `TokenReuseError` handle the actual JWT rotation; this file orchestrates around them.
+- **`services/index.ts`** — Re-exports this module's public API to the rest of the account service layer.
+- **`./verification`** — Sibling service that follows the same "named token-type + TTL constant" convention.
 
 ## Notes
 
-- **Token values are file-local.** `requestAccountDeletion`, `requestPasswordReset`, and `requestAccountSetup` all consume the token inside their `.then` chain; no caller ever receives it. This prevents a live credential from leaking into a layer that shouldn't hold one.
-- **Array append, never rebuild.** `tokenAdd` delegates to the document method so the write is a `$push`. Replacing the array (`user.tokens = [...]`) would erase tokens added by a concurrent request in the same time window—exactly what happens when a reset link and a second session race.
-- **Silence is a security feature.** `requestPasswordReset` resolves `false` for unknown addresses and the route always returns 200, so the endpoint cannot be used for email enumeration.
-- **Locale fallback order** is consistent: `user.locale` → `context.locale` → `getDefaultLocale()`. The email is rendered *before* enqueue, so the mailer worker needs no locale.
-- **`refreshAccessToken`** is the only route where the session itself is the requester (login *creates* a session; refresh *uses* one), which is why `recordRefreshTokenUse` is called here and nowhere else.
-- **Logout never fails.** A missing refresh cookie is a no-op, not an error; the audit event still fires so the trail shows the user *attempted* logout.
+- **Token array is append-only.** The comment in `tokenAdd` calls out that `user.tokens = [...]` must never be used; a full-array write erases tokens added by a concurrent request (e.g., two sessions plus a reset link).
+- **Silent success is a security feature.** `requestPasswordReset` always resolves (true/false internally) so the HTTP layer can answer 200 regardless; the boolean is for metrics, not client-facing.
+- **Token values are file-private.** Every public function that issues a token keeps the value in closure scope and passes it directly to the mail builder — no export, no return, no intermediate storage.
+- **Audit fidelity.** `sessionRevoke` audits only on a real match; `refreshAccessToken` uses a distinct action for reuse vs. invalid. Do not collapse these — they answer different questions for the reader of the trail.
+- **`DUMMY_PASSWORD_HASH` is a boot-time cost, not per-request.** It exists solely to make the unknown-email path pay the same bcrypt cost as a wrong-password path, eliminating the timing oracle.

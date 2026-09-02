@@ -2,34 +2,35 @@
 
 ## Purpose
 
-Contract tests for the self-service `/account` HTTP surface (login, profile update, password change, single-session logout, session listing, email verification). They exist because these endpoints have state-dependent branches—duplicate-email conflicts, revoked cookies, spent tokens, cross-session access—that a generated-payload unit sweep cannot exercise. Assertions check specific IDs and field values, not merely response lengths.
+Contract tests for the self-service `/account` API surface (profile update, password change, re-auth, sessions, email verification, export). Unlike unit suites that sweep generated payloads, these tests target state-dependent contract branches — a second account holding the same email, a revoked cookie, a spent token, someone else's session — that no random payload can produce. Every assertion runs `toSatisfyApiSpec()` to validate the response against the OpenAPI contract.
 
 ## Key elements
 
-- **`loginWithCookie(overrides?)`** — Creates a user, POSTs `/account/login`, and returns `{ user, bearer, jwtCookie }`. Unlike `authenticateAs`, it preserves the `jwt` refresh cookie in addition to the bearer token.
-- **`readVerifyToken(userId)`** — Queries `userRepository.findByIdWithCredentials` and extracts the token whose `type` is `EMAIL_VERIFY_TOKEN_TYPE`.
-- **`cookieMaxAge(response, name)`** — Parses the `Max-Age` attribute off a named `Set-Cookie` header, returning seconds or `undefined`.
-- **`MISSING_ID`** — A syntactically valid ObjectId guaranteed to be absent, used to exercise the 404 branch distinctly from the 422 branch.
-- **`describe` blocks** — Cover: `POST /account/login` (remember-me tier, default tier, invalid tier), `PUT /account` (self-update, email change → unverified, duplicate email → 409, invalid body → 422, unauth → 401), `POST /account/password` (success, wrong current → 422, unauth → 401), `POST /account/logout` (revokes specific cookie, no-op without cookie), `GET /account/sessions` (current flag, bearer-only flag, `lastUsedAt` lifecycle, unauth → 401), `DELETE /account/sessions/{sessionId}` (targeted revocation).
+- **`loginWithCookie(overrides?)`** — Logs a user in via `POST /account/login` and returns `{ user, bearer, jwtCookie }`, preserving the refresh cookie that `authenticateAs` deliberately drops.
+- **`readVerifyToken(userId)`** — Queries `userRepository.findByIdWithCredentials` to check whether an `EMAIL_VERIFY_TOKEN_TYPE` token (digest) is present at rest.
+- **`verifyTokenFromMail()`** — Extracts the plaintext verify token from the last queued email's `linkUrl` (regex on `mailerPort.enqueueEmail.mock.calls`), since storage only holds a digest.
+- **`cookieMaxAge(response, name)`** — Parses `Max-Age` from a named `set-cookie` header for refresh-tier assertions.
+- **`MISSING_ID`** — A well-formed ObjectId guaranteed absent from the DB, used to hit the 404 branch (distinguishing it from 422).
+- **`jest.mock('@infrastructure/adapters/mailer', …)`** — Replaces `enqueueEmail` with a resolved no-op; required because `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes under swc.
+- **`describe` blocks** — Cover `POST /account/login` (remember-me tiers), `PUT /account` (profile, email-change unverify, 409 conflict, 422), `POST /account/password`, `POST /account/reauth`, `POST /account/export`, and (truncated) session/verification scenarios.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | Side-effect import; installs the `toSatisfyApiSpec()` matcher used in every assertion. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` is called once at module scope to reset the database before the suite runs. |
-| `tests/support/http.ts` | Provides `api()` (supertest wrapper) and `authenticateAs(role)` for quick bearer-token auth. |
-| `src/modules/users/tests/fixtures.ts` | `createUser` and `PLAIN_PASSWORD` are the standard user-creation helpers. |
-| `src/modules/products/tests/fixtures.ts` | `createProduct` is imported (used in truncated portion, likely for ownership-related assertions). |
-| `src/modules/users/index.ts` | Re-exports `userRepository`, used to read stored tokens directly from the DB. |
-| `src/modules/users/repository.ts` | `userRepository.findByIdWithCredentials` backs the `readVerifyToken` helper. |
-| `src/modules/account/services/index.ts` | Exports `EMAIL_VERIFY_TOKEN_TYPE`, the discriminator for locating the verify token in a user's token list. |
+- **`tests/support/contract.ts`** — Imported as a side-effect; registers the `toSatisfyApiSpec` custom matcher used throughout.
+- **`tests/support/http.ts`** — Provides `api()` (supertest wrapper) and `authenticateAs()`.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets the database before each test.
+- **`src/modules/users/tests/fixtures.ts`** — `createUser` and `PLAIN_PASSWORD` seed test accounts.
+- **`src/modules/users/index.ts` / `src/modules/users/repository.ts`** — `userRepository.findByIdWithCredentials` is queried directly by `readVerifyToken`.
+- **`src/modules/account/services/index.ts`** — Exports `EMAIL_VERIFY_TOKEN_TYPE` used in token-type matching.
+- **`src/infrastructure/adapters/mailer.ts`** — Mocked entirely; `enqueueEmail` calls are inspected to recover the plaintext verify token.
+- **`src/modules/products/tests/fixtures.ts`** — `createProduct` seeds a product for the export test.
+- **`src/modules/orders/tests/fixtures.ts`** — `createOrder`, `toOrderItem` seed an order for the export test.
 
 ## Notes
 
-- **`authenticateAs` drops the refresh cookie.** It returns only the bearer token. Any test that needs the `jwt` cookie (logout, refresh, session listing) must use `loginWithCookie` instead.
-- **`set-cookie` typing quirk.** Supertest types every header as `string`, but `set-cookie` arrives as an array. Both helpers handle the array-or-string case defensively.
-- **`toSatisfyApiSpec()`** is the single contract assertion; it validates shape, status, and error envelope against the API spec. Every test calls it after the status check.
-- **404 vs 422 distinction.** `MISSING_ID` is a well-formed ObjectId that simply doesn't exist, so the server returns 404. A malformed ID would hit the 422 validation branch. Tests are careful to hit the right one.
-- **`lastUsedAt` is intentionally asserted in a single test** (absent before use, present after a refresh call) so that a regression can't silently shift one half without the other.
-- **The file is truncated** in the source provided; the visible `DELETE /account/sessions/{sessionId}` block and any email-verification `describe` block are only partially present.
+- **422, never 401, on wrong password.** Both `/account/password` and `/account/reauth` assert 422 for a wrong current password. A 401 would be misread by client interceptors as "session expired" and force a logout on a still-valid session — the opposite of re-authentication's purpose.
+- **Verify tokens are digests at rest.** The plaintext token exists only in the emailed link URL. The test must read it from the mocked mailer's call history, not from the DB.
+- **`verifyTokenFromMail` bypasses `observePort`.** The standard `@tests/ports` helper clears the mock's call history on hand-out, which would erase the very call being read. This helper accesses `mock.calls` directly.
+- **`authenticateAs` drops the refresh cookie.** Any test that needs the `jwt` cookie (logout, refresh, re-auth) must use the local `loginWithCookie` helper instead.
+- **Listing assertions check IDs, not lengths.** Per the module doc, array responses are verified by confirming the expected IDs are present, preventing false passes from coincidental counts.
+- **Cookie header is typed as `string` by supertest but is actually a list.** Both `loginWithCookie` and `cookieMaxAge` normalize with an `Array.isArray` guard.

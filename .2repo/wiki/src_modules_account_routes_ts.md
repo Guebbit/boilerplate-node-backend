@@ -1,30 +1,49 @@
 # src/modules/account/routes.ts
 
 ## Purpose
-Express router for the account module. It wires every account/auth HTTP endpoint—login, signup, password reset, email verification, token refresh, session management, address-book CRUD, and account deletion—to its controller, applying shared middleware (auth population, cache-control, rate-limiting) at the appropriate scope.
+
+Express router for the account module. It declares every HTTP route for authentication (login, signup, token refresh, logout), password management, email verification, two-factor auth, session management, address-book CRUD, and account lifecycle (deletion, data export). Cross-cutting concerns—rate limiting, auth-context population, cache invalidation, and fresh-session re-auth—are wired in at the route level here rather than inside individual controllers.
 
 ## Key elements
-- **`router`** (exported) — the `express.Router` instance that `./module.ts` mounts into the app.
-- **Global middleware** — `getAuth` (populates `request.authContext` when a token is present) and `noStore` (marks every response as non-cacheable) are applied to *all* routes via `router.use`.
-- **Route definitions** — ~20 endpoints covering:
-  - Auth lifecycle: `POST /login`, `POST /signup`, `POST /reset`, `POST /reset-confirm`, `POST /password`, `GET /refresh`, `POST /logout`, `POST /logout-all`
-  - Sessions: `GET /sessions`, `DELETE /sessions/:sessionId`
-  - Profile: `GET /`, `PUT /`, `DELETE /`, `DELETE /delete-confirm`
-  - Addresses: `GET|POST /addresses`, `PUT|DELETE /addresses/:addressId`
-  - Verification: `POST /verify-request`, `POST /verify-confirm`
-  - Admin: `DELETE /tokens/expired`
-- **Per-route middleware** — `isAuth`, `isAdmin`, `credentialLimiters`, `upload.single('imageUpload')`, and `invalidateCache(keys)` are composed inline per route.
+
+- **`router`** (exported) — the Express `Router` instance; all middleware and route handlers are chained onto it.
+- **`isChangingEmail`** (module-private) — predicate passed to `requireFreshAuthWhen` on `PUT /`. Returns `true` only when the request body carries an `email` field that differs from the caller's current email. Must be evaluated *after* multer has parsed the multipart body.
+- **Router-level middleware** — `getAuth` (populates `request.authContext` when a token is present, on every route) and `noStore` (marks all responses non-cacheable so no route can accidentally serve a cached profile).
+- **Route definitions** — one handler per REST action, each importing its controller from `./controllers/*`. Notable groupings:
+  - Auth flow: `POST /login`, `POST /signup`, `GET /refresh`, `POST /logout`, `POST /logout-all`, `POST /reauth`.
+  - Password: `POST /reset`, `POST /reset-confirm`, `POST /password`.
+  - 2FA: `POST /login/2fa`, `POST /2fa/setup`, `POST /2fa/confirm`, `DELETE /2fa`.
+  - Sessions: `GET /sessions`, `DELETE /sessions/:sessionId`.
+  - Address book: `GET/POST/PUT/DELETE /addresses[/:addressId]`.
+  - Account lifecycle: `DELETE /`, `DELETE /delete-confirm`, `POST /export`, `DELETE /tokens/expired` (admin).
+  - Email verification: `POST /verify-request`, `POST /verify-confirm`.
 
 ## Relationships
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — supplies `credentialLimiters`, applied to all credential-sensitive routes (login, signup, reset, password, verify).
-- **`src/infrastructure/http/middlewares/cache.ts`** — supplies `noStore` (global) and `invalidateCache` (per-route, invalidates cached user/session data on mutations).
-- **`src/kernel/middlewares/authorizations.ts`** — supplies `getAuth` (global), `isAuth` (per-route guard), and `isAdmin` (admin-only route).
-- **`src/infrastructure/adapters/storage.ts`** — supplies `upload`, used on `PUT /` and `POST /signup` for avatar image uploads.
-- **Controllers** (`./controllers/*`) — each imported function is the terminal handler for exactly one route: `getAccount`, `putAccount`, `postLogin`, `postSignup`, `postResetRequest`, `postResetConfirm`, `postPasswordChange`, `getRefreshToken`, `postLogout`, `postLogoutEverywhere`, `getSessions`, `deleteSession`, `postVerifyRequest`, `postVerifyConfirm`, `deleteExpiredTokens`, `getAddresses`, `postAddress`, `putAddress`, `deleteAddress`, `deleteAccountRequest`, `deleteAccountConfirm`.
+
+| Neighbor | Interaction |
+|---|---|
+| `infrastructure/adapters/storage.ts` | Imports `upload` (multer-based) for `imageUpload` on `PUT /` and `POST /signup`. |
+| `infrastructure/http/middlewares/cache.ts` | Imports `noStore` (router-level) and `invalidateCache` (per destructive/mutating route). |
+| `infrastructure/http/middlewares/rate-limit.ts` | Imports `credentialLimiters`, `uploadLimiter`, `mfaChallengeLimiter` and attaches them to the relevant routes. |
+| `kernel/middlewares/authorizations.ts` | Imports `getAuth`, `isAuth`, `isAdmin`, `requireFreshAuth`, `requireFreshAuthWhen`, and the `REAUTH_TIME_CRITICAL` / `REAUTH_TIME_SENSITIVE` constants. |
+| `controllers/get-account.ts` | Handler for `GET /`. |
+| `controllers/get-addresses.ts` | Handler for `GET /addresses`. |
+| `controllers/get-refresh-token.ts` | Handler for `GET /refresh`. |
+| `controllers/get-sessions.ts` | Handler for `GET /sessions`. |
+| `controllers/delete-session.ts` | Handler for `DELETE /sessions/:sessionId`. |
+| `controllers/delete-address.ts` | Handler for `DELETE /addresses/:addressId`. |
+| `controllers/delete-account-request.ts` | Handler for `DELETE /`. |
+| `controllers/delete-account-confirm.ts` | Handler for `DELETE /delete-confirm`. |
+| `controllers/delete-expired-tokens.ts` | Handler for `DELETE /tokens/expired`. |
+| `controllers/delete-2fa.ts` | Handler for `DELETE /2fa`. |
+| `controllers/post-2fa-confirm.ts` | Handler for `POST /2fa/confirm`. |
+
+*(Controllers not listed above are also imported but fall outside the provided neighbor set.)*
 
 ## Notes
-- **`noStore` is global and intentional.** A prior bug: `GET /account` also mounted `setCache`, whose `Cache-Control` header *replaced* the `noStore` header, so browsers cached the caller's own profile for an hour. `noStore` now marks the response first; `setCache` refuses to run on an already-marked response (see `cache.ts`). Do not remove the global `router.use(noStore)`.
-- **`getAuth` runs on every route**, including public ones (login, signup, reset). It is non-blocking—its sole job is to populate `request.authContext` when a token happens to be present. Use `isAuth` per route when authentication is actually required.
-- **`delete-confirm` and `verify-confirm` are public** (no `isAuth`): the one-time token carried in the request body is the credential.
-- **`DELETE /tokens/expired`** is the only route requiring `isAdmin` in addition to `isAuth`.
-- **Route ordering matters for the `upload` middleware**: it must appear before the controller but after any `invalidateCache` call that touches the `users` cache key.
+
+- **Middleware order is load-bearing on `PUT /`.** `upload.single('imageUpload')` must precede `requireFreshAuthWhen(isChangingEmail, …)` because `request.body` is empty until multer parses the multipart payload. Reordering would make the predicate always return `false`, silently disabling the email-change gate.
+- **`noStore` is router-level, not per-controller.** This guarantees that any future route added to this file is non-cacheable by default. A separate `setCache` call will refuse to run if it detects the `noStore` marker, preventing the header-replacement bug that previously let browsers cache a user's own profile for an hour.
+- **Fresh-auth tiers are deliberate.** `PUT /` uses `REAUTH_TIME_SENSITIVE` (not CRITICAL) so an avatar-only upload doesn't trigger a password re-proof; only an actual email change is gated. Destructive or 2FA-enrollment routes use `REAUTH_TIME_CRITICAL`.
+- **`DELETE /2fa` has a dual gate:** `requireFreshAuth(REAUTH_TIME_CRITICAL)` *and* a valid code in the request body. Neither alone is sufficient.
+- **`getAuth` runs on public routes too** (`POST /login`, `POST /signup`, etc.) to populate `authContext` when a token happens to be present; `isAuth` is the actual access gate and is only applied where auth is required.

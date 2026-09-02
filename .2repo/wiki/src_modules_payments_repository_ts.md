@@ -2,28 +2,29 @@
 
 ## Purpose
 
-Data-access layer for the payments module. Spreads the shared repository factory for standard CRUD, then adds two domain-specific reads (by order, by id) and two guarded writes (intent upsert, status transition) that the payment service depends on. All ownership scoping is enforced inside the query filter rather than checked after retrieval.
+Payment data-access layer: standard CRUD (via a shared factory) plus the payment-specific lookups and guarded writes that the payments service needs. It owns scoping to a caller's rows, the intent upsert, the status-machine transition primitive, and account-erasure detachment — all as a single exported object.
 
 ## Key elements
 
-- **`paymentRepository`** (sole export) — object conforming to `Repository<PaymentDocument>` plus five domain methods:
-  - **`ownerScope(userId)`** — returns `{ userId: ObjectId }` for spread into a filter; pass `undefined` for admin (unscoped).
-  - **`findByIdScoped(paymentId, scope?)`** — `findOne` by `_id` with an optional scope filter.
-  - **`findByOrderId(orderId, scope?)`** — `findOne` by `orderId` with an optional scope filter.
-  - **`upsertIntent(orderId, userId, { amount, currency, provider })`** — atomic `findOneAndUpdate` with `upsert: true`; filter restricts to `status: { $in: ['requires_confirmation', 'declined'] }`. Returns `null` on duplicate-key (code 11000) — the unique index on `orderId` is the "money already moved" signal.
-  - **`updateStatusIfIn(orderId, from, to, extra?)`** — atomic `findOneAndUpdate` whose filter includes `status: { $in: from }`, so only one of two racing writers can match.
+- **`paymentRepository`** — the sole export. Spreads `createRepository<PaymentDocument>(paymentModel, { transform: applyPaymentTransform })` for generic CRUD, then adds domain-specific methods. Its type is written out explicitly because Mongoose's generics exceed TypeScript's inference limit at an export boundary (TS7056).
+- **`ownerScope(userId)`** — returns a filter fragment `{ userId: ObjectId }` to spread into a query; pass `undefined` for admin/unscoped access.
+- **`findByIdScoped(paymentId, scope?)`** — fetch one payment by `_id` with optional ownership filter applied *in the query*, not post-read.
+- **`findByOrderId(orderId, scope?)`** — same pattern, keyed on `orderId`.
+- **`upsertIntent(orderId, userId, data)`** — single `findOneAndUpdate` with `upsert: true`. The `$in` status guard (`requires_confirmation`, `declined`) ensures a re-ask only fires before money has moved. Catches MongoDB duplicate-key error (code 11000) and returns `null` instead of throwing — that collision *is* the "already paid" answer. When `userId` is `undefined`, `$setOnInsert` omits the field entirely.
+- **`updateStatusIfIn(orderId, from, to, extra?)`** — atomic guarded transition; the `from` array goes into the filter so only one of two racing writers matches.
+- **`detachUserId(userId)`** — `$unset` the `userId` field on all of an erased account's payments; returns `modifiedCount`. No timestamps update.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory (spread for standard CRUD) and the `toObjectId` helper used throughout.
-- **`src/modules/payments/model.ts`** — provides `paymentModel` (the Mongoose model) and `applyPaymentTransform` (wired into the base repository's transform).
-- **`src/modules/payments/service.ts`** — the primary consumer; calls every method on `paymentRepository`.
-- **`src/types/index.ts`** — source of the `PaymentStatus` type used in the `updateStatusIfIn` signature.
-- **`src/modules/payments/tests/integration/service.test.ts`** — integration tests that exercise this repository through the service.
+- **`src/infrastructure/persistence/create-repository.ts`** — supplies the base `createRepository` factory, the `Repository<T>` type, and the `toObjectId` helper used throughout.
+- **`src/modules/payments/model.ts`** — provides `paymentModel` (the Mongoose model) and `applyPaymentTransform` (field mapping applied to results by the base CRUD methods).
+- **`src/types/index.ts`** — source of the `PaymentStatus` union type used in `updateStatusIfIn`'s signature.
+- **`src/modules/payments/service.ts`** — the primary consumer; the comment block explicitly names "the intent/status writes the service depends on."
+- **`src/modules/payments/tests/integration/service.test.ts`** and **`retention.test.ts`** — integration tests that exercise these methods end-to-end.
 
 ## Notes
 
-- The return type of `paymentRepository` is spelled out explicitly at the export boundary; Mongoose's generic inference is too large for TypeScript to resolve (error TS7056).
-- `upsertIntent` intentionally catches and converts MongoDB error `11000` to `null` instead of throwing — callers treat `null` as "this order's payment already progressed past the upsert-eligible states."
-- Scoping is applied in the query filter (not as a post-read check) to close the TOCTOU window between reading a row and verifying ownership.
-- The status-machine guard (`$in` in the filter) is the concurrency control: two racing `updateStatusIfIn` calls with disjoint `from` arrays can both succeed at the Mongoose level, but the `$in` filter guarantees at most one document matches.
+- Scoping is always applied **inside the MongoDB filter** (spread as `{ ...scope }`), never checked after the read. The file's comments call out that a post-read ownership check creates an information-leak window.
+- The `unique` index on `orderId` is the single source of truth for "one payment per order." The upsert relies on that index for its duplicate-key collision rather than doing a read-then-write.
+- `detachUserId` uses `{ timestamps: false }` on `updateMany` to avoid bumping `updatedAt` during bulk erasure.
+- The `userId` field can be absent (not `null`): `upsertIntent` intentionally omits it when the caller's account is already erased, so the payment still records the transaction with no payer reference.

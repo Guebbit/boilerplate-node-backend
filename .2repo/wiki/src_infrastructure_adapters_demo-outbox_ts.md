@@ -2,29 +2,29 @@
 
 ## Purpose
 
-In-memory email sink for demo mode. Under `npm run demo` there is no SMTP server, yet the e2e suite must still read the emails the app "sent" (a password-reset token, for example). The mailer records each send here instead of calling nodemailer, and the demo router exposes the results over HTTP. The module is inert unless `NODE_DEMO=true`.
+In-memory email sink for the demo profile. When `NODE_DEMO=true` and the environment is not production, the mailer records every "send" here instead of calling nodemailer, so the e2e suite can read sent emails (e.g. extract a reset token) without an SMTP server. Lives in the infrastructure tier alongside the mailer because the mailer cannot import from `app`.
 
 ## Key elements
 
-- **`DemoOutboxEmail`** (interface) — Shape of one recorded send: `to`, `subject`, `template`, optional `token`, and `lines` (stringified primitive template variables).
-- **`isDemoMode()`** — Returns `true` when the `NODE_DEMO` environment flag is set; delegates to `environmentFlag`.
-- **`recordDemoEmail(request, templateName, data)`** — Appends (actually prepends) a `DemoOutboxEmail` to the internal array. Lifts the token from `data.token` or, failing that, from the last path segment of `data.linkUrl` (16+ hex chars).
-- **`readDemoOutbox()`** — Returns a shallow copy of all recorded emails, newest first.
-- **`clearDemoOutbox()`** — Empties the internal array; called between e2e specs to prevent leakage.
-- **`outbox`** (module-level `const`, not exported) — The backing array. Cleared on process restart.
+- **`DemoOutboxEmail`** — interface describing one recorded send: `to`, `subject`, `template`, optional `token`, and `lines` (stringified primitive template variables).
+- **`isDemoMode()`** — gate function. Returns `true` only when `NODE_DEMO` is truthy **and** `NODE_ENV !== 'production'`. Logs at `error` level if the flag is set in production.
+- **`recordDemoEmail(request, templateName, data)`** — appends (via `unshift`, so newest-first) a `DemoOutboxEmail` to the module-level array. Extracts `token` from `data.token` if present, otherwise pulls the last hex path segment (≥ 16 chars) from `data.linkUrl`.
+- **`readDemoOutbox()`** — returns a shallow copy (`[...outbox]`) so callers cannot mutate the live array.
+- **`clearDemoOutbox()`** — empties the array; intended to be called between e2e specs.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — The mailer imports `isDemoMode` and, when true, calls `recordDemoEmail` in place of a nodemailer send. This file lives beside the mailer at the infrastructure tier so the mailer never reaches into the app layer.
-- **`src/app/demo.ts`** — The demo router imports `readDemoOutbox` and serves the result at `GET /__demo/emails` for the e2e suite.
-- **`src/infrastructure/runtime/environment.ts`** — Provides `environmentFlag`, which `isDemoMode` uses to read `NODE_DEMO`.
-- **`src/app.ts`** — Application entry point that wires the demo router (and therefore this module) into the running app.
-- **`tests/unit/infrastructure/adapters/demo-outbox.test.ts`** — Unit tests covering recording, token extraction, read/clear semantics, and edge cases (non-string `to`, missing `linkUrl`, etc.).
+- **`src/infrastructure/adapters/mailer.ts`** — the mailer is the caller of `recordDemoEmail` in demo mode; the outbox's `template` field mirrors `EmailContent.template` defined there.
+- **`src/app/demo.ts`** — the demo router that serves the outbox at `GET /__demo/emails` (references `readDemoOutbox`).
+- **`src/infrastructure/runtime/environment.ts`** — provides `environmentFlag('NODE_DEMO', …)` used by `isDemoMode`.
+- **`src/infrastructure/adapters/logger.ts`** — provides `logger` for the production-guard error message.
+- **`tests/unit/infrastructure/adapters/demo-outbox.test.ts`** — unit tests for the recording, reading, clearing, and token-extraction logic.
 
 ## Notes
 
-- **Newest-first ordering.** `recordDemoEmail` uses `unshift`, so `readDemoOutbox` returns the most recent email at index 0, matching inbox reading order.
-- **Token fallback logic.** The primary source is `data.token`; the secondary source is a regex (`/\/([\da-f]{16,})$/`) against `data.linkUrl`. If neither yields a token, the field is `undefined`.
-- **`lines` is lossy by design.** Only `string` and `number` template variables are included; objects, arrays, and booleans are filtered out.
-- **Non-string `to` is JSON-stringified**, not `String()`-coerced, preserving the shape of array/recipient objects.
-- **Not persisted.** The outbox is a plain module-level array; a process restart or `clearDemoOutbox` call wipes it. There is no disk or DB backing.
+- The outbox is a **module-level array**, not persisted. A process restart silently loses all recorded emails.
+- `recordDemoEmail` stores entries **newest-first** (`unshift`), matching inbox reading order.
+- `lines` only includes variables whose value is a primitive `string` or `number`; objects, arrays, and `undefined` are excluded.
+- Non-string `request.to` (e.g. an address object) is coerced via `JSON.stringify` before storage.
+- The token regex expects a hex string of ≥ 16 chars as the **last** path segment of `linkUrl`; if the URL shape changes, token extraction will silently return `undefined`.
+- `isDemoMode` is a two-condition gate by design: `NODE_DEMO` alone is never sufficient in production. Do not simplify to a single flag check.

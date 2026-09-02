@@ -1,16 +1,16 @@
-# Graph Report - target-repo  (2026-08-31)
+# Graph Report - target-repo  (2026-09-02)
 
 ## Corpus Check
-- 780 files · ~1,560,771 words
+- 822 files · ~1,809,975 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 5218 nodes · 10955 edges · 1026 communities (246 shown, 780 thin omitted)
-- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 175 edges (avg confidence: 0.62)
+- 5528 nodes · 11928 edges · 1027 communities (264 shown, 763 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 187 edges (avg confidence: 0.61)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `9b841e10`
+- Built from commit: `5f4c2211`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -70,7 +70,6 @@
 - Analytics Provider Abstraction
 - Contract Bundle Generation
 - Inventory & Feedback Contracts
-- Module Architecture Overview
 - Contract Probe Generation
 - Structured Logging
 - Contract Data Generation
@@ -108,7 +107,6 @@
 - Dependency Health Check
 - Inventory Data Models
 - Generated Worker Types
-- Observability Stack Docs
 - Module Registry & Contracts
 - Module Manifest Structure
 - Jest Test Configuration
@@ -156,6 +154,7 @@
 - Sort Stage Validation
 - Instrumentation Dependencies
 - Observability Event Channels
+- Docs & Migrations
 - Seed Data Migration
 - Test Suite Reference
 - MongoDB & Mongoose
@@ -208,6 +207,7 @@
 - Security Scanning
 - Initial Index Migration
 - Locale Collections Migration
+- Order Shipping Cost Migration
 - Analytics Event Emission
 - Module Factory and Demo
 - Performance Load Testing
@@ -508,7 +508,6 @@
 - Cache Identity Sharing (keyAs)
 - cart/services/items.ts (shared product validation)
 - feedback/service.ts (toFeedbackStatus)
-- FeedbackRequestStatus Shared Schema
 - hardDelete OR Rule (anyTrue)
 - products/routes.ts (mount order reference)
 - Read vs Write Disposition (fail-closed vs 422)
@@ -1027,36 +1026,36 @@
 - tsx
 - winston
 - zod
+- @typescript-eslint/parser
 
 ## God Nodes (most connected - your core abstractions)
-1. `successResponse()` - 139 edges
-2. `t` - 135 edges
-3. `catchAs()` - 101 edges
-4. `callerContextOf()` - 100 edges
-5. `scripts` - 80 edges
-6. `rejectResponse()` - 78 edges
-7. `generateReject()` - 72 edges
-8. `generateSuccess()` - 70 edges
-9. `asStub()` - 69 edges
-10. `emitAuditEvent()` - 67 edges
+1. `successResponse()` - 155 edges
+2. `t` - 151 edges
+3. `callerContextOf()` - 115 edges
+4. `catchAs()` - 103 edges
+5. `rejectResponse()` - 93 edges
+6. `scripts` - 82 edges
+7. `generateReject()` - 82 edges
+8. `generateSuccess()` - 80 edges
+9. `emitAuditEvent()` - 76 edges
+10. `buildAuditEvent()` - 76 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `down()` --indirect_call--> `indexName()`  [INFERRED]
-  db/migrations/20240101000000-initial-indexes.js → tests/support/schema.ts
-- `up()` --indirect_call--> `indexName()`  [INFERRED]
-  db/migrations/20260808180000-prune-unused-indexes.js → tests/support/schema.ts
-- `down()` --indirect_call--> `indexName()`  [INFERRED]
-  db/migrations/20260817140000-locale-collections.js → tests/support/schema.ts
 - `Production RabbitMQ Queue Service` --semantically_similar_to--> `Server: rabbitmqLocal (localhost:5672 AMQP)`  [INFERRED] [semantically similar]
   docker-compose.production.yml → asyncapi.yaml
 - `Dev RabbitMQ Service` --semantically_similar_to--> `Server: rabbitmqLocal (localhost:5672 AMQP)`  [INFERRED] [semantically similar]
   docker-compose.yml → asyncapi.yaml
+- `Production App Service` --semantically_similar_to--> `Dev App Service`  [INFERRED] [semantically similar]
+  docker-compose.production.yml → docker-compose.yml
+- `down()` --indirect_call--> `indexName()`  [INFERRED]
+  db/migrations/20240101000000-initial-indexes.js → tests/support/schema.ts
+- `up()` --indirect_call--> `indexName()`  [INFERRED]
+  db/migrations/20260808180000-prune-unused-indexes.js → tests/support/schema.ts
 
 ## Import Cycles
 - None detected.
 
 ## Hyperedges (group relationships)
-- **POST /x/search Polymorphism Pattern (trigger rule, cache identity, x-alias-of, parity test)** — contract_plan_polymorphism_trigger_rule, contract_plan_polymorphism_cache_identity, contract_plan_polymorphism_x_alias_of, changelog_test_contract_search_parity, contract_plan_polymorphism_setcache [EXTRACTED 0.95]
 - **Four-Tier Modular Monolith (infrastructure, kernel, modules, app)** — readme_layered_architecture, readme_modular_monolith, readme_modules_ts, readme_openapi_yaml, changelog_modules_products, changelog_modules_cart, changelog_modules_wishlist [EXTRACTED 0.90]
 - **Observability SSE Event Contract (channels, payload schema, source fragment)** — asyncapi_public_sse_metrics, asyncapi_public_observability_metrics_payload, asyncapi_public_observability_asyncapi, changelog_modules_observability, readme_observability [EXTRACTED 0.90]
 - **Observability Telemetry Pipeline (Prometheus, Loki, Tempo, Grafana, Alertmanager, OTel Collector, Alloy, Promtail)** — docker_compose_yml_prometheus, docker_compose_yml_loki, docker_compose_yml_tempo, docker_compose_yml_grafana, docker_compose_yml_alertmanager, docker_compose_yml_otel_collector, docker_compose_yml_alloy, docker_compose_yml_promtail [EXTRACTED 0.95]
@@ -1134,55 +1133,55 @@
 - **Shared Response Envelope Pattern (success/status/message/data)** — src_modules_products_openapi_productenvelope, src_modules_products_openapi_productsresponseenvelope, src_modules_users_openapi_usersresponseenvelope, src_modules_wishlist_openapi_wishlistresponseenvelope, shared_contracts_openapi_root [EXTRACTED 0.95]
 - **Wishlist → Product → Cart Cross-Module Flow** — src_modules_wishlist_openapi_addwishlistitem, src_modules_wishlist_openapi_removewishlistitem, src_modules_wishlist_openapi_movewishlistitemtocart, src_modules_products_openapi_getproductbyid, src_modules_products_openapi_listproducts [INFERRED 0.80]
 
-## Communities (1026 total, 780 thin omitted)
+## Communities (1027 total, 763 thin omitted)
 
 ### Community 0 - "Mutation Testing Resource Limits"
-Cohesion: 0.12
-Nodes (29): postLogin(), recordLoginFailure(), recordLoginSuccess(), rememberSchema, refreshAccessToken(), runTokenCleanup(), getAccessTokenSecret(), getAccessTokenTTL() (+21 more)
+Cohesion: 0.09
+Nodes (38): verifyCodeOrBackup(), getAccessTokenSecret(), getAccessTokenTTL(), getExpiryTime(), getExpiryTimeMilliseconds(), getRefreshTokenSecret(), getRotationGraceMilliseconds(), getTotpEncryptionKey() (+30 more)
 
 ### Community 1 - "Build & Benchmark Scripts"
-Cohesion: 0.03
-Nodes (80): scripts, backfill:image-thumbnails, bench, bench:inventory, bench:k6, bench:k6:checkout, bench:orders, bench:search (+72 more)
+Cohesion: 0.02
+Nodes (82): scripts, bench, bench:inventory, bench:k6, bench:k6:checkout, bench:orders, bench:search, build (+74 more)
 
 ### Community 2 - "Strategic DDD Concepts"
-Cohesion: 0.17
-Nodes (20): canTransition(), ORDER_LIFECYCLE, orderActionsFor(), OrderActor, statusesLeadingTo(), statusesReachableFrom(), checkOrderLines(), OrderLineCandidate (+12 more)
+Cohesion: 0.08
+Nodes (34): emitDomainEvent(), DomainEventMap, @kernel/events, inventoryService, AnalyticsEventMap, @infrastructure/observability/analytics, ordersAnalyticsEvents, canTransition() (+26 more)
 
 ### Community 3 - "Request Body Parsing"
-Cohesion: 0.07
-Nodes (41): ServiceResult, extractAndValidateId(), firstEntry(), FORM_BOOLEANS, getRequestBody(), isMultipartRequest(), parseFormBoolean(), parseFormNumber() (+33 more)
+Cohesion: 0.19
+Nodes (11): hardDeleteSchema, pageSchema, pageSizeSchema, paginationSchema, createListController(), createSearchController(), getInventoryLevels, getStockMovements (+3 more)
 
 ### Community 4 - "Locale Context Middleware"
-Cohesion: 0.06
-Nodes (54): express, express, app, getPort(), installRequestContext(), installRoutes(), installSecurity(), startServer() (+46 more)
+Cohesion: 0.08
+Nodes (44): daysAgo(), initI18n(), main(), warn(), withLocaleRestored(), attachLocale(), deepMerge(), getDefaultLocale() (+36 more)
 
 ### Community 5 - "Audit Event Emission"
-Cohesion: 0.11
-Nodes (34): enqueueEmail(), rejectDatabaseEnvelope(), CallerContext, validationErrors(), getDefaultLocale(), accountAnalyticsEvents, AnalyticsEventMap, @infrastructure/observability/analytics (+26 more)
+Cohesion: 0.07
+Nodes (95): enqueueEmail(), rejectDatabaseEnvelope(), refuse(), CallerContext, generateReject(), generateSuccess(), normalizeErrors(), resolveErrorCode() (+87 more)
 
 ### Community 6 - "Image Upload & Storage"
-Cohesion: 0.11
-Nodes (28): decode(), digestImage(), maxDigestDimension(), maxInputPixels(), maxThumbnailDimension(), ReencodableImageMime, reencode(), thumbnailImage() (+20 more)
+Cohesion: 0.17
+Nodes (17): ImageWriteback, createRepository(), Repository, toObjectId(), buildPaginatedMeta(), normalizePagination(), listLevels(), aggregate() (+9 more)
 
 ### Community 7 - "API Contract Testing"
 Cohesion: 0.07
-Nodes (27): loginWithCookie(), authenticateWithCart(), CONTACT_PAYLOAD, createFeedbackRequest(), createEntry(), createLanguage(), PORTUGUESE, seedTwoKeys() (+19 more)
+Nodes (33): loginWithCookie(), authenticateWithCart(), CONTACT_PAYLOAD, createFeedbackRequest(), MISSING_ID, pollUntilAudited(), authenticateWithIntent(), createAdminUser() (+25 more)
 
 ### Community 8 - "Account & Token Management"
-Cohesion: 0.11
-Nodes (40): readUploadedImage(), rejectDatabaseError(), callerContextOf(), rejectResponse(), deleteAccountConfirm(), deleteAccountRequest(), deleteAddress(), deleteExpiredTokens() (+32 more)
+Cohesion: 0.08
+Nodes (63): readUploadedImage(), rejectValidation(), rejectDatabaseError(), callerContextOf(), isConsentValue(), rejectResponse(), delete2fa(), deleteAccountConfirm() (+55 more)
 
 ### Community 9 - "Address CRUD Operations"
-Cohesion: 0.13
-Nodes (33): catchAs(), authContextOf(), isValidObjectId(), successResponse(), deleteSession(), getAddresses(), getSessions(), postVerifyRequest() (+25 more)
+Cohesion: 0.08
+Nodes (70): catchAs(), parseBody(), refused(), authContextOf(), firstEntry(), FORM_BOOLEANS, getRequestBody(), isMultipartRequest() (+62 more)
 
 ### Community 10 - "Metrics & Telemetry"
-Cohesion: 0.18
-Nodes (17): installTelemetry(), aggregateLatencyBuckets(), decrementInflight(), getLatencyPercentiles(), getRouteLabel(), _heapSizeLimitGauge, httpInflightRequests, httpRequestDuration (+9 more)
+Cohesion: 0.09
+Nodes (28): installTelemetry(), aggregateLatencyBuckets(), decrementInflight(), getLatencyPercentiles(), getPrometheusMetrics(), getRouteLabel(), _heapSizeLimitGauge, httpRequestDuration (+20 more)
 
 ### Community 11 - "Domain Event Testing"
 Cohesion: 0.08
-Nodes (30): findLiveToken(), spendLiveToken(), toSession(), AnalyticsEventMap, @infrastructure/observability/analytics, usersAnalyticsEvents, AuditActionMap, @infrastructure/observability/audit (+22 more)
+Nodes (40): ResponseSuccess, findLiveToken(), spendLiveToken(), toSession(), issueRefreshToken(), createUserWithBothTokenTypes(), mockedLogger, mockTokenRemoveExpired (+32 more)
 
 ### Community 12 - "Domain Module Documentation"
 Cohesion: 0.12
@@ -1193,8 +1192,8 @@ Cohesion: 0.50
 Nodes (5): AsyncAPI Public Contract (SSE Events), src/modules/observability/asyncapi.yaml (source fragment), ObservabilityMetricsPayload Schema, SSE Metrics Channels (snapshot, updated, heartbeat), Observability Module
 
 ### Community 14 - "Dev Tool Dependencies"
-Cohesion: 0.07
-Nodes (29): @asyncapi/cli, @commitlint/config-conventional, eslint, @eslint-community/eslint-plugin-eslint-comments, eslint-plugin-prettier, eslint-plugin-unicorn, fast-check, husky (+21 more)
+Cohesion: 0.06
+Nodes (35): @asyncapi/cli, @eslint/js, eslint-plugin-unicorn, fast-check, jest, mongodb-memory-server, nodemon, devDependencies (+27 more)
 
 ### Community 15 - "Infrastructure Tool Documentation"
 Cohesion: 0.06
@@ -1205,144 +1204,144 @@ Cohesion: 0.07
 Nodes (45): Two-Tier Locale Architecture, openapi.root.yaml (REST Preamble), Feedback Module OpenAPI Contract, Inventory Module OpenAPI Contract, Locales Module OpenAPI Contract, getLocaleDictionary (GET /locales/{locale}), getLocaleMessages (GET /locales/{locale}/messages), Products Module Contract (OpenAPI 3.0.3 v2.0.0) (+37 more)
 
 ### Community 17 - "Analytics & Audit Events"
-Cohesion: 0.09
-Nodes (42): AnalyticsEventMap, AnalyticsEventName, buildAnalyticsBase(), emitAnalyticsEvent(), PROVIDERS, resetAnalyticsProvider(), noneAnalyticsProvider, getOwnProfile() (+34 more)
+Cohesion: 0.18
+Nodes (24): buildAnalyticsBase(), emitAnalyticsEvent(), getOwnProfile(), cartDeleteByUserId(), cartGet(), cartGetForBadge, cartGetForView(), cartItemAdd() (+16 more)
 
 ### Community 18 - "Redis Cache Layer"
 Cohesion: 0.13
-Nodes (24): getCacheValue(), prefix(), setCacheValue(), armCacheWrite(), CachedResponse, CacheOptions, getCacheKey(), getCacheScope() (+16 more)
+Nodes (22): armCacheWrite(), CachedResponse, CacheOptions, getCacheKey(), getCacheScope(), getDevelopmentTtlMax(), getMaxCachedBytes(), normalizeKeyValue() (+14 more)
 
 ### Community 19 - "Message Queue Workers"
 Cohesion: 0.05
-Nodes (50): AsyncAPI Bundler (produces asyncapi.public.yaml), asyncapi.root.yaml (Async Preamble), asyncapi.workers.yaml (Infrastructure Queues), registerWorkers(), handleEmailJob(), registerImageWritebackResolver(), EmailJob, DEFAULT_PDF_OPTIONS (+42 more)
+Nodes (53): registerWorkers(), handleEmailJob(), ReencodableImageMime, imageStore, DigestedImageUrls, digestQuarantinedImage(), enqueueImageDigest(), handleImageDigestJob() (+45 more)
 
 ### Community 20 - "Base Repository Abstraction"
-Cohesion: 0.09
-Nodes (37): buildWhere(), createRepository(), FindAllOptions, isPresent(), Repository, RepositoryOptions, SearchFilters, SearchSpec (+29 more)
+Cohesion: 0.16
+Nodes (18): buildWhere(), FindAllOptions, isPresent(), PaginatedResult, RepositoryOptions, Transform, trackDatabaseQuery(), addRegexFilter() (+10 more)
 
 ### Community 21 - "Security & Rate Limiting"
-Cohesion: 0.08
-Nodes (32): allowedOrigins, stopServer(), CLUSTER_ENABLED, getWorkerTarget(), stopCache(), stopQueue(), credentialLimiters, limiterOptions() (+24 more)
+Cohesion: 0.06
+Nodes (48): fetchSourcePhoto(), generateOne(), ImageEntry, main(), PRODUCT_ROLES, randomName(), removeStaleOriginals(), SEED_ROOT (+40 more)
 
 ### Community 22 - "Module Registry & Lifecycle"
-Cohesion: 0.09
-Nodes (36): AUTHENTICATED, chainOf(), RATE_LIMITED, TOKEN_BEARING, ALL, chainOf(), chainOf(), ADMIN (+28 more)
+Cohesion: 0.18
+Nodes (16): authGuardsMock(), cacheMock(), handlerName(), labelled(), LabelledMiddleware, Layer, mockSearchCache(), mockSetCache() (+8 more)
 
 ### Community 23 - "Mutation Baseline Tracking"
 Cohesion: 0.11
 Nodes (24): baseline, comparisons, counts, missing, profileName, regressions, update, compareToBaseline() (+16 more)
 
+### Community 24 - "Mutation Testing Configuration"
+Cohesion: 0.07
+Nodes (27): 10. Information disclosure — the site tells you too much, 11. Denial of service — availability, 12. Data layer — databases, caches, queues, 13. Infrastructure, configuration and deployment, 14. Supply chain — code you did not write, 15. API-specific — REST, GraphQL, webhooks, 16. Real-time and messaging — WebSockets, SSE, brokers, 17. Email and notifications (+19 more)
+
 ### Community 25 - "Domain Event Handlers"
-Cohesion: 0.10
-Nodes (24): DomainEventHandler, DomainEventMap, DomainEventName, handlers, onDomainEvent(), AppModule, DemoExport, ImageTarget (+16 more)
+Cohesion: 0.11
+Nodes (23): DomainEventHandler, DomainEventMap, DomainEventName, handlers, onDomainEvent(), resetDomainEvents(), AppModule, assertRequiredConfig() (+15 more)
 
 ### Community 26 - "Order Shipping & Tracking"
-Cohesion: 0.12
-Nodes (26): ReorderLine, shipOrder(), trackingCodeFor(), authenticateWithShipment(), DomainEventMap, @kernel/events, OrderFixture, OrderLineInput (+18 more)
+Cohesion: 0.09
+Nodes (38): cartWith(), HOME, OFFICE, ReorderLine, authenticateWithShipment(), shippedOrderFor(), applyOrderItems(), applyOrderTransform (+30 more)
 
 ### Community 27 - "Domain Glossary & Contexts"
 Cohesion: 0.14
 Nodes (14): `account`, `audit-logs`, `cart`, `delivery`, `feedback`, Glossary, `inventory`, `locales` (+6 more)
 
 ### Community 28 - "Inventory Audit & Events"
-Cohesion: 0.10
-Nodes (24): AuditActionMap, @infrastructure/observability/audit, inventoryAuditActions, lowStockThreshold(), reservationTtlMinutes(), availabilityOf(), CounterDelta, counterDeltaFor() (+16 more)
+Cohesion: 0.13
+Nodes (21): SearchFilters, AuditActionMap, @infrastructure/observability/audit, inventoryAuditActions, lowStockThreshold(), reservationTtlMinutes(), availabilityOf(), CounterDelta (+13 more)
 
 ### Community 29 - "Contract Fuzz Testing"
-Cohesion: 0.15
-Nodes (17): arbitraryFor(), bodyArbitraryFor(), HOSTILE_STRINGS, numberArbitrary(), objectArbitrary(), OMITTED, stringArbitrary(), HttpMethod (+9 more)
+Cohesion: 0.12
+Nodes (21): FUZZABLE, NO_BODY, OPERATIONS, SEED, arbitraryFor(), bodyArbitraryFor(), HOSTILE_STRINGS, numberArbitrary() (+13 more)
 
 ### Community 30 - "Prism & Rate-Limit Tests"
 Cohesion: 0.10
 Nodes (25): finish(), main(), PORT, prism, REPO_ROOT, stop(), waitForBoot(), resolve() (+17 more)
 
 ### Community 31 - "Test Fixture Factories"
-Cohesion: 0.11
-Nodes (17): resetDomainEvents(), cartWith(), HOME, OFFICE, createUserWithBothTokenTypes(), mockEnqueueEmail, shippedOrderFor(), orderService (+9 more)
+Cohesion: 0.09
+Nodes (21): 1. TLS + DNS + WAF in front — the actual gap, 2. CDN for the FE bundle, 3. R2 for uploads — **the best value/effort ratio of the three external services**, 4. Turnstile — optional, V2, External service — Cloudflare, Open questions, Where this sits, Backend work (+13 more)
 
 ### Community 32 - "Response & Error Stubs"
-Cohesion: 0.12
-Nodes (18): getPrometheusMetrics(), makeResponse(), fakeResponse(), handlerFor(), preSaveHook(), asStub(), makeRequest(), makeResponse() (+10 more)
+Cohesion: 0.09
+Nodes (28): isMetricsScraper(), AuthenticatedUser, AuthResolver, registerAuthResolver(), RFC-8176, makeResponse(), preSaveHook(), makeResponseStub() (+20 more)
 
 ### Community 34 - "AsyncAPI Type Generation"
 Cohesion: 0.09
 Nodes (25): AsyncApiChannel, AsyncApiDocument, AsyncApiMessage, AsyncApiOperation, buildOutput(), channelNamespaceBlocks, checkOnly, collectChannelMessageEntries() (+17 more)
 
 ### Community 35 - "Audit Log Persistence"
-Cohesion: 0.11
-Nodes (16): AuditEntry, PaginatedResult, auditSinkFailuresTotal, applyAuditLogTransform, AuditLogDocument, AuditLogModel, auditLogSchema, retentionDays (+8 more)
+Cohesion: 0.09
+Nodes (22): AuditActionMap, AuditEntry, AuditEvent, AuditSink, CoreAuditAction, coreAuditActions, extractRequestContext(), registerAuditSink() (+14 more)
 
 ### Community 36 - "Locale Seed Fixtures"
-Cohesion: 0.12
-Nodes (23): exportSeededLocales(), localeEntryFixtures, localeFixtures, SEED_LOCALE_TAGS, seedLocalesCollection(), LocaleEntryFixture, LocaleEntryOverrides, LocaleFixture (+15 more)
+Cohesion: 0.07
+Nodes (36): exportSeededLocales(), localeEntryFixtures, localeFixtures, SEED_LOCALE_TAGS, seedLocalesCollection(), LocaleEntryFixture, LocaleEntryOverrides, LocaleFixture (+28 more)
 
 ### Community 39 - "Analytics Event Mapping"
-Cohesion: 0.08
-Nodes (24): PaginatedMeta, AnalyticsEventMap, @infrastructure/observability/analytics, ordersAnalyticsEvents, AnalyticsEventMap, @infrastructure/observability/analytics, productsAnalyticsEvents, callerScope (+16 more)
+Cohesion: 0.12
+Nodes (12): AnalyticsEventMap, cartAnalyticsEvents, @infrastructure/observability/analytics, AnalyticsEventMap, @infrastructure/observability/analytics, productsAnalyticsEvents, JsonPayload, mockCapture (+4 more)
 
 ### Community 40 - "Seed Data Export"
-Cohesion: 0.11
-Nodes (30): exportCollection(), OwnedSeedRepository, SEED_SAVE_OPTIONS, SeedOutcome, SeedRepository, upsertById(), upsertByOwner(), exportSeededAddressBooks() (+22 more)
+Cohesion: 0.05
+Nodes (53): exportCollection(), OwnedSeedRepository, SEED_SAVE_OPTIONS, SeedOutcome, SeedRepository, upsertById(), upsertByOwner(), seedCredentials (+45 more)
 
 ### Community 41 - "Mutation Testing Workflow"
 Cohesion: 0.04
 Nodes (48): <rootDir>/src/modules/[^/]+/tests/integration/, <rootDir>/tests/integration/, concurrency, testPathIgnorePatterns, coverageAnalysis, htmlReporter, fileName, ignorePatterns (+40 more)
 
 ### Community 42 - "Property-Based Testing"
-Cohesion: 0.09
-Nodes (21): OverridesFor, _inventoryReservedUnitsTotal, _productsLowStockTotal, MISSING_ID, applyOrderItems(), makeOrderPayload(), asSuccess(), seedOrder() (+13 more)
+Cohesion: 0.10
+Nodes (25): createOwnerScope(), createVisibilityScope(), restrictNonAdmin(), Scope, AuditActionMap, @infrastructure/observability/audit, productsAuditActions, deleteProducts (+17 more)
 
 ### Community 43 - "Worker Message Contracts"
 Cohesion: 0.09
 Nodes (29): AsyncAPI Contract (Boilerplate Node Backend), Message: EmailJobConsumeMessage, Message: EmailJobMessage, Schema: EmailJobPayload, Message: PdfJobConsumeMessage, Message: PdfJobMessage, Schema: PdfJobPayload, Server: rabbitmqLocal (localhost:5672 AMQP) (+21 more)
 
 ### Community 44 - "Demo Dataset Assembly"
-Cohesion: 0.11
-Nodes (20): CartModel, feedbackRequestRepository, OrderModel, createUserWithTokens(), wipeRows(), dropAllIndexes(), MODULES_ROOT, registeredModels (+12 more)
+Cohesion: 0.14
+Nodes (19): assembleDemoDataset(), collectIds(), DEMO_DATA_PATH, findDanglingReferences(), isRecord(), reconcileShapes(), sortKeys(), toPlainJson() (+11 more)
 
 ### Community 45 - "Checkout Evaluation Logic"
-Cohesion: 0.14
-Nodes (20): AddressItem, addressAdd(), addressesDeleteByUserId(), addressesGet(), AddressesView, addressForCheckout(), addressRemove(), addressUpdate() (+12 more)
+Cohesion: 0.24
+Nodes (11): AddressItem, addressForCheckout(), ADDRESS_EXPORTS, orderConfirm(), runCheckout(), toShippingAddress(), toStockLines(), isJoined() (+3 more)
 
 ### Community 46 - "Feedback Module CRUD"
-Cohesion: 0.19
-Nodes (14): ResponseNeutral, ResponseReject, ResponseSuccess, cartDeleteByUserId(), productRemoveFromCartsById(), create(), FEEDBACK_STATUS_VALUES, notifyMailbox() (+6 more)
+Cohesion: 0.14
+Nodes (17): applyPersonalFieldMode(), baseFormat, hashPersonalValue(), PERSONAL_FIELDS, PersonalFieldMode, prettyFormat, redactFormat, redactSensitiveFields() (+9 more)
 
 ### Community 48 - "Order Seed & Events"
 Cohesion: 0.06
 Nodes (32): Bus factor, Contract, Design notes, Failure modes map onto the existing consumer contract, Files, Frontend follow-up (boilerplate-vue-frontend), Image pipeline: quarantined upload → digest → promote, Infrastructure (+24 more)
 
 ### Community 49 - "Payment Authorization & Scopes"
-Cohesion: 0.11
-Nodes (25): createOwnerScope(), createVisibilityScope(), restrictNonAdmin(), Scope, AnalyticsEventMap, @infrastructure/observability/analytics, paymentsAnalyticsEvents, AuditActionMap (+17 more)
+Cohesion: 0.08
+Nodes (35): AnalyticsEventMap, @infrastructure/observability/analytics, paymentsAnalyticsEvents, AuditActionMap, @infrastructure/observability/audit, paymentsAuditActions, defaultCurrency(), applyPaymentTransform (+27 more)
 
 ### Community 50 - "Seed & Cache Reset"
-Cohesion: 0.08
-Nodes (33): reset, seed(), runScript(), backfillOne(), backfillProducts(), backfillUsers(), main(), UNTHUMBNAILED_LOCAL_IMAGE (+25 more)
+Cohesion: 0.09
+Nodes (34): reset, seed(), runScript(), main(), stopServer(), cacheConnection, clearCache(), ClearCacheResult (+26 more)
 
 ### Community 51 - "Observability Signal Layer"
 Cohesion: 0.14
 Nodes (14): Alertmanager, Architecture at a glance, Common tasks, FAQ / troubleshooting, Grafana, Loki, Observability Stack Reference, OpenTelemetry Collector (+6 more)
 
 ### Community 52 - "Analytics Provider Abstraction"
-Cohesion: 0.17
-Nodes (16): compact(), FactoryIdentity, identityOf(), toDate(), toObjectId(), AddressBookOverrides, CartFixture, CartOverrides (+8 more)
+Cohesion: 0.18
+Nodes (18): identityOf(), OverridesFor, stripUndefined(), toDate(), toObjectId(), makeOrder(), OrderFixture, OrderLineInput (+10 more)
 
 ### Community 54 - "Inventory & Feedback Contracts"
 Cohesion: 0.10
 Nodes (23): Append-Only Stock Movement Ledger, createFeedbackRequest (POST /feedback/contact), CreateFeedbackRequest Schema, FeedbackRequest Schema, FeedbackRequestEnvelope Schema, FeedbackRequestsResponseEnvelope Schema, FeedbackRequestStatus Enum, listFeedbackRequests (GET /feedback) (+15 more)
 
-### Community 55 - "Module Architecture Overview"
-Cohesion: 0.08
-Nodes (33): account, Related pages, The story, cart, Related pages, The story, delivery, Related pages (+25 more)
-
 ### Community 56 - "Contract Probe Generation"
-Cohesion: 0.10
-Nodes (21): asyncapiPublicBundle, allProbes(), brunoBundle, COLLECTION_TOOLS, collectionBundle(), contentFor(), generate(), insomniaBundle (+13 more)
+Cohesion: 0.11
+Nodes (20): ContractBundle, allProbes(), brunoBundle, COLLECTION_TOOLS, collectionBundle(), contentFor(), generate(), insomniaBundle (+12 more)
 
 ### Community 57 - "Structured Logging"
-Cohesion: 0.15
-Nodes (22): refused(), rejectValidation(), deleteLocale(), deleteLocaleEntry(), getLocaleMessages(), getLocaleTenants(), createLocaleEntry(), importEntries() (+14 more)
+Cohesion: 0.09
+Nodes (33): RFC-9470, invalidateCache(), requireResolver(), resolveAccessToken(), resolveRefreshToken(), FreshAuthOptions, getAuth(), getTokenBearer() (+25 more)
 
 ### Community 58 - "Contract Data Generation"
 Cohesion: 0.19
@@ -1353,28 +1352,28 @@ Cohesion: 0.29
 Nodes (9): compareSharedFiles(), hashFile(), siblingRole(), roots, sharedFiles(), sharedFilesWith(), siblingPresent, siblingRoot (+1 more)
 
 ### Community 60 - "Order Deletion & Audit"
-Cohesion: 0.10
-Nodes (20): 1. Write down the admission tests — docs only, 2. `runtime/managed-connection.ts` → `adapters/managed-connection.ts`, 3. Pull the controller factories out of `http/`, 4. `http/middlewares/security.ts` → `rate-limit.ts`, 5. Split the wire dialect out of `http/` — DEFERRED, `adapters` — a docs bug, not a code bug, Coverage floors — the sharpest one, Everything else (+12 more)
+Cohesion: 0.13
+Nodes (17): AsyncAPI Bundler (produces asyncapi.public.yaml), asyncapi.root.yaml (Async Preamble), asyncapi.workers.yaml (Infrastructure Queues), DEFAULT_PDF_OPTIONS, launchOptions(), renderHtmlToPdf(), handlePdfJob(), Observability AsyncAPI Contract (+9 more)
 
 ### Community 61 - "Address Response Mapping"
-Cohesion: 0.16
-Nodes (7): ExtendedError, makeResponseStub(), ResponseStub, makeCastError(), mockedLogger, NotFoundError, makeRequest()
+Cohesion: 0.18
+Nodes (6): ExtendedError, isDuplicateKey(), upsertLine(), makeCastError(), mockedLogger, NotFoundError
 
 ### Community 63 - "Demo Email Outbox"
-Cohesion: 0.20
-Nodes (13): emailTemplatesDirectory(), getTransporter(), nodemailer(), resetTransporter(), smtpPort(), templateFile(), listEmailFiles(), MODULES_ROOT (+5 more)
+Cohesion: 0.08
+Nodes (30): installDemo(), runDemoSeed(), clearDemoOutbox(), DemoOutboxEmail, isDemoMode(), outbox, readDemoOutbox(), recordDemoEmail() (+22 more)
 
 ### Community 64 - "Email Template System"
-Cohesion: 0.31
-Nodes (13): EmailContent, translator(), accountLink(), deleteConfirmEmail(), deleteRequestEmail(), resetConfirmEmail(), resetRequestEmail(), setupRequestEmail() (+5 more)
+Cohesion: 0.10
+Nodes (31): EmailContent, translator(), accountLink(), deleteConfirmEmail(), deleteRequestEmail(), inactivityWarningEmail(), resetConfirmEmail(), resetRequestEmail() (+23 more)
 
 ### Community 65 - "Products Module CRUD"
-Cohesion: 0.14
-Nodes (5): AnalyticsEvent, AnalyticsProvider, posthogAnalyticsProvider, umamiAnalyticsProvider, UmamiEventData
+Cohesion: 0.12
+Nodes (11): AnalyticsEvent, AnalyticsEventInput, AnalyticsEventName, AnalyticsProvider, PROVIDERS, requireAnalyticsConsent(), resetAnalyticsProvider(), noneAnalyticsProvider (+3 more)
 
 ### Community 66 - "JWT Token Management"
-Cohesion: 0.10
-Nodes (20): 1. Sources are ranked — except `hardDelete`, 2. A value outside a closed set — read vs write, Appendix — a GET already generates types, Cache identity — the part worth copying, Carried to another API, Contract plan — polymorphism, Current state, per module, Dispositions (+12 more)
+Cohesion: 0.15
+Nodes (14): router, AUTHENTICATED, chainOf(), RATE_LIMITED, TOKEN_BEARING, router, ALL, chainOf() (+6 more)
 
 ### Community 67 - "Route Surface Analysis"
 Cohesion: 0.14
@@ -1382,47 +1381,47 @@ Nodes (19): HTTP_METHODS, MountedRoute, mountedRoutes, read(), readAllowedSource
 
 ### Community 68 - "Contract Bundle Staleness"
 Cohesion: 0.13
-Nodes (22): arguments_, authored, bundle(), checkOnly, named, stale, unknown, assembleBundle() (+14 more)
+Nodes (21): arguments_, authored, bundle(), checkOnly, named, stale, unknown, assembleBundle() (+13 more)
 
 ### Community 69 - "Test Result Reporting"
 Cohesion: 0.11
 Nodes (15): Bucket, bucketOf(), buckets, coverage, DEFAULT_REPORT, failures, readCoverage(), REPO_ROOT (+7 more)
 
 ### Community 70 - "Route & Auth Middleware"
-Cohesion: 0.08
-Nodes (42): upload, invalidateCache(), searchCache(), isMetricsScraper(), routeFlag(), createDeleteController(), createItemController(), ItemControllerSpec (+34 more)
+Cohesion: 0.14
+Nodes (15): router, router, router, handlersMountedUnauthenticated(), MODULES_ROOT, ROUTED_MODULES, MODULES_ROOT, ROUTED_MODULES (+7 more)
 
 ### Community 71 - "Address Book Serialization"
-Cohesion: 0.13
-Nodes (19): applySerialization(), SerializableSchema, SerializeOptions, SerializeTransform, applyShipmentTransform, ShipmentDocument, ShipmentModel, shipmentSchema (+11 more)
+Cohesion: 0.26
+Nodes (10): applySerialization(), SerializableSchema, SerializeOptions, SerializeTransform, buildTransform(), documentKey(), documentLike(), fakeSchema() (+2 more)
 
 ### Community 72 - "Locale Entry Management"
-Cohesion: 0.14
-Nodes (45): refuse(), generateReject(), generateSuccess(), t, buildAuditEvent(), emitAuditEvent(), emitDomainEvent(), signup() (+37 more)
+Cohesion: 0.16
+Nodes (13): ResponseNeutral, ResponseReject, AuditActionMap, deliveryAuditActions, @infrastructure/observability/audit, shipmentRepository, listMethods(), runCourierAdvance() (+5 more)
 
 ### Community 73 - "Locale Tenant Resolution"
-Cohesion: 0.24
-Nodes (17): describeLanguage(), dynamicCapability(), isRightToLeft(), listCapabilities(), mergeCapabilities(), readDynamicTier(), RIGHT_TO_LEFT_BASE_LANGUAGES, staticCapability() (+9 more)
+Cohesion: 0.15
+Nodes (25): deriveBaseLanguage(), countEntriesByLocale(), callerScope, describeLanguage(), dynamicCapability(), isRightToLeft(), listCapabilities(), listTenants() (+17 more)
 
 ### Community 74 - "Locale Persistence Layer"
-Cohesion: 0.13
-Nodes (12): applyLocaleMessageTransform, applyLocaleTransform, bumpRevision(), countEntriesByLocale(), createEntry(), entryBase, ImportCounts, importEntries() (+4 more)
+Cohesion: 0.19
+Nodes (13): addressesGet(), AccountExportPayload, ExportFeedbackTicket, exportOwnData(), ExportPayment, ExportSession, ownSessions(), toExportFeedback() (+5 more)
 
 ### Community 75 - "Queue Integration Testing"
 Cohesion: 0.10
 Nodes (21): 1–3 · Delete the folder, the line, the entries, 1 · The folder, 2 · The line, 3 · The fragments and their section entries, 4 · Bundle, 4 · The page, 5 · Re-bundle and mirror, 5 · The page (+13 more)
 
 ### Community 76 - "Analytics Event Bundling"
-Cohesion: 0.26
-Nodes (12): assembleDemoDataset(), collectIds(), DEMO_DATA_PATH, findDanglingReferences(), isRecord(), reconcileShapes(), sortKeys(), toPlainJson() (+4 more)
+Cohesion: 0.17
+Nodes (13): router, chainOf(), router, ADMIN, chainOf(), PUBLIC, router, chainOf() (+5 more)
 
 ### Community 77 - "Frontend Pairing Sync"
 Cohesion: 0.20
 Nodes (6): FRONTEND_ONLY, FRONTEND_PAIRING, Pairing, siblingModules, siblingPresent, siblingRoot
 
 ### Community 78 - "Response Normalization"
-Cohesion: 0.12
-Nodes (18): router, parseBody(), normalizeErrors(), resolveErrorCode(), resolveErrorMessage(), SERVER_FAULT, STATUS_ENVELOPE, UNMAPPED_REQUEST_FAULT (+10 more)
+Cohesion: 0.13
+Nodes (19): RFC-4122, express, express, app, getPort(), installRequestContext(), installRoutes(), installSecurity() (+11 more)
 
 ### Community 79 - "TypeScript Compiler Config"
 Cohesion: 0.12
@@ -1433,12 +1432,12 @@ Cohesion: 0.18
 Nodes (15): relative(), builderDataKeys(), entryKey(), extractBalanced(), includedPartials(), loopLocals(), MODULES_ROOT, OutputTag (+7 more)
 
 ### Community 81 - "AsyncAPI Bundle Compilation"
-Cohesion: 0.18
-Nodes (15): ASYNC_ROOT_DOCUMENT, ASYNC_SECTION_ORDER, asyncapiBundle, AsyncScope, asyncSectionDocument(), AsyncSectionName, compile(), compiled (+7 more)
+Cohesion: 0.17
+Nodes (16): ASYNC_ROOT_DOCUMENT, ASYNC_SECTION_ORDER, asyncapiBundle, asyncapiPublicBundle, AsyncScope, asyncSectionDocument(), AsyncSectionName, compile() (+8 more)
 
 ### Community 83 - "Error Handling & Tracing"
-Cohesion: 0.25
-Nodes (10): handleUncaughtError(), installErrorHandling(), databaseErrorInterpreter(), getActiveSpanContext(), getTracer(), isValidOtelId(), recordErrorOnActiveSpan(), withSpan() (+2 more)
+Cohesion: 0.21
+Nodes (12): handleUncaughtError(), installErrorHandling(), auditLogger, databaseErrorInterpreter(), requestLogger(), getActiveSpanContext(), getTracer(), isValidOtelId() (+4 more)
 
 ### Community 84 - "Graceful Shutdown"
 Cohesion: 0.10
@@ -1457,16 +1456,12 @@ Cohesion: 0.25
 Nodes (8): Clustering & Graceful Shutdown, Configuration, Crash backoff, Graceful shutdown, Related pages, Useful links, Why a primary + workers, Why this matters
 
 ### Community 90 - "Dependency Health Check"
-Cohesion: 0.11
-Nodes (22): cacheConnection, cacheState(), ClearCacheResult, getRedisUrl(), invalidateCacheTags(), isCacheEnabled(), manageConnection(), ManagedConnection (+14 more)
+Cohesion: 0.13
+Nodes (17): cacheState(), manageConnection(), ManagedConnection, ManagedConnectionOptions, queueState(), resolveAnalyticsProvider(), DATABASE_STATES, DependencyHealth (+9 more)
 
 ### Community 91 - "Inventory Data Models"
 Cohesion: 0.14
 Nodes (15): applyReservationTransform, applyStockMovementTransform, MOVEMENT_REASONS, ReservationDocument, ReservationItem, reservationItemSchema, ReservationModel, reservationSchema (+7 more)
-
-### Community 93 - "Observability Stack Docs"
-Cohesion: 0.32
-Nodes (5): Family map, Good starting points, Quick visual of the current repo, Read this repo as, What this docs site is for
 
 ### Community 96 - "Jest Test Configuration"
 Cohesion: 0.14
@@ -1485,8 +1480,8 @@ Cohesion: 0.15
 Nodes (13): ./api/*, ./src/app/*, ./src/infrastructure/*, ./src/kernel/*, ./src/modules/*, ./tests/support/*, paths, @api/* (+5 more)
 
 ### Community 103 - "Payment Provider Abstraction"
-Cohesion: 0.29
-Nodes (7): CardDetails, cardLastFour(), fakePaymentProvider, ChargeOutcome, PaymentProvider, PROVIDERS, loadResolver()
+Cohesion: 0.13
+Nodes (14): 1. `users/model.ts`, 2. `account/oauth/` — new subfolder, mirrors `session/`, 3. Controllers + routes (`account/controllers/`, `account/routes.ts`), 4. Config, 5. Contract (`openapi.yaml`), 6. Audit / analytics / metrics, 7. Tests, Backend changes (+6 more)
 
 ### Community 105 - "Deployment & CI Config"
 Cohesion: 0.29
@@ -1509,20 +1504,20 @@ Cohesion: 0.10
 Nodes (20): 1. The order lifecycle, 2. Capabilities: the server answers what a client may do, 3. Money, 4. What is still absent, Compensation is policy, and it travels with the fact, Deciding and enforcing stay separate, How it is enforced, No currency in the type — yet (+12 more)
 
 ### Community 112 - "OpenAPI Bundle Compilation"
-Cohesion: 0.21
-Nodes (10): assertModuleSectionsAreCurrent(), hasOwnOpenapiSpec(), ModuleSection, moduleSpec(), OPENAPI_OUTPUT, ROOT_SPEC, rootPaths(), SECTION_ORDER (+2 more)
+Cohesion: 0.19
+Nodes (11): assertModuleSectionsAreCurrent(), hasOwnOpenapiSpec(), ModuleSection, moduleSpec(), OPENAPI_OUTPUT, openapiBundle, ROOT_SPEC, rootPaths() (+3 more)
 
 ### Community 113 - "Image Format Detection"
-Cohesion: 0.18
-Nodes (12): AuthenticatedUser, AuthResolver, registerAuthResolver(), requireResolver(), resolveAccessToken(), resolveRefreshToken(), fromAccessToken, fromRefreshToken (+4 more)
+Cohesion: 0.19
+Nodes (12): AnalyticsEventMap, AnalyticsEventMap, @infrastructure/observability/analytics, wishlistAnalyticsEvents, productRemoveFromWishlistsById(), toWishlistView(), wishlistAdd(), wishlistDeleteByUserId() (+4 more)
 
 ### Community 114 - "Image Upload Handling"
-Cohesion: 0.29
-Nodes (11): EntryInput, callerScope, listTenants(), buildMessageTree(), findBatchCollision(), findKeyCollision(), findUnsafeKeySegment(), isPlainObject() (+3 more)
+Cohesion: 0.21
+Nodes (9): searchCache(), routeFlag(), getProductItem, getProducts, searchProductsKeyParameters, searchProductsQuerySchema, cacheProductsSearch, makeRequest() (+1 more)
 
 ### Community 115 - "Uploaded Image Storage"
-Cohesion: 0.11
-Nodes (19): Architecture, Configuration, Consuming messages, Dead letters, Docker Compose, Emails (fire-and-forget), External references, Graceful shutdown (+11 more)
+Cohesion: 0.10
+Nodes (20): Architecture, Configuration, Consuming messages, Dead letters, Docker Compose, Emails (fire-and-forget), External references, Graceful shutdown (+12 more)
 
 ### Community 116 - "Cart & Checkout API"
 Cohesion: 0.22
@@ -1545,8 +1540,8 @@ Cohesion: 0.29
 Nodes (6): ./tsconfig.json, compilerOptions, module, moduleResolution, verbatimModuleSyntax, extends
 
 ### Community 124 - "Email Dispatch Testing"
-Cohesion: 0.12
-Nodes (14): cacheInvalidationFailuresTotal, metricsRegistry, databaseErrorsTotal, databaseQueriesTotal, cartCheckoutTotal, getObservabilityMetricsOverview(), MetricSample, readCounter() (+6 more)
+Cohesion: 0.21
+Nodes (9): getUserItem, getUsers, queryBoolean, searchUsersKeyParameters, searchUsersQuerySchema, cacheUsersSearch, router, ALL (+1 more)
 
 ### Community 125 - "Managed DB Connections"
 Cohesion: 0.13
@@ -1598,19 +1593,23 @@ Nodes (8): isTotal(), listSourceFiles(), pagedSortStages(), sortKeys(), SortStag
 
 ### Community 139 - "Instrumentation Dependencies"
 Cohesion: 0.22
-Nodes (9): amqplib, express-rate-limit, @guebbit/js-toolkit, @opentelemetry/semantic-conventions, dependencies, amqplib, express-rate-limit, @guebbit/js-toolkit (+1 more)
+Nodes (9): bcrypt, @guebbit/js-toolkit, @guebbit/openapi-runnable-collections, dependencies, bcrypt, @guebbit/js-toolkit, @guebbit/openapi-runnable-collections, redis (+1 more)
 
 ### Community 140 - "Observability Event Channels"
 Cohesion: 0.25
 Nodes (8): Message: HeartbeatEvent, Message: MetricsSnapshotEvent, Message: MetricsUpdatedEvent, Channel: observability.heartbeat, Schema: ObservabilityMetricsPayload, Channel: observability.metrics.snapshot, Channel: observability.metrics.updated, Server: sseLocal (localhost:3000 HTTP/SSE)
+
+### Community 141 - "Docs & Migrations"
+Cohesion: 0.24
+Nodes (5): Family map, Good starting points, Quick visual of the current repo, Read this repo as, What this docs site is for
 
 ### Community 142 - "Seed Data Migration"
 Cohesion: 0.39
 Nodes (6): intoSeedDirectory(), ORDER_ITEM_ELEMENT, rewriteField(), SEED_IMAGE_FILENAMES, toPosix(), up()
 
 ### Community 145 - "Controller Error Handling"
-Cohesion: 0.18
-Nodes (13): getHttpRequestCounters(), sumMetricValues(), ProcessMemorySnapshot, ProcessSnapshot, buildObservabilityPayload(), getActiveSseClients(), sseClients, streamObservabilityMetrics() (+5 more)
+Cohesion: 0.12
+Nodes (21): getHttpRequestCounters(), httpInflightRequests, sumMetricValues(), ProcessMemorySnapshot, ProcessSnapshot, buildObservabilityPayload(), getActiveSseClients(), sseClients (+13 more)
 
 ### Community 146 - "Wishlist Data Model"
 Cohesion: 0.22
@@ -1626,27 +1625,27 @@ Nodes (6): globalSetup(), instanceDataRoot(), isAlive(), sweepDeadInstances(), T
 
 ### Community 149 - "Email Locale Testing"
 Cohesion: 0.12
-Nodes (16): An outcome is a different event, not a property, Attribution, Caller context, Choosing a provider, Configuration, Event flow, External references, Naming (+8 more)
+Nodes (17): An outcome is a different event, not a property, Attribution, Caller context, Choosing a provider, Configuration, Consent, Event flow, External references (+9 more)
 
 ### Community 151 - "Dependency Analysis & Boundaries"
 Cohesion: 0.29
 Nodes (6): Cycles, Dependency graph, Reachability, Two settings that decide whether the rules mean anything, What is deliberately not here, Why a second tool
 
 ### Community 155 - "Heap Retainer Analysis"
-Cohesion: 0.52
-Nodes (6): depth, main(), mb(), readHeader(), readInts(), streamArray()
+Cohesion: 0.15
+Nodes (12): Coverage gaps — verified against the current tree, Findings — status and corrected severity, P1 batches — spec-vs-test, per file audited, P-A — cross-repo differential (BE vs `boilerplate-vue-frontend`), P-B — tautology sweep, full suite, P-C — mutation-survivor prior for P2/P3 ordering, Test audit — correlated blind spots — what to do with the reports, The headline, stated honestly (+4 more)
 
 ### Community 156 - "Shipment Data Model"
 Cohesion: 0.15
 Nodes (12): Architecture, Configuration, How it's used, Image processing, Maintenance, No broker (fallback), Operational notes, Queue enabled (the normal path) (+4 more)
 
 ### Community 157 - "Payment Data Model"
-Cohesion: 0.43
-Nodes (5): applyPaymentTransform, PaymentDocument, PaymentModel, paymentSchema, paymentRepository
+Cohesion: 0.17
+Nodes (11): Boolean gates, Coordination, House rule, Sequencing, The distinction that decides each field, The one piece of real work: multipart, The rule, Verification (+3 more)
 
 ### Community 158 - "Audit Logging"
-Cohesion: 0.09
-Nodes (23): auditLogger, AuditAction, AuditActionMap, AuditEvent, AuditSink, CoreAuditAction, coreAuditActions, extractRequestContext() (+15 more)
+Cohesion: 0.06
+Nodes (32): AuditAction, createDeleteController(), DeleteControllerSpec, AuditActionMap, cartAuditActions, @infrastructure/observability/audit, AuditActionMap, feedbackAuditActions (+24 more)
 
 ### Community 159 - "Locale Namespace Validation"
 Cohesion: 0.38
@@ -1665,8 +1664,8 @@ Cohesion: 0.13
 Nodes (15): AsyncAPI is the async contract source of truth, AsyncAPI Workflow, CI enforcement, Commands used in this repo, Generated TypeScript types, How this complements OpenAPI, Naming convention, RabbitMQ queue channels (+7 more)
 
 ### Community 165 - "Heap Summary Reporting"
-Cohesion: 0.53
-Nodes (5): main(), mb(), readHeader(), streamArray(), topN
+Cohesion: 0.24
+Nodes (7): withoutWindow(), reservationRepository, listMovements(), releaseForOrder(), runReservationSweep(), withoutWindow(), withEnvironment()
 
 ### Community 167 - "CI Gate Coverage"
 Cohesion: 0.40
@@ -1681,16 +1680,16 @@ Cohesion: 0.13
 Nodes (15): A port does not have to be infrastructure, Adding a domain, And `domain/`, if the module has rules, Example from this repo, How to read a feature, Layer stack, inside one module, Layers, Observability in one paragraph (+7 more)
 
 ### Community 170 - "Service Namespace Validation"
-Cohesion: 0.24
-Nodes (8): makeWishlist(), WishlistFixture, applyWishlistTransform, WishlistDocument, WishlistItem, wishlistItemSchema, WishlistModel, wishlistSchema
+Cohesion: 0.22
+Nodes (9): makeWishlist(), WishlistFixture, applyWishlistTransform, WishlistDocument, WishlistItem, wishlistItemSchema, WishlistModel, wishlistSchema (+1 more)
 
 ### Community 171 - "Tier Boundary Validation"
-Cohesion: 0.18
-Nodes (10): 1. `unit-layer-is-framework-free.test.ts` (58 lines) → `unit-layer-stays-database-free`, 2. `auth-surface.test.ts`'s second `describe` (~30 lines) → `module-internals-are-private`, 3. `dependsOn` + `context-map.test.ts` (217 lines) → `MODULE_EDGES`, 4. Historical: two cross-cutting tests → `eslint/rules/` (before this audit), Deliberately hand-rolled, and right to be, Identified, not taken — and why, Reinventing the wheel: hand-rolled guards a standard tool already answers, Resolved: handed to the standard tool (+2 more)
+Cohesion: 0.20
+Nodes (10): A boot that refuses, Hardening — the small ones, Keeping this page true, Not mitigated, and why that is a decision, Revocation and session lifetime, Step-up authentication, The perimeter reviewed clean, Two-factor authentication (+2 more)
 
 ### Community 172 - "Unit Test Isolation"
-Cohesion: 0.36
-Nodes (8): installDemo(), runDemoSeed(), clearDemoOutbox(), DemoOutboxEmail, isDemoMode(), outbox, readDemoOutbox(), recordDemoEmail()
+Cohesion: 0.22
+Nodes (9): An order's life, Customers, Everything is written down, Hidden two different ways, Prices and delivery, The catalogue, The shop manager, The words we used (+1 more)
 
 ### Community 174 - "Favicon & Icon Assets"
 Cohesion: 0.40
@@ -1701,16 +1700,16 @@ Cohesion: 0.40
 Nodes (5): EmailJobPayload Schema, PdfJobPayload Schema, rabbitmqLocal Server, worker.email.send Channel, worker.pdf.generate Channel
 
 ### Community 176 - "Request Type Augmentation"
-Cohesion: 0.60
-Nodes (3): express-serve-static-core, Request, AuthContext
+Cohesion: 0.47
+Nodes (4): express-serve-static-core, Request, AuthContext, RFC-8176
 
 ### Community 177 - "Observability Payload Building"
 Cohesion: 0.50
 Nodes (4): HeartbeatEvent Message, MetricsSnapshotEvent Message, MetricsUpdatedEvent Message, ObservabilityMetricsPayload Schema
 
 ### Community 178 - "Auth Context Validation"
-Cohesion: 0.20
-Nodes (9): 1. `deepMerge` — `src/infrastructure/i18n/catalog.ts:109-122`, 2. `compact` — `src/infrastructure/persistence/factory.ts:51-52`, 3. `sanitizeStringArray` — `src/modules/products/service.ts:48-51`, 4. `buildMessageTree` and friends — `src/modules/locales/services/keys.ts:41-117`, 5. Minor duplicated one-liner: capitalize-first-letter, 6. Minor partial overlap: omit-by-key inside `applySerialization`, Lodash replacement candidates, Not found (+1 more)
+Cohesion: 0.22
+Nodes (9): Afterwards, Before buying, Checking out, Paying, The 30-minute hold, The customer, The journey, The words we used (+1 more)
 
 ### Community 179 - "Module Shape Validation"
 Cohesion: 0.13
@@ -1721,8 +1720,8 @@ Cohesion: 0.16
 Nodes (12): ALLOWED_ELSEWHERE, callSites(), EXPECTED_LAYER, label(), Layer, layerOf(), moduleFiles(), MODULES_ROOT (+4 more)
 
 ### Community 181 - "Index Pruning Migration"
-Cohesion: 0.25
-Nodes (18): localeMessageSchema, localeSchema, declaredIndexes(), defaultOf(), enumOf(), indexBehaviour(), indexName(), indexOptionSpecs() (+10 more)
+Cohesion: 0.17
+Nodes (20): down(), DROPS, up(), down(), declaredIndexes(), defaultOf(), enumOf(), indexBehaviour() (+12 more)
 
 ### Community 184 - "Mutation Testing System"
 Cohesion: 0.05
@@ -1749,12 +1748,16 @@ Cohesion: 0.67
 Nodes (3): Dependabot Configuration, Audit Job, CodeQL Workflow
 
 ### Community 192 - "Initial Index Migration"
-Cohesion: 0.13
-Nodes (15): 401 or 403, and why the guards agree, Auth architecture (current backend pattern), External references, Login → auth → refresh request flow, Main security tools, Related pages, Security, Security properties provided (+7 more)
+Cohesion: 0.12
+Nodes (16): 401 or 403, and why the guards agree, Auth architecture (current backend pattern), External references, Login → auth → refresh request flow, Main security tools, Related pages, Security, Security properties provided (+8 more)
 
 ### Community 200 - "Locale Collections Migration"
 Cohesion: 0.11
 Nodes (18): A combined coverage run was tried, and abandoned, Co-located module tests, Load testing, Mutation testing is the instrument; coverage is the proxy, Tests, `tests/cluster/` — more than one worker, `tests/contract/` and `tests/fuzz/`, `tests/cross-cutting/` — rules that hold across every module (+10 more)
+
+### Community 203 - "Order Shipping Cost Migration"
+Cohesion: 0.25
+Nodes (8): "I can't get in", "Is the shop down?", Languages, The contact form, The support desk, The words we used, What is pretend here, "Where is my order?"
 
 ### Community 209 - "Jest Test Configuration"
 Cohesion: 0.67
@@ -1773,8 +1776,8 @@ Cohesion: 0.67
 Nodes (3): POST /delivery/advance, GET /delivery/order/{orderId}, Shipment Schema
 
 ### Community 214 - "Controller Naming Conventions"
-Cohesion: 0.20
-Nodes (7): EmailRequest, DATA, isQueueEnabledMock, loggerMock, publishToQueueMock, REQUEST, sendMailMock
+Cohesion: 0.25
+Nodes (8): Clearing expired holds, Getting it out of the door, The one rule, The running-low list, The two things you do by hand, The warehouse, The words we used, Two numbers, not one
 
 ### Community 216 - "Password Hashing"
 Cohesion: 0.14
@@ -1796,25 +1799,29 @@ Nodes (13): A finding in the generator itself, Architecture, Commands, Contract-
 Cohesion: 0.15
 Nodes (13): App runtime, Choosing the engine, Container map, Container reference, Core data, Docker & Podman, How to think about the setup, Observability stack (+5 more)
 
+### Community 229 - "ESLint Base Config"
+Cohesion: 0.25
+Nodes (8): Check it worked, First run, Getting Started — Production, Observability in production, Putting a reverse proxy in front, Uploaded images do not outlive the container, What's different from dev, Where to go next
+
 ### Community 231 - "Prettier ESLint Integration"
-Cohesion: 0.27
-Nodes (8): isDuplicateKey(), applyCartTransform, CartDocument, CartItem, cartItemSchema, cartSchema, CartLineMode, upsertLine()
+Cohesion: 0.13
+Nodes (13): FactoryIdentity, AddressBookOverrides, CartFixture, CartOverrides, makeCart(), applyCartTransform, CartDocument, CartItem (+5 more)
 
 ### Community 232 - "ESLint Unicorn Rules"
-Cohesion: 0.17
-Nodes (12): Audit events, Configuration, External references, Redaction, Related pages, Retention, Two log streams, What an access log looks like (+4 more)
+Cohesion: 0.15
+Nodes (13): Audit events, Configuration, External references, Personal data, Redaction, Related pages, Retention, Two log streams (+5 more)
 
 ### Community 233 - "Rate Limiting"
 Cohesion: 0.29
 Nodes (5): resolveFrontendPath(), REPO_ROOT, skipSync, Step, STEPS
 
 ### Community 235 - "JS Toolkit Utilities"
-Cohesion: 0.31
-Nodes (8): checkOnly, nodeId(), PAGE, readEdges(), render(), ROOT, run(), SUBDOMAIN
+Cohesion: 0.20
+Nodes (15): applyTarget(), checkOnly, EventEdge, eventName(), nodeId(), PAGE, readEdges(), readEventEdges() (+7 more)
 
 ### Community 236 - "OpenAPI Test Collections"
-Cohesion: 0.25
-Nodes (7): Async and error handling, Changing a contract, Code layout, Commenting third-party / unowned code, Comments, Function design, TypeScript
+Cohesion: 0.22
+Nodes (8): Async and error handling, Changing a contract, Code layout, Commenting third-party / unowned code, Comments, Function design, Scope, TypeScript
 
 ### Community 256 - "JWT Token Handling"
 Cohesion: 0.18
@@ -1853,8 +1860,8 @@ Cohesion: 0.18
 Nodes (7): childEnvironment, concurrency, heapMb, passthrough, REPO_ROOT, strykerArguments, TEST_TMP_BASE
 
 ### Community 269 - "Semantic Conventions"
-Cohesion: 0.25
-Nodes (6): audit-logs, Related pages, The story, observability, Related pages, The story
+Cohesion: 0.40
+Nodes (5): audit-logs, Its neighbourhood, Related pages, The pipeline, The story
 
 ### Community 272 - "Headless Browser Automation"
 Cohesion: 0.20
@@ -1875,6 +1882,26 @@ Nodes (10): Admin API vs Grafana, External references, Find a request that broke
 ### Community 276 - "Schema Validation"
 Cohesion: 0.20
 Nodes (10): Configuration, External references, How logs and traces correlate, OpenTelemetry, OTel Collector config, Related pages, Trace flow (with OTel Collector), What is instrumented out of the box (+2 more)
+
+### Community 279 - "OpenAPI Linting"
+Cohesion: 0.29
+Nodes (7): Money and delivery, Opening it yourself, The demo shop, The two people in it, The whole shop on one picture, What the shop sells, Which page do you want
+
+### Community 284 - "EJS Types"
+Cohesion: 0.29
+Nodes (7): Breach runbook (Art. 33 — 72 hours), Data Protection, Deployer's checklist, Processing register (Art. 30), Sub-processor list, Subject-request runbook (Art. 15–21), What this page is not
+
+### Community 285 - "Express Types"
+Cohesion: 0.33
+Nodes (6): Its neighbourhood, Related pages, Soft delete vs. erasure, The pipeline, The story, users
+
+### Community 286 - "Multer Types"
+Cohesion: 0.40
+Nodes (5): SearchSpec, buildWhereFor(), FixtureDocument, identityTransform(), stubModel
+
+### Community 288 - "Nodemailer Types"
+Cohesion: 0.53
+Nodes (4): applyShipmentTransform, ShipmentDocument, ShipmentModel, shipmentSchema
 
 ### Community 290 - "TypeScript Parser"
 Cohesion: 0.20
@@ -1909,8 +1936,8 @@ Cohesion: 0.44
 Nodes (6): copy(), copy(), invalidUser, messagesFor(), loadBeforeI18n(), mergedResources()
 
 ### Community 320 - "Grafana Documentation"
-Cohesion: 0.25
-Nodes (8): CI, Images, Ops & Assets, Rendered templates, Served assets, The compose stack, The docs site itself, The observability stack
+Cohesion: 0.22
+Nodes (9): CI, Data retention, Images, Ops & Assets, Rendered templates, Served assets, The compose stack, The docs site itself (+1 more)
 
 ### Community 341 - "Observability Endpoints"
 Cohesion: 0.17
@@ -1953,8 +1980,8 @@ Cohesion: 0.29
 Nodes (7): Check it worked, Explore the API without writing a client, First run, Getting Started, Running on the host instead, The one command before you commit, Where to go next
 
 ### Community 363 - "Sessions"
-Cohesion: 0.29
-Nodes (7): Logout everywhere, Related pages, Sessions, The cookie, flag by flag, The resolver, installed at import time, Two tokens, two lifetimes, two homes, Why none of this is published
+Cohesion: 0.25
+Nodes (8): Logout everywhere, Refresh rotation, Related pages, Sessions, The cookie, flag by flag, The resolver, installed at import time, Two tokens, two lifetimes, two homes, Why none of this is published
 
 ### Community 364 - "Checkout"
 Cohesion: 0.29
@@ -1993,20 +2020,20 @@ Cohesion: 0.29
 Nodes (7): Before you commit, boilerplate-node-api-mongodb-mongoose, License, Start here, The map, What this is, Where things live
 
 ### Community 373 - "index.ts"
-Cohesion: 0.25
-Nodes (6): BODY, isQueueEnabledMock, jobFor(), publishToQueueMock, REQUEST, sendMailMock
+Cohesion: 0.50
+Nodes (3): { createHash }, hashToken(), up()
 
 ### Community 374 - "ignorePatterns"
-Cohesion: 0.48
-Nodes (5): invoiceDocument(), InvoiceOrder, orderConfirmEmail(), OrderLines, ORDER
+Cohesion: 0.40
+Nodes (5): account, Its neighbourhood, Related pages, The pipeline, The story
 
 ### Community 375 - "ignorePatterns"
-Cohesion: 0.60
-Nodes (3): ContactRequest, contactRequestEmail(), REQUEST
+Cohesion: 0.40
+Nodes (5): cart, Its neighbourhood, Related pages, The pipeline, The story
 
 ### Community 376 - "Five sections, five jobs"
-Cohesion: 0.33
-Nodes (6): [API](./api/), [Files](./reference/), Five sections, five jobs, [Modules](./modules/), [Theory](./theory/), [Tools](./tools/)
+Cohesion: 0.29
+Nodes (7): [API](./api/), [Demo Shop](./demo-ecommerce/), [Files](./reference/), [Modules](./modules/), Six sections, six jobs, [Theory](./theory/), [Tools](./tools/)
 
 ### Community 377 - "File Glossary"
 Cohesion: 0.33
@@ -2031,6 +2058,10 @@ Nodes (6): External references, How to think about runtime here, Main runtime to
 ### Community 382 - "Copilot instructions"
 Cohesion: 0.33
 Nodes (5): Change brain, Code brain, Copilot instructions, Docs brain, Mandatory pre-work checklist
+
+### Community 383 - "base-repository.test.ts"
+Cohesion: 0.40
+Nodes (5): delivery, Its neighbourhood, Related pages, The pipeline, The story
 
 ### Community 384 - "mutate"
 Cohesion: 0.50
@@ -2064,25 +2095,61 @@ Nodes (3): Claude Code — resume checkpoint, Plan (from TodoWrite state), To re
 Cohesion: 0.50
 Nodes (4): Read by intent, Tool map, Tools, Why this section is bigger now
 
+### Community 393 - "thresholds"
+Cohesion: 0.40
+Nodes (5): feedback, Its neighbourhood, Related pages, The pipeline, The story
+
+### Community 396 - "amqplib"
+Cohesion: 0.40
+Nodes (5): inventory, Its neighbourhood, Related pages, The pipeline, The story
+
+### Community 401 - "jest"
+Cohesion: 0.40
+Nodes (5): Its neighbourhood, locales, Related pages, The pipeline, The story
+
+### Community 409 - "@types/amqplib"
+Cohesion: 0.40
+Nodes (5): Its neighbourhood, observability, Related pages, The pipeline, The story
+
+### Community 413 - "@types/jsonwebtoken"
+Cohesion: 0.40
+Nodes (5): Its neighbourhood, orders, Related pages, The pipeline, The story
+
+### Community 414 - "@types/supertest"
+Cohesion: 0.40
+Nodes (5): Its neighbourhood, payments, Related pages, The pipeline, The story
+
+### Community 415 - "vitepress"
+Cohesion: 0.40
+Nodes (5): Its neighbourhood, products, Related pages, The pipeline, The story
+
+### Community 503 - "Cache Identity Sharing (keyAs)"
+Cohesion: 0.40
+Nodes (5): Its neighbourhood, Related pages, The pipeline, The story, wishlist
+
+### Community 504 - "cart/services/items.ts (shared product validation)"
+Cohesion: 0.50
+Nodes (4): ServiceResult, extractAndValidateId(), ResponseErrorItem, RemoveResult
+
 ## Knowledge Gaps
-- **2491 isolated node(s):** `umami-init.sh script`, `husky.sh script`, `reset`, `ORDER_ITEM_ELEMENT`, `DROPS` (+2486 more)
+- **2655 isolated node(s):** `umami-init.sh script`, `husky.sh script`, `reset`, `ORDER_ITEM_ELEMENT`, `DROPS` (+2650 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **780 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **763 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `dependencies` connect `Instrumentation Dependencies` to `winston`, `zod`, `Locale Context Middleware`, `Email Sending`, `OpenTelemetry API`, `PostHog Analytics`, `Prometheus Metrics`, `redis`, `@opentelemetry/instrumentation-redis`, `@opentelemetry/instrumentation-http`, `Environment Variable Loading`, `Deployment & CI Config`, `bcrypt`, `cookie-parser`, `cors`, `ejs`, `@guebbit/openapi-runnable-collections`, `Security Headers`, `jsonwebtoken`, `mongodb`, `mongoose`, `multer`, `@opentelemetry/exporter-trace-otlp-http`, `@opentelemetry/instrumentation-express`, `@opentelemetry/instrumentation-mongoose`, `@opentelemetry/sdk-node`, `puppeteer-core`, `rate-limit-redis`, `i18n Internationalization`, `sharp`, `tsx`?**
-  _High betweenness centrality (0.060) - this node is a cross-community bridge._
-- **Why does `express` connect `Locale Context Middleware` to `Metrics & Telemetry`, `Error Handling & Tracing`, `Instrumentation Dependencies`, `Unit Test Isolation`?**
-  _High betweenness centrality (0.056) - this node is a cross-community bridge._
-- **Why does `devDependencies` connect `Dev Tool Dependencies` to `Dependency Update Checking`, `@asyncapi/cli`, `autocannon`, `cross-env`, `eslint-config-prettier`, `jest`, `mermaid`, `migrate-mongo`, `Code Formatting`, `OpenAPI Documentation`, `OpenAPI Linting`, `@stoplight/spectral-rulesets`, `Mutation Testing`, `Mutation Testing Configuration`, `HTTP Integration Testing`, `SWC Compiler`, `@swc/jest`, `ts-jest`, `@types/amqplib`, `@types/bcrypt`, `Cookie Parser Types`, `@types/cors`, `EJS Types`, `Express Types`, `@types/jest`, `@types/jsonwebtoken`, `Multer Types`, `Node.js Types`, `Nodemailer Types`, `@types/supertest`, `vitepress`, `Mermaid Diagram Plugin`, `TypeScript ESLint`, `Contract Bundle Generation`, `Docker & Podman Documentation`, `Commit Message Linting`, `Dependency Analysis`, `TypeScript Import Resolution`, `ESLint Base Config`, `Module Boundary Enforcement`, `Deployment & CI Config`, `Global Variables Config`, `OpenAPI Test Integration`, `TypeScript Runtime Loader`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `dependencies` connect `Instrumentation Dependencies` to `Source Ranking Rule (params > query > body)`, `winston`, `wishlist/probes.ts (rejection requests)`, `x-alias-of Annotation`, `zod`, `Email Sending`, `puppeteer-core`, `OpenTelemetry API`, `PostHog Analytics`, `Prometheus Metrics`, `@opentelemetry/instrumentation-redis`, `Response Normalization`, `Environment Variable Loading`, `Deployment & CI Config`, `Security Headers`, `cookie-parser`, `cors`, `ejs`, `jsonwebtoken`, `mongodb`, `mongoose`, `multer`, `@opentelemetry/exporter-trace-otlp-http`, `@opentelemetry/instrumentation-express`, `@opentelemetry/instrumentation-http`, `@opentelemetry/instrumentation-mongoose`, `@opentelemetry/sdk-node`, `hardDelete OR Rule (anyTrue)`, `rate-limit-redis`, `i18n Internationalization`, `sharp`, `tsx`?**
+  _High betweenness centrality (0.058) - this node is a cross-community bridge._
+- **Why does `express` connect `Response Normalization` to `Metrics & Telemetry`, `Error Handling & Tracing`, `Instrumentation Dependencies`, `Demo Email Outbox`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **Why does `devDependencies` connect `Dev Tool Dependencies` to `POST /x/search Trigger Rule (~8 filters threshold)`, `@typescript-eslint/parser`, `readInput (src/infrastructure/http/request.ts)`, `Dependency Update Checking`, `setCache Middleware`, `@asyncapi/cli`, `autocannon`, `cross-env`, `eslint-config-prettier`, `redis`, `mermaid`, `migrate-mongo`, `Code Formatting`, `OpenAPI Documentation`, `@stoplight/spectral-rulesets`, `Mutation Testing`, `HTTP Integration Testing`, `SWC Compiler`, `@swc/jest`, `ts-jest`, `@types/bcrypt`, `Cookie Parser Types`, `@types/cors`, `@types/jest`, `Node.js Types`, `TypeScript ESLint`, `Mermaid Diagram Plugin`, `Contract Bundle Generation`, `Docker & Podman Documentation`, `Commit Message Linting`, `Dependency Analysis`, `TypeScript Import Resolution`, `Module Boundary Enforcement`, `Deployment & CI Config`, `Global Variables Config`, `bcrypt`, `@guebbit/openapi-runnable-collections`, `products/routes.ts (mount order reference)`, `Read vs Write Disposition (fail-closed vs 422)`, `OpenAPI Test Integration`, `TypeScript Runtime Loader`?**
+  _High betweenness centrality (0.029) - this node is a cross-community bridge._
 - **What connects `umami-init.sh script`, `husky.sh script`, `reset` to the rest of the system?**
-  _2491 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _2655 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Mutation Testing Resource Limits` be split into smaller, more focused modules?**
-  _Cohesion score 0.12091038406827881 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09131205673758866 - nodes in this community are weakly interconnected._
 - **Should `Build & Benchmark Scripts` be split into smaller, more focused modules?**
-  _Cohesion score 0.025 - nodes in this community are weakly interconnected._
-- **Should `Request Body Parsing` be split into smaller, more focused modules?**
-  _Cohesion score 0.06654567453115548 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.024390243902439025 - nodes in this community are weakly interconnected._
+- **Should `Strategic DDD Concepts` be split into smaller, more focused modules?**
+  _Cohesion score 0.07918367346938776 - nodes in this community are weakly interconnected._

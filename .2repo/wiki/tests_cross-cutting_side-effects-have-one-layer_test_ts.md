@@ -2,29 +2,31 @@
 
 ## Purpose
 
-Enforces the architectural rule that the four domain side effects (`enqueueEmail`, `emitAuditEvent`, `emitAnalyticsEvent`, `emitDomainEvent`) are each published from exactly one layer (the service layer), with any departure explicitly justified in a named allowlist. It exists because a per-file lint rule cannot see the *set* of files calling the same function; this test sweeps the whole module tree and asserts the set conforms to a declared intention.
+A structural (cross-cutting) test that enforces a single architectural invariant across all modules: each of the four tracked side effects (`enqueueEmail`, `emitAuditEvent`, `emitAnalyticsEvent`, `emitDomainEvent`) must be called from exactly one designated layer (the service layer), unless an explicit, sentence-length justification is recorded. It exists because no per-file lint rule can see the *set* of call sites across fourteen+ files, so a test that reads the tree is the only enforcement mechanism.
 
 ## Key elements
 
-- **`moduleFiles()`** — recursively walks `src/modules`, returning every `.ts` file while skipping `tests/` directories.
-- **`layerOf(file)`** — classifies a file into a `Layer` (`controller`, `service`, `repository`, `model`, `routes`, `domain`, `other`) based solely on its relative path; treats `services/` folder and bare `service.ts` as the same layer.
-- **`EXPECTED_LAYER`** — the authoritative map of marker → intended layer; all four markers are pinned to `'service'`. Written as intention, not derived from current code.
-- **`ALLOWED_ELSEWHERE`** — keyed `'<marker> @ <module>/<path>'` → one-sentence reason. Three entries, all in `account/controllers/`, justified by the security constraint that a failed/unknown-user request never reaches a service.
-- **`callSites()`** — regex-scans every module file (comments stripped) for invocation-pattern calls (`marker(`) and returns a `Map<marker, {file, layer}[]>`.
-- **Test 1 (canary)** — asserts the sweep finds at least one call site per marker, so a regex breakage fails loudly rather than producing a vacuous pass.
-- **Test 2 (core assertion)** — collects "strays" (call sites whose layer ≠ expected and not in the allowlist) and expects none.
-- **Test 3 (reason quality)** — every allowlist entry must be ≥ 12 words, preventing a bare "N/A" excuse.
-- **Test 4 (stale exceptions)** — every allowlist entry must still correspond to a live call site; dead entries fail.
-- **Test 5 (table integrity)** — validates that `EXPECTED_LAYER` values are members of the `Layer` union, catching typos that would silently govern nothing.
+- **`moduleFiles()`** — Walks `src/modules/` and returns every `.ts` file, skipping `tests/` subdirectories (specs emit freely and are out of scope).
+- **`layerOf(file)`** — Classifies a file into one of seven layers (`controller`, `service`, `repository`, `model`, `routes`, `domain`, `other`) purely from its path. Treats `services/` folder and bare `service.ts` as the same layer.
+- **`label(file)`** — Produces the `<module>/<path>` string used in failure messages and allowlist keys.
+- **`EXPECTED_LAYER`** — A `Readonly<Record<string, Layer>>` mapping each side-effect marker to `'service'`. Written as intention, not derived from current code.
+- **`ALLOWED_ELSEWHERE`** — `Readonly<Record<string, string>>` of documented exceptions, keyed `"<marker> @ <module>/<path>"`, each carrying a human-readable reason. Three entries exist (two for `login-observability.ts`, one for `post-reset-request.ts`).
+- **`callSites()`** — Scans every module file's source for a call-site regex (`(?<![\w.])marker\s*\(`) after stripping block and line comments, returning a `Map<marker, {file, layer}[]>`.
+- **`describe` block (5 tests)**:
+  1. *Canary* — asserts the sweep actually found call sites (guards against a silent no-op).
+  2. *Core assertion* — no call site sits in a layer ≠ `EXPECTED_LAYER` unless covered by `ALLOWED_ELSEWHERE`.
+  3. *Exception quality* — every reason in `ALLOWED_ELSEWHERE` must be ≥ 12 words.
+  4. *Stale-exception check* — every allowlist key must still correspond to a live call site.
+  5. *Table sanity* — every layer value in `EXPECTED_LAYER` must be a known `Layer` literal.
 
 ## Relationships
 
-Neither graph neighbor is imported or referenced in this file. The relationship is indirect: both `scripts/contracts/asyncapi-bundles.ts` and `tests/unit/db/seed-fixtures.test.ts` operate within the same `src/modules` tree that this test sweeps, so structural changes to module layout (e.g., renaming `services/` → `service/`) would affect all three.
+No direct import, call, or data dependency on either graph neighbor is visible in this file. The test is self-contained: it reads the filesystem under `src/modules/` at runtime and has no imports from project source.
 
 ## Notes
 
-- The regex in `callSites()` deliberately matches the *call* (`marker(`) after stripping block and line comments, so a docblock mentioning the name is not counted. This is intentional to prevent "rewording comments to pass the test."
-- `ALLOWED_ELSEWHERE` is keyed per-marker-and-file, not per-file, so an exception for `emitAuditEvent` in one controller does not silently cover `enqueueEmail` in the same file.
-- The `tests/` subdirectory under each module is excluded from the sweep because spec files may legitimately invoke these functions to assert behavior.
-- The module root is resolved relative to `__dirname` (`../../src/modules`), so the test must live two levels below `src/`.
-- The canary test (Test 1) runs before the core assertion; without it a silent regex failure would make Test 2 pass with zero call sites found.
+- The regex in `callSites()` deliberately matches the *call* (`marker(`) rather than the import, and comments are stripped first — a docblock mentioning `emitAuditEvent` will not be flagged.
+- `ALLOWED_ELSEWHERE` is keyed per-marker-and-file, so an exception for `emitAuditEvent` does not implicitly permit `enqueueEmail` in the same file.
+- The test is intentionally **not** a "no controller may emit" blanket rule; the three documented exceptions in `session/login-observability.ts` and `post-reset-request.ts` are kept because the security argument (user enumeration, session-existence timing) cannot be satisfied from a service that is only reached after a user is found.
+- `EXPECTED_LAYER` is hard-coded as intention. A test that re-derives the expected layer from the current tree would pass forever and prevent nothing.
+- The walk skips `tests/` directories at any depth, so spec files that intentionally trigger an emit are never swept.

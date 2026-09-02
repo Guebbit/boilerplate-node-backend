@@ -2,25 +2,31 @@
 
 ## Purpose
 
-Defines the users module's slice of the demo dataset: two seeded accounts (one admin, one customer) that other modules and routes reference during development. Provides the fixtures, the seed routine, and a read-back export used by the demo-dataset publishing script.
+Defines the user-directory slice of the demo seed dataset: two login-capable accounts (`root` admin, `ginopinoshow` customer) plus ten filler customers that give `cart/demo.ts` and `orders/demo.ts` varied shoppers. Exposes the fixtures, a collection seeder, and a read-back export used by the demo-data tooling.
 
 ## Key elements
 
-- **`userFixtures`** — Array of two user objects built via `makeUser` (`./fixtures`): `root` (admin, `verified: true`) and `ginopinoshow` (customer). IDs, emails, and passwords are pulled from `@kernel/seed-accounts` so other modules can reference the same identities.
-- **`seedUsersCollection()`** — Upserts every entry in `userFixtures` through `userRepository` using `upsertById` from `@infrastructure/persistence/seed`. Declared in `module.ts`; invoked by `db/demo/index.ts`.
-- **`exportSeededUsers()`** — Reads the seeded user collection back via `exportCollection(userModel, { _id: 1 })`. Returns only IDs; passwords are intentionally excluded and published separately from `@kernel/seed-accounts`.
+- **`demoCustomerId(index)`** — deterministic hex ID generator (prefix `67f0c2`); avoids time-based `ObjectId` so `db:seed` upserts are idempotent.
+- **`SEED_CUSTOMER_IDS`** — `as const` object mapping ten names (`amelia`…`isla`) to their IDs. Imported by `cart/demo.ts` and `orders/demo.ts` instead of raw hex strings.
+- **`SEED_CUSTOMER_EMAILS`** — derived email per customer (`{username}@example.com`); exported so other modules can address orders without reconstructing the username.
+- **`userFixtures`** — the full array (2 named + 10 filler) of user documents built via `makeUser`, ready for upsert.
+- **`seedUsersCollection()`** — upserts every fixture through `userRepository`; declared in `module.ts`, invoked by `db/demo/index.ts`.
+- **`exportSeededUsers()`** — reads the `users` collection (projecting only `_id`) via `exportCollection`; password is intentionally absent from the output.
 
 ## Relationships
 
-- **`src/kernel/seed-accounts.ts`** — Source of the six `SEED_*` constants (IDs, emails, passwords). This file and other modules (cart, etc.) share these constants to reference the same two identities.
-- **`src/modules/users/fixtures.ts`** — Supplies the `makeUser` factory that shapes each fixture object.
-- **`src/modules/users/model.ts`** — Supplies `userModel`, used by `exportSeededUsers` to query the raw collection.
-- **`src/modules/users/repository.ts`** — Supplies `userRepository`, the upsert target in `seedUsersCollection`.
-- **`src/infrastructure/persistence/seed.ts`** — Provides the `upsertById`, `exportCollection` primitives and the `SeedOutcome` type.
-- **`src/modules/users/module.ts`** — Registers/declares this module's seed function in the broader demo-orchestration flow.
+- **`@kernel/seed-accounts`** — sole source of the two named accounts' IDs, emails, and passwords; no other module's seed rows depend on the ten fillers.
+- **`./fixtures` (`makeUser`)** — constructs user documents with schema defaults (including `verified: false`, which this file overrides to `true`).
+- **`./model` (`userModel`)** — Mongoose model used by `exportSeededUsers` for the read-back projection.
+- **`./repository` (`userRepository`)** — the upsert target for `seedUsersCollection`.
+- **`@infrastructure/persistence/seed`** — provides `upsertById`, `SeedOutcome`, and `exportCollection` utilities.
+- **`./demo-images.generated.json`** — static avatar image data; the ten fillers alternate between the `root` and `ginopinoshow` image sets by index parity.
+- **`../cart/demo.ts` / `../orders/demo.ts`** — consumers of `SEED_CUSTOMER_IDS` and `SEED_CUSTOMER_EMAILS`; the seven customers through `priya` receive one small order and no cart row, while `marcus`, `harper`, `isla` receive a fuller cart and two orders.
+- **`./module.ts`** — declares `seedUsersCollection` in the module's seed manifest so `db/demo/index.ts` can call it.
 
 ## Notes
 
-- `verified` is explicitly set to `true` on both fixtures, overriding the schema default of `false`. The default is correct for self-signup (unverified email) but wrong for seed accounts that must be immediately loggable.
-- Passwords never appear in `exportSeededUsers` output. The projection is `{ _id: 1 }`. Credentials are published out-of-band by `scripts/export-demo-dataset.ts` reading directly from `@kernel/seed-accounts`.
-- Cart-line fixtures for these two users live in `src/modules/cart/demo.ts`, not here.
+- **Deterministic IDs are load-bearing.** The `67f0c2` prefix is distinct from the products demo-catalog prefix so the two ID spaces can never collide. Replacing `demoCustomerId` with `new Types.ObjectId()` would break idempotent reseeding.
+- **`verified: true` is intentional.** The schema default (`false`) models "awaiting email verification"; seed accounts exist to be logged into, so the flag is overridden for all twelve users.
+- **The ten fillers have no credentials in `@kernel/seed-accounts`.** They use `makeUser`'s internal password default and are never meant to be logged into. Credentials for `root`/`ginopinoshow` are published separately by `scripts/export-demo-dataset.ts`.
+- **Image assignment is positional, not semantic.** Even-indexed fillers get `userImages.root`; odd-indexed get `userImages.ginopinoshow`. There is no per-user image mapping.

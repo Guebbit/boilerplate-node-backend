@@ -2,30 +2,33 @@
 
 ## Purpose
 
-Defines the **module manifest type** (`AppModule`) and the two runtime entry points (`registerModules`, `resolveImageTargets`) that turn the explicit list in `src/modules.ts` into a wired-up application. It is the single place where the shape of a module is enforced at the type level, so enabling a domain is a one-line edit to the list rather than a filesystem discovery step.
+Defines the `AppModule` manifest type and the boot-time registration functions that turn the static list in `src/modules.ts` into a running application. It is the single place where the app tier learns what each module needs (routes, subscriptions, seeds, image writebacks, required env vars) without importing any individual module, keeping the kernel free of `src/modules/*` dependencies.
 
 ## Key elements
 
-- **`DemoShape`** (`'response' | 'stored'`) — classifies whether a seeded collection is served verbatim by the API or only stored internally.
-- **`DemoExport`** — discriminated union requiring `seedExport` *and* `demoShapes` together (or neither). Forces every exported collection to be labelled at the manifest, preventing an unclassified row from leaking into a sibling repo.
-- **`ImageTarget`** — the writeback contract a module registers so the image-digest worker can persist `imageUrl`/`thumbnailUrl` onto a document without importing the module's repository. The `writeback` call is guarded by a `pendingImageKey` match to make stale/duplicate deliveries no-ops.
-- **`AppModule`** — the full manifest: `name`, optional `basePath`, `routes`, `subscribe`, `locales` (a directory path, not loaded dicts), `seeds`, `imageTargets`, plus the `DemoExport` intersection.
-- **`resolveImageTargets(appModules)`** — flattens every module's `imageTargets` into a single `Record<string, ImageTarget | undefined>` for the worker. Takes the list as a parameter (does not import `enabledModules`) to keep this file free of `src/modules/*` imports.
-- **`registerModules(appModules)`** — iterates the list and calls each module's `subscribe?.()`. Called once at boot, after all modules are known, so any handler may reference a sibling.
+- **`AppModule`** — The manifest type every module exports. Fields include `name`, optional `basePath`/`routes`, `subscribe`, `locales`, `seeds`, `imageTargets`, `requiredConfig`, and the `DemoExport` union (`seedExport` + `demoShapes` or neither).
+- **`RequiredConfig`** — `{ key, minLength, placeholder }` describing one mandatory env var a module declares.
+- **`ImageTarget`** — `{ writeback(documentId, key, urls) → Promise<boolean> }`; the module-provided callback the image worker uses to persist digested URLs without importing the module's repository.
+- **`DemoShape`** / **`DemoExport`** — Classify each seeded collection as `'response'` (API-servable) or `'stored'` (internal-only); union type makes omitting one without the other a compile error.
+- **`resolveImageTargets(appModules)`** — Flattens all modules' `imageTargets` into a single `Record<string, ImageTarget | undefined>` for the worker's resolver.
+- **`registerModules(appModules)`** — Calls `assertRequiredConfig` then invokes each module's `subscribe()`. Must run before any route is mounted.
+- **`assertRequiredConfig`** (module-private) — Collects every offending env var across all modules and throws once, listing all failures. Skipped when `NODE_ENV=test` or `isDemoMode()`.
 
 ## Relationships
 
-- **`src/modules.ts`** — produces the `AppModule[]` list that is passed to `registerModules` and `resolveImageTargets`. This file does *not* import it.
-- **`src/app.ts`** — calls `registerModules` during boot and reads each module's `locales` path to pass to `registerLocaleDirectories` before `i18next.init()`.
-- **`src/app/workers.ts`** — calls `resolveImageTargets` once and hands the resulting lookup to `infrastructure/adapters/image.worker.ts` as a plain resolver.
-- **`src/infrastructure/persistence/seed.ts`** — provides the `SeedOutcome` type used by the `seeds` field.
-- **Module files** (`account`, `audit-logs`, `cart`, `delivery`, `feedback`, `inventory`, `locales`) — each exports an object conforming to `AppModule`; they are listed in `src/modules.ts` but never imported by this file.
-- **`db/demo/assemble.ts`** — walks `enabledModules` and calls each module's `seedExport`.
+- **`src/modules.ts`** — Exports the `enabledModules` array; the only caller of `registerModules` and `resolveImageTargets`.
+- **`src/app.ts`** — Calls `registerModules` at boot and reads each module's `locales` path before `i18next.init()`.
+- **`src/app/workers.ts`** — Calls `resolveImageTargets(enabledModules)` once and passes the resulting lookup to `infrastructure/adapters/image.worker.ts`.
+- **`src/infrastructure/adapters/demo-outbox.ts`** — Provides `isDemoMode()`, consumed by `assertRequiredConfig` to skip validation in the demo profile.
+- **`src/infrastructure/persistence/seed.ts`** — Provides the `SeedOutcome` type used in `AppModule.seeds`.
+- **`src/modules/*/module.ts`** (account, audit-logs, cart, delivery, feedback, …) — Each exports an object conforming to `AppModule`; none are imported here.
+- **`db/demo/assemble.ts`** / **`scripts/export-demo-dataset.ts`** (referenced in docblocks) — Consume `seeds` and `seedExport` respectively; not imported by this file.
+- **`src/modules/cart/tests/…`**, **`src/modules/delivery/tests/…`** — Integration tests that exercise modules registered through this manifest.
 
 ## Notes
 
-- **No `src/modules/*` imports, by design.** The constraint exists so `infrastructure/adapters/image.worker.ts` (which needs `resolveImageTargets` but must not import a module directly) can depend on this file without creating a cycle. If you add a helper here, do not reach into a module.
-- **`resolveImageTargets` return type is `ImageTarget | undefined`**, stated explicitly because `noUncheckedIndexedAccess` is off project-wide; without the annotation an unregistered `collection` string would type-check as always present.
-- **`seedExport` must read rows back through the model's `toJSON`**, not return the fixtures it wrote. Returning fixtures would publish a guess labelled as truth in the downstream demo dataset.
-- **`demoShapes` is stated, not derived.** A structural matcher could mislabel a `stored` collection as `response` (e.g. `locales`), so the classification is an explicit per-collection map.
-- **`subscribe` is separate from route mounting.** A domain-event handler may fire for an event emitted by a sibling mid-request, so all subscriptions must be registered before the first route is reachable.
+- This file must never import from `src/modules/*`. The entire design (passing `appModules` as a parameter to every function) exists to preserve that boundary so `image.worker.ts` can depend on the registry without creating an import cycle.
+- `subscribe` is called *after* all modules are known, so a handler can reference a sibling's events; calling it inline during module import would not be safe.
+- `assertRequiredConfig` throws once with all failures rather than failing on the first one, to avoid N restart cycles for N mistakes.
+- `resolveImageTargets` annotates the return value with `| undefined` explicitly because `noUncheckedIndexedAccess` is off project-wide; without it, an unregistered `collection` key would type-check as always present.
+- `DemoExport` is a strict union (both fields or neither), not an optional-pair object, so a module that seeds data must also classify every collection it returns.

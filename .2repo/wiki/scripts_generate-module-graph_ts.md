@@ -2,25 +2,29 @@
 
 ## Purpose
 
-Generates the Mermaid dependency diagram and the adjacent module table inside `docs/modules/index.md` from the live import graph (via `dependency-cruiser`), replacing a previously hand-drawn diagram that silently went stale. Supports a `--check` mode that exits non-zero when the page has diverged, for use in CI (`complete`).
+Generates the module dependency diagram in `docs/modules/index.md` and a per-module neighbourhood diagram on each module's page, replacing hand-drawn mermaid blocks with graphs derived from actual `dependency-cruiser` output and `onDomainEvent` subscriptions. It exists so the published architecture diagram can never silently drift from the code: run with `--check` (as part of `complete`) it fails when the generated blocks no longer match reality.
 
 ## Key elements
 
-- **`SUBDOMAIN`** – Readonly `Record` mapping each of the 13 module names to its strategic-DDD tier (`core` / `supporting` / `generic`). Drives node colour in the diagram.
-- **`readEdges()`** – Invokes `npx depcruise` with `--collapse`, `--exclude /tests/`, and `--include-only ^src/modules/`, then regex-parses the Mermaid output to return a sorted `[from, to][]` list. Edges touching `modules.ts` are dropped.
-- **`nodeId(name)`** – Replaces hyphens with underscores so names like `audit-logs` are valid Mermaid identifiers.
-- **`render(edges)`** – Builds the full replacement block: a `flowchart TD` with classDef colours, plus a Markdown table listing "Reaches / Reached by" per module, sorted by connection weight.
-- **`run()`** – Reads `docs/modules/index.md`, locates the `<!-- module-graph:start -->` / `<!-- module-graph:end -->` markers, splices in the generated block, formats the *entire* page with Prettier, then either compares (check mode) or writes the file back.
-- **`checkOnly`** – Set when `--check` appears in `process.argv`; gates whether the script writes or merely reports.
+- **`SUBDOMAIN`** — `Record<string, 'core' | 'supporting' | 'generic'>` mapping each of the 13 modules to its DDD subdomain; drives node colouring in both diagrams.
+- **`readEdges()`** — shells out to `npx depcruise` with `--collapse` to one node per module, `--exclude /tests/`, and mermaid output; parses the result into a sorted `[from, to]` edge list. Filters out `modules.ts` (the registry) as a node.
+- **`readEventEdges()`** — scans each module's `module.ts` for `onDomainEvent(CONST, …)` calls, resolves the owning module via barrel imports, and resolves the wire event name via `eventName()`. Returns `EventEdge[]` (owner → subscriber with event name).
+- **`render(edges)`** — produces the full index-page block: a top-down mermaid flowchart plus a "Reaches / Reached by" table sorted by degree.
+- **`renderNeighbourhood(name, edges, events)`** — produces a single-module left-right mermaid diagram with solid arrows (imports) and dotted arrows (events). Returns a prose placeholder when the module has zero neighbours.
+- **`applyTarget(target)`** — splices a generated block between the `<!-- module-graph:start/end -->` markers in a page file, formats the whole file with Prettier, then either writes it back or reports drift (in `--check` mode).
+- **`nodeId(name)`** — replaces hyphens with underscores so module names like `audit-logs` are valid mermaid identifiers.
+- **`eventName(owner, constant)`** — reads `src/modules/<owner>/events.ts` to map a TS constant back to its string wire name.
+- **`checkOnly`** — set when `--check` is in `process.argv`; causes `applyTarget` to report drift and exit 1 instead of writing.
 
 ## Relationships
 
-No graph neighbors are registered in the dependency graph. At runtime the script reads `docs/modules/index.md`, reads `.dependency-cruiser.cjs` (passed to `depcruise`), and shells out to `npx depcruise` over `src/modules/`. It references `src/modules.ts` and `eslint.config.ts` only in comments to explain filtering choices.
+No graph-neighbor files are recorded. The script is a leaf: it imports only Node built-ins (`child_process`, `fs`, `path`) and `prettier`, and invokes `depcruise` as a subprocess. Its output is consumed by the static markdown pages under `docs/modules/`.
 
 ## Notes
 
-- **Prettier is applied to the whole page, not just the block.** This prevents a conflict where `prettier --check` (also run over `docs/` in `complete`) would demand different bytes than the script wrote, undoing each other.
-- **`--exclude /tests/` is load-bearing.** Without it the sweep reports 38 edges instead of 19 and describes the test suite rather than the architecture.
-- **`modules.ts` is intentionally excluded from edges.** It imports every manifest by definition, which would draw a star that hides the real domain-to-domain shape.
-- **`SUBDOMAIN` must stay in sync with `docs/theory/strategic-ddd.md`.** It is the single source of truth for node colour; adding a new module without a tier entry will leave it uncoloured (no `class` assignment) but it will still appear in the table.
-- **Markers are mandatory.** If either `<!-- module-graph:start -->` or `<!-- module-graph:end -->` is missing, the script exits 1 with an error and writes nothing.
+- The generated block is always run through Prettier *before* comparison or write, because `prettier --check` also covers `docs/` in the `complete` gate; skipping this step makes the two checks demand different bytes from the same file.
+- `src/modules.ts` is deliberately excluded from the graph: it imports every manifest by definition, so its 13 edges would draw a star over the real topology.
+- Test files (`/tests/`) are excluded so the diagram describes the architecture rather than the test suite (19 real edges vs. 38 with tests included).
+- Event edges are the *reverse* of the import direction: a subscriber imports the event constant from the owner's barrel, so the import points at the owner while the message flows owner → subscriber. `readEventEdges` corrects this.
+- A module listening to its own events is skipped (local concern, not a cross-module edge).
+- The index diagram is imports-only; only the per-module neighbourhood diagrams add dotted event arrows.

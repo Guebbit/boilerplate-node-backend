@@ -2,29 +2,31 @@
 
 ## Purpose
 
-Documents the payments module, which owns an order's money behind a provider port. The intent freezes an order's total; the confirm moves the order to `paid` and commits the inventory hold into a sale. It also handles the refund path triggered by `order.cancelled`.
+Owns the monetary side of an order: creating a payment intent that freezes the total, and confirming the payment that moves the order to `paid` and commits held inventory. All provider-specific logic sits behind a port, so the rest of the system is processor-agnostic.
 
 ## Key elements
 
-- **Payment intent** — freezes an order's total amount; one intent per order (enforced by `unique: true` on `orderId`).
-- **Confirm path** — the single moment a held inventory unit becomes a committed sale; moves order status to `paid` and commits held units directly (no event-announce-and-hope pattern).
-- **Refund path** — responds to the `order.cancelled` event from the orders module; releases stock *and* returns money (unlike a bare cancellation).
-- **Provider port** — the processor sits behind an interface under `providers/`; a fake implementation ships by default so the checkout-to-paid path runs in tests and the demo profile without a sandbox account.
-- **User resolution** — the order's `userId` is resolved against the account record so the payer id on a payment document is queryable; an unresolvable payer is logged, not refused.
+- **Create intent** — freezes the order's total; `unique: true` on `orderId` enforces one payment per order at the database level (double-charge guard).
+- **Confirm** — the single critical path: calls the provider port, transitions the order to `paid` (via `orders`), and commits the held units (via `inventory`). On provider decline the order stays pending and units remain held.
+- **Refund handler** — listens for the `order.cancelled` domain event from `orders` and issues a refund if one was due.
+- **Provider port** — an interface with a deliberately fake default implementation; swapping in a real processor (e.g. Stripe) is one file behind that interface. Nothing above `providers/` knows which is wired.
+- **`userId` resolution** — resolves the order's `userId` against the `users` account record so the payer id on a payment document is queryable later. An unresolvable payer is logged, not refused.
 
 ## Relationships
 
-- **orders** — a payment is *about* an order. Orders announces `order.cancelled`; payments answers with the refund. The confirm path writes the order's status to `paid` and commits the order's held units.
-- **inventory** — the confirm path commits the order's held units from inventory. Without this module, no hold ever becomes a sale and every reservation sits until its window expires.
-- **inventory-reservations** — the hold that payments commits originates in the reservation lifecycle; payments is the terminal consumer of that hold.
-- **users** — the `userId` on the order is resolved against the account record (groundwork for future "everything this account has paid" queries). No current feature is gated on this.
-- **payments-provider-port** — defines the processor interface and the fake implementation that payments sits behind.
-- **index.md** — lists this module as a top-level domain module.
+- **`orders`** (import + event): payments moves an order to `paid` on confirm; `orders` emits `order.cancelled` which payments answers with a refund.
+- **`inventory`** (import): confirm commits the held units; without this step holds expire without ever becoming sales.
+- **`users`** (import + event): payments resolves the payer against the account record; `users` emits `user.deleted` that payments must handle.
+- **`payments-provider-port`**: the interface and fake implementation that this module calls during confirm.
+- **`inventory-reservations`**: the hold/commit lifecycle this module's confirm step concludes.
+- **`demo-ecommerce/shopper.md` / `demo-ecommerce/manager.md`**: the demo profile exercises the full checkout-to-paid path using the fake provider.
+- **`theory/layers.md`**: defines what a port is and where it sits in the architecture.
+- **`tools/security.md`**: documents that payment secrets are never stored in this module.
+- **`api/endpoints.md`**: exposes the intent/confirm actions over the API surface.
 
 ## Notes
 
-- The confirm path is the **only** place in the system where a hold becomes a sale. Changing it risks leaving orders reserved until their window expires.
-- The fake provider is intentional, not a placeholder. Swapping in a real processor is one file behind an existing interface.
-- `unique: true` on `orderId` is a **database-level** double-charge guard, not an application-layer check.
-- Cancelling an order without this module still releases stock but returns no money — that asymmetry is what `CANCELLABLE_ORDER_STATUSES` documents.
-- This file is documentation, not source. The actual implementation lives in the payments module directory referenced by the provider port page.
+- The confirm path is the only place a hold becomes a sale; changing it affects inventory commitments, order status, and the refund path simultaneously.
+- The fake provider is intentional, not a placeholder — it is what lets tests and the demo profile run without a sandbox account.
+- `unique: true` on `orderId` is a schema-level invariant, not an application-level check; do not replace it with a pre-query guard.
+- The dependency on `users` is groundwork: no current screen queries "everything this account has paid," but the id is stored now so it is queryable later.

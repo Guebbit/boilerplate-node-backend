@@ -5,57 +5,55 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: tests/support/
-files: 20
-updated: 2026-08-31T20:58:22.906310+00:00
+files: 21
+updated: 2026-09-02T18:36:55.819201+00:00
 ---
 
 # tests/support/
 
 ## Purpose
 
-Shared test infrastructure for the entire project. It provides the database lifecycle, HTTP harnesses, fixture generation, environment bootstrap, and assertion utilities that every other test suite (unit, integration, cross-cutting, and per-module) relies on, so that no individual test file needs to re-wire Mongoose, Express, i18next, or the OpenAPI contract.
+Shared test infrastructure for the entire suite. This module contains no test cases of its own; it provides the lifecycle hooks, HTTP harnesses, fixture generators, assertion helpers, and environment bootstrapping that every other test file depends on.
 
 ## Key parts
 
-- **Database lifecycle** — `global-setup.ts` / `global-teardown.ts` start and stop a single in-memory MongoDB for the whole run; `database.ts` exposes `connect` / `disconnect` / `clearAll` for per-file isolation; `setup-test-db.ts` registers the `beforeAll`/`beforeEach` hooks that wipe collections between test cases.
-- **HTTP & contract testing** — `http.ts` (supertest harness over the full Express pipeline), `contract.ts` (registers `jest-openapi` assertions against `openapi.yaml`), `contract-data.ts` (Zod-schema-driven payload generator for fuzz-style contract tests), `spec-walk.ts` (derives the endpoint list from the spec), `race.ts` (fires N simultaneous requests for concurrency verification).
-- **Bootstrap & environment** — `setup.ts` (Jest `setupFiles` hook that sets env vars and initialises i18next/validation messages before any `src/` module is imported), `i18n-boot.ts` (reproduces the production import ordering so specs see real translated copy), `environment.ts` (`withEnvironment` helper for safe per-test env mutation).
-- **Response & assertion helpers** — `response.ts` (type-safe narrowing of the `ResponseSuccess | ResponseReject` union), `express.ts` (chainable `Response` stub for middleware unit tests), `stub.ts` (single sanctioned `as`-cast export that ESLint enforces everywhere else).
-- **Introspection & configuration** — `routes.ts` (serialises an Express router's route table into an assertable string; mocks middleware factories for visibility), `schema.ts` (reads Mongoose schema declarations — required fields, indexes, enums — at runtime).
-- **Miscellaneous** — `caller-context.ts` (minimal fixture for service-level tests), `ports.ts` (portable spied port helper that avoids `spyOn` issues under Stryker/transform pipelines), `migrations.ts` (loads and runs the real `db/migrations/` files against the test database).
+- **Test bootstrap & lifecycle** — `setup.ts` (per-worker env vars + i18next init before any import), `i18n-boot.ts` (reproduces production import ordering for translation assertions), `global-setup.ts` / `global-teardown.ts` (start/stop the shared in-memory Mongo for the whole run), `database.ts` / `setup-test-db.ts` (per-suite connect, per-test wipe), `environment.ts` (scoped `process.env` mutation with guaranteed restore).
+- **HTTP & contract layer** — `http.ts` (supertest harness exercising the full Express pipeline), `contract.ts` (registers `jest-openapi` against `openapi.yaml`), `contract-routes.ts` (flat endpoint/guard enumeration without pulling in module side-effects), `contract-data.ts` (Zod-schema-driven valid/invalid payload generator), `spec-walk.ts` (derives the operation list from the spec so fuzz coverage is automatic).
+- **Unit-test assertion helpers** — `routes.ts` (route-table introspection + labelled middleware mocks), `schema.ts` (Mongoose schema declaration introspection without a DB round-trip), `response.ts` (branch-narrowing for `ResponseSuccess | ResponseReject`), `express.ts` (chainable `Response` stub for middleware/controller unit tests), `caller-context.ts` (minimal caller-identity fixture), `ports.ts` (safe `jest.fn()` port factory), `stub.ts` (single sanctioned structural cast).
+- **Concurrency** — `race.ts` (fires N truly simultaneous requests and exposes per-participant outcomes).
+- **Migrations** — `migrations.ts` (loads the real `db/migrations/` files the same way `migrate-mongo` does and runs them against the test database).
 
 ## How it connects
 
-- **`tests/`, `tests/unit/`, `tests/cross-cutting/`, `tests/unit/infrastructure/`** — all of these consumer suites import the DB helpers, HTTP harness, and assertion utilities from this directory; this module is the shared foundation they build on.
-- **`src/modules/*/tests/`** (account, orders) — per-module integration tests call `setup-test-db.ts` for isolation and `http.ts` for full-pipeline requests.
-- **`db/`** — `migrations.ts` reads and executes the real migration scripts from `db/migrations/`; `database.ts` and `setup-test-db.ts` connect Mongoose to the same models defined there.
-- **`src/` / `src/infrastructure/`** — `setup.ts` and `i18n-boot.ts` exist specifically so that `src/` modules (rate limiters, Zod message thunks, JWT config, i18next) capture their configuration at import time rather than later.
-- **`src/modules/locales/`** — `i18n-boot.ts` reproduces the exact import ordering that `locales/` relies on in production, catching the class of bug where `t()` is called before `i18next.init()`.
+- **`src/` and `src/modules/*`** — `routes.ts`, `contract-routes.ts`, `schema.ts`, and `caller-context.ts` import the production route tables, Mongoose schemas, service signatures, and context types so tests can introspect or stub them. `ports.ts` replaces infrastructure adapter calls (audit, analytics) without touching the real adapters in `src/infrastructure/adapters/`.
+- **`src/infrastructure/`** — `environment.ts` and `setup.ts` exist specifically because `@infrastructure/runtime/environment` reads `process.env` lazily; the helpers guarantee a known baseline. `i18n-boot.ts` mirrors the runtime's i18next initialisation order.
+- **`db/`** — `migrations.ts` reads the migration files on disk and replays them against the in-memory Mongo started by `global-setup.ts`.
+- **`tests/`, `tests/cross-cutting/`, `tests/unit/infrastructure/`, and per-module `tests/` directories** — all consume the helpers here. `setup-test-db.ts` is the most pervasive dependency; `http.ts` and `contract.ts` gate the contract and cross-cutting suites; `ports.ts` and `response.ts` appear in nearly every service-level unit test.
 
 ## Where to start
 
-1. **`setup.ts`** — read this first because it explains the "why" behind the entire bootstrap sequence (env vars, i18next, validation messages) and the ordering constraint that several other files in this directory exist to enforce.
-2. **`http.ts`** — the single most-used entry point for integration-style tests; understanding its chainable API and how it plugs into `contract.ts` and `setup-test-db.ts` gives you a working mental model of how a typical test file is assembled.
+1. **`setup.ts`** — small, and it explains *why* the test environment looks the way it does (env vars, i18next, Zod messages) before any module is loaded. Reading it first makes the rest of the scaffolding less surprising.
+2. **`http.ts`** — the primary integration harness. Once you understand how a contract test mounts the full Express app and asserts against `openapi.yaml`, the roles of `contract.ts`, `contract-routes.ts`, and `spec-walk.ts` become self-evident.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_tests_support["tests/support/"]
-    m_root["/ (repository root)<br/>44 files"]
-    m_db["db/<br/>21 files"]
+    m_root["/ (repository root)<br/>46 files"]
+    m_db["db/<br/>22 files"]
     m_src["src/<br/>22 files"]
     m_src_infrastructure["src/infrastructure/<br/>43 files"]
     m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>15 files"]
     m_src_modules["src/modules/<br/>20 files"]
-    m_src_modules_account_tests["src/modules/account/tests/<br/>19 files"]
-    m_src_modules_cart["src/modules/cart/<br/>37 files"]
+    m_src_modules_account_tests["src/modules/account/tests/<br/>20 files"]
+    m_src_modules_cart["src/modules/cart/<br/>38 files"]
     m_src_modules_delivery["src/modules/delivery/<br/>20 files"]
-    m_src_modules_feedback["src/modules/feedback/<br/>19 files"]
+    m_src_modules_feedback["src/modules/feedback/<br/>21 files"]
     m_src_modules_inventory["src/modules/inventory/<br/>24 files"]
     m_src_modules_locales["src/modules/locales/<br/>32 files"]
-    m_src_modules_orders_tests["src/modules/orders/tests/<br/>20 files"]
-    m_src_modules_payments["src/modules/payments/<br/>22 files"]
-    m_src_modules_products["src/modules/products/<br/>30 files"]
+    m_src_modules_orders_tests["src/modules/orders/tests/<br/>21 files"]
+    m_src_modules_payments["src/modules/payments/<br/>24 files"]
+    m_src_modules_products["src/modules/products/<br/>31 files"]
     m_tests_support --- m_root
     m_tests_support --- m_db
     m_tests_support --- m_src
@@ -74,11 +72,12 @@ flowchart LR
     style m_tests_support stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_db|db/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_feedback|src/modules/feedback/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · [[boilerplate-node-backend_src_modules_orders_tests|src/modules/orders/tests/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · … and 7 more
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_db|db/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_feedback|src/modules/feedback/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · [[boilerplate-node-backend_src_modules_orders_tests|src/modules/orders/tests/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · … and 6 more
 
 ## Files
 - `tests/support/caller-context.ts` — Provides a minimal `CallerContext` fixture for tests that invoke service functions directly, bypassing the HTTP controller layer that would normally construct one from an incoming request. Most service-level tests don't need a meaningful caller identity—only that the field is present so the code path doesn't throw on a missing value.
 - `tests/support/contract-data.ts` — A Zod-schema-driven fixture generator that produces valid and invalid request payloads for contract testing. It recursively walks a Zod v4 schema's `_zod.def` introspection surface to emit deterministic, seed-reproducible data, answering "does the API honour its contract for *any* legal input?" — a question the per-module hand-written factories in `tests/fixtures.ts` don't cover. It is additive; deterministic scenario tests still use the hand-written factories.
+- `tests/support/contract-routes.ts` — Provides the contract-test layer's flat view of every endpoint mounted across the app (method, absolute path, effective guard chain). It exists as a separate module from `tests/support/routes.ts` so that contract tests can enumerate routes without paying the cost of `enabledModules` pulling in event subscriptions and demo seeding that per-module route unit tests don't need.
 - `tests/support/contract.ts` — Side-effect setup file that registers `jest-openapi` with the project's `openapi.yaml` spec, making the `toSatisfyApiSpec()` assertion available globally. It exists to guard against over-serialization (leaking `_id`, `password`, populated sub-documents, etc.) by validating real HTTP responses against the OpenAPI document — a check that the generated Zod schemas cannot provide in this repo.
 - `tests/support/database.ts` — Provides the three-lifecycle test-database helpers (`connect`, `disconnect`, `clearAll`) that every DB-touching integration test uses. It connects Mongoose to a **shared** in-memory Mongo started once by `globalSetup`, allocating a unique database name per test file to preserve isolation without spawning a `mongod` per file.
 - `tests/support/environment.ts` — Provides a single test helper, `withEnvironment`, that temporarily sets one `process.env` key for the duration of an async test body and then restores the original state. It exists because the codebase's config layer (`@infrastructure/runtime/environment`) reads every value lazily at the point of use, so tests can vary a single setting in isolation — but only if the variable is reliably restored afterward.
@@ -91,10 +90,10 @@ flowchart LR
 - `tests/support/ports.ts` — A single-function test helper that hands out a `jest.fn()`-backed port (e.g. `emitAuditEvent`, `emitAnalyticsEvent`) with its call history cleared, so tests can assert "this event fired, that one didn't" from a known-clean baseline. It exists because the naïve `jest.spyOn(namespace, 'fn')` pattern is not portable across the project's transform pipeline (`ts-jest` vs `@swc/jest`) and Stryker's instrumented sandbox, where CommonJS namespace getters are non-configurable and `spyOn` throws a `TypeError`.
 - `tests/support/race.ts` — Concurrency-test harness that fires N identical HTTP requests truly simultaneously and exposes per-participant outcomes for assertion. It exists because serial test suites (and mutation testing) cannot verify that a race condition is actually handled — the question is "does it still do the right thing when all of it happens at once?"
 - `tests/support/response.ts` — Test helper that narrows a service's `ResponseSuccess<T> | ResponseReject` union at the assertion site. Instead of an inline `as` cast (which silently succeeds even when the wrong arm is hit), these helpers **assert the expected branch first**, so a response that took the wrong path fails on that single, readable fact before any property is read from it.
-- `tests/support/routes.ts` — Test-support utility that reads an Express router's mounted route table (method, path, middleware chain) back into an assertable string form. It also provides `jest.mock` factories that replace middleware *factories* (cache, rate-limit, route-flag, storage) with labelling wrappers so their call arguments — TTL, tags, field names, flag values — appear in the route table where anonymous closures would otherwise hide them. The goal: a route file's full configuration is a one-line snapshot, and any change to it (dropped auth, renamed cache tag, wrong path) forces a visible test edit.
+- `tests/support/routes.ts` — Provides a route-table introspection utility and a set of jest mock factories that label Express middleware produced by factory functions (which would otherwise appear as anonymous closures). Together they let each module's route test assert the **complete** set of mounted methods, paths, and middleware chains—including the arguments captured inside factory closures (cache tags, TTLs, upload field names, auth tiers)—so that any silent route or middleware change must be a deliberate, reviewable edit to the test.
 - `tests/support/schema.ts` — A set of read-only introspection helpers that extract a Mongoose schema's contract (required fields, indexes, defaults, enums, nested schemas, schema-level options) directly from the schema object at runtime. This lets unit tests assert the *declaration* of a schema — things that don't change the shape of a valid document but break quietly (a dropped `required`, a renamed index, a missing `_id: false`) — without spinning up a database or round-tripping a document.
 - `tests/support/setup-test-db.ts` — Registers Jest lifecycle hooks (`beforeAll` / `afterAll` / `beforeEach`) that connect to the run's shared in-memory mongod and wipe every collection before each test case. It exists so that any suite touching Mongo gets an isolated, empty database per `it()` without each test file repeating the boilerplate.
-- `tests/support/setup.ts` — Global Jest bootstrap (wired via `setupFiles`) that runs once per worker **before** any test module is imported. It sets the environment variables and initialises the i18next / validation-message machinery at a point where downstream modules are about to read them at import time. Setting these later (e.g. in `beforeAll`) would be too late because rate limiters, Zod message thunks, and JWT config are captured on first import.
+- `tests/support/setup.ts` — Jest `setupFiles` bootstrap that runs once per worker **before** any test module is imported. It sets environment variables (rate-limit budgets, JWT secrets, TOTP key, metrics token, Redis opt-out) and initialises i18next + Zod validation messages so that modules which capture defaults at import time see correct values. It deliberately does **not** start a database—that is per-suite via `setupTestDb()`.
 - `tests/support/spec-walk.ts` — Derives the full list of HTTP operations (and their schemas) directly from `openapi.yaml`, so the fuzz test suite automatically covers every route the spec declares without anyone manually maintaining an endpoint list. It is intentionally limited to the schema subset this repo actually uses and is *not* a general OpenAPI parser.
 - `tests/support/stub.ts` — Provides a single sanctioned cast helper for hand-built test stubs. Because framework types (`Request`, `Response`, Mongoose `CastError`, etc.) have hundreds of members that a minimal stub cannot structurally satisfy, some cast is unavoidable. This file centralizes that cast behind one named export so the ESLint `no-restricted-syntax` rule can ban the raw `as unknown as T` spelling everywhere else in the codebase.
 

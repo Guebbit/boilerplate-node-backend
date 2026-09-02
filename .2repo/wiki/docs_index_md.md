@@ -2,27 +2,26 @@
 
 ## Purpose
 
-Landing page for the Docusaurus-based documentation site. It orients a reader (human or AI) to the boilerplate's stack, the five top-level doc sections, and the fastest paths to the info they need. All navigation, feature bullets, and diagrams live here; deeper content lives in the linked sub-pages.
+Landing/home page of the Docusaurus documentation site for the `api-mongodb-mongoose` boilerplate. It orients readers (human or AI) to the repo's shape, its six documentation sections, and the key starting points — acting as a table of contents before any specific topic page is read.
 
 ## Key elements
 
-- **Frontmatter `hero` / `actions`** – Docusaurus layout config defining the title, tagline, and the five CTA buttons (Get Started, Read Theory, Browse Modules, Explore Tools, Follow the API flow).
-- **Frontmatter `features`** – Three bullet cards summarising repo shape, layer visibility, and contract-first workflow.
-- **Family map (Mermaid `flowchart`)** – Positions this repo (`api-mongodb-mongoose`) among five sibling boilerplates in the "Node backend family."
-- **"Read this repo as" list** – Maps abstract concepts (API, Framework, Database, Observability, Real-time, Process model, Contracts, Shape) to the specific doc page or YAML file that covers each.
-- **Five sections overview** – One-paragraph descriptions of Theory, Modules, Tools, API, and Files with links into each section's index.
-- **"Quick visual of the current repo" (Mermaid `flowchart`)** – End-to-end data-flow diagram: `openapi.yaml` / `asyncapi.yaml` → Routes → Controllers → Services → Repositories → Models → MongoDB, with side branches to Redis, RabbitMQ, and observability tooling.
-- **Good starting points** – Curated list of entry-point pages for common reader intents (first run, domain lookup, file lookup, contract edits, observability, package map, payload changes).
+- **Frontmatter (`layout: home`)** — Docusaurus hero config with five CTA buttons (Get Started, See the shop, Read Theory, Browse Modules, Explore Tools, Follow the API flow) and four `features` cards summarising the repo's differentiators.
+- **"Read this repo as" block** — a labelled index mapping each concern (API, framework, DB, observability, real-time, process model, contracts, shape) to the page that explains it.
+- **"Six sections, six jobs"** — one-paragraph descriptions of Demo Shop, Theory, Modules, Tools, API, and Files (reference) sections, each with a pointer to its index page.
+- **Two Mermaid flowcharts** — a "family map" showing sibling boilerplates, and a "current repo" diagram tracing the request path from `openapi.yaml` / `asyncapi.yaml` through routes → controllers → services → repositories → models → MongoDB, with side channels (Redis, RabbitMQ, OpenTelemetry → Grafana).
+- **"Good starting points"** — a bulleted list of entry-point recommendations keyed to the reader's situation (first run, production deploy, non-dev, module contract edit, file lookup, dependency lookup, observability, contract change).
 
 ## Relationships
 
-- **`asyncapi.yaml`** – Referenced in the "Read this repo as" list and the architecture diagram as the async/realtime contract source of truth; the index page is the first place a reader learns it exists.
-- **`docs/api/asyncapi-workflow.md`** – Linked from both the "Read this repo as" list and the architecture diagram caption; the index delegates the detailed AsyncAPI workflow to that page.
-- **`package.json`** – Mentioned in "Good starting points" as the file to consult (via `tools/package-dependencies.md` and `tools/package-scripts.md`) for the dependency and script map.
+- Links outward to every top-level section index: `getting-started.md`, `getting-started-production.md`, `theory/clustering.md`, `theory/layers.md`, `api/openapi-workflow.md`, `api/asyncapi-workflow.md`, `api/observability.md`, `api/regenerating.md`.
+- Links to tool pages: `tools/mongodb-mongoose.md`, `tools/observability-reference.md`, `tools/opentelemetry.md`, `tools/grafana.md`, `tools/email-and-rendering.md`, `tools/package-dependencies.md`, `tools/package-scripts.md`.
+- Serves as the `link` target for the hero's "Get Started", "Read Theory", "Browse Modules", "Explore Tools", and "Follow the API flow" buttons, making it the canonical `/` route of the docs site.
+- All neighbor pages treat this file as the navigation root; the frontmatter `features` and "Good starting points" sections are the primary cross-linking surface into the rest of the tree.
 
 ## Notes
 
-- The page is a **Docusaurus `layout: home`** page; its frontmatter is parsed by the Docusaurus theme, not by Markdown renderers. Editing `hero.actions` or `features` changes the rendered homepage without touching the body.
-- Two Mermaid diagrams use `%%{init: ...}%%` spacing overrides; if the docs theme upgrades its Mermaid version, node overlap behaviour may shift.
-- The "family map" lists sibling repos (`mvc-mongodb-mongoose`, `api-mongodb-mongoose-fastify-nestjs`, etc.) that are **not** part of this package—do not treat them as local paths.
-- All internal links use relative `./` paths (e.g. `./theory/`, `./api/openapi-workflow.md`). Docusaurus resolves these at build time; broken links will only surface in the build log, not in this file.
+- The page is primarily **frontmatter + prose + diagrams**; it contains no executable logic. Changes to the hero actions or feature cards alter the rendered home page without touching any other file.
+- The two Mermaid blocks use inline `classDef` styling; they are decorative orientation aids, not a machine-readable dependency graph.
+- The "family map" references sibling repos (`mvc-mongodb-mongoose`, `api-mysql-sequelize`, etc.) that do **not** exist in this codebase — they are external projects in the same family. Do not expect corresponding files locally.
+- The page links to `./tools/prometheus.md` and `./tools/tools-explained.md`, which are **not** in the dependency-graph neighbor list; verify those paths exist before relying on them.

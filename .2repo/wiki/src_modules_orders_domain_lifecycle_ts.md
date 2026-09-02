@@ -2,28 +2,28 @@
 
 ## Purpose
 
-Defines the order state machine: which status transitions are legal, and which actor (`customer`, `admin`, or `system`) may initiate each one. It does not execute transitions—`updateStatusIfIn` in the repository does that—but supplies the `from`-set and actor checks that make the write safe and correct.
+Defines the order-status state machine: which status may follow which, and which actor (`customer`, `admin`, `system`) is permitted to make each move. The status *set* is generated from a shared contract; this file adds the directed edges and per-edge actor authorization, producing a single source of truth that the service layer, repository helpers, and client-facing action queries all consult.
 
 ## Key elements
 
-- **`OrderActor`** — Union type `'customer' | 'admin' | 'system'`. `system` means "moves no human request can make" (e.g., payment confirmation), not a privilege level above admin.
-- **`ORDER_LIFECYCLE`** — Total `Record<OrderStatus, …>` mapping each status to a map of allowed target statuses → permitted actors. Terminal states (`delivered`, `cancelled`) map to `{}`. Adding a new `OrderStatus` without a key here is a compile error.
-- **`canTransition(from, to, actor)`** — Returns `true` if the move is allowed, or if `from === to` (a no-op write, not a transition).
-- **`statusesReachableFrom(from, actor)`** — All statuses the actor may move *to* from `from`, in `OrderStatus` enumeration order. Excludes `from` itself.
-- **`statusesLeadingTo(to, actor)`** — All statuses that may *precede* `to` for the given actor. Designed to feed `updateStatusIfIn`'s `from` parameter.
-- **`orderActionsFor(status, actor)`** — Returns an `OrderActions` object (`{ transitions, cancel, pay }`) shaped for client-side UI rendering. `pay` is computed against the `system` actor and is independent of `transitions`.
+- **`OrderActor`** (type) — the three roles that can trigger a transition: `'customer' | 'admin' | 'system'`. `system` is narrower than `admin`, not above it: it covers moves no human may make by hand (e.g. the payment webhook).
+- **`ORDER_LIFECYCLE`** (const) — a total `Record<OrderStatus, …>` mapping each status to the transitions it allows, with the authorized actors attached to each edge. Terminal states (`delivered`, `cancelled`) carry `{}`. Totality means a new contract status is a compile-time error, not a silent dead-end.
+- **`canTransition(from, to, actor)`** (fn) — core gate. Returns `true` if the move is legal. `from === to` (no-op / echo write) is allowed **except** when `to === 'paid'`, where only `system` may pass.
+- **`statusesReachableFrom(from, actor)`** (fn) — the subset of statuses the actor may move *to* from `from` (excludes `from` itself). Intended as the payload for a 409 response's "what you *can* do" list.
+- **`statusesLeadingTo(to, actor)`** (fn) — the subset of statuses from which `to` is reachable by `actor`. Feeds the `from` set handed to `updateStatusIfIn` in the repository for optimistic-concurrency writes.
+- **`orderActionsFor(status, actor)`** (fn) — returns an `OrderActions` object (`transitions`, `cancel`, `pay`) shaped for client-side rendering. `cancel` is derived from `statusesReachableFrom` (so an already-cancelled order reports `cancel: false`). `pay` is evaluated from the `system` actor's perspective and is `true` only when `pending → paid` is still possible.
 
 ## Relationships
 
-- **`src/types/index.ts`** — Provides `OrderStatus` (the enum the lifecycle is total over) and the `OrderActions` return type.
-- **`src/modules/orders/domain/index.ts`** — Barrel re-export; consumers of the `domain` module pull these symbols through it.
-- **`src/modules/orders/service.ts`** — Calls `canTransition` / `orderActionsFor` to guard writes and build API responses.
-- **`src/modules/payments/service.ts`** — Triggers the `pending → paid` transition, the only edge whose actor is `system`; interacts via `canTransition` or `statusesLeadingTo`.
-- **`src/modules/orders/tests/unit/lifecycle.test.ts`** — Unit tests covering every edge, the `from === to` shortcut, and `orderActionsFor` output shapes.
+- **`src/types/index.ts`** — supplies `OrderStatus` and `OrderActions`; this file imports both and its map keys/values are typed against them.
+- **`src/modules/orders/service.ts`** — calls `canTransition`, `statusesLeadingTo`, and `orderActionsFor` to gate writes and build API responses.
+- **`src/modules/orders/domain/index.ts`** — barrel re-export; external code imports the lifecycle API through the domain folder rather than this file directly.
+- **`src/modules/payments/service.ts`** — the "system" actor path: when a payment webhook fires it transitions `pending → paid`, the one edge in `ORDER_LIFECYCLE` restricted to `['system']`.
+- **`src/modules/orders/tests/unit/lifecycle.test.ts`** — unit-tests every exported function against the lifecycle table.
 
 ## Notes
 
-- `canTransition` intentionally returns `true` when `from === to`. Use `statusesReachableFrom` (or `orderActionsFor`) when you need to exclude the current status—e.g., "may I cancel this already-cancelled order?" should be `false`.
-- The `pay` field in `orderActionsFor` is queried against the `system` actor, so it will never appear in `transitions` (which are filtered by the *requesting* actor). It exists so a client can decide whether to show a card form.
-- The `ORDER_LIFECYCLE` table is the single source of truth for edges and actor permissions. Do not duplicate transition logic elsewhere; add new edges here.
-- Status order in return arrays follows `Object.values(OrderStatus)` (contract/enum declaration order), not alphabetical.
+- **No-op into `paid` is special-cased.** `canTransition(paid, paid, 'customer')` returns `false` even though `from === to`. This prevents a client echo-write from bypassing the "only system can mark paid" invariant. `system` still gets the no-op for webhook retries.
+- **`orderActionsFor` deliberately avoids `canTransition` for `cancel`.** Because `canTransition` returns `true` for `from === to`, it would report `cancel: true` on an already-cancelled order. `statusesReachableFrom` excludes the current status, which is the correct answer for "may I cancel *this*?"
+- **`pay` ignores the requesting actor.** It is always evaluated as `system` because paying is never a client-initiated move; the field exists so a front-end can decide whether to show a card form.
+- The module doc-comment cross-references `../repository.ts` (`updateStatusIfIn`) and `docs/theory/tactical-ddd.md §1` for the broader concurrency and DDD context.

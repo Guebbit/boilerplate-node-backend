@@ -2,27 +2,28 @@
 
 ## Purpose
 
-Defines the Mongoose schema, document interface, and model for the Payment collection. It enforces a 1:1 relationship between a payment and its order (via `unique` on `orderId`), captures the provider-facing lifecycle status, and exposes a lean-read serialization transform for the repository layer.
+Defines the Mongoose schema, document interface, and registered model for the **Payment** collection. Enforces the one-payment-per-order invariant via a `unique` index on `orderId`, so a retry after a decline re-confirms the same document. Anchors the provider-facing lifecycle (`PaymentStatus` enum from `@types`) to the schema so the wire and the enum cannot drift.
 
 ## Key elements
 
-- **`PaymentDocument`** – Mongoose `Document` interface describing the stored shape: `orderId`, `userId`, `amount`, `currency`, `status`, `provider`, `cardLast4`, timestamps.
-- **`PaymentModel`** – Convenience type alias for `Model<PaymentDocument>`; imported by `repository.ts` rather than re-declared there.
-- **`paymentSchema`** – The Mongoose `Schema` instance. `orderId` is `unique: true` so a retry upserts the same document. `status` defaults to `PaymentStatus.requires_confirmation` and is constrained to the enum's values. `timestamps: true` adds `createdAt`/`updatedAt`.
-- **`applyPaymentTransform`** – Result of `applySerialization(paymentSchema)`. Normalizes lean query output (`_id` → `id`, strips `__v`). Consumed by the repository factory for lean reads.
-- **`paymentModel`** – The registered Mongoose model (`'Payment'`). This is the handle the repository uses for all CRUD and query operations.
+- **`PaymentDocument`** – Interface extending Mongoose `Document`. Fields: `orderId` (unique ref → Order), `userId` (optional ref → User, unset on erasure), `amount`, `currency`, `status` (`PaymentStatus`), `provider`, `cardLast4?`, timestamps.
+- **`PaymentModel`** – Type alias for `Model<PaymentDocument>`; used as the model generic.
+- **`paymentSchema`** – Mongoose `Schema` instance. `status` defaults to `PaymentStatus.requires_confirmation` and is constrained by `Object.values(PaymentStatus)`. `userId` is intentionally **not** `required` so account erasure unsets it without deleting the payment.
+- **`applyPaymentTransform`** – Wraps `applySerialization(paymentSchema)` (from `@infrastructure/persistence/serialize`). Normalizes lean query results: renames `_id` → `id`, strips `__v`. Consumed by the repository's factory.
+- **`paymentModel`** – The registered Mongoose model (`model<PaymentDocument, PaymentModel>('Payment', …)`). The single import point for the runtime model instance.
 
 ## Relationships
 
-- **`src/types/index.ts`** — Imports `PaymentStatus` (the enum). The schema's `enum` array and `default` are derived from it, keeping the stored value and the wire contract in lockstep.
-- **`src/infrastructure/persistence/serialize.ts`** — Provides `applySerialization`, which this file calls with `paymentSchema` to produce `applyPaymentTransform`.
-- **`src/modules/payments/repository.ts`** — Imports `paymentModel` and `applyPaymentTransform`; all queries and lean-read normalization live there.
-- **`src/modules/payments/service.ts`** — Business rules (state transitions, retry semantics) reference the `PaymentStatus` values persisted by this schema.
-- **`src/modules/payments/tests/unit/schema-contract.test.ts`** — Asserts that the schema's fields, constraints, and enum values match the `PaymentDocument` interface and `PaymentStatus` contract.
+- **`src/infrastructure/persistence/serialize.ts`** – Provides `applySerialization`, which is called with `paymentSchema` to produce `applyPaymentTransform`.
+- **`src/modules/payments/repository.ts`** – Owns all query/read/write logic against `paymentModel`; imports the model and the transform.
+- **`src/modules/payments/service.ts`** – Encapsulates business rules (status transitions, retry-after-decline, refund). Consumes the repository; does not import the schema directly.
+- **`src/types/index.ts`** – Source of the `PaymentStatus` enum used for the `status` field's `enum` constraint and its default value.
+- **`src/modules/payments/tests/unit/schema-contract.test.ts`** – Asserts the schema contract (required fields, enum values, `unique` index on `orderId`).
+- **`src/modules/payments/tests/integration/retention.test.ts`** – Exercises the erasure path that unsets `userId` while preserving the payment document.
 
 ## Notes
 
-- The `unique` index on `orderId` is the idempotency guarantee: a re-authorization or retry after a decline upserts the same document rather than creating a second. Consumers should expect `findOneAndUpdate` (upsert) semantics on the repository, not blind `create`.
-- `currency` is stored per-document (frozen at intent time) rather than read from config at read time, so changing `NODE_DEFAULT_CURRENCY` later does not retroactively alter historical payments.
-- `cardLast4` is the only card data persisted; full PANs must never be written to this collection.
-- The `provider` field is a free-form string (e.g. `'fake'`, `'stripe'`), not an enum—adding a new provider requires no schema migration.
+- `userId` is deliberately absent after account erasure; code must treat it as optional everywhere (no non-null assertion).
+- `amount` and `currency` are **frozen at intent-creation time**; they do not track live order totals or `NODE_DEFAULT_CURRENCY` changes.
+- `cardLast4` is the only card data persisted—never store full PANs.
+- Queries and mutation logic are **not** in this file; they live in `repository.ts` and `service.ts` respectively. This file is schema + registration only.

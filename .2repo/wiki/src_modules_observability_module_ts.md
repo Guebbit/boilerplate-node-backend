@@ -2,22 +2,23 @@
 
 ## Purpose
 
-Module manifest that registers the operator-facing observability surface (health check, metrics overview, live SSE stream, Prometheus scrape endpoint, and audit trail) under the `/observability` base path. It exists to wire routes and locales into the kernel's app registry without owning any data itself.
+Module manifest for the `observability` module. Registers the module's identity (name, base path, routes, locales, required config) with the kernel so the service can serve operator-facing endpoints: health, a metrics overview, the live SSE stream, the Prometheus scrape endpoint, and the audit trail.
 
 ## Key elements
 
-- **`export default`** — An object satisfying `AppModule` from `@kernel/registry`. Declares `name: 'observability'`, `basePath: '/observability'`, `routes` (the Hono router from `./routes`), and a `locales` path. No event subscriptions or seeds are registered.
-- **`router` (re-exported from `./routes`)** — The single Hono router carrying every observability endpoint. Authentication style varies per route; see `routes.ts` for details.
+- **Default export** — a plain object satisfying the `AppModule` interface from `@kernel/registry`. Declares `name`, `basePath: '/observability'`, `routes`, `requiredConfig`, and `locales`.
+- **`routes`** — imported from `./routes`; the actual route tree mounted under `/observability`.
+- **`requiredConfig`** — a single entry for `NODE_METRICS_TOKEN`. `minLength: 0` is intentional: an *unset* token is a valid fail-closed state (scrape returns 503). The check exists only to refuse boot when the token is set to the shipped placeholder `change-me-dev-metrics-token`.
+- **`locales`** — resolved via `path.join(__dirname, 'locales')`; no i18n strings are owned here beyond pointing at the directory.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Imports the `AppModule` type; this file's default export is consumed by the kernel's registry to mount the module.
-- **`src/modules/observability/routes.ts`** — Imports `router`, the Hono router that this manifest attaches to the app.
-- **`src/modules.ts`** — Aggregates this module's manifest alongside sibling modules (graph-level inclusion, not a direct import in this file).
-- **`audit-logs` (external module)** — Serves `GET /observability/audit`; this module does not import it directly but depends on its presence at runtime.
+- **`src/kernel/registry.ts`** — supplies the `AppModule` type that the default export `satisfies`. The kernel consumes this manifest to wire the module into the service.
+- **`src/modules.ts`** — top-level module aggregator; this file is one of the module entries it collects.
+- **`src/modules/observability/routes.ts`** — provides the `router` that this manifest attaches to `basePath`. All URL definitions, auth styles, and handler logic live there; this file only *declares* the module.
 
 ## Notes
 
-- **String-based metric reads.** This module reads domain counters via `metricsRegistry.getSingleMetric('auth_login_total')` (by string), never by importing the producing module. This is deliberate — it allows reporting on domains without naming them. The trade-off: renaming a counter compiles cleanly but breaks this module silently. `metric-names.test.ts` exists to guard against that.
-- **No `index.ts`.** The module owns URLs, not data, so there is no public data surface to re-export to siblings.
-- **Mixed auth styles.** Every route is authenticated, but not uniformly — `routes.ts` documents which style applies where.
+- **No `index.ts`.** This module deliberately owns URLs, not data. There is no barrel file to promise a sibling module an import surface.
+- **String-based metric reads.** The module reads domain counters by string off the shared `metricsRegistry` (e.g. `metricsRegistry.getSingleMetric('auth_login_total')`) rather than by typed import. Renaming a counter elsewhere compiles cleanly but breaks this module silently — `metric-names.test.ts` is the safety net.
+- **Auth is not uniform across routes.** Each route in `routes.ts` may use a different authentication style; this manifest does not enforce a single scheme.

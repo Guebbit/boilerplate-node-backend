@@ -1,39 +1,51 @@
 # src/modules/users/repository.ts
 
 ## Purpose
-
-Persistence layer for the `users` collection. Wraps the standard CRUD provided by the shared `createRepository` factory with the credential reads and token-lifecycle operations that the `account` module needs across the shared-kernel boundary. Centralises the two `select: false` fields (`password`, `tokens`) into sanctioned helpers so that re-selection logic lives in one place.
+Persistence layer for the `users` collection. Exposes standard CRUD (via the shared repository factory) plus the credential reads and token-lifecycle operations that the `account` module needs on the far side of the shared-kernel edge. Keeps all re-selection of `select: false` fields and atomic token mutations in one place so they aren't scattered across services.
 
 ## Key elements
 
-- **`CREDENTIAL_FIELDS`** (`'+password +tokens'`) — the only string used to re-select the two schema fields that are excluded by default; used by every credential-aware finder.
-- **`userRepository`** — the sole export. A `Repository<UserDocument>` (from the factory) extended with:
-  - `updateMany` — batch update; explicit because Mongoose generics trigger TS7056 at the export boundary.
-  - `findByIdWithCredentials` / `findOneWithCredentials` — standard finders that re-select `password` + `tokens`.
-  - `findByToken(token, type)` — `$elemMatch` lookup so token value **and** type must match the same array entry; returns the holder with credentials.
-  - `findByTokenValue(token)` — untyped revocation lookup (no `type` filter); used by the refresh flow to check whether a token still exists.
-  - `tokenRemove(id, token)` — atomic `$pull` by user id + token value (spend a one-shot token).
-  - `tokenRemoveByValue(token)` — atomic `$pull` by token value alone (single-session logout from the refresh cookie).
-  - `tokenRemoveExpired()` — bulk `$pull` of all expired tokens; returns a plain count, not an HTTP status.
-  - `tokenTouch(token)` — positional `$set` on `tokens.$.lastUsedAt` so concurrent refreshes don't overwrite each other.
-  - `sessionRemove(id, sessionId)` — `$pull` one refresh token by sub-document `_id`, pinned to `type: refresh` so it cannot target reset/delete tokens.
-  - `writebackImage` — conditional writeback of `imageUrl`/`thumbnailUrl` keyed on `pendingImageKey`; returns a boolean (`matchedCount > 0`) so a stale or duplicate job is a detectable no-op.
-
-All token mutations pass `timestamps: false` because spending/expiring/touching a token is not an account edit.
+- **`userRepository`** — single export; a `Repository<UserDocument>` (from the factory) augmented with credential, token, session, inactivity, and image-writeback methods.
+- **`CREDENTIAL_FIELDS`** — constant `'+password +tokens +twoFactorSecret …'` string; the only sanctioned re-select clause for `select: false` fields.
+- **`AUTHENTICATABLE_FILTER`** — `{ active: { $ne: false }, deletedAt: undefined }`; shared by every login-adjacent lookup so the clause can't drift.
+- **`LAST_ACTIVE_EXPR`** — aggregation `$expr` (`$max` of `tokens.lastUsedAt` or `createdAt`) reused by all `findInactive*` / `findReaper*` queries.
+- **`findByIdWithCredentials` / `findOneWithCredentials`** — fetch a user with credential fields re-selected.
+- **`findByToken`** — `$elemMatch` on `{ token: hashToken(t), type }` to match both conditions on the *same* array entry; returns user with credentials.
+- **`findByTokenValue`** — untyped-by-kind revocation lookup (no `type` param); carries `AUTHENTICATABLE_FILTER`; selects `+tokens` for rotation reads.
+- **`findAuthenticatableById`** — `findById` scoped to active, non-deleted accounts; sole caller is `resolve()` in `account/module.ts`.
+- **`tokenRemove` / `tokenRemoveByValue`** — atomic `$pull` to spend one token (by id+value, or by value alone for single-session logout).
+- **`tokenRemoveExpired`** — bulk `$pull` of expired and superseded-past-grace tokens across all documents; returns a plain count.
+- **`tokenTouch`** — positional `$set` of `tokens.$.lastUsedAt` so concurrent refreshes don't clobber each other.
+- **`tokenSupersede`** — atomic claim for rotation; `$elemMatch` ensures exactly one concurrent caller wins (`modifiedCount: 1`).
+- **`sessionRemove`** — removes a session entry by user id + session id.
+- **`findInactiveUnwarned` / `findWarnedStillInactive` / `findReaperSoftDeletedPastGrace`** — inactivity and grace-period sweeps for the reaper script.
+- **`writebackImage`** — `ImageWriteback`-typed callback for image persistence.
+- **`searchable` config** (inside the factory call) — defines `objectIds`, `text`, `regex`, and `booleans` facets for list/filter endpoints.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository`, `toObjectId`, and the `Repository` type. The factory supplies the base CRUD object spread into `userRepository`.
-- **`src/infrastructure/adapters/image.worker.ts`** — contributes the `ImageWriteback` type that `writebackImage` satisfies; the image-digest pipeline calls into this repository to persist finished thumbnails.
-- **`src/modules/account/services/*`** (authentication, profile, tokens, token-cleanup, verification) — the primary consumers across the kernel edge. They call the credential and token helpers rather than issuing raw Mongoose queries.
-- **`src/modules/account/session/jwt.ts`** — uses `findByTokenValue` for the refresh-token revocation check during token validation.
-- **`scripts/backfill-image-thumbnails.ts`** — exercises the `writebackImage` path in bulk.
-- **`src/modules/account/tests/**`** — integration and contract tests drive `findByIdWithCredentials`, `findByToken`, `tokenRemove`, `tokenRemoveByValue`, `tokenRemoveExpired`, `tokenTouch`, `sessionRemove`, and `writebackImage` to verify token-lifecycle invariants (idempotency, `modifiedCount` semantics, concurrent-refresh safety).
+- **`src/infrastructure/persistence/create-repository.ts`** — supplies `createRepository`, `toObjectId`, and the `Repository` type; `userRepository` spreads the factory's base CRUD underneath its own methods.
+- **`src/infrastructure/adapters/image.worker.ts`** — provides the `ImageWriteback` type that `writebackImage` is typed against.
+- **`src/modules/account/module.ts`** — `resolve()` is the explicit sole caller of `findAuthenticatableById`; the module orchestrates which repository methods a request invokes.
+- **`src/modules/account/services/authentication.ts`** — consumes `findByTokenValue`, `tokenSupersede`, `tokenTouch`, `tokenRemoveByValue` during login / refresh.
+- **`src/modules/account/services/token-cleanup.ts`** — calls `tokenRemoveExpired`, passing in `supersededGraceMs` (session policy config lives in `account`, not here).
+- **`src/modules/account/services/two-factor.ts`** — uses `findByIdWithCredentials` / `findOneWithCredentials` to read 2FA fields.
+- **`src/modules/account/services/verification.ts`** — uses `findByToken` for email/verification link resolution.
+- **`src/modules/account/services/profile.ts`** — uses credential-aware fetchers for profile operations.
+- **`src/modules/account/services/export.ts`** — reads user data through the repository for account export.
+- **`scripts/reap-inactive-accounts.ts`** — the operational consumer of `findInactiveUnwarned`, `findWarnedStillInactive`, and `findReaperSoftDeletedPastGrace`.
+- **`src/modules/account/session/jwt.ts`** — the session/token model that `tokenTouch`, `tokenSupersede`, and `findByTokenValue` serve.
+- **Tests** (`api.contract.test.ts`, `jwt.test.ts`, `persisted-locale.test.ts`) — exercise the repository through the account API surface.
 
 ## Notes
 
-- **Never** add `.select('+password')` or `.select('+tokens')` outside this file. The two `*WithCredentials` helpers and `findByToken`/`findByTokenValue` are the sanctioned entry points.
-- `findByToken` uses `$elemMatch` deliberately. A naive `{ 'tokens.token': x, 'tokens.type': y }` filter would also match a document that holds token *x* as a reset token and token *y* as a delete token in separate array entries.
-- `sessionRemove` pins `type: TokenType.REFRESH` in the `$pull` condition. This is a safety constraint, not an optimisation—without it a leaked sub-document id could revoke a pending reset or delete confirmation.
-- `writebackImage` is conditional on `pendingImageKey` still equal to the job's `key`. This makes late or duplicate image-worker deliveries a `false` return rather than an overwrite, and a hard-deleted user a detectable miss.
-- The explicit interface on `userRepository` (rather than letting TypeScript infer) exists because Mongoose's generic parameter list is too large for TS to serialise at an export boundary (TS7056). Do not "simplify" it back to inference.
+- **`select: false` is load-bearing.** `password`, `tokens`, and 2FA fields are hidden by default on the schema. Always go through `*WithCredentials` helpers; ad-hoc `.select('+password')` is explicitly discouraged.
+- **`$ne: false` vs `true`.** `active` can be *absent* on rows written before the `20260808120000` migration, so the filter uses `{ $ne: false }`, not `true`.
+- **Tokens are stored hashed (wave 3.1).** Every query path calls `hashToken(token)` before building the filter; never compare plaintext.
+- **`$elemMatch` is intentional in `findByToken` and `tokenSupersede`.** A naive two-path filter would match a reset-token entry via an unrelated delete-token entry on the same document.
+- **`timestamps: false` on all token mutations.** Spending, touching, superseding, or expiring a token is not a semantic change to the account and must not bump `updatedAt`.
+- **`tokenRemoveExpired` takes `supersededGraceMs` as a parameter** rather than importing the config. That value is session-policy owned by `account`; this module must not import it (shared-kernel boundary).
+- **Explicit type annotation on `userRepository`.** Mongoose's inferred generic is too large for TS to serialize at an export boundary (TS7056), so the type is written out by hand.
+- **`LAST_ACTIVE_EXPR` works despite `select: false`.** `select` trims what a query *returns*, not what a `$expr` aggregation may read from the stored document.
+- **`searchable.booleans.active` filters the real column**, not `deletedAt` existence — "deactivated" and "deleted" are intentionally distinct questions.
+- **`admin` / `verified` are exposed in `searchable`** only because the listing endpoint already returns 403 to non-staff, making the filter safe to publish.

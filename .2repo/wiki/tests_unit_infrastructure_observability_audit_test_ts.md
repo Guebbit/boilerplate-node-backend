@@ -2,24 +2,24 @@
 
 ## Purpose
 
-Unit tests for the core audit-observability module. Verifies that audit events are logged at the correct severity level, forwarded to any registered sink, and that request-context extraction produces the expected shape — without touching disk or requiring a live OpenTelemetry SDK.
+Unit tests for the core audit-logging subsystem: event emission, sink registration, request-context extraction, and the app-level security action constants. Ensures the audit path degrades safely (no disk writes, no exceptions escaping) in test and worker environments.
 
 ## Key elements
 
-- **`coreAuditActions` suite** – Asserts the three app-level security action strings (`security.unauthorized`, `security.forbidden`, `security.rate_limit_hit`) are stable.
-- **`emitAuditEvent` suite** – Checks logger level selection (`info` for success, `warn` for failure or security actions) and that all `AuditEvent` fields (including `target_*`, `trace_id`, `metadata`) pass through intact.
-- **`registerAuditSink` suite** – Verifies the sink receives an `AuditEntry`, that `timestamp` is a `Date` instance, that logging still occurs with no sink registered, and that a throwing sink is caught and reported via `auditLogger.warn` rather than propagated.
-- **`extractRequestContext` suite** – Confirms extraction of `ip`, `user_agent`, `request_id` from the request object, and that `trace_id` is `undefined` when no OTel span is active.
+- **`coreAuditActions` tests** — Asserts the three app-level strings (`security.unauthorized`, `security.forbidden`, `security.rate_limit_hit`). Domain-specific action strings are intentionally *not* asserted here; each module pins its own in `src/modules/<name>/tests/unit/audit.test.ts`.
+- **`emitAuditEvent` tests** — Verifies the function routes to `auditLogger.log` with level `info` (success) or `warn` (failure / security actions), and that all `AuditEvent` fields pass through intact.
+- **`registerAuditSink` tests** — Covers sink invocation, `AuditEntry` shape (Date-typed `timestamp`, derived `level`), fallback logging when no sink is active, and that a throwing sink is caught, logged via `auditLogger.warn('audit.sink.failed', …)`, and does not propagate.
+- **`extractRequestContext` tests** — Confirms mapping of `ip`, `userAgent`→`user_agent`, `requestId`→`request_id`, and that `trace_id` is `undefined` absent an active OTel span.
+- **Top-level spies** — `auditLogger.log` and `auditLogger.warn` are mocked to no-op at module scope to prevent disk I/O during the suite.
 
 ## Relationships
 
-- **`src/infrastructure/observability/audit.ts`** – The module under test; this file imports `emitAuditEvent`, `extractRequestContext`, `registerAuditSink`, `coreAuditActions`, and the `AuditEvent`/`AuditEntry` types.
-- **`src/infrastructure/adapters/logger.ts`** – Provides `auditLogger`, which is spied on (both `log` and `warn`) so no output reaches disk during tests.
+- **`src/infrastructure/observability/audit.ts`** — The module under test. All exported symbols (`emitAuditEvent`, `extractRequestContext`, `registerAuditSink`, `coreAuditActions`, types) are imported here and exercised.
+- **`src/infrastructure/adapters/logger.ts`** — Provides `auditLogger`, which is spied on to intercept log/warn calls and assert on them.
 
 ## Notes
 
-- `auditLogger.log` and `auditLogger.warn` are mocked at **module scope** (outside any `describe`), so every test in the file runs with them inert.
-- The `registerAuditSink` suite needs an `afterEach` that re-registers an inert `() => {}` sink, because the sink is stored in a module-level closure and would otherwise leak into subsequent tests.
-- The `timestamp` assertion specifically checks `toBeInstanceOf(Date)` (not an ISO string) because the production model stores it as a BSON date for TTL-index and sort-order correctness.
-- `coreAuditActions` deliberately tests **only** the three core-owned actions. Domain-specific action strings are pinned in each module's own `src/modules/<name>/tests/unit/audit.test.ts`.
-- The "throwing sink" test encodes an invariant: audit emission must never throw back into the request-handling path.
+- `registerAuditSink` stores the sink in module-level closure state. Each test in that block resets it to `() => {}` in `afterEach`; forgetting this causes cross-test contamination (a later test's events land in the earlier test's sink).
+- `AuditEntry.timestamp` is asserted to be a **`Date` instance**, not an ISO string — downstream MongoDB uses it for a TTL index and a `timestamp: -1` sort, so lexicographic ordering of strings would be incorrect.
+- The "no sink registered" path is exercised explicitly because that is the runtime state in unit tests and queue workers; the compliance log line must still be written.
+- A throwing sink must never turn an in-flight request into a 500; the test asserts both that no exception escapes and that the failure is surfaced via a `warn` call with the error message.

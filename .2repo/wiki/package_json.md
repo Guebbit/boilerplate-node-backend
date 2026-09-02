@@ -2,39 +2,39 @@
 
 ## Purpose
 
-Root manifest for the `boilerplate-node-api-mongodb-mongoose` project (v2.0.0, AGPL-3.0). It declares the dependency set (runtime + dev), defines the full script surface (dev, test, lint, docs, DB, benchmarking, code-gen), and wires lifecycle hooks (`postinstall`, `prepare`) that regenerate API contracts and install git hooks on every install.
+Project manifest for **boilerplate-node-api-mongodb-mongoose** (v2.0.0, AGPLv3.0). Declares the runtime and development dependency sets, defines the full script surface (dev server, linting, contract validation, multi-tier testing, benchmarking, DB migration/seeding, container orchestration, docs, and generated-artifact regeneration), and sets the entry point to `src/cluster.ts`. The `postinstall` hook auto-generates API and AsyncAPI client types and bundles OpenAPI/AsyncAPI contract files after every `npm install`.
 
 ## Key elements
 
-- **`main`: `src/cluster.ts`** — declared entry point; all `dev`, `start`, and `debug` scripts target this (or `src/app.ts` for the single-process Docker variant).
-- **`scripts.dev*`** — `dev` (tsx watch), `dev:docker` / `dev:docker:cluster` (nodemon + tsx) for hot-reload during development.
-- **`scripts.test*`** — layered Jest suites: `unit`, `cross-cutting`, `integration`, `contract`, `fuzz`; plus Stryker mutation testing and Prism smoke tests. `test` chains them sequentially.
-- **`scripts.lint*`** — ESLint (zero-warning), Prettier, Spectral for OpenAPI & AsyncAPI specs (global + per-module), and `dependency-cruiser` for import-graph rules.
-- **`scripts.check*`** — `ts-check` (tsc --noEmit), `check:contracts-bundle`, `check:seed-export`, `check:spec-identity`, `check:dependencies`, `check:docs-graph`.
-- **`scripts.gen*` / `scripts.contracts*`** — Orval (OpenAPI → TS client), AsyncAPI Modelina (→ TS types), and a contract-bundle build step.
-- **`scripts.db*`** — `migrate-mongo` up/down/status, demo seeding, cache clearing, and a combined `db:bootstrap`.
-- **`scripts.compose*`** — thin wrappers around `${CONTAINER_ENGINE:-podman} compose` (up/down/rebuild/kill).
-- **`scripts.bench*`** — autocannon (products, search, orders, inventory) and k6 (browse, checkout) load-test invocations.
-- **`scripts.docs*`** — Vitepress dev/build/preview for the `docs/` directory; AsyncAPI Studio for interactive spec browsing.
-- **`scripts.complete`** — meta-script that runs every check, lint, doc build, and test in sequence (CI gate).
-- **`postinstall`** — auto-runs `contracts:bundle`, `gen:api`, `gen:asyncapi` so generated artifacts exist before first use.
-- **`prepare`** — installs Husky git hooks.
-- **`dependencies`** — Express 5, Mongoose 9, Redis, AMQP (amqplib), OpenTelemetry (SDK + Express/HTTP/Mongoose/Redis instrumentations), Zod 4, Sharp, Puppeteer-core, i18next, Winston, PostHog, prom-client, and a handful of private `@guebbit/*` packages.
-- **`devDependencies`** — Jest 30 + ts-jest + @swc, Stryker 9, ESLint 9 + boundaries/unicorn plugins, Spectral, dependency-cruiser, Orval, migrate-mongo, mongodb-memory-server, Vitepress, and type packages for every runtime dep.
-- **`overrides`** — pins transitive `ip-address` to `^10.5.0`.
+- **`main`: `src/cluster.ts`** — entry point for both `start` and `dev` scripts (run via `tsx`).
+- **`scripts.dev` / `scripts.start`** — launch the cluster mode server with `tsx`; `dev:docker` variants use `nodemon` + `tsx` for in-container watch.
+- **`scripts.test`** — sequential gate: unit → cross-cutting → integration → contract → fuzz (all Jest).
+- **`scripts.test:mutation`** — Stryker mutation testing with baseline-check and deep-config variants.
+- **`scripts.lint` / `lint:openapi` / `lint:asyncapi`** — ESLint (zero-warnings), Spectral for OpenAPI/AsyncAPI specs, including per-module spec directories.
+- **`scripts.postinstall`** — runs `contracts:bundle`, `gen:api` (Orval), and `gen:asyncapi` (custom script) to produce typed clients and bundled specs.
+- **`scripts.prepare`** — initializes Husky git hooks.
+- **`scripts.compose`** — wraps `podman compose` (or `docker compose` via `CONTAINER_ENGINE`).
+- **`scripts.db:*`** — `migrate-mongo` up/down/status, seed via `db/demo/index.ts`, cache-clear, bootstrap (migrate + seed).
+- **`scripts.bench*`** — AutoCannon and k6 load tests against `/products`, `/products/search`, `/orders`, `/inventory/levels`.
+- **`scripts.complete`** — full CI gate: type-check → lint → spec lint → prettier → contract/seed/spec checks → dependency-cruiser → docs build → all tests.
+- **`dependencies`** — Express 5, Mongoose 9, Redis, AMQP, OpenTelemetry suite, helmet, rate-limit-redis, zod, sharp, winston, i18next, jsonwebtoken, bcrypt, nodemailer, posthog-node, prom-client, puppeteer-core, tsx.
+- **`devDependencies`** — Jest 30, TypeScript 5.9, ESLint 9 + typescript-eslint, Prettier, Spectral, AsyncAPI CLI, Stryker, Orval, dependency-cruiser, VitePress, mongodb-memory-server, supertest, fast-check, husky.
+- **`overrides.ip-address`** — pins `ip-address` to `^10.5.0` to avoid a transitive dependency conflict.
 
 ## Relationships
 
-- **`src/app/routes.ts`, `security.ts`, `request-context.ts`, `demo.ts`, `error-handling.ts`, `static-assets.ts`, `telemetry.ts`** — all live under `src/` and are therefore covered by `ts-check`, `lint`, and the unit/integration test globs. `telemetry.ts` consumes the OpenTelemetry `dependencies`; `security.ts` consumes helmet, express-rate-limit, rate-limit-redis, bcrypt, jsonwebtoken; `static-assets.ts` and `routes.ts` consume ejs/express/multer.
-- **`src/infrastructure/adapters/image.ts`** — depends on the `sharp` and `puppeteer-core` runtime packages declared here; exercised by the `backfill:image-thumbnails` script.
-- **`tests/cross-cutting/contract-error-declarations.test.ts`** — executed by the `test:cross-cutting` script; likely uses `jest-openapi` and `zod` (both declared here) to assert error contract conformance.
-- **`tests/support/spec-walk.ts`** — a shared test helper imported by cross-cutting/contract tests; runs under the same Jest invocation defined by `test:cross-cutting`.
+- **`src/app/routes.ts`, `request-context.ts`, `security.ts`, `error-handling.ts`, `demo.ts`, `static-assets.ts`, `telemetry.ts`** — the app modules that the `main`/`dev`/`start` scripts launch. Their runtime needs (Express, helmet, rate-limit-redis, @opentelemetry/*, winston, zod, sharp) are satisfied by the `dependencies` declared here.
+- **`src/infrastructure/adapters/image.ts`** — consumes the `sharp` dependency declared in this file.
+- **`tests/cross-cutting/contract-error-declarations.test.ts`** — executed by the `test:cross-cutting` script (`jest tests/cross-cutting`); relies on `jest-openapi` and `supertest` from `devDependencies`.
+- **`tests/support/spec-walk.ts`** — utility used by cross-cutting/contract tests; its type-checking is covered by the `ts-check` script (`tsc --noEmit`).
+- **`src/cluster.ts`** (referenced by `main`, not a listed neighbor) — the actual process entry that imports and wires the `src/app/*` modules above.
 
 ## Notes
 
-- The `host` script is a **prefix-only** helper (`cross-env … npm run`); it sets local env vars and expects an additional script name as its trailing argument. It will fail if invoked standalone.
-- `postinstall` regenerates artifacts (`gen:api` does `rm -rf ./api` first). A clean install therefore always rebuilds the API client and AsyncAPI types — do not commit generated output expecting it to survive a fresh `npm ci`.
-- `dev:docker` and `dev:docker:cluster` use `--legacy-watch` (inotify fallback) because they target inotify-limited Docker bind mounts; the plain `dev` script does not.
-- The `complete` script is the canonical CI gate; `complete:manual` isolates the two tests that require a running cluster/Prism and must be run against a live environment.
-- `lint` enforces `--max-warnings 0`, so any ESLint warning breaks the build.
-- The `overrides` block exists to pin a single transitive dependency (`ip-address`); adding a new override should be treated as a conscious, reviewed decision.
+- `postinstall` runs every `npm install`, so CI and local environments will regenerate `api/` (Orval) and `src/types/asyncapi.generated.ts` automatically. A stale `node_modules` can silently change generated output.
+- The `test` script chains five Jest suites sequentially; each tier after unit runs with `--runInBand`, so parallelism is only within a single suite.
+- `lint` enforces `--max-warnings 0`; any ESLint warning is a hard failure.
+- `compose` defaults to `podman` but honours the `CONTAINER_ENGINE` env var to fall back to `docker`.
+- The `host` script (`cross-env … npm run`) is a passthrough helper for overriding DB/Redis host env vars in a single invocation; it does not itself run a server.
+- `overrides` only pins `ip-address`; no other dependency resolutions are forced.
+- `sharp` is pinned to an exact version (`0.35.4`) rather than a semver range, unlike every other dependency.

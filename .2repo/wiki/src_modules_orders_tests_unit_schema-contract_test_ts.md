@@ -2,28 +2,26 @@
 
 ## Purpose
 
-Unit test that inspects the Mongoose `orderSchema` object **declaration-by-declaration** (required flags, types, defaults, embedded options, index specs) without a database. It exists because the integration suite (`tests/integration/model.test.ts`) exercises the schema only through valid-document saves, which cannot surface declaration defects like a dropped `required`, a flipped `_id: false`, or a reversed index direction.
+Asserts the **declarations** of `orderSchema` — required paths, types, defaults, enums, embedded-subschema options, index specs, and schema-level options — by inspecting the Mongoose schema object directly. This catches declaration defects (a dropped `required`, a flipped `_id: false`, a reversed index direction) that would not change what a valid document looks like and are therefore invisible to integration tests that only drive real saves.
 
 ## Key elements
 
-- **`describe('orderSchema — what an order must carry')`** — asserts the exact required-path set (`['email', 'userId']`), that `userId` is typed `ObjectId`, and that `notes` / `shippingMethod` / `deletedAt` are *not* required.
+- **`describe('orderSchema — what an order must carry')`** — asserts `requiredPaths` is exactly `['email']`; `userId` is typed `ObjectId`; `notes`, `shippingMethod`, `deletedAt` are *not* required.
 - **`describe('orderSchema — status')`** — asserts the enum equals `Object.values(OrderStatus)` and the default is `OrderStatus.pending`.
-- **`describe('orderSchema — money')`** — asserts `shippingCost` defaults to `0` and has `min: 0`.
-- **`describe('orderSchema — the embedded snapshots')`** — asserts `items` has `_id: false`, requires `quantity`, uses `excludeIndexes` on the `product` sub-path, and that `shippingAddress` has `_id: false` with a specific required set (everything but `phone`).
-- **`describe('orderSchema — indexes')`** — asserts exactly three named indexes with explicit directions, and that none carries `unique` or `sparse` options.
-- **`describe('orderSchema — options')`** — asserts `timestamps` is `true`.
-
-All assertions use helper utilities from `tests/support/schema.ts` (`requiredPaths`, `typeOf`, `enumOf`, `defaultOf`, `optionsOf`, `pathOptions`, `subSchema`, `indexSpecs`, `indexOptionSpecs`).
+- **`describe('orderSchema — money')`** — asserts `shippingCost` has no default and `min` is 0.
+- **`describe('orderSchema — the embedded snapshots')`** — asserts `items` sub-schema has `_id: false`, requires `quantity`, sets `excludeIndexes: true` on `product`, and that `shippingAddress` has `_id: false` with five required fields (phone optional).
+- **`describe('orderSchema — indexes')`** — asserts exactly four named, directed index specs and their options (only `orders_anonymizeAfter` is sparse; none are unique).
+- **`describe('orderSchema — options')`** — asserts `timestamps: true`.
 
 ## Relationships
 
-- **`src/modules/orders/model.ts`** — sole subject under test; this file imports `orderSchema` and reads its Mongoose internals directly.
-- **`src/types/index.ts`** — provides the `OrderStatus` enum used to verify the `status` path's enum values and default.
-- **`tests/support/schema.ts`** — supplies every schema-inspection helper; without it this file would need to reach into Mongoose internals ad hoc.
+- **`src/modules/orders/model.ts`** — source of `orderSchema`, the system under test.
+- **`src/types/index.ts`** — provides `OrderStatus` used in enum and default assertions.
+- **`tests/support/schema.ts`** — provides the inspection helpers (`requiredPaths`, `typeOf`, `defaultOf`, `enumOf`, `pathOptions`, `optionsOf`, `subSchema`, `indexSpecs`, `indexOptionSpecs`) that read the schema object without a database connection.
 
 ## Notes
 
-- The file deliberately uses **set-equality** (`toEqual`) for required-path and index assertions rather than individual `toContain` checks, so that *adding* a path or index is as detectable as removing one.
-- Index names are asserted verbatim because they are hand-assigned (not auto-derived); a silent rename would leave stale indexes in production.
-- The `excludeIndexes` assertion on `items.product` is paired with a negative assertion (`indexSpecs` containing no `items.` entries) to prove the catalogue indexes were not copied onto the order collection.
-- No database connection is opened or required — the entire file runs against the in-memory schema object.
+- `userId` is intentionally **not** in the required set: account erasure unsets it, so the schema cannot claim it is always present.
+- Index names are asserted explicitly (not derived) because Mongoose identifies indexes by name — a silent rename would leave the old index in production.
+- The `excludeIndexes` check exists because Mongoose copies an embedded schema's indexes onto the parent collection; without it, catalogue-search indexes would be maintained on every order write.
+- The test runs with **no database**; all helpers from `tests/support/schema.ts` read the in-memory schema definition.

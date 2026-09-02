@@ -2,26 +2,33 @@
 
 ## Purpose
 
-Documents the repo's single local container setup (`docker-compose.yml`), covering the app runtime, core data services, and the full observability stack. Also explains how Podman is supported as a drop-in alternative to Docker and the one non-trivial difference (log collection) between the two engines.
+Documents the single local container implementation (`docker-compose.yml`) and the Podman-compatible helper scripts in `package.json`. It serves as the authoritative reference for which containers exist, their ports, their roles, and the one non-trivial difference (log driver) between running under Docker vs. Podman.
 
 ## Key elements
 
-- **`docker-compose.yml`** — single compose file defining all local services: `app`, `database` (MongoDB 8), `redis` (7), `rabbitmq` (3-management), and the observability stack (`otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `grafana`). No override files or `COMPOSE_FILE` chaining.
-- **`.docker/Dockerfile`** — `node:25-alpine` base with Chromium installed for Puppeteer/PDF rendering. Kept intentionally minimal; compose decides the runtime command.
-- **Podman helper scripts** (`package.json`) — `compose:restart`, `compose:rebuild`, `compose:kill` all invoke `${CONTAINER_ENGINE:-podman} compose`. Default engine is Podman; set `CONTAINER_ENGINE=docker` (shell env var) to switch.
-- **Promtail dual config** — two config files (`promtail.docker.config.yaml` / `promtail.podman.config.yaml`) selected via the `PROMTAIL_CONFIG` env var. Differ only in log parser (JSON envelope vs. CRI) and the glob under the shared `/var/log/host-containers` mount.
-- **Port map** — App `:3000`, MongoDB `:27017`, Redis `:6379`, RabbitMQ `:5672`/`:15672`, OTel `:4317`/`:4318`, Prometheus `:9090`, Alertmanager `:9093`, Loki `:3100`, Grafana `:3001`.
+- **Container map (Mermaid diagram)** — visual topology of the full compose stack: app, core data (MongoDB, Redis, RabbitMQ), and the 7-service observability stack (OTel Collector → Tempo, Prometheus → Alertmanager, Promtail → Loki, all feeding Grafana).
+- **Container reference tables** — per-container image, ports, role, and a "Read next" link for each service.
+- **Service groups** — three logical groupings (App runtime / Core data / Observability) with a one-line rationale.
+- **Podman & Promtail log collection** — the three `.env` variables (`CONTAINER_LOGS_PATH`, `PROMTAIL_CONFIG`, `CONTAINER_LOG_DRIVER`) that make log tailing work under Podman's `k8s-file` driver; explains why the default (`journald`) silently produces no logs.
+- **Engine selection** — `CONTAINER_ENGINE` shell variable consumed by `npm run compose:*` scripts; explicitly *not* a `.env` value.
+- **Kubernetes threshold** — short checklist of when compose stops being sufficient.
 
 ## Relationships
 
-- **docs/tools/grafana.md** — Grafana is defined as a service in this compose file and is the unified query UI for Tempo (traces), Prometheus (metrics), and Loki (logs) as provisioned here.
-- **docs/tools/events-and-logging.md** — Promtail and Loki are the log-collection pair wired up in this stack; the Podman log-driver configuration documented here directly affects whether Promtail finds any log files to tail.
-- **docs/tools/email-and-rendering.md** — RabbitMQ (defined here) is the broker for async email and PDF-generation jobs; the Chromium dependency in the Dockerfile exists specifically to support Puppeteer-driven PDF rendering.
-- **docs/tools/frontend-observability.md** — The app container emits OTLP traces (to `otel-collector`) and exposes `/observability/metrics` (scraped by Prometheus), both of which are wired up in this compose file.
+- **docs/tools/mongodb-mongoose.md** — "Read next" target for the `database` container; explains the MongoDB/Mongoose layer the container provides.
+- **docs/tools/redis-cache.md** — "Read next" for `redis`; documents the caching contract the container serves.
+- **docs/tools/rabbitmq.md** — "Read next" and Related-pages link; details the AMQP broker and management UI.
+- **docs/tools/opentelemetry.md** — "Read next" for `otel-collector`; describes the OTLP instrumentation the collector ingests.
+- **docs/tools/prometheus.md** — "Read next" for both `prometheus` and `alertmanager`; covers scrape config, alert rules, and the `/observability/metrics` endpoint.
+- **docs/tools/loki.md** — "Read next" for `loki` and `promtail`; explains LogQL queries and the Promtail pipeline.
+- **docs/tools/grafana.md** — "Read next" and Related-pages link; documents the dashboard UI that unifies Tempo, Prometheus, and Loki.
+- **docs/tools/package-scripts.md** — Related-pages link; defines the `compose:restart`, `compose:rebuild`, `compose:kill` npm scripts this page depends on.
 
 ## Notes
 
-- **Podman log driver gotcha**: Podman defaults to `journald` (no log files on disk). Promtail tails files, so without setting `CONTAINER_LOG_DRIVER=k8s-file` plus the correct `CONTAINER_LOGS_PATH`, Loki stays empty and Grafana log panels are blank with no error. Three `.env` values fix this; Docker needs none of them.
-- **`CONTAINER_ENGINE` is a shell variable, not a `.env` value.** npm does not read `.env`, so this must be exported in the shell profile. Compose *does* read `.env` for the two Promtail variables — that split is intentional.
-- **Do not set `COMPOSE_FILE` in `.env`.** Docker Compose honours it; podman-compose (≥1.6.0) silently ignores it, making anything built on it work on one runtime and do nothing on the other.
-- The RabbitMQ management UI (`:15672`) and Grafana (`:3001`) both have anonymous/local access enabled by default for development; do not expose these ports to a network.
+- `CONTAINER_ENGINE` is a **shell** variable read by npm, not a `.env` variable. Compose reads `.env`; npm does not. Setting it in `.env` has no effect on which binary is invoked.
+- **Do not set `COMPOSE_FILE` in `.env`.** Docker Compose honours it there, but podman-compose (v1.6.0, verified 2026-08-05) ignores it, causing silent no-ops on Podman.
+- The log driver is applied via a YAML anchor across *all* services; leaving any one on the default means that service's logs are invisible to Promtail.
+- The previous multi-file override mechanism (separate compose override + `scripts/compose.ts` selector) was removed after it selected the Docker override on a Podman-only host, causing Promtail to tail nothing.
+- The Dockerfile installs Chromium specifically for Puppeteer-driven PDF generation; this is not a general browser dependency.
+- Redis cache is intentionally ephemeral (no volume); data is expected to be lost on restart.

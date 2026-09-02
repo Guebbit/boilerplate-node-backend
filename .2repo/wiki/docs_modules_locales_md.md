@@ -2,25 +2,27 @@
 
 ## Purpose
 
-Documents the locales module, which defines which languages this deployment supports and how runtime override rows (one per `locale, scope, key`) patch the bundled translation files. It exists so operators can edit copy without touching source code, while the filesystem remains the source of truth for *which* keys exist.
+Documents the dependency-free `locales` module, which owns two things: the set of languages the deployment speaks (Tier 1, file-based dictionaries loaded into i18next at boot) and the runtime override rows (Tier 2, one per `locale · scope · key`) that patch those dictionaries without touching source files. It exists so copy can be edited at runtime while remaining available during full backend outages.
 
 ## Key elements
 
-- **Tier 1 (bundled files)** — `src/locales/*.json` plus per-module `locales/` folders; loaded into i18next at boot; resolved by `t()`; permanent on disk.
-- **Tier 2 (override rows)** — Two collections keyed by `(locale, scope, key)`. `scope` selects the target dictionary:
-  - `scope: "app"` — served via `GET /locales/:locale/messages`, merged key-by-key over the frontend's bundled copy.
-  - `scope: "api"` — never leaves this service; layered over Tier 1 at boot, on a timer, and after every admin write.
-- **`GET /locales`** — reports `scopes` per language (not a bare tag list), distinguishing "can the API answer in this language" from "can I download a dictionary."
-- **`scope` field** — the single discriminator that routes a row to the correct dictionary.
+- **`scope` field** — the single discriminator on every override row. `app` → served to the frontend via `GET /locales/:locale/messages` and merged over the bundled copy key-by-key. `api` → layered over Tier 1 in-process at boot, on a timer, and after every admin write; never leaves the service.
+- **Tier 1 files** — `src/locales/*.json` plus each module's `locales/` folder. Loaded into i18next at boot; drive `t()` resolution and `Content-Language`. Permanent on disk by design.
+- **Tier 2 rows** — one document per `(locale, scope, key)`. Edited by admins at runtime. Overriding only: a row cannot introduce a key the files do not already define.
+- **`GET /locales`** — reports `scopes` per language (not a bare tag list), so "can the API answer in this language" and "can I download this dictionary" are answered independently.
+- **`GET /locales/:locale/messages`** — the sole HTTP sink for `scope: app` rows; the frontend merges the result over its bundled copy.
 
 ## Relationships
 
-- **`docs/modules/index.md`** — The modules overview page that positions this module in the broader service map; this file cross-references it as the "whole context map."
+- **docs/tools/i18n.md** — describes the i18next mechanism both tiers run on; `locales` is the data layer, `i18n` is the resolution layer.
+- **docs/theory/request-input.md** — explains how an incoming request's locale is negotiated; that negotiated locale is the key that Tier 1 and Tier 2 both resolve against.
+- **docs/tools/demo-profile.md** — the demo dataset registers specific languages and scopes (e.g. `es` with no backing file) to exercise the distinction between "language present in DB" and "language the API can answer in."
+- **docs/modules/index.md** — the overview map that places `locales` as the one module with zero in- or out-degree in the dependency graph.
 
 ## Notes
 
-- **No barrel, no imports.** This module must not be imported by other modules. It is a leaf in the dependency graph.
-- **Overrides, not dictionaries.** A row can only *change* the text of a key that already exists in the files. It cannot introduce a new key.
-- **Language ≠ availability.** A language registered in the database (e.g. `es` in the demo profile) does not guarantee `src/locales/es.json` exists. `GET /locales` encodes this by reporting `scopes` rather than a flat tag list.
-- **Nothing is awaited on the request path.** If Mongo is down, a language is half-translated, or a key is malformed, the worst case is one endpoint failing or a stale overlay. All other responses still resolve copy from the filesystem.
-- **Changing `scope` breaks routing.** It is the sole field that decides which of the two dictionaries a row patches; swapping values silently re-targets every affected row.
+- **No barrel, no imports, no events.** Nothing in the codebase imports `locales` and it imports nothing. Deleting the module removes one folder and this page; no other code or doc page changes.
+- **`scope` is load-bearing.** Changing a row's `scope` silently redirects it to the wrong dictionary (`app` vs `api`). This is the most common source of "my edit isn't showing up" reports.
+- **Rows patch, they do not create.** A key with no file backing will never render regardless of how many override rows reference it.
+- **No request-path awaits.** A Mongo outage or a malformed key degrades to a stale overlay or one failing endpoint; every other response still resolves copy from the files.
+- **Demo `es` trap.** The demo intentionally registers `es` in the override table with no `src/locales/es.json`. Any test that asserts "language listed → API responds" will fail by design.

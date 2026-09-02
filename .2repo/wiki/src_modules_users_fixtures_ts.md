@@ -2,27 +2,27 @@
 
 ## Purpose
 
-Builder for user fixtures used by `./demo` and any test that needs a person. It deliberately omits schema-managed fields (`imageUrl`, `locale`, `admin`, `active`, `verified`, `tokens`) so that `demo-data.json` records what the Mongoose schema actually defaults, rather than baking those values in at fixture time.
+Builds a minimal, schema-respecting user object for demo data and tests. It deliberately omits every field the Mongoose schema defaults (`imageUrl`, `locale`, `admin`, `active`, `verified`, `tokens`) so that `demo-data.json` reflects actual schema behavior rather than a restated copy. The password is always plaintext here; hashing is delegated to the model's pre-save hook.
 
 ## Key elements
 
-- **`PLAIN_PASSWORD`** – Exported constant (`'Password1!'`) used as the default password for any fixture where the caller doesn't pin one. Satisfies the real signup password policy so fixtures can exercise actual signup flows. Exported so login tests type the same string the builder wrote.
-- **`UserOverrides`** – Type alias: `OverridesFor<User> & { password?: string; tokens?: Token[] }`. Derives pin-able fields from the generated `User` contract and adds the two fields (`password`, `tokens`) that contract intentionally excludes (they never appear in API responses).
-- **`UserFixture`** – Type alias: `Partial<UserDocument> & { _id: … }`. The shape `makeUser` returns; ready to pass to `userRepository.create`.
-- **`makeUser(fields?: UserOverrides)`** – Builds a fixture by spreading `identityOf({ id, createdAt, updatedAt })`, setting fixed `username`/`email`/`password`, then merging caller overrides via `compact({ …fields, deletedAt: toDate(deletedAt) })`. Anything absent is left for the schema to fill.
+- **`PLAIN_PASSWORD`** – The single plaintext password (`'Password1!'`) assigned to every unpinned fixture. Satisfies the real `CreateUserBody.shape.password` policy so fixtures can exercise genuine signup flows. Exported so tests that log in reference the same constant instead of a duplicated string.
+- **`UserOverrides`** (type) – What a caller may pin when building a fixture. Derived from `OverridesFor<User>` (from `@types`) plus two additions the public contract omits: `password` (plaintext) and `tokens`.
+- **`UserFixture`** (type) – The return shape of `makeUser`: `Partial<UserDocument> & { _id }`, i.e. a document ready for `userRepository.create`.
+- **`makeUser(fields?)`** – The builder function. Accepts an optional `UserOverrides` object, spreads `identityOf` defaults (id / timestamps), sets fixed `username`, `email`, and `password`, then applies caller overrides via `stripUndefined` (so `undefined` values never shadow schema defaults). `deletedAt` and `twoFactorEnabledAt` are passed through `toDate`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/fixtures.ts`** – Imports `identityOf`, `compact`, `toDate`, and the `OverridesFor` helper type; the generic plumbing this module composes.
-- **`src/modules/users/model.ts`** – Imports `Token` and `UserDocument` types. The model's pre-save hook is responsible for hashing the plaintext password this module writes.
-- **`src/modules/users/demo.ts`** – Consumes `makeUser` / `PLAIN_PASSWORD` to seed demo accounts.
-- **`src/modules/users/tests/fixtures.ts`** – Test-layer re-export or wrapper around this module.
-- **`src/modules/users/tests/unit/fixtures.test.ts`** – Unit-tests the `makeUser` builder itself.
-- **`src/modules/users/tests/integration/repository.test.ts`** – Feeds fixtures into the user repository for integration tests.
-- **`src/types/index.ts`** – Source of the `User` type that `UserOverrides` is derived from.
+- **`@infrastructure/persistence/fixtures`** – Supplies the generic helpers `identityOf`, `stripUndefined`, `toDate`, and the `OverridesFor<T>` type alias used throughout.
+- **`./model`** – Provides the `Token` and `UserDocument` types. Its pre-save hook is the single place that hashes `password`; this file never calls a hash function.
+- **`@types`** – Source of the generated `User` type, from which `UserOverrides` is derived.
+- **`./demo`** – Primary consumer; builds the demo accounts whose shapes are captured in `demo-data.json`.
+- **`tests/fixtures.ts`** – Wraps or re-exports this builder for test suites.
+- **`tests/integration/repository.test.ts` / `tests/unit/fixtures.test.ts`** – Consume `makeUser` and `PLAIN_PASSWORD` to create and authenticate fixture users.
 
 ## Notes
 
-- **Password stays plaintext here on purpose.** `userSchema`'s pre-save hook performs the hash on the way into Mongo. Writing a pre-hashed value in a fixture would drift from that hook and break any code path that expects the hook to do the work.
-- **Do not add schema-managed defaults to `makeUser`.** Fields like `admin`, `active`, `verified`, `locale`, and `imageUrl` are intentionally absent so that fixture output reflects real schema behavior.
-- `compact` strips `undefined` values before spreading, so a caller can pass `{ password: undefined }` without clobbering the `PLAIN_PASSWORD` default.
+- **Password is never hashed here.** If you add a hash in this file it will drift from the model's pre-save hook. Always pass plaintext.
+- **Do not add schema-defaulted fields** (`admin`, `active`, `verified`, `locale`, `imageUrl`, `tokens`) as fixed values in `makeUser`. Their absence is intentional: it lets the schema own the defaults so demo data stays truthful.
+- **`stripUndefined` matters.** Passing `undefined` for an override field would otherwise overwrite the schema default with `undefined` in the document sent to MongoDB.
+- **`UserOverrides` ≠ `User`.** The public `User` type omits `password` and `tokens` (they never appear in API responses). The overrides type adds them back because a fixture *must* set them before the document hits the repository.

@@ -2,23 +2,26 @@
 
 ## Purpose
 
-Unit tests for the four shared fixture helper functions (`toObjectId`, `compact`, `toDate`, `identityOf`) that every module's `fixtures.ts` composes from. The tests exist to pin down the "missing field" semantics of seeded records — each helper has a silent-failure mode (e.g. a hex string that never becomes a real `ObjectId` matching zero documents in a `$match`) that this suite is written to catch.
+Unit tests for the four shared fixture helpers (`toObjectId`, `stripUndefined`, `toDate`, `identityOf`) that every module's `fixtures.ts` composes. The tests exist to pin down the contract for what happens when a seeded record omits a field—specifically the silent-failure modes (string leaking into a `$match`, `undefined` suppressing Mongoose defaults, `Invalid Date` persisting as `null`) and the non-obvious derivation rules (timestamps pulled from the ObjectId's embedded time, `updatedAt` defaulting to `createdAt`).
 
 ## Key elements
 
-- **`describe('toObjectId')`** — verifies hex→`ObjectId` conversion, fresh-id generation when no input is given, and that a malformed string throws rather than silently minting a new id.
-- **`describe('compact')`** — confirms `undefined` keys are stripped (so Mongoose `default:` applies), while `null`/`0`/`''`/`false` are preserved as deliberate values; also asserts non-mutation of the input object.
-- **`describe('toDate')`** — ensures ISO strings (what seed files actually contain) parse to `Date`, a `Date` passes through unchanged, and `undefined` stays `undefined` (preventing `new Date(undefined)` → Invalid Date → persisted as `null`).
-- **`describe('identityOf')`** — the largest block; validates that `_id`, `createdAt`, and `updatedAt` are all produced correctly from: an explicit id only, an explicit `createdAt` (ISO string or `Date`), an explicit `updatedAt`, or no overrides at all. Key assertions: `createdAt` defaults to the timestamp embedded in the `ObjectId`; `updatedAt` defaults to `createdAt` (not `new Date()`).
+- **`describe('toObjectId')`** — verifies hex→`Types.ObjectId` conversion, fresh-id generation when called with no argument, and that malformed input throws rather than silently minting an unrelated id.
+- **`describe('stripUndefined')`** — confirms only `undefined` values are dropped; `null`, `0`, `''`, `false` are preserved. Also asserts the input object is not mutated.
+- **`describe('toDate')`** — checks ISO-string parsing, `Date` passthrough, and that `undefined` stays `undefined` (so `stripUndefined` can remove the key instead of producing an `Invalid Date`).
+- **`describe('identityOf')`** — the largest block. Validates:
+  - `_id` from an explicit id or a freshly generated one.
+  - `createdAt` derived from the id's embedded timestamp when not supplied.
+  - Explicit `createdAt` overriding the derived value.
+  - `updatedAt` defaulting to `createdAt` (not `new Date()`) so an untouched record reads as untouched.
+  - Full-identity output (`_id`, `createdAt`, `updatedAt` all present) from an empty input object.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/fixtures.ts`** — the module under test. All four functions are imported from here via the `@infrastructure/persistence/fixtures` alias.
-- **`mongoose`** — `Types.ObjectId` is used in assertions to confirm `toObjectId` returns a genuine BSON id, not a plain string.
+- **`src/infrastructure/persistence/fixtures.ts`** — sole import target. The test file exercises every public export of that module (`toObjectId`, `stripUndefined`, `toDate`, `identityOf`) and asserts their edge-case behavior. No other files are imported.
 
 ## Notes
 
-- The file's leading docblock is the authoritative description of *why* each helper exists and what silent failure it prevents. The test names and inline comments mirror that rationale — reading the comments is as important as reading the assertions.
-- `identityOf` derives `createdAt` from the ObjectId's embedded timestamp (`_id.getTimestamp()`). This is what gives a seeded catalogue a stable, meaningful sort order without seed files stating explicit dates.
-- `updatedAt` intentionally defaults to `createdAt` rather than `new Date()`, so a seeded-but-never-edited record does not appear in "recently changed" views.
-- The tests use a fixed hex constant (`65dc8a99604c307b702b5ccc`) for deterministic assertions; the "fresh id" test only checks inequality between two generated ids, not specific values.
+- The `HEX` constant (`65dc8a99604c307b702b5ccc`) is a real 24-char hex string; its embedded timestamp is what `identityOf` extracts for `createdAt`, so tests around `identityOf` implicitly depend on that fixed value.
+- The file deliberately tests *negative* silent-failure paths (malformed id, `undefined` timestamp) rather than only the happy path, because those are the failure modes that produce "record not found" or "all records share the same timestamp" bugs far from the seed.
+- `stripUndefined` is tested for immutability (`Object.keys(source)` unchanged) even though the implementation likely uses destructuring or `Object.fromEntries`; this guards against a future refactor that mutates in place.

@@ -2,21 +2,19 @@
 
 ## Purpose
 
-Pins the products module's audit action strings to their exact wire-format values and verifies they are registered in the app-wide `AuditAction` union. These strings are a cross-repo contract consumed by external log queries and alerts, so this test acts as a change-detector: any added, removed, or re-spelled action breaks CI immediately.
+Locks in the exact string values of the `productsAuditActions` vocabulary so that accidental renames, additions, or removals are caught immediately. The values are a wire contract consumed by external log queries and alerting tooling, not just internal constants.
 
 ## Key elements
 
-- **`describe('the products audit vocabulary')`** — suite scoped to the products audit vocabulary.
-- **`it('spells every action exactly as the log tooling expects')`** — asserts `toEqual` against the full expected object (`ADMIN_PRODUCT_CREATED`, `ADMIN_PRODUCT_UPDATED`, `ADMIN_PRODUCT_DELETED` → their dot-notation strings). Whole-object equality means an *extra* or *missing* key fails the test, not just a renamed value.
-- **`it('registers its actions in the app-wide union')`** — assigns a products action to a variable typed as `AuditAction`. This is a **compile-time check only**; the `expect(...).toBe(...)` line is a no-op guard to satisfy Jest's requirement of an assertion. If the `declare module` augmentation in `audit.ts` is removed, `tsc` fails at every `emitAuditEvent` call site and CI goes red.
+- **`describe('the products audit vocabulary')`** — single test suite scoped to the audit vocabulary.
+- **`expect(productsAuditActions).toEqual({...})`** — asserts the entire object by deep equality against three pinned entries (`ADMIN_PRODUCT_CREATED`, `ADMIN_PRODUCT_UPDATED`, `ADMIN_PRODUCT_DELETED`). Using `toEqual` (not `toMatchObject`) means both unexpected extra keys and missing keys fail the test.
 
 ## Relationships
 
-- **`src/modules/products/audit.ts`** — source of the `productsAuditActions` object under test. Its `declare module` block extends `AuditAction` with the three products actions.
-- **`src/infrastructure/observability/audit.ts`** — defines the `AuditAction` type (imported as `type` here). The second test exercises assignability into this union.
+- **`src/modules/products/audit.ts`** — the sole import source; exports `productsAuditActions`, the object whose shape and values are asserted here.
 
 ## Notes
 
-- The string values (`'admin.product.created'`, etc.) are **not** safe to rename in isolation; external dashboards and alert rules read them literally. Update the test's expected object and the external tooling together.
-- The second `it` block has no real runtime assertion. Its sole purpose is to make the TypeScript compiler verify the module augmentation. Don't "simplify" it away.
-- Jest does **not** run `tsc`; a type-only regression (e.g., removing the `declare module` line) is caught by the CI `tsc` step, not by this test file at runtime.
+- The test intentionally compares the *string values* (`'admin.product.created'`, etc.) rather than just the keys. The doc comment makes clear these strings are read by log-query tooling outside this repo, so a constant rename that leaves the value unchanged is safe, but changing the value would silently break external dashboards/alerts.
+- Adding a new audit action to `audit.ts` without adding it here will fail this test — it acts as a written-down registry.
+- Only one test case; there is no parametric or per-action breakdown by design (the whole-object assertion is the point).

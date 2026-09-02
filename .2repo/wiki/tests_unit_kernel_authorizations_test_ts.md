@@ -2,30 +2,34 @@
 
 ## Purpose
 
-Unit tests for the three authorization middlewares (`getAuth`, `isAuth`, `isAdmin`) and the `getTokenBearer` helper in `src/kernel/middlewares/authorizations.ts`. The file exists to pin the deliberately different failure modes of each middleware (fail-open vs. fail-closed vs. role-gated), the exact status codes a client receives, and the audit events emitted on rejection. The response layer is exercised for real; only the JWT/DB boundary and the audit sink are stubbed.
+Unit tests for the authorization middlewares in `src/kernel/middlewares/authorizations.ts`. Verifies that each middleware (`getAuth`, `isAuth`, `isAdmin`, `getTokenBearer`, `isAdminViaCookie`, `requireFreshAuth`) honours its contracted failure mode—fail-open vs fail-closed—returns the correct status code and response envelope, and emits the correct audit event. Only the audit sink and the JWT/user-lookup boundary are stubbed; the response path is exercised for real so asserted status codes match what a client would receive.
 
 ## Key elements
 
-- **`getTokenBearer` tests** — strips the `Bearer` prefix; returns `undefined` for absent or token-less headers.
-- **`getAuth` tests** — optional identification that always calls `next()` exactly once. Covers: no token, valid token, missing `admin` flag (normalised to `false`), invalid/expired token, deleted user, DB failure, and the invariant that it never sends its own response.
-- **`isAuth` tests** — required identification; rejects with 401 when the auth context or bearer token is missing. Asserts a `SECURITY_UNAUTHORIZED` audit event on rejection and no event on pass-through.
-- **`isAdmin` tests** — required elevation; passes admin, rejects non-admin with 403, rejects absent `admin` flag, and (per the truncated tail) distinguishes 401 (no credentials) from 403 (known non-admin).
-- **`makeRequest` / `makeCookieRequest`** — local helpers that build `Request` stubs via `asStub`, carrying optional `Authorization` header, `authContext`, or `cookies.jwt`.
-- **`runUntilNext`** — helper that invokes an async middleware and resolves once `next()` is called, returning the `next` mock for assertions.
-- **Mocked auth resolver** — `registerAuthResolver` is called once with `fromAccessToken` / `fromRefreshToken` jest mocks; the two resolve/reject paths (bad token vs. valid token naming nobody) are kept distinguishable to match production semantics.
-- **`emitAuditEvent` mock** — `jest.mock` replaces only the sink; `buildAuditEvent` and the `coreAuditActions` vocabulary remain real so shape mismatches surface in tests.
+- **`getTokenBearer` tests** — header parsing: strips `Bearer` prefix, returns `undefined` for absent header or bare-scheme header.
+- **`getAuth` tests** — optional identification: always calls `next()` exactly once; never sets a response status; attaches `authContext` on success; defaults `admin` to `false` via `?? false`; proceeds anonymously on expired token, deleted user, or lookup failure.
+- **`isAuth` tests** — required identification: demands *both* an `authContext` and a Bearer token; returns 401 with a generic `{ success: false, status: 401 }` envelope; emits a `SECURITY_UNAUTHORIZED` audit event on rejection, nothing on success.
+- **`isAdmin` tests** — required elevation: passes admin through; distinguishes 401 (no credentials at all) from 403 (known non-admin); both bodies stay generic.
+- **`isAdminViaCookie` / `requireFreshAuth` / `requireFreshAuthWhen` tests** (truncated in sample) — cookie-based auth and session-freshness guards.
+- **`fromAccessToken` / `fromRefreshToken`** — `jest.fn` pair registered via `registerAuthResolver`; the entire auth-resolver contract (rejection = bad token, `undefined` resolution = valid token, no user) is faked here.
+- **`makeRequest` / `makeCookieRequest` / `makeStepUpResponseStub`** — minimal Express request/response stubs built with `asStub`.
+- **`runUntilNext`** — helper that invokes an async middleware and resolves a promise when `next()` is called, returning the `next` mock for assertions.
+- **Partial mock of audit** — `jest.mock` spreads `requireActual` so `buildAuditEvent` and `coreAuditActions` stay real; only `emitAuditEvent` is replaced.
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — the module under test; all five exported symbols are imported here.
-- **`src/kernel/authentication.ts`** — `registerAuthResolver` is called to inject the fake resolvers, replacing the production implementation for the duration of the test.
-- **`src/infrastructure/observability/audit.ts`** — `emitAuditEvent` is mocked (spied via `jest.requireActual`); `coreAuditActions` is consumed as the real vocabulary in audit-event assertions.
-- **`tests/support/stub.ts`** — `asStub` is used to build the `Request`, `NextFunction`, and other plain-object stubs throughout the file.
-- **`tests/support/express.ts`** — `makeResponseStub` provides the chainable `status().json()` response stub whose calls are asserted.
+- **`src/kernel/middlewares/authorizations.ts`** — the module under test; all exported middlewares are imported and exercised.
+- **`src/kernel/authentication.ts`** — `registerAuthResolver` is called at module scope to inject the fake `fromAccessToken`/`fromRefreshToken` pair, replacing the production resolver for the duration of the test.
+- **`src/infrastructure/observability/audit.ts`** — partially mocked; `emitAuditEvent` is a `jest.fn` whose calls are asserted; `coreAuditActions` (the action vocabulary) and `buildAuditEvent` remain real so shape mismatches surface here.
+- **`tests/support/express.ts`** — provides `makeResponseStub` used across all response assertions.
+- **`tests/support/stub.ts`** — provides `asStub`, the generic helper used to build every request, response, and `NextFunction` stub in this file.
 
 ## Notes
 
-- The `getAuth` "never sends a response" test guards against a future refactor that would let the optional middleware pre-empt the route handler with a status code.
-- The `admin ?? false` normalisation test exists because both `isAdmin` and `orderService.callerScope` branch on the flag; an explicit `false` is the only value that cannot be misread as "unknown."
-- `isAuth` requires **both** a populated `authContext` **and** a present bearer token; the test with context-but-no-token documents that an already-populated request object cannot stand in for a credential.
-- The file references `isAdminViaCookie` in the import list but the truncated content does not show its test block; expect cookie-path coverage below the truncation point.
+- **Partial mock discipline:** `jest.mock('@infrastructure/observability/audit', …)` spreads `requireActual` first, so only `emitAuditEvent` is replaced. If the real `buildAuditEvent` output shape drifts, tests here will fail before production does.
+- **Resolver contract is binary:** a *rejection* means "bad/expired token" and a *resolved `undefined`* means "valid token, no matching user." These must stay distinguishable in the fake or `isAdminViaCookie`'s 401-vs-403 mapping breaks.
+- **`getAuth` never responds:** it is identification-only; any `res.status`/`res.json` call would be a bug. Tests assert this explicitly.
+- **`isAuth` requires both conditions:** an `authContext` without a Bearer token is still a 401. This prevents a populated request object from standing in for a credential.
+- **`admin` normalisation:** `getAuth` tests that a missing `admin` field is coalesced to `false` (not left `undefined`), because `isAdmin` and downstream `callerScope` logic branch on the value.
+- **`nowSeconds()`** returns epoch *seconds* (not ms) to match the JWT `auth_time` claim; `staleRequest()` subtracts 999 s to fall outside any freshness tier.
+- **`makeStepUpResponseStub`** adds a `setHeader` mock because `requireFreshAuth` calls it and the shared `makeResponseStub` does not.

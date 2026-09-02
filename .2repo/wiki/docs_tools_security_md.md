@@ -2,28 +2,41 @@
 
 ## Purpose
 
-Documentation page that catalogs the project's security tooling (Helmet, CORS, rate-limit, JWT, bcrypt, cookie-parser), explains the split-token auth architecture and its request flow, and records the rationale behind specific security decisions (rate-limit budgets, regex escaping, `trust proxy`, SSE cookie auth, metrics credential, 401-vs-403 policy). It exists so contributors and AI assistants can understand *why* the security middleware is configured the way it is without reverse-engineering the code.
+Documents the security posture of the backend: the middleware and libraries that harden the Express app, the split-token auth model (short-lived Bearer access tokens + HTTP-only refresh-token cookies), TOTP two-factor authentication, the four rate-limit budgets, the metrics-endpoint credential, `$regex` input escaping, and `trust proxy` configuration. It exists so that engineers and AI assistants understand *why* each control is shaped the way it is before modifying any of the endpoints or middleware it governs.
 
 ## Key elements
 
-- **Main security tools table** — lists Helmet, cors, express-rate-limit, jsonwebtoken, cookie-parser, bcrypt with a one-line "why" for each.
-- **Auth architecture (split-token model)** — access token (Bearer JWT) vs. refresh token (HttpOnly `jwt` cookie); where verification happens (`getAuth`, `verifyAccessToken`, `verifyRefreshToken`, `users.tokens` store).
-- **Rate-limit budgets** — global 100 req/min limiter + a separate smaller limiter on `POST /account/login` with `skipSuccessfulRequests`; test-suite budget raised 10× in `tests/support/setup.ts`.
-- **Metrics endpoint credential** — static bearer token (`NODE_METRICS_TOKEN`) for Prometheus scraping; deny-by-default when unset; compared via `timingSafeEqual`.
-- **Regex-escaping rule** — search terms are escaped before `$regex`; empty/whitespace-only terms yield `undefined` (not `''`) to avoid matching all documents.
-- **`trust proxy` / `NODE_TRUST_PROXY_HOPS`** — must equal the actual proxy count; `0` (default) for local/compose; `true` is explicitly warned against.
-- **401 vs 403 policy** — 401 = "authenticate and retry", 403 = "known but refused"; all guards follow this.
-- **SSE endpoint auth** — `EventSource` cannot set headers, so `isAdminViaCookie` verifies the HttpOnly refresh cookie (signature + DB presence) instead of a Bearer token.
-- **Strategy note** — security concerns live near routes/middleware, before business logic.
+- **Security middleware stack** — Helmet (default headers), cors (origin allowlist), express-rate-limit (edge abuse protection), cookie-parser, bcrypt (password hashing), jsonwebtoken (HS256 access/refresh tokens).
+- **Split-token auth model** — Access token (short-lived JWT, `Authorization: Bearer` header) + Refresh token (longer-lived JWT in `httpOnly`/`sameSite=lax`/`secure` `jwt` cookie). Verified by `getAuth` → `verifyAccessToken` and `createAccessToken` → `verifyRefreshToken` (signature + `users.tokens` DB presence).
+- **TOTP 2FA** — AES-256-GCM encrypted secret (`NODE_TOTP_ENCRYPTION_KEY`, versioned for rotation), sha256-hashed backup codes, two-step enrollment, discriminated-union login response, single-purpose challenge token, per-account time-step replay tracking, admin-only recovery.
+- **Rate-limit budgets** —
+  - Global: 100 req/min (browsing-sized, per-minute window).
+  - Credential (`POST /account/login`): smaller per-route budget, `skipSuccessfulRequests: true`.
+  - Submission (`POST /contact`): `skipSuccessfulRequests: false` (success = abuse signal), `NODE_SUBMISSION_RATE_LIMIT_MAX=5`.
+  - Upload (image routes across products/users/account): `skipSuccessfulRequests: false` (decode/resize CPU cost), `NODE_UPLOAD_RATE_LIMIT_MAX=20`.
+- **Metrics endpoint credential** — Static bearer token for Prometheus scraping; `timingSafeEqual` comparison; deny-by-default when `NODE_METRICS_TOKEN` is unset.
+- **`$regex` escaping** — Search terms are escaped before reaching MongoDB `$regex` to prevent ReDoS and to treat input as literal text; empty-after-strip returns `undefined` (not `''`) to avoid matching all documents.
+- **`trust proxy` guidance** — Two failure modes (unset vs. misconfigured) for `request.ip` used by rate-limit buckets and audit logs.
 
 ## Relationships
 
-- **`docs/tools/runtime.md`** — defines the environment variables this page's security behavior depends on (`NODE_METRICS_TOKEN`, `NODE_TRUST_PROXY_HOPS`). Security middleware is inert or misconfigured without the runtime env described there.
+- **`docs/modules/account.md`** — The login (`POST /account/login`), refresh (`GET /account/refresh`), and 2FA setup/confirm endpoints whose security behavior (token issuance, challenge flow, rate limits) is specified here.
+- **`docs/modules/account-sessions.md`** — Session lifecycle and token storage (`users.tokens`) that `verifyRefreshToken` checks for revocation; the split-token model defined here is the session contract.
+- **`docs/modules/feedback.md`** — `POST /contact` is the sole route guarded by `submissionLimiter`; the inverted `skipSuccessfulRequests` rule is documented here.
+- **`docs/modules/users.md`** — `users.tokens` store used by refresh verification; the admin surface for 2FA recovery; upload routes covered by `uploadLimiter`.
+- **`docs/reference/ops.md`** — Runtime environment variables referenced throughout (`NODE_TOTP_ENCRYPTION_KEY`, `NODE_MFA_CHALLENGE_MAX`, `NODE_SUBMISSION_RATE_LIMIT_MAX`, `NODE_UPLOAD_RATE_LIMIT_MAX`, `NODE_METRICS_TOKEN`) and the `.env-example` / compose config that set the metrics token.
+- **`docs/reference/src-infrastructure.md`** — Where Helmet, CORS, rate-limiters, `trust proxy`, and the Express app wiring live in source; this page describes *why* they are configured as they are.
+- **`docs/reference/tests.md`** — Test suites raise rate-limit budgets tenfold (via `tests/support/setup.ts`) to avoid 429s in CI; the credential-endpoint and 2FA flows are exercised here.
+- **`docs/theory/web-attack-catalog.md`** — The threats each control addresses (ReDoS via `$regex`, timing attacks via `===` vs. `timingSafeEqual`, CSRF via `sameSite`, brute-force via rate limits, token replay via time-step tracking).
+- **`docs/theory/data-protection.md`** — Password hashing (bcrypt), TOTP secret encryption, backup-code hashing, and refresh-token storage all fall under the data-protection policy summarized here.
+- **`docs/theory/request-flow.md`** — The login → auth → refresh sequence (steps 1–7) is the canonical request-flow example for the auth path.
+- **`docs/theory/architecture.md`** — The split-token model and the four-budget rate-limit design are architectural decisions this page justifies.
 
 ## Notes
 
-- The global rate limiter is deliberately per-**minute** (not per-quarter-hour) to avoid locking out legitimate browsing sessions; see the rationale in the file for why a long window is worse.
-- `skipSuccessfulRequests` on the login limiter means a correct sign-in spends zero budget — important for shared egress IPs (CGNAT, offices).
-- An unset `NODE_METRICS_TOKEN` **denies** access rather than opening the endpoint; the shipped `.env-example` and compose file set it so the stack works out-of-the-box.
-- A search term that reduces to an empty string must return `undefined`, not `''`, because `$regex: ''` matches every document — a silent "match all" inversion.
-- SSE auth deliberately avoids query-string tokens (`?token=…`) to prevent leakage via access logs, `Referer` headers, and browser history.
+- The file was truncated in the provided content; the `trust proxy` section (table of two failure modes) is incomplete. The full table likely distinguishes "unset" (all requests appear to come from the proxy's IP) from "set too high" (internal client IPs are trusted, spoofing the rate-limit bucket key).
+- `skipSuccessfulRequests` being **on** for credentials but **off** for submissions and uploads is a deliberate inversion, not an oversight—do not "unify" them.
+- The `$regex` escaping returns `undefined` (not `''`) for terms that vanish after stripping; treating it as empty would match every document.
+- The 2FA challenge token is single-purpose: the session resolver explicitly rejects it, so it can never authenticate a request by itself.
+- The metrics endpoint uses a static credential, not the admin JWT—Prometheus cannot perform login/refresh. An unset `NODE_METRICS_TOKEN` denies access rather than opening the endpoint.
+- Test environments multiply all rate-limit budgets by 10×; do not remove this override when adding new routes.

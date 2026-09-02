@@ -2,36 +2,40 @@
 
 ## Purpose
 
-Defines the Mongoose schema, Zod wire-validation twin, and token subdocument methods for the user record. Kept as a single file deliberately: splitting it would separate the bcrypt pre-save hook from the `select: false` that prevents the password hash from leaking on any read.
+Defines the Mongoose schema, TypeScript document/service types, token subdocument methods, and the Zod wire-validation schema for the user record. Kept as a single file so the `pre-save` bcrypt hook and the `select: false` flag on `password` stay co-located—splitting them would risk a `.lean()` read leaking the hash.
 
 ## Key elements
 
-- **`TokenType`** — enum (`REFRESH`, `PASSWORD_RESET`) naming the two token types the JWT layer recognises.
-- **`Token`** — interface for a token subdocument (`token`, `type`, `expiration?`, `lastUsedAt?`, plus the Mongoose-assigned `_id`).
-- **`UserRecord` / `UserDocument` / `UserMethods` / `UserModel`** — TypeScript type layer bridging the wire `User` contract (ISO-string dates) to the Mongoose document (real `Date`s), instance methods (`tokenAdd`, `tokenRemoveAll`), and the model type.
-- **`zodUserSchema`** — Zod schema extending the orval-generated `CreateUserBody` with i18n-aware validation messages for `email`, `username`, and `password`.
-- **`userSchema`** — the Mongoose schema: all user fields, `timestamps: true`, indexes, the bcrypt pre-save hook, and atomic token `$push`/`$pull` methods.
-- **Indexes** — `users_email` (unique) and `users_tokens_token`. Explicitly *not* indexed: `deletedAt`.
+- **`TokenType`** – Enum (`REFRESH`, `PASSWORD_RESET`) naming the two token kinds the JWT layer issues. Stored tokens also carry an account-deletion type not in this enum.
+- **`hashToken(token)`** – SHA-256 hex digest used for all token storage/lookup. Exported so callers comparing in-memory tokens and the migration script hash identically.
+- **`Token`** – Subdocument shape (`_id`, `token`, `type`, `expiration`, `lastUsedAt`, `supersededAt`). The only field allowed to leave the server is `_id` (used as a revocation handle).
+- **`UserRecord`** – Storage-side shape: adds `password` (hashed), `deletedAt`, `inactivityWarnedAt`, 2FA fields, `tokens[]`, and redeclares timestamp fields as `Date` (contract uses ISO strings).
+- **`UserDocument`** – `UserRecord` + `UserMethods` + Mongoose `Document` guarantees + `pendingImageKey`.
+- **`UserMethods`** – `tokenAdd` / `tokenRemoveAll` instance methods.
+- **`zodUserSchema`** – Zod wire-validation built on the orval-generated `CreateUserBody`. All error messages are thunks (`() => t(...)`) to defer i18n resolution past import time.
+- **`userSchema`** – The Mongoose `Schema` with field definitions, regexes, defaults, and `select: false` on `password`.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** (`context.ts`, `index.ts`) — `zodUserSchema` imports `t` to build per-locale error messages.
-- **`@infrastructure/persistence/serialize.ts`** — the model's output is expected to pass through `applySerialization` / `applyUserTransform` before reaching a controller.
-- **`src/modules/account/session/jwt.ts`** — consumes `TokenType` to issue/verify refresh and password-reset JWTs.
-- **`src/modules/account/services/authentication.ts`** — reads the schema's `password` (via `*WithCredentials` helpers) and calls `tokenAdd`/`tokenRemoveAll` on login and logout.
-- **`src/modules/account/services/verification.ts`** — issues and consumes `PASSWORD_RESET`-type tokens stored in `tokens`.
-- **`src/modules/account/services/profile.ts`** — reads/writes the profile fields defined here (`username`, `phone`, `website`, `locale`, `imageUrl`, `thumbnailUrl`).
-- **`src/modules/account/services/tokens.ts`** — manages the `tokens` array (revoke-all, list sessions).
-- **`src/modules/account/controllers/post-logout-everywhere.ts`** — triggers `tokenRemoveAll` across all refresh types.
-- **`scripts/backfill-image-thumbnails.ts`** — writes `thumbnailUrl` and clears `pendingImageKey` on existing rows.
-- **Integration tests** (`jwt.test.ts`, `persisted-locale.test.ts`, `self-service.test.ts`, `service-flows.test.ts`, `service.test.ts`) — exercise the schema, token methods, and serialization end-to-end.
+- **`scripts/reap-inactive-accounts.ts`** – Stamps `inactivityWarnedAt` on first warning; reads it to distinguish its own soft-deletes from admin-initiated ones.
+- **`src/infrastructure/i18n/index.ts`** – Provides `t()` used inside `zodUserSchema` error thunks.
+- **`src/infrastructure/persistence/serialize.ts`** – `applySerialization` is imported to transform documents on read.
+- **`src/modules/account/services/tokens.ts`** – Calls `hashToken`, `tokenAdd`, `tokenRemoveAll`; manages refresh/rotation lifecycle.
+- **`src/modules/account/services/two-factor.ts`** – Reads/writes `twoFactorSecret`, `twoFactorLastUsedStep`, `twoFactorBackupCodes`; uses `hashToken` for backup codes.
+- **`src/modules/account/services/authentication.ts`** – Consumes the `pre-save` bcrypt hook; selects `password` via `*WithCredentials` helpers for login.
+- **`src/modules/account/services/verification.ts`** – Issues/consumes password-reset and verification tokens via `tokenAdd` / `tokenRemoveAll`.
+- **`src/modules/account/session/jwt.ts`** – Imports `TokenType` to classify issued JWTs.
+- **`src/modules/account/services/profile.ts`** – Reads/writes the self-service fields (`phone`, `website`, `locale`, `imageUrl`, `analyticsConsent`).
+- **`src/modules/account/controllers/post-logout-everywhere.ts`** – Triggers `tokenRemoveAll` to revoke all sessions.
+- **`src/modules/account/tests/integration/jwt.test.ts`** – Exercises token add/rotate/remove and `hashToken` through the model.
+- **`src/modules/account/tests/integration/persisted-locale.test.ts`** – Asserts `locale` default and round-trip.
+- **`src/modules/account/tests/integration/self-service.test.ts`** – Covers profile field edits against the schema.
 
 ## Notes
 
-- **Zod messages are thunks** (`error: () => t(...)`), never eagerly called. This module is evaluated at import time, before `i18next.init()` runs in `app.ts`; an eager call would return `undefined` and Zod would silently fall back to its own English default.
-- **`password` and `tokens` are both `select: false`.** Even a `.lean()` read bypasses `applyUserTransform`, so the schema-level exclusion is the last line of defence. Use the repository's `*WithCredentials` helpers to re-select.
-- **Token writes are atomic** (`$push`/`$pull` evaluated by mongod), never read-modify-write, to avoid lost-session races under concurrent logins.
-- **Index names are load-bearing.** Mongo identifies an index by name as much as by key; renaming one here will make a database holding the old name fail at boot rather than silently no-op.
-- **`active` and `verified` are independent of `deletedAt`.** Deactivation and soft-delete are separate states; admin listings filter on `active`, not `deletedAt`.
-- **`createdAt`/`updatedAt` are redeclared as `Date`** in `UserRecord` because the wire contract carries ISO strings but `timestamps: true` writes real `Date` objects.
-- **`deletedAt` is deliberately not indexed** — nothing searches on it; the one login query that references it also matches on the unique, indexed `email`.
+- **i18n thunk pattern is mandatory.** `zodUserSchema` evaluates at import time, before `i18next.init()`. An eager `t(...)` call returns `undefined` and Zod silently falls back to its English message. Always use `error: () => t(...)`.
+- **`password` is `select: false`.** Any query that needs the hash must explicitly `.select('+password')` (the repository's `*WithCredentials` helpers). A plain `.find().lean()` will never return it.
+- **`active` vs `deletedAt`.** These are independent tri-states; deactivation and soft-delete produce the same external effect but are distinct internal states. Backfilled by migration `20260808120000`.
+- **Timestamp fields are `Date` in the document, ISO strings in the wire `User` contract.** The `UserRecord` interface redeclares them as `Date` to match what `timestamps: true` actually writes—don't type them as `string` in new code.
+- **`supersededAt` keeps rotated refresh tokens in the array** for a short grace window (prevents two-tab race from looking like theft). Absent means the token is still live.
+- **`Token['type']` is a plain string** in the stored subdocument; the `TokenType` enum only names the two JWT-layer kinds. The account-deletion token type appears in `tokens[]` but is not in the enum.

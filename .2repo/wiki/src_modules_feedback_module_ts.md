@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Declares the manifest for the **feedback** module — an open contact form where anyone (with or without an account) can file a request and admins triage it. This file wires together the module's name, route table, and locale path into a single `AppModule`-shaped export so the kernel can register it.
+Module manifest for the **feedback** (contact-form) module. It registers the module's name, base path, Express router, and locale directory into the application's module registry. The module handles open contact requests (filed by anyone with or without an account) and admin-only triage.
 
 ## Key elements
 
-- **default export** — An object literal satisfying `AppModule` (from `@kernel/registry`). Contains:
-  - `name`: `'feedback'`
-  - `basePath`: `'/feedback'`
-  - `routes`: re-exported `router` from `./routes.ts`
-  - `locales`: resolved path to a sibling `locales/` directory (via `path.join(__dirname, …)`)
-- **`router`** (imported from `./routes.ts`) — The actual route handlers; not defined here.
+- **Default export** — An object satisfying `AppModule` (from `@kernel/registry`) with:
+  - `name: 'feedback'`
+  - `basePath: '/feedback'`
+  - `routes: router` (imported from `./routes`)
+  - `locales: <abs path to ./locales>`
+- **Doc comment** — Documents the module's position in the dependency graph: it *reaches* nothing; it is *reached by* the account module's data export (`findOwnTickets`), gated behind `NODE_EXPORT_INCLUDE_FEEDBACK` (default off).
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Supplies the `AppModule` type; this file's default export is type-checked against it with `satisfies`.
-- **`src/modules/feedback/routes.ts`** — Source of the `router` value embedded in the manifest.
-- **`src/modules.ts`** — Consumes this module's default export as part of the app's module collection.
+- **`src/kernel/registry.ts`** — Provides the `AppModule` type used in the `satisfies` clause; this file is a concrete implementation of that contract.
+- **`src/modules.ts`** — Aggregates all module manifests (including this one) so the kernel can mount them.
+- **`src/modules/feedback/routes.ts`** — Supplies the `router` that this manifest attaches to the `routes` field.
 
 ## Notes
 
-- The JSDoc explicitly marks this file as a **leaf in both directions**: it imports nothing beyond a type, a path helper, and the local router, and (per the doc comment) no other file imports it directly. Deleting the directory removes the feature with no ripple.
-- Feedback records an **email address**, not a user ID, by design — the form is open to unauthenticated visitors, so no account relationship exists to delete.
-- The `satisfies` keyword is used (not `: AppModule`) so the object keeps its literal types at the call site while still being checked structurally against the contract.
+- This module records an **email address**, not a user ID. The doc comment explicitly states this is intentional (the form is open to unregistered users) and that deleting an account does *not* remove their feedback.
+- The `findOwnTickets` call in the account module links a ticket to an account by guessing the email matches; the doc comment notes that guess is the **caller's** responsibility, not this module's.
+- The module is described as a "leaf in both directions" — no internal module imports from it, and it imports from no other internal module beyond the registry type and its own routes file.

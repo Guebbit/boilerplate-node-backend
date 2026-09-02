@@ -2,21 +2,22 @@
 
 ## Purpose
 
-Barrel module for the account service layer. It re-exports every function from the six internal service files (`authentication`, `profile`, `addresses`, `verification`, `tokens`, `token-cleanup`) through two channels: a curated set of named exports for direct imports, and a single `accountService` namespace object that carries the full surface. It exists so controllers and external callers address one path (`../services`) rather than reaching into sub-files.
+Barrel module that re-exports every function from the account sub-services (authentication, profile, addresses, verification, tokens, token-cleanup, export, two-factor) into a single `accountService` namespace plus a short list of named re-exports. It exists so callers have one import site and the namespace acts as a catch-all registry; no business logic lives here.
 
 ## Key elements
 
-- **Named re-exports** — `tokenAdd`, `signup`, `login`, `PASSWORD_RESET_TOKEN_TYPE`, `passwordChange`, `passwordChangeWithCurrent`, `updateProfile`, `addressForCheckout`, `sendVerificationEmail`, `EMAIL_VERIFY_TOKEN_TYPE`, `runTokenCleanup`. A deliberate subset; address-book CRUD and `tokenRemoveAll` are excluded because no caller imports them by name.
-- **`accountService` (object export)** — A single namespace containing all 31 functions from the six sub-modules, including side-effecting jobs (`sendVerificationEmail`, `runTokenCleanup`, `adminTokenCleanup`). Intended as the "reaches everything" access point.
-- **Re-exported token-type constants** — `PASSWORD_RESET_TOKEN_TYPE` and `EMAIL_VERIFY_TOKEN_TYPE` are surfaced alongside the functions that create them.
+- **`accountService`** — the primary export; an object literal bundling all 35 service functions (auth, profile, address CRUD, verification, token lifecycle, cleanup, export, 2FA). Controllers and tests reach through this namespace.
+- **Named re-exports** — `tokenAdd`, `signup`, `login`, `PASSWORD_RESET_TOKEN_TYPE`, `passwordChange`, `passwordChangeWithCurrent`, `updateProfile`, `addressForCheckout`, `sendVerificationEmail`, `EMAIL_VERIFY_TOKEN_TYPE`, `runTokenCleanup`. A deliberately smaller subset: only functions that are actually imported by name elsewhere.
+- **Imports from sub-modules** — `./authentication`, `./profile`, `./addresses`, `./verification`, `./tokens`, `./token-cleanup`, `./export`, `./two-factor`.
 
 ## Relationships
 
-- **Consumed by all 15 account controllers** (`get-account`, `post-login`, `post-logout`, `delete-account-request`, `delete-account-confirm`, `delete-address`, `get-addresses`, `get-refresh-token`, `get-sessions`, `post-logout-everywhere`, `post-password-change`, `post-reset-confirm`, `post-reset-request`, `delete-expired-tokens`) — each imports specific named exports or the `accountService` namespace from this file.
-- **Aggregates six internal service files** (`./authentication`, `./profile`, `./addresses`, `./verification`, `./tokens`, `./token-cleanup`). Per the module doc, nothing outside the account module imports those files directly; this barrel is the sole public surface.
+- **Consumed by controllers** (all 15 listed neighbors): `post-login.ts`, `post-login-2fa.ts`, `post-2fa-setup.ts`, `post-2fa-confirm.ts`, `delete-2fa.ts`, `delete-account-request.ts`, `delete-account-confirm.ts`, `delete-address.ts`, `delete-expired-tokens.ts`, `delete-session.ts`, `get-account.ts`, `get-addresses.ts`, `get-refresh-token.ts`, `get-sessions.ts`, `post-account-export.ts`. Each imports specific functions from this file (via `accountService.*` or the named exports) and delegates the operation.
+- **Depends on sub-service files** under `src/modules/account/services/` (the eight `./` imports above). This file adds no logic; it is a pass-through.
+- **`../session/`** sits below this layer (JWT signing, refresh cookie, shared expiry) per the module doc comment; nothing outside the account module imports `session/` directly.
 
 ## Notes
 
-- **Two export channels, different scoping.** Named exports are a curated list (adding a new export here is a conscious decision); `accountService` is exhaustive (adding a sub-module function *requires* adding it here or it silently disappears from the namespace). Keep them in sync when adding operations.
-- **No logic lives here.** The file is pure re-export plus one object literal. Behaviour changes always belong in the sub-module files.
-- **The "folder rather than one file" convention** (referenced to `docs/theory/layers.md`) explains why the account service was split at ~300 lines; the same rule that retired `addresses-service.ts` into this structure applies to future splits.
+- **Dual export pattern is intentional and maintained manually.** The named-export list is a *subset* of `accountService`; it was trimmed to only what is imported by name (address-book CRUD and `tokenRemoveAll` were removed because no caller uses them that way). Adding a new function to `accountService` does **not** automatically add it to the named exports — update both lists together.
+- The namespace is explicitly described as carrying *every* exported function, including side-effecting jobs (`sendVerificationEmail`, `runTokenCleanup`), to prevent silent loss of members.
+- The split rationale (why this folder instead of one file) is documented in `docs/theory/layers.md`; the module boundary is described in `src/modules/account/index.ts`.

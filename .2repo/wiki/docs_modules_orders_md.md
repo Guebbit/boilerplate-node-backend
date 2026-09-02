@@ -2,26 +2,31 @@
 
 ## Purpose
 
-Documents the orders module: the aggregate that owns line-item snapshots, the order status state machine, and the semantics of cancellation (unit release + refund). It exists to make the invariants explicit so no other module silently reinterprets them.
+Documents the **orders** module: the owner of placed orders, their frozen line items, the status state machine, and the invariants around what cancelling restores. It is the strongest aggregate candidate in the system and the module whose `status` enum acts as the public vocabulary three sibling modules react to.
 
 ## Key elements
 
-- **`items` (line items)** — each row embeds `productSchema` directly (a frozen snapshot), not a reference to `products`. Guarantees an order's history is immutable even if the catalogue changes.
-- **`status` enum** — `pending` → `paid` → `processing` → `shipped` → `delivered`, with `cancelled` reachable from `pending` or `paid`. This is the module's public vocabulary; transitions are driven by specific actors (checkout/admin, `payments`, `delivery`, expired holds).
-- **`userId: 1, deletedAt: 1` index** — supports the two dominant queries in one lookup: "give me this account's live orders" and "soft-delete an order."
-- **Permissions** — reads are scoped to the owning account; writes and soft-deletes are admin-only.
+- **Status enum** — `pending → paid → processing → shipped → delivered`, plus `cancelled` reachable from `pending` or `paid`. Each transition has a designated actor (checkout, payments, admin, delivery, or an expired hold).
+- **Embedded `productSchema` in `items`** — the catalogue row is copied into the order at purchase time so later product edits cannot rewrite historical orders.
+- **`userId: 1, deletedAt: 1` index** — supports both per-account reads and admin soft-delete in a single index lookup.
+- **Domain events emitted** — `order.status_changed` (to delivery) and `order.cancelled` (to payments for refund).
+- **Domain events consumed** — `inventory.reservation_expired` (triggers cancellation) and `user.deleted` (from the users module).
 
 ## Relationships
 
-- **`products`** — supplies the `productSchema` shape and serialisation transform that `items` embeds at order time.
-- **`inventory` / `inventory-reservations`** — holds units when an order enters `pending`; emits `reservation.expired` which can transition the order to `cancelled`.
-- **`payments`** — confirms payment → `paid`; listens for `order.cancelled` to issue a refund.
-- **`delivery`** — drives the `processing → shipped → delivered` fulfilment leg.
-- **`cart` / `cart-checkout`** — upstream; checkout is the actor that creates an order in `pending` state.
-- **`index`** — the modules overview page that places orders in the wider context map.
+- **inventory** — solid dependency: orders reads units from inventory. Dotted: `reservation_expired` event flows *into* orders, triggering cancellation.
+- **products** — solid dependency: orders embeds the product schema published through products' barrel export.
+- **payments** — payments confirms `pending → paid`; in return, `order.cancelled` tells payments to issue a refund. No import either direction.
+- **delivery** — `order.status_changed` tells delivery to create the parcel; delivery later advances the status to `delivered`.
+- **cart / cart-checkout** — cart imports orders; checkout is the originator of `pending` orders.
+- **manager (demo-ecommerce)** — the "admin" actor that writes, soft-deletes, and manually moves statuses.
+- **tactical-ddd** — explains why orders is the primary aggregate candidate.
+- **events-and-logging** — documents the lifecycle of `order.cancelled` and `reservation_expired`.
+- **modules/index** — parent overview page.
 
 ## Notes
 
-- **Breaking change:** modifying the `status` enum ripples into at least three other modules (`payments`, `delivery`, `inventory-reservations`). Treat it as a shared contract.
-- **No direct imports across the cycle.** `inventory` cancels orders and `orders` announces `order.cancelled` exclusively through events, which keeps the dependency graph acyclic. Do not replace these with synchronous calls.
-- **Embedding vs. referencing:** `items` stores the full product shape, not an ID lookup. This is deliberate (invoice integrity) — do not "simplify" it to a foreign key.
+- **Do not change the `status` enum casually.** Three modules (payments, delivery, inventory) react to specific values; renaming or reordering breaks them silently.
+- **Two reverse reactions are event-based, not import-based.** inventory→orders (expiry) and orders→payments (refund) are deliberately acyclic. Adding an import here creates a cycle.
+- **Embedding vs. referencing is intentional.** The `productSchema` copy in `items` exists so an invoice cannot change after payment. Do not replace it with a foreign key to the live product row.
+- Account-level reads are scoped by `userId`; all writes and soft-deletes are admin-only. The composite index is what keeps both paths cheap — adding a new query pattern may require a separate index.

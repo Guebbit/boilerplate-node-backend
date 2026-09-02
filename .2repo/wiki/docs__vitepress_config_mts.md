@@ -2,24 +2,28 @@
 
 ## Purpose
 
-VitePress configuration file that defines the site title, description, local search, top-level navigation, and the full sidebar structure for the project's documentation site. It also wraps the config with the Mermaid plugin so diagram blocks render natively in the docs.
+VitePress site configuration that defines the documentation layout for the "Boilerplate Node Backend" project. It sets the site metadata, enables local search, configures the top navigation bar, and declares the sidebar structure for every documentation section (Demo Shop, Theory, Modules, Tools, API/Reference). Mermaid diagram rendering is enabled via the `vitepress-plugin-mermaid` wrapper.
 
 ## Key elements
 
-- **`withMermaid(...)`** – Wraps the VitePress config (from `vitepress-plugin-mermaid`) to enable Mermaid sequence/flowchart rendering in Markdown pages.
-- **`defineConfig({...})`** – Standard VitePress entry point; the exported default is `withMermaid(defineConfig(...))`.
-- **`title` / `description`** – Site-level metadata shown in the browser tab and used for SEO; identifies this as an "ADHD-friendly docs" project for an Express + MongoDB + Mongoose REST boilerplate.
-- **`themeConfig.search.provider: 'local'`** – Enables VitePress's built-in local search (no external service).
-- **`themeConfig.nav`** – Top-level navigation bar with seven entries: Home, Start, Theory, Modules, Tools, API, Files.
-- **`themeConfig.sidebar`** – Per-section sidebar definitions keyed by path prefix (`/theory/`, `/modules/`, `/tools/`, `/reference/`, `/api/`). Each entry is a grouped list of links, some with nested sub-items (e.g., cart → Checkout, inventory → Reservations).
+- **`export default withMermaid(defineConfig({ … }))`** — the sole export; wraps the standard VitePress config with the Mermaid plugin so `.md` files can render Mermaid diagrams.
+- **`title` / `description`** — site-level metadata used in the browser tab and SEO.
+- **`themeConfig.search.provider: 'local'`** — activates client-side full-text search (no external service).
+- **`themeConfig.nav`** — top-level navigation links (Home, Start, Start (Production), Demo Shop, Theory, Modules, Tools, API, Files).
+- **`themeConfig.sidebar`** — a record keyed by URL prefix, each containing an array of collapsible section objects (`text`, `items`, optional `collapsed`, optional nested `items`). Covers:
+  - `/demo-ecommerce/` — 5 role-based pages.
+  - `/theory/` — 15 pages covering DDD, request flow, security, data protection.
+  - `/modules/` — grouped into **core**, **supporting**, and **generic** categories; some entries have child pages (e.g. cart → Checkout, inventory → Reservations).
+  - `/tools/` — grouped into Setup, Database, Messaging, Observability, Analytics, and Testing sub-sections (largest sidebar, ~40 links).
+  - `/reference/` — file-glossary pages mapped to source directories.
 
 ## Relationships
 
-No dependency-graph neighbors are recorded for this file. It is a leaf config consumed by the VitePress CLI at build/dev time.
+No dependency-graph neighbors are registered for this file. It is a leaf configuration consumed only by the VitePress build toolchain.
 
 ## Notes
 
-- The file is truncated in the source above (the `/api/` sidebar section is cut off), so the full sidebar may contain additional entries beyond what is visible.
-- Sidebar group objects use a `collapsed: false` flag on most section headers, meaning those groups render expanded by default.
-- Adding a new documentation page requires updating the corresponding sidebar array here (or the page will be unreachable from the sidebar) and, if it's a new top-level section, adding a `nav` entry as well.
-- The Mermaid plugin wrapper must remain the outermost call; placing `defineConfig` outside `withMermaid` would break diagram rendering.
+- The sidebar is **per-section**, not global: each URL prefix gets its own sidebar, so a reader on `/modules/` never sees the `/tools/` sidebar and vice-versa.
+- New documentation pages must be added to both the relevant `sidebar` entry (for discoverability) and, if they are top-level sections, the `nav` array.
+- The `collapsed: false` property is set explicitly on most section objects; omitting it defaults to `true`, which is likely why it is spelled out here.
+- The file uses the `.mts` extension (ESM + TypeScript), consistent with VitePress ≥ 1.0 conventions; it is not imported by application code, only by the `vitepress` CLI.

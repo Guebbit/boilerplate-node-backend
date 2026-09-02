@@ -2,34 +2,34 @@
 
 ## Purpose
 
-Declares the Mongoose schema, Zod validation schema, and serialization transform for the Product collection. It owns the column declarations (including `onHand`/`reserved`) and the single-point derivation of `available`, while delegating all business logic to `./service` and queries to `./repository`.
+Defines the Product's Mongoose schema, its Zod validation schema, and the serialization transform that derives the computed `available` field from `onHand` and `reserved`. This is the single source of truth for the Product collection's shape, indexes, and the one-time normalization every product response passes through.
 
 ## Key elements
 
-- **`ProductSnapshot`** — Plain interface of stored product fields (no Mongoose `Document`). Used by `orders` to embed a product copy on line items without pulling in document machinery. Omits `available` (derived) and uses `_id`.
-- **`ProductDocument`** — Extends `ProductSnapshot` with Mongoose `Document` plus `pendingImageKey` (internal image-pipeline bookkeeping, deliberately excluded from `ProductSnapshot` so it never appears in order snapshots).
-- **`zodProductSchema`** — Zod validation built on the generated `CreateProductBody`; overrides `title` and `price` with i18n error messages. Uses lazy `t()` thunks so messages resolve after i18next init.
-- **`productSchema`** — Mongoose `Schema` defining all columns (`title`, `price`, `onHand`, `reserved`, `description`, `imageUrl`, `thumbnailUrl`, `pendingImageKey`, `categories`, `tags`, `active`, `deletedAt`) plus two named indexes: `products_createdAt` and `products_active_deletedAt`.
-- **`applyProductTransform`** — Exported serialization function combining the shared `_id`→`id` / `__v` strip with `applyProductAvailability` (computes `available = max(0, onHand − reserved)`). Reused by `./service` for lean/aggregate results that bypass Mongoose's `toJSON`.
-- **`productModel`** — The registered Mongoose model instance (`'Product'`).
+- **`ProductSnapshot`** — Interface for stored product fields (dates as `Date`, `_id` as `ObjectId`). Excludes `available` (derived, never stored) and Mongoose document machinery. Intended for embedding in `orders` line items.
+- **`ProductDocument`** — Extends `ProductSnapshot` with Mongoose's `Document`. Adds `pendingImageKey`, a document-only field for the image-digest pipeline that must never leak into embedded snapshots.
+- **`ProductModel`** — Type alias for the Mongoose `Model`. Business logic lives in `./service`; queries in `./repository`.
+- **`zodProductSchema`** — Zod validation built via `.extend()` on the generated `CreateProductBody`. Overrides `title` and `price` with i18n-aware messages (thunk-based, evaluated at parse time). Explicitly restates `.min(0)` on price because `.extend()` replaces a field entirely.
+- **`productSchema`** — Mongoose schema declaring all stored fields. Declares `onHand`/`reserved` (written only by `@modules/inventory`) and `active`/`requiresShipping` (read by other modules). Creates two named indexes: `products_createdAt` (listing sort) and `products_active_deletedAt` (storefront filter).
+- **`applyProductTransform`** — Wraps `applySerialization` with a custom `after` hook (`applyProductAvailability`) that computes `available = max(0, onHand - reserved)`. Also omits `pendingImageKey` from output. Exported for reuse on lean/aggregate results in `./service`.
+- **`productModel`** — The instantiated Mongoose model for the `Product` collection.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** — Imports `t` to supply localized error messages in `zodProductSchema`.
-- **`@infrastructure/persistence/serialize`** — Imports `applySerialization` to build `applyProductTransform` on top of the shared base transform.
-- **`src/modules/orders/model.ts`** — Imports `ProductSnapshot` for embedding on order line items (not `ProductDocument`, to avoid document-only fields like `pendingImageKey`).
-- **`src/modules/products/service.ts`** — Consumes `productModel` and calls `applyProductTransform` on lean/aggregate query results.
-- **`src/modules/products/repository.ts`** — Runs queries against `productModel`; the `products_active_deletedAt` index supports its `publicScope` filter.
-- **`src/modules/products/fixtures.ts` / `demo.ts`** — Provide test and seed data shaped to this schema.
-- **`src/modules/products/index.ts`** — Re-exports the public surface of this module.
-- **`scripts/backfill-image-thumbnails.ts`** — Writes `thumbnailUrl` / clears `pendingImageKey` on existing products.
-- **`src/modules/cart/services/view.ts` / `reorder.ts`** — Read product data (including derived `available`) when rendering or reordering cart items.
+- **`@infrastructure/i18n`** (`context.ts`, `index.ts`) — Imports `t()` for i18n error messages inside `zodProductSchema`. Calls are deferred to parse time via thunks so i18next is initialized.
+- **`@infrastructure/persistence/serialize.ts`** — Imports `applySerialization` to build `applyProductTransform` (shared `_id→id` rename, `__v` stripping, plus the custom `after` hook).
+- **`src/modules/orders/model.ts`** — `ProductSnapshot` is the shape `orders` embeds on line items (not a full document, so it can't satisfy `ProductDocument`).
+- **`src/modules/products/repository.ts`** — The `products_active_deletedAt` index backs the repository's `publicScope()` query; `products_createdAt` backs the default listing sort.
+- **`src/modules/products/service.ts`** — Calls `applyProductTransform` on lean/aggregate results (e.g., `search()`) where `toJSON` doesn't fire automatically.
+- **`src/modules/products/index.ts`** — Barrel re-export of the public API of this file.
+- **`src/modules/products/fixtures.ts` / `tests/fixtures.ts` / `demo.ts`** — Consume `productModel` and/or `zodProductSchema` for seeding, testing, and demo data.
+- **`src/modules/orders/tests/integration/repository.test.ts` / `orders/fixtures.ts`** — Exercise product data through the orders flow, relying on `ProductSnapshot` shape.
 
 ## Notes
 
-- **`available` is never persisted.** It is computed at serialization time by `applyProductAvailability`, clamped to ≥ 0. No writer can let it drift.
-- **`onHand` / `reserved` are declared here but written only by `@modules/inventory`.** This module owns the collection (hence the columns) but performs no stock mutations.
-- **Zod `.extend()` replaces a field entirely.** Any override must restate every constraint (e.g. `.min(0)`) or the constraint is silently dropped. A prior `.refine()` override lost the price minimum.
-- **`t()` calls must be thunks** (`() => t(...)`) inside Zod `{ error }` options so they execute at parse time, after i18next has initialized.
-- **Index names are explicit** to surface name/key mismatches at startup rather than silently creating a duplicate or no-op index.
-- **`pendingImageKey` lives on `ProductDocument` only**, keeping it out of `ProductSnapshot` so it never leaks into order line-item embeddings.
+- `available` is **never persisted**. It is computed at serialization time by `applyProductAvailability` so no write path can let it drift. The clamp at zero is a safety net, not a contract guarantee.
+- `onHand` / `reserved` are declared here (this module owns the collection) but **never written** by this module. All stock transitions go through `@modules/inventory`.
+- `pendingImageKey` is deliberately absent from `ProductSnapshot` so it never appears on `orders`-embedded copies. The serialization transform also omits it; with `additionalProperties: false` on the contract, any leak would fail response validation.
+- The Zod `.extend()` pitfall: overriding a field **replaces** it entirely. Any custom override must restate all contract constraints it relies on (the `price` override reasserts `.min(0)` for this reason).
+- Index names are fixed by name, not just key — renaming or duplicating an index key under a different name causes a startup failure rather than a silent no-op.
+- `active` and `deletedAt` are independent axes. A soft-deleted product still has `active: true`; `publicScope` requires both to be in the "visible" state.

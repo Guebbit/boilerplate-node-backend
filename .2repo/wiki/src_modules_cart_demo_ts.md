@@ -1,23 +1,30 @@
 # src/modules/cart/demo.ts
 
 ## Purpose
-Holds the cart module's slice of the demo/seed dataset. It defines which demo accounts have items in their cart, provides the seeding function for the `carts` collection, and exposes a read-back helper. Only accounts with at least one line-item get a cart document; the absence of a row is itself the fixture for a customer who has never added anything.
+
+Declares the cart's share of the demo dataset: which seeded users get a cart row, what items are in each cart, and the functions to upsert and read those rows back. It lives here (the cart module) rather than nested under each user so the cart collection is owned and stated where it belongs.
 
 ## Key elements
-- **`cartFixtures`** — Array of cart objects built via `makeCart`. Currently contains a single cart for the seed admin (`SEED_ADMIN_ID`) with two items referencing `SEED_PRODUCT_IDS`.
-- **`seedCartsCollection`** — Seeds the `carts` collection by calling `upsertByOwner(cartRepository, cart)` for each fixture. Declared in `module.ts`; invoked by `db/demo/index.ts`.
-- **`exportSeededCarts`** — Reads the stored carts back from `cartModel`, sorted by `userId`, and returns `{ carts: [...] }`. Intended for snapshot/debugging, not API responses.
+
+- **`cartFixtures`** — Array of four cart objects (admin + marcus, harper, isla). Each is built via `makeCart` with a fixed id, a `userId`, and two line items. The remaining seven demo customers intentionally have no entry; absence *is* their fixture.
+- **`demoCartId(index)`** (local) — Builds a deterministic hex string prefixed `67f0c3` so cart ids never collide with other collections' id spaces.
+- **`seedCartsCollection()`** — Upserts every entry in `cartFixtures` through `cartRepository` using `upsertByOwner`. Declared in `module.ts`; invoked by the demo bootstrap (`db/demo/index.ts`).
+- **`exportSeededCarts()`** — Reads all stored carts back via `exportCollection(cartModel, { userId: 1 })` and returns them keyed under `"carts"`. The shape is the raw stored document, not a `CartResponse`.
 
 ## Relationships
-- **`src/infrastructure/persistence/seed.ts`** — Provides `upsertByOwner` (write path) and `exportCollection` (read path) used by `seedCartsCollection` and `exportSeededCarts` respectively.
-- **`src/kernel/seed-accounts.ts`** — Supplies `SEED_ADMIN_ID`, the `userId` on the sole seeded cart.
-- **`src/modules/products/demo.ts`** — Supplies `SEED_PRODUCT_IDS` (e.g. `panino`, `pufettino`) so cart line-items reference the same product IDs used elsewhere in the demo data.
-- **`src/modules/cart/fixtures.ts`** — Provides `makeCart`, the factory that shapes each cart document.
-- **`src/modules/cart/model.ts`** — Provides `cartModel`, the Mongoose model targeted by `exportCollection`.
-- **`src/modules/cart/repository.ts`** — Provides `cartRepository`, the persistence adapter passed to `upsertByOwner`.
-- **`src/modules/cart/module.ts`** — Imports/declares `seedCartsCollection` so the top-level demo seeder can call it.
+
+- **`@infrastructure/persistence/seed`** — Supplies `SeedOutcome`, `exportCollection`, and `upsertByOwner`, the generic seed primitives this file drives.
+- **`@kernel/seed-accounts`** — Exports `SEED_ADMIN_ID`, the userId for the admin cart row.
+- **`@modules/products/demo`** — Exports `SEED_PRODUCT_IDS` (named products for the admin cart) and `fillerProductId(n)` (combinatorial-catalogue items for the "medium" customer carts).
+- **`@modules/users/demo`** — Exports `SEED_CUSTOMER_IDS` (marcus, harper, isla, etc.); also documents the deterministic-id convention this file mirrors.
+- **`./fixtures`** — Provides `makeCart`, the factory that shapes each fixture object.
+- **`./model`** — Provides `cartModel` (the Mongoose model) used by `exportSeededCarts`.
+- **`./repository`** — Provides `cartRepository`, the upsert target for `seedCartsCollection`.
+- **`./module`** — Declares `seedCartsCollection` in the module's public seed manifest.
 
 ## Notes
-- **No row ≠ empty cart.** If a user has zero items, there is simply no document in the `carts` collection. Code that reads "does this user have a cart?" must treat a missing document and an empty `items` array identically.
-- **`exportSeededCarts` returns the *stored* shape, not a `CartResponse`.** No API endpoint serves a raw cart; `./service` constructs the priced response, and the frontend mirrors that construction. Don't confuse the export output with a wire-format DTO.
-- **Sort key is `userId`, not `_id`.** Carts are owned by a user and lack a natural stable sort field, so the export sorts by owner for deterministic output.
+
+- **Missing rows are intentional.** Seven of eleven demo customers have no cart document. Code that iterates "all users" and fetches their cart must treat a `null`/empty result as a valid state, not an error.
+- **`exportSeededCarts` is read-only introspection.** It does not price lines or build a `CartResponse`; that logic lives in `./service`. Use it only for debugging or snapshot comparisons.
+- **Id prefixes are load-bearing.** The `67f0c3` prefix on `demoCartId` and the hardcoded `65dd2c9e…` on the admin cart exist to keep id spaces disjoint across collections. Don't replace them with random `ObjectId`s.
+- **Sort key is `userId`.** Carts have no natural `_id` ordering that's meaningful across runs; `exportSeededCarts` sorts by `userId` for stable output.

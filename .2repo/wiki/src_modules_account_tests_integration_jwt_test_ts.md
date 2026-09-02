@@ -2,31 +2,30 @@
 
 ## Purpose
 
-Integration test suite for the JWT module (`session/jwt.ts`). It verifies the security-critical contract between stateless access tokens and stateful refresh tokens: that refresh tokens require both a valid signature **and** a matching row on the user document, that logout (token removal) actually revokes sessions, and that the two secret types are never interchangeable.
+Integration tests for the JWT session module (`session/jwt.ts`). Validates the four public functions—`createAccessToken`, `verifyAccessToken`, `createRefreshToken`, `verifyRefreshToken`—against a real database, exercising the security-critical split between stateless access tokens and stateful (DB-backed) refresh tokens, including revocation, secret separation, expiry, tamper resistance, and multi-device accumulation.
 
 ## Key elements
 
-- **`describe('verifyAccessToken')`** — Confirms payload resolution on a valid token, and rejection on: wrong secret (refresh secret), expired token, malformed string, and tampered payload (forged base64 segment).
-- **`describe('verifyRefreshToken')`** — Confirms the two-part check: valid signature *and* stored-on-user. Rejects orphan tokens (valid sig, no row), revoked tokens (removed after a prior success check), wrong secret, and expired tokens.
-- **`describe('createRefreshToken')`** — Round-trips a newly issued token through `verifyRefreshToken`; asserts the stored entry has `type: REFRESH` and a future expiry; rejects unknown user IDs; verifies multi-device accumulation (two tokens coexist rather than one replacing the other).
-- **`describe('createAccessToken')`** — Exchanges a stored refresh token for a verifiable access token; refuses revoked, unsigned, or foreign tokens; pins the payload identity to the refresh token's owner (not caller-supplied); includes a "bare document" test guarding the `select: false` edge case.
-- **Env-var harness** — `beforeEach`/`afterEach` save/restore `NODE_TOKEN_*` keys and set fixed test secrets so the suite never reads `.env`.
+- **`describe('verifyAccessToken')`** — Asserts that tokens signed with the access secret resolve; rejects tokens signed with the refresh secret, expired tokens, malformed strings, and forged payloads.
+- **`describe('verifyRefreshToken')`** — Asserts the two-part check: valid signature *and* presence on the user document. Rejects orphan tokens, revoked tokens, cross-secret tokens, and expired tokens.
+- **`describe('createRefreshToken')`** — Round-trips a newly issued token through `verifyRefreshToken`; verifies the stored row under `TokenType.REFRESH` with a future expiry; rejects unknown user IDs; confirms tokens accumulate (multi-device) rather than replace.
+- **`describe('createAccessToken')`** — Exchanges a valid stored refresh token for a verifiable access token; refuses revoked, unsigned, or foreign tokens; pins the identity to the refresh token's owner.
+- **Env-var save/restore in `beforeEach`/`afterEach`** — Explicitly sets `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, and expiry tiers to fixed test values, then restores the original environment afterward.
+- **`setupTestDb()`** — Top-level call that provisions a real test database for the suite.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `session/jwt.ts` | System under test; imports `verifyAccessToken`, `verifyRefreshToken`, `createRefreshToken`, `createAccessToken`. |
-| `session/config.ts` | Imports `RefreshTokenExpiryTime` to parameterize `createRefreshToken` calls. |
-| `users/index.ts` | Imports `TokenType` (enum) and `userRepository` (for `findByIdWithCredentials` / `findById`). |
-| `users/model.ts` | Exerced indirectly via `user.tokenAdd` and `user.tokenRemoveAll` on user documents. |
-| `users/repository.ts` | Exerced indirectly via `userRepository.findByIdWithCredentials` and `userRepository.findById`. |
-| `users/tests/fixtures.ts` | `createUser` provides a fresh user document per test. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the test database before the suite runs. |
+- **`src/modules/account/session/jwt.ts`** — The module under test; all four exported functions are exercised here.
+- **`src/modules/account/session/config.ts`** — Supplies `RefreshTokenExpiryTime.SHORT` used as the tier argument to `createRefreshToken`.
+- **`src/modules/users/index.ts`** — Re-exports `TokenType`, `userRepository`, and `hashToken` consumed throughout the tests.
+- **`src/modules/users/model.ts`** — Provides `tokenAdd`, `tokenRemoveAll`, and `findByIdWithCredentials` on the user document; the `tokens` array (marked `select: false`) is the stateful store these tests validate against.
+- **`src/modules/users/repository.ts`** — `userRepository.findById` and `findByIdWithCredentials` are used to inspect or revoke stored token rows.
+- **`src/modules/users/tests/fixtures.ts`** — `createUser` creates the user documents every test case operates on.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the MongoDB instance the integration suite runs against.
 
 ## Notes
 
-- **Secrets are set explicitly** (not via dotenv) because the test runner does not load `.env`. The four `NODE_TOKEN_*` keys are saved and restored around each test to avoid leaking into sibling suites.
-- **`tokens` is `select: false`** on the user schema. Reading it requires `findByIdWithCredentials`; a plain `findById` leaves `tokens === undefined`. The "bare document" test in `createAccessToken` specifically guards a past bug where `tokenRemoveAll` succeeded in the DB (`$pull`) but then threw on `undefined.filter(...)`, turning a successful logout into a 500.
-- **Multi-device guard**: the `createRefreshToken` suite asserts that two successive issuances *both* survive and are independently verifiable, preventing a future regression to a `tokens = [newToken]` assignment.
-- **Dual-assertion revocation tests**: both `tokenRemoveAll` resolving *and* the subsequent `createAccessToken` rejecting are asserted together, because either half alone is satisfiable by incorrect code (e.g., a no-op revocation, or a revocation that throws after the write).
+- Secrets are hard-coded to `'test-access-secret'` / `'test-refresh-secret'` and injected via `process.env` in `beforeEach` because the test runner does not load `.env`. The env-var save/restore pattern ensures no leakage between suites.
+- The `tokens` field is `select: false`, so `findById` returns a document where `tokens` is `undefined` (not `[]`). One test deliberately exercises `tokenRemoveAll` on such a bare document to guard against a historical bug where the in-memory resync called `.filter` on `undefined` *after* the atomic `$pull` write had already succeeded.
+- Stored tokens are compared via `hashToken(issued)` (a digest), never by the raw JWT string—consistent with the wave 3.1 migration.
+- The revocation tests assert both the negative case (token no longer verifiable) and the positive precondition (it *was* verifiable before revocation) to avoid vacuous passes.

@@ -2,27 +2,32 @@
 
 ## Purpose
 
-Documents the products module, which owns the shop catalogue (product CRUD) and the two stock counters (`onHand`, `reserved`) that live on every product row. It is a leaf module with zero inbound dependencies; four other domains conform to its shape rather than the reverse.
+Documents the **products** module — the shop's catalogue and the leaf domain that `cart`, `inventory`, `orders`, and `wishlist` all conform to. It defines what a product looks like (`productSchema`), how soft deletion works, and the one domain event (`product.deleted`) that lets this module reach back into other modules without importing them.
 
 ## Key elements
 
-- **`productSchema`** — the canonical product shape. Embedded verbatim in orders, so changing it rewrites order history.
-- **`onHand` / `reserved`** — stock counters stored on the product document so a catalogue read needs no join. Read-only from this module's perspective.
-- **`active` + `deletedAt`** — soft-deletion pair with a restore route, preserving renderability of historical orders.
-- **`active: 1, deletedAt: 1` index** — keeps the public list query cheap while the admin list still sees deleted rows.
-- **`product.deleted` event** — published on the event bus; cart and wishlist subscribe to drop their references. Not an import, so the dependency arrow stays one-way.
-- **`openapi.yaml`** — the module's contract fragment, merged into the root OpenAPI document.
+- **`productSchema`** — the Mongoose schema for a product row. `orders` embeds this shape directly, so schema changes are order-breaking.
+- **`onHand` / `reserved`** — stock counters stored on the product document so a catalogue read needs no join. **This module never writes them**; `inventory` is the sole writer.
+- **`active` + `deletedAt`** — soft-deletion pair. A product row is never hard-removed so embedded order history still renders.
+- **`active: 1, deletedAt: 1` compound index** — keeps the public product list query cheap while the admin list can still see inactive rows.
+- **`product.deleted` domain event** — emitted on soft delete; `cart` and `wishlist` listen and drop the stale line. Avoids an import cycle.
+- **Redis cache invalidation** — runs as part of the delete path alongside the event emission.
 
 ## Relationships
 
-- **→ `inventory.md`** — Inventory is the *only* writer of `onHand` and `reserved`. Products exposes the fields for reads; all transitions go through inventory.
-- **→ `orders.md`** — Orders embed `productSchema` directly. An order's history is literally this shape; schema changes propagate to order records.
-- **→ `cart.md`** — Cart listens for `product.deleted` and drops the line item.
-- **→ `wishlist.md`** — Wishlist listens for `product.deleted` and removes the entry.
-- **→ `index.md`** — Linked as the modules-overview / context map page.
+- **`cart` / `cart-checkout`** — imports products for reads; listens to `product.deleted` to remove matching cart lines.
+- **`wishlist`** — same pattern: reads products, listens to `product.deleted` to purge entries.
+- **`inventory` / `inventory-reservations`** — imports products for reads; is the **only** module that writes `onHand` and `reserved`.
+- **`orders`** — embeds `productSchema` in its items; a shape change here is a breaking change for stored orders.
+- **`index.md` (modules)** — positions products as the central `core` node in the dependency graph.
+- **`events-and-logging.md`** — describes the bus on which `product.deleted` travels.
+- **`strategic-ddd.md`** — explains why the four inbound arrows are labelled `conformist`.
+- **`contract-fragmentation.md`** — documents how this module's `openapi.yaml` fragment is merged into the root OpenAPI document.
+- **`mongodb-mongoose.md`** — background on the repository/model patterns this module uses.
+- **`demo-ecommerce/manager.md`** — exercises the module in the demo flow.
 
 ## Notes
 
-- **Write discipline:** A write to `onHand` or `reserved` from anywhere other than inventory is a bug, not a shortcut. The fields exist on the product document purely to avoid a join on read.
-- **No inbound imports by design:** Products needs other modules to react to deletion, but does so via `product.deleted` (event) rather than calling into them. This avoids an import cycle and keeps the dependency arrow pointing one direction.
-- **Soft delete, not hard:** Deletion sets `active: false` + `deletedAt`; a restore route reactivates the product. Hard-deleting would break rendering of existing orders.
+- **Field-ownership split:** `onHand` and `reserved` *live* on the product document but are *owned* by `inventory`. Any write to those fields outside the inventory transition is a bug, not a shortcut.
+- **No outbound imports:** products deliberately depends on nothing. The `product.deleted` event exists precisely so the "reach back" (cart/wishlist cleanup) stays a one-way arrow.
+- **Schema is a contract:** because `orders` embeds it, treat `productSchema` changes as a migration-level concern, not a local refactor.

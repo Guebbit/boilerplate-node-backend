@@ -2,33 +2,30 @@
 
 ## Purpose
 
-Integration test suite for `userRepository`, exercising every public method (CRUD + token operations) against a real in-memory MongoDB instance wired up by `setupTestDb`. It exists to verify that the repository's Mongoose interactions behave correctly end-to-end—pre-save hooks, lean queries, pagination options, and token sweeps—without relying on mocks for the database layer.
+Integration test suite for `userRepository`, run against an in-memory MongoDB (wired up by `setupTestDb`). It verifies the full CRUD surface of the repository factory (`create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`, `updateMany`) plus the token-lifecycle methods the users module adds (`tokenRemoveAll`, `tokenRemoveExpired`, and related). The file exists so that repository behavior is validated end-to-end (including Mongoose hooks and lean-query semantics) rather than in isolation.
 
 ## Key elements
 
-- **`setupTestDb()`** — called once at module top-level to seed and clean the in-memory Mongo before any `describe` block runs.
-- **`describe('create')`** — asserts a document is inserted, the pre-save hook hashes the password, and `admin` defaults to `false`.
-- **`describe('findById')` / `describe('findOne')`** — happy-path and null-return cases.
-- **`describe('findAll')`** — no-filter, `limit`, `skip` (cursor pagination), query filtering, and lean-object guarantee (no Mongoose `save` method via `asStub`).
-- **`describe('count')`** — total, filtered, and empty-collection counts.
-- **`describe('save')`** — persists in-memory Mongoose mutations back to the DB.
-- **`describe('deleteOne')`** — permanent removal; `findById` returns `null` afterward.
-- **`describe('updateMany')`** — bulk `$set` on matching docs; non-matching docs untouched.
-- **`describe('token methods')`** — `tokenRemoveAll(type)`, `tokenRemoveExpired()` (valid vs. expired sweep, failure-rejection path via a spied `Users.updateMany`), and token-lookup methods (truncated in source).
+- **`setupTestDb()`** (top-level call) – initialises the in-memory Mongo instance before any test runs.
+- **`describe('userRepository')`** – the root suite; each nested `describe` block maps to one repository method.
+- **Token-method tests** – seed `tokens` arrays directly with `hashToken(…)` values and `TokenType` enum members, then exercise `tokenRemoveAll`, `tokenRemoveExpired` (including the `supersededAt` grace-window logic), and verify results via `findByIdWithCredentials`.
+- **`asStub<T>(user).save`** – uses the `asStub` helper to safely check that `findAll` returns lean (non-Mongoose) objects without the `save` method.
 
 ## Relationships
 
-- **`src/modules/users/index.ts`** — provides the `userRepository` factory, `TokenType` enum, and `UserDocument` type that the tests import and assert against.
-- **`src/modules/users/repository.ts`** — the unit under test; every `it` block exercises one of its exported methods.
-- **`src/modules/users/model.ts`** — imported directly as `Users`; spied on in the `tokenRemoveExpired` failure test to make `updateMany().exec()` reject.
-- **`src/modules/users/tests/fixtures.ts`** — supplies `makeUser()` (plain-object factory) and `createUser()` (inserts via the repository) for every test that needs seed data.
-- **`tests/support/setup-test-db.ts`** — boots the in-memory Mongo and calls `setupTestDb()` once at the top of this file.
-- **`tests/support/stub.ts`** — provides `asStub<T>()`, used to cast a lean object so the test can assert absence of Mongoose instance methods.
-- **`src/modules/users/fixtures.ts`** — listed as a neighbor but not imported here; the test uses the module-local `tests/fixtures.ts` instead.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/users/index.ts` (barrel) | Source of `userRepository`, `hashToken`, `TokenType`, `UserDocument`. |
+| `src/modules/users/model.ts` | Imported directly as `userModel as Users`; bypasses the barrel because no sibling module consumes it and `eslint-plugin-boundaries` permits a spec to reach its own module's internals. |
+| `src/modules/users/repository.ts` | System under test; exercised exclusively through the `userRepository` export from the barrel. |
+| `src/modules/users/tests/fixtures.ts` | Provides `makeUser` (plain-data factory) and `createUser` (persists via the repository) used to seed state. |
+| `tests/support/setup-test-db.ts` | Provides `setupTestDb`, which boots the in-memory Mongo and connects Mongoose. |
+| `tests/support/stub.ts` | Provides `asStub`, a typed cast helper used to assert absence of Mongoose methods on lean results. |
 
 ## Notes
 
-- The direct import of `userModel` from `@modules/users/model` is intentional: the barrel (`index.ts`) no longer re-exports it. A comment in the file notes that `eslint-plugin-boundaries` explicitly permits a spec reaching into its own module's internals.
-- `tokenRemoveExpired` is asserted to **reject** on write failure (not resolve a status object). A comment documents that the old contract returned `{ status: 500, success: false }` from a Mongoose static, which conflated persistence with HTTP semantics.
-- When stubbing the failure path, the mock must return a **query-like object** with `.exec()` (not a rejected promise), because the repository calls `.exec()` on the returned query. A plain `mockRejectedValue` would throw `"exec is not a function"`.
-- The file is truncated in the source snapshot; the `findByToken` / `findByIdWithCredentials` tests are cut off.
+- **Token seeding convention:** every token fixture calls `hashToken(…)` explicitly rather than going through `tokenAdd`. This mirrors what production actually writes to the database; a plaintext seed would describe a document the app never persists.
+- **`tokenRemoveExpired` return value:** the method returns a plain count (`number`), not a status code or error. The test asserts `toBe(1)` rather than checking for a thrown error.
+- **`supersededAt` grace window:** `tokenRemoveExpired` sweeps both expired tokens *and* superseded (rotated-away) tokens whose grace window has elapsed. Tokens superseded "just now" (within the grace window) are intentionally kept. This is the most subtle behavioural contract in the file.
+- **Direct model import:** the file deliberately imports `userModel` from `@modules/users/model` instead of the barrel. The inline comment documents the rationale and the lint rule that makes this legal; do not "fix" it to go through the barrel.
+- **`findAll` lean semantics:** tests explicitly assert that returned objects have no `.save` method. Any regression to hydrated Mongoose documents would be caught here.

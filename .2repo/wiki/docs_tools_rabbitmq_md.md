@@ -2,33 +2,36 @@
 
 ## Purpose
 
-Documents how RabbitMQ is wired into the app as an optional message broker for offloading emails, PDF generation, and similar background work out of the request/response cycle. Serves as the single reference for the queue contract (queue names, dead-letter topology, publish/consume API) so contributors and AI assistants can add or modify workers without re-deriving the pattern.
+Documents how the project uses RabbitMQ as an optional message broker to move heavy or unreliable work (emails, PDF generation) out of the HTTP request/response cycle into background queues, and how to publish, consume, configure, and operate that infrastructure.
 
 ## Key elements
 
-- **`src/infrastructure/adapters/queue.ts`** — connection management, `publishToQueue()`, `consumeFromQueue()`, `startQueue()`, `stopQueue()`, and the `EMAIL_QUEUE` / `PDF_QUEUE` / `WORKER_CHANNELS` constants generated from `asyncapi.yaml`.
-- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail()` entry point; publishes to `worker.email.send` when enabled, falls back to direct `nodemailer()` call when disabled.
-- **`src/infrastructure/adapters/email.worker.ts`** — consumer that drains `worker.email.send` and calls Nodemailer.
+- **`src/infrastructure/adapters/queue.ts`** — AMQP connection, `publishToQueue`, `consumeFromQueue`, queue-declaration helpers, dead-letter wiring, priority arguments.
+- **`src/infrastructure/adapters/mailer.ts` → `enqueueEmail()`** — queue-aware dispatch; publishes to `worker.email.send` or falls back to direct `nodemailer()` call when the queue is disabled.
+- **`src/infrastructure/adapters/email.worker.ts`** — consumer that drains `worker.email.send` and sends mail.
 - **`src/infrastructure/adapters/pdf.worker.ts`** — consumer for async PDF generation jobs.
-- **`src/app/workers.ts`** — registers all consumers at startup.
-- **`src/app.ts`** — calls `startQueue` + `registerWorkers` on boot and `stopQueue` on graceful shutdown.
-- **Dead-letter topology** — a `direct` exchange named `dead-letter` plus per-queue `<queue>.dead` queues; handler outcomes map to `ack` / `nack(requeue=false)` / `nack(requeue=true)`.
-- **Env configuration** — `NODE_RABBITMQ_URL` (preferred) or individual `HOST`/`PORT`/`USER`/`PASS` vars; `NODE_RABBITMQ_ENABLED=0` forces disable. Absent config → silent no-op.
+- **`src/app/workers.ts`** — registers all worker consumers at startup.
+- **`src/app.ts`** — calls `startQueue` / `registerWorkers` on boot and `stopQueue` on graceful shutdown.
+- **Queue name constants** (`EMAIL_QUEUE`, `PDF_QUEUE`) — aliases of `WORKER_CHANNELS.*`, generated from `asyncapi.yaml` so producer, consumer, and contract share one string.
+- **Dead-letter setup** — every work queue gets a `dead-letter` direct exchange and a `<queue>.dead` queue; handler return values map to ack / nack (requeue) / nack (dead-letter).
+- **Priority** — `x-max-priority: 1`; `'normal'` (0) vs `'high'` (1) for time-sensitive mail.
+- **Env vars** — `NODE_RABBITMQ_URL` (preferred), individual `HOST`/`PORT`/`USER`/`PASS` fallbacks, `NODE_RABBITMQ_ENABLED=0` to force-disable. All unset → silent no-op.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/queue.ts`** — the sole AMQP client wrapper; every other file in the graph imports from it.
-- **`src/infrastructure/adapters/mailer.ts`** — calls `publishToQueue` (via `enqueueEmail`) to hand email jobs to the broker; is the producer-side integration point.
-- **`src/infrastructure/adapters/email.worker.ts`** / **`src/infrastructure/adapters/pdf.worker.ts`** — consumers registered via `consumeFromQueue`; their `ack`/`nack`/reject behaviour drives the dead-letter flow documented here.
-- **`src/app/workers.ts`** — calls the worker registration functions; without it, consumers are never started.
-- **`src/app.ts`** — orchestrates lifecycle: `startQueue` → `registerWorkers` at boot; `stopQueue` after HTTP server close.
-- **`docs/tools/runtime.md`** — describes the broader startup/shutdown sequence in which `startQueue`/`stopQueue` participate.
-- **`docs/tools/redis-cache.md`** — follows the same "optional infrastructure, silent no-op when unconfigured" pattern; useful as a parallel reference.
+- **`docs/tools/email-and-rendering.md`** — the primary consumer of this queue; controllers publish email jobs, the worker calls Nodemailer.
+- **`docs/reference/src-infrastructure.md`** — hosts `queue.ts`, `mailer.ts`, `email.worker.ts`, `pdf.worker.ts` under `src/infrastructure/adapters/`.
+- **`docs/reference/src-app.md`** — `src/app.ts` wires `startQueue`/`stopQueue`; `src/app/workers.ts` registers consumers.
+- **`docs/api/asyncapi-workflow.md`** — queue names are generated from `asyncapi.yaml`, keeping producer/consumer/contract names in sync.
+- **`docs/tools/docker-and-podman.md`** — `docker-compose.yml` defines the `rabbitmq` service (AMQP 5672, management UI 15672).
+- **`docs/tools/runtime.md`** — graceful-shutdown sequence calls `stopQueue()` after the HTTP server closes.
+- **`docs/tools/redis-cache.md`** — follows the same optional-infrastructure / silent-fallback pattern.
 
 ## Notes
 
-- **Never use string literals for queue names.** `EMAIL_QUEUE` and `PDF_QUEUE` are generated from `asyncapi.yaml`; a typo in a literal is a message on a queue nobody reads, with no error anywhere.
-- **Handler return semantics are strict:** `true` → ack/delete; `false` → permanent dead-letter (use only for permanently unprocessable jobs); `reject` → requeue (use for transient failures). Confusing `false` with `reject` permanently loses the job.
-- **Broker upgrade gotcha:** adding dead-letter arguments to an existing queue triggers `PRECONDITION_FAILED` and kills the channel. Must `rabbitmqctl delete_queue` the old queues (consumers stopped) before restarting; declarations are recreated on first publish.
-- **Sync PDF path still exists:** `GET /orders/:id/invoice` renders inline (must return the file in the response); only *async* PDF jobs go through the queue.
-- **Docker Compose** ships a `rabbitmq` service (AMQP `5672`, management UI `15672`, guest/guest) for local dev.
+- **Never hard-code queue names as string literals.** Use the `EMAIL_QUEUE` / `PDF_QUEUE` constants; a typo in a literal creates a message on a queue nobody reads, with no compile-time or runtime error.
+- **Handler return semantics are strict:** `true` → ack (done); `false` → dead-lettered permanently (unrecoverable); reject/throw → requeued for retry (transient). Do not `return false` for a transient error.
+- **Upgrading broker arguments** (e.g., adding dead-letter policy or `x-max-priority`) causes `PRECONDITION_FAILED` on an existing queue. Stop consumers, delete the old queues via `rabbitmqctl delete_queue …`, then restart the app so declarations are recreated.
+- **Priority is approximate**, not a strict global ordering — RabbitMQ reorders only within its current buffer. Two levels exist by design.
+- **All operations are durable by default** (`durable: true`, `persistent: true`) unless explicitly overridden.
+- When RabbitMQ is fully unconfigured, the app runs identically to a queue-less deployment — no crash, no error.

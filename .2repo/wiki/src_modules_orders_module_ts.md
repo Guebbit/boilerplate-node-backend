@@ -1,29 +1,35 @@
 # src/modules/orders/module.ts
 
 ## Purpose
-Module manifest for the **orders** domain: wires routes, event subscriptions, demo seeding, and locale paths into a single `AppModule` object the kernel registry can load. It also declares the one cross-module subscription the order lifecycle needs (auto-cancelling an order when its inventory reservation times out).
+
+Module manifest (entry point) for the **orders** module. Wires together the HTTP router, domain-event subscriptions, demo seeding, and locale path into a single `AppModule` object that the kernel registry consumes. Also installs the module's two reactive event handlers: cancelling an order when its inventory reservation expires, and detaching a user ID from all their orders when that user is deleted.
 
 ## Key elements
-- **Default export (`AppModule`)** – The module's registration object: `name: 'orders'`, `basePath: '/orders'`, `routes`, `subscribe`, `seeds`, `seedExport`, `demoShapes`, `locales`.
-- **`subscribe()`** – Calls `onDomainEvent(RESERVATION_EXPIRED, …)` to cancel an order (`cancelById(orderId, { admin: true })`) when inventory releases a timed-out hold. The two release paths (inventory expiry vs. admin cancel) converge safely because `cancelById` → `releaseForOrder` is idempotent.
-- **`seeds` / `seedExport`** – Re-exports `seedOrdersCollection` and `exportSeededOrders` from `./demo` for the demo/dev data pipeline.
-- **`demoShapes`** – Declares `orders: 'response'` so the demo harness serialises `GET /orders/:id` as a full response document.
-- **`locales`** – Points at `./locales` for i18n strings.
-- **`import './events'`** – Side-effect import that registers `ORDER_CANCELLED` and `ORDER_STATUS_CHANGED` declarations with the event kernel.
+
+- **`default` export** — The `AppModule` manifest (`satisfies AppModule`). Declares `name: 'orders'`, `basePath: '/orders'`, and exposes `routes`, `subscribe`, `seeds`, `seedExport`, `demoShapes`, and `locales`.
+- **`subscribe`** — Registers two `onDomainEvent` handlers:
+  - `RESERVATION_EXPIRED` → calls `cancelById(orderId, { admin: true })` (the shop cancels; `inventory` already released the units, so no double-release).
+  - `USER_DELETED` → calls `detachUserId(userId)` (detaches the user reference; the order record is preserved, never hard-deleted).
+- **Side-effect import `'./events'`** — Registers this module's own event declarations (`ORDER_CANCELLED`, `ORDER_STATUS_CHANGED`) with the kernel event bus.
+- **Re-exports consumed here**: `router` from `./routes`, `cancelById` / `detachUserId` from `./service`, `seedOrdersCollection` / `exportSeededOrders` from `./demo`.
 
 ## Relationships
-- **`src/kernel/registry.ts`** – Imports the `AppModule` type; this file's default export is the object the registry validates and loads.
-- **`src/kernel/events.ts`** – Imports `onDomainEvent` to attach the `RESERVATION_EXPIRED` handler.
-- **`src/modules/inventory/index.ts`** – Imports the `RESERVATION_EXPIRED` event constant (the trigger for auto-cancel).
-- **`src/modules/orders/routes.ts`** – Imports `router` and exposes it under `basePath: '/orders'`.
-- **`src/modules/orders/service.ts`** – Imports `cancelById`, the admin-scope cancel used by the subscription.
-- **`src/modules/orders/events.ts`** – Side-effect import; no symbols are consumed.
-- **`src/modules/orders/demo.ts`** – Imports the two seed helpers.
-- **`src/modules.ts`** – Uploader that aggregates this module's manifest for the kernel.
-- **Cart / Delivery / Payments / Products integration tests** – Exercise this module's HTTP and event behaviour end-to-end; they import the app (which loads this module) rather than importing it directly.
+
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/registry.ts` | Imports the `AppModule` type used in the `satisfies` clause. |
+| `src/kernel/events.ts` | Imports `onDomainEvent` to register the two event subscriptions. |
+| `src/modules/inventory/index.ts` | Imports the `RESERVATION_EXPIRED` domain event constant. |
+| `src/modules/orders/routes.ts` | Imports `router` to expose on the manifest. |
+| `src/modules/orders/service.ts` | Imports `cancelById` and `detachUserId` for the event handlers. |
+| `src/modules/orders/events.ts` | Side-effect import; populates the event declaration registry. |
+| `src/modules/orders/demo.ts` | Imports seeding and export helpers used by `seeds` / `seedExport`. |
+
+> The file does **not** import `cart`, `delivery`, `payments`, or `users`' service code. `users` is reached only via the `USER_DELETED` event constant. `cart` depends on this module (downstream), keeping the import graph acyclic.
 
 ## Notes
-- The `./events` import is a **bare side-effect import** — removing the line silently drops the event registrations. There is no import to guard.
-- The subscription uses `{ admin: true }` deliberately: the *shop* is cancelling (reservation expired), not the customer, so the event fires under the admin code path.
-- Per the module doc-block, orders **embed** `productSchema` at purchase time rather than referencing a live catalogue row. Schema changes to products therefore alter stored order history in this collection.
-- The import graph is kept acyclic by design: cart → orders → inventory → products. Cart must not be imported back here.
+
+- **Embed, don't reference:** An order stores a snapshot of the product row (`productSchema`) rather than a live product ID. A catalogue shape change does not retroactively alter existing order documents.
+- **Detach, don't delete:** On `USER_DELETED` the handler only nulls the user reference; the order document remains for audit / data-export purposes.
+- **`satisfies` over `:`:** The manifest uses `satisfies AppModule` to keep the object's inferred literal types (e.g. the exact `locale` path string) while still being type-checked against the contract.
+- **Admin-scope cancel:** The reservation-expiry handler passes `{ admin: true }` because the *shop* is initiating the cancellation, not the customer.

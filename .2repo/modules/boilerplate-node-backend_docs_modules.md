@@ -6,65 +6,81 @@ tags:
 type: module
 module: docs/modules/
 files: 18
-updated: 2026-08-31T20:49:36.266084+00:00
+updated: 2026-09-02T18:30:23.869089+00:00
 ---
 
 # docs/modules/
 
 ## Purpose
 
-`docs/modules/` is the documentation section for the application's domain modules. Each Markdown file in this directory corresponds to one module (or a tightly related pair of modules) in the source tree, describing its responsibilities, invariants, and boundary so a reader can understand *what* the module does and *why* it is shaped the way it is without opening the code first.
+This directory is the per-module documentation section of the codebase wiki. Each file here is a reference page for one domain module (or a tightly scoped subsystem within one), covering its responsibilities, invariants, state machines, and how it fits the cross-module dependency graph. It sits alongside `docs/theory/` (architectural rationale) and `docs/tools/` (development workflow) as the "what each part does" layer of the wiki.
 
 ## Key parts
 
-- **Orientation** — `index.md` defines the vertical (domain) vs. horizontal (mechanism) split, renders the module dependency graph, and lists every module grouped by subdomain. Read this before any individual page.
-- **Core transaction path** — `cart.md`, `cart-checkout.md`, `orders.md`, `payments.md`, `payments-provider-port.md`, `inventory.md`, `inventory-reservations.md`, `products.md`. These pages document the request→order→payment→stock-release pipeline and the sole-writer invariants around the stock counters.
-- **Identity & session** — `account.md` (session lifecycle, address book, two-step deletion) and `account-sessions.md` (token generation, verification, cookie storage, and the `session/` seal-off). Together they explain the kernel's "who is this request?" question.
-- **Supporting & leaf domains** — `delivery.md` (shipping rates and shipment state machine), `wishlist.md` (per-user product references), `feedback.md` (open contact form + admin triage), `users.md` (user record shape and repository, distinct from authentication).
-- **Cross-cutting / infrastructure** — `observability.md` (health, metrics, SSE, audit read endpoint), `audit-logs.md` (queryable audit trail and its import-time sink), `locales.md` (supported languages and runtime override rows).
+- **Landing & orientation**
+  - `index.md` — Defines what a module page is, shows the cross-module dependency graph, lists every module by DDD strategic tier, and maps backend-to-frontend pairings. Read this before diving into any single module page.
+
+- **Core commerce domain pages**
+  - `account.md`, `account-sessions.md` — Authentication authority and the token lifecycle (signing, rotation, clearing) that lives behind it.
+  - `cart.md`, `cart-checkout.md` — Per-user cart pricing and the 9-step checkout pipeline that ends the cart.
+  - `orders.md`, `payments.md`, `payments-provider-port.md` — Order aggregate, the monetary side of a purchase, and the provider abstraction that keeps PSP choice a deployment decision.
+  - `products.md` — Catalogue schema, soft deletion, and the single `product.deleted` domain event.
+  - `inventory.md`, `inventory-reservations.md` — Single writer for stock counters and the conditional-claim reservation lifecycle.
+  - `delivery.md` — Shipping-rate functions and the shipment/parcel record the cart prices against.
+
+- **Supporting & cross-cutting pages**
+  - `users.md` — The user record and repository (dependency-free leaf; no auth logic).
+  - `wishlist.md` — Minimal per-user product list; the simplest example of the repo's module pattern.
+  - `locales.md` — File-based dictionaries plus runtime override rows for i18n.
+  - `feedback.md` — The only unauthenticated write path and its admin triage workflow.
+  - `audit-logs.md` — The `auditlogs` collection, write-sink installation, and 90-day TTL.
+  - `observability.md` — Operator-facing HTTP surface (health, metrics, SSE, audit read) owned by this module, not the data collection layer.
 
 ## How it connects
 
-- **`docs/`** — This directory is the *modules* sub-section of the top-level documentation root. `docs/index.md` (or equivalent) in the parent links here as the canonical entry point for "how the application is decomposed into modules."
-- **`docs/tools/`** — Sibling section that documents developer tooling (CLI commands, scripts, CI utilities). Pages in `docs/modules/` occasionally reference a tool by name (e.g., a migration or seed script) but do not duplicate its documentation; a reader is directed to the corresponding `docs/tools/` page for operational details.
+- **`docs/`** — This directory is a first-level section of the top-level `docs/` wiki. The top level provides global navigation, conventions, and links that point into `docs/modules/`.
+- **`docs/theory/`** — Module pages reference DDD concepts (strategic tiers, bounded contexts, shared-kernel edges, ports/adapters) whose definitions and rationale live in the theory section. `index.md` explicitly groups modules by those tiers, so a reader needs the theory pages to interpret the grouping.
+- **`docs/tools/`** — Tooling pages (test runners, lint configs, deploy scripts) are the "how to work in the repo" layer; module pages occasionally point a reader there for build/test commands relevant to a specific module but do not duplicate that content.
 
 ## Where to start
 
-1. **`index.md`** — It is the map: it names every module, draws the dependency graph, and explains the domain/mechanism split in one pass. It tells you which page to open next.
-2. **`products.md`** — The simplest leaf module (zero inbound dependencies, clear CRUD shape). Reading it first gives you a concrete sense of the documentation style, the "sole owner" phrasing, and how a module page describes invariants, before moving to the more entangled transaction-path pages.
+1. **`index.md`** — It is explicitly the orientation page: it defines the module-page contract, draws the dependency graph, and groups every module by tier. Reading it first means every subsequent module page has context.
+2. **`account.md`** — After the overview, this is the highest-leverage single module to read because it is "the only `shared-kernel` edge in the repo": every auth guard in the app resolves through it, so understanding its boundary clarifies why other modules never import session logic directly.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_docs_modules["docs/modules/"]
-    m_docs["docs/<br/>34 files"]
+    m_docs["docs/<br/>27 files"]
+    m_docs_theory["docs/theory/<br/>16 files"]
     m_docs_tools["docs/tools/<br/>40 files"]
     m_docs_modules --- m_docs
+    m_docs_modules --- m_docs_theory
     m_docs_modules --- m_docs_tools
     style m_docs_modules stroke-width:3px
 ```
 
-[[boilerplate-node-backend_docs|docs/]] · [[boilerplate-node-backend_docs_tools|docs/tools/]]
+[[boilerplate-node-backend_docs|docs/]] · [[boilerplate-node-backend_docs_theory|docs/theory/]] · [[boilerplate-node-backend_docs_tools|docs/tools/]]
 
 ## Files
-- `docs/modules/account-sessions.md` — Documents the session subsystem: how access/refresh tokens are generated, verified, and stored in cookies, and why the `session/` folder is deliberately sealed off from all other modules.
-- `docs/modules/account.md` — Documents the `account` module, which answers the kernel's "who is making this request?" question. It owns session lifecycle (signup, login, refresh, password reset, logout-everywhere, two-step deletion) and the per-account address book, and it is the repo's only `shared-kernel` consumer.
-- `docs/modules/audit-logs.md` — Headless domain module that owns the queryable audit-trail collection and installs its sink at import time. It exists so that audit storage can be toggled as a unit without naming a domain from the assembly file (`app.ts`). No router is declared here; the single read endpoint lives in `observability`.
+- `docs/modules/account-sessions.md` — Documents the session/token subsystem inside the `account` module: how access and refresh tokens are signed, verified, stored, rotated, and cleared, and why none of it is importable from outside `session/`.
+- `docs/modules/account.md` — Documents the `account` module, the application's sole authority for authentication (signup, login, token refresh, password reset, logout-everywhere, two-step deletion) and the per-account address book. It is the only `shared-kernel` edge in the repo: it fills the `kernel/authentication.ts` port at import time, so every guard in the app resolves through it.
+- `docs/modules/audit-logs.md` — Owns the `auditlogs` MongoDB collection and installs the write-sink (`record`) that ~53 `emitAuditEvent` call sites reach through `@infrastructure/observability/audit`. It declares no router; its sole responsibility is to store audit entries and enforce the 90-day retention window via a TTL index.
 - `docs/modules/cart-checkout.md` — Documents the `POST /cart/checkout` endpoint — the sole cart operation that writes into another module's collection. It orchestrates a fixed 9-step sequence across five modules to convert a cart into an order, with all validation resolved before any write occurs.
-- `docs/modules/cart.md` — Documents the cart module: a per-user collection (one document per `userId`) that holds priced line items against the live catalogue and terminates in a checkout. It is the single point where price, stock, address, shipping, and order creation must all agree atomically.
-- `docs/modules/delivery.md` — Documents the delivery module: shipping rates, shipment (parcel) records, and the fake courier that transitions shipments through `shipped → delivered`. Exists to centralize how the shop prices and tracks physical shipping of an order.
-- `docs/modules/feedback.md` — Documents the feedback (contact-request) module: an open form anyone can use to file a message by email address, with an admin triage workflow. It exists as a leaf module (no dependencies, no dependents) to give the module system a simple reference point.
-- `docs/modules/index.md` — Index and orientation page for the modules documentation section. It defines the vertical (domain) vs. horizontal (mechanism) split of the wiki, renders the module dependency graph, lists every module with a one-line description grouped by subdomain (core / supporting / generic), and documents the frontend–backend module pairing asymmetry. It exists so a reader can pick the right domain page without opening any of them.
+- `docs/modules/cart.md` — Owns one cart document per user (keyed by `userId`), prices its lines against the live catalogue, and executes the checkout pipeline that ends the cart. It is the convergence point where price, stock, address, shipping, and order creation must all agree in a single transactional sequence.
+- `docs/modules/delivery.md` — Documents the delivery module, which owns shipping-rate calculations, shipment records, and a fake courier that advances parcels from `shipped` to `delivered`. It exists so the cart can price a checkout against pure rate functions without learning that a shipment record exists, and so the order lifecycle can create a parcel and notify the recipient when shipping begins.
+- `docs/modules/feedback.md` — Documents the contact-request (feedback) module: an open form anyone can submit (the only unauthenticated write in the app) and the admin triage workflow around it. Exists as a reference page so readers understand the status lifecycle, honeypot mechanics, and retention policy without opening the source.
+- `docs/modules/index.md` — Landing page for the modules section. It defines what a module page is (a "decision" owned by one domain, as opposed to a "mechanism" owned by a horizontal page), shows the cross-module dependency graph, lists every module grouped by DDD strategic tier, and records the backend-to-frontend module pairing. It exists so a reader can orient before choosing a specific module page.
 - `docs/modules/inventory-reservations.md` — Documents the reservation subsystem inside the inventory module: the four state transitions that move `onHand`/`reserved` counters, the conditional-claim mechanism that guarantees exactly-once semantics without locks or transactions, and the admin sweep that expires stale holds. Exists so readers understand the sole writer path for inventory counters and the invariants that make it safe under concurrency.
-- `docs/modules/inventory.md` — Sole owner and writer of the two stock counters (`onHand`, `reserved`) that physically live on the product document, plus the `stockmovements` ledger. Every inventory mutation in the system routes through this module's four transitions; no other code writes those counters.
-- `docs/modules/locales.md` — Documents the locales module, which defines which languages this deployment supports and how runtime override rows (one per `locale, scope, key`) patch the bundled translation files. It exists so operators can edit copy without touching source code, while the filesystem remains the source of truth for *which* keys exist.
-- `docs/modules/observability.md` — Documents the observability module — the operator-facing HTTP surface (health, metrics overview, live SSE stream, Prometheus scrape endpoint, audit read). This page exists so a reader can understand the module's boundary, its per-route authentication choices, and its deliberate absence of a barrel export without reading the source.
-- `docs/modules/orders.md` — Documents the orders module: the aggregate that owns line-item snapshots, the order status state machine, and the semantics of cancellation (unit release + refund). It exists to make the invariants explicit so no other module silently reinterprets them.
+- `docs/modules/inventory.md` — Single writer for all stock-counter changes (`onHand`, `reserved`) and the `stockmovements` audit ledger. It owns the reservation lifecycle (hold → commit/release) and guarantees exactly-once transitions via conditional claims on reservation status. No other module touches the counters.
+- `docs/modules/locales.md` — Documents the dependency-free `locales` module, which owns two things: the set of languages the deployment speaks (Tier 1, file-based dictionaries loaded into i18next at boot) and the runtime override rows (Tier 2, one per `locale · scope · key`) that patch those dictionaries without touching source files. It exists so copy can be edited at runtime while remaining available during full backend outages.
+- `docs/modules/observability.md` — Documents the observability module: the operator-facing HTTP surface (health, metrics overview, Prometheus scrape, live SSE stream, audit read) that exposes process-level measurements collected by `infrastructure/observability`. It owns routes and authentication, not data — it has no model, no repository, and no barrel.
+- `docs/modules/orders.md` — Documents the **orders** module: the owner of placed orders, their frozen line items, the status state machine, and the invariants around what cancelling restores. It is the strongest aggregate candidate in the system and the module whose `status` enum acts as the public vocabulary three sibling modules react to.
 - `docs/modules/payments-provider-port.md` — Defines the `PaymentProvider` interface — the single contract the payments service calls for charges and refunds — so that which real provider is wired in is a deployment decision (env variable), not a code path. Shipped with one in-process `fake` implementation; a real PSP plugs in as one additional file.
-- `docs/modules/payments.md` — Documents the payments module, which owns an order's money behind a provider port. The intent freezes an order's total; the confirm moves the order to `paid` and commits the inventory hold into a sale. It also handles the refund path triggered by `order.cancelled`.
-- `docs/modules/products.md` — Documents the products module, which owns the shop catalogue (product CRUD) and the two stock counters (`onHand`, `reserved`) that live on every product row. It is a leaf module with zero inbound dependencies; four other domains conform to its shape rather than the reverse.
-- `docs/modules/users.md` — Documents the `users` module, which owns the user record (email, password hash, admin flag, reset/refresh tokens) and publishes its model and repository. It is a generic, dependency-free leaf at the bottom of the module graph; authentication and the token lifecycle live in the sibling `account` module rather than here.
-- `docs/modules/wishlist.md` — Documentation page for the **wishlist** module — the smallest domain in the repo. It defines one wishlist document per user holding product references, with no checkout complexity. The page exists to let readers understand the module's shape, its three one-way dependencies, and its complete independence from the rest of the system.
+- `docs/modules/payments.md` — Owns the monetary side of an order: creating a payment intent that freezes the total, and confirming the payment that moves the order to `paid` and commits held inventory. All provider-specific logic sits behind a port, so the rest of the system is processor-agnostic.
+- `docs/modules/products.md` — Documents the **products** module — the shop's catalogue and the leaf domain that `cart`, `inventory`, `orders`, and `wishlist` all conform to. It defines what a product looks like (`productSchema`), how soft deletion works, and the one domain event (`product.deleted`) that lets this module reach back into other modules without importing them.
+- `docs/modules/users.md` — Documents the `users` module — the owner of the user record (email, password hash, admin flag, and the reset/refresh token subdocument) and its repository. It is a dependency-free leaf in the module graph; five sibling modules import it, and it imports none. Authentication is deliberately *not* here; that logic lives in `account`, a second service over the same collection.
+- `docs/modules/wishlist.md` — Documents the wishlist module — the smallest domain in the repo. It owns one wishlist document per user that holds product references and nothing else. Serves as the simplest reference for understanding the repo's module pattern (same shape as `cart`, without checkout complexity).
 
 ---
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

@@ -2,26 +2,24 @@
 
 ## Purpose
 
-Integration tests that verify Mongoose schema **declarations** — defaults, `required`, `select: false` — against a real MongoDB instance. These behaviors belong to Mongoose, not the application, so a mocked model would only assert the mock's own interpretation. Sibling specs in this folder cover the transforms; this file covers the raw contract.
+Integration test that validates the Mongoose schema declarations themselves — `required`, `default`, `select: false`, serialization options — against a real MongoDB instance. It exists because these behaviours belong to Mongoose, not to application code; mocking the model would assert the mock's interpretation rather than the actual schema contract.
 
 ## Key elements
 
-- **`setupTestDb()`** (top-level) — boots a real test database before any test runs.
-- **"applies documented defaults…"** — creates a product with only `title` and `price`; asserts `description`, `categories`, `tags`, `active`, `deletedAt`, and `imageUrl` all receive their schema defaults.
-- **"requires a title" / "requires a price"** — confirm `required` enforcement rejects omitted fields.
-- **"accepts a price of zero"** — guards against a truthiness-based guard that would wrongly reject `price: 0`.
-- **"stamps createdAt and updatedAt"** — verifies Mongoose timestamp hooks fire on insert.
-- **"serialises to id, never _id or __v"** — asserts `toJSON()` output uses a string `id` and excludes `_id` and `__v`.
+- **`setupTestDb()`** — called once at module scope; spins up a real (in-memory or spun-up) Mongo database for the suite.
+- **`describe('product schema')`** — top-level suite; contains two tests:
+  - *"accepts a price of zero"* — creates a product via `productRepository.create` with `price: 0` (cast `as never` to bypass the non-null type) and asserts the stored value is `0`. Guards against a truthiness-based validation that would wrongly reject free products.
+  - *"serialises to id, never _id or __v"* — creates a product via the `createProduct` fixture, calls `toJSON()`, and asserts the output has `id` (stringified `_id`) while `_id` and `__v` are absent.
 
 ## Relationships
 
-- **`src/modules/products/index.ts`** — provides the `productRepository` export (via the barrel) used for all create calls.
-- **`src/modules/products/repository.ts`** — the `productRepository.create` method under test (imported through the index).
-- **`src/modules/products/tests/fixtures.ts`** — supplies the `createProduct` helper used by the timestamp and serialization tests.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, which provisions the in-memory/file-backed Mongo instance.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, which initialises the real Mongo connection used by every test in this file.
+- **`src/modules/products/index.ts`** — re-exports `productRepository`; this test imports it from the public module entry point rather than reaching into the barrel's internals.
+- **`src/modules/products/repository.ts`** — the `create` method under test; the test exercises the schema path that the repository triggers during document creation.
+- **`src/modules/products/tests/fixtures.ts`** — provides `createProduct`, a convenience factory used in the serialization test to build a valid product document.
 
 ## Notes
 
-- Tests intentionally use `as never` casts to pass type checking while supplying deliberately incomplete payloads; this is a pattern specific to "what the schema rejects" tests, not a type-safety workaround.
-- `active` and `deletedAt` are explicitly noted as **independent** axes — a product can be active-but-deleted or inactive-but-not-deleted.
-- The serialization test calls `toJSON()` rather than checking the raw doc; the contract is about the wire/API shape, not internal representation.
+- The `as never` cast on the `create` call is intentional: `price` is typed as non-nullable, but the test deliberately passes `0` to confirm the *schema-level* `required` constraint (which rejects `undefined`, not falsy values) behaves correctly at the Mongoose layer.
+- Because this test hits real Mongo, it lives under `tests/integration/` rather than alongside unit tests; CI must have a Mongo instance available.
+- Sibling specs in the same folder cover application-level transforms; this file is scoped strictly to schema declarations.

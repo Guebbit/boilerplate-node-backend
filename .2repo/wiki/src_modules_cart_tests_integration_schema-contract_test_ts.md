@@ -2,31 +2,22 @@
 
 ## Purpose
 
-Integration tests that assert the **schema declarations** themselves on the cart collection — defaults, `required` fields, `minimum` constraints, the unique `userId` index, subdocument `_id` suppression, and timestamps. These behaviours are owned by Mongoose, not application logic, so the tests run against a real MongoDB instance rather than a mock. Sibling specs cover transforms; this file covers what the client actually receives or rejects at the wire level.
+Integration test that verifies Mongoose schema-level declarations (here, the unique index on `userId`) against a **real** MongoDB instance. It exists because schema constraints are part of the public API contract and aren't exercised by the sibling transform/behaviour specs; mocking would assert the mock's own behaviour rather than Mongoose's index enforcement.
 
 ## Key elements
 
-- **`describe('cart schema')`** — single suite containing eight `it` blocks, each targeting one schema guarantee:
-  - *Empty `items` default* — a freshly created cart has `items: []` without the caller supplying it.
-  - *`userId` is required* — creating a cart without `userId` rejects.
-  - *Unique `userId` index* — a second cart for the same user rejects after `cartModel.syncIndexes()`.
-  - *Line must reference a product* — an item without `productId` rejects.
-  - *Line must carry a quantity* — an item without `quantity` rejects.
-  - *Quantity minimum is 1* — `quantity: 0` rejects.
-  - *No auto `_id` on subdocuments* — serialized items contain only `productId` and `quantity`.
-  - *Timestamps* — `createdAt` / `updatedAt` are `Date` instances after creation.
+- **`setupTestDb()`** — called at module level to spin up a real test database before any test runs.
+- **`describe('cart schema')`** — single spec: creates a user, inserts one cart via `cartRepository.create`, syncs indexes, then asserts a second `create` for the same `userId` rejects. This proves the **unique index** (not an application-level guard) is what enforces the one-cart-per-user invariant.
 
 ## Relationships
 
-- **`src/modules/cart/model.ts`** — imports `cartModel`; calls `cartModel.syncIndexes()` to materialise the unique index before the duplicate-user test.
-- **`src/modules/cart/repository.ts`** — imports `cartRepository`; every test exercises `cartRepository.create()` as the write path.
-- **`src/modules/users/tests/fixtures.ts`** — imports `createUser` to seed a valid `userId` reference.
-- **`src/modules/products/tests/fixtures.ts`** — imports `createProduct` to seed a valid `productId` reference.
-- **`tests/support/setup-test-db.ts`** — imports `setupTestDb`; called once at module level to start a real Mongo connection before the suite runs.
+- **`src/modules/cart/repository.ts`** — `cartRepository.create` is the write path used to attempt duplicate insertion and trigger the index constraint.
+- **`src/modules/cart/model.ts`** — `cartModel.syncIndexes()` is called explicitly to ensure the unique index physically exists in the test database before the duplicate-write assertion.
+- **`src/modules/users/tests/fixtures.ts`** — `createUser` supplies a valid user document whose `_id` populates the `userId` field under test.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb` provisions the real MongoDB connection and lifecycle for the entire integration suite.
 
 ## Notes
 
-- **Real database, not mocks.** The doc comment explicitly states this is testing Mongoose's own enforcement (defaults, `required`, `minimum`, unique index). A mock would assert its own shape, not the schema's.
-- **`as never` casts.** Every `cartRepository.create(...)` call passes a payload that intentionally violates the typed signature (missing fields, zero quantities). The `as never` cast silences the type checker so the test can exercise runtime validation.
-- **`syncIndexes()` is explicit.** Mongoose does not guarantee index creation at model-load time in all environments; the unique-index test calls `syncIndexes()` directly to ensure the index exists before asserting rejection.
-- **Scope boundary.** This file does **not** test application-level transforms, validators beyond the schema, or business rules — those live in sibling test files.
+- `syncIndexes()` is required in-test because the test database starts without indexes; omitting it would make the duplicate-write assertion vacuous.
+- The `as never` cast on the `create` payload signals the repository's typed signature expects more fields (e.g. `items`) than this schema-contract test cares about — the test is intentionally minimal.
+- Real Mongo is used deliberately: the behaviour under test (index rejection) is Mongoose's, not application code, so a mock would defeat the purpose.

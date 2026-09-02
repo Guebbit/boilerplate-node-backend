@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Unit tests for the user-administration router that verify three invariants without spinning up a server: (1) the exact set and order of mounted endpoints, (2) that every endpoint carries the `getAuth → isAuth → isAdmin` guard chain in that order with no public endpoints leaking through, and (3) correct cache tagging, upload validation, and feature-flag gating. The file exists so that a route accidentally mounted above the shared `isAdmin` middleware, a removed cache tag, or a broken ordering is caught at test time rather than in production.
+Unit test for the users routes router. It asserts that every endpoint is present, correctly ordered, guarded by the full admin middleware chain, and wired with the expected caching and upload behavior. Its job is to catch regressions where a new route is added without the `isAdmin` guard, a cache tag is dropped, or a mutating endpoint forgets to invalidate the shared profile cache.
 
 ## Key elements
 
-- **`ALL`** — Ordered array of the nine `METHOD /path` signatures the router must expose, from `POST /search` through `DELETE /:id/hard`.
-- **`chainOf(signature)`** — Looks up one endpoint in `routeTable(router)` and returns its middleware chain (array of string descriptions) for inspection.
-- **"what is mounted" block** — Asserts the router exposes exactly `ALL` in order and that `/search` is mounted before `/:id` (Express would otherwise shadow it).
-- **"authorization" block** — Per-endpoint assertion that `getAuth`, `isAuth`, `isAdmin` all appear *and* in that relative order; plus a global assertion that zero endpoints lack `isAdmin`.
-- **"caching and uploads" block** — Verifies shared cache key (`users:search`, tag `users`, 3600 s TTL) for `GET /` and `POST /search`; `GET /:id` under the `users` tag; all mutating routes invalidate both `users` and `account` tags; `POST/PUT /` and `PUT /:id` include `upload.single(imageUpload)` + `validateUploadedImages` + `quarantineUploadedImages`; `DELETE /:id/hard` is gated behind `routeFlag(hardDelete)` while the soft-delete routes are not.
-- **`jest.mock` calls** — Stub `cache`, `route-flag`, and `storage` infrastructure so the router can be inspected as a pure middleware chain without I/O.
+- **`ALL`** — Ordered list of every documented endpoint signature (`POST /search`, `GET /`, …, `DELETE /:id/2fa`). Serves as the single source of truth for "what should exist."
+- **`chainOf(signature)`** — Helper that looks up the middleware chain for one endpoint via `routeTable`. Used throughout the caching and upload assertions.
+- **"what is mounted" block** — Verifies the exact endpoint set and that `/search` is mounted before `/:id` (otherwise the parameter route would shadow it).
+- **"authorization" block** — For every endpoint in `ALL`, asserts the guard chain contains `getAuth → isAuth → isAdmin` **in that order**. Also asserts no endpoint at all lacks `isAdmin` (no public reads).
+- **"caching and uploads" block** — Verifies shared cache key between `GET /` and `POST /search`, the `users` tag on `GET /:id`, that all mutating endpoints invalidate both `users` and `account` cache tags, that image-upload middleware is present on the three create/update routes, and that `DELETE /:id/hard` is gated behind `routeFlag(hardDelete)` while the other delete routes are not.
+- **Jest mocks** — `cache`, `route-flag`, and `storage` adapters are replaced with factories from `@tests/routes` so the router can be introspected without real infrastructure.
 
 ## Relationships
 
-- **`src/modules/users/routes.ts`** — The module under test; its exported `router` is imported and passed to every helper. The test file asserts the observable shape of that router without invoking any handler.
-- **`tests/support/routes.ts`** — Supplies the inspection helpers (`routeTable`, `routeSignatures`, `guardsOn`, `optionsOf`) and the mock factories (`cacheMock`, `routeFlagMock`, `storageMock`) referenced in the `jest.mock` calls. The test file depends on its API contract for both setup and assertions.
+- **`src/modules/users/routes.ts`** — The module under test. The test imports `router` from it and inspects the mounted middleware table.
+- **`tests/support/routes.ts`** — Provides the introspection helpers (`routeTable`, `routeSignatures`, `guardsOn`, `optionsOf`) and the mock factories (`cacheMock()`, `routeFlagMock()`, `storageMock()`) used in the `jest.mock` calls.
 
 ## Notes
 
-- Guard **order** is asserted, not just presence: `isAdmin` reads the role off the request context that `getAuth` populates; if the order flips, `isAdmin` would read `undefined`.
-- The "no public endpoint" test is a deliberate tripwire: it fails if someone mounts a "harmless" `GET` above the `router.use(...isAdmin)` line, since that route would never see the guard.
-- Both `users` **and** `account` cache tags are required on invalidation because the same user row is served by two different modules (`/users/:id` and `/account`); clearing only one leaves a stale profile for the other audience.
-- The file relies on string-matching against the middleware chain (`chainOf` returns descriptive strings like `'setCache(3600…)'`). If a helper in `@tests/routes` changes its formatting, these assertions break even though the router is unchanged.
+- The test asserts **guard ordering**, not just presence. A chain of `[isAdmin, getAuth, isAuth]` would fail even though all three are present, because `isAdmin` would read `req.user` before `getAuth` populates it.
+- The leading JSDoc `@module` block is actually a description of the **routes** module's invariant (admin-only by a single `router.use`). It lives in the test file as documentation but reads as a note about `routes.ts`.
+- Cache invalidation asserts both `users` **and** `account` tags because the same row is served by two separate route trees; missing either tag leaves a stale profile in one of them.
+- `keyParameters` on the shared listing cache is asserted to be non-empty, ensuring the cache key varies by query (e.g. search term) rather than being a single flat key.

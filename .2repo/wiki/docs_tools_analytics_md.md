@@ -2,38 +2,43 @@
 
 ## Purpose
 
-Documents the server-side product-analytics pipeline: how business events (signup, cart, checkout, order, wishlist) are emitted through a single helper, routed to a configurable provider (Umami, PostHog, or no-op), and governed by a strict naming convention and cross-repo uniqueness guarantee. It exists so that "how many users abandon checkout?" is answerable without polluting operational metrics or per-request traces.
+Documents the Node backend's product-analytics pipeline: how business-level events (signup, cart, checkout, order) are emitted through a single helper, routed to a configurable provider (Umami, PostHog, or no-op), consent-gated, and named. It exists to centralise the conventions so that no module needs to know where an event lands, and to record the deliberate differences from the PHP twin's ambient-context approach.
 
 ## Key elements
 
-- **`emitAnalyticsEvent()`** — the single helper every module calls; no module knows where the event lands.
-- **`NODE_ANALYTICS_PROVIDER`** — env var selecting `umami` (default), `posthog`, or `none`; mirrors the `NODE_PAYMENT_PROVIDER` port pattern.
-- **`CallerContext`** / **`callerContextOf(request)`** (`src/infrastructure/http/request.ts`) — plain parameter threading caller IP, user-agent, and trace id into service calls; deliberately *not* an `AsyncLocalStorage` ambient value.
-- **`src/modules/<name>/analytics.ts`** — per-module event declarations; each uses a `declare module` block to register names in `AnalyticsEventMap`. One module, one owner.
-- **`tests/cross-cutting/analytics-events.test.ts`** — fails on duplicate event names, duplicate constant names, or missing `declare module` blocks across all module folders.
-- **Naming rule** — `<subject>_<past-tense-verb>`, snake_case; outcomes are separate events (`checkout_completed` / `checkout_failed`), not a shared name plus an `outcome` property.
-- **Provider implementations** — Umami (`POST /api/send`), PostHog (buffered `capture()`), and a no-op; unknown provider names throw on first event.
-- **`check:spec-identity`** — guards that the backend and paired-frontend event catalogues are byte-identical (the frontend emits no custom events, so this is trivially satisfied).
+- **`emitAnalyticsEvent()`** — The one choke-point every module calls to emit. Applies the consent gate, serialises to the active provider, and is the only place consent is checked.
+- **`CallerContext` / `callerContextOf(request)`** (in `src/infrastructure/http/request.ts`) — Plain-parameter carrier for IP, user-agent, trace id, and `analyticsConsent`. Built once in the controller; passed down to the emitting service call. Deliberately *not* an `AsyncLocalStorage` ambient read (unlike the PHP twin).
+- **`NODE_ANALYTICS_PROVIDER`** — Selects `umami` (default), `posthog`, or `none`. Unknown values throw on first event. Mirrors the `NODE_PAYMENT_PROVIDER` port pattern.
+- **`NODE_ANALYTICS_REQUIRE_CONSENT`** — Defaults `true`. When set, only an explicit `granted` consent captures; everything else is dropped. No partial/anonymised capture exists by design.
+- **`NODE_UMAMI_INGEST_HOST`** — Internal-network address the API dials for ingest. Distinct from the public `NODE_UMAMI_HOST` (browser-facing origin). Falls back to the public host if unset.
+- **`src/modules/<name>/analytics.ts`** + **`declare module` / `AnalyticsEventMap`** — Per-module event-name definitions; the `declare module` block registers names in the global type map so the compiler catches typos.
+- **`tests/cross-cutting/analytics-events.test.ts`** — Sweeps all module folders; fails on duplicate event names, duplicate constant names, or a missing `declare module` block.
+- **`check:spec-identity`** — Guards that the event catalogue is byte-identical between the Node and PHP repos (the paired-frontend half is now empty by construction, so all custom names live here).
+- **`GET /observability/health`** — Reports active provider as `telemetry.analytics: { provider, configured }`.
 
 ## Relationships
 
-- **`docs/modules/cart-checkout.md`** — primary emitter of `cart_viewed`, `cart_item_added`, `order_created`, `checkout_completed`/`checkout_failed`, `payment_succeeded`/`payment_declined`. The rule that `order_created` must fire from the service (not the admin-order controller) originated here.
-- **`docs/modules/wishlist.md`** — emits `wishlist_item_added`; shares the `cartItemAdd` / `cartItemUpdateQuantity` split rule.
-- **`docs/tools/events-and-logging.md`** — the audit-trail system; explicitly contrasted (outcome is a *field* in audit, a *different event name* in analytics).
-- **`docs/tools/frontend-observability.md`** — the browser half writing pageviews into the same Umami website; the frontend emits no custom events.
-- **`docs/tools/prometheus.md`** / **`docs/tools/tempo.md`** — the operational and per-request counterparts; analytics is explicitly the third, business-question lane.
-- **`docs/tools/observability-layer.md`** / **`docs/tools/index.md`** — parent context; `GET /observability/health` reports `telemetry.analytics`.
-- **`docs/reference/src-infrastructure.md`** — houses `CallerContext` and `callerContextOf`.
-- **`docs/reference/src-modules.md`** — houses each module's `analytics.ts` file.
-- **`docs/reference/tests.md`** — describes the cross-cutting analytics-events test.
-- **`docs/tools/pairing-and-ports.md`** — the provider-port pattern that `NODE_ANALYTICS_PROVIDER` follows.
-- **`docs/tools/package-dependencies.md`** — PostHog Node client dependency.
+- **`docs/tools/prometheus.md`** — Complementary: Prometheus counts operational SLOs; analytics counts business funnels. The doc recommends adding a Prometheus counter alongside an analytics emit when you need a consent-independent count.
+- **`docs/tools/tempo.md`** — Every analytics event carries a `traceId` that joins to the corresponding Tempo trace; the audit event in that trace names the actor, which is why "anonymised" partial capture is deliberately absent.
+- **`docs/tools/events-and-logging.md`** — The audit trail inverts the analytics convention: audit puts `outcome` in a mandatory field and slices *across* actions; analytics uses separate event names (`checkout_completed` vs `checkout_failed`) and counts *per name*.
+- **`docs/tools/observability-layer.md`** — The health endpoint's `telemetry.analytics` field is part of the broader observability surface documented there.
+- **`docs/tools/pairing-and-ports.md`** — Provider selection follows the same port/adapter pattern as `NODE_PAYMENT_PROVIDER`; this file is a second worked example of that pattern.
+- **`docs/modules/cart-checkout.md`** — Primary source of the canonical event names (`cart_viewed`, `cart_item_added`, `order_created`, `checkout_completed`, `checkout_failed`, `payment_succeeded`, `payment_declined`).
+- **`docs/modules/wishlist.md`** — Emits `wishlist_item_added`; subject to the same naming and collision rules.
+- **`docs/reference/src-infrastructure.md`** — Houses `CallerContext` and `callerContextOf` in `src/infrastructure/http/request.ts`.
+- **`docs/reference/src-modules.md`** — Per-module `analytics.ts` files live alongside the module's service code.
+- **`docs/reference/tests.md`** — Lists `tests/cross-cutting/analytics-events.test.ts` among cross-cutting test suites.
+- **`docs/theory/index.md`** — The PHP-ambient-vs-Node-threaded context split is a deliberate architectural divergence discussed in the theory notes.
+- **`docs/tools/frontend-observability.md`** — The frontend emits no custom events; its pageviews are handled by the Umami tag. All custom names in the shared Umami website originate in this repo.
+- **`docs/tools/package-dependencies.md`** — Umami is a self-hosted compose service; PostHog is the one hosted/cloud dependency in the stack.
 
 ## Notes
 
-- **`NODE_UMAMI_INGEST_HOST` ≠ `NODE_UMAMI_HOST`.** The former is the in-network API endpoint (compose: `http://umami:3000`); the latter is the public browser origin. Using the public one from inside a container dials `localhost`, i.e. the API itself.
-- **Umami silently drops events with no `User-Agent` header** and still returns `200`. The provider always forwards the caller's UA or substitutes a server placeholder.
-- **Renaming an event after deployment ends its time-series in Umami** — there is no history migration.
-- **Split before emit:** a method serving two meanings (e.g. `cartGetForView` vs `cartGetForBadge`) must be two named functions, not one with a flag.
-- **The two backends' (Node vs PHP) event vocabularies are not diffed against each other.** Deployment runs one backend at a time; a cross-repo gate would guard an impossible state. The rule is that both trees apply the same naming convention independently.
-- **The PHP twin uses `AnalyticsContext::current()`** (ambient, safe under PHP-FPM); the Node twin threads a plain parameter. This is an intentional divergence, not an oversight.
+- **Emit from the service, not the controller.** A route-level emit misses other routes that reach the same operation (e.g. admin order creation vs. customer checkout both create an order). The `order_created` bug was the motivating case for this rule.
+- **Split ambiguous methods before adding an emit.** `cartGetForView` vs `cartGetForBadge` are separate functions so only the former emits `cart_viewed`. A boolean flag on a shared function is considered a footgun.
+- **Consent is tri-state and opt-in.** `granted` / `denied` / unset (never asked). Only `granted` captures. There is no "anonymised" middle tier because `order_id`, `product_id`, and `traceId` would still join back to the person.
+- **`NODE_ANALYTICS_REQUIRE_CONSENT` defaults `true`** (GDPR Art. 25(2)). A fresh deployment captures nothing until users grant. Set to `false` only after independent legal advice.
+- **Naming is `<subject>_<past-tense-verb>`, singular subject = one instance, plural = collection, compound for nested things.** One noun per domain. Outcomes are separate event names, never a property.
+- **Renames are destructive in Umami** (no history forward). Decide names before dashboards depend on them.
+- **`NODE_UMAMI_INGEST_HOST` ≠ `NODE_UMAMI_HOST`.** The former is the internal network address the API container dials; the latter is the public browser-facing origin. Inside compose, `localhost` in the ingest host resolves to the API itself.
+- **The two backends (Node vs PHP) are never deployed simultaneously**, so there is no cross-backend vocabulary diff test by design.

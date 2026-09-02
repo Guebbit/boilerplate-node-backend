@@ -2,31 +2,26 @@
 
 ## Purpose
 
-Jest configuration for the unit + cross-cutting test suite. Exists as `.js` (not `.json`) so that coverage thresholds can carry inline explanations, and so that runtime logic (worker-count resolution, env-file reading) can live next to the config it guards.
+Jest configuration for the unit / cross-cutting test suite. Written as `.js` rather than `.json` so the coverage thresholds can carry inline explanations that JSON cannot hold. It defines the test glob, worker count, coverage collection, and per-file coverage floors that run in CI, while explicitly excluding the cluster and mutation suites (handled by their own configs).
 
 ## Key elements
 
-- **`readEnvFile()`** – Reads the project `.env` via `node:util`'s `parseEnv` and returns a plain object (or `{}`). Deliberately avoids `loadEnvFile` to prevent merging the entire dev environment into every Jest worker's `process.env`.
-- **`resolveMaxWorkers()`** – Returns the worker count: `JEST_WORKERS` (real env var or `.env` file) if set and valid, otherwise `Math.max(1, os.cpus().length - 2)`. Caps parallelism to avoid OOM on large machines.
-- **`module.exports`** – The Jest config object:
-  - `preset: 'ts-jest'`, `coverageProvider: 'v8'`, `testEnvironment: 'node'`, `clearMocks: true`
-  - `testMatch: ['**/tests/**/*.test.ts']`
-  - `testPathIgnorePatterns` – excludes `/node_modules/`, `.stryker-tmp/`, `.tmp/`, and `tests/cluster/`
-  - `collectCoverageFrom` – `src/**/*.ts` minus types, `.d.ts`, and co-located specs (`src/**/tests/**`)
-  - `coverageThreshold` – per-file glob floors (e.g. `src/modules/*/model.ts`, `repository.ts`, `service.ts`) at 70% / 70% / 0% / 70% (statements / branches / functions / lines), re-fitted 2026-08-29
+- **`readEnvFile()`** — Parses `.env` with `node:util`'s `parseEnv` to extract `JEST_WORKERS` without merging the whole file into `process.env` (avoids leaking rate-limit vars into workers).
+- **`resolveMaxWorkers()`** — Returns the worker count: `JEST_WORKERS` from env/file if set, otherwise `os.cpus().length - 2`, clamped to ≥ 1. Exists because Jest's default (logical CPUs − 1) OOM-kills workers on 32-core machines.
+- **`testMatch` / `testPathIgnorePatterns`** — Matches `**/tests/**/*.test.ts`; excludes `tests/cluster/` (delegated to `jest.config.cluster.js`) and Stryker/tmp directories.
+- **`collectCoverageFrom`** — Collects from `src/**/*.ts` while excluding type declarations and co-located `src/**/tests/**` (prevents a module's own specs from inflating its own floor).
+- **Per-file `coverageThreshold` globs** — Floors on `model.ts`, `repository.ts`, `service.ts` under `src/modules/<name>/`. Uses glob (file-level) keys rather than directory keys so each file is measured individually. Deliberately does **not** floor controllers (covered by contract/integration suites elsewhere) or newer per-module files (`audit.ts`, `metrics.ts`, etc.) whose floors await architecture stabilisation.
+- **`clearMocks: true`, `coverageProvider: 'v8'`, `testEnvironment: 'node'`** — Standard runtime flags.
 
 ## Relationships
 
-- **`jest.config.cluster.js`** – This config explicitly excludes `tests/cluster/` via `testPathIgnorePatterns`; those tests are run under the cluster config, which spawns `src/cluster.ts`, boots its own Mongo, and requires Redis.
-- **`jest.config.mutation.js`** – The header positions this file's `coverageThreshold` as the cheap CI check ("is code executed?") and mutation testing (configured via `stryker.config.json` / `scripts/run-mutation-tests.ts`) as the expensive nightly check ("do tests notice when it changes?"). The `mutate` list in the Stryker config is wider than the floor list here; a file with zero coverage is free to mutate but expensive to floor.
+- **`jest.config.cluster.js`** — This config explicitly excludes `tests/cluster/` via `testPathIgnorePatterns`. Those tests spawn `src/cluster.ts` as a child process, boot their own Mongo, and require Redis; they are run under the cluster config instead, where setup and timeouts differ.
+- **`jest.config.mutation.js`** — The mutation suite (Stryker) is the project's primary test-quality instrument; the coverage floors here are a cheaper CI proxy. The mutation config's `mutate` list is intentionally wider than this file's floored set. A path added to the mutation config is a candidate for a floor here once measured.
 
 ## Notes
 
-- **Per-file glob vs. pooled directory thresholds are not interchangeable.** A directory key pools all files into one total; a glob key applies per-file. The old pooled form let four files sit at 0% inside a "green" 70% gate.
-- **A threshold key that matches zero files is silently ignored.** Renaming a source directory without updating these keys produces a green run, not an error.
-- **Jest adds a file to every matching threshold group** (not the most specific one). An exemption must use an extglob negation to *leave* the glob; a lower key alongside the glob still fails the file.
-- **Controllers are deliberately not floored.** They are covered by `tests/contract/` and `tests/integration/` (real HTTP); a floor on the unit run would measure the wrong suite.
-- **`functions: 0` is intentional** where the unit layer calls none of a file's exports. It is a ratchet ("do not get worse"), not a target.
-- **Coverage is a proxy, not a guarantee.** A line can be executed with no meaningful assertion. Mutation testing is the real instrument; coverage exists because it runs in seconds.
-- **The `.env` read is a deliberate isolation choice.** `loadEnvFile` would publish the full dev env into every worker, causing `tests/support/setup.ts` rate-limit guards (`??=`) to inherit real production values and return 429 to test fixtures.
-- **The fallback is `logical CPUs − 2`, not a memory calculation.** CI runners (4 vCPU) land on 2 workers, which is already correct; large dev boxes have a `.env` with `JEST_WORKERS` set.
+- **Glob vs. directory threshold keys:** A directory key pools all files under it into one total; a glob key measures each file separately and names each failure. This config uses globs on purpose.
+- **Silent ignore trap:** A threshold key that matches no file is silently dropped (no error, green run). Renaming a source directory without updating these keys silently disables the floor.
+- **Exemption mechanism:** To exempt a file from a glob floor, negate it out of the glob *and* give it its own key. Adding a second lower key alongside the glob does not work—Jest applies the file to every matching group and the stricter one still fails.
+- **Floor values are a ratchet, not a target:** Several floors (e.g. `service.ts` at 37 % statements) are low because 36 module specs were moved to `tests/integration` and are no longer visible to this run. They reflect what the unit layer alone reaches, not a quality target.
+- **`JEST_WORKERS` env var** overrides the `.env` file value, allowing `JEST_WORKERS=2 npm run test:unit` for ad-hoc runs without editing config.

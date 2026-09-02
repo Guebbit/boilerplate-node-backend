@@ -1,31 +1,28 @@
 # src/modules/orders/fixtures.ts
 
 ## Purpose
-
-Builder and type definitions for constructing order fixtures that are ready to pass to `orderRepository.create`. It exists so that tests, demo scripts, and other fixture layers can generate realistic, deterministic order documents without manually assembling Mongo `_id`s, converting ISO dates, or worrying about which fields are stored vs. derived.
+Builder and type definitions for constructing order fixtures ready to be passed to `orderRepository.create`. It translates contract-level order data (flat product ids, ISO date strings, wire-shaped items) into the shape MongoDB expects (embedded product snapshots with `ObjectId`s, real `Date` values), filling in identity and safe defaults for anything the caller leaves unstated.
 
 ## Key elements
-
-- **`OrderSnapshotInput`** — The shape of a product embedded in an order line: a generated `Product` with `id`, `title`, and `price` required. Carries `createdAt`/`updatedAt` explicitly to avoid non-deterministic sub-document timestamps.
-- **`OrderLineInput`** — One line of an order: the snapshot input plus `quantity` (and any other `OrderItem` fields except `product`).
-- **`OrderOverrides`** — The pin set a caller may supply to `makeOrder`. Deliberately omits `status`, `totalItems`, `totalQuantity`, `totalPrice` (derived at serialization, never stored) and replaces `items` with `OrderLineInput[]`.
-- **`OrderFixture`** — The output type: a `Partial<OrderDocument>` with a required `_id`, i.e. what `orderRepository.create` expects.
-- **`toSnapshot`** (internal) — Converts an `OrderSnapshotInput` into a `ProductSnapshot` by mapping `id` → `_id` (ObjectId) and ISO strings → `Date`, passing optional fields through `compact`.
-- **`makeOrder`** (exported) — The public builder. Accepts an optional `OrderOverrides` object, fills in defaults (e.g. `email: 'test@example.com'`), maps items via `toSnapshot`, and uses `compact` to ensure unspecified optional shipping/notes fields stay absent rather than being written as `undefined`.
+- **`OrderSnapshotInput`** — type for the product data a caller must supply per line; requires `id`, `title`, `price` and accepts any other `Product` field as an override.
+- **`OrderLineInput`** — one order line: the snapshot input plus `quantity`.
+- **`OrderOverrides`** — the set of fields a caller may pin on the order. Excludes `status`, `totalItems`, `totalQuantity`, `totalPrice` (derived, never stored) and replaces `items` with `OrderLineInput[]`.
+- **`OrderFixture`** — the output shape: `Partial<OrderDocument>` with a guaranteed `_id`.
+- **`toSnapshot`** (internal) — converts `OrderSnapshotInput` to a `ProductSnapshot` subdocument: `id` → `Types.ObjectId`, dates → `Date`, strips `undefined`.
+- **`makeOrder`** (exported) — the main builder. Accepts `OrderOverrides` (defaults to `{}`), returns an `OrderFixture` with identity via `identityOf`, a default `email`, mapped items, and `stripUndefined`-gated optional fields.
 
 ## Relationships
-
-- **`src/infrastructure/persistence/fixtures.ts`** — Provides the shared utilities this module composes: `identityOf` (generates `_id` + timestamps), `compact` (strips `undefined` keys), `toDate` (ISO → `Date`), and the `OverridesFor<T>` helper type.
-- **`src/modules/orders/model.ts`** — Supplies the `OrderDocument` type that defines the shape of `OrderFixture` and the target schema.
-- **`src/modules/products/index.ts`** — Exports the `ProductSnapshot` type used as the return type of `toSnapshot`.
-- **`src/types/index.ts`** — Source of the contract-level types (`Id`, `Order`, `OrderItem`, `Product`) that the input/override types derive from.
-- **`src/modules/orders/demo.ts`** — Consumer of `makeOrder` to seed demo data.
-- **`src/modules/orders/tests/fixtures.ts`** — Re-exports or wraps this module for the test fixture layer.
-- **`src/modules/orders/tests/unit/fixtures.test.ts`** — Unit tests that exercise `makeOrder` and the snapshot conversion logic.
+- **`src/infrastructure/persistence/fixtures.ts`** — provides `identityOf`, `stripUndefined`, `toDate`, and the `OverridesFor<T>` generic used throughout the type definitions.
+- **`src/modules/orders/model.ts`** — source of the `OrderDocument` type that `OrderFixture` extends.
+- **`src/modules/products/index.ts`** — exports `ProductSnapshot`, the target shape of `toSnapshot`.
+- **`src/types/index.ts`** — source of the contract types `Id`, `Order`, `OrderItem`, `Product` that the local types are derived from.
+- **`src/modules/orders/tests/fixtures.ts`** — consumes `makeOrder` to build test datasets.
+- **`src/modules/orders/tests/unit/fixtures.test.ts`** — unit-tests the output of `makeOrder`.
+- **`src/modules/orders/demo.ts`** — likely calls `makeOrder` to seed demo data.
 
 ## Notes
-
-- The product is embedded as a **value snapshot**, not a reference. The `product` field on an order item holds a copy of the product at time of purchase; there is no `ref` to resolve.
-- `createdAt`/`updatedAt` on the snapshot are the *catalogue row's* timestamps, passed through explicitly. Without this, Mongoose sub-document `timestamps: true` behavior would stamp them at insert, making exports non-deterministic.
-- Shipping fields (`shippingMethod`, `shippingCost`, `shippingAddress`) are intentionally **not** given defaults. The three-way distinction (absent = pre-checkout order, `pickup` at price 0, paid shipping) must remain representable. `compact` is the mechanism that keeps "not supplied" as truly absent.
-- `deletedAt` on the snapshot is passed through via `compact` but the module's doc-block notes it is *deliberately* not required — a catalogue soft-delete carries no meaning for an already-placed order.
+- **Product is embedded, not referenced.** `orderItemSchema` declares `product: productSchema` with no `ref`, so the builder must produce the full snapshot object — it cannot store just an id.
+- **Subdocument timestamps are explicit.** Mongoose stamps `createdAt`/`updatedAt` on subdocuments at insert time regardless of the parent schema's `{ timestamps: false }`. `toSnapshot` carries the catalogue row's timestamps through to keep exports deterministic.
+- **Totals and status are un-settable.** They are excluded from `OrderOverrides` entirely (not merely optional) because they are derived at serialization time by `applyOrderTransform`; stating them would fabricate a column the API never stores.
+- **Shipping fields intentionally have no defaults.** `shippingMethod`, `shippingCost`, and `shippingAddress` pass through via `stripUndefined` so "absent" (pre-checkout orders) is preserved distinctly from `pickup` (a real method priced 0). A builder-supplied default would collapse that distinction.
+- **`deletedAt` on the snapshot is pass-through.** A catalogue soft-delete is meaningless for an already-placed order line, but the field is still carried (as `undefined` or a `Date`) so it round-trips through `stripUndefined` without error.
