@@ -3,7 +3,8 @@
 A theory-only reference: every kind of flaw a website can have and every kind of attack it can
 receive, grouped by **where the attack lands**. Nothing on this page is about this codebase — what
 the boilerplate actually does about each item lives in [Security](../tools/security.md), and the
-mapping from this catalog to the code is a separate, later page.
+row-by-row mapping from this catalog to the code is
+[Web Attack Defences](./web-attack-defences.md).
 
 Use it as a checklist when threat-modelling a feature: walk the groups top to bottom and ask
 "could this one apply here?". Each row is deliberately one line — the name, what it is, and the
@@ -622,7 +623,8 @@ Information disclosure feeds entry, entry feeds escalation, escalation feeds imp
 
 ## What this page is not
 
-- Not a statement about this codebase. What is mitigated, how, and where is a later page.
+- Not a statement about this codebase. What is mitigated, how, and where is
+  [Web Attack Defences](./web-attack-defences.md).
 - Not a severity ranking. Impact depends on the chain, not the row.
 - Not complete forever. New classes appear (HTTP/2 desync and XS-Leaks are both recent); revise
   it when a reference above does.
