@@ -3,10 +3,10 @@
  * Contract-derived authorization sweep: every route `@tests/contract-routes` finds behind `isAuth`
  * must answer 401 to a callerless request, and every route behind `isAdmin` must answer 403 to a
  * logged-in non-admin — mirror image of `request-contract.test.ts`, which sweeps request BODIES
- * against the contract instead of AUTHORIZATION. One table-driven case per route replaces what
- * used to be a hand-written "matches the error contract when unauthenticated" (or "for a
- * non-admin") copied into each module's own contract file: the guard wiring per route is still one
- * fact per route, asserted here instead of 40-odd times over.
+ * against the contract instead of AUTHORIZATION. One table-driven case per route, rather than one
+ * hand-written "matches the error contract when unauthenticated" (or "for a non-admin") per
+ * module's own contract file: the guard wiring per route is still one fact per route, asserted
+ * here instead of 40-odd times over.
  *
  * Path parameters are filled with a syntactically valid, nonexistent id. The guard always runs
  * before any per-field validation (`@tests/routes`' `applies`-then-`chain` order), so what the id
