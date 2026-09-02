@@ -97,8 +97,8 @@ flowchart LR
 There is a stock board showing everything with a "show me only the low ones" filter. Anything at
 **5 or fewer** counts as low, unless that figure is changed.
 
-In the demo, Miciona inutile sits at zero — a permanent example of what the bottom of that list
-looks like.
+In the demo, the Heavy-Duty Cat Scratching Post sits at zero — a permanent example of what the
+bottom of that list looks like.
 
 ## Getting it out of the door
 

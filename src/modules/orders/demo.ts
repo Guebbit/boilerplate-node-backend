@@ -13,7 +13,8 @@ import {
     SEED_USER_EMAIL,
     SEED_USER_ID
 } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS, seedProductById } from '@modules/products/demo';
+import { SEED_PRODUCT_IDS, fillerProductId, seedProductById } from '@modules/products/demo';
+import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from '@modules/users/demo';
 import { makeOrder, type OrderSnapshotInput } from './fixtures';
 import { orderModel } from './model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
@@ -44,8 +45,15 @@ const line = (productId: string, quantity: number) => ({
     quantity
 });
 
-/** The seeded orders, each demonstrating a distinct case — see the comments on each fixture. */
-export const orderFixtures = [
+/**
+ * Deterministic id for a demo history order at `index` — see `@modules/users/demo`'s
+ * `demoCustomerId` for why this isn't `new Types.ObjectId()`. Its own prefix keeps this id space
+ * apart from every other collection's.
+ */
+const demoOrderId = (index: number): string => `67f0c4${index.toString(16).padStart(18, '0')}`;
+
+/** The three test-critical orders — see the comment on each for the branch it exercises. */
+const namedOrders = [
     makeOrder({
         id: '65de73a69ca05739be2b5e85',
         userId: SEED_ADMIN_ID,
@@ -81,7 +89,8 @@ export const orderFixtures = [
     /*
      * The soft-deleted order, and it sits on the NON-ADMIN account on purpose. The case it
      * exercises is "the owner cannot see their own soft-deleted order" — which ownership-only
-     * scoping would wrongly allow, and which an admin-owned fixture could never catch.
+     * scoping would wrongly allow, and which an admin-owned fixture could never catch. It also
+     * anchors `ginopinoshow`'s "large" history below: this is the FOURTH order, not the first.
      */
     makeOrder({
         id: '66b3f0c14d2e8a91c7d4a015',
@@ -94,6 +103,147 @@ export const orderFixtures = [
          * `@infrastructure/persistence/fixtures`. */
         deletedAt: '2024-08-07T09:12:03.114Z'
     })
+];
+
+/**
+ * `ginopinoshow`'s three ADDITIONAL orders (on top of the soft-deleted one above), each larger
+ * than anything a "small" or "medium" customer below carries — more lines, higher quantities.
+ * None has `shippingAddress`/`shippingMethod`: like the admin's first order, these predate a
+ * chosen delivery method.
+ */
+const ginoOrders = [
+    makeOrder({
+        id: demoOrderId(0),
+        userId: SEED_USER_ID,
+        email: SEED_USER_EMAIL,
+        items: [
+            line(SEED_PRODUCT_IDS.panino, 3),
+            line(SEED_PRODUCT_IDS.pufettino, 2),
+            line(fillerProductId(25), 4),
+            line(fillerProductId(77), 1)
+        ]
+    }),
+    makeOrder({
+        id: demoOrderId(1),
+        userId: SEED_USER_ID,
+        email: SEED_USER_EMAIL,
+        items: [
+            line(fillerProductId(9), 5),
+            line(fillerProductId(48), 2),
+            line(fillerProductId(101), 3)
+        ]
+    }),
+    makeOrder({
+        id: demoOrderId(2),
+        userId: SEED_USER_ID,
+        email: SEED_USER_EMAIL,
+        items: [
+            line(fillerProductId(31), 2),
+            line(fillerProductId(64), 6),
+            line(fillerProductId(110), 1),
+            line(fillerProductId(4), 2)
+        ]
+    })
+];
+
+/**
+ * The seven "small" customers (`@modules/users/demo`'s `amelia` through `priya`) — one order
+ * each, one line, a modest quantity. Each draws a different row from the combinatorial catalogue
+ * so the seven don't all buy the same thing.
+ */
+const smallCustomerOrders = (
+    [
+        ['amelia', 3, 1],
+        ['benjamin', 15, 1],
+        ['chloe', 27, 2],
+        ['daniel', 42, 1],
+        ['grace', 58, 1],
+        ['felix', 71, 1],
+        ['priya', 89, 2]
+    ] as [customer: keyof typeof SEED_CUSTOMER_IDS, productIndex: number, quantity: number][]
+).map(([customer, productIndex, quantity], index) =>
+    makeOrder({
+        id: demoOrderId(3 + index),
+        userId: SEED_CUSTOMER_IDS[customer],
+        email: SEED_CUSTOMER_EMAILS[customer],
+        items: [line(fillerProductId(productIndex), quantity)]
+    })
+);
+
+/** One medium order: who placed it, and its lines as `[productIndex, quantity]` pairs. */
+interface MediumOrderSeed {
+    customer: keyof typeof SEED_CUSTOMER_IDS;
+    lines: [productIndex: number, quantity: number][];
+}
+
+/**
+ * The three "medium" customers (`marcus`, `harper`, `isla`) — two orders each, two or three lines
+ * apiece, bigger than a "small" order but well short of `ginopinoshow`'s.
+ */
+const MEDIUM_ORDERS: MediumOrderSeed[] = [
+    {
+        customer: 'marcus',
+        lines: [
+            [5, 2],
+            [46, 1]
+        ]
+    },
+    {
+        customer: 'marcus',
+        lines: [
+            [63, 1],
+            [97, 3],
+            [112, 1]
+        ]
+    },
+    {
+        customer: 'harper',
+        lines: [
+            [8, 2],
+            [50, 2]
+        ]
+    },
+    {
+        customer: 'harper',
+        lines: [
+            [70, 1],
+            [99, 1],
+            [120, 2]
+        ]
+    },
+    {
+        customer: 'isla',
+        lines: [
+            [12, 1],
+            [40, 3]
+        ]
+    },
+    {
+        customer: 'isla',
+        lines: [
+            [66, 2],
+            [95, 1],
+            [118, 2]
+        ]
+    }
+];
+
+const mediumCustomerOrders = MEDIUM_ORDERS.map(({ customer, lines }, index) =>
+    makeOrder({
+        id: demoOrderId(10 + index),
+        userId: SEED_CUSTOMER_IDS[customer],
+        email: SEED_CUSTOMER_EMAILS[customer],
+        items: lines.map(([productIndex, quantity]) =>
+            line(fillerProductId(productIndex), quantity)
+        )
+    })
+);
+
+export const orderFixtures = [
+    ...namedOrders,
+    ...ginoOrders,
+    ...smallCustomerOrders,
+    ...mediumCustomerOrders
 ];
 
 /*
