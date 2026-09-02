@@ -4378,11 +4378,11 @@
     "credentials": {
         "admin": {
             "email": "root@root.it",
-            "password": "rootroot"
+            "password": "Demo-Admin1!"
         },
         "user": {
             "email": "gino@pino.it",
-            "password": "password"
+            "password": "Demo-User1!"
         }
     }
 }
