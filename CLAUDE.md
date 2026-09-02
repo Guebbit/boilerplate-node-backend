@@ -41,6 +41,13 @@ See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`
 - MUST keep nesting ≤ 3 levels; extract a helper for anything deeper.
 - MUST prefer pure functions and shared abstractions over duplicated inline logic.
 
+## Scope
+
+- MUST NOT preserve backward compatibility (old field names, deprecated endpoints, legacy code
+  paths, dual-write transitions) unless the user explicitly asks for it. Replace, don't shim.
+- MUST NOT leave deprecated code in place — no `@deprecated` tag kept "for later." When a change
+  supersedes something, remove it in the same change.
+
 ## Async and error handling
 
 - **Prefer promise chaining** (`.then`/`.catch`/`.finally`) when there are only 1–2 awaits.
@@ -68,6 +75,10 @@ Hard caps. "Keep it short" wasn't specific enough, so:
 - A short `//` line inside a function body is fine, and encouraged, wherever a loop, branch or
   operation isn't self-evident from the code alone — same caps, same two questions, just attached
   to the line instead of the declaration.
+- Never narrate history — no "this used to...", "previously...", "was renamed from...". A comment
+  describes the code as it is now; git log is where the past lives.
+- Never link to a `.md` file outside `docs/*` — a root-level plan, audit, or report doc is
+  ephemeral; only `docs/` is a stable target for a comment to point at.
 
 MUST: every exported function gets `@param`/`@returns`/`@throws` as needed, within the cap above.
 MUST: every exported interface/type states its purpose and what each field means, within the cap.

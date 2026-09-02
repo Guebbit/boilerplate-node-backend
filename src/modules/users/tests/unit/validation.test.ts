@@ -92,10 +92,9 @@ describe('password messages', () => {
         expect(messagesFor({ ...validUser, password: 'Aa1!aaaa' }, 'password')).toEqual([]);
     });
 
-    // An 8-char all-lowercase password used to pass here with zero validation errors — the exact
-    // gap TEST_AUDIT_CORRELATED_BLIND_SPOTS.md's X-2 found: the paired frontend's `usersPasswordSchema`
-    // enforced this, nothing server-side did. `PasswordNew` (`shared/contracts/openapi.root.yaml`)
-    // documents the rule; this and the four cases below pin the server-side enforcement of it.
+    // Length alone is not enough: the paired frontend's `usersPasswordSchema` also requires
+    // complexity, and the contract (`PasswordNew` in `shared/contracts/openapi.root.yaml`)
+    // documents the same rule. This and the four cases below pin the server-side enforcement.
     it('rejects a password the contract minimum accepts on length alone', () => {
         expect(
             messagesFor(
