@@ -306,6 +306,11 @@ export const passwordChangeWithCurrent = (
                       // `openapi.yaml` never declares here.
                       if (!user) return generateReject(401, []);
 
+                      // An OAuth-only account (`account/oauth/link.ts`) holds no password to prove
+                      // against — same 422 as a wrong one, since this flow has no other way in.
+                      if (!user.password)
+                          return generateReject(422, [t('account.password-change.wrong-current')]);
+
                       return bcrypt.compare(currentPassword, user.password).then((doMatch) => {
                           if (!doMatch)
                               return generateReject(422, [

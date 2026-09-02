@@ -32,7 +32,9 @@ describe('the account audit vocabulary', () => {
             AUTH_DATA_EXPORTED: 'auth.data_export.completed',
             AUTH_2FA_ENROLLED: 'auth.two_factor.enrolled',
             AUTH_2FA_DISABLED: 'auth.two_factor.disabled',
-            AUTH_2FA_CHALLENGE_FAILED: 'auth.two_factor.challenge_failed'
+            AUTH_2FA_CHALLENGE_FAILED: 'auth.two_factor.challenge_failed',
+            AUTH_OAUTH_LINKED: 'auth.oauth.linked',
+            AUTH_OAUTH_FAILED: 'auth.oauth.failed'
         });
     });
 

@@ -108,6 +108,10 @@
                 "body": "We haven't seen you sign in for a while. To keep your account, sign in within the next {{days}} days — after that it will be deactivated, and eventually permanently deleted."
             }
         },
+        "oauth": {
+            "unknown-provider": "This sign-in method isn't available.",
+            "invalid-state": "This sign-in attempt has expired. Please try again."
+        },
         "addresses": {
             "added": "Address saved.",
             "updated": "Address updated.",

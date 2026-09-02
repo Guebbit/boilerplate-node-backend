@@ -7,7 +7,7 @@
  */
 
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
-import type { UserDocument, Token } from './model';
+import type { UserDocument, Token, OAuthAccount } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
 import {
     createRepository,
@@ -17,12 +17,12 @@ import {
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 
 /**
- * `password`, `tokens` and the 2FA secret fields are `select: false` on the schema, so plain
- * finders never load them. These two helpers are the ONLY sanctioned way to get them back,
- * keeping re-selection in one place instead of scattered `.select('+password')` calls.
+ * `password`, `tokens`, the 2FA secret fields and `oauthAccounts` are `select: false` on the
+ * schema, so plain finders never load them. These two helpers are the ONLY sanctioned way to get
+ * them back, keeping re-selection in one place instead of scattered `.select('+password')` calls.
  */
 const CREDENTIAL_FIELDS =
-    '+password +tokens +twoFactorSecret +twoFactorLastUsedStep +twoFactorBackupCodes';
+    '+password +tokens +twoFactorSecret +twoFactorLastUsedStep +twoFactorBackupCodes +oauthAccounts';
 
 /**
  * The clause every login-adjacent lookup filters on: `active` may be absent on a row written
@@ -66,6 +66,7 @@ export const userRepository: Repository<UserDocument> & {
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     tokenSupersede: (token: string) => Promise<boolean>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
+    linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<void>;
     writebackImage: ImageWriteback;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
     findWarnedStillInactive: (cutoff: Date) => Promise<UserDocument[]>;
@@ -281,6 +282,25 @@ export const userRepository: Repository<UserDocument> & {
                 { timestamps: false }
             )
             .exec(),
+
+    /**
+     * Link a provider identity to an account and mark it verified — atomic `$push`/`$set`, never
+     * read-modify-write, same rule `tokens` follows: `oauthAccounts` is `select: false`, so the
+     * document `account/oauth/link.ts` already holds never carries the array to mutate in place.
+     * `verified` is set unconditionally: the provider vouching for the email is exactly the fact
+     * that already makes a fresh signup `verified: true`, so re-asserting it on an existing
+     * account is idempotent, never a downgrade. `timestamps: false` — linking a login method isn't
+     * a profile edit.
+     */
+    linkOAuthAccount: (userId: string, account: OAuthAccount) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(userId) },
+                { $push: { oauthAccounts: account }, $set: { verified: true } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
 
     /**
      * The image digest pipeline's writeback for the `users` collection — see `ImageTarget` in

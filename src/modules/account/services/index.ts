@@ -46,6 +46,7 @@ import {
 import { findLiveToken, spendLiveToken, sessionsList } from './tokens';
 import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
 import { exportOwnData } from './export';
+import { loginOrCreateFromOAuth, recordOAuthFailure } from './oauth';
 import {
     setupTwoFactor,
     confirmTwoFactor,
@@ -64,6 +65,7 @@ export { passwordChange, passwordChangeWithCurrent, updateProfile } from './prof
 export { addressForCheckout } from './addresses';
 export { sendVerificationEmail, EMAIL_VERIFY_TOKEN_TYPE } from './verification';
 export { runTokenCleanup } from './token-cleanup';
+export { loginOrCreateFromOAuth, recordOAuthFailure, OAuthEmailUnverifiedError } from './oauth';
 
 /**
  * The one namespace this module's service is reached through — named for the module, not a
@@ -109,5 +111,7 @@ export const accountService = {
     setupTwoFactor,
     confirmTwoFactor,
     disableTwoFactor,
-    verifyLoginChallenge
+    verifyLoginChallenge,
+    loginOrCreateFromOAuth,
+    recordOAuthFailure
 };
