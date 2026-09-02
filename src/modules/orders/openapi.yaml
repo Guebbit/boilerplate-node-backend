@@ -62,6 +62,17 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/OrderEnvelope'
+                    links:
+                        PayOrder:
+                            operationId: createPaymentIntent
+                            parameters:
+                                orderId: '$response.body#/data/id'
+                            description: The new order's id is the `orderId` to freeze into a payment intent.
+                        CancelOrder:
+                            operationId: cancelOrderById
+                            parameters:
+                                id: '$response.body#/data/id'
+                            description: The new order's id can be cancelled directly.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }

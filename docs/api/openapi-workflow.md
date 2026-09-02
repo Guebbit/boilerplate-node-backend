@@ -40,6 +40,18 @@ This repository owns the contract; the frontend holds a byte-identical copy and 
 How the file is meant to be split per module and how it travels between the two repos is
 [Contract Ownership & Fragmentation](./contract-fragmentation.md).
 
+## Declaring state-machine `links`
+
+A response's `links` block names the operation a legal next request would call, and how to read
+its parameters out of this response — e.g. `createOrder`'s `201` names `createPaymentIntent`,
+reading `orderId` from `$response.body#/data/id`. Declared per leaf fragment, same as everything
+else in the contract, on the response object that starts the transition.
+
+This is what lets a tool follow a **sequence** (create an order, pay it, cancel it) instead of one
+request at a time — see [Stateful fuzzing](../tools/fuzz-testing.md#stateful-fuzzing-sequences-not-single-requests)
+for the consumer. It is pure documentation until something reads it; nothing in the app enforces
+that a `links` chain matches the actual lifecycle, so keep it in sync with `lifecycle.ts` by hand.
+
 ## OpenAPI vs AsyncAPI in this repository
 
 - Use OpenAPI for REST endpoint contracts.

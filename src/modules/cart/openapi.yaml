@@ -183,6 +183,17 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/CheckoutResponseEnvelope'
+                    links:
+                        PayOrder:
+                            operationId: createPaymentIntent
+                            parameters:
+                                orderId: '$response.body#/data/order/id'
+                            description: The new order's id is the `orderId` to freeze into a payment intent.
+                        CancelOrder:
+                            operationId: cancelOrderById
+                            parameters:
+                                id: '$response.body#/data/order/id'
+                            description: The new order's id can be cancelled directly.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # An `addressId` that names none of the caller's saved addresses — the checkout
                 # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.

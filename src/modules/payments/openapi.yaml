@@ -25,6 +25,12 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/PaymentEnvelope'
+                    links:
+                        ConfirmPayment:
+                            operationId: confirmPayment
+                            parameters:
+                                id: '$response.body#/data/id'
+                            description: The intent's id is confirmed here to complete the charge.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Not `pending` any more, or already paid. `errors[].code` is
@@ -118,6 +124,17 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/PaymentEnvelope'
+                    links:
+                        RefundPayment:
+                            operationId: refundPaymentByOrder
+                            parameters:
+                                orderId: '$response.body#/data/orderId'
+                            description: A succeeded payment can be refunded without touching the order status.
+                        CancelOrder:
+                            operationId: cancelOrderById
+                            parameters:
+                                id: '$response.body#/data/orderId'
+                            description: A paid order can still be cancelled, which refunds it too.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Declined by the card issuer (`PAYMENT_DECLINED`), not awaiting confirmation

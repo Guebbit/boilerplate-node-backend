@@ -38,6 +38,7 @@
         "test:integration": "jest tests/integration 'src/modules/.*/tests/integration' --runInBand",
         "test:contract": "jest tests/contract 'src/modules/.*/tests/contract' --runInBand",
         "test:fuzz": "jest tests/fuzz --runInBand",
+        "test:order-random": "jest tests/integration tests/contract tests/fuzz 'src/modules/.*/tests/integration' 'src/modules/.*/tests/contract' --runInBand --randomize --showSeed",
         "test:all": "jest",
         "test:mutation": "tsx scripts/run-mutation-tests.ts",
         "test:mutation:deep": "tsx scripts/run-mutation-tests.ts stryker.deep.json",

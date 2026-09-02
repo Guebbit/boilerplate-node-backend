@@ -89,6 +89,27 @@ Silencing it is not on the list.
 
 `multipart/form-data` operations are skipped. Their bodies are files, and `fast-check` has nothing useful to say about a PNG; the upload path is covered by `tests/integration/upload-security.test.ts`, which drives real magic-byte checks. A test asserts that the skipped set stays small, so "skipped" cannot quietly become "skipped everything".
 
+It also drives **one request at a time**. `create order → pay → cancel → pay again` is a real class of bug — a status check that only runs on the happy path, a reservation released twice — and nothing above can see it, because nothing above remembers the response of one request while building the next.
+
+## Stateful fuzzing: sequences, not single requests
+
+That gap is real enough to change the answer above. `openapi.yaml` now declares `links` on the operations that chain into an order's lifecycle (`createOrder`/`checkout` → `createPaymentIntent` → `confirmPayment` → `refundPaymentByOrder`/`cancelOrderById`) — contract work, in the leaf `src/modules/*/openapi.yaml` fragments, independent of any test. See [OpenAPI Workflow](../api/openapi-workflow.md).
+
+Following those links to build a legal, in-order **sequence** of requests is not something the hand-rolled walk above does, and re-implementing it would be re-implementing Schemathesis's one genuinely hard feature. So `.github/workflows/schemathesis.yml` runs the real [`schemathesis`](https://schemathesis.readthedocs.io/) CLI, from its own Docker image, against the app booted via `npm run demo`:
+
+```bash
+docker run --rm --network host \
+  -v "$PWD/openapi.yaml:/spec/openapi.yaml:ro" \
+  schemathesis/schemathesis:stable \
+  run /spec/openapi.yaml \
+  --url http://localhost:3000 \
+  --checks all --stateful=links --hypothesis-derandomize
+```
+
+The reasoning against a Python dependency in the first section still holds for the single-request case, which is why `tests/fuzz/` stays hand-rolled. It does not hold for sequences: `--stateful=links` is not a capability worth re-deriving from four building blocks when the actual gap is state, not generation. `--hypothesis-derandomize` keeps a red run reproducible, same requirement as the seeded run below. Python never enters `package.json` — the workflow is the only place it exists, exactly like `test:prism`'s relationship with the Prism CLI.
+
+Nightly, same as the per-request fuzzer, and advisory for the same reason: a stateful failure is a finding, not something a merge should block on.
+
 ## Why it is a nightly, not a PR gate
 
 Same reasoning as [Mutation Testing](./mutation-testing.md): it is slow, and a failure is usually a **finding** that needs a person to read it rather than a red X that should stop a merge.
@@ -97,14 +118,15 @@ It also means a green PR is not a promise the fuzzer agrees — that is what the
 
 ## File map
 
-| Path                                | Contents                                                                                         |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `tests/fuzz/endpoints.fuzz.test.ts` | The driver: one jest case per operation, the two assertions, the self-tripwire                   |
-| `tests/support/spec-walk.ts`        | Parses `openapi.yaml`, resolves `$ref`/`allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
-| `tests/support/spec-arbitraries.ts` | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                               |
-| `tests/support/http.ts`             | The supertest harness and `authenticateAs`, shared with the integration and contract suites      |
-| `tests/support/contract.ts`         | Registers `toSatisfyApiSpec()` against `openapi.yaml` (imported for its side effect)             |
-| `.github/workflows/fuzz.yml`        | The nightly schedule and manual dispatch                                                         |
+| Path                                 | Contents                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: one jest case per operation, the two assertions, the self-tripwire                   |
+| `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref`/`allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
+| `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                               |
+| `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites      |
+| `tests/support/contract.ts`          | Registers `toSatisfyApiSpec()` against `openapi.yaml` (imported for its side effect)             |
+| `.github/workflows/fuzz.yml`         | The nightly schedule and manual dispatch                                                         |
+| `.github/workflows/schemathesis.yml` | Stateful sequence fuzzing, following `openapi.yaml`'s `links` — see above                        |
 
 ## Commands
 
