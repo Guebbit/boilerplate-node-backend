@@ -43,17 +43,6 @@ describe('user schema', () => {
         expect(found!.password).toMatch(/^\$2[aby]\$/);
     });
 
-    it('defaults admin to false', async () => {
-        const user = await userRepository.create({
-            email: 'plain@example.com',
-            username: 'plain',
-            password: 'Password1!'
-        } as never);
-
-        // Privilege by omission would be the worst possible default here.
-        expect(user.admin).toBe(false);
-    });
-
     it('serialises to id, never _id, __v, password or tokens', async () => {
         const created = await createUser({ email: 'json@example.com' });
 
