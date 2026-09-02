@@ -38,10 +38,15 @@ jest.mock('@infrastructure/adapters/queue', () => ({
     publishToQueue: jest.fn()
 }));
 
+jest.mock('@infrastructure/http/middlewares/cache', () => ({
+    invalidateCacheTagsLogged: jest.fn()
+}));
+
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import { identifyImage } from '@infrastructure/adapters/image-signatures';
 import { isQueueEnabled, publishToQueue } from '@infrastructure/adapters/queue';
+import { invalidateCacheTagsLogged } from '@infrastructure/http/middlewares/cache';
 import {
     digestQuarantinedImage,
     enqueueImageDigest,
@@ -60,6 +65,7 @@ const mockedThumbnailImage = thumbnailImage as jest.Mock;
 const mockedIdentifyImage = identifyImage as jest.Mock;
 const mockedIsQueueEnabled = isQueueEnabled as jest.Mock;
 const mockedPublishToQueue = publishToQueue as jest.Mock;
+const mockedInvalidateCacheTagsLogged = invalidateCacheTagsLogged as jest.Mock;
 
 /** Wires the mocks to a happy-path digest: identifies as PNG, digests, thumbnails, promotes both. */
 const primeSuccessfulDigest = () => {
@@ -79,6 +85,7 @@ beforeEach(() => {
     jest.spyOn(logger, 'info').mockImplementation(() => logger);
     jest.spyOn(logger, 'debug').mockImplementation(() => logger);
     mockedRemove.mockResolvedValue(true);
+    mockedInvalidateCacheTagsLogged.mockResolvedValue(undefined);
 });
 
 afterAll(() => jest.restoreAllMocks());
@@ -139,6 +146,20 @@ describe('handleImageDigestJob', () => {
     });
 
     /**
+     * The write that enqueued this job already cleared the `products` tag, before the digest ran
+     * — so the response it re-warmed still carries the pre-digest placeholder. Clearing the tag
+     * again here is what stops that placeholder surviving for the whole TTL (see `settleWriteback`).
+     */
+    it('invalidates the collection cache tag once the writeback matches', async () => {
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(true);
+
+        await handleImageDigestJob(job);
+
+        expect(mockedInvalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
+    });
+
+    /**
      * A stale or duplicate delivery, or a document deleted mid-flight: the writeback matches
      * nothing, so the files this run just promoted are unlinked rather than orphaned — and the
      * job still acks, since nothing about redelivering it would change the outcome.
@@ -150,6 +171,7 @@ describe('handleImageDigestJob', () => {
         await expect(handleImageDigestJob(job)).resolves.toBe(true);
 
         expect(mockedRemove).toHaveBeenCalledWith('/images/abc123.png');
+        expect(mockedInvalidateCacheTagsLogged).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -224,6 +246,8 @@ describe('enqueueImageDigest', () => {
             imageUrl: '/images/abc123.png',
             thumbnailUrl: '/images/thumbs/v1/abc123.webp'
         });
+        // Same `settleWriteback` path as the queued job — the inline fallback must invalidate too.
+        expect(mockedInvalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });
 
     /* Same fallback `enqueueEmail` takes: a broker that is configured but momentarily unreachable
@@ -252,5 +276,6 @@ describe('enqueueImageDigest', () => {
         await enqueueImageDigest(payload, writeback);
 
         expect(mockedRemove).toHaveBeenCalledWith('/images/abc123.png');
+        expect(mockedInvalidateCacheTagsLogged).not.toHaveBeenCalled();
     });
 });
