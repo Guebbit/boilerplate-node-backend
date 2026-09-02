@@ -2,25 +2,24 @@
 
 ## Purpose
 
-Single-purpose controller module that wires up the `DELETE /users` and `DELETE /users/:id` admin endpoints (soft delete by default, hard delete via `?hardDelete=true`). It delegates all business logic to the user service and exists so that route definitions and audit policy stay decoupled from the controller shape.
+Thin controller layer for the two admin user-deletion endpoints (`DELETE /users` and `DELETE /users/:id`). It delegates to the user service and selects the correct audit action, differentiating soft delete from a permanent (GDPR Art. 17) hard delete.
 
 ## Key elements
 
-- **`deleteUsers`** (exported const) — The only export. Built by calling `createDeleteController` with:
-  - `entity: 'user'`
-  - `remove(id, hardDelete)` — calls `userService.removeById(id, hardDelete)`
-  - `auditAction` — set to `usersAuditActions.ADMIN_USER_DELETED`
-  - `notFoundKey: 'users.not-found'` — i18n key returned when the id does not resolve to a record
+- **`deleteUsers`** (exported const) — the controller object produced by `createDeleteController`. Configures:
+  - `remove(id, hardDelete)` → calls `userService.removeById(id, hardDelete)`
+  - `auditAction(hardDelete)` → returns `ADMIN_USER_ERASED` (hard) or `ADMIN_USER_SOFT_DELETED` (soft)
+  - `entity: 'user'`, `notFoundKey: 'users.not-found'`
 
 ## Relationships
 
-- **`create-delete-controller.ts`** — Provides the generic factory (`createDeleteController`) that produces the request handler. This file is a thin configuration over that factory.
-- **`service.ts`** — Supplies `userService.removeById`, the actual persistence call (soft or hard).
-- **`audit.ts`** — Supplies `usersAuditActions.ADMIN_USER_DELETED`, the audit-log action key recorded after a successful delete.
-- **`routes.ts`** — Imports and mounts `deleteUsers` on the `DELETE /users` and `DELETE /users/:id` paths.
+- **`src/infrastructure/surfaces/create-delete-controller.ts`** — provides the `createDeleteController` factory that assembles the request-validation, service-call, and audit-logging plumbing.
+- **`src/modules/users/service.ts`** — `userService.removeById(id, hardDelete)` performs the actual deletion; the `hardDelete` flag controls permanence and cascading (cart, wishlist, address book) plus a `USER_DELETED` announcement.
+- **`src/modules/users/audit.ts`** — supplies `usersAuditActions.ADMIN_USER_ERASED` / `.ADMIN_USER_SOFT_DELETED`, the action names written to the audit trail.
+- **`src/modules/users/routes.ts`** — consumer; mounts `deleteUsers` on the relevant DELETE routes.
 
 ## Notes
 
-- Hard delete (`?hardDelete=true`) triggers a `USER_DELETED` domain event that cascades to cart, wishlist, and address book (per the docblock). The cascade logic itself lives downstream of the service, not in this file.
-- The controller accepts the user id either from the **request body** (`DELETE /users`) or the **path param** (`DELETE /users/:id`); the `createDeleteController` factory abstracts that duality.
-- The module is annotated `@module` and has no default export—import `{ deleteUsers }` by name.
+- Two input shapes coexist: id in the **request body** (`DELETE /users`) or in the **path** (`DELETE /users/:id`). The controller factory handles both transparently.
+- `?hardDelete=true` is the **only** signal that discharges an Art. 17 erasure obligation; a soft delete does not. The audit record itself is the durable proof of which path was taken.
+- The `USER_DELETED` event (announced on hard delete) triggers cascading removal in cart, wishlist, and address-book modules—those cleanups are **not** visible in this file.

@@ -2,28 +2,29 @@
 
 ## Purpose
 
-Design and implementation-plan document for the image upload pipeline: every uploaded image must be digested (metadata stripped, dimensions capped, recompressed) and thumbnailed **before** it is ever placed under `public/` and served with `immutable, 1y` cache headers. It exists because the previous "validate-and-publish" flow leaked EXIF data, accepted malformed payloads, and forced full-size downloads in list views.
+Design and status document for the image upload pipeline: quarantine → digest (metadata strip, dimension cap, re-encode) → thumbnail generation → promote to `public/`. It exists to justify why images are never served from `public/` until fully processed, and to record the architectural decisions (three-directory model, conditional writeback, no-broker fallback) so they aren't re-litigated. Status: implemented on both backend and frontend.
 
 ## Key elements
 
-- **Three-directory model** — `NODE_UPLOAD_STAGING_PATH` (ephemeral, during request), `NODE_QUARANTINE_PATH` (durable, outside `public/`, between request and job), `NODE_PUBLIC_PATH` (permanent, served). A hard boundary, not a naming convention.
-- **Pipeline sequence** — `quarantineUploadedImages` → enqueue `worker.image.digest` → sharp strip/resize/re-encode → `imageStore.promote` → `imageStore.putDerivative` (thumbnail at `/images/thumbs/v1/<stem>.webp`) → conditional writeback → unlink quarantine file.
-- **`pendingImageKey` field** — dual-purpose: guards against out-of-order redeliveries (stale job matches zero docs, self-cleans) and provides a queryable "stuck on placeholder" signal without a separate status enum.
-- **No-broker fallback** — when `isQueueEnabled()` is false the digest runs synchronously in the request; the API contract always returns `thumbnailUrl`.
-- **Writeback via `kernel/registry.ts`** — modules register an `imageTargets` entry so `infrastructure/adapters/image.worker.ts` can resolve the target collection without importing `src/modules/*`. Domain-event bus and a generic collection-name whitelist were considered and rejected.
-- **Library choice: sharp 0.35.x** — selected over jimp, @napi-rs/image, canvas, gm, etc. Native libvips under the hood, 25 prebuilt platform packages, 93.8 M weekly downloads, active release cadence.
-- **Failure-mode contract** — maps onto `consumeFromQueue`: `false` → dead-letter, throw → requeue. Quarantine file is unlinked on dead-letter.
+- **Three-directory model** — `NODE_UPLOAD_STAGING_PATH` (request-scoped, ephemeral), `NODE_QUARANTINE_PATH` (durable, outside `public/`), `NODE_PUBLIC_PATH` (forever, `immutable`). Enforced by the filesystem, not by naming convention.
+- **Pipeline flow** — `multer` → `validateUploadedImages` → `imageStore.quarantine()` → enqueue `worker.image.digest` job (or run inline if broker absent) → 201 with placeholder URLs.
+- **`worker.image.digest` job** — reads quarantine key, runs sharp (strip metadata, cap dimensions, re-encode same format), generates a WebP thumbnail, calls `imageStore.promote()` and `imageStore.putDerivative()`, then conditionally updates the record via `pendingImageKey` and unlinks the quarantine file.
+- **`pendingImageKey`** — stored on the document during the pending window; used as a guard in the conditional `updateOne` to handle concurrent uploads, stale jobs, and mid-flight document deletion. Doubles as an observability query target.
+- **No-broker fallback** — when `isQueueEnabled()` is false, digest runs synchronously in the request; placeholder URLs are never returned.
+- **Writeback via `kernel/registry.ts`** — modules register an `imageTargets` entry; the worker resolves by key. Chosen over the event bus (swallows throws) and a generic collection allowlist (leaks module names into infrastructure).
+- **`thumbs/v1/` path segment** — versioned key namespace for thumbnails so future quality/algorithm changes don't collide with `immutable` cache headers.
+- **Placeholders** — `pending.png` / `pending-thumb.webp` under `images/system/`, overridable via env vars. Deletion-protected by the existing `imageStore.remove()` subdirectory guard.
+- **Library choice: sharp** — native libvips wrapper; 25 prebuilt platform packages; runs on libuv threadpool (non-blocking). Chosen over jimp, @napi-rs, canvas, gm, etc. (comparison table in the file).
 
 ## Relationships
 
-No graph neighbors are recorded for this file. It is a planning document, not a module, so it does not appear in the import/dependency graph. It does, however, prescribe the contract that several implementation files must satisfy: `imageStore` (quarantine/read/promote/putDerivative), `infrastructure/adapters/image.worker.ts` (the digest worker), `kernel/registry.ts` (writeback resolution), and `src/app/static-assets.ts` (the immutable-caching constraint the entire design is built around).
+No graph neighbors recorded for this file. It is a standalone design document and does not appear in the dependency graph. (It *references* `http/middlewares/rate-limit.ts`, `src/app/static-assets.ts`, `infrastructure/adapters/image.worker.ts`, `kernel/registry.ts`, `kernel/events.ts`, and `pdf.worker.ts`, but none of those form a graph edge to this file.)
 
 ## Notes
 
-- **Status is mixed.** Backend steps 1–6 are implemented. The frontend follow-up section is deliberately outstanding and gated on a `sync:frontend` run that has not happened yet. `npm run test:mutation:baseline` also needs re-running.
-- **The `immutable: true` + `maxAge: '1y'` header is the single constraint that shapes the whole design.** Any in-place byte rewrite after publication would be pinned for a year. Only work that produces a *new* URL may happen post-publication.
-- **Format preservation.** The digested original is re-encoded to the *same* format (PNG stays PNG, JPEG stays JPEG) so the static server's extension-derived `Content-Type` remains correct. The thumbnail is always WebP because it gets a new URL/key.
-- **`thumbs/v1/` versioning.** Any future change to thumbnail quality or size requires bumping the key segment (`v2`, …), not overwriting existing files, because of the same immutable caching.
-- **Placeholders live under `public/images/system/`.** `imageStore.remove()` already refuses deletions inside subdirectories of `images/`, so the placeholders get deletion protection without extra code. Keep them distinct from `NODE_DEFAULT_IMAGE_PRODUCT` / `NODE_DEFAULT_IMAGE_USER` (processing ≠ never-had-an-image).
-- **Job payload carries an opaque store key, never a filesystem path.** Do not copy the `pdf.worker.ts` `outputPath` pattern; it breaks the moment the store backend changes.
-- **Rate-limiting the upload endpoints** is flagged as an open decision under "Things that will bite."
+- The single governing constraint: `express.static` serves `public/` with `maxAge: '1y', immutable: true`, and the URL **is** the persisted `imageUrl`. Anything that mutates bytes must happen *before* publication; only new-URL work may happen after.
+- The job payload carries an **opaque store key**, never a filesystem path (unlike `pdf.worker.ts`'s `outputPath`). This keeps the store backend-agnostic.
+- The digest re-encodes to the **same** format as the upload (JPEG stays JPEG, PNG stays PNG) to avoid `Content-Type` / extension mismatches. Only the thumbnail is free to be WebP (new key).
+- Outstanding: `npm run test:mutation:baseline` needs re-baselining after this feature shipped.
+- The upload rate-limit question is resolved: `uploadLimiter` in `http/middlewares/rate-limit.ts`; see `docs/tools/security.md#the-rate-limit-budgets`.
+- This is a **plan/design doc**, not executable code. The "Key elements" above are the architectural decisions and API surface it prescribes, not importable symbols.

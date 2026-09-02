@@ -2,31 +2,26 @@
 
 ## Purpose
 
-Unit tests for `enqueueEmail` in `src/infrastructure/adapters/mailer.ts`, covering all three dispatch branches (no broker, broker OK, broker publish failure) plus the contract that the queue adapter answers `false` rather than rejecting. The file exists because the three-branch dispatch logic was previously untested and a silent failure (unresolved broker, no fallback) would drop password-reset emails invisibly.
+Unit tests for the `enqueueEmail` dispatch function in `mailer.ts`, covering its three delivery branches (no broker → inline send; broker OK → queue publish; broker publish fails → inline fallback) plus the edge case where the queue adapter rejects instead of returning `false`. The file exists to pin down a "three-branch claim" that no other test in the codebase asserted, and to document why each branch's logging, return shape, and payload shape matter for production delivery of password-reset and auth emails.
 
 ## Key elements
 
-- **`enqueueEmail`** (imported from `@infrastructure/adapters/mailer`) — the function under test; dispatches an email either to a message queue or inline via SMTP.
-- **`sendMailMock`** — mock for `nodemailer.createTransport().sendMail`; asserts whether inline SMTP delivery happened.
-- **`isQueueEnabledMock` / `publishToQueueMock`** — mocks for `@infrastructure/adapters/queue`; drive the three-branch logic.
-- **`loggerMock`** (exposed via getters) — mock for `@infrastructure/adapters/logger`; verifies debug-vs-info level on enqueue.
-- **`DATA`** — full set of EJS template variables; used because the inline paths render the template for real.
-- **Path 1 suite** — no broker: asserts inline send, no publish, `undefined` return.
-- **Path 2 suite** — publish succeeds: asserts queue publish, no inline send, payload carries template name + data (not HTML), debug-level log.
-- **Path 3 suite** — publish returns `false`: asserts inline fallback send, no debug log, `undefined` return.
-- **Reject-guard suite** — `publishToQueue` rejects: documents that `enqueueEmail` has no catch, so a rejecting adapter would lose the fallback entirely.
-- **Mutual-exclusivity table** — `it.each` over all three configs asserting exactly one delivery attempt occurs.
+- **`enqueueEmail` (imported)** — the function under test; dispatches an email either inline via SMTP or by publishing a job to the queue.
+- **Mocks (hoisted via `jest.mock`)** — `nodemailer` (sendMail), `@infrastructure/adapters/queue` (isQueueEnabled, publishToQueue), `@infrastructure/adapters/logger` (info/debug/warn/error).
+- **`REQUEST` / `TEMPLATE` / `DATA`** — shared fixtures: a minimal `EmailRequest`, the EJS template name, and the full variable set the template interpolates.
+- **`describe` blocks (one per path)** — path 1 (no broker), path 2 (publish succeeds), path 3 (publish returns `false`), path 3-reject (publish throws), and a mutual-exclusivity `it.each` table.
+- **Logger mock with getters** — uses `get logger()` / `get auditLogger()` instead of direct property references to avoid a TDZ error under swc's ESM import hoisting.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — the module under test; provides `enqueueEmail` and the `EmailRequest` type.
-- **`@infrastructure/adapters/queue`** (mocked) — supplies `isQueueEnabled` and `publishToQueue`; its `boolean` return contract is what path 3 relies on.
-- **`@infrastructure/adapters/logger`** (mocked) — `enqueueEmail` logs enqueue events at debug level.
-- **`nodemailer`** (mocked) — the inline SMTP transport; the test asserts call count, not message content.
+- **`src/infrastructure/adapters/mailer.ts`** — the sole production module under test. The file imports `enqueueEmail` and the `EmailRequest` type from it. Every assertion in this file constrains `enqueueEmail`'s observable contract (return type, logging level, payload shape, call counts).
+- **`@infrastructure/adapters/queue`** (mocked) — `isQueueEnabled` and `publishToQueue` are stubbed to drive the three branches. The test that pins `publishToQueue` to *resolve* a boolean (rather than reject) is the consumer-side half of a contract also pinned in `queue.test.ts`.
+- **`nodemailer`** (mocked) — only `createTransport().sendMail` is stubbed; the EJS rendering that happens before the SMTP call is real.
+- **`@infrastructure/adapters/logger`** (mocked) — asserts that enqueue is logged at `debug`, not `info`, and that a failed publish does not log a successful enqueue.
 
 ## Notes
 
-- The logger mock uses **getter properties** (`get logger()`) rather than a direct reference. This is required because `swc` hoists `import` statements above `const` declarations, so the `jest.mock` factory would execute before `loggerMock` is initialised. The nodemailer and queue mocks are already safe because their factories access variables from inside arrow-function bodies, not at object-literal top level.
-- The inline paths **render EJS templates for real** (only the SMTP transport is stubbed). A missing template variable surfaces as an EJS `ReferenceError`, not a blank line — a useful side-effect of the setup.
-- `enqueueEmail` always resolves `void`. The tests pin this so a future change cannot accidentally leak a `SentMessageInfo` on one branch and cause callers to depend on it.
-- The "adapter never rejects" suite is a **contract pin**, not a behavior test: it documents *why* `queue.test.ts` must assert `publishToQueue` resolves `false` rather than throwing. If that contract breaks, path 3's fallback is silently skipped and the rejection becomes an unhandled promise rejection with no request context.
+- **Logger mock must use getters.** `jest.mock` factories are hoisted above all `const` declarations. Under swc (which hoists ESM imports to the top of the emitted file), reading a `const` inside a factory literal throws a TDZ error. Getters defer access until the property is read, by which time the `const` is initialized. The queue and nodemailer mocks avoid the issue because they reference their variables from inside arrow functions, not at the object's top level.
+- **`enqueueEmail` resolves `undefined` on every path.** Tests assert `.resolves.toBeUndefined()` explicitly so that a future refactor cannot leak a `SentMessageInfo` object on the inline path and silently change the return contract.
+- **Inline paths render EJS for real.** Only the SMTP transport is mocked. A missing variable in `DATA` surfaces as an EJS `ReferenceError` rather than a blank line — useful for catching template/data mismatches.
+- **The rejection test is intentionally separate.** It documents *why* `queue.test.ts` must pin `publishToQueue` to resolve `false` rather than throw: `enqueueEmail` has no `catch`, and a rejection would skip the inline fallback entirely, surfacing later as an unhandled rejection with no request context.

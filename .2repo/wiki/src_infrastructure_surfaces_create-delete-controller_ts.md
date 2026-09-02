@@ -2,34 +2,34 @@
 
 ## Purpose
 
-Factory that produces the shared Express handler for the `DELETE /x`, `DELETE /x/:id`, and `DELETE /x/:id/hard` triplet used across every module. Each entity module supplies a small spec (entity name, service call, audit action, not-found key) and receives back a fully-wired handler—id extraction, `hardDelete` flag merging, validation, service dispatch, audit emission, and error mapping—so the cross-cutting logic lives in one place while the per-entity differences stay in the module's own file.
+Factory that builds a fully-wired Express delete handler (soft and hard) for any entity. Each module's own controller file (e.g. `delete-orders.ts`) supplies only the four per-entity differences—entity name, service `remove` call, audit action, and i18n not-found key—and this factory assembles the shared plumbing: id extraction, `hardDelete` flag merging, schema validation, audit emission, and error mapping.
 
 ## Key elements
 
-- **`DeleteControllerSpec`** (exported interface) — The four fields a module must provide: `entity` (lower-case singular, e.g. `'order'`), `remove(id, hardDelete)` (the service call), `auditAction`, and `notFoundKey`.
-- **`RemoveResult`** (local interface) — The envelope shape returned by `remove`; mirrors what `generateSuccess`/`generateReject` produce (`success`, `status`, optional `message`/`errors`).
-- **`createDeleteController`** (exported function) — Accepts a `DeleteControllerSpec`, derives the operation name (`deleteOrder`, `deleteProduct`, …), and returns a named Express handler. The handler:
-  1. Extracts and validates `:id` from the route (422 if missing/malformed).
-  2. Reads `hardDelete` from path, query, and body via `readInput` with `anyTrue` merging, then validates against `hardDeleteSchema`.
-  3. Calls `remove(id, hardDelete)`.
-  4. On refusal → short-circuits via `refused`.
-  5. On success → emits an audit event and sends `successResponse` with the service's message.
-  6. On `CastError` (bad ObjectId) → returns 404 with the entity's `notFoundKey`; other errors → `rejectDatabaseError`.
+- **`DeleteControllerSpec`** (exported interface) — the four inputs a module must provide: `entity`, `remove`, `auditAction`, `notFoundKey`.
+- **`createDeleteController`** (exported function) — accepts a `DeleteControllerSpec` and returns a single Express handler named `delete<CapitalizedEntity>` (e.g. `deleteOrder`) via a computed property key so `handler.name` is meaningful in stack traces and logs.
+- **`RemoveResult`** (internal interface) — the envelope a module's `remove` callback must return: `{ success, status, message?, errors? }`.
+- **Handler internals** (not exported):
+  - Extracts and validates `:id` from the route; 422 on missing/malformed.
+  - Merges `hardDelete` from path/query/body with **OR semantics** (any `true` wins), then validates against `hardDeleteSchema`.
+  - Delegates to `remove(id, hardDelete)`; on refusal sends the service-provided error envelope.
+  - On success emits an audit event (resolving `auditAction` which may be a value or a function of `hardDelete`) and sends a 200.
+  - Catches `CastError` of kind `ObjectId` → 404 with the entity-specific i18n message; other errors → generic database error response.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Imports `refused` (detects service-level refusal) and `rejectValidation` (422 path for schema failures).
-- **`src/infrastructure/http/errors.ts`** — Imports `rejectDatabaseError` for non-CastError failures.
-- **`src/infrastructure/http/request.ts`** — Imports `extractAndValidateId`, `readInput`, and `callerContextOf`.
-- **`src/infrastructure/http/response.ts`** — Imports `rejectResponse`, `successResponse`, and the `ResponseErrorItem` type.
-- **`src/infrastructure/http/schemas.ts`** — Imports `hardDeleteSchema` (Zod schema for the merged flag).
-- **`src/infrastructure/i18n/index.ts`** — Imports `t` to resolve the `notFoundKey` into a user-facing message.
-- **`src/infrastructure/observability/audit.ts`** — Imports `emitAuditEvent`, `buildAuditEvent`, and the `AuditAction` type.
-- **`src/modules/orders/controllers/delete-orders.ts`**, **`src/modules/products/controllers/delete-products.ts`**, **`src/modules/users/controllers/delete-users.ts`** — Each is a thin module-owned file that calls `createDeleteController` with its own spec, satisfying the `controller-naming.test.ts` requirement while delegating all logic here.
+- **`@infrastructure/http/controller`** — calls `refused()` to short-circuit when the service signals refusal, and `rejectValidation()` for schema-parse failures.
+- **`@infrastructure/http/errors`** — calls `rejectDatabaseError()` as the fallback error handler for unexpected exceptions.
+- **`@infrastructure/http/request`** — calls `extractAndValidateId()` for the route param, `readInput()` to merge multi-source `hardDelete`, and `callerContextOf()` to build the audit actor context.
+- **`@infrastructure/http/response`** — calls `successResponse()` and `rejectResponse()` to emit the final HTTP envelopes; imports `ResponseErrorItem` as a type.
+- **`@infrastructure/http/schemas`** — imports `hardDeleteSchema` to validate the merged boolean.
+- **`@infrastructure/i18n`** — calls `t(notFoundKey)` to resolve the entity-specific 404 message.
+- **`@infrastructure/observability/audit`** — calls `buildAuditEvent()` and `emitAuditEvent()` on every successful delete; imports `AuditAction` as a type.
+- **`src/modules/orders/controllers/delete-orders.ts`**, **`delete-products.ts`**, **`delete-users.ts`** — downstream consumers that each import `createDeleteController` and pass a `DeleteControllerSpec` to obtain their entity-specific handler.
 
 ## Notes
 
-- The handler is attached via a **computed property key** (`{ [operation](req, res) { … } }[operation]`) so that `handler.name` equals the operation string (e.g. `"deleteOrder"`). This name is what appears in stack traces, audit logs, and the generated `docs/modules/` tables. Renaming the entity in the spec changes the name automatically.
-- `hardDelete` is merged with **OR semantics** across path/query/body: any `true` wins. This prevents the default `false` on one surface from overriding an explicit `true` on another.
-- A malformed ObjectId reaches Mongoose as a `CastError` rather than a "not found" miss; the handler maps that to the same 404 + `notFoundKey` response a well-formed unknown id receives, so callers get a uniform error shape.
-- On validation or id-extraction failures the handler returns `Promise.resolve()` (with the reject already sent) rather than throwing, keeping the Express chain short.
+- `hardDelete` is merged with **OR**, not first-source-wins. This is deliberate: `false` is the default (what nobody types), so it must never outvote an explicit `true` sent on a different transport (query vs. body vs. path).
+- `auditAction` may be a plain string or a `(hardDelete: boolean) => AuditAction` function. The `users` module uses the function form so the audit log can distinguish "soft-deleted (reversible)" from "hard-deleted (record scrubbed)" as different actions.
+- A malformed ObjectId that passes `extractAndValidateId`'s shape check but fails Mongoose's internal cast is intercepted as a `CastError` and mapped to the **same 404** a legitimate unknown id receives—callers cannot distinguish "doesn't exist" from "isn't a valid id."
+- The handler is built as a computed property (`{ [operation](…) }[operation]`) rather than a named function expression so that `handler.name` carries the entity-specific name in all runtime surfaces.

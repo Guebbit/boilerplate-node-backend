@@ -2,24 +2,23 @@
 
 ## Purpose
 
-Unit tests for the `tokenAdd` and `tokenRemoveAll` instance methods on the user Mongoose schema. The tests exercise the DB-first-then-mirror write order that these methods require (because `tokens` is `select: false`), using a hand-rolled document double instead of a real database.
+Unit tests for the `tokenAdd` and `tokenRemoveAll` instance methods on the user schema. They verify the critical ordering guarantee: the database write (`updateOne`) happens first, and the in-memory `tokens` array is updated only if it was loaded. This protects against a scenario where a failed in-memory push throws *after* tokens have already been revoked in the database.
 
 ## Key elements
 
-- **`documentDouble(tokens?)`** — Factory that returns a minimal Mongoose-document-shaped object (`_id`, `tokens`, `constructor.updateOne`, `updateOne`). The optional `tokens` argument lets each test declare explicitly whether the array was loaded (`[]` or populated) or absent (`undefined`), which is the core distinction these methods must handle.
-- **`methods`** — `asStub<…>(userSchema.methods)` that types and isolates just `tokenAdd` and `tokenRemoveAll` so they can be `.call`-ed against a document double without a full model instance.
-- **`describe('tokenAdd')`** — 8 cases covering: `$push` shape, return value, expiry computation (normal / zero / negative window), `timestamps: false`, mirroring into a loaded array, success with an unloaded array, and correct `type` filing.
-- **`describe('tokenRemoveAll')`** — 4 cases covering: `$pull` by type, leaving other token types untouched, `timestamps: false`, and success with an unloaded array.
+- **`documentDouble(tokens?: Token[])`** — Builds a fake Mongoose document with a mocked `updateOne` (and a `constructor.updateOne` alias). The `tokens` parameter is intentionally optional: `undefined` simulates the ordinary `select: false` case; an array simulates a loaded list.
+- **`methods`** — A typed stub of `userSchema.methods` (`tokenAdd`, `tokenRemoveAll`) obtained via `asStub`, called with `.call(document, …)` to simulate instance context.
+- **`describe('tokenAdd')`** — Verifies: hashing at rest, returning the plaintext token, expiry computation, zero/negative-window → no expiry, `timestamps: false`, mirroring into a loaded array, safety when array is `undefined`, and correct `type` filed.
+- **`describe('tokenRemoveAll')`** — Verifies: `$pull` by type only, other types untouched, `timestamps: false`, and safe no-op in-memory path when array is `undefined`.
 
 ## Relationships
 
-- **`@modules/users/model`** — imports `userSchema` (the source of the `.methods` under test) and the `Token` type used in assertions.
-- **`@modules/users`** (index) — imports the `TokenType` enum used throughout test data and expectations.
-- **`@tests/stub`** (`asStub`) — provides the `asStub` helper that wraps `userSchema.methods` with a structural type so the tests can reference only the two methods they need.
+- **`src/modules/users/model.ts`** — Source of `userSchema` (whose `.methods` are stubbed) and the `Token` type used in assertions.
+- **`src/modules/users/index.ts`** — Re-exports `TokenType` and `hashToken`, both consumed directly in test expectations.
+- **`tests/support/stub.ts`** — Provides `asStub`, the utility that extracts the method functions off the schema for isolated calling.
 
 ## Notes
 
-- **Zero / negative expiry edge case:** Passing `expirationMs` of `0` or negative must result in `expiration` being `undefined`, *not* `new Date(Date.now() + 0)`. The tests pin this explicitly because a token that expires at issuance is silently broken.
-- **`select: false` contract:** The "unloaded array" tests (`documentDouble(undefined)`) exist to guard against a regression where a throw during the in-memory mirror would surface *after* the DB write already landed, making a logout report failure despite tokens being revoked.
-- **`tokenRemoveExpired` is absent by design:** A trailing comment records that this method was moved to `userRepository.tokenRemoveExpired` (and its tests to `repository.test.ts` / `token-cleanup-job.test.ts`) because it resolved an HTTP status, which belongs below the schema layer. Do not re-add tests for it here.
-- **`timestamps: false` is asserted on every `updateOne` call** — token add/remove must not bump the user's `updatedAt`.
+- The `tokens` parameter of `documentDouble` is the whole point of most tests: `undefined` vs `[]` is not interchangeable. Tests explicitly cover both to lock in the "optional-chain guard" behavior.
+- A `timestamps: false` option is passed as the third argument to `updateOne` in both methods; the tests assert this explicitly to prevent Mongoose from mutating `updatedAt` on a purely session-level operation.
+- `tokenRemoveExpired` is deliberately **not** tested here. A trailing comment explains it was moved to `userRepository` because it resolves an HTTP status code, which belongs at the repository layer. Its tests live in `repository.test.ts` and `account/tests/unit/token-cleanup-job.test.ts`.

@@ -1,32 +1,38 @@
 # src/infrastructure/observability/analytics/index.ts
 
 ## Purpose
-Defines the product-analytics port (the `AnalyticsProvider` interface), the shared event/payload types, the provider registry keyed off `NODE_ANALYTICS_PROVIDER`, and the thin emit helpers that application code calls. It exists so that the rest of the codebase talks to an abstract "capture an event" seam and never imports a specific backend (Umami, PostHog, or no-op) directly.
+
+Defines the product-analytics port, event taxonomy, payload schema, provider registry, and the single emit path (`emitAnalyticsEvent`) that every module funnels through. It is explicitly distinct from metrics/tracing: it answers product questions (funnels, adoption) rather than operational ones. The active backend is a deployment choice (`NODE_ANALYTICS_PROVIDER`, default `umami`); `none` disables collection entirely.
 
 ## Key elements
-- **`AnalyticsEventMap`** – Empty interface used as a declaration-merging seam; each module (e.g. `modules/cart/analytics.ts`) augments it with its own event names. `infrastructure` never imports from a module.
-- **`AnalyticsEventName`** – Union of every key in `AnalyticsEventMap`; the single set of event names shared 1:1 with the frontend (enforced by `tests/cross-cutting/analytics-events.test.ts`).
-- **`AnalyticsEvent`** – Payload shape: `distinctId`, `event`, optional `timestamp` (PostHog-only), `traceId`, `properties`, and three attribution fields (`clientIp`, `userAgent`, `hostname`).
-- **`AnalyticsProvider`** – The port. Three methods: `capture(event): void` (fire-and-forget), `configured(): boolean`, `shutdown(): Promise<void>`.
-- **`PROVIDERS`** – Registry mapping the strings `umami`, `posthog`, `none` to their singleton instances.
-- **`resolveAnalyticsProvider()`** – Memoised lookup on `NODE_ANALYTICS_PROVIDER` (default `umami`). Throws on an unknown value rather than returning `undefined`.
-- **`resetAnalyticsProvider()`** – Test seam; clears the memoised handle.
-- **`buildAnalyticsBase(context: CallerContext)`** – Fills the per-event boilerplate (`distinctId`, `traceId` from ambient OTel context, `clientIp`, `userAgent`, `hostname`) so call sites don't repeat it.
-- **`emitAnalyticsEvent(event)`** – One-liner: resolves the provider and calls `capture`. Returns `void`.
-- **`shutdownAnalytics()`** – Flushes and releases the provider; no-ops if no provider was ever resolved (avoids a crash from a typo'd env var at process exit).
+
+- **`AnalyticsEventMap`** – Empty interface reserved for declaration merging. Each domain module (e.g. `modules/cart/analytics.ts`) augments it with its own event names; `infrastructure` never imports from a module.
+- **`AnalyticsEventName`** – Resolved union of every declared event name in the build.
+- **`AnalyticsEvent`** – Core payload shape: `distinctId`, `event`, optional `timestamp`, `traceId`, `properties`, `clientIp`, `userAgent`, `hostname`.
+- **`AnalyticsEventInput`** – `AnalyticsEvent` plus `analyticsConsent`; consent is a gate input, not event data, so `AnalyticsProvider.capture` structurally cannot receive it.
+- **`AnalyticsProvider`** (port interface) – `name`, `capture(event): void` (fire-and-forget), `configured(): boolean`, `shutdown(): Promise<void>`.
+- **`resolveAnalyticsProvider()`** – Memoised lookup of the provider named by `NODE_ANALYTICS_PROVIDER` (default `umami`). Throws on unknown provider names.
+- **`resetAnalyticsProvider()`** – Clears the memoised handle; test seam analogous to the mailer's `resetTransporter`.
+- **`buildAnalyticsBase(context: CallerContext)`** – Populates the shared fields (`distinctId`, `traceId`, `clientIp`, `userAgent`, `hostname`, `analyticsConsent`) from a `CallerContext` so call sites don't repeat boilerplate.
+- **`requireAnalyticsConsent()`** – Reads `NODE_ANALYTICS_REQUIRE_CONSENT` (default `true`); when enabled, only `'granted'` consent captures.
+- **`emitAnalyticsEvent(event)`** – The single choke point. Strips consent, applies the consent gate, delegates to `resolveAnalyticsProvider().capture()`.
+- **`shutdownAnalytics()`** – Flushes buffered events, releases the client, and clears the memoised handle. No-op if the provider was never resolved.
 
 ## Relationships
-- **`src/infrastructure/observability/analytics/umami.ts` / `posthog.ts` / `none.ts`** – Provide the three `AnalyticsProvider` implementations registered in `PROVIDERS`.
-- **`src/infrastructure/observability/tracer.ts`** – Supplies `getActiveSpanContext()` so `buildAnalyticsBase` can stamp `traceId` without per-call plumbing.
-- **`src/infrastructure/http/request.ts`** – Source of the `CallerContext` type consumed by `buildAnalyticsBase`.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** – Calls `shutdownAnalytics()` last in the shutdown chain.
-- **`src/modules/observability/controllers/get-observability-health.ts`** – Reports `provider.name` as `integrations.analytics` in the health endpoint.
-- **`src/modules/account/services/authentication.ts` / `profile.ts` / `controllers/post-login.ts`** and **`src/modules/cart/services/checkout.ts` / `items.ts` / `reorder.ts`** – Call sites that emit events via `emitAnalyticsEvent` and augment `AnalyticsEventMap` with module-specific event names.
-- **`src/modules/account/tests/integration/*.test.ts`** – Use `resetAnalyticsProvider()` to isolate provider state between test cases.
+
+- **`@infrastructure/observability/tracer`** – `buildAnalyticsBase` calls `getActiveSpanContext()` to read the ambient OTel trace ID without call-site plumbing.
+- **`@infrastructure/runtime/environment`** – `requireAnalyticsConsent` reads the `NODE_ANALYTICS_REQUIRE_CONSENT` flag via `environmentFlag`.
+- **`@infrastructure/http/request`** – `CallerContext` (type-only import) is the input shape for `buildAnalyticsBase`.
+- **`./umami`, `./posthog`, `./none`** – The three `AnalyticsProvider` implementations registered in the `PROVIDERS` map.
+- **`runtime/server-lifecycle`** – Calls `shutdownAnalytics()` as the last step in the shutdown chain.
+- **Domain modules (cart, account, etc.)** – Consume `emitAnalyticsEvent` / `buildAnalyticsBase` and augment `AnalyticsEventMap` via declaration merging. The cross-cutting test `tests/cross-cutting/analytics-events.test.ts` enforces 1:1 event-name sharing with the frontend.
 
 ## Notes
-- **Fire-and-forget contract:** `capture` returns `void` by design; a failing provider swallows the error. The only observable signal is the one-time warning from an unconfigured provider (`configured() === false`).
-- **`timestamp` is PostHog-only:** Umami's `/api/send` (v2.14.0) has no timestamp field and stamps ingest time, so a replayed/backfilled event lands on the wrong date.
-- **Unauthenticated collapse:** All anonymous callers share the literal `'anonymous'` distinctId. Umami still differentiates visitors via IP+UA hashing; PostHog does not.
-- **Declaration-merging discipline:** `AnalyticsEventMap` is intentionally empty here. Adding a field to `AnalyticsEvent` breaks `buildAnalyticsBase` at compile time (typed `Pick`), keeping the two in lockstep.
-- **Shutdown clears the memo:** After `shutdownAnalytics()` resolves, `provider` is reset to `undefined` so a restarted process (or a subsequent test) builds a fresh client instead of reusing a shut-down one.
+
+- **Declaration merging is the extension mechanism.** `AnalyticsEventMap` is deliberately empty here. Adding a new event requires augmenting the interface in the owning module's analytics file; the `infrastructure` layer never imports module code.
+- **Consent is opt-in by default.** `requireAnalyticsConsent()` defaults to `true`, meaning an event is dropped unless the caller explicitly passes `analyticsConsent: 'granted'`. A deployment that has its own legal basis for server-side, non-cookie analytics can set `NODE_ANALYTICS_REQUIRE_CONSENT=false`.
+- **`capture` is fire-and-forget.** It returns `void`; a provider failure is silent by contract. `configured()` exists so `/observability/health` can surface a misconfiguration, but `capture` itself never throws to the caller.
+- **`timestamp` is PostHog-only.** Umami (pinned v2.14.0) stamps ingest time and has no timestamp field in its `/api/send` API, so replayed events land on the wrong date under Umami.
+- **`userAgent` is required by Umami.** Umami discards an event that arrives without one; PostHog does not.
+- **Pre-login identity.** Unauthenticated callers all get `distinctId: 'anonymous'`. Under Umami the IP + user-agent hash still separates visitors; under PostHog they do not.
+- **Memoised provider handle.** `shutdownAnalytics` clears the handle after flushing so a restarted process (or a test) builds a fresh client rather than reusing a shut-down one.

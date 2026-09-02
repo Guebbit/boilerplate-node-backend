@@ -2,35 +2,37 @@
 
 ## Purpose
 
-Integration tests for the account service's happy paths and argument-level rejections: signup, login, token add, password change, and refresh-access-token. Complements the sibling `service.test.ts` (which covers security invariants) by exercising the ordinary success and validation-failure flows against a real database via `setupTestDb`.
+Integration tests for the `account` service's ordinary (non-security) flows: signup, login, token addition, password change, and access-token refresh. Drives a real database via `setupTestDb` to verify end-to-end behavior, including persistence side-effects. The sibling `service.test.ts` covers security invariants; this file covers the happy paths and argument-level rejections those invariants sit on.
 
 ## Key elements
 
-- **`describe('accountService.signup')`** — verifies user creation, password mismatch, duplicate-email 409, invalid-format 422, short-password 422.
-- **`describe('accountService.login')`** — verifies credential check, wrong-password 401, unknown-email 401, soft-deleted-user 401.
-- **`describe('accountService.tokenAdd')`** — verifies token string generation, DB persistence, and expiration setting.
-- **`describe('accountService.passwordChange')`** — verifies password rotation, mismatch 422, short-password 422, and that the new password actually enables login.
-- **`describe('accountService.refreshAccessToken')`** — verifies successful refresh (with audit record), invalid-token rejection (`invalid_token`), and revoked-token rejection. Sets JWT secrets in `process.env` manually and restores them after.
-- **`issueRefreshToken`** (local helper) — creates a user, mints a real signed refresh token via `createRefreshToken`, persists it, and returns the stored token string.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces `emitAuditEvent` with `jest.fn()` so calls can be observed without spying on a non-configurable getter.
+- **`describe('accountService.signup')`** — verifies success (user created, email returned) and rejections: mismatched passwords (422), duplicate email (409), invalid email format (422), short password (422).
+- **`describe('accountService.login')`** — verifies success (correct credentials), wrong password (401), non-existent email (401), and soft-deleted user (401).
+- **`describe('accountService.tokenAdd')`** — verifies token string format (32 chars), persistence to the user document, and expiration-date setting.
+- **`describe('accountService.passwordChange')`** — verifies success, mismatched-password rejection (422), too-short rejection (422), and that the new password actually works for subsequent login.
+- **`issueRefreshToken`** (local helper) — creates a user and returns a real signed refresh token via `createRefreshToken`.
+- **`describe('accountService.refreshAccessToken')`** — verifies access-token issuance, audit-event emission, refresh-token rotation (old token invalidated), and that `auth_time` stays stable across ten consecutive refreshes. Manages JWT env vars (`NODE_TOKEN_*`) in `beforeEach`/`afterEach` because unit tests do not load dotenv.
+- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the audit port's `emitAuditEvent` with a `jest.fn()` (see Notes).
+- **`ENV_KEYS` / `originalEnvironment`** — snapshot-and-restore pattern for the five `NODE_TOKEN_*` environment variables.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — the module under test; imported as `accountService` (namespace) for most flows and as `account` (alias) to reach `refreshAccessToken`, which is only exposed on the service object.
-- **`src/modules/account/session/jwt.ts`** — `createRefreshToken` is called to produce a real signed token for the refresh-flow tests.
-- **`src/modules/account/audit.ts`** — `accountAuditActions` constants are used in `expect` assertions on audit event payloads.
-- **`src/infrastructure/observability/audit.ts`** — `emitAuditEvent` is mocked; observed via `observePort` from the ports helper.
-- **`src/infrastructure/http/response.ts`** — `ResponseSuccess` / `ResponseReject` types are used for casting assertion targets.
-- **`src/modules/users/index.ts` / `repository.ts`** — `userRepository` is used to seed users, verify token persistence, remove tokens (revocation), and re-fetch documents.
-- **`src/modules/users/tests/fixtures.ts`** — `createUser` and `PLAIN_PASSWORD` supply test data.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the real database for the whole file.
-- **`tests/support/caller-context.ts`** — `testCallerContext` is passed as the caller argument to service functions that require it.
-- **`tests/support/ports.ts`** — `observePort` wraps a port function so individual calls can be inspected after execution.
+- **`src/modules/account/services/index.ts`** — the module under test. Imported twice: as a namespace (`accountService`) for most calls, and as a named object (`account`) to reach `refreshAccessToken`, which is published on the service object rather than exported as a bare name.
+- **`tests/support/setup-test-db.ts`** — called once at module level to provision a real test database for all suites in this file.
+- **`tests/support/caller-context.ts`** — provides `testCallerContext` passed to service calls that require caller metadata.
+- **`tests/support/ports.ts`** — provides `observePort`, used to capture audit-event calls on the mocked audit port.
+- **`src/infrastructure/observability/audit.ts`** — mocked via `jest.mock`; `emitAuditEvent` is the single replaced export.
+- **`src/modules/account/audit.ts`** — supplies `accountAuditActions` constants (e.g. `AUTH_TOKEN_REFRESHED`) used in audit-event assertions.
+- **`src/modules/account/session/jwt.ts`** — supplies `createRefreshToken` (to mint real tokens) and `verifyAccessToken` (referenced in the module's comment context).
+- **`src/modules/users/tests/fixtures.ts`** — supplies `createUser` and `PLAIN_PASSWORD` for seeding test data.
+- **`src/modules/users/index.ts`** / **`src/modules/users/repository.ts`** — `userRepository.findByIdWithCredentials` and `findById` are used to assert persistence side-effects (tokens, password changes).
+- **`src/modules/users/model.ts`** — `UserDocument` type used in `ResponseSuccess<UserDocument>` casts.
+- **`src/infrastructure/http/response.ts`** — `ResponseSuccess` and `ResponseReject` types used to type-narrow service return values in assertions.
 
 ## Notes
 
-- **Audit mocking is a `jest.mock` replacement, not a `jest.spyOn`.** `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes; this fails under the swc transform in `jest.config.mutation.js` and inside Stryker's sandbox. See `tests/support/ports.ts` for the full rationale.
-- **Status-code convention follows `openapi.yaml`:** validation failures are always **422** (the spec never declares 400), auth failures are **401**, conflicts are **409**.
-- **Dual import style is intentional:** `accountService` (namespace) covers barrel-exported functions; `account` (aliased) exists solely to reach `refreshAccessToken`, which is attached to the service object rather than re-exported from the barrel.
-- **`refreshAccessToken` tests set JWT secrets in `process.env`** (`NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, etc.) because unit-test runs do not load `.env`. The original values are saved/restored in `beforeEach`/`afterEach`.
-- **Revocation is document-based, not signature-based:** the "revoked token" test removes the token from the user document via `userRepository.tokenRemoveByValue`, proving that a cryptographically valid token is still rejected once the user no longer holds it.
+- **Audit port is replaced, not spied on.** `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes; this fails under the SWC transform in `jest.config.mutation.js` and inside Stryker's sandbox. The `jest.mock` factory + `observePort` pattern in `tests/support/ports.ts` is the workaround.
+- **Status-code convention:** all validation failures return **422** (matching `openapi.yaml`, which never declares 400); auth failures return **401**; duplicate-resource conflicts return **409**.
+- **`refreshAccessToken` access style:** it is reached via `account.refreshAccessToken(…)` (object property), not as a bare import, because the services barrel publishes it on the service object rather than re-exporting it as a top-level name.
+- **JWT env vars are set manually** in `beforeEach`/`afterEach` with snapshot-and-restore, because the test runner does not invoke `dotenv` the way the application does.
+- **File location rationale:** lives under `account/tests/integration/` (not alongside `users` tests) because the code under test belongs to the `account` module, even though the tests seed data through the `users` fixtures.

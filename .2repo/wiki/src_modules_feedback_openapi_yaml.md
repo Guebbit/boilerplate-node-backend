@@ -2,28 +2,28 @@
 
 ## Purpose
 
-OpenAPI 3.0.3 contract for the feedback module. Defines the four endpoints (submit, list, search, update) and all request/response schemas for the feedback & contact-request workflow, serving as the single source of truth for code generation (orval) and API documentation.
+OpenAPI 3.0.3 contract for the feedback module. Defines the five endpoints (submit, list, search, update-status, delete) and all module-local schemas that govern the feedback/contact-request workflow. Serves as the single source of truth for code generation (orval) and API documentation for this module.
 
 ## Key elements
 
-- **`POST /feedback/contact`** — Public (no auth) endpoint to submit a new feedback/contact request. Returns a `FeedbackRequestEnvelope` on success.
-- **`GET /feedback`** — Admin list endpoint (bearerAuth). Accepts pagination and filter params (`text`, `email`, `status`) as query strings. Returns a paginated `FeedbackRequestsResponseEnvelope`.
-- **`POST /feedback/search`** — DTO-friendly alias of the list endpoint; same filters in a JSON body. Marked with the custom extension `x-alias-of: listFeedbackRequests`.
-- **`PUT /feedback/{id}`** — Admin endpoint to update a request's status and/or `adminNotes`.
-- **`FeedbackRequest`** — Core entity schema: `id`, `email`, `subject`, `message`, `status`, `adminNotes`, `respondedAt`, `createdAt`, `updatedAt`.
-- **`FeedbackRequestStatus`** — Closed enum: `new | in_progress | resolved | spam`. Named to match the type orval already derives from the frontend; renaming would be a silent breaking change.
-- **Envelope schemas** (`FeedbackRequestEnvelope`, `FeedbackRequestsResponseEnvelope`) — Wrap data in the shared `{success, status, message, data}` envelope.
-- **`SearchFeedbackRequestsRequest`** / **`CreateFeedbackRequest`** / **`UpdateFeedbackRequestStatusRequest`** — Request-body DTOs, all with `additionalProperties: false`.
+- **`POST /feedback/contact`** (`createFeedbackRequest`) — Public (no auth). Accepts `CreateFeedbackRequest`, returns `FeedbackRequestEnvelope`. Includes a `website` honeypot field.
+- **`GET /feedback`** (`listFeedbackRequests`) — Bearer-auth. Filtered via query params (`page`, `page_size`, `text`, `email`, `status`). Returns `FeedbackRequestsResponseEnvelope`.
+- **`POST /feedback/search`** (`searchFeedbackRequests`) — Bearer-auth. JSON-body equivalent of the GET above; carries `x-alias-of: listFeedbackRequests`. Exists because a body on GET is non-portable and invisible to query-param-keyed caches.
+- **`PUT /feedback/{id}`** (`updateFeedbackRequestStatus`) — Bearer-auth. Updates status/admin notes via `UpdateFeedbackRequestStatusRequest`.
+- **`DELETE /feedback/{id}`** (`deleteFeedbackRequest`) — Bearer-auth. Permanent removal; returns shared `Success` response.
+- **`FeedbackRequestStatus`** — Closed enum: `new`, `in_progress`, `resolved`, `spam`. Named to match the type orval already derived from the inline copy; renaming would silently break five frontend imports.
+- **`CreateFeedbackRequest`** — Required: `email`, `subject`, `message`. Optional: `name`, `website` (honeypot, never persisted or returned).
+- **`FeedbackRequest`** — The entity shape returned in envelopes. No `website` property (honeypot is request-only).
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Heavily referenced for shared building blocks: envelope fields (`EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`), scalar types (`Id`, `Email`, `Page`, `PageSize`, `Text`), pagination meta, standard query/path parameters (`PageParam`, `PageSizeParam`, `TextParam`, `IdPathParam`), and standard error responses (`ValidationError`, `InternalError`, `Unauthorized`, `Forbidden`, `NotFound`). All refs use the relative path `../../../shared/contracts/openapi.root.yaml`.
-- **`src/modules/inventory/openapi.yaml`** — Sibling module contract; no direct `$ref` dependency exists between the two files. They share the same structural conventions (envelope wrapping, `additionalProperties: false`, shared root refs) but are otherwise independent.
+- **`shared/contracts/openapi.root.yaml`** — Heavily referenced via `$ref` for shared building blocks: `EnvelopeSuccess`/`EnvelopeStatus`/`EnvelopeMessage`, `Id`, `Email`, pagination parameters (`PageParam`, `PageSizeParam`, `TextParam`), `IdPathParam`, and standard error responses (`ValidationError`, `InternalError`, `Unauthorized`, `Forbidden`, `NotFound`, `Success`). This file composes those into module-specific envelopes and request bodies.
+- **`src/modules/inventory/openapi.yaml`** — Sibling module contract in the same `src/modules/` tree. No cross-references are visible in this file; the two modules are structurally parallel but independent.
 
 ## Notes
 
-- `POST /feedback/contact` has `security: []` (explicit empty array) — it is intentionally unauthenticated. All other endpoints require `bearerAuth`.
-- The `GET /feedback` vs `POST /feedback/search` split is deliberate: the inline comment documents that a body on GET has no RFC 9110 semantics and would break `setCache` keying, which keys on declared query parameters. Treat the two endpoints as interchangeable at the API level but not swappable in a client that relies on cache-key correctness.
-- `x-alias-of` is a **custom** OpenAPI extension (not part of the spec); tooling that ignores unknown extensions will simply not see it.
-- All schemas set `additionalProperties: false`, meaning generated validators will reject unknown fields.
-- The `FeedbackRequestStatus` enum was previously inlined in four places and omitted (bare `string`) in a fifth, causing drift; it is now a single `$ref` target. Do not duplicate the enum values elsewhere.
+- **`security: []` on POST /feedback/contact** is intentional (public endpoint). All admin-facing operations use `bearerAuth`.
+- **`POST /feedback/search` vs `GET /feedback`** — The two are functionally identical; the POST exists because (a) the Fetch spec rejects request bodies on GET, and (b) the frontend's `setCache` keys on declared query params, so a body-borne filter would be invisible to the cache key and cause stale reads. Treat the POST as the DTO-friendly alias, not a separate capability.
+- **`FeedbackRequestStatus` naming** — Deliberately *not* shortened to `FeedbackStatus`; the name is frozen to match the already-generated orval type. The enum is defined once here and `$ref`-ed everywhere it appears (query param, response, update body) to prevent the inline-copy drift that previously let `GET /feedback` accept any string while `POST /feedback/search` validated the enum.
+- **Honeypot (`website`)** — Present only in the *request* schema. A non-empty value flags the submission as spam. It is absent from `FeedbackRequest`, confirming it is never stored or exposed.
+- **Relative `$ref` depth** — All shared-contract references use `../../../shared/contracts/openapi.root.yaml`. If this file moves in the tree, every shared ref breaks silently at generation time.

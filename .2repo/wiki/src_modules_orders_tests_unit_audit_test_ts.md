@@ -2,21 +2,19 @@
 
 ## Purpose
 
-Unit test that pins the orders module's audit action strings to their exact wire-contract values and verifies they are registered in the app-wide `AuditAction` type union. It exists because these strings are read by log queries and alert rules outside this repo — a silent rename or omission breaks downstream tooling.
+Single-test guard that pins the exact key-and-value shape of the `ordersAuditActions` vocabulary to the string literals expected by downstream log-query and alert-rule tooling outside this repository. It exists so that a value rename, a new action, or a removed action all fail CI loudly rather than silently breaking external consumers.
 
 ## Key elements
 
-- **`describe('the orders audit vocabulary')`** — the single test suite in the file.
-- **`it('spells every action exactly as the log tooling expects')`** — asserts `ordersAuditActions` via whole-object `toEqual` against four literal strings (`order.created`, `order.updated`, `order.deleted`, `order.cancelled`). Whole-object equality catches a changed value *and* an action added or removed without documentation.
-- **`it('registers its actions in the app-wide union')`** — assigns `ordersAuditActions.ORDER_CREATED` to a variable typed as `AuditAction`, exercising the `declare module` augmentation at compile time.
+- **`describe('the orders audit vocabulary')`** — sole suite; scopes the test to the audit-string contract.
+- **`it('spells every action exactly as the log tooling expects')`** — asserts `ordersAuditActions` deep-equals a hardcoded object with four entries (`ORDER_CREATED: 'order.created'`, `ORDER_UPDATED: 'order.updated'`, `ORDER_DELETED: 'order.deleted'`, `ORDER_CANCELLED: 'order.cancelled'`).
+- **Import of `ordersAuditActions`** from `../../audit` — the only production symbol under test.
 
 ## Relationships
 
-- **`src/modules/orders/audit.ts`** — the SUT. Exports `ordersAuditActions` and contains the `declare module` augmentation that merges these four strings into `AuditAction`.
-- **`src/infrastructure/observability/audit.ts`** — defines the base `AuditAction` type (and the `emitAuditEvent` API) that the orders module augments.
+- **`src/modules/orders/audit.ts`** — source of the `ordersAuditActions` constant. This test is the sole consumer in the repo whose job is to freeze that export's shape and values.
 
 ## Notes
 
-- The second test's type-level assertion is verified by `tsc` (the whole tree is in `tsconfig.json`), **not** by Jest at runtime. If the `declare module` augmentation is removed, Jest still passes but type-checking fails — CI must run the type-checker to catch this.
-- String values are a wire contract, not internal identifiers. Renaming them requires a coordinated change in downstream log/alert infrastructure.
-- The file uses `toEqual` (deep equality on the object) rather than per-key checks, deliberately catching accidental key additions or removals.
+- The assertion uses `toEqual` (whole-object deep equality), not per-key checks. This intentionally fails on a *new* or *missing* key, not just a changed string — the JSDoc calls the vocabulary a "wire contract."
+- There is exactly one test case; it is a snapshot-style contract guard, not a behavioral test. Adding a new audit action in `audit.ts` will break this test until the expected literal is updated here.

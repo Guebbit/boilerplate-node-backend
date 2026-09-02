@@ -2,27 +2,24 @@
 
 ## Purpose
 
-Verifies the Mongoose schema *declarations* themselves (defaults, `required` fields, serialization shape, timestamps) rather than the domain transforms covered by sibling integration specs. Uses a real MongoDB instance because the behaviours under test are Mongoose-internal (e.g. what `default` actually does) and would be meaningless against a mock.
+Integration test that verifies the Mongoose schema declarations on the order model — defaults, `required` constraints, `select: false` on credentials — rather than any application-level transforms. It runs against a real Mongo instance because the assertions target Mongoose's own runtime behaviour, which a mock would only re-implement opaquely.
 
 ## Key elements
 
-- **`makeOrderPayload()`** — async helper that creates a real user and product via fixture helpers, then returns a valid order payload with an *embedded* product snapshot (full object, not an ObjectId).
-- **`describe('order schema')`** — three assertions:
-  - `email` is required (omitting it causes `orderRepository.create` to reject).
-  - `order.toJSON()` exposes `id`, never `_id` or `__v`.
-  - `createdAt` / `updatedAt` are stamped as `Date` instances.
-- **Trailing cart comment** — documents the intent behind the cart's `userId: unique` declaration (single upsert addressing), though the test block it introduces is not present in this file.
+- **`makeOrderPayload`** — Async helper that creates a real user and product via fixtures, then returns a valid order payload. The `items[].product` field embeds the full product document (title, price, etc.), not a bare ObjectId, because the schema expects the entire embedded schema.
+- **`describe('order schema')` → "serialises to id, never _id or __v"** — Calls `orderRepository.create()`, then asserts `toJSON()` exposes `id` (stringified) and omits both `_id` and `__v`.
+- **Trailing doc comment (cart uniqueness)** — Documents the design intent that `userId` on the cart collection is `unique`, making it the sole address for a user's cart. (No corresponding `it` block is visible in the current excerpt.)
 
 ## Relationships
 
-- **`src/modules/orders/index.ts`** — re-exports `orderRepository`, which is the sole SUT exercised here.
-- **`src/modules/orders/repository.ts`** — implements `create`; the schema it attaches is what these tests assert against.
-- **`src/modules/products/tests/fixtures.ts`** — `createProduct` supplies a valid product document to embed.
-- **`src/modules/users/tests/fixtures.ts`** — `createUser` supplies a valid buyer with an `email`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` spins up and tears down a real in-memory/ephemeral Mongo for the whole file.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to provision a real Mongo connection for the suite.
+- **`src/modules/orders/index.ts`** — Re-exports `orderRepository`, the object whose `create()` method is exercised by the test.
+- **`src/modules/orders/repository.ts`** — Underlying implementation behind `orderRepository`; the test exercises its persistence path to reach Mongoose's serialization.
+- **`src/modules/users/tests/fixtures.ts`** — `createUser` seeds a real user document so the order's `userId` and `email` reference valid data.
+- **`src/modules/products/tests/fixtures.ts`** — `createProduct` seeds a real product whose `toObject()` output is embedded into the order payload.
 
 ## Notes
 
-- The `as never` casts on `orderRepository.create(...)` are a known workaround for a type mismatch between the test payload shape and the repository's expected input; they are intentional, not a typo.
-- The embedded-product requirement means a bare `ObjectId` in `items[].product` will fail Mongoose validation (`title`/`price` are `required` on the sub-schema). This is by design, not a bug.
-- The file deliberately does **not** test business-rule transforms (e.g. discount logic, status transitions) — those live in sibling specs in the same `integration/` folder.
+- The embedded `product` in `items[]` must be a full document (title, price present); a plain ObjectId will fail validation because the embedded schema marks those fields `required`.
+- Sibling files in the same `integration/` directory cover behavioural/transform specs; this file is intentionally scoped to "what the schema says and nothing else."
+- The cast `as never` on the payload passed to `orderRepository.create` is a workaround for the repository's typed signature — the test intentionally supplies a raw shape to exercise the schema layer directly.

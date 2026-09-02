@@ -2,28 +2,27 @@
 
 ## Purpose
 
-OpenAPI 3.0.3 contract (v2.0.0) for the Payments module. Defines the four endpoints that manage the money-side of an order lifecycle — creating a payment intent, looking up a payment by order, confirming a charge, and issuing a refund — plus the `Payment` schema and its supporting types. Serves as the single source of truth for the API surface that the orders module and clients depend on.
+OpenAPI 3.0.3 module contract for the Payments service (v2.0.0). Defines the four HTTP endpoints that manage the lifecycle of a payment (create intent → confirm → refund) tied to an order, along with the `Payment` schema and caller-specific `PaymentActions`. Serves as the single source of truth for client code generation and API documentation.
 
 ## Key elements
 
-- **`POST /payments/intent`** (`createPaymentIntent`) — Freezes a caller's `pending` order into a payment intent; idempotent (one intent per order, enforced by the DB). Returns a `PaymentEnvelope`.
-- **`GET /payments/order/{orderId}`** (`getPaymentByOrder`) — Retrieves the existing payment for an order so a client can resume mid-flow. Returns 404 if no intent exists yet.
-- **`POST /payments/order/{orderId}/refund`** (`refundPaymentByOrder`) — Admin-only refund. Conditional write: only succeeds while the payment is `succeeded`; a second attempt returns 409 (`PAYMENT_NOT_REFUNDABLE`).
-- **`POST /payments/{id}/confirm`** (`confirmPayment`) — Charges the card (provider-first), then conditionally moves the order `pending → paid`. Decline returns 409 with `PAYMENT_DECLINED` and is retryable. If the order state has already changed, the charge is refunded on the spot.
-- **`Payment`** schema — Provider-facing record (id, orderId, userId, amount, currency, status, provider, cardLast4, actions, timestamps). Status enum: `requires_confirmation | succeeded | declined | refunded`.
-- **`PaymentActions`** schema — Per-caller boolean flags (`pay`, `refund`) computed at read time, mirroring the `Order.actions` convention.
-- **`PaymentEnvelope`** schema — Standard `{ success, status, message, data }` wrapper around `Payment`.
-- **`CreatePaymentIntentRequest`** / **`ConfirmPaymentRequest`** — Request bodies for the intent and confirm endpoints.
+- **`POST /payments/intent`** — Freezes a caller's `pending` order into a payment intent (amount locked from order lines). Idempotent: re-calling refreshes the same intent; an already-paid order returns 409.
+- **`GET /payments/order/{orderId}`** — Retrieves the existing payment record for an order (404 if none yet). Used by clients to re-hydrate state mid-flow.
+- **`POST /payments/order/{orderId}/refund`** — Admin-only. Returns funds without changing order status. Conditional write: second submit gets 409 (`PAYMENT_NOT_REFUNDABLE`).
+- **`POST /payments/{id}/confirm`** — Submits card details to the provider. Provider charges first; order transitions `pending → paid` via conditional write. Decline (409, `PAYMENT_DECLINED`) is retryable with a new card.
+- **`Payment` schema** — Provider-facing record: `id`, `orderId`, `amount`, `currency`, `status` (`requires_confirmation | succeeded | declined | refunded`), `provider`, `cardLast4`, computed `actions`.
+- **`PaymentActions` schema** — Per-caller booleans (`pay`, `refund`) indicating which endpoints would accept the request. Mirrors the `Order.actions` pattern.
+- **`PaymentEnvelope`** — Standard response wrapper (`success`, `status`, `message`, `data`) around `Payment`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Heavily referenced: all envelope fields (`EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`), the `Id` schema, the `IdPathParam` parameter, and every shared error response (401, 403, 404, 409, 422, 500) are `$ref`-imported from this file. This spec never redefines those types.
-- **`src/modules/orders/openapi.yaml`** — The payment intent is derived from an order's lines; `confirmPayment` transitions the order to `paid`; `refundPaymentByOrder` deliberately does *not* alter the order's status. The two modules split the lifecycle: orders own the customer-facing status, payments own the money.
+- **`shared/contracts/openapi.root.yaml`** — All shared response definitions (401, 403, 404, 409, 422, 500), the `Id` schema, and the `IdPathParam` parameter are imported via `$ref`. This file does not redefine them.
+- **`src/modules/orders/openapi.yaml`** — No direct `$ref` in this file, but the API is coupled by design: every endpoint is scoped to an `orderId`, the confirm endpoint drives the order's `pending → paid` transition, and `PaymentActions.pay` checks whether the order can still reach `paid`. Clients that need both order and payment actions compose them at runtime.
 
 ## Notes
 
-- The 409 response is overloaded across endpoints but disambiguated by `errors[].code` (`PAYMENT_ORDER_NOT_PAYABLE`, `PAYMENT_DECLINED`, `PAYMENT_NOT_REFUNDABLE`, `PAYMENT_NOT_CONFIRMABLE`). Clients must branch on the code, not just the status.
-- `Payment.actions` is computed per caller at response time (not persisted), same convention as `Order.actions`. A client that needs both action sets composes them rather than making cross-module decisions.
-- The `provider` field is `fake` in the demo; the fake provider declines exactly one card number (documented on `ConfirmPaymentRequest.cardNumber`).
-- `amount` on the intent is locked from the order's own lines at creation time — the intent cannot quote a different total.
-- The confirm endpoint is charge-then-write: money moves at the provider before the DB update, so a race on the order state triggers an automatic on-the-spot refund rather than a lost payment.
+- `userId` on `Payment` is optional and **absent** once the account is erased — do not treat it as a required join key.
+- `declined` is **not** terminal; the same payment ID can be re-submitted to `/confirm` with a different card. `refunded` is terminal.
+- The confirm endpoint's 409 is overloaded: `PAYMENT_DECLINED` (retryable), `PAYMENT_NOT_CONFIRMABLE` (state), and `PAYMENT_ORDER_NOT_PAYABLE` (order slipped, charge auto-refunded). Distinguish by `errors[].code`.
+- `cardLast4` is the only card data persisted by policy; the full PAN exists only in the request body and is never stored.
+- The fake provider declines exactly one card number (documented on `ConfirmPaymentRequest.cardNumber`) — useful for exercising the decline path in tests.

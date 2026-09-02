@@ -2,20 +2,19 @@
 
 ## Purpose
 
-Pins the exact string values of the users audit action constants so they match the wire contract consumed by external log queries, dashboards, and alerts. Uses whole-object equality to catch any added, removed, or reworded action.
+Unit test that pins the exact string values of `usersAuditActions` by asserting whole-object equality. These strings are wire contracts consumed by external log queries, dashboards, and alerting rules, so any addition, removal, or rename must fail CI before reaching production.
 
 ## Key elements
 
-- **`describe('the users audit vocabulary')`** — test suite for the users audit vocabulary.
-- **`it('spells every action exactly as the log tooling expects')`** — asserts `usersAuditActions` equals the full object `{ ADMIN_USER_CREATED: 'admin.user.created', ADMIN_USER_UPDATED: 'admin.user.updated', ADMIN_USER_DELETED: 'admin.user.deleted' }` via `toEqual`.
-- **`it('registers its actions in the app-wide union')`** — assigns `usersAuditActions.ADMIN_USER_CREATED` to a variable typed as `AuditAction`, verifying the module augmentation in `audit.ts` actually widens the union.
+- **`usersAuditActions`** (imported from `../../audit`) — the object under test; a map of five symbol keys (`ADMIN_USER_CREATED`, `ADMIN_USER_UPDATED`, `ADMIN_USER_SOFT_DELETED`, `ADMIN_USER_ERASED`, `ADMIN_USER_2FA_DISABLED`) to dotted action strings (e.g. `'admin.user.created'`).
+- **`describe('the users audit vocabulary')` / `it(...)`** — a single test case that calls `expect(usersAuditActions).toEqual({...})`, asserting the entire object shape and every value in one comparison.
 
 ## Relationships
 
-- **`src/modules/users/audit.ts`** — source of `usersAuditActions`; its `declare module` augmentation is what makes the second test's type assignment valid.
-- **`src/infrastructure/observability/audit.ts`** — defines the `AuditAction` type imported for the type-level check in the second test.
+- **`src/modules/users/audit.ts`** — sole dependency. Provides the `usersAuditActions` export that this test imports and validates.
 
 ## Notes
 
-- The second test is a **compile-time check only**. Jest does not type-check; the assertion passes at runtime regardless. Its real value is forcing `tsc` (via `tsconfig.json`) to verify the `declare module` augmentation in `audit.ts` is present and correct.
-- Whole-object equality (not per-key checks) is deliberate: it guarantees the set of keys is exactly the three listed, catching accidental additions or removals.
+- The assertion uses `toEqual` (whole-object equality), not per-key checks. This means adding a new action, removing one, or changing any string value will fail the test — intentional, to force a conscious update here alongside the source.
+- The test file's JSDoc explicitly states the strings are read by tooling *outside this repo*; treat them as an external API, not just internal constants.
+- There is no mocking, no async setup, and no other imports. The test is fully synchronous and self-contained.

@@ -2,36 +2,36 @@
 
 ## Purpose
 
-Email delivery adapter: renders EJS templates to HTML and sends them over SMTP (or records them to the demo outbox). Provides both a synchronous `nodemailer` send and an async `enqueueEmail` path that publishes to a message queue so a slow mail server cannot block an HTTP response. It owns the SMTP transport configuration, the template-path resolution, and the queue payload contract shared with the consumer.
+Email infrastructure adapter: renders EJS templates into HTML and delivers via SMTP (nodemailer), with an optional path through the message queue. It is the single point where a logical email (template name + data) becomes a wire-format SMTP message or a queued job, isolating all transport concerns from application modules.
 
 ## Key elements
 
-- **`emailTemplatesDirectory()`** — Resolves the EJS template directory; overridable via `NODE_EMAIL_TEMPLATES_DIR`, defaults to `shared/views/templates-emails`.
-- **`templateFile(templateName)`** — Maps a bare template name (e.g. `orders.order-confirm`) to its `.ejs` file path. The single point where a name becomes a filesystem path.
-- **`getTransporter()`** (module-internal) — Lazy, memoised Nodemailer `Transporter`. Reads SMTP host/port/auth from the environment on first call. In `NODE_ENV=test` returns a `jsonTransport` (no socket). `secure` is derived from the port (465 → implicit TLS, otherwise STARTTLS).
-- **`resetTransporter()`** — Test seam that discards the memoised transport so a suite can re-read changed SMTP env vars.
-- **`nodemailer(request, templateName, data)`** — Renders the named EJS template with the given data, then sends via the SMTP transport. Wraps the operation in an OTel span (`email.send`). In demo mode delegates to `recordDemoEmail` instead.
-- **`enqueueEmail`** *(truncated in source)* — Queue-aware dispatch; the recommended entry point for request paths. Publishes an `EmailJob` to the queue when enabled, otherwise falls through to inline send.
-- **`EmailRequest`** (type) — JSON-safe envelope shape (`EmailJobPayload['request']`). Deliberately narrower than Nodemailer's `SendMailOptions` so it survives `JSON.stringify` in a queue payload.
-- **`EmailJob`** (type) — Alias for `EmailJobPayload`; the exact wire contract shared with the worker.
-- **`EmailContent`** (interface) — `{ template, subject, data }` returned by each module's `emails.ts` and passed to `enqueueEmail`.
+- **`emailTemplatesDirectory()`** — Resolves the absolute directory containing `.ejs` templates. Overridable via `NODE_EMAIL_TEMPLATES_DIR`; defaults to `shared/views/templates-emails`.
+- **`templateFile(templateName)`** — Maps a bare template name (no extension) to the resolved `.ejs` path. The single place `.ejs` is appended.
+- **`getTransporter()`** (internal) — Lazy singleton nodemailer `Transporter`. Uses `jsonTransport` under `NODE_ENV=test`. Reads SMTP host/port/user/pass from env on first call.
+- **`resetTransporter()`** — Test seam; clears the memoised transport so a suite can re-read changed env vars without re-importing the module.
+- **`nodemailer(request, templateName, data)`** — Renders the EJS template, then sends via the transporter (or records to the demo outbox). Wraps the operation in an OTel span with `messaging.*` attributes. Rejections propagate (no internal `.catch`).
+- **`EmailContent`** (interface) — The shape a module's `emails.ts` returns: `{ template, subject, data }`. All strings must already be translated.
+- **`EmailRequest`** (type) — The JSON-safe envelope carried in a queue job; deliberately narrower than nodemailer's `SendMailOptions` to survive `JSON.stringify`.
+- **`EmailJob`** (type) — Re-export of `EmailJobPayload` from `@types`; the producer/consumer shared contract.
+- **`enqueueEmail`** — Queue-aware dispatch (truncated in source): checks `isQueueEnabled`, publishes to `EMAIL_QUEUE` with a priority, or falls through to `nodemailer` inline.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/queue.ts`** — Imports `isQueueEnabled`, `publishToQueue`, and `EMAIL_QUEUE`. `enqueueEmail` publishes to this queue; the queue name lives here (not in the worker) so producer and consumer agree on spelling without a cross-layer import.
-- **`src/infrastructure/adapters/email.worker.ts`** — Consumer that drains `EMAIL_QUEUE`. Re-exports the `EmailJob` type defined here rather than declaring its own, keeping one source of truth.
-- **`src/infrastructure/adapters/demo-outbox.ts`** — Calls `isDemoMode()` and `recordDemoEmail()` to short-circuit real SMTP during the demo profile.
-- **`src/infrastructure/adapters/logger.ts`** — Logs the SMTP `messageId` on successful send.
-- **`src/infrastructure/observability/tracer.ts`** — Wraps the send in `withSpan('email.send', …)` and sets OTel messaging attributes (`messaging.system`, `messaging.destination.name`, `email.template`).
-- **`src/infrastructure/runtime/environment.ts`** — Uses `environmentNumber` to parse `NODE_SMTP_PORT` with a safe integer constraint.
-- **`src/modules/account/emails.ts`, `src/modules/delivery/emails.ts`** — Producers that build `EmailContent` objects (template name + pre-translated subject/data) and hand them to `enqueueEmail`.
-- **`src/modules/account/services/verification.ts`, `src/modules/cart/services/checkout.ts`, `src/modules/delivery/service.ts`** — Application services that trigger email sends through the `emails.ts` helpers in their respective modules.
-- **`src/modules/cart/tests/integration/service.test.ts`, `src/modules/delivery/tests/integration/service.test.ts`** — Integration suites that exercise the full send path (demo outbox or jsonTransport) end-to-end.
+- **`queue.ts`** — Imports `isQueueEnabled`, `publishToQueue`, `EMAIL_QUEUE`, and `JobPriority` for the queue dispatch path.
+- **`email.worker.ts`** — The queue consumer that calls back into this file's `nodemailer` function; re-exports `EmailJob` rather than redefining it.
+- **`demo-outbox.ts`** — Imports `isDemoMode` and `recordDemoEmail`; when demo mode is active, sends are recorded instead of delivered.
+- **`logger.ts`** — Imports `logger` to log the SMTP `messageId` on successful send.
+- **`tracer.ts`** — Imports `withSpan` to wrap each send in an OTel span.
+- **`environment.ts`** — Imports `environmentNumber` for safe numeric parsing of `NODE_SMTP_PORT`.
+- **Module `emails.ts` files** (account, delivery, cart/checkout) — Produce `EmailContent` objects and call `enqueueEmail`/`nodemailer`; they never import nodemailer directly.
+- **`scripts/reap-inactive-accounts.ts`** — Trigger for account-related notification emails flowing through this adapter.
 
 ## Notes
 
-- **Template names are shared identifiers, not paths.** They travel through RabbitMQ to a consumer in another process, so they are bare names (`orders.order-confirm`) with the owning module as a prefix. `.ejs` is appended only inside `templateFile`, the single name→path boundary.
-- **All strings in `EmailContent.data` are pre-translated by the producer.** The mailer and the worker (potentially another process, hours later) never see a locale or translation function—there is no `t()` in the render context.
-- **`EmailRequest` is deliberately narrower than `SendMailOptions`.** Buffers in attachments would corrupt through `JSON.stringify`. A project that needs binary attachments should pass a storage key instead.
-- **No `.catch()` on the send chain.** Rejections propagate so `withSpan` marks the span as errored and the caller (or the worker's nack path) can react.
-- **`secure` is compared as a number**, not a string, so a zero-padded `"0465"` env value still resolves correctly and does not open a plaintext connection to a TLS-only port.
+- **Templates are not per-module.** They live in `shared/views/templates-emails/` because the template *name* crosses process boundaries via RabbitMQ; a path into `src/modules` would not be portable to the worker. Ownership is encoded in the name prefix (e.g. `orders.order-confirm`).
+- **No translation at render time.** The `data` object is the complete render context; all user-facing strings are translated by the producing module while the request is alive. The adapter (and the worker, potentially hours later) never needs a locale.
+- **`EmailRequest` ≠ `SendMailOptions`.** The type is intentionally narrow so every field survives `JSON.stringify` for the queue. Attachments should be sent as storage keys, not inline buffers.
+- **`secure` is port-derived and compared numerically.** `smtpPort() === 465` (number) avoids a zero-padded `"0465"` string being treated as "not 465" and opening a plaintext socket to an implicit-TLS port.
+- **Caller overrides win.** `from` and `html` are set as defaults *before* the `...request` spread, so a caller-supplied envelope field takes precedence.
+- **Failure surfaces at send time, not boot.** Empty SMTP credentials cause a server rejection on first send; email is not a hard startup dependency.

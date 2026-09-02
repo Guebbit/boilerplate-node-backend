@@ -2,37 +2,32 @@
 
 ## Purpose
 
-Integration tests for the inventory service's module-internal guarantees: exactly-once reserve/commit/release semantics, admin transitions (receive, adjust) and their refusal paths, and the reservation sweep. Deliberately scoped to the module's own edges—cross-module lifecycle is covered by `cart/tests/unit/stock.test.ts` and replay invariants by `ledger.property.test.ts`. Runs against a real MongoDB instance because every guarantee under test is a conditional write.
+Integration tests for the inventory service's own module boundaries: the all-or-nothing `reserveForOrder` semantics, exactly-once `commitForOrder` / `releaseForOrder` transitions, their refusal paths, `receive`, and `adjust` guardrails. Explicitly out of scope (covered elsewhere) are cross-module lifecycle (see `cart/tests/unit/stock.test.ts`) and the ledger replay invariant (see `ledger.property.test.ts`). All tests run against real MongoDB because every guarantee under test is a conditional write.
 
 ## Key elements
 
-- **`anOrderId()`** – generates a unique 24-char hex order ID per call; holds are keyed by this value.
-- **`countersOf(productId)`** – reads `onHand` / `reserved` directly from the product document via `productRepository.findByIdRaw`, bypassing service-level projections.
-- **`withoutWindow(body)`** – wraps a test body with `NODE_RESERVATION_TTL_MINUTES=0` so every hold it opens is immediately stale (used by sweep tests).
-- **`describe('reserveForOrder')`** – atomic all-or-nothing hold; rollback is recorded (not netted); idempotency on order ID; non-duplicate DB errors propagate (surfaced by mutation testing); shortfall reports *available*, not `onHand`.
-- **`describe('commitForOrder')`** – drops both counters together; at-most-once (second call returns `false`); cannot commit after release; no-op for an unknown order.
-- **`describe('releaseForOrder')`** – returns units; at-most-once; records the reason (`release` vs `expire`) so the ledger distinguishes cancellation from abandonment.
-- **`describe('receive')`** – raises `onHand` without disturbing existing holds; 404 for a non-existent product.
-- **`describe('adjust')`** – correction in either direction; refuses if it would drop `onHand` below `reserved` (409, `INVENTORY_BELOW_RESERVED`); allows correction down to exactly `reserved`.
-- **`describe('runReservationSweep')`** – (truncated in source) exercises TTL-based sweep under the `withoutWindow` helper.
+- **`anOrderId()`** — module-level counter producing 24-char hex strings (valid MongoDB ObjectId shape), one per call.
+- **`countersOf(productId)`** — reads `onHand` / `reserved` via `productRepository.findByIdRaw` to assert counter state without going through the service.
+- **`withoutWindow(body)`** — wraps `body` with `NODE_RESERVATION_TTL_MINUTES=0` so every hold is immediately stale. Defined at module scope (not inside a `describe`) to avoid leaking the zero-TTL into sibling suites.
+- **`describe('reserveForOrder')`** — five cases: all-or-nothing shortfall, rollback recorded as a distinct movement (not netted), idempotency on duplicate order-id, non-duplicate DB error propagation (mutation-testing guard), and refusal when all units are already held.
+- **`describe('commitForOrder')`** — four cases: successful commit drops both counters, at-most-once on replay, refusal after prior release, no-op for unknown order.
+- **`describe('releaseForOrder')`** — two cases: at-most-once give-back, and distinct `StockMovementReason` values (`release` vs `expire`) recorded in the ledger.
+- **`describe('receive')`** — three cases: raises available stock, leaves existing holds untouched, 404 for missing product.
+- **`describe('adjust')`** — correction in both directions, refusal below reserved (409 `INVENTORY_BELOW_RESERVED`), boundary where `onHand` may equal but not fall below `reserved`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/inventory/service.ts` | Module under test; all exported functions are called directly. |
-| `src/modules/inventory/model.ts` | `reservationModel.create` is spied/mocked in the error-propagation test. |
-| `src/modules/inventory/repository.ts` | `reservationRepository` imported (used internally by the service). |
-| `src/modules/products/index.ts` | `productRepository` used by `countersOf` to read raw counters. |
-| `src/modules/products/tests/fixtures.ts` | `createProduct` creates seeded products for every test. |
-| `src/types/index.ts` | `StockMovementReason` enum used in assertions. |
-| `tests/support/environment.ts` | `withEnvironment` temporarily sets `NODE_RESERVATION_TTL_MINUTES`. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the real Mongo test database at module load. |
+- **`../../service`** (`src/modules/inventory/service.ts`) — system under test; all eight exported functions are exercised here.
+- **`../../model`** (`src/modules/inventory/model.ts`) — `reservationModel` is spied on (`.create` mocked) to simulate a non-duplicate DB error.
+- **`../../repository`** (`src/modules/inventory/repository.ts`) — `reservationRepository` imported (used in truncated portion of the file).
+- **`@modules/products`** (`src/modules/products/index.ts`) — `productRepository.findByIdRaw` used by `countersOf` to assert raw counter state.
+- **`@modules/products/tests/fixtures`** (`src/modules/products/tests/fixtures.ts`) — `createProduct` seeds products with specific `onHand` values.
+- **`@types`** (`src/types/index.ts`) — `StockMovementReason` enum for asserting ledger reasons.
+- **`@tests/setup-test-db`** (`tests/support/setup-test-db.ts`) — `setupTestDb()` initialises a real MongoDB instance at module load.
+- **`@tests/environment`** (`tests/support/environment.ts`) — `withEnvironment` used by `withoutWindow` to temporarily override the reservation TTL.
 
 ## Notes
 
-- **Real Mongo, no in-memory mocks.** Every assertion depends on conditional-write semantics (atomic find-and-update, unique-index 11000); an in-memory store would not exercise them.
-- **`withoutWindow` is module-scoped, not per-test.** Setting TTL to 0 globally would expire holds that other tests in the file depend on.
-- **Error-propagation test is mutation-driven.** Swallowing *any* error into `null` (making `reserveForOrder` read "already held") survived every other test in the file; only code 11000 may be mapped to `null`.
-- **Rollback is recorded, not netted.** A failed multi-line reserve leaves both a `reserve` and a `release` row in the movement ledger—intentionally, so the ledger remains reconcilable.
-- **Order ID shape matters.** `anOrderId` pads to 24 hex chars to match the unique-index key format; using a shorter string would change which code path the duplicate check exercises.
+- The non-duplicate-error test exists because mutation testing showed that replacing the duplicate-key check with `true` (or swallowing all errors into `null`) would pass every other test while masking a real failure mode: a transient DB error being read as "already held."
+- `withoutWindow` is deliberately **not** a `describe`-scoped helper; placing it inside a `describe` would leave the TTL at zero for the remainder of the file and expire holds that other cases depend on.
+- Order IDs are 24-char hex strings to satisfy MongoDB's unique-index format on the `orderId` field, ensuring the idempotency path is genuinely exercised.

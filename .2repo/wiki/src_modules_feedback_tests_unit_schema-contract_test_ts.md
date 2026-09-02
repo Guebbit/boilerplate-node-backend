@@ -1,22 +1,29 @@
 # src/modules/feedback/tests/unit/schema-contract.test.ts
 
 ## Purpose
-Contract test for `feedbackRequestSchema`. Because the feedback form is the sole path by which an external user writes to the database, this test pins down the exact required/optional field set, enum constraints, defaults, index, and timestamp settings so that any schema change that would alter who can reach operators or how the operator queue is queried is caught immediately.
+
+Contract tests for `feedbackRequestSchema`. Encodes the business rule that a stranger may reach operators only if the schema captures enough to reply (email, subject, message) while keeping the name optional. Verifies required/optional fields, operator-side defaults (or lack thereof), the status enum, index layout, and the TTL retention policy so that schema drift is caught at the unit level.
 
 ## Key elements
-- **`describe('feedbackRequestSchema')`** — single test suite covering every public contract of the schema.
-  - *required fields* — asserts `email`, `message`, `subject` are required; `name` is not.
-  - *operator-side defaults* — asserts `respondedAt` and `adminNotes` have **no** default (prevents auto-marking submissions as answered).
-  - *status enum & default* — asserts the enum matches `Object.values(FeedbackRequestStatus)` and the default is `FeedbackRequestStatus.new`.
-  - *index* — asserts a single compound index `status_1_createdAt_-1` (the only queue query: open items, newest first).
-  - *timestamps* — asserts `optionsOf(...).timestamps` is `true`, since the queue orders by `createdAt`.
+
+- **`RETENTION_SECONDS`** – computed from `NODE_FEEDBACK_RETENTION_DAYS` (default 730) and used to assert the TTL value without hard-coding a literal.
+- **`describe('feedbackRequestSchema')`** – seven assertions covering:
+  - Required paths are exactly `email`, `message`, `subject`.
+  - `name` is absent from required paths.
+  - `respondedAt` and `adminNotes` have **no** default (operator-filled, not submitter-filled).
+  - `status` enum matches `Object.values(FeedbackRequestStatus)` and defaults to `FeedbackRequestStatus.new`.
+  - Index specs include `createdAt_1` (ascending) and `status_1_createdAt_-1` (compound queue).
+  - `timestamps: true` is set.
+  - `expireAfterSeconds` appears only on the ascending `createdAt_1` index.
 
 ## Relationships
-- **`src/modules/feedback/model.ts`** — source of `feedbackRequestSchema`, the object under test.
-- **`src/types/index.ts`** — provides `FeedbackRequestStatus`; the test compares the schema's enum against `Object.values(FeedbackRequestStatus)` to keep the two in lockstep.
-- **`tests/support/schema.ts`** — provides the Mongoose-schema introspection helpers used here: `requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `optionsOf`.
+
+- **`src/modules/feedback/model.ts`** – source of `feedbackRequestSchema`; the sole subject under test.
+- **`src/types/index.ts`** – exports `FeedbackRequestStatus` used to validate the `status` enum values and default.
+- **`tests/support/schema.ts`** – provides the extraction helpers (`requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`) that turn Mongoose schema internals into plain values for `expect(...)`.
 
 ## Notes
-- The test asserts the *absence* of defaults on `respondedAt` / `adminNotes` as a contract guard: adding a `default` would silently mark every new submission as answered.
-- The name-optional assertion is intentional and documented inline; a future "fix" that makes `name` required would violate the stated policy that reporting a problem doesn't require self-identification.
-- The index assertion is a full string match on the compound key order (`status+1, createdAt-1`), so reordering or adding fields to the index will fail the test.
+
+- The retention assertion compares against `RETENTION_SECONDS` (derived from the env var at test time), so changing `NODE_FEEDBACK_RETENTION_DAYS` moves the expected value automatically. It also guards against a TTL sneaking onto the compound index.
+- The dedicated "expires ascending by createdAt" test exists because Mongo silently ignores `expireAfterSeconds` on a descending or compound index; `createdAt` appears in both `createdAt_1` (ascending) and `status_1_createdAt_-1` (descending), and only the former is a valid TTL candidate.
+- `respondedAt` is checked for the *absence* of a default — a default there would mark every incoming ticket as already answered.

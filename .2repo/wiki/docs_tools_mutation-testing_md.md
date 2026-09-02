@@ -2,32 +2,31 @@
 
 ## Purpose
 
-Explains how and why this project uses Stryker mutation testing to verify that the test suite actually asserts meaningful behaviour, not just that code executes. Serves as the conceptual and operational reference for interpreting mutation scores, the per-file ratchet (`mutation-baseline.json`), and the known limitations of the current run (service-layer exclusion, static-mutant cost).
+Explains the project's mutation-testing setup (Stryker): what it measures, how it differs from line coverage, the four distinct thresholds in play, the per-file ratchet (`mutation-baseline.json`), and operational details (concurrency, static mutants, incremental mode, nightly schedule). Exists so a reader can interpret mutation scores and CI failures without reading the Stryker config or the nightly workflow directly.
 
 ## Key elements
 
-- **Stryker configuration** (`stryker.config.json`) — sets `coverageAnalysis: perTest`, concurrency, thresholds (`high`/`low` for report colouring, `break: 60` as a global backstop), and the file globs it mutates.
-- **`mutation-baseline.json` (the ratchet)** — per-file score history. `npm run test:mutation:check` compares each file to its own last score; regressions fail the job, improvements are written back. This is the day-to-day gate, not the `break` threshold.
-- **Outcome vocabulary** — *killed*, *survived*, *no coverage*, *timeout* (counts as killed), *error*. The page defines each precisely and distinguishes survived from no-coverage.
-- **Static mutants** — mutants in module-scope code (e.g. `new Schema({...})`, top-level repository construction). Identified as the single largest cost in this repo's runs because `perTest` analysis cannot skip them.
-- **Incremental mode** — Stryker caches per-mutant results in a committed file; nightly runs pass `--force` to rebuild.
-- **Concurrency** — parallel mutant processes, each running a full Jest runner + in-memory `mongod`. Bounded by memory (ArrayBuffer backing stores), not CPU cores.
-- **Service-layer exclusion** — `tests/integration/`, `tests/contract/` are excluded from the mutation run while `src/modules/*/**/*.ts` is still mutated, causing 153/254 baseline files to score 0%. Documented as a `bson` leak workaround, not an oversight.
-- **Nightly GitHub Actions workflow** — cron at 03:00 UTC; nothing blocks on it; reports next morning.
+- **Four thresholds table** — distinguishes `jest.config.js` coverageThreshold (70 % line-coverage gate), `stryker.config.json` `thresholds.high/low` (report colouring only), `thresholds.break` (global run-level fail at 60), and `mutation-baseline.json` (per-file ratchet).
+- **Glossary** — precise definitions: Mutant, Killed, Survived, No coverage, Timeout, Mutation score, `break` threshold, Baseline/ratchet, Nightly, Concurrency, `coverageAnalysis: perTest`, Static mutant, Incremental.
+- **Danger box (service-layer exclusion)** — `mutate` covers `src/modules/*/**/*.ts` but `tests/integration/` and `tests/contract/` are excluded; 153 of 254 baseline files score 0 % for that reason. Exclusion exists to avoid a `bson` `ArrayBuffer` OOM (17 MiB buffers outside V8 heap).
+- **"What a mutant actually is"** — worked example from `src/modules/cart/repository.ts` showing one source line yielding multiple mutants.
+- **Per-file ratchet section** — how `mutation-baseline.json` compares each file against its own history; `npm run test:mutation:check` is the enforcement gate.
+- **Operational notes** — concurrency limited by memory (each worker spawns an in-memory mongod), `coverageAnalysis: perTest` to reduce runtime, static mutants as the dominant cost, incremental mode (nightly passes `--force`).
 
 ## Relationships
 
-- **`docs/tools/coverage-and-confidence.md`** — explicitly linked from the danger note; explains what a 0% mutation score does and does not mean and how to interpret the four coexisting percentage thresholds.
-- **`docs/reference/scripts.md`** / **`docs/tools/package-scripts.md`** — the `test:mutation:check`, `test:unit:coverage`, and related `npm run` scripts are defined there; this page references them as entry points.
-- **`docs/reference/ops.md`** — the nightly cron workflow and CI job structure that schedules and reports mutation runs live there.
-- **`docs/tools/contract-request-data.md`** — contract tests are part of the excluded suites (`tests/contract/`); understanding why they are excluded requires context from that page.
-- **`docs/tools/concurrency-testing.md`** — shares the "parallel processes each spawning a full test runner + in-memory mongod" constraint; the concurrency limit discussed here is the same resource budget.
-- **`docs/tools/unit-testing.md`** — mutation testing operates *on* the unit/integration test suite; the "killed by a test" outcome depends on the assertions described there.
-- **`docs/reference/tests.md`** — the test-file layout (`tests/integration/`, `tests/contract/`, `src/modules/*/**/*.ts`) referenced by the exclusion logic is documented there.
+- **`docs/tools/coverage-and-confidence.md`** — explicitly cross-referenced from the danger box for interpreting 0 % scores and deciding what to trust.
+- **`docs/tools/package-scripts.md`** — defines the `test:mutation:check` and `test:unit:coverage` scripts this page names.
+- **`docs/tools/unit-testing.md`** — the unit test suite is the killing mechanism Stryker drives; `jest.config.js` coverageThreshold lives here.
+- **`docs/tools/contract-request-data.md`** — contract tests are among the suites excluded from the mutation run (see danger box).
+- **`docs/reference/scripts.md`** — houses `stryker.config.json`, `mutation-baseline.json`, and the GitHub Actions nightly workflow this page describes.
+- **`docs/reference/ops.md`** — operational context for the nightly cron (03:00 UTC) schedule and memory limits.
+- **`docs/reference/tests.md`** — general test-suite structure (`tests/integration/`, `tests/contract/`) that scopes the exclusion.
 
 ## Notes
 
-- **Four percentages, one gate.** `jest.config.js` line-coverage threshold (70%), Stryker `high`/`low` (80/60, cosmetic only), Stryker `break` (60, global backstop), and the baseline ratchet (per-file, no fixed number) are all in play. Only the ratchet fails day-to-day PRs; `break` catches whole-run collapse.
-- **OOM is not fixable via heap flags.** The 17 MiB buffers that cause the 23 OOMs are `ArrayBuffer` backing stores outside V8's heap bounds; `--max-old-space-size` cannot help.
-- **Survived ≠ untested.** "No coverage" (nothing ran the code) costs zero and is easy to triage; "survived" (tests ran but asserted nothing) is the actionable finding. The page stresses keeping these distinct.
-- **`perTest` is the speed mechanism, not a correctness feature.** It narrows which tests run per mutant. Static mutants bypass it entirely, which is why they dominate runtime.
+- A 0 % mutation score for a file in `mutation-baseline.json` does **not** mean the file is untested; it means its killing tests are in the excluded integration/contract suites. 153 of 254 files fall in this category.
+- The `break: 60` threshold is a global backstop, not a per-file target. The actual day-to-day gate is the per-file ratchet (`test:mutation:check`).
+- Concurrency is memory-bound, not CPU-bound: each Stryker worker runs a full test runner plus an in-memory mongod. `--max-old-space-size` does not help because the OOM source is `ArrayBuffer` backing stores, which live outside the V8 heap.
+- Static mutants (code executed at module import time, e.g. `new Schema({...})`) are the single biggest runtime cost in this repo; `coverageAnalysis: perTest` cannot skip them.
+- The nightly workflow passes `--force` to rebuild the incremental cache from scratch, so local incremental runs and nightly runs are not directly comparable in wall-clock time.

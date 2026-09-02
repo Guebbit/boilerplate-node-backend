@@ -2,23 +2,23 @@
 
 ## Purpose
 
-Unit tests for the inventory transition table. Rather than asserting "output equals input," the suite pins down three invariants: only receipt or adjustment changes the unit count, a commit shifts both counters equally so availability is untouched, and reserve / release / expire are exact inverses. No mocks, no database—pure function calls.
+Unit tests for the inventory transition table (`counterDeltaFor`) and the derived `availabilityOf` helper. Rather than restating the table, the tests assert three invariants: (1) only `receive` or `adjust` changes the total unit count, (2) `commit` moves both counters equally so a sale doesn't alter availability, and (3) `release`/`expire` are exact inverses of `reserve`.
 
 ## Key elements
 
-- **`counterDeltaFor` block** — asserts exhaustiveness over every `StockMovementReason` value, that only `commit`/`receive`/`adjust` touch `onHand`, that commit deltas are equal on both counters, that `reserve` + `release`/`expire` sum to zero on both counters, that `reserve`/`release`/`expire` never alter `onHand`, and that `adjust` preserves sign (−3 stays −3).
-- **`availabilityOf` block** — table-driven checks that `onHand − reserved` is the result, that absent counters read as 0 (not Infinity), and that a negative result is clamped to 0.
-- **`EVERY_REASON`** — `Object.values(StockMovementReason)`, used to drive the exhaustiveness and filtering loops.
+- **`EVERY_REASON`** — `Object.values(StockMovementReason)`; iterated to guarantee exhaustive coverage of every reason in the contract.
+- **`describe('counterDeltaFor')`** — suite covering: exhaustive switch hit, exact signed delta per reason (pinned to the OpenAPI table), the "only receipt/adjustment changes onHand" invariant, commit-doesn't-change-availability, reserve/release/expire inverse relationship, and `adjust` sign preservation.
+- **`describe('availabilityOf')`** — suite covering: correct subtraction for known counter pairs, absent-field defaults (reads as 0, not unlimited), and clamping a would-be negative result to zero.
 
 ## Relationships
 
-- **`src/modules/inventory/domain/index.ts`** — re-exports `counterDeltaFor` and `availabilityOf`, which are the two functions under test (imported via `../../domain`).
-- **`src/modules/inventory/domain/transitions.ts`** — defines the actual transition table and the exhaustive switch that `counterDeltaFor` implements; these tests are the behavioral contract for that module.
-- **`src/types/index.ts`** — source of the `StockMovementReason` enum; the exhaustiveness test iterates its values to ensure the table stays in lockstep with the contract.
+- **`src/modules/inventory/domain/transitions.ts`** — defines `counterDeltaFor` and `availabilityOf`, the two functions under test.
+- **`src/modules/inventory/domain/index.ts`** — barrel re-export through which this file imports the two functions (`import { counterDeltaFor, availabilityOf } from '../../domain'`).
+- **`src/types/index.ts`** — source of the `StockMovementReason` enum used to enumerate every movement type and to reference individual reasons in the `it.each` cases.
 
 ## Notes
 
-- The exhaustiveness test is load-bearing: `counterDeltaFor` switches over the enum, so a new reason added to `StockMovementReason` without a table entry is only a compile error if *something* passes that value in. This test is that something.
-- The `adjust` sign test exists to catch an accidental `Math.abs` that would turn write-offs into phantom stock.
-- `availabilityOf` treats missing counters as 0 deliberately—the safe default when the number gates a charge.
-- The negative-clamp case (`onHand: 3, reserved: 8`) is expected to be unreachable given upstream guards, but is asserted to keep it from ever reaching a UI.
+- The exact-delta test case references `openapi.yaml:162-171` as the normative source for the signed table; if that spec changes, this test must change in lockstep.
+- `availabilityOf({})` → `0` is deliberate: an absent counter means "nothing to sell," which is the safe default when the number gates a payment.
+- `adjust` is the only reason whose quantity is pre-signed; a `Math.abs` on that path would silently convert write-offs into stock additions.
+- Uses `Array.prototype.toSorted()` (non-mutating), so the `StockMovementReason` enum ordering in the expected array is independent of the iteration order of `EVERY_REASON`.

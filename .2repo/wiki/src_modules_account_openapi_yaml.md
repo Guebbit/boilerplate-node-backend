@@ -1,31 +1,30 @@
 # src/modules/account/openapi.yaml
 
 ## Purpose
-OpenAPI 3.0.3 specification for the **account** module (v2.0.0). It is the single source of truth for the HTTP contract of everything account-related: profile read/update/delete, password change, session management, and the user's address book. Other tools (code-gen, client SDKs, CI contract tests) consume this file directly.
+
+OpenAPI 3.0.3 contract for the **account** module (v2.0.0). It defines the REST surface for user profile management, password changes, step-up re-authentication, TOTP two-factor lifecycle, session introspection, and logout. Serves as the single source of truth for client SDK generation and API documentation for everything under `/account*`.
 
 ## Key elements
-- **Paths**
-  - `GET /account` — current user profile.
-  - `PUT /account` — update own profile (email, username, locale, image); email change resets `verified`.
-  - `DELETE /account` — initiate account deletion (sends confirmation token).
-  - `POST /account/password` — change password (requires current password).
-  - `POST /account/logout` — revoke only the current session.
-  - `GET /account/sessions` — list active refresh-token sessions.
-  - `DELETE /account/sessions/{sessionId}` — revoke a single session.
-  - `GET /account/addresses` / `POST /account/addresses` — address-book list and create.
-  - `PUT /account/addresses/{addressId}` — update one address entry (default-slot logic).
-  - *(file is truncated; additional address and/or auth paths may follow.)*
-- **Local schemas** (under `components/schemas`): `UpdateAccountRequest`, `UpdateAccountRequestMultipart`, `ChangePasswordRequest`, `SessionsEnvelope`, `AddressesEnvelope`, `AddressInput`, `UpdateAddressRequest`.
-- **Security scheme**: `bearerAuth` (OAuth2/Bearer) used on all mutating and reading endpoints except `POST /account/logout`, which is unauthenticated (operates on the cookie alone).
+
+- **`/account` (GET / PUT / DELETE)** — Read, update (JSON or multipart), and request deletion of the authenticated user's profile. Email changes reset `verified`; role/state/password are deliberately out of scope.
+- **`/account/password` (POST)** — Change password with current-password proof. Revokes all *other* sessions; returns a fresh `AuthTokensEnvelope`.
+- **`/account/reauth` (POST)** — Step-up re-authentication. Resolves a `401 REAUTH_REQUIRED` challenge without destroying the session; re-mints the token.
+- **`/account/2fa/setup` → `/account/2fa/confirm` (POST)** — Two-step TOTP enrollment. Setup returns a one-time plaintext secret + `otpauth://` URI; confirm arms the secret and returns one-time backup codes.
+- **`/account/2fa` (DELETE)** — Disable 2FA; requires a valid TOTP or backup code in the body in addition to the fresh-auth requirement.
+- **`/account/logout` (POST)** — Revokes the *current* session only (no bearer required). Always returns 200.
+- **`/account/sessions` (GET, …)** — List active sessions (issue-agnostic handles, expiry, `current` flag). Truncated in source; likely includes revoke sub-routes.
+- **Local component schemas** — `UpdateAccountRequest`, `UpdateAccountRequestMultipart`, `ChangePasswordRequest`, `ReauthRequest`, `AuthTokensEnvelope`, `TwoFactorSetupEnvelope`, `TwoFactorConfirmRequest`, `TwoFactorConfirmEnvelope`, `TwoFactorDisableRequest`.
 
 ## Relationships
-- **`shared/contracts/openapi.root.yaml`** — The spec `$ref`s shared components from this file for the `UserEnvelope` schema, the `Id` path-parameter schema, and the standard response objects (`Unauthorized`, `Conflict`, `ValidationError`, `InternalError`, `Success`, `NotFound`). Any change to those shared definitions propagates into this contract.
-- **`src/modules/cart/openapi.yaml`** — Sibling module spec in the same `src/modules/` tree. The cart spec may reference the address-book endpoints (e.g. for shipping at checkout) but no direct `$ref` between the two YAML files is visible in this file; the coupling is at the API-surface level (a client calls both modules).
+
+- **`shared/contracts/openapi.root.yaml`** — Heavily referenced for shared schemas (`UserEnvelope`) and standard error/success responses (`Unauthorized`, `Conflict`, `ValidationError`, `InternalError`, `Success`). This file never redefines those; all cross-cutting types live in the root.
+- **`src/modules/cart/openapi.yaml`** — Sibling module spec in the same project. No direct `$ref` to or from this file is visible in the source; they co-exist as independent module contracts under the shared root.
 
 ## Notes
-- **Wrong current password → 422, not 401.** A 401 would be indistinguishable from an expired token to client interceptors and would log the user out. The 422 carries a translated message.
-- **`PUT /account` email change** resets `verified` and triggers a new verification email; a 409 is returned if the new address is already taken.
-- **Address default-slot invariant**: a non-empty book always has exactly one `default` entry. `default: false` or an absent `default` on update is a no-op for the slot (avoids orphaning the book with no default).
-- **`DELETE /account/sessions/{sessionId}`** on the caller's own session is valid and equivalent to `POST /account/logout`, but cannot clear other clients' cookies — their next refresh will simply fail.
-- The spec mixes `application/json` and `multipart/form-data` content types on `PUT /account` to support image upload.
-- Relative `$ref` paths go three levels up (`../../../shared/contracts/…`); keep this in mind when relocating the file.
+
+- **Wrong-password responses are `422`, not `401`.** Both `changePassword` and `reauth` carry an explicit comment: a `401` would be indistinguishable from "token expired" to client interceptors and would log the user out of a perfectly valid session. The `422` carries a translated message.
+- **Account deletion is two-step:** `DELETE /account` only sends a confirmation token to email; actual deletion requires a follow-up call to `/account/delete-confirm` (not shown in this file's visible portion).
+- **2FA setup is idempotent-with-overwrite:** calling `POST /account/2fa/setup` on an account that already has 2FA enabled replaces the pending secret *and clears the confirmed one*. This is the documented "lost my phone, still have my session" recovery path.
+- **`PUT /account` accepts both `application/json` and `multipart/form-data`**, enabling profile-image upload in the same request.
+- **`POST /account/logout` has `security: []`** — it deliberately omits the bearer requirement so a client can call it even with a stale/absent token; the refresh cookie is the operative credential.
+- The file is truncated in the source snapshot; `GET /account/sessions` response schema and any subsequent session-management routes are not fully visible.

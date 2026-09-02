@@ -2,35 +2,41 @@
 
 ## Purpose
 
-The `POST /account/login` HTTP controller. It authenticates a user's credentials via the account service, then mints the full session (refresh token → cookies → short-lived access token). All observability (metrics, audit, analytics) is emitted here rather than in the service layer, because the success signal must fire only after the tokens and cookies actually exist.
+Controller for `POST /account/login`. Receives credentials, validates the optional `remember` tier, runs a pre-login token cleanup, delegates the credential check to the account service, and on success mints a session (refresh cookie + short-lived access token) or returns a 2FA challenge. Success/failure metrics, audit, and analytics are emitted here in the controller rather than in the service.
 
 ## Key elements
 
-- **`postLogin`** (exported) — The route handler. Reads `email`/`password` raw from the body (no Zod parsing), validates the `remember` tier, runs token cleanup, calls `accountService.login`, and on success creates the refresh token, sets cookies, derives the access token, then responds with `{ token }`.
-- **`rememberSchema`** — A Zod schema that validates only the `remember` field against the `RefreshTokenExpiryTime` enum. Parsed *before* the credential check so an invalid tier is rejected with a 422 without touching the secret fields.
-- **`recordLoginFailure`** — Increments the `authLoginTotal{status:"failure"}` metric and emits an audit event with `actor_user_id: 'anonymous'`.
-- **`recordLoginSuccess`** — Increments `authLoginTotal{status:"success"}`, emits an audit event with the resolved user id/role, and fires a `USER_LOGGED_IN` analytics event.
+- **`postLogin(request, response)`** — the sole export. Orchestrates the full login flow:
+  - Destructures `email` / `password` directly from `request.body` without Zod parsing (deliberate: prevents a 422 on short passwords from leaking info or bypassing `recordLoginFailure`).
+  - Parses only `remember` via `rememberSchema` (a `z.enum(RefreshTokenExpiryTime)` guard) before proceeding.
+  - Calls `runTokenCleanup()` → `accountService.login(email, password)` in sequence.
+  - On failure: calls `recordLoginFailure` then `rejectResponse`.
+  - On success with `twoFactorEnabledAt`: returns a 200 with `{ mfaRequired: true, challenge }` (no cookies, no access token).
+  - On plain success: calls `issueSession(response, userId, remember)` to set cookies and obtain an access token, then `recordLoginSuccess`.
+  - All unexpected errors are routed through `rejectDatabaseError`.
+
+- **`rememberSchema`** — module-local Zod schema; the only field in the request body that is formally validated.
 
 ## Relationships
 
-- **`routes.ts`** — Registers `postLogin` as the handler for `POST /account/login`.
-- **`services/index.ts`** — Supplies `accountService.login` (credential check) and `runTokenCleanup` (pre-login housekeeping).
-- **`session/jwt.ts`** — `createRefreshToken` and `createAccessToken` produce the JWTs returned/set by this controller.
-- **`session/cookies.ts`** — `createRefreshCookie` and `createLoggedCookie` write the session cookies onto the response.
-- **`session/config.ts`** — `RefreshTokenExpiryTime` enum constrains the `remember` tier.
-- **`@infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` shape every HTTP reply.
-- **`@infrastructure/http/errors.ts`** — `rejectDatabaseError` handles unexpected throws (token cleanup, JWT ops, service failures).
-- **`@infrastructure/http/controller.ts`** — `rejectValidation` returns the 422 when `remember` is invalid.
-- **`@infrastructure/http/request.ts`** — `callerContextOf` extracts request metadata for audit/analytics payloads.
-- **`@infrastructure/observability/audit.ts`** / **`audit.ts` (module)** — Generic audit emitter + `accountAuditActions.AUTH_LOGIN` constant.
-- **`@infrastructure/observability/analytics/index.ts`** / **`analytics.ts` (module)** — Generic analytics emitter + `accountAnalyticsEvents.USER_LOGGED_IN` constant.
-- **`metrics.ts`** — `authLoginTotal` counter.
-- **`services/token-cleanup.ts`** — Expired-token sweep executed before each login attempt.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/account/routes.ts` | Registers `postLogin` on the `POST /account/login` route. |
+| `src/modules/account/services/index.ts` | Provides `accountService.login` (credential check) and `runTokenCleanup` (stale-token sweep). |
+| `src/modules/account/services/token-cleanup.ts` | Implements the cleanup that `runTokenCleanup` invokes before each login attempt. |
+| `src/modules/account/session/session.ts` | `issueSession` sets refresh/access cookies and returns the access token. |
+| `src/modules/account/session/jwt.ts` | `createMfaChallenge` mints the short-lived 2FA challenge token. |
+| `src/modules/account/session/config.ts` | Supplies the `RefreshTokenExpiryTime` enum used by `rememberSchema`. |
+| `src/modules/account/session/login-observability.ts` | `recordLoginSuccess` / `recordLoginFailure` emit metrics, audit, and analytics events. |
+| `src/infrastructure/http/controller.ts` | Provides `rejectValidation` for the `remember` schema failure path. |
+| `src/infrastructure/http/errors.ts` | Provides `rejectDatabaseError` for the catch-all error path. |
+| `src/infrastructure/http/response.ts` | Provides `successResponse` and `rejectResponse` helpers. |
+| `src/types/index.ts` | Supplies the `LoginRequest` type for the Express request body generic. |
+| `src/modules/account/tests/unit/token-cleanup.test.ts` | Unit-tests the cleanup step this controller depends on. |
 
 ## Notes
 
-- **No Zod on `email`/`password`.** This is a deliberate security choice: validating those fields first would produce a 422 for a too-short password but a 401 for a wrong-but-plausible one, leaking information and skipping the failure audit trail. The stored-hash comparison is the sole decider.
-- **`remember` *is* validated with Zod, and first.** An unknown tier would otherwise produce a cookie with no expiry. Because `remember` is not secret, a 422 here reveals nothing about credentials.
-- **Success observability fires after all three artifacts exist.** `accountService.login` only proves the credentials matched; the tokens and cookies are minted in the controller.
-- **The `.catch` block does NOT call `recordLoginFailure`.** A throw (DB error, JWT failure, cookie write) means the attempt is inconclusive, not a rejected login, so it is routed to `rejectDatabaseError` instead.
-- **Promise-chain style** (`.then`/`.catch`) rather than `async`/`await` throughout the handler.
+- **Validation order is a security decision, not an oversight.** `email` and `password` are intentionally *not* Zod-parsed. A 422 on a too-short password would (a) leak information about the account and (b) skip `recordLoginFailure`, dropping the attempt from the audit trail. Only the stored-hash comparison in the service decides success vs. failure.
+- **`remember` is the one field that *is* parsed**, and it is parsed *first*, because an invalid tier must not propagate into a cookie with no expiry.
+- **2FA short-circuits before `issueSession`.** No cookies or access token are set; the downstream `postLoginTwoFactor` endpoint completes the login.
+- **Errors after the credential check (token cleanup, cookie issuance) are *not* recorded as login failures** — the user may have had the correct password — so they route through `rejectDatabaseError` rather than `recordLoginFailure`.

@@ -2,36 +2,34 @@
 
 ## Purpose
 
-Module manifest for the shopping-cart domain. Registers routes, domain-event subscriptions, demo seeding, and locale paths into the kernel's `AppModule` registry so the cart can be discovered and booted without hard-coding imports elsewhere.
+The manifest (registration entry) for the shopping-cart module. It wires the cart's routes, domain-event subscriptions, demo seeding, and locale directory into the application's module registry so the kernel can mount, seed, and subscribe to the cart as a first-class feature.
 
 ## Key elements
 
-- **`default` (satisfies `AppModule`)** — The module descriptor object. Exports:
-  - `name: 'cart'`, `basePath: '/cart'`
-  - `routes` — re-exported from `./routes`
-  - `subscribe()` — hooks two domain-event handlers (see below)
-  - `seeds` / `seedExport` — demo data lifecycle from `./demo`
-  - `demoShapes` — declares that `carts` is a stored-shape (the stored row is the *input* to the `GET /cart` response, not the response itself)
-  - `locales` — path to the module's locale directory
-
-- **`subscribe()`** — On boot, registers:
-  - `PRODUCT_DELETED` → calls `productRemoveFromCartsById(productId)`
-  - `USER_DELETED` → calls `cartDeleteByUserId(userId)`
+- **Default export (`AppModule`-typed object)** — the module manifest consumed by the kernel registry. Fields:
+  - `name` / `basePath` — identifier (`cart`) and route prefix (`/cart`).
+  - `routes` — the cart router, re-exported from `./routes`.
+  - `subscribe()` — registers two domain-event handlers via `onDomainEvent`:
+    - `PRODUCT_DELETED` → calls `productRemoveFromCartsById(productId)` to strip the product from every cart that references it.
+    - `USER_DELETED` → calls `cartDeleteByUserId(userId)` to purge a user's cart.
+  - `seeds` / `seedExport` — demo-data helpers re-exported from `./demo`.
+  - `demoShapes` — declares that the `carts` demo shape is `'stored'` (the persisted row is the input; the live `GET /cart` response resolves it against the catalogue).
+  - `locales` — path to a `locales/` directory next to this file.
 
 ## Relationships
 
 - **`src/kernel/registry.ts`** — provides the `AppModule` type that the default export satisfies.
-- **`src/kernel/events.ts`** — provides `onDomainEvent`, used inside `subscribe()` to attach event handlers.
-- **`src/modules/products/index.ts`** — source of the `PRODUCT_DELETED` event constant; the cart reacts to product removal by purging the SKU from every cart.
-- **`src/modules/users/index.ts`** — source of the `USER_DELETED` event constant; the cart reacts by deleting the user's cart document.
-- **`src/modules/cart/routes.ts`** — supplies the Express/Fastify router attached to `basePath`.
-- **`src/modules/cart/demo.ts`** — supplies `seedCartsCollection` (insert) and `exportSeededCarts` (teardown) for demo/data-seeding flows.
-- **`src/modules/cart/services/index.ts`** — re-exports `cartDeleteByUserId` and `productRemoveFromCartsById`, the two cleanup actions triggered by the event subscriptions.
-- **`src/modules.ts`** — aggregates this module (via its default export) for kernel boot.
-- **`src/modules/cart/tests/integration/service.test.ts`**, **`stock.test.ts`**, **`src/modules/observability/tests/unit/metrics-overview.test.ts`**, **`src/modules/payments/tests/integration/service.test.ts`**, **`src/modules/products/tests/integration/service.test.ts`** — integration/unit tests that exercise the cart module's registered routes and event handlers.
+- **`src/kernel/events.ts`** — provides `onDomainEvent`, the subscription mechanism used inside `subscribe()`.
+- **`src/modules/cart/routes.ts`** — source of the `router` object mounted at the module's base path.
+- **`src/modules/cart/services/index.ts`** — barrel import (`./services`) supplying `cartDeleteByUserId` and `productRemoveFromCartsById` for the event handlers.
+- **`src/modules/cart/demo.ts`** — supplies `seedCartsCollection` and `exportSeededCarts` for the seeding contract.
+- **`src/modules/products/index.ts`** — supplies the `PRODUCT_DELETED` event token (and, transitively, `productRemoveFromCartsById` lives in cart services but is triggered by this product-domain event).
+- **`src/modules.ts`** — the top-level module aggregator that (presumably) imports this file to register the cart module in the app.
+- **Tests** (`service.test.ts`, `stock.test.ts`, retention tests in orders/payments, `metrics-overview.test.ts`, products `service.test.ts`) — exercise the cart module indirectly through the event subscriptions and service functions wired here.
 
 ## Notes
 
-- The cart deliberately **does not import** `orders`. The module doc-comment states that a checkout is "where a cart stops being a cart," and products/users communicate back to the cart *only* via domain events (`PRODUCT_DELETED`, `USER_DELETED`), keeping the import graph acyclic.
-- The `demoShapes` entry (`carts: 'stored'`) is a contract hint for the demo/observability layer: the stored cart row is the *input* to `GET /cart` (which resolves lines against the live catalogue), not the raw response shape.
-- A migration file `20260808160000-cart-collection.js` (referenced in the header comment) creates this module's DB collection and reads `users` — it is **not** an import of this file.
+- The file imports `USER_DELETED` from `@modules/users`, which is **not** in the listed graph neighbors — that dependency exists but is outside the provided neighbor set.
+- `demoShapes.carts: 'stored'` is a deliberate contract: the `GET /cart` handler re-prices lines against the live catalogue, so the stored document is the *input*, not the API response. Any tooling that reads the demo shape should expect stored (unpriced) rows.
+- Event subscriptions are registered inside a `subscribe()` callback (lazy), not at import time, so the kernel controls when they activate.
+- The migration file `20260808160000-cart-collection.js` (referenced in the docblock) creates the cart collection and reads `users`, but is **not** an import of this file.

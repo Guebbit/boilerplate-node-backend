@@ -2,29 +2,35 @@
 
 ## Purpose
 
-Express middleware guards that sit in front of route handlers to enforce authentication and role-based access. They build on the token resolvers in `kernel/authentication.ts`, attach a caller identity to `request.authContext`, and emit an audit event before every rejection so that no denied request goes unrecorded.
+Express middleware guards that sit in front of module routes to enforce authentication, authorization, and step-up (re-authentication) policies. Built on the token resolvers in `kernel/authentication.ts`, they populate `request.authContext`, gate routes by role, and challenge callers whose session is too old or missing a required auth method. Every denial is audited before the response is sent.
 
 ## Key elements
 
-- **`getTokenBearer(request)`** – Utility that extracts the bearer token from the `Authorization` header (`split(' ')[1]`); returns `undefined` if the header is missing.
-- **`getAuth(request, response, next)`** – "Soft" resolver middleware. Calls `resolveAccessToken`; on success populates `request.authContext` (id, email, username, admin, imageUrl). Never rejects — an absent or invalid token simply leaves `authContext` unset and calls `next()`.
-- **`isAuth(request, response, next)`** – Hard gate. If `authContext` is missing *or* the header carries no token, emits a `SECURITY_UNAUTHORIZED` audit event and returns 401. Otherwise calls `next()`.
-- **`isAdmin(request, response, next)`** – Admin gate. Distinguishes 401 (no caller at all — defensive check, normally unreachable because `isAuth` runs first) from 403 (authenticated but non-admin). Audits each case with a distinct `reason` in metadata.
-- **`isAdminViaCookie(request, response, next)`** – SSE-only variant. Reads the `jwt` cookie, resolves it via `resolveRefreshToken`, and populates `authContext` only if the user is an admin. Returns 401 for missing/expired cookie, 403 for a valid non-admin token. Uses i18n (`t`) for client-facing messages.
+- **`getTokenBearer(request)`** — extracts the bearer token string from the `Authorization` header; returns `undefined` when absent.
+- **`getAuth`** — passive resolver middleware. If a valid token is present it sets `request.authContext`; it never rejects. Mount it before `isAuth`/`isAdmin` on routes that serve both anonymous and authenticated callers.
+- **`isAuth`** — rejects 401 (with audit event) when `request.authContext` is missing or no token was supplied.
+- **`isAdmin`** — rejects 401 (no caller) or 403 (non-admin), each with an audit event. Must run after `isAuth`.
+- **`isAdminViaCookie`** — admin check for SSE endpoints where `EventSource` cannot send an `Authorization` header. Reads the `jwt` cookie, resolves the refresh token (signature *and* DB presence), and rejects 401/403 with i18n error envelopes.
+- **`REAUTH_TIME_CRITICAL`** / **`REAUTH_TIME_SENSITIVE`** — step-up freshness windows (seconds) read from env (`NODE_REAUTH_TIME_CRITICAL`, `NODE_REAUTH_TIME_SENSITIVE`), defaulting to 300 / 900.
+- **`FreshAuthOptions`** — optional `{ methods?: readonly string[] }` that requires every listed RFC 8176 value to appear in `authContext.amr`.
+- **`requireFreshAuth(maxAgeSeconds, options?)`** — curried step-up guard. Rejects 401 with `WWW-Authenticate: Bearer error="insufficient_user_authentication"` and an `errors[].code = 'REAUTH_REQUIRED'` envelope when the caller's `authTime` is older than `maxAgeSeconds` or the `amr` methods are missing.
+- **`requireFreshAuthWhen(predicate, maxAgeSeconds, options?)`** — conditional variant: only enforces freshness when `predicate(request)` returns true (e.g., `PUT /account` only when email is changing).
 
 ## Relationships
 
-- **`src/kernel/authentication.ts`** – Provides `resolveAccessToken` and `resolveRefreshToken`, the two token-validation functions this file delegates to.
-- **`src/infrastructure/observability/audit.ts`** – Supplies `emitAuditEvent`, `buildAuditEvent`, and `coreAuditActions`; every rejection path in this file calls these before responding.
-- **`src/infrastructure/http/request.ts`** – Provides `callerContextOf(request)` used to populate the audit event's caller metadata.
-- **`src/infrastructure/http/response.ts`** – Provides `rejectResponse` for uniform 401/403 responses.
-- **`src/infrastructure/i18n/index.ts`** (via `@infrastructure/i18n`) – Provides the `t` function; used by `isAdminViaCookie` for localized error messages.
-- **Route modules** (`account`, `cart`, `delivery`, `feedback`, `inventory`, `locales`, `observability`, `orders`, `payments`) – Consumers that mount `getAuth` → `isAuth` → `isAdmin` (or `isAdminViaCookie` for SSE routes) as Express middleware chains before their handlers.
+- **`src/kernel/authentication.ts`** — source of `resolveAccessToken` and `resolveRefreshToken`; the only place token verification logic lives.
+- **`src/infrastructure/http/request.ts`** — provides `callerContextOf(request)` used to build audit events.
+- **`src/infrastructure/http/response.ts`** — provides `rejectResponse` for uniform 401/403 shapes.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — provides `t()` for localized error messages in cookie/step-up rejections.
+- **`src/infrastructure/observability/audit.ts`** — provides `emitAuditEvent`, `coreAuditActions`, `buildAuditEvent`; every guard denial emits an audit record here.
+- **`src/infrastructure/runtime/environment.ts`** — provides `environmentNumber` for reading the two reauth TTLs.
+- **Module routes** (`account`, `cart`, `delivery`, `feedback`, `inventory`, `locales`, `observability`, `orders`) — consumers that mount these guards in their Express router chains.
 
 ## Notes
 
-- Ordering is significant: `getAuth` must precede `isAuth`, and `isAuth` must precede `isAdmin`. The 401 branch inside `isAdmin` is a defensive guard for a future mount that skips `isAuth`.
-- `getAuth` is deliberately non-rejecting; it is safe to place on routes that serve both anonymous and authenticated traffic.
-- `isAdminViaCookie` is the *only* guard that uses the refresh-token path (`resolveRefreshToken`) rather than the access-token path. It also verifies the token's presence on the user document, so a revoked token is rejected, not just an expired one.
-- `isAuth` and `isAdmin` call `rejectResponse` without a message array (server-generated 401/403 bodies); `isAdminViaCookie` passes explicit i18n messages because its callers are browsers (SSE) that display them.
-- The i18n import comes from `@infrastructure/i18n` (the barrel), not from `context.ts` directly.
+- **Mount order is mandatory:** `getAuth` → `isAuth` → `isAdmin` / `requireFreshAuth`. `isAdmin` and `requireFreshAuth` include a defensive `if (!request.authContext)` check for the case where `isAuth` is skipped, but the documented contract still requires the full chain.
+- **401 vs 403 convention:** 401 = "authenticate (or re-authenticate) and retry"; 403 = "you are authenticated but not permitted." This is the repo's own rule (see `docs/tools/security.md`), not merely RFC 9470.
+- **`amr` is an array of RFC 8176 strings**, not a boolean. New auth methods (e.g. WebAuthn `'hwk'`) are added by callers of `requireFreshAuth` via `options.methods` without touching the guard code.
+- **`requireFreshAuthWhen` + `multipart/form-data`:** if the predicate inspects `request.body`, the guard must be mounted *after* `upload.single(...)` (or equivalent body parser); otherwise it reads an empty object and gates nothing.
+- **`isAdminViaCookie` is SSE-only.** Do not use it for regular REST routes; it bypasses the access-token path entirely.
+- All rejections emit an audit event *before* calling `rejectResponse`, guaranteeing a trail even if the response middleware chain is interrupted.

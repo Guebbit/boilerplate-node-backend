@@ -2,30 +2,31 @@
 
 ## Purpose
 
-Integration tests for `orderRepository` that verify three contracts against a real MongoDB instance: (1) `create` persists correct order data with embedded product snapshots, (2) `aggregate` is a faithful passthrough that does not reshape Mongo pipeline stages, and (3) `findByIdScoped` returns a usable `id` on both its unscoped and scoped branches while enforcing authorization.
+Integration test suite for `orderRepository`. It verifies three contract areas against a real (test) database: `create` (insert + return a Mongoose document), `aggregate` (raw pipeline passthrough — the repository must *not* reshape Mongo stages), and `findByIdScoped` (two structurally different resolution branches: unscoped/admin hydrated doc vs. scoped/owner transformed aggregate row). The aggregate cases pin the passthrough guarantee so that `$match`/`$count`/`$addFields`/pagination remain a deliberate, tested design rather than an implicit assumption.
 
 ## Key elements
 
-- **`describe('create')`** — four tests confirming that `orderRepository.create` stores the correct `_id`, `email`, `userId`, per-line `quantity`, the full embedded product snapshot (title, price), and multiple line items in a single order.
-- **`describe('aggregate')`** — five tests pinning the raw-passthrough contract: empty `$match`, filtered `$match`, `$count`, `$addFields` (computed totals), and the `$sort`/`$skip`/`$limit` pagination pattern using `DEFAULT_SORT` as the tiebreaker sort.
-- **`describe('findByIdScoped')`** — three tests covering the two structural branches: both branches expose a correct `id`; the scoped branch has `_id` deleted (so `id` is the reliable field); and a scope that does not cover the order returns `undefined`.
-- **`asStub`** (from `tests/support/stub`) — used to safely access optional/unknown-typed fields on results that differ in shape between branches, avoiding TypeScript errors while still asserting runtime values.
+- **`describe('create')`** — Four tests confirming: a Mongoose document is returned with `_id`, `email`, `userId`; per-line `quantity` is stored; the full product snapshot (`title`, `price`) is embedded (not referenced by ObjectId); multiple line-items are supported.
+- **`describe('aggregate')`** — Five tests exercising the raw pipeline passthrough: match-all (`$match: {}`), `$match` filtering, `$count`, `$addFields` with `$sum`/`$map`/`$multiply`, and the `$sort` → `$skip` → `$limit` pagination pattern using `DEFAULT_SORT`.
+- **`describe('findByIdScoped')`** — Three tests covering: `id` is present and correct on *both* branches (unscoped and scoped); the scoped branch has `_id` removed (so `id` is the only reliable identifier); and a scope that doesn't cover the order returns `undefined` (authorization is preserved).
 
 ## Relationships
 
-- **`src/modules/orders/repository.ts`** — the system under test; provides `orderRepository.create`, `.aggregate`, `.findByIdScoped`, and `.visibleScope`.
-- **`src/modules/orders/index.ts`** — re-exports `orderRepository` so tests import via the module barrel rather than the file path.
-- **`src/modules/orders/tests/fixtures.ts`** — supplies `createOrder`, `makeOrder`, and `toOrderItem` for building valid order documents.
-- **`src/modules/users/tests/fixtures.ts`** — supplies `createUser` (supports explicit `email` to avoid unique-index collisions).
-- **`src/modules/products/tests/fixtures.ts`** — supplies `createProduct` with optional field overrides (title, price).
-- **`src/modules/products/index.ts`** — source of the `ProductDocument` type used to cast embedded snapshots.
-- **`src/infrastructure/persistence/search.ts`** — exports `DEFAULT_SORT`, the canonical sort (including tiebreaker) the pagination test depends on.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises and tears down the in-memory MongoDB instance before the suite runs.
+- **`src/modules/orders/repository.ts`** — The unit under test; `orderRepository` is imported via the module's barrel.
+- **`src/modules/orders/index.ts`** — Barrel re-export from which `orderRepository` is imported.
+- **`src/modules/orders/tests/fixtures.ts`** — Provides `createOrder`, `makeOrder`, `toOrderItem` helpers used in every test case.
+- **`src/modules/users/tests/fixtures.ts`** — `createUser` factory for seeding the owner/stranger users.
+- **`src/modules/products/tests/fixtures.ts`** — `createProduct` factory for seeding products with configurable `title`/`price`.
+- **`src/modules/products/index.ts`** — Source of the `ProductDocument` type used for the snapshot assertion cast.
+- **`src/infrastructure/persistence/search.ts`** — Supplies `DEFAULT_SORT`, the canonical sort (including tiebreaker) the pagination test must use.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory/test database before the suite runs.
+- **`tests/support/stub.ts`** — `asStub<T>()` is used in `findByIdScoped` assertions to read fields whose presence is branch-dependent, without TypeScript narrowing.
 
 ## Notes
 
-- The aggregate tests are intentionally written against raw pipeline objects (`$match`, `$count`, `$addFields`, `$sort`/`$skip`/`$limit`) to **pin** that the repository does not inject or reorder stages. Adding or removing a stage in the repository implementation will break these tests.
-- An empty array is not a valid Mongoose aggregate pipeline (throws `MongooseError`), so the "match all" test uses `[{ $match: {} }]`.
-- `findByIdScoped` returns **structurally different** shapes per branch: the unscoped path yields a hydrated Mongoose document (has `_id`, `id`); the scoped path yields an aggregate row where the serializer deletes `_id` after writing `id`. Reading `_id` on the scoped result silently yields `undefined` — the tests assert this explicitly.
-- The `id` assertion uses `String(value) === expected` rather than `toBeDefined()`, guarding against the value being the literal string `"undefined"`.
-- The authorization test creates two users with **explicitly distinct emails** because the `users.email` field is unique; relying on the fixture default would cause a duplicate-key error.
+- An **empty** aggregate pipeline (`[]`) throws `MongooseError: Aggregate has empty pipeline`; the match-all test therefore passes `[{ $match: {} }]` instead.
+- The `findByIdScoped` scoped branch returns an **already-transformed aggregate row**, not a hydrated Mongoose document. It drops `_id` and exposes only `id`; the unscoped branch is a full document. `id` is the only field both branches guarantee.
+- The `id` assertion deliberately uses `String(...).toBe(expected)` rather than `toBeDefined()`, because a value that stringifies to the literal `"undefined"` would pass the looser check.
+- `DEFAULT_SORT` includes a **tiebreaker** stage; a page is only well-defined when the sort preceding `$skip` is a total order.
+- Product is stored as an **embedded snapshot** (title, price) in each order line — not an ObjectId reference. Tests assert the embedded fields directly.
+- The authorization test creates two users with **distinct emails** (not the factory default) because `users.email` has a unique index.

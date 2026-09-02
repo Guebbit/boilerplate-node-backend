@@ -2,36 +2,33 @@
 
 ## Purpose
 
-Defines the admin-only Express router for the `/users` resource. It composes authorization, response-caching, file-upload, and route-flag middlewares with the user controllers to expose search, read, create, update, and delete (soft + hard) operations.
+Defines the Express router for all `/users` admin endpoints (search, read, create, update, delete, and 2FA recovery). Every route is gated behind authentication and the admin role. This file is the single wiring point that composes authorization, caching, rate-limiting, file-upload, and flag middleware around the module's five controllers.
 
 ## Key elements
 
-- **`router`** – The exported Express `Router`. All routes inherit `getAuth → isAuth → isAdmin` via `router.use`.
-- **`cacheUsersSearch`** – A `searchCache('users', searchUsersKeyParameters)` middleware; reads cached search results keyed on the same query params the `getUsers` schema accepts.
-- **Read routes** – `GET /` and `POST /search` use `cacheUsersSearch`; `GET /:id` additionally writes into cache via `setCache(3600, { tags: ['users'] })`.
-- **Write routes** – `POST /`, `PUT /`, `PUT /:id` chain `invalidateCache(['users','account'])` → `upload.single('imageUpload')` → `writeUsers`.
-- **Delete routes** – `DELETE /`, `DELETE /:id` perform a soft delete; `DELETE /:id/hard` applies `routeFlag('hardDelete')` before calling the same `deleteUsers` handler.
-- **Route-order comment** – `POST /search` is deliberately registered before any `/:id` pattern so "search" isn't captured as an id.
+- **`router`** (exported) — the Express `Router` instance; all routes carry `getAuth → isAuth → isAdmin` via a blanket `router.use(...)`.
+- **`cacheUsersSearch`** — a `searchCache('users', …)` reader keyed on the same query params `getUsers` accepts; attached to `POST /search` and `GET /`.
+- **`POST /search`** — placed before `/:id` so "search" is never captured as an id.
+- **`POST /` · `PUT /` · `PUT /:id`** (create / update) — each chains `uploadLimiter → invalidateCache → upload.single('imageUpload') → writeUsers`.
+- **`DELETE /` · `DELETE /:id`** — `invalidateCache → deleteUsers`; soft-delete by default.
+- **`DELETE /:id/hard`** — same as above but adds `routeFlag('hardDelete')`, which sets the flag in the request for `deleteUsers`.
+- **`DELETE /:id/2fa`** — admin-assisted 2FA removal; intentionally bypasses the "prove-the-factor" rule (see controller comment).
+- **`GET /:id`** — `setCache(3600, …) → getUserItem`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/kernel/middlewares/authorizations.ts` | Supplies `getAuth`, `isAuth`, `isAdmin` applied globally to every route. |
-| `src/infrastructure/adapters/storage.ts` | Supplies `upload` (single-file multer) on all write routes. |
-| `src/infrastructure/http/middlewares/cache.ts` | Supplies `searchCache`, `setCache`, `invalidateCache` for read/write cache management. |
-| `src/infrastructure/http/middlewares/route-flag.ts` | Supplies `routeFlag('hardDelete')` to mark the path-segment hard-delete variant. |
-| `src/modules/users/controllers/get-users.ts` | Exports `getUsers` handler and `searchUsersKeyParameters` (cache key config). |
-| `src/modules/users/controllers/get-user-item.ts` | Exports `getUserItem` for `GET /:id`. |
-| `src/modules/users/controllers/write-users.ts` | Exports `writeUsers` for create/update. |
-| `src/modules/users/controllers/delete-users.ts` | Exports `deleteUsers` for soft and hard delete. |
-| `src/modules/users/module.ts` | Mounts the exported `router` into the application. |
-| `src/modules/users/tests/unit/routes.test.ts` | Unit-tests the route wiring. |
-| `tests/cross-cutting/authenticated-controllers.test.ts` | Verifies auth middlewares are present on these routes. |
-| `tests/cross-cutting/write-routes-are-guarded.test.ts` | Verifies write/delete routes carry the required guard chain. |
+- **`@kernel/middlewares/authorizations`** — provides `getAuth`, `isAuth`, `isAdmin`; applied globally to every route.
+- **`@infrastructure/http/middlewares/cache`** — `searchCache` (read-through on list/search), `setCache` (write-through on `GET /:id`), `invalidateCache` (tag-based invalidation on every mutation).
+- **`@infrastructure/http/middlewares/rate-limit`** — `uploadLimiter` guards the three upload-bearing write routes.
+- **`@infrastructure/adapters/storage`** — `upload` (multer instance) handles the single `imageUpload` field on create/update.
+- **`@infrastructure/http/middlewares/route-flag`** — `routeFlag('hardDelete')` signals the hard-delete intent to `deleteUsers`.
+- **Controllers** (`get-users`, `write-users`, `delete-users`, `get-user-item`, `delete-user-two-factor`) — the terminal handlers each route delegates to.
+- **`src/modules/users/module.ts`** — the module entry point that mounts this router into the application.
+- **Tests** — `src/modules/users/tests/unit/routes.test.ts` exercises route wiring; `tests/cross-cutting/write-routes-are-guarded.test.ts` and `tests/cross-cutting/authenticated-controllers.test.ts` assert that mutations require auth/admin.
 
 ## Notes
 
-- **Hard-delete is reachable two ways:** `DELETE /:id?hardDelete=true` (query-param) and `DELETE /:id/hard` (path-segment). Both invoke the same `deleteUsers` handler; the path variant uses `routeFlag` to set the flag in the request context.
-- **Cache tags:** every mutating route invalidates both `'users'` **and** `'account'` tags, so account-level caches are kept consistent.
-- **No wildcard catch-all** is defined; any unlisted path on this router falls through to 404 (or whatever the parent router handles).
+- **Route order is load-bearing.** `POST /search` is registered before `GET /:id`; reordering will cause "search" to be parsed as a user id.
+- **Two spellings for hard-delete.** `DELETE /:id?hardDelete=true` and `DELETE /:id/hard` both reach `deleteUsers` with the same flag; the path form uses `routeFlag` middleware while the query-param form relies on the controller reading the query string. Keep them in sync when changing the flag name.
+- **`invalidateCache` tags are always `['users', 'account']`.** If a new cache tag is introduced in `getUserItem` or `getUsers`, every mutation route here must be updated to invalidate it.
+- **`uploadLimiter` is only on write routes that accept a file.** The `DELETE` routes and `POST /search` do not pass through the limiter.

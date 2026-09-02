@@ -2,26 +2,27 @@
 
 ## Purpose
 
-Integration tests for the root `/` route and the `/observability/*` family (metrics, events, health, audit). They exercise the real application exported from `src/app.ts` through the shared supertest harness, ensuring the actual middleware stack is under test. A database is required (session-cookie auth for the SSE endpoint); Redis is intentionally not started.
+Integration tests for the system route (`/`) and the observability routes (`/observability/*`). They drive the **real** application exported from `src/app.ts` through the shared supertest harness to verify middleware ordering, response shapes, and auth behavior as deployed — not against a privately-assembled Express app.
 
 ## Key elements
 
-- **`setupTestDb()`** — called at module level to provision the test database before any test runs.
-- **`describe('System routes')`** — asserts `GET /` returns 200 with a welcome payload and `x-request-id` header; asserts unknown paths return 404.
-- **`describe('Observability routes')`** — three test groups:
-  - Metrics: `GET /observability/metrics` with a static `Bearer` token (`NODE_METRICS_TOKEN`); verifies Prometheus text exposition format and two expected metric names.
-  - Events (SSE): logs in an admin user to obtain a `jwt` session cookie, then requests `GET /observability/events`. Uses a custom supertest `.parse()` that accumulates chunks and **destroys the stream** as soon as the first `data: ` frame arrives (the endpoint streams indefinitely).
-  - Auth guard: `it.each` over `/observability/health`, `/observability/metrics/overview`, `/observability/audit` asserts a 401 (not 404/500) is returned without credentials, proving the auth middleware is mounted.
+- **`setupTestDb()`** — called once at module level to provision a test database (needed because `/observability/events` requires a session-bound admin user).
+- **`describe('System routes')`** — asserts `GET /` returns 200 with `x-request-id` and a `status: "ok"` body; asserts 404 for unknown paths; asserts a well-formed UUID in `x-request-id` is echoed back verbatim; asserts a malformed (non-UUID) `x-request-id` is **replaced** by a valid UUID rather than reflected.
+- **`describe('Observability routes')`** —
+  - `GET /observability/metrics`: authenticates with a static `Bearer` token (`NODE_METRICS_TOKEN`), expects Prometheus exposition text.
+  - `GET /observability/events`: creates an admin user, logs in to obtain a `jwt` session cookie, then reads the SSE stream using a **custom supertest parser** that accumulates data and destroys the stream as soon as the first `data: ` chunk arrives (the endpoint streams indefinitely).
+  - `it.each` over `/observability/health`, `/observability/metrics/overview`, `/observability/audit`: each must return **401** (not 404/500) without credentials, proving the auth middleware is actually mounted on the path.
 
 ## Relationships
 
-- **`tests/support/http.ts`** — supplies the `api()` factory that wraps supertest against the real app; every request in this file goes through it.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` to create/reset the test database schema.
-- **`src/modules/users/tests/fixtures.ts`** — provides `createAdminUser()` and `PLAIN_PASSWORD`, used to obtain a valid admin session for the SSE authentication test.
+- **`tests/support/http.ts`** — supplies the `api()` helper; the supertest instance wrapping the real app from `src/app.ts`. Every request in this file goes through it.
+- **`tests/support/setup-test-db.ts`** — supplies `setupTestDb()`, called at the top of the module to seed/point at a throwaway database for the session-based SSE test.
+- **`src/modules/users/tests/fixtures.ts`** — supplies `createAdminUser` and `PLAIN_PASSWORD`, used to create an admin account and log in so the SSE events test can present a valid session cookie.
 
 ## Notes
 
-- The SSE test does **not** hold the connection open; it reads one chunk and destroys the stream. A naive `await api().get(...)` would hang forever.
-- The events endpoint authenticates via **session cookie**, not a bearer token, because the browser `EventSource` API cannot set headers. The test mirrors this by extracting the `jwt=…` cookie from a login response.
-- The 401 assertions are deliberate: they verify that the auth middleware is present on the route, not merely that the route exists. A missing middleware would surface as 404 or 500 instead.
-- Redis is **not** started for this file; none of the exercised routes require it.
+- **Redis is intentionally not started.** The routes under test do not require it; spinning it up would add flakiness for no coverage gain.
+- **SSE parsing workaround.** Supertest buffers the entire response by default. The custom `parse` callback collects chunks and calls `stream.destroy()` the moment `data: ` appears, letting supertest settle the promise. Without this the test hangs forever.
+- **`x-request-id` malformed-value test** uses a plain non-UUID string (`'not-a-uuid'`) rather than a CR/LF injection payload, because Node's HTTP client itself rejects literal CRLF in header values before the server ever sees them.
+- **401-not-404 assertion** is deliberate: a 404 could mean the route was never registered; a 401 proves the auth middleware sits in front of a real handler.
+- The metrics token comes from `process.env.NODE_METRICS_TOKEN`; if unset the header is an empty string and the test will fail with a non-200, surfacing a missing env var.

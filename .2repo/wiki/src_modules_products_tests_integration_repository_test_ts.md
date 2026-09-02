@@ -2,26 +2,27 @@
 
 ## Purpose
 
-Integration tests for `productRepository` executed against a real MongoDB instance. Covers CRUD operations (create, find, count, save, delete) and pins the empty-catalogue contract for the aggregate reads (`facets`, `sumReserved`, `availabilityPage`), where a `$group`/`$facet` pipeline returns no row at all rather than a zeroed one.
+Integration test suite for `productRepository` executed against a real MongoDB instance. It verifies CRUD operations, pagination, lean-output guarantees, and the three aggregate reads (`facets`, `sumReserved`, `availabilityPage`)—with dedicated blocks that pin their behavior over an empty catalogue and that distinguish the two intentionally different stock gauges (`countLowAvailability` vs. `sumReserved`).
 
 ## Key elements
 
-- **`describe('productRepository')`** — main suite; each nested `describe` maps to one repository method: `create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`.
-- **`describe('an empty catalogue')`** — isolated suite that wipes the collection in `beforeEach` (`productModel.deleteMany({})`) and asserts the three aggregate methods return safe defaults (`{ categories: [], tags: [] }`, `0`, `{ items: [], totalItems: 0 }`).
-- **`setupTestDb()`** — called at module top-level to provision and connect the test database before any test runs.
-- **`asStub<{ save?: unknown }>`** — used in the `findAll` lean-objects test to assert Mongoose document methods (e.g. `save`) are absent on returned plain objects.
+- **`describe('productRepository')`** — CRUD coverage: `create`, `findById`, `findOne`, `findAll` (including `limit`/`skip`/`active`-filter/lean-object assertions), `count`, `save`, `deleteOne`.
+- **`describe('an empty catalogue')`** — Asserts `facets()` returns `{ categories: [], tags: [] }`, `sumReserved()` returns `0`, and `availabilityPage()` returns `{ items: [], totalItems: 0 }` when no documents exist (the `.at(0)` absent-row arm).
+- **`describe('the two stock gauges count different populations')`** — Encodes the documented rule that `countLowAvailability` is scoped to active (customer-visible) products while `sumReserved` spans all products regardless of `active`.
+- **`setupTestDb()`** (module-level call) — Configures the in-memory or local Mongo connection before any suite runs.
+- **`asStub`** — Imported from `tests/support/stub`; used to assert `findAll` results are lean (no Mongoose `save` method).
 
 ## Relationships
 
-- **`@modules/products`** (`src/modules/products/index.ts`) — imports `productRepository`, the unit under test.
-- **`../../model`** (`src/modules/products/model.ts`) — imports `productModel` solely for `deleteMany({})` cleanup in the empty-catalogue suite.
-- **`@modules/products/tests/fixtures`** (`src/modules/products/tests/fixtures.ts`) — provides `makeProduct` (plain input object) and `createProduct` (helper that inserts via the repository and returns the document).
-- **`@tests/setup-test-db`** (`tests/support/setup-test-db.ts`) — initialises the in-memory or local Mongo instance for the suite.
-- **`@tests/stub`** (`tests/support/stub.ts`) — `asStub` cast helper used to probe for absence of Mongoose methods.
+- **`src/modules/products/index.ts`** — Source of the `productRepository` import (re-exported barrel).
+- **`src/modules/products/model.ts`** — `productModel` is imported directly to call `deleteMany({})` in `beforeEach` for the aggregate test blocks.
+- **`src/modules/products/tests/fixtures.ts`** — Provides `makeProduct` (builds a plain object) and `createProduct` (inserts and returns a Mongoose doc) used throughout.
+- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb` to wire up the test database.
+- **`tests/support/stub.ts`** — Provides `asStub` for type-safe assertion on lean objects.
 
 ## Notes
 
-- The file runs against a **real** Mongo instance (not an in-memory mock), so CI must have a MongoDB available or `setupTestDb` must spin one up.
-- The empty-catalogue suite intentionally **does not** share state with the main suite; its `beforeEach` wipe means the main suite must run first or be independent. In practice Jest runs top-level `describe` blocks in file order, so the main suite seeds data and the empty-catalogue suite wipes it.
-- `findAll` tests assert **lean** (plain-object) output via the `asStub` check — if the repository ever stops calling `.lean()`, this test fails.
-- The `create` test for `imageUrl` does not assert the schema default value itself; it only confirms a supplied URL round-trips. The default is a schema concern, not a repository concern.
+- This is a **real-database** integration test; it does not mock Mongoose. `setupTestDb` is expected to clear/recreate the collection before the suite (or each file run).
+- The "empty catalogue" and "two stock gauges" blocks call `productModel.deleteMany({})` in `beforeEach` for explicit isolation; the CRUD block relies on `setupTestDb`'s per-test teardown.
+- The file documents (via comments) a cross-reference to `docs/modules/inventory-reservations.md` §"The threshold, and its two readers"—the semantic split between `countLowAvailability` and `sumReserved` is a deliberate business rule, not an oversight.
+- `findAll` is asserted to return **lean** objects; if the repository implementation changes to return hydrated docs, the `asStub` assertion will fail.

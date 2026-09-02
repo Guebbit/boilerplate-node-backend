@@ -2,24 +2,24 @@
 
 ## Purpose
 
-Integration tests for the two token-facing methods on the users service — `findByEmail` and `consumeToken`. It verifies that `findByEmail` returns a populated tokens array (not `undefined`) and that `consumeToken` enforces one-time-use semantics with the change persisted to the database.
+Integration tests for the two token-facing service methods on `userService` — `findByEmail` and `consumeToken`. They verify that `findByEmail` returns a populated `tokens` array (not `undefined`) and that `consumeToken` permanently removes a single token while leaving the rest intact, including confirming the removal is persisted rather than just in-memory.
 
 ## Key elements
 
-- **`createUserWithTokens()`** – Local helper that calls the shared `createUser` fixture with two tokens (one `password`/reset, one `delete`) so filter-type and multi-token assertions have realistic data.
-- **`describe('userService.findByEmail', …)`** – Three cases: happy-path lookup, tokens array is present and has length 2 (guards against the `select: false` pitfall), and unknown email resolves falsy.
-- **`describe('userService.consumeToken', …)`** – Four cases: consumed token no longer appears on re-read, sibling tokens are untouched, removal is persisted (verified via a fresh DB read), and an unknown token is a safe no-op.
+- **`createUserWithTokens()`** – Local helper that seeds a user with one `password`-type reset token and one `delete`-type delete token. Tokens are stored as `hashToken(…)` digests because the fixture writes `tokens` directly, bypassing `tokenAdd`.
+- **`describe('userService.findByEmail')`** (3 cases) – Confirms lookup by email, that `found.tokens` is a 2-element array (guarding against the `select: false` undefined-push bug), and that an unknown email resolves falsy.
+- **`describe('userService.consumeToken')`** (4 cases) – Asserts the consumed token is gone on re-read, sibling tokens survive, the removal is persisted (verified via a fresh `userRepository.findOneWithCredentials` call), and an unknown token is a no-op.
 
 ## Relationships
 
-- **`src/modules/users/service.ts`** – The system under test; both `findByEmail` and `consumeToken` are called directly.
-- **`src/modules/users/index.ts`** – Barrel import for `userRepository` and the `Token` type used in assertions and fixture casts.
-- **`src/modules/users/repository.ts`** – `userRepository.findOneWithCredentials` is the re-read mechanism that proves persistence after `consumeToken`.
-- **`src/modules/users/tests/fixtures.ts`** – Provides `createUser` used by both the local helper and the plain-lookup test.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module scope to ensure a real database is available before any test runs.
+- **`src/modules/users/service.ts`** – The module under test; `findByEmail` and `consumeToken` are the two methods exercised here.
+- **`src/modules/users/index.ts`** – Barrel import source for `userRepository`, `hashToken`, and the `Token` type used throughout the file.
+- **`src/modules/users/repository.ts`** – `userRepository.findOneWithCredentials` is called directly in `consumeToken` tests to re-read the persisted document and prove the write actually hit the database.
+- **`src/modules/users/tests/fixtures.ts`** – `createUser` provides the base user-creation path that `createUserWithTokens` builds on.
+- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module load to provision the in-memory/test database before any test runs.
 
 ## Notes
 
-- The module doc-comment clarifies scope: live reset/delete/verify tokens are handled by `accountService.findLiveToken` and are **not** covered here.
-- `findByEmail` deliberately uses `findOneWithCredentials` (rather than the default finder) because `select: false` on `tokens` would leave the array `undefined`; callers immediately `.push` onto it, so a plain finder would throw a `TypeError` one layer away. The second test in the `findByEmail` block exists specifically to pin this contract.
-- `consumeToken` assertions re-read through `userRepository.findOneWithCredentials` rather than trusting the in-memory object, ensuring the test validates a committed DB mutation, not just a local splice.
+- Tokens are always compared as hashes. The fixture stores `hashToken(…)`, not the plaintext value, because it bypasses the service-layer `tokenAdd` that would normally perform the hashing. Passing a plaintext string into the fixture would make `consumeToken`'s hashed lookup silently miss.
+- `findByEmail` relies on `findOneWithCredentials` (not the standard `findOne`) specifically so that the `select: false` `tokens` field is still materialised. The tests encode this as an explicit guard: if the service ever switches back to the plain finder, the "returns the tokens array" case will fail with a `TypeError` at the caller rather than here.
+- Concurrency of `consumeToken` is covered elsewhere (the "concurrency suite" referenced in the module docstring); these tests assert the *outcome* property (token no longer present) rather than racing two callers.

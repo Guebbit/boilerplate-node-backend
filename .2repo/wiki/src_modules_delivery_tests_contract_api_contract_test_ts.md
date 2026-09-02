@@ -2,29 +2,27 @@
 
 ## Purpose
 
-Contract (API-spec) tests for the three `/delivery` routes. Each test issues a real HTTP request and asserts the response both matches the OpenAPI-style spec (via `toSatisfyApiSpec`) and hits the expected status/body shape for a specific audience: public (methods list), owner (shipment read), and staff (courier advance). The file exists to pin that every contract branch is reachable over HTTP; the courier's business-logic rules are deliberately left to the unit suite.
+Contract tests for the three `/delivery` HTTP routes. Each test exercises one endpoint over real HTTP and asserts the response satisfies the registered OpenAPI spec (`toSatisfyApiSpec`). The file intentionally stops at contract conformance; courier ordering/advance logic is covered by the unit suite, not here.
 
 ## Key elements
 
-- **`authenticateWithShipment()`** — local helper that creates a product, an order, transitions it to `shipped` via `orderRepository`, and calls `shipOrder`; returns the bearer token and order for use in subsequent assertions.
-- **`describe('GET /delivery/methods')`** — one test: unauthenticated request returns 200 with a non-empty `methods` array, satisfying the spec.
-- **`describe('GET /delivery/order/{orderId}')`** — three tests covering: 200 for the owner (tracking code prefixed `TRK-`), 404 when the order is not yet shipped, and 401 when unauthenticated.
-- **`describe('POST /delivery/advance')`** — two tests: 200 for admin (reports `advanced: 1`), 403 for a regular user.
+- **`authenticateWithShipment`** (local helper) — Creates a user, product, and order; updates the order to `shipped`; calls `shipOrder` to create the parcel. Returns the bearer token and order reference. Used by the shipment-read and advance tests.
+- **`describe('GET /delivery/methods')`** — Single unauthenticated request; asserts 200, non-empty `methods` array, and spec conformance. Documents that rates are public pre-purchase information.
+- **`describe('GET /delivery/order/{orderId}')`** — Two cases: (1) owner with a shipped order receives 200 and a `trackingCode` containing `TRK-`; (2) owner with an unshipped order receives 404. Both checked against the spec.
+- **`describe('POST /delivery/advance')`** — Admin calls the tick endpoint; asserts 200 and `data.advanced === 1`.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — side-effect import (`'@tests/contract'`) that registers the `toSatisfyApiSpec` custom matcher used in every assertion.
-- **`tests/support/http.ts`** — provides `api()` (HTTP client) and `authenticateAs()` (auth helper).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top-level to initialise a clean test database before any test runs.
-- **`src/modules/delivery/service.ts`** — `shipOrder` is invoked in the setup helper to create the parcel that the "owner reads shipment" and "courier advance" tests depend on.
-- **`src/modules/orders/index.ts`** — re-exported `orderRepository` is used to transition an order from `pending` → `shipped` during setup.
-- **`src/modules/orders/repository.ts`** — the underlying `updateStatusIfIn` call made through the re-export.
-- **`src/modules/products/tests/fixtures.ts`** — `createProduct` seeds a product for the order fixture.
-- **`src/modules/orders/tests/fixtures.ts`** — `createOrder` and `toOrderItem` build the order used in every test scenario.
+- **`tests/support/contract.ts`** — Imported for side-effect only; registers the `toSatisfyApiSpec` Jest matcher used in every assertion.
+- **`tests/support/http.ts`** — Provides `api()` (request builder) and `authenticateAs()` (token acquisition) used throughout.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is invoked at module top-level to reset the database before each test.
+- **`src/modules/delivery/service.ts`** — `shipOrder` is called in the helper to produce the parcel that the read endpoint returns.
+- **`src/modules/orders/index.ts`** / **`src/modules/orders/repository.ts`** — `orderRepository.updateStatusIfIn` transitions the order from `pending` → `shipped` before `shipOrder` is invoked.
+- **`src/modules/orders/tests/fixtures.ts`** — `createOrder` and `toOrderItem` build the order fixture.
+- **`src/modules/products/tests/fixtures.ts`** — `createProduct` builds the product fixture.
 
 ## Notes
 
-- The file does **not** test courier ordering/sorting rules; those are explicitly deferred to the unit suite (stated in the module JSDoc).
-- `setupTestDb()` is a top-level call, not wrapped in `beforeAll`; it runs once when the module is first imported.
-- Every positive and negative case calls `toSatisfyApiSpec()`, meaning the spec validation is the primary assertion and the status/body checks are secondary confirmations.
-- The `POST /delivery/advance` admin test relies on `authenticateWithShipment` having already created and shipped one parcel (so `advanced` equals 1); it does not clean up between the two tests in the block.
+- Three distinct auth levels are exercised: unauthenticated (methods), owner (shipment read), admin (advance). This mirrors the route access model and ensures the correct 401/403 contracts aren't silently skipped.
+- `setupTestDb()` runs at import time (module scope), not inside `beforeEach`; the contract-support module presumably wires the per-test reset.
+- The 404 "not shipped" case creates its own order without calling `shipOrder`, relying solely on the status update (or absence thereof) to drive the error path.

@@ -1,25 +1,19 @@
 # CHANGELOG.md
 
 ## Purpose
-
-Records every notable change to the API contract (`openapi.yaml`) since version 3.0.0. It exists so that both humans and tooling can determine what broke, what was added, and *why*—using the working definition that a breaking change is one a generated client cannot absorb without being regenerated.
+Records all notable changes to the API contract (`openapi.yaml`), defining a **breaking change** as one a generated client cannot absorb without being regenerated. Serves as the canonical history for consumers of the contract and the repository's own tooling gates.
 
 ## Key elements
-
-- **`[3.0.0]` (2026-08-23)** — The major release that established the modular-monolith architecture (domain folders under `src/modules/`, four-tier dependency direction, per-module contract fragments assembled into `openapi.yaml`). Documents all breaking contract changes (stock reservation model, `tenant` scope, readiness payload shape, audit pagination, etc.) and added features (demo profile, payments, delivery, analytics, credential budgets).
-- **`Unreleased` → Fixed** — Bug fixes that correct contract declarations (missing `422` responses, invalid GET request bodies, undeclared `hardDelete` params) and a cart-line visibility gap. No contract surface change for the cart fix.
-- **`Unreleased` → Changed** — Audit vocabulary consolidation (action names collapsed; `outcome`/`actor_role` fields carry the distinction), runtime-neutral `runtimeVersion` field, implementation-agnostic contract prose, `FeedbackRequestStatus` schema extraction, shared cache identity for GET/POST search pairs, and removal of unreachable request bodies on GET list endpoints.
-- **`Unreleased` → Added** — `x-alias-of` extension on fourteen operation pairs (invisible to orval, no generated-type change), enforced by `contract-aliases.test.ts`.
+- **`[3.0.0]` (2026-08-23)** — Major release introducing the modular-monolith + domain-layer architecture. Documents all breaking contract changes (stock reservation model, translation `scope`→`tenant`, locale objects, `/health` readiness shape, audit pagination, whoami 401 semantics, single emitter per analytics event, demo dataset declarations), new features (demo profile, payments, delivery, inventory movements, analytics, credential budgets, customer surface, sessions), and breaking tooling changes (strict linting, `complete:fix` gate, byte-mirrored contract requirement).
+- **`Unreleased / Fixed`** — Post-3.0.0 corrections: missing `422` declarations on id-taking routes, `GET /feedback` body removal, `hardDelete` param consistency, cart-line visibility guard for hidden/soft-deleted products, `canTransition` no-op path actor check, deleted-account `401` alignment, `shippingCost` default removal, and server-side password complexity policy (`PasswordNew` schema).
+- **`Unreleased / Changed`** — Audit vocabulary consolidation (action names de-duplicated against `outcome`/`actor_role` fields), cart-product-eligibility centralisation in `cart/services/items.ts`, **breaking**: `nodeVersion`→`runtimeVersion` in readiness payload, removal of Node-specific descriptions from the shared contract, and further contract hygiene (content truncated).
 
 ## Relationships
-
-- **CONTRACT_PLAN_POLYMORPHISM.md** — Documents the polymorphism strategy for contract types; the changelog's breaking-change entries (stock model, scope→tenant, readiness vocabulary) are the concrete contract shifts that plan anticipated.
-- **README.md** — Points to this changelog as the source of truth for what changed between client-compatible releases; the "demo profile" and "modular monolith" entries here are the canonical descriptions the README references.
-- **asyncapi.public.yaml** — The public async event contract that this changelog's "one emitter per analytics event" and "payments/delivery behind provider ports" entries govern; the changelog is the record of when and why event names or shapes shifted.
+- **`asyncapi.public.yaml`** — Graph-adjacent contract file. The changelog references the shared contract as byte-identical across three repositories and notes that "byte-mirrored contract files require the paired frontend at the matching commit," placing `asyncapi.public.yaml` in the same multi-repo contract-sharing arrangement, though the changelog body does not name it directly.
 
 ## Notes
-
-- The file is **append-only within a release cycle**: the `Unreleased` section is the live working area; once a version is cut, its block is frozen and a new `Unreleased` begins.
-- Every entry that mentions a test file (e.g. `contract-error-declarations.test.ts`, `audit-actions.test.ts`, `contract-search-parity.test.ts`) is not merely documentation—those tests are the enforcement mechanism. If you change the contract without updating the corresponding test, CI fails.
-- `x-alias-of` entries explicitly state they produce **zero generated-type diff**; do not remove them assuming they are inert comments—they are load-bearing for the paired frontend's route-discovery.
-- The 3.0.0 block notes that `main` forked from the 2.1.0 line; there is no 2.x → 3.0 migration guide in this file. The "Breaking — contract" bullet list *is* the migration guide.
+- The contract being documented is **`openapi.yaml`**, not `asyncapi.public.yaml`; the changelog explicitly scopes itself to that file.
+- `main` forked from the 2.1.0 line before 3.0.0 was cut, so every 3.0.0 entry is new relative to 2.1.0.
+- The file is truncated in the source; the `Unreleased / Changed` section is incomplete and may contain additional entries.
+- Several fixes reference specific test files that act as living contracts (e.g., `tests/cross-cutting/contract-error-declarations.test.ts`, `tests/cross-cutting/audit-actions.test.ts`)—updating the changelog without updating the corresponding test is a likely source of drift.
+- The `PasswordNew` schema intentionally avoids a `pattern` regex because lookahead-based patterns break the fuzz generator in `tests/support/spec-arbitraries.ts`.

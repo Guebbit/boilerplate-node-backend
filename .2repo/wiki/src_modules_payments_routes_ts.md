@@ -1,28 +1,30 @@
 # src/modules/payments/routes.ts
 
 ## Purpose
-
-Express router that defines the four payment endpoints (intent, confirm, read-by-order, refund) and enforces the authentication/authorization boundary for all of them. It exists so the module's public surface is a single `router` export that `module.ts` can mount, while keeping auth policy in one visible place.
+Defines the Express route table for all payment endpoints (intent creation, confirmation, order lookup, refund). Enforces a layered auth model at the router level: every route requires authentication, all money-moving routes additionally require a fresh re-authentication session, and the refund route is admin-only.
 
 ## Key elements
-
-- **`router`** (exported `Router`) — the sole export; all other identifiers are route registrations or imports.
-- **`router.use(getAuth, isAuth)`** — applies authentication to every subsequent route; no payment endpoint is reachable anonymously.
-- **`POST /intent`** → `postPaymentIntent` — freezes an order's price for later confirmation.
-- **`GET /order/:orderId`** → `getPaymentByOrder` — read-only lookup of the payment behind an order.
-- **`POST /order/:orderId/refund`** → `postPaymentRefund`, additionally guarded by `isAdmin` — operator-only money return.
-- **`POST /:id/confirm`** → `postPaymentConfirm` — card-dialog submit that finalises a payment.
+- **`router`** (exported `Router`) — the single exported value; mounted by the payments module.
+- **Router-level middleware** (`getAuth`, `isAuth`) — applied via `router.use`, so every route is authenticated.
+- **`POST /intent`** — creates a payment intent; guarded by `requireFreshAuth(REAUTH_TIME_CRITICAL)` → `postPaymentIntent`.
+- **`GET /order/:orderId`** — reads back the payment for an order; auth only, no fresh-session requirement (read-only) → `getPaymentByOrder`.
+- **`POST /order/:orderId/refund`** — admin-only refund; middleware order is `isAdmin` *then* `requireFreshAuth(REAUTH_TIME_CRITICAL)` → `postPaymentRefund`.
+- **`POST /:id/confirm`** — confirms a previously created intent; guarded by `requireFreshAuth(REAUTH_TIME_CRITICAL)` → `postPaymentConfirm`.
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — source of the three middleware functions (`getAuth`, `isAuth`, `isAdmin`) consumed on every route.
-- **`src/modules/payments/controllers/post-payment-intent.ts`**, **`post-payment-confirm.ts`**, **`get-payment-by-order.ts`**, **`post-payment-refund.ts`** — the four handler functions wired to their respective routes.
-- **`src/modules/payments/module.ts`** — mounts this `router` into the application's payment route tree.
-- **`src/modules/payments/tests/unit/routes.test.ts`** — unit tests that assert route shape and middleware ordering.
-- **`tests/cross-cutting/authenticated-controllers.test.ts`** — verifies that every controller registered here sits behind `isAuth`.
-- **`tests/cross-cutting/write-routes-are-guarded.test.ts`** — verifies that all `POST` routes here are guarded (auth, and `isAdmin` where applicable).
+- **`src/kernel/middlewares/authorizations.ts`** — supplies all five auth primitives (`getAuth`, `isAuth`, `isAdmin`, `requireFreshAuth`, `REAUTH_TIME_CRITICAL`) consumed by this file.
+- **`src/modules/payments/controllers/post-payment-intent.ts`** — handler for `POST /intent`.
+- **`src/modules/payments/controllers/post-payment-confirm.ts`** — handler for `POST /:id/confirm`.
+- **`src/modules/payments/controllers/get-payment-by-order.ts`** — handler for `GET /order/:orderId`.
+- **`src/modules/payments/controllers/post-payment-refund.ts`** — handler for `POST /order/:orderId/refund`.
+- **`src/modules/payments/module.ts`** — mounts `router` into the application (the consuming module).
+- **`src/modules/payments/tests/unit/routes.test.ts`** — unit tests exercising route definitions and middleware order.
+- **`tests/cross-cutting/authenticated-controllers.test.ts`** — verifies every route is behind auth.
+- **`tests/cross-cutting/step-up-auth-routes.test.ts`** — verifies money-moving routes carry `requireFreshAuth`.
+- **`tests/cross-cutting/write-routes-are-guarded.test.ts`** — verifies all `POST` routes have appropriate guards.
 
 ## Notes
-
-- The `isAdmin` guard is applied **per-route** (only on `/order/:orderId/refund`), not at the router level. The other three routes are auth-only. The file's header comment frames this as an intentional split: a refund left open to any authenticated caller would be a self-service withdrawal, while locking intent/confirm to admins would make checkout impossible.
-- Route ordering matters: `GET /order/:orderId` and `POST /order/:orderId/refund` are registered before the catch-all `POST /:id/confirm` so that Express doesn't misroute a refund as a confirm.
+- Middleware order on the refund route is deliberate: `isAdmin` runs *before* `requireFreshAuth`. The comment in the file states an admin session moving money out is "worth more, not less," so both gates must pass and the admin check is the cheaper, earlier one.
+- `GET /order/:orderId` is the **only** route without `requireFreshAuth`; it is read-only and does not move money.
+- The file exports a single value (`router`); there are no named function exports.
+- Route param naming is intentionally inconsistent (`:id` vs `:orderId`) to reflect that `/confirm` operates on the payment identifier while the other two operate on the order identifier.

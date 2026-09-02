@@ -2,27 +2,25 @@
 
 ## Purpose
 
-Unit tests for the `makeProduct` catalogue fixture builder. They verify that the builder produces valid, insertable documents, respects the omit-unset-field convention, preserves falsy overrides, performs type coercion on date strings, and derives timestamps from the ObjectId — protecting both the test suite and the published demo dataset that reuses the same function.
+Unit tests for the `makeProduct` fixture builder. This test suite is critical because `makeProduct` is **not test-only**: it seeds the shipped demo dataset via `demo.ts` and `scripts/export-demo-dataset.ts` (published as `db/demo/demo-data.json`). A defect here propagates into a published artifact, not just a test run.
 
 ## Key elements
 
-- **`describe('makeProduct', …)`** — single suite containing seven focused assertions:
-  - Bare call yields a complete document (`_id`, `title: 'Test Product'`, `price: 9.99`).
-  - `id` override is stored as a real `ObjectId`.
-  - Arbitrary field overrides replace schema defaults.
-  - Unspecified optional fields (`active`, `onHand`, `reserved`, `categories`, `tags`, `description`) are **absent** from the object (no key present as `undefined`).
-  - Falsy overrides (`active: false`, `onHand: 0`) are **retained**, not dropped by compaction.
-  - `deletedAt` supplied as an ISO string is converted to a `Date` instance.
-  - `createdAt` is derived from the embedded ObjectId timestamp when no explicit timestamp is given.
+- **`describe('makeProduct')`** — single test block with seven cases covering the builder's contract:
+  - *No-override default* — asserts `_id`, `title`, and `price` are present (the schema's required fields).
+  - *ID override* — a hex string is accepted and stored as a real `Types.ObjectId`.
+  - *Field override* — `title`/`price` can be replaced; other defaults remain untouched.
+  - *Unspecified fields are absent* — `active`, `onHand`, `reserved`, `categories`, `tags`, `description` must **not** exist as own keys (so Mongoose `default:` applies).
+  - *Falsy overrides preserved* — `active: false` and `onHand: 0` survive (compacting must key on `undefined`, not truthiness).
+  - *`deletedAt` ISO→Date* — a seed-file string is converted to a `Date` instance.
+  - *Timestamp derivation* — when no explicit timestamps are given, `createdAt` is back-calculated from the ObjectId's embedded timestamp.
 
 ## Relationships
 
-- **`src/modules/products/fixtures.ts`** — sole production import (`makeProduct`). Every test case exercises this function directly; the test file exists solely to pin its contract.
-- **`mongoose`** — provides `Types.ObjectId` used to construct and inspect ObjectId values and extract embedded timestamps.
+- **`src/modules/products/fixtures.ts`** — the module under test; provides the `makeProduct` export. This file imports it via `@modules/products/fixtures` and exercises its full behavioral contract.
 
 ## Notes
 
-- The `compact` rule is the critical invariant: a key present as `undefined` blocks Mongoose's `default:` from applying, so the builder must delete unset overrides entirely rather than leaving `undefined` values. The test at line ~45 asserts this with `Object.hasOwn`.
-- Compaction must key on `undefined` specifically, not on falsiness — the `active: false` / `onHand: 0` test exists because a falsy-based drop would silently remove the two values the visibility and out-of-stock test branches depend on.
-- The module-level doc comment notes that `makeProduct` is **not test-only**: `demo.ts` and `scripts/export-demo-dataset.ts` consume it to produce `db/demo/demo-data.json`. A regression here ships to a published artifact, not just to a failing unit test.
-- `deletedAt` coercion (string → `Date`) is tested because seed files store ISO strings while the schema expects a `Date`; without the conversion the soft-delete code path is never actually exercised.
+- The "omits unspecified fields" test is the guard for `stripUndefined`. If the builder ever starts emitting `{ active: undefined }`, Mongoose sees the key, skips the schema default, and produces an unpublished product — silently, in both tests and the demo export.
+- The falsy-preservation test (`active: false`, `onHand: 0`) exists specifically to prevent a regression where `stripUndefined` accidentally compacts on falsiness rather than strict `undefined`.
+- The ObjectId-timestamp test pins a subtle derivation: `createdAt` is not an independent random value but is read from the hex id's 4-byte timestamp prefix. Changing the id generation strategy without updating this test will break timestamp consistency.

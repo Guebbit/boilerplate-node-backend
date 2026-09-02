@@ -1,25 +1,23 @@
 # src/modules/products/fixtures.ts
 
 ## Purpose
-
-Builds a single product fixture intended for the demo dataset (`./demo`) and any test that needs a catalogue row. It intentionally leaves schema defaults unset, pinning only the required `title` and `price` placeholders, so that `scripts/export-demo-dataset.ts` reads seeded rows back through the real serializer rather than a hand-built guess.
+Builds a single product fixture with only the required `title` and `price` fields placeholdered, leaving all other fields to Mongoose schema defaults. Serves both the demo dataset (`./demo`) and any test that needs a catalogue row, ensuring seeded rows are read back through the real serializer rather than a hand-crafted guess.
 
 ## Key elements
-
-- **`ProductOverrides`** (type) — Derived from the generated `Product` via `OverridesFor<Product>`, so adding a field to the schema automatically widens the override surface without manual upkeep.
-- **`ProductFixture`** (type) — The concrete shape returned by `makeProduct`: `Partial<ProductDocument>` intersected with `Pick<ProductSnapshot, '_id' | 'title' | 'price'>`. Those three factory-set fields are required (not optional) so callers can read `fixture.title` without a non-null assertion.
-- **`makeProduct`** (function) — Accepts an optional `ProductOverrides` object and returns a `ProductFixture`. Spreads `identityOf` for `_id`/timestamps, sets `title: 'Test Product'` and `price: 9.99`, then applies `compact` to the caller's overrides (including `deletedAt` coerced via `toDate`). Any field the caller omits is left to Mongoose's `default:`.
+- **`ProductOverrides`** — type alias for `OverridesFor<Product>` (derived from the generated `Product` type, not restated). Accepts any field a caller wants to pin; omits everything else.
+- **`ProductFixture`** — return type of `makeProduct`. Extends `Partial<ProductDocument>` with `Pick<ProductSnapshot, '_id' | 'title' | 'price'>`, making those three fields non-optional so callers can dereference them without `!`.
+- **`makeProduct(overrides?)`** — the sole builder function. Fills `title: 'Test Product'` and `price: 9.99`, spreads `identityOf` for `_id`/`createdAt`/`updatedAt`, and merges any caller-supplied fields via `stripUndefined`. Returns a `ProductFixture` ready for `productRepository.create`.
 
 ## Relationships
-
-- **`src/infrastructure/persistence/fixtures.ts`** — Source of the generic utilities `identityOf`, `compact`, `toDate`, and the `OverridesFor` helper that all module-level fixtures share.
-- **`src/modules/products/model.ts`** — Provides the `ProductDocument` and `ProductSnapshot` types that shape the `ProductFixture` return type.
-- **`src/types/index.ts`** — Supplies the generated `Product` type, from which `ProductOverrides` is derived.
-- **`src/modules/products/demo.ts`** — Consumes `makeProduct` to seed the demo catalogue.
-- **`src/modules/products/tests/fixtures.ts`**, **`src/modules/products/tests/unit/fixtures.test.ts`**, **`src/modules/products/tests/integration/repository.test.ts`** — Test files that build or assert against product fixtures produced here.
+- **`src/infrastructure/persistence/fixtures.ts`** — provides the generic helpers `identityOf`, `stripUndefined`, `toDate`, and the `OverridesFor<T>` type used by all domain fixtures.
+- **`src/modules/products/model.ts`** — supplies the `ProductDocument` and `ProductSnapshot` types that shape `ProductFixture`.
+- **`src/types/index.ts`** — source of the generated `Product` type that `ProductOverrides` is derived from.
+- **`src/modules/products/demo.ts`** — primary consumer; calls `makeProduct` to seed the demo catalogue.
+- **`src/modules/products/tests/fixtures.ts`** — test-local fixture layer that likely re-exports or extends `makeProduct` for test scenarios.
+- **`src/modules/products/tests/unit/fixtures.test.ts`** — unit-tests the `makeProduct` output shape and defaults.
+- **`src/modules/products/tests/integration/repository.test.ts`** — feeds `makeProduct` output into `productRepository.create` to exercise the real serializer.
 
 ## Notes
-
-- `available` is accepted in the overrides object but **silently ignored** (it is not a Mongoose schema path). To control stock, pin `onHand` / `reserved` instead.
-- Because the fixture deliberately omits schema-defaulted fields, tests that assert on those fields must do so *after* a round-trip through the repository, not on the in-memory fixture object.
-- `compact` strips `undefined` values from the overrides spread, so passing a key with an explicit `undefined` value is a no-op.
+- `available` appears in `ProductOverrides` (inherited from `Product`) but is **not** a Mongoose schema path — it is accepted and silently ignored. To fix availability, pin `onHand` or `reserved` instead.
+- The file intentionally does **not** set schema-defaulted fields (e.g., `stock`, `metadata`). This is a deliberate design choice: the demo export script (`scripts/export-demo-dataset.ts`) relies on reading rows back through the real serializer, so the fixture must exercise the default pipeline rather than bypass it.
+- All exports are type-level or a single function; there is no class or side-effectful module state.

@@ -2,25 +2,25 @@
 
 ## Purpose
 
-Unit tests for `readInput` (and, by import, `callerContextOf`, `extractAndValidateId`, `isValidObjectId`) in `@infrastructure/http/request`. Because `readInput` is reached by every controller, the integration and contract suites exercise it without probing its edge cases; this file pins the precedence chain, ID resolution, and multipart transport-decoding rules that are easy to regress silently.
+Unit tests for the `readInput` function (and, by import, `callerContextOf`, `extractAndValidateId`, `isValidObjectId`) in `@infrastructure/http/request`. The file exists because `readInput` is a small, always-in-the-path helper whose failure mode (a crash on a body-less request under Express 5) is invisible to integration and contract suites that only ever send well-formed payloads.
 
 ## Key elements
 
-- **`makeRequest(overrides)`** — Builds a minimal Express `Request` stub via `asStub`. Simulates `req.is(type)` so it returns the matched type, `false`, or `null` (no body) depending on the supplied `contentType`. This is how tests control the transport path without a real HTTP server.
-- **`makeResponse()`** — Returns a stub `Response` plus a `sent` bag capturing `status` and `json` calls, for exercising `rejectResponse` paths.
-- **`describe('readInput') → 'precedence'`** — Verifies the per-surface winner (`search`→body, `write`→params, `delete`→params, `path`→params), fallback when the higher source is absent, key-union across sources, source visibility (`path` sees only params), explicit-`undefined` key removal, body-less requests, and the "no pagination default" rule.
-- **`describe('readInput') → 'ids'`** — Covers first-source-wins resolution, empty-string fall-through, array-valued keys (takes first entry), and absent-key omission.
-- **`describe('readInput') → 'transport decoding'`** — Multipart-only coercion: booleans, string arrays, numbers (including the `''`→string and unparseable-string pass-through). Explicitly asserts that JSON bodies are **not** type-coerced.
+- **`makeRequest(overrides)`** — builds a minimal Express `Request` stub via `asStub`. Simulates Express 5's `body: undefined` (not `{}`) when `contentType` is omitted, and models `req.is(type)` returning `null` / the matched string / `false`.
+- **`makeResponse()`** — returns an Express `Response` stub plus a `sent` object that records `.status()` and `.json()` calls.
+- **`describe('readInput')`** — the sole test block. Sub-groups:
+  - **`precedence`** — pins which source (params / body / query) wins for each `surface` value (`search`, `write`, `delete`, `path`), verifies fallback, key-union, source-exclusion, explicit-`undefined` key dropping, body-less survival, and no-defaulting for pagination.
+  - **`ids`** — covers the `ids` option: first-source-wins, body fallback, empty-string fall-through, repeated-key-as-array (takes first entry), and key-absence preservation.
+  - **`transport decoding`** — multipart-only coercion of booleans, string arrays, and numbers; verifies that unparseable numbers stay as strings (no `NaN`), empty strings are not coerced to `0`, and JSON bodies are left untouched so downstream validators see the raw type error.
 
 ## Relationships
 
-- **`src/infrastructure/http/request.ts`** — The module under test. `readInput`, `callerContextOf`, `extractAndValidateId`, and `isValidObjectId` are imported and exercised here.
-- **`tests/support/stub.ts`** — Provides `asStub<T>`, the generic helper used to construct the `Request` and `Response` stand-ins without pulling in a full Express instance.
+- **`src/infrastructure/http/request.ts`** — the module under test. This file imports `readInput`, `callerContextOf`, `extractAndValidateId`, and `isValidObjectId` and asserts their observable contract.
+- **`tests/support/stub.ts`** — provides `asStub<T>()`, the typed-stub factory used to construct the `Request` and `Response` fakes without a full Express app.
 
 ## Notes
 
-- **Express 5 body quirk:** When a request carries no body, Express 5 leaves `req.body` as `undefined` (Express 4 gave `{}`). `makeRequest` mirrors this by defaulting `body` to `undefined`, not `{}`. Tests for body-less requests (e.g., `DELETE /cart/:productId`) exist specifically to guard against a `TypeError` that would surface only in production.
-- **Multipart type coercion is transport-conditional.** The test file asserts that JSON bodies are left untouched so downstream validators (Zod) can reject type mismatches with their own messages. Coercion applies only when `req.is('multipart/form-data')` is truthy.
-- **Empty string ≠ zero for numbers.** `Number('')` is `0`, but the code deliberately leaves `''` as a string so the validator can distinguish "not sent" from a legitimately free (zero-priced) product.
-- **No pagination defaults here.** Absent `page`/`pageSize` must surface as `undefined`; defaults and bounds live in `normalizePagination` (`@infrastructure/persistence/search`), tested separately.
-- **Precedence is per-surface, not per-call.** The `it.each` table pins all four surfaces at once so a precedence inversion is caught in a single failing row rather than hiding behind which array a controller happened to pass.
+- The tests are written against **Express 5** semantics: `request.body` is `undefined` (not `{}`) when a request has no body. `makeRequest` omits `contentType` to reproduce this, so any regression that assumes a `{}` default will surface here.
+- Multipart decoding (booleans, numbers, stringArrays) is **transport-conditional** — it only fires when `req.is('multipart/form-data')` is truthy. JSON bodies must pass through unchanged so that `z.number()`-style validators can reject a string `'101.5'` with the contract's own message.
+- `Object.keys(input).toHaveLength(0)` is used explicitly (not just `toEqual({})`) to guard against spread preserving `undefined`-valued keys, which Mongoose would interpret as a filter clause.
+- The precedence table is asserted as a single `it.each` over a const tuple rather than per-surface tests, making the mapping auditable in one place.

@@ -2,35 +2,40 @@
 
 ## Purpose
 
-Module entry-point for the `account` mount. It wires the kernel's authentication resolver (mapping verified JWTs to a minimal user shape) and declares the module's manifest — routes, event subscriptions, demo seeds, and locale path — so the runtime can mount `/account` and react to user lifecycle events.
+Entry point and module manifest for the **account** module. At import time it installs the kernel's authentication resolver (so every guard can identify the caller before the first request), and it declares the `AppModule` manifest that the kernel uses to mount routes, subscribe to domain events, validate config, and seed demo data. The module owns the address-book collection and all token/auth-flow logic, while the User document itself remains the shared kernel with the `users` module.
 
 ## Key elements
 
-- **`resolve(verify)`** — Factory that takes a token verifier (`verifyAccessToken` / `verifyRefreshToken`) and returns an async resolver: token → `userRepository.findById` → a projection limited to `{ id, email, username, admin, imageUrl }`. Returns `undefined` when the user no longer exists.
-- **`registerAuthResolver({ fromAccessToken, fromRefreshToken })`** — Called at import time (side-effect, no connection). Installs the two resolvers into the kernel so every downstream guard can identify the caller before the first request arrives.
-- **`export default { … } satisfies AppModule`** — The manifest object consumed by the module registry. Fields:
-  - `routes` — the account router from `./routes`.
-  - `subscribe()` — Registers two domain-event handlers: `USER_DELETED` → cascade-delete the user's address book; `USER_SETUP_REQUESTED` → trigger the password/email setup flow (no-ops if the user was already deleted).
-  - `seeds` / `seedExport` — Demo-seed functions from `./demo` for the `addressBooks` collection.
-  - `demoShapes` — Declares that address books are stored opaquely (never serialized raw).
-  - `locales` — Path to the module's locale directory.
+- **`resolve(verify)`** – Internal factory that builds a token→identity resolver. Verifies the token, rejects tokens carrying a `purpose` claim (MFA challenge tokens must never authenticate on their own), looks the user up via `userRepository.findAuthenticatableById`, and projects only the fields the kernel declares (`id`, `email`, `username`, `admin`, `imageUrl`, `authTime`, `amr`, `analyticsConsent`). Returns `undefined` when the user no longer exists.
+- **`registerAuthResolver({ fromAccessToken, fromRefreshToken })`** – Called at module top-level; wires `resolve(verifyAccessToken)` and `resolve(verifyRefreshToken)` into the kernel.
+- **`export default … satisfies AppModule`** – The manifest object:
+  - `routes: router` (from `./routes`)
+  - `requiredConfig` – three env vars (`NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, `NODE_TOTP_ENCRYPTION_KEY`) with a 16-char minimum
+  - `subscribe()` – registers handlers for `USER_DELETED` (cascades address-book deletion) and `USER_SETUP_REQUESTED` (triggers `requestAccountSetup`)
+  - `seeds` / `seedExport` – demo seeding functions from `./demo`
+  - `demoShapes`, `locales` – demo and i18n metadata
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Imports the `AppModule` type; the default export here is shaped to satisfy it.
-- **`src/kernel/authentication.ts`** — Calls `registerAuthResolver` at import time to install the token→user resolution pipeline.
-- **`src/kernel/events.ts`** — Subscribes to `USER_DELETED` and `USER_SETUP_REQUESTED` via `onDomainEvent`.
-- **`src/modules.ts`** — Consumes this module's default export as part of the application's module list.
-- **`src/modules/account/session/jwt.ts`** — Provides `verifyAccessToken` and `verifyRefreshToken` used by the resolvers.
-- **`src/modules/account/services/addresses.ts`** — Provides `addressesDeleteByUserId`, the cleanup action fired on `USER_DELETED`.
-- **`src/modules/account/services/authentication.ts`** — Provides `requestAccountSetup`, invoked on `USER_SETUP_REQUESTED`.
-- **`src/modules/account/demo.ts`** — Supplies the seed / export functions for demo data.
-- **`src/modules/account/routes.ts`** — Supplies the router mounted at `/account`.
-- **`src/modules/cart` (tests), `src/modules/payments` (tests), `src/modules/observability` (tests), `scripts/run-prism-smoke-test.ts`** — Exercise the auth resolver or event handlers indirectly; no direct import of this file.
+| Neighbor | Interaction |
+|---|---|
+| `src/kernel/authentication.ts` | Imports `registerAuthResolver`; calls it at import time to install the token→identity resolver. |
+| `src/kernel/events.ts` | Imports `onDomainEvent`; used inside `subscribe()` to listen for `USER_DELETED` and `USER_SETUP_REQUESTED`. |
+| `src/kernel/registry.ts` | Imports the `AppModule` type; the default export is type-checked against it. |
+| `src/modules.ts` | This module's manifest is registered there as part of the application's module list. |
+| `src/modules/account/routes.ts` | Imports `router` and places it in the manifest under `basePath: '/account'`. |
+| `src/modules/account/services/addresses.ts` | Imports `addressesDeleteByUserId`; called in the `USER_DELETED` handler. |
+| `src/modules/account/services/authentication.ts` | Imports `requestAccountSetup`; called in the `USER_SETUP_REQUESTED` handler. |
+| `src/modules/account/session/jwt.ts` | Imports `verifyAccessToken`, `verifyRefreshToken`, and the `TokenData` type used by `resolve`. |
+| `src/modules/account/demo.ts` | Imports `seedAddressBooksCollection` and `exportSeededAddressBooks` for the `seeds` / `seedExport` manifest fields. |
+
+The file also imports from `@modules/users` (`userRepository`, `USER_DELETED`, `USER_SETUP_REQUESTED`) to read the shared User document and react to its lifecycle events.
 
 ## Notes
 
-- The auth resolver is installed **at import time**, not inside a lifecycle hook. Every guard in the app depends on it being present before the first request; there is no "late registration" path.
-- The user projection is deliberately minimal (`id`, `email`, `username`, `admin`, `imageUrl`). The kernel must not learn the full document shape — the `User` record lives in the `users` module and is the one shared schema in the repo. A schema change to `users` requires agreement with this module.
-- `USER_SETUP_REQUESTED` handler resolves `undefined` for already-deleted users and silently drops the request; no error is surfaced.
-- The address book is the **only** collection this module owns outright; the `User` document is shared with `users` and kept replaceable for a future identity provider.
+- **Import-time side effect.** `registerAuthResolver` runs the moment the module is loaded, not inside a lifecycle hook. Every auth guard in the app depends on this being in place before the first request.
+- **Stale vs. fresh fields.** `authTime` and `amr` are read from the (potentially old) token claims, while `analyticsConsent` is read fresh from the User document on every request so a consent withdrawal takes effect immediately.
+- **MFA bypass is centralized.** The `claims.purpose` check lives in `resolve`, the single choke-point through which every access/refresh token passes, rather than being scattered across individual routes.
+- **`findAuthenticatableById` vs. `findById`.** The resolver deliberately uses the scoped lookup so a deactivated or soft-deleted account stops authenticating on the very next request, not just at the next login.
+- **Config validation is intentionally minimal.** The 16-character `minLength` rejects empty/truncated values; it does not assess cryptographic strength—that is an operator concern.
+- **Shared User schema.** Both this module and `users` read and write the same User document. Any schema change must be agreed upon in both places.

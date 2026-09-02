@@ -2,31 +2,34 @@
 
 ## Purpose
 
-Defines the Express route table for the feedback/contact module. It exposes one public visitor route (the contact form) and a set of admin-only routes for reading and updating submitted feedback. The single positional auth gate (`router.use`) separates the two halves.
+Express route table for the feedback/contact module. Defines one public endpoint (visitor contact form) and a set of admin-only endpoints for reading, updating, and deleting feedback submissions. The critical architectural constraint is positional: the single public route is mounted *above* a `router.use(getAuth, isAuth, isAdmin)` gate, so any route added below that line is automatically admin-only.
 
 ## Key elements
 
-- **`router`** (exported) — The Express `Router` instance registered by the module. Contains all feedback/contact endpoints.
-- **`POST /contact`** — Public; calls `invalidateCache(['feedback'])` then `postFeedbackContact`. The only route above the auth gate.
-- **`POST /search`** — Admin; runs `cacheFeedbackSearch` then `getFeedback`. Exists because a GET body has no defined semantics; carries filters via request body.
-- **`GET /`** — Admin; shares the same `cacheFeedbackSearch` middleware as `POST /search`, so either warms the other's cache entry.
-- **`PUT /:id`** — Admin; calls `invalidateCache(['feedback'])` then `putFeedbackStatus`.
-- **`cacheFeedbackSearch`** — Local const wrapping `searchCache('feedback', searchFeedbackKeyParameters, 600)` with key `feedback:search`. TTL is 600 s.
+- **`router`** (exported) — the Express `Router` instance, mounted by the module.
+- **`POST /contact`** — sole public route. Chain: `submissionLimiter` → `invalidateCache(['feedback'])` → `postFeedbackContact`.
+- **`router.use(getAuth, isAuth, isAdmin)`** — positional auth gate; every route below it requires an authenticated admin.
+- **`cacheFeedbackSearch`** — a `searchCache('feedback', searchFeedbackKeyParameters, 600)` instance shared by both read routes.
+- **`POST /search`** — admin filter/search endpoint (POST body carries filters that GET can't; shares cache key with `GET /`).
+- **`GET /`** — admin list-all endpoint; shares the same cache key as `POST /search`.
+- **`PUT /:id`** — admin status update; invalidates the feedback cache before delegating to `putFeedbackStatus`.
+- **`DELETE /:id`** — admin delete; invalidates the feedback cache before delegating to `deleteFeedback`.
 
 ## Relationships
 
-- **`@kernel/middlewares/authorizations`** — Supplies `getAuth`, `isAuth`, `isAdmin`; applied as a single `router.use` gate that protects every route defined after it.
-- **`@infrastructure/http/middlewares/cache`** — Supplies `invalidateCache` (used by the two write routes) and `searchCache` (used by the two read routes).
-- **`./controllers/post-feedback-contact`** — Terminal handler for `POST /contact`.
-- **`./controllers/get-feedback`** — Terminal handler for both `GET /` and `POST /search`; also exports `searchFeedbackKeyParameters` which defines the cache-key shape.
-- **`./controllers/put-feedback-status`** — Terminal handler for `PUT /:id`.
-- **`module.ts`** — Consumes the exported `router` to mount it in the application.
-- **`tests/cross-cutting/authenticated-controllers.test.ts`** — Asserts that any route reading the caller sits below the auth gate; catches a public route accidentally placed after `router.use`.
-- **`tests/cross-cutting/write-routes-are-guarded.test.ts`** — Asserts write routes (`POST`, `PUT`) are behind authentication.
-- **`tests/unit/routes.test.ts`** — Unit-level route-table tests for this file.
+- **`@kernel/middlewares/authorizations`** — supplies `getAuth`, `isAuth`, `isAdmin`; applied via `router.use` to gate all admin routes.
+- **`@infrastructure/http/middlewares/rate-limit`** — supplies `submissionLimiter`, applied only to `POST /contact`.
+- **`@infrastructure/http/middlewares/cache`** — supplies `searchCache` (read-path caching) and `invalidateCache` (write-path invalidation) used across routes.
+- **`./controllers/post-feedback-contact`**, **`./controllers/get-feedback`**, **`./controllers/put-feedback-status`**, **`./controllers/delete-feedback`** — terminal handlers for each route; `get-feedback` also exports `searchFeedbackKeyParameters` used to build the cache key.
+- **`./module.ts`** — consumes the exported `router` to register the module with the application.
+- **`tests/cross-cutting/authenticated-controllers.test.ts`** — asserts admin routes are reachable only by authenticated admins (catches a route accidentally placed above the gate).
+- **`tests/cross-cutting/write-routes-are-guarded.test.ts`** — asserts all write (POST/PUT/DELETE) routes pass through the auth chain.
+- **`./tests/unit/routes.test.ts`** — unit tests for route registration and middleware ordering.
 
 ## Notes
 
-- **Positional auth gate.** The `router.use(getAuth, isAuth, isAdmin)` line guards only routes defined *below* it. Adding a new public route requires inserting it *above* that line; appending it at the bottom makes it admin-only silently.
-- **Shared cache key.** `GET /` and `POST /search` both use the same `searchCache` instance (`feedback:search`), so a request to either warms the other's entry. The `POST /search` response is still `no-store` at the HTTP level — the cache is Redis-side only.
-- **Route order within the admin half.** `POST /search` is declared before `GET /` so its literal path can't be swallowed by a future `/:id` GET pattern.
+- **Positional auth is the invariant.** A new public route must be inserted *above* the `router.use(getAuth, …)` line; a new admin route goes below. There is no per-route auth annotation.
+- **`POST /search` vs `GET /`** exist side-by-side because a GET body is semantically undefined and the cache layer keys on query parameters only. Both share the cache key `feedback:search`; hitting either warms the other.
+- **`submissionLimiter` ≠ credential limiters.** It budgets *successful* form submissions (spam), not failed auth attempts. See `docs/tools/security.md#the-rate-limit-budgets`.
+- **Write routes call `invalidateCache(['feedback'])`** before the handler runs, so the 600 s search cache is bust on every mutation.
+- **`POST /search` is Redis-side caching only** — the wire response is `no-store`; it is not a browser-cacheable POST.

@@ -1,56 +1,40 @@
 # Repository Overview
 
-## What This Is
+## What This Repository Is
 
-A TypeScript e-commerce backend API with a contract-first approach. It manages users, accounts/sessions, cart, checkout, orders, inventory (with reservations), delivery, feedback, and audit logging. Data is stored in MongoDB (evidenced by collection-based migrations). The API supports multi-tenant localization (locale collections, base language, tenant scoping) and image pipeline processing.
+A **TypeScript e-commerce application** with a multi-tenant, multi-locale architecture. It handles users/accounts, orders, cart, product inventory, and stock management. The codebase integrates with **Stripe** (payments), **Cloudflare** (CDN/imaging), and **Vercel** (hosting/edge). It ships with a **demo mode**, **social login**, a **feature-flag (boolean gates) system**, and an **image pipeline**.
 
-## Main Areas
+The project is contract-first: API specifications are maintained in **AsyncAPI**, **Zod schemas**, and exported to **Bruno / Insomnia / Mockoon / Postman** collections at the repository root.
 
-| Area | Purpose |
-|------|---------|
-| `src/infrastructure/http/` | Request/response handling, controller base class (hub connecting to ~110 files) |
-| `src/infrastructure/i18n/` | Internationalization context and resolution (~86 file connections) |
-| `src/infrastructure/adapters/` | Logger and external-service adapters |
-| `src/modules/` | Domain logic: orders, users, cart, inventory, delivery, feedback, account, audit-logs, inventory-reservations |
-| `src/types/` | Shared TypeScript type definitions |
-| `api/schemas.zod.ts` | Zod schema definitions used for request/response validation |
-| `db/migrations/` | Sequential MongoDB collection/index migrations |
-| `db/demo/` | Seed/demo data assembly |
-| `docs/` | VitePress-powered developer documentation |
-| Contract files (root) | OpenAPI, AsyncAPI, Bruno, Insomnia, Mockoon, and Postman artifacts for API testing and mocking |
-| `docker-compose.yml` / `.production.yml` | Local and production service orchestration |
-| `tests/support/` | Test DB setup and shared test helpers |
+## Main Areas & Relationships
 
-## How the Pieces Relate
+| Area | Path | Role |
+|---|---|---|
+| **Infrastructure (cross-cutting)** | `src/infrastructure/` | HTTP layer (request, response, controller), i18n/locale context, adapters (logger). These files are the most heavily imported in the codebase (50–121 dependents). |
+| **Domain modules** | `src/modules/` | Business logic per entity: `users`, `orders`, and (inferred from migrations) products, cart, inventory. Each module typically exposes a `service` and an `index` barrel. |
+| **Shared types** | `src/types/` | Central type definitions imported across the codebase (~89 dependents). |
+| **Database** | `db/` | Migrations (chronological, MongoDB-style collections), demo seed data, cache utilities, and a script runner. |
+| **API contracts** | Root-level `*.json`, `*.yml`, `*.yaml`, `api/` | AsyncAPI specs, Zod schemas, and client-tool collections. Keep in sync via the workflow described in `docs/api/`. |
+| **Documentation site** | `docs/` | VitePress site covering getting-started, per-role e-commerce guides (shopper, manager, warehouse, support), API reference, and module docs. |
+| **Tests** | `tests/` | Test setup (shared DB fixture) and suites. A dedicated audit doc tracks correlated blind spots. |
+| **Ops / Deployment** | `docker-compose*.yml`, `EXTERNAL_SERVICE_*.md` | Local and production Docker stacks; planning docs for each external service. |
+| **Planning & feedback** | Root-level `*.md` | Changelog, feedback log, and feature-planning notes (image pipeline, social login, etc.). |
 
-```
-Contracts (api/, *.yml, *.json)
-        │
-        ▼
-Infrastructure (HTTP layer, i18n, logger)
-        │
-        ▼
-Modules (orders, users, cart, inventory, …)
-        │
-        ▼
-Data (MongoDB collections, migrations, cache)
-```
+**Relationship in one line:** `src/infrastructure` provides the HTTP + i18n + logging primitives → `src/modules` uses them to implement domain logic → `db/` persists state → contracts at the root define the external API surface → `docs/` and test suites keep everything verifiable.
 
-Each module exposes a service layer; the HTTP controller in `infrastructure` dispatches to those services. Contracts at the repo root define the external API surface independently of runtime code. The `docs/` site mirrors the module structure for human readers.
+## Where to Start Reading
 
-## Where to Start
+1. **`README.md`** – project purpose, quick-start, and pointer to the docs site.
+2. **`docs/getting-started.md`** (and `docs/getting-started-production.md` for prod) – how to run locally.
+3. **`src/infrastructure/http/`** – `request.ts`, `response.ts`, `controller.ts`: the HTTP contract every module follows.
+4. **`src/infrastructure/i18n/`** – locale resolution and context; affects every user-facing response.
+5. **`src/modules/users/`** and **`src/modules/orders/`** – two of the most connected modules; read their `index.ts` (barrel) then `service.ts` to see domain flow.
+6. **`db/migrations/`** – read in chronological order to understand the data model evolution.
+7. **`docs/demo-ecommerce/`** – role-based walkthroughs (shopper → manager → warehouse → support) that illustrate end-to-end scenarios.
 
-1. **`CLAUDE.md`** – project conventions and AI-assistant guidance.
-2. **`README.md`** – quick-start and high-level context.
-3. **`docs/getting-started.md`** – how to run locally (Docker, migrations, demo data).
-4. **`docs/modules/index.md`** – one-page summary of each domain module and its responsibilities.
-5. **`src/modules/orders/service.ts`** – a representative module service to see the typical request→service→DB flow.
+## Conventions Evident in the Repo
 
-## Notable Planning / Process Docs
-
-- `CONTRACT_PLAN_POLYMORPHISM.md` – approach to polymorphic response schemas.
-- `IMAGE_PIPELINE_PLAN.md` – image processing pipeline design.
-- `INFRASTRUCTURE_LAYOUT_PLAN.md` – rationale for the `src/infrastructure/` split.
-- `REINVENTING_THE_WHEEL.md` / `LODASH.md` – team decisions on library usage.
-
-These are design discussions, not runtime code.
+- **Contract-first:** change an API → update AsyncAPI / Zod → regenerate client collections.
+- **i18n is pervasive:** ~92 files touch the i18n index; assume every user-facing string is locale-scoped.
+- **Migrations are append-only** and timestamped; do not edit historical files.
+- **Demo mode** lives under `db/demo/` and is assembled separately from production data.

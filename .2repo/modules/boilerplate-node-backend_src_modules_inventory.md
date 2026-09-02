@@ -6,54 +6,56 @@ tags:
 type: module
 module: src/modules/inventory/
 files: 24
-updated: 2026-08-31T20:54:38.804053+00:00
+updated: 2026-09-02T18:34:07.061438+00:00
 ---
 
 # src/modules/inventory/
 
 ## Purpose
 
-The inventory module is the sole writer of `Product.onHand` and `Product.reserved` counters. It owns the full stock-counter lifecycle—receipts, stocktake adjustments, reservation holds (reserve → commit / release / expire), and the append-only stock-movement ledger that records every delta. Customer-facing availability is not a route here; it is a derived field on the product object. Everything in this module is admin-gated and exists to keep a truthful, replayable record of why a counter changed.
+The inventory module owns every mutation of the `Product.onHand` and `Product.reserved` counters. It manages the full reservation lifecycle (reserve → commit / release / expire), maintains an append-only stock-movement ledger, and exposes a small set of admin-facing HTTP endpoints for stocktake, receipts, and reservation sweeps. Customer-facing availability is *not* a route here; it is derived from the counters and surfaced as a field on the product object.
 
 ## Key parts
 
-- **Domain rules** (`domain/transitions.ts`, `domain/index.ts`) — Pure, I/O-free definitions of how each of the six transitions mutates `onHand`/`reserved`, plus the single canonical availability formula. The barrel enforces the lint boundary so consumers never reach into Express or Mongoose.
-- **Service layer** (`service.ts`) — The single application-level chokepoint for every counter change. Guarantees a counter move and its ledger row are inseparable via conditional writes, implements the reserve/commit/release lifecycle, and runs the externally-triggered expiry sweep.
-- **Persistence** (`model.ts`, `repository.ts`) — Mongoose schemas for the two inventory-owned collections (StockMovement ledger, Reservation holds) and the repository built on the shared `createRepository` factory.
-- **HTTP surface** (`routes.ts`, `controllers/`, `openapi.yaml`) — Express route table (all admin-only), thin controllers that validate and delegate, and the OpenAPI contract pinning the wire format.
-- **Module wiring** (`module.ts`, `index.ts`, `config.ts`, `audit.ts`, `events.ts`, `metrics.ts`) — Kernel registration, the public import surface, the two deployment knobs (reservation TTL, low-stock threshold), the audit-action vocabulary, the single `inventory.reservation_expired` domain event, and two Prometheus gauges.
-- **Tests** (`tests/`) — Contract tests against the OpenAPI spec, a property-based ledger-replay test over random operation sequences, integration tests for exactly-once semantics, and unit tests for the transition table, schema shapes, and route guard coverage.
+- **Domain layer** (`domain/transitions.ts`, `domain/index.ts`) — Pure, I/O-free functions that define what each of the six stock-movement transitions does to the two counters and what "available" means to a customer. Exposed through a single barrel that lint enforces as dependency-free.
+- **Service** (`service.ts`) — The single application-level chokepoint. Implements reserve/commit/release/expire with conditional writes (no Mongo transactions), the externally-driven expiry sweep, and the guarantee that a counter move and its ledger row are inseparable.
+- **Controllers & routes** (`controllers/`, `routes.ts`) — Thin HTTP adapters for five admin endpoints (`/levels`, `/movements`, `/receipts`, `/adjustments`, `/reservations/sweep`). Every route sits behind an admin-only auth chain.
+- **Data layer** (`model.ts`, `repository.ts`) — Mongoose schemas for the two inventory-owned collections (StockMovement ledger, Reservation holds) and the domain-specific queries the service needs, built on the shared repository factory.
+- **Module wiring** (`module.ts`, `index.ts`, `events.ts`, `audit.ts`, `metrics.ts`, `config.ts`) — Registration manifest, public barrel (the only import surface for sibling modules), the single domain event (`inventory.reservation_expired`), audit-action registration, two Prometheus gauges, and the two deployment knobs (reservation TTL, low-stock threshold).
+- **OpenAPI contract** (`openapi.yaml`) — Authoritative REST specification for the five endpoints.
+- **Tests** (`tests/`) — Unit tests for the transition table and router surface; integration tests for service semantics against real MongoDB; a property-based ledger-replay test (fast-check + real Mongo); and contract tests that pin every response branch to the OpenAPI spec.
 
 ## How it connects
 
-- **products** — Stock counters are columns on the product document; inventory is the *only* writer of those columns. Catalogue reads never join into inventory.
-- **orders / payments / cart** — The reserve → commit / release lifecycle is driven by the originating domain (checkout, payment confirmation, cancellation). Each of those domains writes its own audit row; inventory writes the ledger row and mutates the counter. The `inventory.reservation_expired` event is consumed by the orders module to trigger its own cancellation path. Cart's stock tests exercise the cross-module reserve/release flow.
-- **delivery** — Shares the same "external caller ticks a sweep" pattern (cron/CI hits `POST /inventory/reservations/sweep` the same way it hits `POST /delivery/advance`); no internal scheduler exists.
-- **infrastructure / adapters** — Repositories are built on the shared `createRepository` factory; the module registers itself with the kernel and augments the kernel's `DomainEventMap` and `AuditActionMap`.
-- **tests/support, tests/cross-cutting** — Shared test harnesses and cross-module scenario suites that this module's tests build on (e.g., the real-MongoDB integration setup, API-spec assertion helpers).
+- **Products (`src/modules/products/`)** — The stock counters are columns on the product document. Inventory is the *sole* writer of those counters; the products module owns the document schema and all other fields.
+- **Orders (`src/modules/orders/`)** — Orders are the primary lifecycle caller: checkout triggers `reserve`, order completion triggers `commit`, and cancellation triggers `release`/`expire`. Each originating domain audits its own transition; inventory only audits the three admin-initiated actions (receive, adjust, sweep). The `inventory.reservation_expired` event is consumed by orders to clean up the affected order.
+- **Payments (`src/modules/payments/`)** — Payment settlement is the external signal that triggers `commit` for a held reservation.
+- **Cart (`src/modules/cart/`)** — Cross-module stock checks during cart/checkout are tested in `src/modules/cart/tests/` and depend on the availability verdict exposed by the inventory domain layer.
+- **Delivery (`src/modules/delivery/`)** — Shares the same "no internal scheduler" arrangement: an external caller hits `POST /inventory/reservations/sweep` the same way it hits `POST /delivery/advance`.
+- **Infrastructure / kernel (`src/infrastructure/`, `src/infrastructure/adapters/`)** — The module registers itself through the kernel's `AppModule` mechanism, augments the kernel's `DomainEventMap` and `AuditActionMap`, and consumes the shared `createRepository` factory and Prometheus gauge registration.
+- **Cross-cutting tests (`tests/cross-cutting/`, `tests/support/`)** — Shared test harnesses and fixtures used by the integration and contract suites.
 
 ## Where to start
 
-1. **`domain/transitions.ts`** — ~60 lines of pure functions defining what each of the six transitions does to `onHand` and `reserved` and the availability formula. No imports beyond types; reading it gives you the entire business rule in one pass.
-2. **`service.ts`** — Shows how those pure transitions are wired to conditional Mongo writes, the ledger, the reservation lifecycle, and the sweep. Tracing one function (e.g. `reserve`) from input to the final `applyTransition` call is the fastest way to see the module's core guarantee: *a counter move and its ledger row are inseparable*.
+Read `domain/transitions.ts` first — it is the entire mental model in roughly forty lines: six transitions, two counters, one availability rule. Then read `service.ts` to see how those pure rules are wrapped into the conditional-write lifecycle and the sweep loop. Together they explain every other file in the module.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_inventory["src/modules/inventory/"]
-    m_root["/ (repository root)<br/>44 files"]
+    m_root["/ (repository root)<br/>46 files"]
     m_src["src/<br/>22 files"]
     m_src_infrastructure["src/infrastructure/<br/>43 files"]
     m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>15 files"]
-    m_src_modules_cart["src/modules/cart/<br/>37 files"]
+    m_src_modules_cart["src/modules/cart/<br/>38 files"]
     m_src_modules_delivery["src/modules/delivery/<br/>20 files"]
-    m_src_modules_feedback["src/modules/feedback/<br/>19 files"]
+    m_src_modules_feedback["src/modules/feedback/<br/>21 files"]
     m_src_modules_orders["src/modules/orders/<br/>26 files"]
-    m_src_modules_orders_tests["src/modules/orders/tests/<br/>20 files"]
-    m_src_modules_payments["src/modules/payments/<br/>22 files"]
-    m_src_modules_products["src/modules/products/<br/>30 files"]
-    m_tests_cross_cutting["tests/cross-cutting/<br/>28 files"]
-    m_tests_support["tests/support/<br/>20 files"]
+    m_src_modules_orders_tests["src/modules/orders/tests/<br/>21 files"]
+    m_src_modules_payments["src/modules/payments/<br/>24 files"]
+    m_src_modules_products["src/modules/products/<br/>31 files"]
+    m_tests_cross_cutting["tests/cross-cutting/<br/>30 files"]
+    m_tests_support["tests/support/<br/>21 files"]
     m_src_modules_inventory --- m_root
     m_src_modules_inventory --- m_src
     m_src_modules_inventory --- m_src_infrastructure
@@ -91,12 +93,12 @@ flowchart LR
 - `src/modules/inventory/repository.ts` — Defines the data-access layer for the inventory module: an append-only stock-movement ledger and a reservation (hold) collection with lifecycle operations. Each repository is built on the shared `createRepository` factory and the module's Mongoose models, adding only the domain-specific queries the service layer needs.
 - `src/modules/inventory/routes.ts` — Defines the Express route table for all staff-facing inventory endpoints. Every route in this module sits behind an admin-only auth gate because the customer-facing half of inventory (how much stock a shopper can buy) is intentionally not exposed as a route at all — it is surfaced as an `available` field on the product object.
 - `src/modules/inventory/service.ts` — The single application-level chokepoint for every stock counter change. It implements the reserve → commit / release lifecycle for order holds, guarantees that a counter move and its ledger row are inseparable (via `applyTransition`), and provides the externally-driven expiry sweep. No Mongo transactions are used; atomicity comes from conditional writes in mongod plus the reservation's unique `orderId` for idempotency.
-- `src/modules/inventory/tests/contract/api.contract.test.ts` — HTTP contract tests for every `/inventory` endpoint. Each test asserts the status code, response envelope, and key field shapes against the registered API spec (via `toSatisfyApiSpec()`), pinning the wire contract independent of internal business-logic rules. Covers both read endpoints (levels, movements) and write transitions (receipts, adjustments, reservations/sweep), including their 401/403/404/409/422 error branches.
+- `src/modules/inventory/tests/contract/api.contract.test.ts` — Contract tests for the `/inventory` HTTP API. Each test pins a specific response branch (status code, body shape, pagination metadata) and validates it against the API spec via `toSatisfyApiSpec()`. The file covers the two read endpoints (`/levels`, `/movements`), two write transitions (`/receipts`, `/adjustments`) with their 200/404/409/422 responses, and the `/reservations/sweep` endpoint. Business-rule assertions on the transitions themselves are delegated to the unit suite.
 - `src/modules/inventory/tests/integration/ledger.property.test.ts` — Property-based integration test that verifies a product's stock-movement ledger is a complete and faithful record of its stored counters. Using `fast-check` to generate random sequences of caller-visible operations (receive, adjust, reserve/commit/release/expire), it replays the ledger rows against a **real** MongoDB instance and asserts the sums match the stored `onHand` and `reserved` values exactly. It exists because the correctness guarantee—"a row is written by the same conditional write that moves the counter"—is best proven over an unbounded space of sequences rather than a fixed table of examples.
-- `src/modules/inventory/tests/integration/service.test.ts` — Integration tests for the inventory service's module-internal guarantees: exactly-once reserve/commit/release semantics, admin transitions (receive, adjust) and their refusal paths, and the reservation sweep. Deliberately scoped to the module's own edges—cross-module lifecycle is covered by `cart/tests/unit/stock.test.ts` and replay invariants by `ledger.property.test.ts`. Runs against a real MongoDB instance because every guarantee under test is a conditional write.
+- `src/modules/inventory/tests/integration/service.test.ts` — Integration tests for the inventory service's own module boundaries: the all-or-nothing `reserveForOrder` semantics, exactly-once `commitForOrder` / `releaseForOrder` transitions, their refusal paths, `receive`, and `adjust` guardrails. Explicitly out of scope (covered elsewhere) are cross-module lifecycle (see `cart/tests/unit/stock.test.ts`) and the ledger replay invariant (see `ledger.property.test.ts`). All tests run against real MongoDB because every guarantee under test is a conditional write.
 - `src/modules/inventory/tests/unit/routes.test.ts` — Unit test that locks down the inventory router's surface area: it asserts the exact set and order of mounted endpoints, confirms every route sits behind the full admin guard chain (`getAuth` → `isAuth` → `isAdmin`), and guarantees no unguarded (public) route exists. It exists as a regression tripwire so that accidentally mounting a route above the guard or dropping `isAdmin` would fail CI rather than silently expose stock counters and the ledger.
 - `src/modules/inventory/tests/unit/schema-contract.test.ts` — Schema-contract tests for the two inventory collections (`stockMovementSchema` and `reservationSchema`). They assert the *shape* of the MongoDB schemas—required fields, defaults, enums, index specs, and referential types—so that guarantees like exactly-once reservation, replayable deltas, and correct index coverage are enforced by CI rather than discovered in production.
-- `src/modules/inventory/tests/unit/transitions.test.ts` — Unit tests for the inventory transition table. Rather than asserting "output equals input," the suite pins down three invariants: only receipt or adjustment changes the unit count, a commit shifts both counters equally so availability is untouched, and reserve / release / expire are exact inverses. No mocks, no database—pure function calls.
+- `src/modules/inventory/tests/unit/transitions.test.ts` — Unit tests for the inventory transition table (`counterDeltaFor`) and the derived `availabilityOf` helper. Rather than restating the table, the tests assert three invariants: (1) only `receive` or `adjust` changes the total unit count, (2) `commit` moves both counters equally so a sale doesn't alter availability, and (3) `release`/`expire` are exact inverses of `reserve`.
 
 ---
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]
