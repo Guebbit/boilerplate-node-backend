@@ -71,22 +71,34 @@ already passes through, so the consent gate lives there rather than at each call
 flowchart LR
     A[Module emits] --> B[emitAnalyticsEvent]
     B --> C{"NODE_ANALYTICS_REQUIRE_CONSENT"}
-    C -->|false| G[capture in full]
+    C -->|false| G[capture]
     C -->|true| D{"caller's analyticsConsent"}
     D -->|granted| G
-    D -->|denied| H[drop]
-    D -->|unset| E["capture, coarsened:<br/>no clientIp, distinctId = 'anonymous'"]
+    D -->|denied, or never asked| H[drop]
 ```
+
+The gate is **opt-in**: only an explicit `granted` captures. There is deliberately no partial,
+"anonymised" capture in between — an event's `properties` carry keys like `order_id` and
+`product_id`, and its `traceId` joins to a trace whose audit event names the actor, so dropping
+`clientIp` and forcing `distinctId` to `anonymous` would remove the labels while leaving every
+join back to the person intact. It would also break the default provider: Umami keys visitors on
+an IP + user-agent hash, and an event sent without `X-Forwarded-For` is attributed to the API's
+own address, collapsing all such traffic onto one "visitor". If you want counts that do not
+depend on consent, add a Prometheus counter next to the emit — see `docs/tools/prometheus.md`.
 
 Consent travels through `CallerContext` the same way `ip`/`userAgent` do. For a logged-in caller
 it is the stored `users.analyticsConsent` (tri-state: `granted` / `denied` / unset — read fresh
-from the account on every request, via `AuthContext`), settable through `PUT /account`. For
-anonymous traffic there is no account to read, so the frontend forwards the visitor's own choice
-on the `X-Analytics-Consent` request header instead.
+from the account on every request, via `AuthContext`), settable through `PUT /account`. Anonymous
+traffic has no account to read, so the frontend forwards the visitor's own banner choice on the
+`X-Analytics-Consent` request header — which also applies to a logged-in caller whose account was
+never asked, so a choice made before login counts until `PUT /account` records it. A header-borne
+grant is a client assertion with no server-side record behind it; the stored field is what you can
+produce under Art. 7(1), so record it as soon as you have an account to record it against.
 
 `NODE_ANALYTICS_REQUIRE_CONSENT` defaults `true` — Art. 25(2) says the private setting is the
 default one. Set it `false` only after taking your own legal advice about server-side, non-cookie
-analytics.
+analytics. Note the consequence of the default: a fresh deployment captures nothing until users
+start granting.
 
 ## Choosing a provider
 

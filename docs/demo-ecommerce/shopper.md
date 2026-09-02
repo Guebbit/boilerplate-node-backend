@@ -1,6 +1,6 @@
 # The customer
 
-What someone buying cat snacks actually experiences, start to finish.
+What someone buying pet supplies actually experiences, start to finish.
 
 ## The journey
 
@@ -33,8 +33,9 @@ flowchart LR
 ## Before buying
 
 **Browsing needs no account.** Anyone can look at the shop, search it, filter by category
-(`food`, `pets`, `bundles`), and see what is in stock. Out-of-stock items are still shown — that is
-why Miciona inutile exists in the demo — because hiding them makes a shop look emptier than it is.
+(`dogs`, `cats`, `rabbits`, `birds`, `reptiles`, `small-animals`, `food`, `bundles`), and see what
+is in stock. Out-of-stock items are still shown — that is why the Heavy-Duty Cat Scratching Post
+exists in the demo — because hiding them makes a shop look emptier than it is.
 
 **The basket lives on the server, not in the browser.** Add something on a phone and it is there on
 a laptop. Close the browser for a week and it is still there.

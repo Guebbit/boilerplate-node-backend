@@ -79,12 +79,12 @@ There is a separate, permanent delete for when a record genuinely has to go.
 
 ## Hidden two different ways
 
-The demo has one of each, which is why the shop shows four products but the manager sees six:
+The demo has one of each, which is why the shop shows 130 products but the manager sees all 132:
 
-| Product        | State            | What it means                                           |
-| -------------- | ---------------- | ------------------------------------------------------- |
-| Sallyno Carino | **deleted**      | removed, but recoverable and still on old orders        |
-| Bundle micini  | **switched off** | not deleted, just not for sale right now — flip it back |
+| Product                                              | State            | What it means                                           |
+| ---------------------------------------------------- | ---------------- | ------------------------------------------------------- |
+| 150W Ceramic Heat Emitter                            | **deleted**      | removed, but recoverable and still on old orders        |
+| Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | **switched off** | not deleted, just not for sale right now — flip it back |
 
 "Switched off" is for a seasonal item or one you are still writing the description for.
 → [`products`](../modules/products.md)

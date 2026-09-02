@@ -147,9 +147,14 @@ describe('the exported dataset conforms to the generated contract', () => {
             }
         });
 
-        it('include one admin and one ordinary account', () => {
+        it('include exactly one admin, and several ordinary accounts', () => {
+            /* Only `root` is staff. The ordinary count is deliberately not pinned to a literal —
+             * `users/demo.ts`'s ten further customers exist to give `cart`/`orders` a spread of
+             * shoppers, and that number is that module's to grow without this test moving too. */
             expect(collections.users.filter((user) => user.admin)).toHaveLength(1);
-            expect(collections.users.filter((user) => !user.admin)).toHaveLength(1);
+            expect(collections.users.filter((user) => !user.admin).length).toBeGreaterThanOrEqual(
+                2
+            );
         });
     });
 

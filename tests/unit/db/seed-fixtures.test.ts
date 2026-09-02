@@ -72,9 +72,11 @@ const imageUrls = collectImageUrls();
 describe('seed fixture imageUrls', () => {
     it('collects a url from every fixture that has one', () => {
         // Guards the test itself: if the fixtures are restructured so the traversal above stops
-        // finding them, every assertion below would vacuously pass over an empty list.
-        // Seven images ship today: five products, two users. The floor is deliberately low
-        // enough to survive a fixture being retired and high enough to catch a broken walk.
+        // finding them, every assertion below would vacuously pass over an empty list. 132
+        // products (5 named + 126 combinatorial) and 2 users carry one today, drawing from a
+        // fixed pool of 27 physical files — the count here is far higher than 27, since most
+        // rows share a photo. The floor is deliberately low enough to survive a fixture being
+        // retired and high enough to catch a broken walk.
         expect(imageUrls.length).toBeGreaterThanOrEqual(5);
     });
 

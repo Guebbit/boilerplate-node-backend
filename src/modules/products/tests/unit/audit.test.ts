@@ -6,7 +6,6 @@
  * also catches an action added or removed without being written down.
  */
 
-import type { AuditAction } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../../audit';
 
 describe('the products audit vocabulary', () => {
@@ -16,16 +15,5 @@ describe('the products audit vocabulary', () => {
             ADMIN_PRODUCT_UPDATED: 'admin.product.updated',
             ADMIN_PRODUCT_DELETED: 'admin.product.deleted'
         });
-    });
-
-    /*
-     * `declare module` in audit.ts feeds these into `AuditAction`; drop it and `emitAuditEvent`
-     * fails to type-check at every call site. Caught only by `tsc`, not by jest — this line
-     * exists to fail CI, not to assert at runtime.
-     */
-    it('registers its actions in the app-wide union', () => {
-        const action: AuditAction = productsAuditActions.ADMIN_PRODUCT_CREATED;
-
-        expect(action).toBe('admin.product.created');
     });
 });

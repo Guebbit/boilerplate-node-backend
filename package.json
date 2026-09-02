@@ -57,6 +57,7 @@
         "db:seed": "tsx db/demo/index.ts",
         "seed:export": "tsx scripts/export-demo-dataset.ts",
         "check:seed-export": "tsx scripts/export-demo-dataset.ts --check",
+        "seed:images": "tsx scripts/generate-seed-images.ts",
         "db:seed:reset": "tsx db/demo/index.ts --reset",
         "db:cache:clear": "tsx db/cache-clear.ts",
         "db:bootstrap": "npm run db:migrate:up && npm run db:seed",

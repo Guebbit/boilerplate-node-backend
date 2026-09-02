@@ -39,24 +39,27 @@ other page in this section is one of those boxes, opened up.
 
 ## What the shop sells
 
-Six products. They are silly on purpose — this is a demo of Italian cat snacks — but each one is
-there to show the shop behaving differently:
+132 products — a pet-supply retailer. Six are hand-picked, each there to show the shop behaving
+differently; the other 126 are a combinatorial grid (six animals × seven product types × three
+quality tiers) so lists, pagination and the category filters have enough real rows to work with:
 
-| Product          | Price | In stock | Why it exists                                      |
-| ---------------- | ----- | -------- | -------------------------------------------------- |
-| Sallyno Panino   | €100  | 25       | a completely normal product                        |
-| Micino pufettino | €77   | 40       | another normal one, so baskets can have two lines  |
-| Miciona inutile  | €1    | **0**    | shows what "out of stock" looks like               |
-| Scatolone        | €5    | 100      | has only a name and a price, nothing else          |
-| Sallyno Carino   | €50   | 10       | **deleted** — proves a deleted product disappears  |
-| Bundle micini    | €40   | 15       | **switched off** — visible to staff, not to buyers |
+| Product                                              | Price | In stock | Why it exists                                      |
+| ---------------------------------------------------- | ----- | -------- | -------------------------------------------------- |
+| Premium Grain-Free Dog Food, 15kg                    | €68   | 30       | a completely normal product                        |
+| Orthopedic Memory Foam Dog Bed                       | €84   | 45       | another normal one, so baskets can have two lines  |
+| Heavy-Duty Cat Scratching Post                       | €45   | **0**    | shows what "out of stock" looks like               |
+| Universal Small Animal Water Bottle                  | €9    | 100      | has only a name and a price, nothing else          |
+| 150W Ceramic Heat Emitter                            | €55   | 12       | **deleted** — proves a deleted product disappears  |
+| Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | €96   | 18       | **switched off** — visible to staff, not to buyers |
+| _...126 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier" |
 
-So a visitor sees **four** products. Staff see all six. That difference is deliberate and it is
-explained on [the shop manager's page](./manager.md).
+So a visitor sees **130** products (the four ordinary ones above, plus all 126 generated).
+Staff see all 132. That difference is deliberate and it is explained on
+[the shop manager's page](./manager.md).
 
 ## The two people in it
 
-The demo comes with two accounts already made:
+Two accounts come with a password you can actually type in:
 
 | Who            | Username       | Password   | Can do                            |
 | -------------- | -------------- | ---------- | --------------------------------- |
@@ -66,6 +69,11 @@ The demo comes with two accounts already made:
 There are only these two levels. Either you are staff, or you are a customer. There is no
 "warehouse-only" or "support-only" login — those are jobs, not accounts, and this section splits
 the pages up that way because it is easier to read, not because the software does.
+
+A further ten customer accounts exist too — `amelia.clarke`, `benjamin.hughes` and so on — with an
+order history spread across them (mostly one small order each, three with a couple more) so the
+staff side has more than one shopper's activity to look at. Nobody is meant to log in as one of
+the ten; they exist to be _looked at_, not signed into.
 
 ## Money and delivery
 
@@ -105,7 +113,7 @@ above. Close it and it all disappears; start it again and it is back exactly as 
 click can break anything permanently.
 
 ::: info This section describes _this_ shop
-The application underneath is a reusable starting point — a **boilerplate** — and this cat-snack
+The application underneath is a reusable starting point — a **boilerplate** — and this pet-supply
 shop is just the example built on top of it. These five pages describe the example. The pages under
 [Modules](../modules/) describe the parts it is assembled from, one per area of the business.
 :::

@@ -60,14 +60,17 @@ export interface AnalyticsEvent {
     userAgent?: string;
     /** Host the request was addressed to, so events can be split per deployment. */
     hostname?: string;
-    /**
-     * The caller's consent choice. Read here, not passed separately, so
-     * `emitAnalyticsEvent`'s own gate can decide without every call site changing: each one
-     * already spreads {@link buildAnalyticsBase}'s return into this object. STRIPPED before an
-     * event reaches a provider — see `emitAnalyticsEvent`; `AnalyticsProvider.capture` never sees it.
-     */
-    analyticsConsent?: 'granted' | 'denied';
 }
+
+/**
+ * What {@link emitAnalyticsEvent} accepts: an event plus the caller's consent choice.
+ * Consent is a gate input, never event data, so it lives here rather than on `AnalyticsEvent` —
+ * `AnalyticsProvider.capture` takes the narrower type and structurally cannot receive it.
+ */
+export type AnalyticsEventInput = AnalyticsEvent & {
+    /** `granted` is the only value that captures; see {@link emitAnalyticsEvent}. */
+    analyticsConsent?: 'granted' | 'denied';
+};
 
 // ─── The port ────────────────────────────────────────────────────────────────
 
@@ -140,7 +143,7 @@ export const resetAnalyticsProvider = (): void => {
 export const buildAnalyticsBase = (
     context: CallerContext
 ): Pick<
-    AnalyticsEvent,
+    AnalyticsEventInput,
     'distinctId' | 'traceId' | 'clientIp' | 'userAgent' | 'hostname' | 'analyticsConsent'
 > => ({
     // CAVEAT: unauthenticated traffic all collapses onto the literal 'anonymous' id, so
@@ -160,7 +163,7 @@ export const buildAnalyticsBase = (
 });
 
 /**
- * Whether a caller's consent is required before capturing them in full.
+ * Whether a caller's consent is required before capturing them at all.
  * Defaults `true`: Art. 25(2) says the PRIVATE setting is the default one, so a boilerplate that
  * shipped the permissive default would ship it into every project built on it. A deployment that
  * has taken its own legal advice about server-side, non-cookie analytics can opt out.
@@ -174,29 +177,20 @@ const requireAnalyticsConsent = (): boolean =>
  * Returns `void` (fire-and-forget): analytics must never delay or fail a user request, so there
  * is nothing to await and nothing to handle.
  *
- * The consent gate lives here, the one choke point every module's event already passes through —
- * `analyticsConsent` is destructured off and never reaches a provider.
- * `denied` drops the event outright; `granted` (or the gate turned off) captures it in full;
- * anything else — unset, or no account to ask (pre-login traffic with no header either) —
- * captures a COARSENED copy: no `clientIp`, `distinctId` forced to `'anonymous'`. Dropping it
- * entirely would lose aggregate counts a deployment may have a real reason to keep; keeping it
- * identified would be exactly the profile Art. 6/7 withheld consent for.
+ * The consent gate lives here, the one choke point every module's event already passes through.
+ * `granted` captures; everything else — `denied`, or never asked — drops. Opt-in, not opt-out:
+ * an event carries `properties` like `order_id` and a `traceId` that join straight back to the
+ * identified row, so there is no partial capture that is meaningfully less identifying than the
+ * whole one. Aggregate counts without consent belong in a metric, not here.
+ *
+ * @param event - the event, plus the caller's consent from {@link buildAnalyticsBase}
  */
-export const emitAnalyticsEvent = (event: AnalyticsEvent): void => {
+export const emitAnalyticsEvent = (event: AnalyticsEventInput): void => {
     const { analyticsConsent, ...capturable } = event;
 
-    if (!requireAnalyticsConsent() || analyticsConsent === 'granted') {
-        resolveAnalyticsProvider().capture(capturable);
-        return;
-    }
+    if (requireAnalyticsConsent() && analyticsConsent !== 'granted') return;
 
-    if (analyticsConsent === 'denied') return;
-
-    resolveAnalyticsProvider().capture({
-        ...capturable,
-        clientIp: undefined,
-        distinctId: 'anonymous'
-    });
+    resolveAnalyticsProvider().capture(capturable);
 };
 
 /**

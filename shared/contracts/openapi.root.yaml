@@ -417,8 +417,8 @@ components:
                     type: string
                 # A tri-state, and absent IS the third one: `granted`/`denied` are the only two a
                 # client may ever WRITE, and "never asked" is not a value anyone sends, it is what
-                # an account looks like before they have. Read by `emitAnalyticsEvent`'s own
-                # consent gate (`observability/analytics/index.ts`), nowhere else.
+                # an account looks like before they have. The gate is opt-in — only `granted`
+                # captures anything (`observability/analytics/index.ts`).
                 analyticsConsent:
                     type: string
                     enum: [granted, denied]

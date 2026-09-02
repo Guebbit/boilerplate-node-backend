@@ -233,9 +233,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: String
         },
         /*
-         * A tri-state, and no `default`: absent IS "never asked", the third state.
-         * `emitAnalyticsEvent`'s consent gate reads this off `AuthContext` (threaded through
-         * `resolve()` in `account/module.ts`), never the document directly.
+         * A tri-state, and no `default`: absent IS "never asked", which the frontend needs in
+         * order to know whether to ask, and which the gate treats as no consent — only an
+         * explicit `granted` captures. Read off `AuthContext` (threaded through `resolve()` in
+         * `account/module.ts`), never the document directly.
          */
         analyticsConsent: {
             type: String,
