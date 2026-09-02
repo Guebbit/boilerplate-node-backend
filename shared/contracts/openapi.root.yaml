@@ -817,6 +817,12 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1confirm'
     /account/2fa:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa'
+    /account/oauth/providers:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1providers'
+    /account/oauth/{provider}:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1{provider}'
+    /account/oauth/{provider}/callback:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1{provider}~1callback'
 
     # ---------- users ----------
     /users:

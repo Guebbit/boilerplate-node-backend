@@ -50,6 +50,9 @@ import { postAddress, putAddress } from './controllers/write-addresses';
 import { deleteAddress } from './controllers/delete-address';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
+import { getOAuthProviders } from './controllers/get-oauth-providers';
+import { getOAuthStart } from './controllers/get-oauth-start';
+import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { invalidateCache, noStore } from '@infrastructure/http/middlewares/cache';
 
 /**
@@ -216,3 +219,15 @@ router.post('/2fa/confirm', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), post
 // DELETE /account/2fa — disable 2FA. Critical fresh auth AND a valid code in the body:
 // disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
 router.delete('/2fa', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), delete2fa);
+
+// GET /account/oauth/providers — which providers this deployment has credentials for. Public,
+// informational; registered ABOVE the `:provider` route below so it isn't swallowed by it.
+router.get('/oauth/providers', getOAuthProviders);
+
+// GET /account/oauth/:provider — 302 to the provider's consent screen. Public: this is how an
+// OAuth session begins, same footing as /login and /signup.
+router.get('/oauth/:provider', credentialLimiters, getOAuthStart);
+
+// GET /account/oauth/:provider/callback — 302 back to the frontend, cookies set on success.
+// Public: the provider's own code+state round trip is the credential.
+router.get('/oauth/:provider/callback', credentialLimiters, getOAuthCallback);

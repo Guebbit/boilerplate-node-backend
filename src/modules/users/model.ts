@@ -78,8 +78,12 @@ export interface UserRecord extends Omit<
     User,
     'createdAt' | 'updatedAt' | 'deletedAt' | 'twoFactorEnabledAt'
 > {
-    /** Hashed by the pre-save hook below before it ever reaches Mongo. */
-    password: string;
+    /**
+     * Hashed by the pre-save hook below before it ever reaches Mongo. Absent for an OAuth-only
+     * account (`account/oauth/link.ts`'s signup branch) — sign-in then works only through a
+     * linked provider, until a future "add a password" flow gives it one.
+     */
+    password?: string;
     // soft delete
     deletedAt?: Date;
 
@@ -113,6 +117,23 @@ export interface UserRecord extends Omit<
 
     /** The user's refresh, reset and delete-confirmation tokens — see `Token` above. */
     tokens: Token[];
+
+    /** The provider identities linked to this account — see `OAuthAccount` below. */
+    oauthAccounts: OAuthAccount[];
+}
+
+/**
+ * One linked OAuth/OIDC identity — `account/oauth/link.ts` is the only writer. A user document
+ * may hold several (Google AND GitHub on the same account), and `providerId` rather than `email`
+ * is the identity key, since a provider's email can change while its subject id never does.
+ */
+export interface OAuthAccount {
+    /** `enabledProviders()`'s registry key — `'google' | 'github' | ...`. */
+    provider: string;
+    /** The provider's stable subject ("sub") for this identity — never the email. */
+    providerId: string;
+    /** When this identity was linked to the account. */
+    connectedAt: Date;
 }
 
 /**
@@ -205,9 +226,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         // `select: false` — never loaded unless a query explicitly asks for it, so even a
         // .lean() read that bypasses applyUserTransform still cannot leak the hash. Use the
         // repository's *WithCredentials helpers to re-select it (see `./repository`).
+        // NOT `required`: an OAuth-only signup (`account/oauth/link.ts`) creates a user with none.
+        // The pre-save hash hook below already skips absent/unmodified passwords, unaffected.
         password: {
             type: String,
-            required: true,
             select: false
         },
         imageUrl: {
@@ -350,6 +372,34 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: [String],
             select: false,
             default: []
+        },
+        /*
+         * Linked provider identities — `select: false` like `tokens`, same reasoning: not secret
+         * in the credential-theft sense (a `providerId` is useless without the provider's own
+         * session), but nothing on the wire needs it by default. Written only through atomic
+         * `$push` (`repository.ts#linkOAuthAccount`), never read-modify-write — same rule as
+         * `tokens`, and for the same reason: two concurrent logins linking a second provider must
+         * not race each other's write away.
+         */
+        oauthAccounts: {
+            type: [
+                {
+                    provider: {
+                        type: String,
+                        required: true
+                    },
+                    providerId: {
+                        type: String,
+                        required: true
+                    },
+                    connectedAt: {
+                        type: Date,
+                        required: true
+                    }
+                }
+            ],
+            select: false,
+            default: []
         }
     },
     {
@@ -376,6 +426,29 @@ userSchema.index({ email: 1 }, { name: 'users_email', unique: true });
 /* Refresh-token verification and the reset/delete flows query by token value. */
 userSchema.index({ 'tokens.token': 1 }, { name: 'users_tokens_token' });
 /*
+ * The OAuth callback's primary lookup: "does this (provider, providerId) pair already exist".
+ * UNIQUE for the same reason as `users_email` — the lookup is check-then-insert
+ * (`account/services/oauth.ts`), so two callbacks minting the SAME never-before-seen identity
+ * concurrently can both read absent and both attempt to create. Only the database can refuse the
+ * second write; it surfaces as the same E11000 → 409 path `users_email` already relies on.
+ *
+ * `partialFilterExpression` is load-bearing, not an optimization: a COMPOUND multikey index over
+ * two fields of the SAME array indexes an EMPTY `oauthAccounts` as one `{provider: null,
+ * providerId: null}` entry — unlike a single-field multikey index, which indexes nothing for an
+ * empty array. Every password-only account defaults to `oauthAccounts: []`, so without this filter
+ * the SECOND such account ever created collides with the first. Restricting the index to documents
+ * that actually hold an entry is what makes "unique per linked identity" mean what it says, rather
+ * than "at most one account may exist with no linked identity at all".
+ */
+userSchema.index(
+    { 'oauthAccounts.provider': 1, 'oauthAccounts.providerId': 1 },
+    {
+        name: 'users_oauth_identity',
+        unique: true,
+        partialFilterExpression: { 'oauthAccounts.0': { $exists: true } }
+    }
+);
+/*
  * `deletedAt` is deliberately not indexed — nothing searches on it. The admin listing filters
  * `active` instead, and the one login query that mentions it also matches on the near-unique,
  * indexed `email`.
@@ -386,7 +459,10 @@ userSchema.index({ 'tokens.token': 1 }, { name: 'users_tokens_token' });
  * reaches storage. See the bcrypt call below for the cost-factor rationale.
  */
 userSchema.pre('save', function () {
-    if (!this.isModified('password')) return;
+    // The second half is only reachable in principle (`isModified` true, value falsy) — an
+    // OAuth-only signup never sets `password` at all, so `isModified` is false for it — but it is
+    // what lets TypeScript see `this.password` as a `string` below, now that it is optional.
+    if (!this.isModified('password') || !this.password) return;
 
     // bcrypt cost factor — 12 rounds. Higher is slower to brute-force and slower to hash; 12 is
     // the library's own recommended floor for a production login path.
@@ -461,7 +537,8 @@ export const applyUserTransform = applySerialization(userSchema, {
     // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment.
     // `twoFactorSecret`/`twoFactorLastUsedStep`/`twoFactorBackupCodes` are 2FA credential
     // material — `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
-    // the schema's own `select: false` split above.
+    // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
+    // part of the `User` contract, `select: false` on the schema already, this is defense in depth.
     omit: [
         'password',
         'tokens',
@@ -469,7 +546,8 @@ export const applyUserTransform = applySerialization(userSchema, {
         'inactivityWarnedAt',
         'twoFactorSecret',
         'twoFactorLastUsedStep',
-        'twoFactorBackupCodes'
+        'twoFactorBackupCodes',
+        'oauthAccounts'
     ]
 });
 

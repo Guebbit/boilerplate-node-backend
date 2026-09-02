@@ -434,6 +434,84 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/oauth/providers:
+        get:
+            tags: [Auth]
+            summary: List enabled OAuth providers
+            description: The OAuth providers this deployment holds credentials for — an empty list means none are configured. The frontend uses this to decide which "Continue with…" buttons to render.
+            operationId: listOAuthProviders
+            security: []
+            responses:
+                '200':
+                    description: Enabled provider names
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OAuthProvidersEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/oauth/{provider}:
+        get:
+            tags: [Auth]
+            summary: Start an OAuth login
+            description: 'Browser-navigated only: redirects to `provider`''s consent screen, having minted the CSRF `state` as a cookie. Not called programmatically — the frontend points a plain `<a href>` at this URL.'
+            operationId: startOAuthLogin
+            security: []
+            parameters:
+                - name: provider
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+                  description: One of the names `GET /account/oauth/providers` lists.
+            responses:
+                '302':
+                    description: Redirect to the provider's consent screen
+                    headers:
+                        Location:
+                            schema: { type: string }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+
+    /account/oauth/{provider}/callback:
+        get:
+            tags: [Auth]
+            summary: Complete an OAuth login
+            description: 'Browser-navigated only: where `provider` sends the browser back after consent. Validates `state`, exchanges the code, finds-or-creates the account, and redirects to the frontend with the session cookies set — or with `?error=<code>` on failure.'
+            operationId: completeOAuthLogin
+            security: []
+            parameters:
+                - name: provider
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+                - name: code
+                  in: query
+                  required: false
+                  schema: { type: string }
+                - name: state
+                  in: query
+                  required: false
+                  schema: { type: string }
+                - name: error
+                  in: query
+                  required: false
+                  description: Set by the provider instead of `code` when the user declines consent.
+                  schema: { type: string }
+            responses:
+                '302':
+                    description: Redirect to the frontend, session cookies set on success
+                    headers:
+                        Location:
+                            schema: { type: string }
+                '400':
+                    description: Missing or mismatched CSRF state
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ErrorResponse'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+
     /account/signup:
         post:
             tags: [Auth]
@@ -563,6 +641,30 @@ paths:
 components:
     schemas:
         # ---------- account — the schemas only this module's paths reference. ----------
+        OAuthProviders:
+            type: object
+            additionalProperties: false
+            required: [providers]
+            properties:
+                providers:
+                    type: array
+                    items: { type: string }
+                    description: Registry names this deployment holds credentials for, e.g. `["google", "github"]`.
+
+        OAuthProvidersEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/OAuthProviders'
+
         AuthTokensEnvelope:
             type: object
             additionalProperties: false

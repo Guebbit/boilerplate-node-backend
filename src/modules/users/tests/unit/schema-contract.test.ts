@@ -21,8 +21,8 @@ import {
 } from '@tests/schema';
 
 describe('userSchema — what a user must carry', () => {
-    it('requires an address, a name and a password, and nothing else', () => {
-        expect(requiredPaths(userSchema)).toEqual(['email', 'password', 'username']);
+    it('requires an address and a name, but not a password — an OAuth-only signup has none', () => {
+        expect(requiredPaths(userSchema)).toEqual(['email', 'username']);
     });
 
     it('constrains the email to something that can be delivered to', () => {
@@ -129,11 +129,15 @@ describe('userSchema — the credentials never load by accident', () => {
             _id: 'abc',
             email: 'ada@example.com',
             password: '$2a$12$hash',
-            tokens: [{ type: TokenType.REFRESH, token: 'live-token' }]
+            tokens: [{ type: TokenType.REFRESH, token: 'live-token' }],
+            oauthAccounts: [
+                { provider: 'google', providerId: 'subject-1', connectedAt: new Date() }
+            ]
         });
 
         expect(serialized.password).toBeUndefined();
         expect(serialized.tokens).toBeUndefined();
+        expect(serialized.oauthAccounts).toBeUndefined();
         expect(serialized.email).toBe('ada@example.com');
         // And the ordinary rename still happens, so this is the real transform and not a stub.
         expect(serialized.id).toBe('abc');
@@ -178,21 +182,45 @@ describe('userSchema — a stored token', () => {
     });
 });
 
+describe('userSchema — a linked OAuth identity', () => {
+    it('requires the provider, its subject id, and when it was linked', () => {
+        // An entry missing any of these can't be matched back by `users_oauth_identity`
+        // (provider+providerId) or shown on a future "connected accounts" list (connectedAt).
+        expect(requiredPaths(subSchema(userSchema, 'oauthAccounts'))).toEqual([
+            'connectedAt',
+            'provider',
+            'providerId'
+        ]);
+    });
+
+    it('withholds the linked-identity list from every query that does not ask for it', () => {
+        expect(pathOptions(userSchema, 'oauthAccounts').select).toBe(false);
+    });
+
+    it('starts a user with no linked identities rather than an absent list', () => {
+        expect(defaultOf(userSchema, 'oauthAccounts')).toEqual([]);
+    });
+});
+
 describe('userSchema — indexes', () => {
-    it('declares exactly the two documented indexes', () => {
+    it('declares exactly the three documented indexes', () => {
         // `users_tokens_token` is what makes `verifyRefreshToken`'s lookup — by token value,
         // across every user — an index hit rather than a collection scan on every refresh.
+        // `users_oauth_identity` is the OAuth callback's equivalent, keyed on (provider, providerId).
         expect(indexSpecs(userSchema)).toEqual([
             'users_email: email+1',
+            'users_oauth_identity: oauthAccounts.provider+1, oauthAccounts.providerId+1',
             'users_tokens_token: tokens.token+1'
         ]);
     });
 
-    it('makes one account per email address a database fact', () => {
+    it('makes one account per email address, and one per linked identity, a database fact', () => {
         // Uniqueness here is an authentication invariant, not hygiene: two rows for one address
-        // make "the user with this email" ambiguous at exactly the moment a password is checked.
+        // (or two accounts claiming the same provider identity) make "the user this credential
+        // names" ambiguous at exactly the moment it is checked.
         expect(indexOptionSpecs(userSchema)).toEqual([
             'users_email: unique=true',
+            'users_oauth_identity: partialFilterExpression={"oauthAccounts.0":{"$exists":true}}, unique=true',
             'users_tokens_token: (none)'
         ]);
     });

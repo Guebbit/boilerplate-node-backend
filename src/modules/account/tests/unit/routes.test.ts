@@ -44,7 +44,9 @@ const RATE_LIMITED = [
     'POST /reauth',
     'POST /verify-request',
     'POST /verify-confirm',
-    'POST /login/2fa'
+    'POST /login/2fa',
+    'GET /oauth/:provider',
+    'GET /oauth/:provider/callback'
 ];
 
 /** Routes that act on the caller's own account and therefore demand a live session. */
@@ -98,7 +100,10 @@ describe('account routes — what is mounted', () => {
             'POST /login/2fa',
             'POST /2fa/setup',
             'POST /2fa/confirm',
-            'DELETE /2fa'
+            'DELETE /2fa',
+            'GET /oauth/providers',
+            'GET /oauth/:provider',
+            'GET /oauth/:provider/callback'
         ]);
     });
 

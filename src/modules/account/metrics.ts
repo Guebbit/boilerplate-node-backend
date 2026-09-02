@@ -155,3 +155,16 @@ export const authTwoFactorChallengeTotal = new Counter({
     labelNames: ['status'] as const,
     registers: [metricsRegistry]
 });
+
+/**
+ * OAuth login/signup attempts, labelled by provider and outcome — kept separate from
+ * `authLoginTotal` rather than adding a label to it, since every existing call site would
+ * otherwise need a `provider: 'password'` to keep the series comparable. Lets a dashboard tell a
+ * Google outage apart from GitHub's, or from the password funnel entirely.
+ */
+export const authOauthTotal = new Counter({
+    name: 'auth_oauth_total',
+    help: 'Total OAuth login/signup attempts, labelled by provider and outcome.',
+    labelNames: ['provider', 'status'] as const,
+    registers: [metricsRegistry]
+});

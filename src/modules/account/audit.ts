@@ -43,7 +43,11 @@ export const accountAuditActions = {
      * not — a sharper signal than a login failure, same reasoning `AUTH_REAUTHENTICATED`'s
      * comment on `authReauthTotal` gives: someone holds a valid credential and still failed.
      */
-    AUTH_2FA_CHALLENGE_FAILED: 'auth.two_factor.challenge_failed'
+    AUTH_2FA_CHALLENGE_FAILED: 'auth.two_factor.challenge_failed',
+    /** A new provider identity was linked onto an already-existing, verified-match account. */
+    AUTH_OAUTH_LINKED: 'auth.oauth.linked',
+    /** An OAuth login/callback did not complete — bad state, a declined consent, a refused link. */
+    AUTH_OAUTH_FAILED: 'auth.oauth.failed'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

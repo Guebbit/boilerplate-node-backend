@@ -508,6 +508,10 @@ export const reauth = (
             // follow, and `openapi.yaml` declares no 404 here either.
             if (!user) return generateReject(401, []);
 
+            // An OAuth-only account (`account/oauth/link.ts`) holds no password to compare
+            // against — same 422 as a wrong one, since there is equally nothing this step can do.
+            if (!user.password) return generateReject(422, [t('account.reauth.wrong-password')]);
+
             return bcrypt.compare(password, user.password).then((doMatch) => {
                 if (!doMatch) return generateReject(422, [t('account.reauth.wrong-password')]);
                 return generateSuccess<UserDocument>(user);

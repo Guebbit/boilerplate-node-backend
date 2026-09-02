@@ -108,6 +108,10 @@
                 "body": "Non ti vediamo accedere da un po'. Per mantenere il tuo account, accedi entro i prossimi {{days}} giorni — trascorsi i quali verrà disattivato e, in seguito, eliminato definitivamente."
             }
         },
+        "oauth": {
+            "unknown-provider": "Questo metodo di accesso non è disponibile.",
+            "invalid-state": "Questo tentativo di accesso è scaduto. Riprova."
+        },
         "addresses": {
             "added": "Indirizzo salvato.",
             "updated": "Indirizzo aggiornato.",
