@@ -292,6 +292,48 @@ export const consumeToken = (user: UserDocument, token: string): Promise<boolean
         return modifiedCount > 0;
     });
 
+/**
+ * Admin-assisted 2FA recovery: unconditionally strips a user's second factor, no code required.
+ * The door that stays shut everywhere else — self-service disable and the login challenge both
+ * demand a code — because a mailbox-based reset would make 2FA only as strong as the inbox it
+ * exists to defend against. This is the one deliberate exception, and it is audited.
+ *
+ * `findByIdWithCredentials`, not `findById`: the 2FA fields are `select: false`, and unsetting a
+ * path Mongoose never loaded registers as no change at all — `save()` would silently do nothing.
+ *
+ * @param id - the user whose second factor is being removed
+ * @param context - the admin's caller context, for the audit record
+ */
+export const adminDisableTwoFactor = (
+    id: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const outcome = userRepository
+        .findByIdWithCredentials(id)
+        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+            if (!user) return generateReject(404, [t('users.not-found')]);
+
+            user.twoFactorSecret = undefined;
+            user.twoFactorEnabledAt = undefined;
+            user.twoFactorLastUsedStep = undefined;
+            user.twoFactorBackupCodes = [];
+
+            return userRepository.save(user).then((saved) => generateSuccess(saved));
+        });
+
+    return outcome.then((result) => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: usersAuditActions.ADMIN_USER_2FA_DISABLED,
+                target_type: 'user',
+                target_id: id,
+                outcome: result.success ? 'success' : 'failure'
+            })
+        );
+        return result;
+    });
+};
+
 /** Remove a user by ID (soft or hard delete). Fetches the document then delegates to remove(). */
 export const removeById = (
     id: string,
@@ -313,6 +355,7 @@ export const userService = {
     updateById,
     remove,
     removeById,
+    adminDisableTwoFactor,
     findByEmail,
     consumeToken,
     enqueueIfPending

@@ -142,6 +142,22 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "exporting the caller's own data — a read wearing a POST, since requireFreshAuth needs a body-free request"
     },
+    'account POST /login/2fa': {
+        requiresAuth: false,
+        reason: 'the second step of a 2FA login — the challenge token is the credential, not a session'
+    },
+    'account POST /2fa/setup': {
+        requiresAuth: true,
+        reason: "enrolling a second factor on the caller's own account"
+    },
+    'account POST /2fa/confirm': {
+        requiresAuth: true,
+        reason: "arming the caller's own pending secret"
+    },
+    'account DELETE /2fa': {
+        requiresAuth: true,
+        reason: "disabling the caller's own second factor"
+    },
     'account POST /logout': {
         requiresAuth: false,
         reason: 'revoking THIS session — the refresh-token cookie is the credential, not a login'

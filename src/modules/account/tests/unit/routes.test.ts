@@ -43,7 +43,8 @@ const RATE_LIMITED = [
     'POST /password',
     'POST /reauth',
     'POST /verify-request',
-    'POST /verify-confirm'
+    'POST /verify-confirm',
+    'POST /login/2fa'
 ];
 
 /** Routes that act on the caller's own account and therefore demand a live session. */
@@ -62,7 +63,10 @@ const AUTHENTICATED = [
     'DELETE /addresses/:addressId',
     'POST /verify-request',
     'DELETE /tokens/expired',
-    'POST /export'
+    'POST /export',
+    'POST /2fa/setup',
+    'POST /2fa/confirm',
+    'DELETE /2fa'
 ];
 
 describe('account routes — what is mounted', () => {
@@ -90,7 +94,11 @@ describe('account routes — what is mounted', () => {
             'POST /verify-request',
             'POST /verify-confirm',
             'DELETE /tokens/expired',
-            'POST /export'
+            'POST /export',
+            'POST /login/2fa',
+            'POST /2fa/setup',
+            'POST /2fa/confirm',
+            'DELETE /2fa'
         ]);
     });
 

@@ -106,6 +106,9 @@ process.env.NODE_METRICS_TOKEN ??= 'test-metrics-token';
 process.env.NODE_TOKEN_ACCESS ??= 'test-access-secret';
 process.env.NODE_TOKEN_REFRESH ??= 'test-refresh-secret';
 
+/** Same reasoning as the two secrets above — `account/two-factor.ts` needs a real value too. */
+process.env.NODE_TOTP_ENCRYPTION_KEY ??= 'test-totp-encryption-key';
+
 //
 //
 /**

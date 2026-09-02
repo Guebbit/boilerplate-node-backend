@@ -58,6 +58,17 @@ export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
 export const getAccessTokenTTL = () => environmentNumber('NODE_TOKEN_ACCESS_TIME', 0);
 
 /**
+ * The key TOTP secrets are encrypted with at rest — see `two-factor.ts`. Unlike the JWT secrets
+ * above, this one is versioned: `two-factor.ts` prefixes every ciphertext with the version this
+ * returns, so a future key rotation can decrypt old rows with their own key while signing new
+ * ones with the new one, instead of a migration that cannot tell which key any given row used.
+ */
+export const getTotpEncryptionKey = (): { version: string; key: string } => ({
+    version: 'v1',
+    key: process.env.NODE_TOTP_ENCRYPTION_KEY ?? ''
+});
+
+/**
  * How long a just-rotated refresh token is still honoured. Long
  * enough that two requests firing within the same page-load race (two tabs waking together, an
  * interceptor retrying) both land inside it; short enough that a token replayed well after its

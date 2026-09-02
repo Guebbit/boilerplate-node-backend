@@ -30,6 +30,14 @@
             "wrong-password": "La password non è corretta.",
             "success": "Identità confermata."
         },
+        "two-factor": {
+            "setup-not-started": "Avvia la configurazione prima di confermare un codice.",
+            "wrong-code": "Il codice non è corretto. Controlla la tua app di autenticazione e riprova.",
+            "not-enabled": "L'autenticazione a due fattori non è attiva su questo account.",
+            "enrolled": "L'autenticazione a due fattori è ora attiva.",
+            "disabled": "L'autenticazione a due fattori è ora disattivata.",
+            "challenge-invalid": "Questo tentativo di accesso è scaduto. Effettua di nuovo l'accesso."
+        },
         "logout": {
             "success": "Disconnessione effettuata."
         },

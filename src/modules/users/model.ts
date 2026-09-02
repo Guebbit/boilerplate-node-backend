@@ -74,7 +74,10 @@ export interface Token {
  * are omitted from the wire `User` contract and redeclared as `Date` below — the contract carries
  * ISO strings, the document carries real dates.
  */
-export interface UserRecord extends Omit<User, 'createdAt' | 'updatedAt' | 'deletedAt'> {
+export interface UserRecord extends Omit<
+    User,
+    'createdAt' | 'updatedAt' | 'deletedAt' | 'twoFactorEnabledAt'
+> {
     /** Hashed by the pre-save hook below before it ever reaches Mongo. */
     password: string;
     // soft delete
@@ -88,6 +91,15 @@ export interface UserRecord extends Omit<User, 'createdAt' | 'updatedAt' | 'dele
      */
     inactivityWarnedAt?: Date;
 
+    /** Encrypted TOTP secret — see `two-factor.ts`. Never part of the `User` contract. */
+    twoFactorSecret?: string;
+
+    /** The RFC 6238 time step of the last code accepted — replay protection. */
+    twoFactorLastUsedStep?: number;
+
+    /** sha256 digests of unused backup codes — see `two-factor.ts#hashBackupCode`. */
+    twoFactorBackupCodes: string[];
+
     /*
      * Redeclared as `Date`, like `ProductDocument` and `OrderDocument`: the contract carries ISO
      * strings, `timestamps: true` writes real `Date`s. This model missed that treatment until a
@@ -95,6 +107,9 @@ export interface UserRecord extends Omit<User, 'createdAt' | 'updatedAt' | 'dele
      */
     createdAt?: Date;
     updatedAt?: Date;
+
+    /** Same ISO-string-vs-`Date` redeclaration as `createdAt`/`updatedAt` above. */
+    twoFactorEnabledAt?: Date;
 
     /** The user's refresh, reset and delete-confirmation tokens — see `Token` above. */
     tokens: Token[];
@@ -286,6 +301,38 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         },
         inactivityWarnedAt: {
             type: Date
+        },
+        /*
+         * Two-factor authentication. Asymmetric storage on purpose:
+         * `twoFactorSecret` must be recoverable to recompute a code against, so it is ENCRYPTED
+         * (`two-factor.ts`), never hashed. `select: false` since the login and 2FA-management
+         * flows are the only readers. Absent `twoFactorEnabledAt` means enrollment was started
+         * (`POST /account/2fa/setup`) but never confirmed — login ignores a pending secret.
+         */
+        twoFactorSecret: {
+            type: String,
+            select: false
+        },
+        twoFactorEnabledAt: {
+            type: Date
+        },
+        /*
+         * The RFC 6238 time step of the last code accepted — replay protection: a code
+         * already used within its own window must not work twice. `select: false`, same as the
+         * secret: nothing outside the verification path needs to read it.
+         */
+        twoFactorLastUsedStep: {
+            type: Number,
+            select: false
+        },
+        /*
+         * Recovery codes for a lost authenticator — sha256 digests, same reasoning as `tokens`:
+         * high-entropy and one-time, so there is no low-entropy secret to stretch.
+         */
+        twoFactorBackupCodes: {
+            type: [String],
+            select: false,
+            default: []
         }
     },
     {
@@ -395,7 +442,18 @@ export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
     // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment.
-    omit: ['password', 'tokens', 'pendingImageKey', 'inactivityWarnedAt']
+    // `twoFactorSecret`/`twoFactorLastUsedStep`/`twoFactorBackupCodes` are 2FA credential
+    // material — `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
+    // the schema's own `select: false` split above.
+    omit: [
+        'password',
+        'tokens',
+        'pendingImageKey',
+        'inactivityWarnedAt',
+        'twoFactorSecret',
+        'twoFactorLastUsedStep',
+        'twoFactorBackupCodes'
+    ]
 });
 
 /** The compiled Mongoose model. */

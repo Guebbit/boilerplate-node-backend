@@ -119,3 +119,39 @@ export const authAccountDeleteTotal = new Counter({
     labelNames: ['status'] as const,
     registers: [metricsRegistry]
 });
+
+/**
+ * Two-factor enrollment confirmations (the `POST /account/2fa/confirm` step, not `setup`).
+ * A high failure rate here usually means the QR code or manual secret wasn't scanned correctly,
+ * not an attack — enrollment happens inside an already-authenticated, fresh session.
+ */
+export const authTwoFactorEnrollTotal = new Counter({
+    name: 'auth_two_factor_enroll_total',
+    help: 'Total two-factor enrollment confirmations, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
+ * Two-factor disable attempts.
+ * The failure series is the interesting one: a stolen-but-fresh session probing for the second
+ * factor before it can strip 2FA off the account.
+ */
+export const authTwoFactorDisableTotal = new Counter({
+    name: 'auth_two_factor_disable_total',
+    help: 'Total two-factor disable attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
+ * Login-time 2FA challenge attempts (`POST /account/login/2fa`).
+ * The sharpest signal of the three: a failure here means the PASSWORD already checked out — same
+ * reasoning `authReauthTotal`'s comment gives, one level earlier in the funnel.
+ */
+export const authTwoFactorChallengeTotal = new Counter({
+    name: 'auth_two_factor_challenge_total',
+    help: 'Total login-time 2FA challenge attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});

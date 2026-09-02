@@ -44,11 +44,16 @@ export const makeUser = ({
     createdAt,
     updatedAt,
     deletedAt,
+    twoFactorEnabledAt,
     ...fields
 }: UserOverrides = {}): UserFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
     username: 'testuser',
     email: 'user@example.com',
     password: PLAIN_PASSWORD,
-    ...stripUndefined({ ...fields, deletedAt: toDate(deletedAt) })
+    ...stripUndefined({
+        ...fields,
+        deletedAt: toDate(deletedAt),
+        twoFactorEnabledAt: toDate(twoFactorEnabledAt)
+    })
 });

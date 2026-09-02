@@ -10,64 +10,16 @@ import { z } from 'zod';
 import { accountService } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { issueSession } from '../session/session';
+import { createMfaChallenge } from '../session/jwt';
+import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import type { LoginRequest } from '@types';
 import { runTokenCleanup } from '../services';
-import { authLoginTotal } from '../metrics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { accountAuditActions } from '../audit';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { accountAnalyticsEvents } from '../analytics';
-import { callerContextOf } from '@infrastructure/http/request';
-
-/*
- * Deliberately not in `accountService.login`: the SUCCESS emit must fire only after the refresh
- * token, cookies and access token all exist — `login()` only proves credentials matched.
- * The failure emit stays here too, for symmetry with success.
- */
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
 const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optional() });
-
-/**
- * Emit login failure observability (metrics + audit).
- */
-const recordLoginFailure = (request: Request) => {
-    authLoginTotal.inc({ status: 'failure' });
-    emitAuditEvent(
-        buildAuditEvent(callerContextOf(request), {
-            action: accountAuditActions.AUTH_LOGIN,
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous',
-            outcome: 'failure'
-        })
-    );
-};
-
-/**
- * Emit login success observability (metrics + audit + analytics).
- */
-const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean) => {
-    const role = isAdmin ? 'admin' : 'user';
-    const context = callerContextOf(request);
-    authLoginTotal.inc({ status: 'success' });
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: accountAuditActions.AUTH_LOGIN,
-            actor_user_id: userId,
-            actor_role: role,
-            outcome: 'success'
-        })
-    );
-    emitAnalyticsEvent({
-        ...buildAnalyticsBase(context),
-        distinctId: userId,
-        event: accountAnalyticsEvents.USER_LOGGED_IN,
-        properties: { role }
-    });
-};
 
 /**
  * POST /account/login
@@ -115,6 +67,22 @@ export const postLogin = (
                 return;
             }
             const userId = data._id.toString();
+
+            /*
+             * 2FA branch: the password checked out, but the login is not complete — no
+             * cookies, no access token, just a short-lived challenge naming this attempt.
+             * Nothing is recorded as a login yet; `postLoginTwoFactor` is what finishes it.
+             */
+            if (data.twoFactorEnabledAt) {
+                successResponse(
+                    response,
+                    { mfaRequired: true, challenge: createMfaChallenge(userId) },
+                    200,
+                    'Two-factor authentication required'
+                );
+                return;
+            }
+
             return issueSession(response, userId, remember).then((accessToken) => {
                 recordLoginSuccess(request, userId, !!data.admin);
                 successResponse(response, { token: accessToken }, 200, 'Authentication successful');

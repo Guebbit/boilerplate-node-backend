@@ -422,6 +422,12 @@ components:
                 analyticsConsent:
                     type: string
                     enum: [granted, denied]
+                # Present only once POST /account/2fa/confirm has armed a secret — a pending,
+                # unconfirmed one never reaches here. The secret and backup codes themselves are
+                # never part of this schema; see `users/model.ts`'s asymmetric storage.
+                twoFactorEnabledAt:
+                    type: string
+                    format: date-time
                 createdAt:
                     type: string
                     format: date-time
@@ -784,6 +790,14 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1tokens~1expired'
     /account/export:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1export'
+    /account/login/2fa:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~12fa'
+    /account/2fa/setup:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1setup'
+    /account/2fa/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1confirm'
+    /account/2fa:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa'
 
     # ---------- users ----------
     /users:
@@ -792,6 +806,8 @@ paths:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}'
     /users/{id}/hard:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~1hard'
+    /users/{id}/2fa:
+        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~12fa'
     /users/search:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1search'
 

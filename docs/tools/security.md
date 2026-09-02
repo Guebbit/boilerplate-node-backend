@@ -63,6 +63,33 @@ flowchart LR
     H -- No --> J[401 Unauthorized]
 ```
 
+## Two-factor authentication
+
+An optional TOTP second factor, on top of the login flow above.
+
+- **Storage is asymmetric.** The TOTP secret must be recoverable to recompute a code against, so
+  it is ENCRYPTED (AES-256-GCM, key from `NODE_TOTP_ENCRYPTION_KEY`, versioned so a future key
+  rotation can decrypt old rows against their own key). Backup codes are one-time and
+  high-entropy, so they are hashed (sha256) the same way refresh tokens are — there is no
+  low-entropy secret to stretch.
+- **Enrollment is two steps.** `POST /account/2fa/setup` generates a secret with no
+  `twoFactorEnabledAt`; only `POST /account/2fa/confirm`, given a code the caller actually read
+  off their own device, arms it and mints backup codes.
+- **Login becomes two steps once enrolled.** `POST /account/login`'s `200` is a discriminated
+  union: a normal `{ token }`, or `{ mfaRequired: true, challenge }` when the account has 2FA on.
+  The challenge is a short-lived, signed, single-purpose token — `POST /account/login/2fa` is the
+  only thing that accepts it back, and the resolver that turns any OTHER token into a session
+  explicitly rejects one carrying that purpose, so a challenge can never authenticate a request on
+  its own.
+- **Replay and rate limits are separate controls.** A code's RFC 6238 time step is tracked per
+  account so the identical code cannot verify twice; `NODE_MFA_CHALLENGE_MAX` bounds attempts
+  against ONE still-live challenge, independent of the account/address budgets below.
+- **Disabling requires proving the factor being removed** — fresh critical auth plus a valid code
+  or backup code — so a stolen-but-fresh session cannot strip 2FA off an account on its own.
+- **Recovery is admin-assisted, not self-service.** A lost device and lost backup codes reduce to
+  the `/users` admin surface, deliberately: a mailbox-based reset would make 2FA only as strong as
+  the inbox it defends against.
+
 ## The rate-limit budgets
 
 **The global limiter is sized for browsing.** A single-page app spends 5–15 requests rendering one

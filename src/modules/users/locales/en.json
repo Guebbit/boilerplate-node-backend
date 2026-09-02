@@ -9,6 +9,7 @@
         "field-password-or-setup-required": "Set a password, or enable the setup email so the user can choose their own.",
         "not-found": "The requested user was not found.",
         "hard-deleted": "User was permanently deleted.",
-        "soft-deleted": "User was soft deleted (deactivated)."
+        "soft-deleted": "User was soft deleted (deactivated).",
+        "two-factor-disabled": "Two-factor authentication was disabled for this user."
     }
 }

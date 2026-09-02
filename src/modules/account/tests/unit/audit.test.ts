@@ -30,7 +30,10 @@ describe('the account audit vocabulary', () => {
             AUTH_LOGGED_OUT_EVERYWHERE: 'auth.logout_all',
             AUTH_SESSION_REVOKED: 'auth.session.revoked',
             AUTH_TOKEN_EXPIRED_CLEANUP: 'auth.token.expired_cleanup',
-            AUTH_DATA_EXPORTED: 'auth.data_export.completed'
+            AUTH_DATA_EXPORTED: 'auth.data_export.completed',
+            AUTH_2FA_ENROLLED: 'auth.two_factor.enrolled',
+            AUTH_2FA_DISABLED: 'auth.two_factor.disabled',
+            AUTH_2FA_CHALLENGE_FAILED: 'auth.two_factor.challenge_failed'
         });
     });
 

@@ -475,8 +475,25 @@ module.exports = {
                     ignoreCodes: [151_002]
                 }
             }
-        ]
+        ],
+        /*
+         * `otplib`'s own packages ship a working CJS build, but two of their transitive deps —
+         * `@scure/base`, `@noble/hashes` — do not; `require`-ing them works under plain Node 22+
+         * (which added synchronous `require(esm)`), but Jest's own module runtime predates that
+         * and still trips on their `export` syntax. Downlevelling just the module syntax with
+         * Babel, only for these two scopes, is narrower than pulling in a real Babel preset for a
+         * codebase that otherwise has none.
+         */
+        '^.+\\.jsx?$': ['babel-jest', { plugins: ['@babel/plugin-transform-modules-commonjs'] }]
     },
+    /*
+     * Default is "ignore everything under node_modules" — carved open only for `@scure`/`@noble`.
+     * Not anchored to "right after node_modules": `@noble/hashes` sometimes lands nested (e.g.
+     * `@otplib/plugin-crypto-noble/node_modules/@noble/hashes`, its own private, unhoisted copy),
+     * so the check is "does `@scure` or `@noble` appear anywhere past this point" rather than
+     * "immediately after the nearest `node_modules/`".
+     */
+    transformIgnorePatterns: ['node_modules/(?!.*@(?:scure|noble))'],
     moduleNameMapper: {
         '^@api/(.*)$': '<rootDir>/api/$1',
         '^@types$': '<rootDir>/src/types',

@@ -33,7 +33,8 @@ const ALL = [
     'GET /:id',
     'PUT /:id',
     'DELETE /:id',
-    'DELETE /:id/hard'
+    'DELETE /:id/hard',
+    'DELETE /:id/2fa'
 ];
 
 describe('user routes — what is mounted', () => {
@@ -90,14 +91,19 @@ describe('user routes — caching and uploads', () => {
         expect(optionsOf(chainOf('GET /:id'), 'setCache')).toMatchObject({ tags: ['users'] });
     });
 
-    it.each(['POST /', 'PUT /', 'DELETE /', 'PUT /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
-        '%s clears both the users and account tags',
-        (signature) => {
-            // Both, because the same row is served by two modules: `/users/:id` to an admin and
-            // `/account` to its owner. Clearing one leaves the other serving the old profile.
-            expect(chainOf(signature)).toContain('invalidateCache([users|account])');
-        }
-    );
+    it.each([
+        'POST /',
+        'PUT /',
+        'DELETE /',
+        'PUT /:id',
+        'DELETE /:id',
+        'DELETE /:id/hard',
+        'DELETE /:id/2fa'
+    ])('%s clears both the users and account tags', (signature) => {
+        // Both, because the same row is served by two modules: `/users/:id` to an admin and
+        // `/account` to its owner. Clearing one leaves the other serving the old profile.
+        expect(chainOf(signature)).toContain('invalidateCache([users|account])');
+    });
 
     it.each(['POST /', 'PUT /', 'PUT /:id'])(
         '%s accepts the imageUpload field and validates it',

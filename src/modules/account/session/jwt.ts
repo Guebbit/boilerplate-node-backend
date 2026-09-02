@@ -41,6 +41,14 @@ export interface TokenData {
      * would add `'otp'`. Copied forward exactly like `auth_time`, same optionality, same reason.
      */
     amr?: string[];
+    /**
+     * Present ONLY on an MFA challenge token (`createMfaChallenge`) — never on an access or
+     * refresh token. `account/module.ts`'s `resolve()` rejects any token carrying this before it
+     * ever reaches a guard: without that check, a challenge token signed with the same secret
+     * would verify as a normal access token and skip the second factor entirely — the classic way
+     * a step-up challenge like this gets built wrong.
+     */
+    purpose?: 'mfa';
 }
 
 /**
@@ -97,9 +105,14 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
  *
  * @param id - user ID
  * @param remember - optional expiry tier
+ * @param amr - how `auth_time` was proved — `['pwd']` unless a 2FA login supplies `['pwd', 'otp']`
  * @returns updated user document
  */
-export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime) =>
+export const createRefreshToken = (
+    id: string,
+    remember?: RefreshTokenExpiryTime,
+    amr: string[] = ['pwd']
+) =>
     userRepository
         // Credentials included: minting a session pushes onto this document's `tokens`.
         .findByIdWithCredentials(id)
@@ -120,7 +133,7 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
                     id,
                     // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
                     auth_time: Math.floor(Date.now() / 1000),
-                    amr: ['pwd']
+                    amr
                 } as TokenData,
                 getRefreshTokenSecret(),
                 {
@@ -131,6 +144,38 @@ export const createRefreshToken = (id: string, remember?: RefreshTokenExpiryTime
             );
             return user.tokenAdd(TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
+
+/** How long an MFA login challenge lives — long enough to type a 6-digit code, no more. */
+export const MFA_CHALLENGE_TTL_SECONDS = 300;
+
+/**
+ * Sign a step-up MFA challenge: `POST /account/login` issues this instead of a session when the
+ * account has 2FA enabled, and `POST /account/login/2fa` is the only thing that accepts it back.
+ *
+ * Signed with the ACCESS secret, which is safe only because `purpose: 'mfa'` is checked at the
+ * one place every access token is resolved (`account/module.ts`'s `resolve()`) — see `TokenData`.
+ *
+ * @param id - the user who passed the password check and still owes a second factor
+ * @returns a short-lived, signed challenge token
+ */
+export const createMfaChallenge = (id: string): string =>
+    sign({ id, purpose: 'mfa' } as TokenData, getAccessTokenSecret(), {
+        expiresIn: MFA_CHALLENGE_TTL_SECONDS,
+        algorithm: 'HS256'
+    });
+
+/**
+ * Verify a challenge token from `createMfaChallenge`.
+ *
+ * @param token - the challenge string the caller submitted to `POST /account/login/2fa`
+ * @returns the claims, if the signature verifies, is unexpired, and actually carries `purpose: 'mfa'`
+ * @throws when any of those fail — a malformed, expired, or wrong-purpose token all read the same to the caller
+ */
+export const verifyMfaChallenge = (token: string): Promise<TokenData> =>
+    verifyAccessToken(token).then((claims) => {
+        if (claims.purpose !== 'mfa') throw new Error('Not an MFA challenge token');
+        return claims;
+    });
 
 /**
  * Stamp a refresh token as used, so `GET /account/sessions` can show which device is idle.

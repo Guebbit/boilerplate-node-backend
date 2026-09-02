@@ -30,6 +30,14 @@
             "wrong-password": "The password is incorrect.",
             "success": "Identity confirmed."
         },
+        "two-factor": {
+            "setup-not-started": "Start setup before confirming a code.",
+            "wrong-code": "That code didn't work. Check your authenticator app and try again.",
+            "not-enabled": "Two-factor authentication isn't enabled on this account.",
+            "enrolled": "Two-factor authentication is now on.",
+            "disabled": "Two-factor authentication is now off.",
+            "challenge-invalid": "This login attempt has expired. Please sign in again."
+        },
         "logout": {
             "success": "Logged out."
         },

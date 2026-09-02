@@ -48,6 +48,14 @@ import { router } from './routes';
  */
 const resolve = (verify: (token: string) => Promise<TokenData>) => (token: string) =>
     verify(token)
+        .then((claims) => {
+            // The wave-5 bypass check: an MFA challenge token (`purpose: 'mfa'`) must never
+            // authenticate a request on its own — only `POST /account/login/2fa` accepts one.
+            // Checked here, the one place every access/refresh token is resolved, rather than
+            // only where a challenge is expected — see `TokenData`'s doc in `session/jwt.ts`.
+            if (claims.purpose) throw new Error('Token not valid for authentication');
+            return claims;
+        })
         // Scoped, not `findById`: a deactivated or soft-deleted account must stop authenticating
         // on its very next request, not merely at its next login. See `findAuthenticatableById`.
         .then((claims) =>
@@ -96,7 +104,14 @@ export default {
      */
     requiredConfig: [
         { key: 'NODE_TOKEN_ACCESS', minLength: 16, placeholder: 'your-access-token-secret-here' },
-        { key: 'NODE_TOKEN_REFRESH', minLength: 16, placeholder: 'your-refresh-token-secret-here' }
+        { key: 'NODE_TOKEN_REFRESH', minLength: 16, placeholder: 'your-refresh-token-secret-here' },
+        // A TOTP secret encrypted under the shipped placeholder is recoverable by anyone who has
+        // read this repository — same failure shape as the two above, same fix.
+        {
+            key: 'NODE_TOTP_ENCRYPTION_KEY',
+            minLength: 16,
+            placeholder: 'your-totp-encryption-key-here'
+        }
     ],
     subscribe: () => {
         // A destroyed account takes its address book with it — the same event cart and wishlist listen for.

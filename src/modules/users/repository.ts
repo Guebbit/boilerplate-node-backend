@@ -17,11 +17,12 @@ import {
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 
 /**
- * `password` and `tokens` are `select: false` on the schema, so plain finders never load them.
- * These two helpers are the ONLY sanctioned way to get them back, keeping re-selection in one
- * place instead of scattered `.select('+password')` calls.
+ * `password`, `tokens` and the 2FA secret fields are `select: false` on the schema, so plain
+ * finders never load them. These two helpers are the ONLY sanctioned way to get them back,
+ * keeping re-selection in one place instead of scattered `.select('+password')` calls.
  */
-const CREDENTIAL_FIELDS = '+password +tokens';
+const CREDENTIAL_FIELDS =
+    '+password +tokens +twoFactorSecret +twoFactorLastUsedStep +twoFactorBackupCodes';
 
 /**
  * The clause every login-adjacent lookup filters on: `active` may be absent on a row written

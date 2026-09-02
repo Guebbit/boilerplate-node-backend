@@ -213,8 +213,20 @@ export const REAUTH_TIME_CRITICAL = environmentNumber('NODE_REAUTH_TIME_CRITICAL
 /** Identity changes, session management — the lighter of the two tiers. */
 export const REAUTH_TIME_SENSITIVE = environmentNumber('NODE_REAUTH_TIME_SENSITIVE', 900);
 
+/** What {@link requireFreshAuth} may additionally demand, beyond how recently. */
+export interface FreshAuthOptions {
+    /**
+     * Every one of these RFC 8176 values must appear in `authContext.amr` — fresh AND
+     * second-factored. `requireFreshAuth(CRITICAL, { methods: ['otp'] })` is the payoff for
+     * carrying `amr` as an array instead of a boolean: a future WebAuthn passkey is `amr: ['hwk']`
+     * and a new caller of this option, no guard or route changes.
+     */
+    methods?: readonly string[];
+}
+
 /**
- * Reject with a step-up challenge unless the caller proved themselves within `maxAgeSeconds`.
+ * Reject with a step-up challenge unless the caller proved themselves within `maxAgeSeconds`,
+ * and (when `options.methods` is given) unless every one of those methods is in their `amr`.
  * MUST run after `isAuth`.
  *
  * **401, not 403** — this repository's own rule (docs/tools/security.md), not just RFC 9470's:
@@ -225,9 +237,11 @@ export const REAUTH_TIME_SENSITIVE = environmentNumber('NODE_REAUTH_TIME_SENSITI
  *
  * @param maxAgeSeconds - how recently `authContext.authTime` must have been set —
  *   {@link REAUTH_TIME_CRITICAL} or {@link REAUTH_TIME_SENSITIVE}
+ * @param options - additional requirements beyond recency — see {@link FreshAuthOptions}
  */
 export const requireFreshAuth =
-    (maxAgeSeconds: number) => (request: Request, response: Response, next: NextFunction) => {
+    (maxAgeSeconds: number, options: FreshAuthOptions = {}) =>
+    (request: Request, response: Response, next: NextFunction) => {
         // Defensive, not the expected path: a route mounting this without `isAuth` first would
         // otherwise read `undefined.authTime` and throw. Same shape as `isAdmin`'s guard above.
         if (!request.authContext) {
@@ -236,7 +250,10 @@ export const requireFreshAuth =
         }
 
         const ageSeconds = Math.floor(Date.now() / 1000) - request.authContext.authTime;
-        if (ageSeconds <= maxAgeSeconds) {
+        const hasRequiredMethods = (options.methods ?? []).every((method) =>
+            request.authContext!.amr.includes(method)
+        );
+        if (ageSeconds <= maxAgeSeconds && hasRequiredMethods) {
             next();
             return;
         }

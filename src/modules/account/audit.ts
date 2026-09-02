@@ -34,7 +34,16 @@ export const accountAuditActions = {
     AUTH_SESSION_REVOKED: 'auth.session.revoked',
     AUTH_TOKEN_EXPIRED_CLEANUP: 'auth.token.expired_cleanup',
     /** The caller pulled a full copy of their own data. */
-    AUTH_DATA_EXPORTED: 'auth.data_export.completed'
+    AUTH_DATA_EXPORTED: 'auth.data_export.completed',
+    /** A pending TOTP secret was confirmed and armed — 2FA is now on for this account. */
+    AUTH_2FA_ENROLLED: 'auth.two_factor.enrolled',
+    AUTH_2FA_DISABLED: 'auth.two_factor.disabled',
+    /**
+     * A password checked out, but the code or backup code presented for the second factor did
+     * not — a sharper signal than a login failure, same reasoning `AUTH_REAUTHENTICATED`'s
+     * comment on `authReauthTotal` gives: someone holds a valid credential and still failed.
+     */
+    AUTH_2FA_CHALLENGE_FAILED: 'auth.two_factor.challenge_failed'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

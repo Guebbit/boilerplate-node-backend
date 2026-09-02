@@ -52,7 +52,12 @@ const STEP_UP_ROUTES: Record<string, string> = {
     'account DELETE /sessions/:sessionId': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
     // The data export adopts this same guard in place of a bespoke password check — see the
     // route's own comment in `account/routes.ts`.
-    'account POST /export': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`
+    'account POST /export': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
+    // Enrolling, confirming or disabling a second factor is itself a sensitive action —
+    // critical tier, same as `DELETE /` and the checkout/payment routes above.
+    'account POST /2fa/setup': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'account POST /2fa/confirm': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'account DELETE /2fa': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`
 };
 
 /** Every step-up label actually mounted on a router, keyed the same way as {@link STEP_UP_ROUTES}. */

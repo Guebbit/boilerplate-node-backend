@@ -117,6 +117,69 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/2fa/setup:
+        post:
+            tags: [Auth]
+            summary: Start two-factor enrollment
+            description: Generates a fresh TOTP secret and returns it plaintext, once, along with the `otpauth://` URI to render as a QR code. Enrollment is not active until `POST /account/2fa/confirm` proves the caller scanned it. Calling this again — including on an account that already has 2FA on — replaces the pending secret and clears any confirmed one, for the "lost my phone, still have my session" recovery path.
+            operationId: setupTwoFactor
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: A fresh TOTP secret, awaiting confirmation
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorSetupEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/confirm:
+        post:
+            tags: [Auth]
+            summary: Confirm two-factor enrollment
+            description: Arms the pending secret from `POST /account/2fa/setup` against a code from the caller's authenticator app, and mints backup codes — returned in the clear exactly once.
+            operationId: confirmTwoFactor
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorConfirmRequest'
+            responses:
+                '200':
+                    description: Two-factor authentication is now on; here are the backup codes
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorConfirmEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa:
+        delete:
+            tags: [Auth]
+            summary: Disable two-factor authentication
+            description: Disables 2FA. Requires a valid TOTP code or an unused backup code in the body, on top of the route's own fresh-auth requirement — disabling from a stolen-but-fresh session is otherwise the cheapest way around the whole feature.
+            operationId: disableTwoFactor
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorDisableRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /account/logout:
         post:
             tags: [Auth]
@@ -325,7 +388,7 @@ paths:
         post:
             tags: [Auth]
             summary: Login
-            description: Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests.
+            description: Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests — OR, when the account has two-factor authentication enabled, a short-lived challenge that must be submitted to `POST /account/login/2fa` instead.
             operationId: login
             security: []
             requestBody:
@@ -336,12 +399,38 @@ paths:
                             $ref: '#/components/schemas/LoginRequest'
             responses:
                 '200':
+                    description: Auth tokens, or a two-factor challenge
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LoginResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/login/2fa:
+        post:
+            tags: [Auth]
+            summary: Complete a two-factor login
+            description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, returns the same auth tokens `POST /account/login` returns for an account with no second factor.
+            operationId: loginTwoFactor
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginTwoFactorRequest'
+            responses:
+                '200':
                     description: Auth tokens
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/AuthTokensEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # A wrong code is a 422, same reasoning as /account/reauth: a 401 here would read
+                # as an expired challenge and send a caller back to /account/login for no reason.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -531,6 +620,120 @@ components:
                 expiresIn:
                     type: integer
                     description: New access token expiry in seconds
+
+        MfaChallenge:
+            type: object
+            additionalProperties: false
+            required: [mfaRequired, challenge]
+            properties:
+                mfaRequired:
+                    type: boolean
+                    enum: [true]
+                    description: Always true — the credential check passed, but a second factor is required before a session is issued.
+                challenge:
+                    type: string
+                    description: Short-lived signed token naming this login attempt. Submit it, with a code, to POST /account/login/2fa. Expires after five minutes.
+
+        LoginResult:
+            oneOf:
+                - $ref: '#/components/schemas/AuthTokens'
+                - $ref: '#/components/schemas/MfaChallenge'
+            description: Either a full session (AuthTokens) or a step-up challenge (MfaChallenge) when the account has two-factor authentication enabled.
+
+        LoginResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LoginResult'
+
+        LoginTwoFactorRequest:
+            type: object
+            additionalProperties: false
+            required: [challenge, code]
+            properties:
+                challenge:
+                    type: string
+                    description: The challenge token from POST /account/login.
+                code:
+                    type: string
+                    description: A 6-digit TOTP code, or an unused backup code.
+
+        TwoFactorSetup:
+            type: object
+            additionalProperties: false
+            required: [secret, otpauthUri]
+            properties:
+                secret:
+                    type: string
+                    description: The TOTP secret, base32-encoded, shown once for manual entry as a fallback to scanning.
+                otpauthUri:
+                    type: string
+                    description: An otpauth:// URI — the frontend renders it as a QR code; this API generates no image.
+
+        TwoFactorSetupEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorSetup'
+
+        TwoFactorConfirmRequest:
+            type: object
+            additionalProperties: false
+            required: [code]
+            properties:
+                code:
+                    type: string
+                    description: A 6-digit code from the authenticator app enrolled via POST /account/2fa/setup.
+
+        TwoFactorConfirmed:
+            type: object
+            additionalProperties: false
+            required: [backupCodes]
+            properties:
+                backupCodes:
+                    type: array
+                    items:
+                        type: string
+                    description: One-time recovery codes for a lost authenticator, shown in the clear exactly once.
+
+        TwoFactorConfirmEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorConfirmed'
+
+        TwoFactorDisableRequest:
+            type: object
+            additionalProperties: false
+            required: [code]
+            properties:
+                code:
+                    type: string
+                    description: A TOTP code, or an unused backup code.
 
         LoginRequest:
             type: object

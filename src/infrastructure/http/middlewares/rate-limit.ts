@@ -200,6 +200,49 @@ export const submissionLimiter: RequestHandler = rateLimit({
 });
 
 /**
+ * Default attempts allowed against ONE login MFA challenge, used when `NODE_MFA_CHALLENGE_MAX`
+ * is unset. Six digits is a million guesses; this is what stops a single challenge from being the
+ * thing an attacker gets to try them against.
+ */
+export const DEFAULT_MFA_CHALLENGE_MAX = 5;
+
+/**
+ * The budget for one login's second-factor challenge (`POST /account/login/2fa`) —
+ * keyed on the CHALLENGE STRING itself, not the account or the address, and windowed to the
+ * challenge's own lifetime rather than the shared `NODE_RATE_LIMIT_WINDOW_MS`. `credentialLimiters`
+ * bounds guesses per account/address across every login attempt; this bounds guesses against ONE
+ * still-live challenge, which an IP/account limit alone does not: a distributed attacker rotating
+ * IPs is still capped per challenge, and six digits is only a million guesses to exhaust.
+ *
+ * A request naming no challenge at all buckets together under one shared key — still a real
+ * budget, just not a useful one to read individually.
+ *
+ * See: docs/tools/security.md#the-rate-limit-budgets
+ */
+export const mfaChallengeLimiter: RequestHandler = rateLimit({
+    store: rateLimitStore('mfa-challenge'),
+    // MFA_CHALLENGE_TTL_SECONDS, restated rather than imported: `account` depends on
+    // `infrastructure`, never the other way around, and the two are pinned together by
+    // `tests/cross-cutting/step-up-auth-routes.test.ts`'s sibling test for this route.
+    windowMs: 300 * 1000,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    passOnStoreError: true,
+    handler: refuse(true),
+    limit: environmentNumber('NODE_MFA_CHALLENGE_MAX', DEFAULT_MFA_CHALLENGE_MAX, 1),
+    keyGenerator: (request: Request): string => {
+        const body: unknown = request.body;
+        const challenge =
+            typeof body === 'object' && body !== null
+                ? (body as Record<string, unknown>).challenge
+                : undefined;
+        return createHash('sha256')
+            .update(typeof challenge === 'string' ? challenge : 'anonymous')
+            .digest('hex');
+    }
+});
+
+/**
  * The budget for routes that accept an image upload.
  *
  * Image processing (the `worker.image.digest` pipeline — see `docs/tools/image-processing.md`) is

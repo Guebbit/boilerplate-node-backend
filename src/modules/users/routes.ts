@@ -14,6 +14,7 @@ import { getUsers, searchUsersKeyParameters } from './controllers/get-users';
 import { writeUsers } from './controllers/write-users';
 import { deleteUsers } from './controllers/delete-users';
 import { getUserItem } from './controllers/get-user-item';
+import { deleteUserTwoFactor } from './controllers/delete-user-two-factor';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
@@ -75,3 +76,7 @@ router.delete(
     routeFlag('hardDelete'),
     deleteUsers
 );
+
+// DELETE /users/:id/2fa — admin-assisted 2FA recovery, no code required. The one deliberate
+// exception to "prove the factor to remove it" — see the controller's own comment.
+router.delete('/:id/2fa', invalidateCache(['users', 'account']), deleteUserTwoFactor);

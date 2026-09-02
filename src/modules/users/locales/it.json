@@ -9,6 +9,7 @@
         "field-password-or-setup-required": "Imposta una password, oppure attiva l'email di configurazione per farla scegliere all'utente.",
         "not-found": "L'utente richiesto non è stato trovato.",
         "hard-deleted": "L'utente è stato eliminato definitivamente.",
-        "soft-deleted": "L'utente è stato eliminato logicamente (disattivato)."
+        "soft-deleted": "L'utente è stato eliminato logicamente (disattivato).",
+        "two-factor-disabled": "L'autenticazione a due fattori è stata disattivata per questo utente."
     }
 }

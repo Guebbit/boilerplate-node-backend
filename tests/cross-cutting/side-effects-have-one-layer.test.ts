@@ -104,16 +104,18 @@ const EXPECTED_LAYER: Readonly<Record<string, Layer>> = {
  * Keyed `<marker> @ <module>/<path>` so one file cannot inherit another's excuse, and so an
  * exception for `emitAuditEvent` does not silently also permit `enqueueEmail`.
  *
- * Both entries are the same shape of argument, and it is one only a controller can make: the emit
- * has to happen for a request that found NO account, and a service function reachable only once a
- * user has been found cannot fire then. Moving either one would make the audit trail disclose
- * account existence that the response deliberately does not.
+ * `session/login-observability.ts` carries the argument a controller alone used to make, now
+ * shared by two of them (`post-login.ts` and `post-login-2fa.ts`): a failed attempt has no user
+ * document to hand a service, and a SUCCESS emit has to wait until cookies and an access token
+ * actually exist — a controller-layer fact neither `login()` nor `verifyLoginChallenge()` (proof
+ * checks only) can know on their own. Extracted rather than duplicated in both controllers once a
+ * second one needed the identical tail.
  */
 const ALLOWED_ELSEWHERE: Readonly<Record<string, string>> = {
-    'emitAuditEvent @ account/controllers/post-login.ts':
-        'A failed login must be recorded, and there is no user document to hand a service when the email belongs to nobody. Emitting from the handler is what makes the record cover the attempts most worth having.',
-    'emitAnalyticsEvent @ account/controllers/post-login.ts':
-        'Same request as the audit record above and the same constraint: the login event is reported for outcomes that never reach a service, so the handler is the only layer that sees all of them.',
+    'emitAuditEvent @ account/session/login-observability.ts':
+        'Shared by every controller that completes or fails a login (POST /account/login, POST /account/login/2fa): a failed attempt has no user document to hand a service, and a success record must wait until a session actually exists, which only the controller layer knows.',
+    'emitAnalyticsEvent @ account/session/login-observability.ts':
+        'Same file, same constraint as the audit record above — the login event is reported for outcomes that never reach a service.',
     'emitAuditEvent @ account/controllers/post-reset-request.ts':
         'Fires unconditionally, whether or not the address belongs to an account, which is exactly what keeps the 200 identical either way and prevents user enumeration. A service reached only after a user is found cannot reproduce that.'
 };

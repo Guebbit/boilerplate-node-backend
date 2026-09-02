@@ -46,6 +46,12 @@ import {
 import { findLiveToken, spendLiveToken, sessionsList } from './tokens';
 import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
 import { exportOwnData } from './export';
+import {
+    setupTwoFactor,
+    confirmTwoFactor,
+    disableTwoFactor,
+    verifyLoginChallenge
+} from './two-factor';
 
 /*
  * Published by name as well as through the namespace: several callers reach for the function
@@ -99,5 +105,9 @@ export const accountService = {
     sessionsList,
     runTokenCleanup,
     adminTokenCleanup,
-    exportOwnData
+    exportOwnData,
+    setupTwoFactor,
+    confirmTwoFactor,
+    disableTwoFactor,
+    verifyLoginChallenge
 };

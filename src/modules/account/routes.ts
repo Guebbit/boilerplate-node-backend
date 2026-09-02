@@ -9,7 +9,11 @@
 
 import type { Request } from 'express';
 import { Router } from 'express';
-import { credentialLimiters, uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
+import {
+    credentialLimiters,
+    uploadLimiter,
+    mfaChallengeLimiter
+} from '@infrastructure/http/middlewares/rate-limit';
 import {
     getAuth,
     isAuth,
@@ -28,6 +32,10 @@ import { postResetRequest } from './controllers/post-reset-request';
 import { postResetConfirm } from './controllers/post-reset-confirm';
 import { postPasswordChange } from './controllers/post-password-change';
 import { postReauth } from './controllers/post-reauth';
+import { postLoginTwoFactor } from './controllers/post-login-2fa';
+import { post2faSetup } from './controllers/post-2fa-setup';
+import { post2faConfirm } from './controllers/post-2fa-confirm';
+import { delete2fa } from './controllers/delete-2fa';
 import { getRefreshToken } from './controllers/get-refresh-token';
 import { postLogout } from './controllers/post-logout';
 import { postLogoutEverywhere } from './controllers/post-logout-everywhere';
@@ -192,3 +200,19 @@ router.delete(
 // POST /account/export — the caller's full data export. Sensitive tier: requireFreshAuth is the
 // identity proof here, not a bespoke password check in the body.
 router.post('/export', isAuth, requireFreshAuth(REAUTH_TIME_SENSITIVE), postAccountExport);
+
+// POST /account/login/2fa — the second step of a 2FA login. Public, like /login
+// itself: the challenge token is the credential. `mfaChallengeLimiter` bounds guesses against
+// ONE challenge; `credentialLimiters` is defense in depth on top of it.
+router.post('/login/2fa', credentialLimiters, mfaChallengeLimiter, postLoginTwoFactor);
+
+// POST /account/2fa/setup — start (or restart) enrollment. Critical tier: enrolling a second
+// factor is itself a sensitive action.
+router.post('/2fa/setup', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), post2faSetup);
+
+// POST /account/2fa/confirm — arm the pending secret, mint backup codes. Critical, same reasoning.
+router.post('/2fa/confirm', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), post2faConfirm);
+
+// DELETE /account/2fa — disable 2FA. Critical fresh auth AND a valid code in the body:
+// disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
+router.delete('/2fa', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), delete2fa);
