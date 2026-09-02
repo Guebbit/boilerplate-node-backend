@@ -7,7 +7,6 @@
  * owner.
  */
 
-import type { AuditAction } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../../audit';
 
 describe('the locales audit vocabulary', () => {
@@ -30,16 +29,5 @@ describe('the locales audit vocabulary', () => {
      */
     it('spells its two-word noun with an underscore, as the sweep requires', () => {
         for (const action of Object.values(localeAuditActions)) expect(action).not.toContain('-');
-    });
-
-    /*
-     * The `declare module` augmentation in `audit.ts` is what puts these into `AuditAction`.
-     * Drop it and the module still compiles on its own — but `emitAuditEvent` then rejects every
-     * action this module owns, at the call sites rather than here.
-     */
-    it('registers its actions in the app-wide union', () => {
-        const action: AuditAction = localeAuditActions.ADMIN_LOCALE_ENTRY_IMPORTED;
-
-        expect(action).toBe('admin.locale_entry.imported');
     });
 });

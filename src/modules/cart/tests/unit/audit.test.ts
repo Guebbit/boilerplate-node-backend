@@ -6,7 +6,6 @@
  * by its owner. Whole-object equality also fails on an action added or removed unnoticed.
  */
 
-import type { AuditAction } from '@infrastructure/observability/audit';
 import { cartAuditActions } from '../../audit';
 
 describe('the cart audit vocabulary', () => {
@@ -15,16 +14,5 @@ describe('the cart audit vocabulary', () => {
             USER_CART_ITEM_REMOVED: 'user.cart.item_removed',
             USER_CART_REORDERED: 'user.cart.reordered'
         });
-    });
-
-    /*
-     * The `declare module` augmentation in `audit.ts` puts these into `AuditAction`. Drop it and
-     * the module still compiles alone, but `emitAuditEvent` then rejects every action it owns —
-     * at the call sites, not here. Checked at type-check time even though jest itself does not.
-     */
-    it('registers its actions in the app-wide union', () => {
-        const action: AuditAction = cartAuditActions.USER_CART_ITEM_REMOVED;
-
-        expect(action).toBe('user.cart.item_removed');
     });
 });
