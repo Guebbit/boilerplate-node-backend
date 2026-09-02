@@ -24,6 +24,19 @@ describe('counterDeltaFor', () => {
             });
     });
 
+    // `openapi.yaml:162-171`'s literal signed table (E1) — the shape check above passes on any
+    // pair of numbers, so this pins the actual value each reason produces.
+    it.each([
+        [StockMovementReason.reserve, { onHandDelta: 0, reservedDelta: 3 }],
+        [StockMovementReason.commit, { onHandDelta: -3, reservedDelta: -3 }],
+        [StockMovementReason.release, { onHandDelta: 0, reservedDelta: -3 }],
+        [StockMovementReason.expire, { onHandDelta: 0, reservedDelta: -3 }],
+        [StockMovementReason.receive, { onHandDelta: 3, reservedDelta: 0 }],
+        [StockMovementReason.adjust, { onHandDelta: 3, reservedDelta: 0 }]
+    ])('gives %s the contract-documented signed delta', (reason, expected) => {
+        expect(counterDeltaFor(reason, 3)).toEqual(expected);
+    });
+
     it('lets only a receipt or an adjustment change how many units exist', () => {
         const changesOnHand = EVERY_REASON.filter(
             (reason) => counterDeltaFor(reason, 5).onHandDelta !== 0

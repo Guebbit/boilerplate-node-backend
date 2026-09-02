@@ -158,6 +158,26 @@ describe('canTransition', () => {
                     );
                 }
     });
+
+    it('reads a literal forward direction off the table, not just its own reverse', () => {
+        // The check above only proves the two wrappers agree WITH EACH OTHER — both route through
+        // the same `canTransition`, so it cannot catch a wrong edge in `ORDER_LIFECYCLE`.
+        // `statusesLeadingTo` already has literal anchors above (`paid`, `cancelled` sections);
+        // `statusesReachableFrom` had none outside the terminal (empty) case.
+        expect(statusesReachableFrom(OrderStatus.pending, 'admin')).toEqual([
+            OrderStatus.cancelled
+        ]);
+        expect(statusesReachableFrom(OrderStatus.pending, 'system')).toEqual([OrderStatus.paid]);
+        expect(statusesReachableFrom(OrderStatus.paid, 'admin')).toEqual([
+            OrderStatus.processing,
+            OrderStatus.cancelled
+        ]);
+        // `processing` is an operator move, not a customer one — unlike `paid` above, nothing
+        // else in this file pins that a customer is refused it.
+        expect(statusesReachableFrom(OrderStatus.paid, 'customer')).toEqual([
+            OrderStatus.cancelled
+        ]);
+    });
 });
 
 describe('orderActionsFor', () => {
@@ -171,6 +191,23 @@ describe('orderActionsFor', () => {
                     statusesReachableFrom(status, actor).includes(OrderStatus.cancelled)
                 );
             }
+    });
+
+    it('reports literal actions for known statuses, not just an echo of its own inputs', () => {
+        // The check above can only catch a wiring bug (wrong args, dropped spread) in
+        // `orderActionsFor` itself — both sides route through the same `statusesReachableFrom`
+        // call, so a wrong entry in `ORDER_LIFECYCLE` would pass it just as easily. These pin
+        // actual values, independent of that function.
+        expect(orderActionsFor(OrderStatus.pending, 'customer')).toEqual({
+            transitions: [OrderStatus.cancelled],
+            cancel: true,
+            pay: true
+        });
+        expect(orderActionsFor(OrderStatus.paid, 'admin')).toEqual({
+            transitions: [OrderStatus.processing, OrderStatus.cancelled],
+            cancel: true,
+            pay: false
+        });
     });
 
     it('never advertises a cancel on an order already cancelled', () => {
