@@ -75,6 +75,13 @@ MongoMemoryServer.create()
         // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- assigning undefined would coerce to the string 'undefined'; delete is how an env var is unset
         for (const key of FORCED_ABSENT) delete process.env[key];
         process.env.NODE_DB_URI = mongod.getUri('demo');
+        // Always derived, never defaulted-when-unset like the block above: a checked-in `.env`'s
+        // `NODE_URL` names the SINGLE-instance developer setup (:3000), and this profile's whole
+        // point is several instances on several ports (see this file's own module doc) — the
+        // OAuth redirect_uri and emailed password-reset/verify links (`emails.ts`) both build off
+        // `NODE_URL`, so a stale value here means those links point at the wrong instance instead
+        // of this one, on every port but the default.
+        process.env.NODE_URL = `http://localhost:${process.env.NODE_PORT ?? '3000'}/`;
 
         // Import AFTER the environment is shaped — `src/app.ts` boots itself on import.
         return import('../src/app')
