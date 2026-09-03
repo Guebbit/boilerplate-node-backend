@@ -41,6 +41,8 @@ describe('signup', () => {
                 VALID_PASSWORD,
                 VALID_PASSWORD,
                 undefined,
+                true,
+                undefined,
                 undefined,
                 undefined,
                 testCallerContext
@@ -65,6 +67,8 @@ describe('signup', () => {
             VALID_PASSWORD,
             VALID_PASSWORD,
             undefined,
+            true,
+            undefined,
             undefined,
             undefined,
             testCallerContext
@@ -85,6 +89,8 @@ describe('signup', () => {
                 'mismatchuser',
                 VALID_PASSWORD,
                 'something-else',
+                undefined,
+                true,
                 undefined,
                 undefined,
                 undefined,
@@ -108,6 +114,8 @@ describe('signup', () => {
                 VALID_PASSWORD,
                 VALID_PASSWORD,
                 undefined,
+                true,
+                undefined,
                 undefined,
                 undefined,
                 testCallerContext
@@ -128,6 +136,8 @@ describe('signup', () => {
                 username,
                 password,
                 password,
+                undefined,
+                true,
                 undefined,
                 undefined,
                 undefined,
@@ -150,6 +160,8 @@ describe('signup', () => {
             VALID_PASSWORD,
             VALID_PASSWORD,
             undefined,
+            true,
+            undefined,
             undefined,
             undefined,
             testCallerContext
@@ -158,6 +170,48 @@ describe('signup', () => {
         const stored = await userRepository.findOne({ email: 'noimage@example.com' });
 
         expect(stored?.imageUrl).toBe('');
+    });
+
+    it('rejects signup with 422 when terms are not accepted', async () => {
+        const response = asReject(
+            await accountService.signup(
+                'noterms@example.com',
+                'notermsuser',
+                VALID_PASSWORD,
+                VALID_PASSWORD,
+                undefined,
+                false,
+                undefined,
+                undefined,
+                undefined,
+                testCallerContext
+            )
+        );
+
+        expect(response.status).toBe(422);
+        expect(response.errors.length).toBeGreaterThan(0);
+
+        const stored = await userRepository.findOne({ email: 'noterms@example.com' });
+        expect(stored).toBeNull();
+    });
+
+    it('persists an explicit analyticsConsent alongside the required termsAccepted', async () => {
+        await accountService.signup(
+            'consenting@example.com',
+            'consentinguser',
+            VALID_PASSWORD,
+            VALID_PASSWORD,
+            true,
+            true,
+            undefined,
+            undefined,
+            undefined,
+            testCallerContext
+        );
+
+        const stored = await userRepository.findOne({ email: 'consenting@example.com' });
+        expect(stored?.termsAccepted).toBe(true);
+        expect(stored?.analyticsConsent).toBe(true);
     });
 });
 

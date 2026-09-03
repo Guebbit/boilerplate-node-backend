@@ -279,6 +279,17 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: Boolean,
             default: false
         },
+        /*
+         * Enforced at signup, not here: `accountService.signup`'s local schema rejects anything
+         * but `true`, so every self-signup that reaches this default already validated it.
+         * `default: true` is for every OTHER creation path — OAuth linking, the admin `/users`
+         * route, test fixtures — none of which shows the checkbox, so none should have to restate
+         * it. Existing rows backfilled by `db/migrations/*-user-terms-accepted-column.js`.
+         */
+        termsAccepted: {
+            type: Boolean,
+            default: true
+        },
         admin: {
             type: Boolean,
             default: false

@@ -439,6 +439,12 @@ components:
                 # (`observability/analytics/index.ts`).
                 analyticsConsent:
                     type: boolean
+                # Enforced at signup only (`SignupRequest.termsAccepted`, required there) — every
+                # account in the database has this `true` by construction, including rows that
+                # predate the field (backfilled, see `db/migrations/*-user-terms-accepted-column.js`).
+                # Informational from here on: there is no re-acceptance flow.
+                termsAccepted:
+                    type: boolean
                 # Present only once POST /account/2fa/confirm has armed a secret — a pending,
                 # unconfirmed one never reaches here. The secret and backup codes themselves are
                 # never part of this schema; see `users/model.ts`'s asymmetric storage.
