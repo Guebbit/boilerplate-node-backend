@@ -301,6 +301,18 @@ No assertions live here. These are what the suites are built from.
 | `tests/support/race.ts`             | The concurrency harness: fire N requests at one instant and assert on the whole set of outcomes.                                               | [Concurrency Testing](../tools/concurrency-testing.md)             |
 | `tests/support/i18n-boot.ts`        | Reproduces the import ordering the app forces — module first, i18next second — so a test hits the same initialisation the app does.            | [Request Flow](../theory/request-flow.md)                          |
 
+## `tests/audit/` — prompts, not tests
+
+The one directory here Jest never runs. These are markdown prompts driven by hand against an LLM,
+covering the question no deterministic tool can reach: does the code do what the **docs** promise?
+They write reports to `reports/audit/` and never touch source.
+
+| File                         | What it is                                                                                          | Read next                              |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `tests/audit/blind-spots.md` | The two-pass audit: freeze spec-derived expectations, then hunt tests that assert the code instead. | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/domain-gaps.md` | Business rules and security boundaries with zero coverage.                                          | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/suite-bloat.md` | Near-duplicate tests that cost CI time and discriminate nothing.                                    | [AI Auditing](../tools/ai-auditing.md) |
+
 ## Co-located module tests
 
 A module's own suites live inside it. Same runner, same conventions; `npm run test:unit`,

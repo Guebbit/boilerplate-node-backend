@@ -36,16 +36,17 @@ flowchart TB
     class LiveFE ext;
 ```
 
-| Layer                     | Question it answers                                                                                 | Tool(s)                           | Command                              | Detail page                                                 |
-| ------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------ | ----------------------------------------------------------- |
-| Unit                      | Is this unit's logic right?                                                                         | Jest, no database                 | `npm run test:unit`                  | [Unit Testing](./unit-testing.md)                           |
-| Integration               | Are the units actually wired together?                                                              | Jest + supertest                  | `npm run test:integration`           | [Integration Testing](./integration-testing.md)             |
-| Contract — Response Shape | Does the wire response match `openapi.yaml`, exactly?                                               | jest-openapi                      | `npm run test:contract`              | [Contract Testing](./contract-testing.md)                   |
-| Contract — Request Data   | Does the API accept every payload the contract declares legal, and reject what it declares illegal? | A zod-v4 AST walker + seeded PRNG | `npm run test:contract` (same suite) | [Contract-Derived Request Data](./contract-request-data.md) |
-| Property                  | Does the rule hold for _every_ input, not just the ones someone thought of?                         | fast-check                        | `npm run test:unit` (same suite)     | [Property Testing](./property-testing.md)                   |
-| Concurrency               | Does it still hold when N requests arrive at once?                                                  | supertest + `Promise.allSettled`  | `npm run test:integration` (same)    | [Concurrency Testing](./concurrency-testing.md)             |
-| Fuzzing                   | Does any spec-valid request produce a 5xx or an undocumented response — on ANY endpoint?            | spec walk + fast-check            | `npm run test:fuzz`                  | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
-| Mutation                  | Do the tests notice when the source is wrong?                                                       | Stryker + jest-runner             | `npm run test:mutation`              | [Mutation Testing](./mutation-testing.md)                   |
+| Layer                     | Question it answers                                                                                 | Tool(s)                            | Command                              | Detail page                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------ | ----------------------------------------------------------- |
+| Unit                      | Is this unit's logic right?                                                                         | Jest, no database                  | `npm run test:unit`                  | [Unit Testing](./unit-testing.md)                           |
+| Integration               | Are the units actually wired together?                                                              | Jest + supertest                   | `npm run test:integration`           | [Integration Testing](./integration-testing.md)             |
+| Contract — Response Shape | Does the wire response match `openapi.yaml`, exactly?                                               | jest-openapi                       | `npm run test:contract`              | [Contract Testing](./contract-testing.md)                   |
+| Contract — Request Data   | Does the API accept every payload the contract declares legal, and reject what it declares illegal? | A zod-v4 AST walker + seeded PRNG  | `npm run test:contract` (same suite) | [Contract-Derived Request Data](./contract-request-data.md) |
+| Property                  | Does the rule hold for _every_ input, not just the ones someone thought of?                         | fast-check                         | `npm run test:unit` (same suite)     | [Property Testing](./property-testing.md)                   |
+| Concurrency               | Does it still hold when N requests arrive at once?                                                  | supertest + `Promise.allSettled`   | `npm run test:integration` (same)    | [Concurrency Testing](./concurrency-testing.md)             |
+| Fuzzing                   | Does any spec-valid request produce a 5xx or an undocumented response — on ANY endpoint?            | spec walk + fast-check             | `npm run test:fuzz`                  | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
+| Mutation                  | Do the tests notice when the source is wrong?                                                       | Stryker + jest-runner              | `npm run test:mutation`              | [Mutation Testing](./mutation-testing.md)                   |
+| Audit                     | Does the code do what the **docs** promise, and do the tests check the spec or just the code?       | prompts in `tests/audit/` + an LLM | by hand, never in CI                 | [AI Auditing](./ai-auditing.md)                             |
 
 Each layer answers a question no other layer answers — a layer that duplicates another's question is cost without coverage:
 
@@ -135,6 +136,8 @@ flowchart TB
 | A race: two requests interleaving into a state neither would produce  | [Concurrency Testing](./concurrency-testing.md)             |
 | A 5xx or undocumented response on an endpoint nobody wrote a test for | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
 | A test that asserts nothing                                           | [Mutation Testing](./mutation-testing.md)                   |
+| A test that asserts what the code does, not what the spec says        | [AI Auditing](./ai-auditing.md)                             |
+| A documented rule with no test at all                                 | [AI Auditing](./ai-auditing.md)                             |
 | A change here that breaks the real frontend                           | the frontend's e2e suites — see below                       |
 
 ## Being the target of the frontend's e2e suites
@@ -338,6 +341,7 @@ requests rather than nightly. Both make the trade worth re-examining; neither is
 - [Concurrency Testing](./concurrency-testing.md) — the four races and the patterns behind them
 - [Spec-Driven Fuzzing](./fuzz-testing.md) — the endpoints nobody wrote a test for
 - [Mutation Testing](./mutation-testing.md)
+- [AI Auditing](./ai-auditing.md) — the prose↔code gap no deterministic tool can reach
 - [Theory](../theory/)
 - [API](../api/)
 - Root file `AI_README.md` for agent-focused repo context

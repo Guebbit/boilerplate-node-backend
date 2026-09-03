@@ -207,6 +207,7 @@ export default withMermaid(
                                 link: '/tools/contract-request-data'
                             },
                             { text: 'Mutation Testing', link: '/tools/mutation-testing' },
+                            { text: 'AI Auditing', link: '/tools/ai-auditing' },
                             {
                                 text: 'Coverage & Confidence',
                                 link: '/tools/coverage-and-confidence'
