@@ -14,10 +14,13 @@ import { findShippingMethod, priceShipping } from '@modules/delivery';
 /** One seed for the file, and one place to change it. */
 const RUN = { seed: 20_260_902, numRuns: 300, endOnFailure: true } as const;
 
+/** A catalogue price, cents-precise — `Product.price` is `format: double`, never a whole dollar only. */
+const decimalPrice = () => fc.integer({ min: 0, max: 10_000_000 }).map((cents) => cents / 100);
+
 const lineItem = () =>
     fc.record({
         quantity: fc.integer({ min: 0, max: 1000 }),
-        product: fc.record({ price: fc.integer({ min: 0, max: 100_000 }) })
+        product: fc.record({ price: decimalPrice() })
     });
 
 /** One of the three methods this shop offers — `findShippingMethod` is the only public way to reach one. */
