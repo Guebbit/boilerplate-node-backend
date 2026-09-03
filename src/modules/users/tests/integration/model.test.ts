@@ -107,6 +107,9 @@ describe('user credential exposure', () => {
                 // The user's preferred language. Public rather than stripped: the client shows
                 // it in the profile and writes it back, and it is in the `User` contract.
                 'locale',
+                // Defaulted `true` like `active`/`admin`, always present — enforced at signup,
+                // informational everywhere else (see `users/model.ts`).
+                'termsAccepted',
                 'updatedAt',
                 'username',
                 // Whether the address is confirmed — in the `User` contract, and the client's

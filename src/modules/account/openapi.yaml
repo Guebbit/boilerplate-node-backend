@@ -857,7 +857,7 @@ components:
         SignupRequest:
             type: object
             additionalProperties: false
-            required: [email, username, password, passwordConfirm]
+            required: [email, username, password, passwordConfirm, termsAccepted]
             properties:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
@@ -870,11 +870,21 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                # Must be `true` — the checkbox gating the Terms of Service / Privacy Policy.
+                # Server-enforced (see `accountService.signup`), not just a client-side gate.
+                termsAccepted:
+                    type: boolean
+                    enum: [true]
+                # Optional, unlike `termsAccepted`: the second signup checkbox, opt-in and
+                # unchecked by default. Absent is the same as `false` — there is no "leave it
+                # alone" reading at signup, unlike `UpdateAccountRequest`'s.
+                analyticsConsent:
+                    type: boolean
 
         SignupRequestMultipart:
             type: object
             additionalProperties: false
-            required: [email, username, password, passwordConfirm]
+            required: [email, username, password, passwordConfirm, termsAccepted]
             properties:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
@@ -885,6 +895,11 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 passwordConfirm:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                termsAccepted:
+                    type: boolean
+                    enum: [true]
+                analyticsConsent:
+                    type: boolean
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string

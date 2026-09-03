@@ -7,7 +7,8 @@
         },
         "signup": {
             "email-already-used": "L'email è già stata utilizzata.",
-            "password-dont-match": "La password di conferma deve essere uguale alla password."
+            "password-dont-match": "La password di conferma deve essere uguale alla password.",
+            "terms-not-accepted": "Devi accettare i Termini di Servizio e l'Informativa sulla Privacy per registrarti."
         },
         "reset": {
             "token-not-found": "Token non valido o scaduto, riprova.",

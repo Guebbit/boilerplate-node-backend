@@ -74,6 +74,10 @@ const namedUsers = [
         email: SEED_USER_EMAIL,
         password: SEED_USER_PASSWORD,
         verified: true,
+        // `tests/e2e/specs/../analytics.cy.ts` (frontend) logs in as this account and asserts
+        // the backend fires `cart_item_added` — `emitAnalyticsEvent`'s consent gate is opt-in,
+        // so this is the account that has opted in.
+        analyticsConsent: true,
         ...userImages.ginopinoshow
     })
 ];
@@ -112,6 +116,10 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         username,
         email: SEED_CUSTOMER_EMAILS[key],
         verified: true,
+        // Alternating, same as the image cycling below: a real customer base is a mix of
+        // opted-in and not, and `root`/`ginopinoshow` alone left the "granted" path exercised
+        // by exactly one account.
+        analyticsConsent: index % 2 === 0,
         ...(index % 2 === 0 ? userImages.root : userImages.ginopinoshow)
     })
 );
