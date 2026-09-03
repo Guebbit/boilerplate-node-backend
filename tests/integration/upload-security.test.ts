@@ -59,6 +59,7 @@ const signupWith = (content: Buffer | string, filename: string, contentType: str
         .field('username', 'uploader')
         .field('password', 'Password1!')
         .field('passwordConfirm', 'Password1!')
+        .field('termsAccepted', 'true')
         .attach('imageUpload', Buffer.isBuffer(content) ? content : Buffer.from(content), {
             filename,
             contentType

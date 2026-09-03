@@ -28,7 +28,8 @@ export const postSignup = (
      * validates via `zodUserSchema`, whose messages are translated; the generated schema would
      * answer first in Zod's own English (`tests/integration/locale.test.ts` asserts it doesn't).
      */
-    const { email, username, password, passwordConfirm } = request.body;
+    const { email, username, password, passwordConfirm, analyticsConsent, termsAccepted } =
+        request.body;
 
     // `= ''` because `signup` passes this straight to `zodUserSchema`, which wants a string.
     const {
@@ -44,6 +45,8 @@ export const postSignup = (
             username,
             password,
             passwordConfirm,
+            analyticsConsent,
+            termsAccepted,
             imageUrl,
             thumbnailUrl,
             pendingImageKey,

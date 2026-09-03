@@ -59,7 +59,8 @@ describe('R1 — concurrent signups for one address', () => {
                     email,
                     username: `racer${index}`,
                     password: PLAIN_PASSWORD,
-                    passwordConfirm: PLAIN_PASSWORD
+                    passwordConfirm: PLAIN_PASSWORD,
+                    termsAccepted: true
                 })
         );
 
@@ -80,7 +81,8 @@ describe('R1 — concurrent signups for one address', () => {
                     email,
                     username: `racer${index}`,
                     password: PLAIN_PASSWORD,
-                    passwordConfirm: PLAIN_PASSWORD
+                    passwordConfirm: PLAIN_PASSWORD,
+                    termsAccepted: true
                 })
         );
 
@@ -98,7 +100,8 @@ describe('R1 — concurrent signups for one address', () => {
                     email,
                     username: `racer${index}`,
                     password: PLAIN_PASSWORD,
-                    passwordConfirm: PLAIN_PASSWORD
+                    passwordConfirm: PLAIN_PASSWORD,
+                    termsAccepted: true
                 })
         );
 
@@ -114,14 +117,16 @@ describe('R1 — concurrent signups for one address', () => {
             email,
             username: 'first',
             password: PLAIN_PASSWORD,
-            passwordConfirm: PLAIN_PASSWORD
+            passwordConfirm: PLAIN_PASSWORD,
+            termsAccepted: true
         });
 
         const second = await api().post('/account/signup').send({
             email,
             username: 'second',
             password: PLAIN_PASSWORD,
-            passwordConfirm: PLAIN_PASSWORD
+            passwordConfirm: PLAIN_PASSWORD,
+            termsAccepted: true
         });
 
         const accounts = await userModel.countDocuments({ email });

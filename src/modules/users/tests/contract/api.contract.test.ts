@@ -106,7 +106,8 @@ describe('POST /account/signup', () => {
             username: 'newcomer',
             email: 'newcomer@example.com',
             password: 'Password1!',
-            passwordConfirm: 'Password1!'
+            passwordConfirm: 'Password1!',
+            termsAccepted: true
         });
 
         expect(response.status).toBe(201);
@@ -120,7 +121,8 @@ describe('POST /account/signup', () => {
             username: 'duplicate',
             email: 'duplicate@example.com',
             password: 'Password1!',
-            passwordConfirm: 'Password1!'
+            passwordConfirm: 'Password1!',
+            termsAccepted: true
         };
         await api().post('/account/signup').send(payload);
         const response = await api().post('/account/signup').send(payload);

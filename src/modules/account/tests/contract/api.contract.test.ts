@@ -470,7 +470,8 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
             email: 'joiner@example.com',
             username: 'joiner',
             password: PLAIN_PASSWORD,
-            passwordConfirm: PLAIN_PASSWORD
+            passwordConfirm: PLAIN_PASSWORD,
+            termsAccepted: true
         });
 
         expect(response.status).toBe(201);

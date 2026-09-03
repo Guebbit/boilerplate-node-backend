@@ -30,7 +30,8 @@ import {
     type TokenType,
     type UserDocument
 } from '@modules/users';
-import type { CallerContext } from '@infrastructure/http/request';
+import { parseFormBoolean, type CallerContext } from '@infrastructure/http/request';
+import { analyticsConsentSchema } from '@infrastructure/http/schemas';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
@@ -301,6 +302,13 @@ export const signup = (
     username: string,
     password: string,
     passwordConfirm: string,
+    // Optional like `UpdateAccountRequest`'s, but with no "leave it alone" reading — there is no
+    // prior value at signup, so absent and `false` mean the same thing here.
+    analyticsConsent: boolean | undefined,
+    // Not a stored default: the contract requires it, and the schema below rejects anything but
+    // `true`. Validated here rather than on `userSchema` so OAuth linking and the admin `/users`
+    // route — neither of which shows this checkbox — aren't forced to restate it.
+    termsAccepted: boolean,
     // Not `| null`: the contract declares `imageUrl` a string, so a null reaches zod as
     // "expected string, received null" and is rejected before the `?? ''` below could see it.
     // The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
@@ -313,7 +321,17 @@ export const signup = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const parseResult = zodUserSchema
         .extend({
-            passwordConfirm: z.string()
+            passwordConfirm: z.string(),
+            // Shared with `PUT /account`'s: both decode the same multipart-string trap
+            // (`analyticsConsentSchema`'s own doc covers it), signup just narrows it to
+            // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
+            analyticsConsent: analyticsConsentSchema,
+            // Not `analyticsConsentSchema`'s shape: signup needs the multipart decode
+            // (`parseFormBoolean`) but a literal-true requirement, not an optional one.
+            termsAccepted: z.preprocess(
+                parseFormBoolean,
+                z.literal(true, { error: () => t('account.signup.terms-not-accepted') })
+            )
         })
         .superRefine(({ passwordConfirm, password }, refinementContext) => {
             if (passwordConfirm !== password)
@@ -327,7 +345,9 @@ export const signup = (
             username,
             imageUrl,
             password,
-            passwordConfirm
+            passwordConfirm,
+            analyticsConsent,
+            termsAccepted
         });
 
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
@@ -343,6 +363,8 @@ export const signup = (
                           thumbnailUrl,
                           pendingImageKey,
                           password,
+                          analyticsConsent,
+                          termsAccepted,
                           // The language they signed up in, kept for work that happens later
                           // without a request to read `Accept-Language` from — a queued email, a
                           // nightly job. Editable afterwards from the user endpoints.
