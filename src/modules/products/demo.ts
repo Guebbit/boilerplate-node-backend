@@ -1,7 +1,7 @@
 /**
  * @module
  * The catalogue's slice of the demo dataset, stated here so `rm -rf src/modules/products` removes
- * it too. `scripts/export-demo-dataset.ts` seeds these rows and publishes what the API actually
+ * it too. `scripts/demo/export-dataset.ts` seeds these rows and publishes what the API actually
  * serves as `db/demo/demo-data.json`, so the paired frontend gets the data without sharing source.
  * A field a record omits falls to `./model`'s `default:` — see `./fixtures`.
  *
@@ -176,7 +176,7 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
 
 /**
  * Read the seeded catalogue back as the API serves it — `module.ts` declares this, and
- * `scripts/export-demo-dataset.ts` calls it. Sorted by `_id` so the published file is byte-stable across
+ * `scripts/demo/export-dataset.ts` calls it. Sorted by `_id` so the published file is byte-stable across
  * runs rather than dependent on Mongo's natural order.
  */
 export const exportSeededProducts = async (): Promise<Record<string, unknown[]>> => ({

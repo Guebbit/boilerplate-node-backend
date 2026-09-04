@@ -114,7 +114,7 @@ someone actually runs e2e against a backend with `NODE_SEED_*` overridden.
 
 ## The shared-file list, and what earns a place on it
 
-`scripts/spec-identity.ts` holds the files that must be **byte-identical** in both checkouts. The
+`scripts/pairing/spec-identity.ts` holds the files that must be **byte-identical** in both checkouts. The
 test for membership is not "are these the same today" — a dozen more files happen to match, from
 favicons to `.prettierrc` — but **"does a fork cause a silent bug?"** Everything on the list fails
 quietly: both sides keep building, keep passing their own suites, and disagree only in production

@@ -7,7 +7,7 @@ npm run demo               # :3000 — in-memory Mongo, seeded, cache/queue disa
 NODE_PORT=3101 npm run demo   # several run side by side; each owns its own database
 ```
 
-One process, no Docker: `scripts/run-demo-server.ts` starts a `mongodb-memory-server` (the same dependency the test suite already uses), points `NODE_DB_URI` at it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Every enabled module's demo fixtures (`src/modules/<name>/demo.ts`) are seeded at boot. Kill the process and nothing survives it.
+One process, no Docker: `scripts/demo/run-server.ts` starts a `mongodb-memory-server` (the same dependency the test suite already uses), points `NODE_DB_URI` at it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Every enabled module's demo fixtures (`src/modules/<name>/demo.ts`) are seeded at boot. Kill the process and nothing survives it.
 
 ## Who it is for
 
@@ -50,7 +50,7 @@ page and types. The passwords are overridable via `NODE_SEED_ADMIN_PASSWORD`/
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
 response — `password` is `select: false` and the user transform omits it — which is why
-`scripts/export-demo-dataset.ts` carries these into `demo-data.json` separately rather than reading them
+`scripts/demo/export-dataset.ts` carries these into `demo-data.json` separately rather than reading them
 back off a serialized user.
 :::
 

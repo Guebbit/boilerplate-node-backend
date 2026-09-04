@@ -22,7 +22,7 @@ import {
     writeBaseline,
     MUTATION_PROFILES,
     profileFromArguments
-} from './mutation-baseline';
+} from './baseline';
 
 const update = process.argv.includes('--update');
 

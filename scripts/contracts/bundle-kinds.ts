@@ -34,7 +34,7 @@ interface BundleIdentity {
     output: string;
     /**
      * Whether the paired frontend holds a copy of this document, and so whether it belongs in
-     * `scripts/spec-identity.ts`.
+     * `scripts/pairing/spec-identity.ts`.
      *
      * Absent means yes, because publishing a document built from every domain's sources is what
      * these bundles are for. `asyncapi.yaml` is the one `false`: the frontend receives

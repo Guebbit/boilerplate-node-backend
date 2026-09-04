@@ -69,7 +69,7 @@ export interface OrderDocument
     updatedAt?: Date;
     /**
      * Set alongside `userId` being unset, to `now + NODE_ORDER_PII_RETENTION_DAYS`.
-     * `scripts/reap-orders.ts` scrubs the order's remaining PII (email, shipping name/phone/
+     * `ops/reap-orders.ts` scrubs the order's remaining PII (email, shipping name/phone/
      * street) once this elapses; the order row itself is never deleted.
      */
     anonymizeAfter?: Date;
@@ -190,7 +190,7 @@ orderSchema.index({ email: 1 }, { name: 'orders_email' });
 /* Non-admin reads exclude soft-deleted rows (`visibleScope` in `./repository`). */
 orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt' });
 /*
- * `scripts/reap-orders.ts`'s own sweep — NOT a TTL index: the row must survive, only its PII
+ * `ops/reap-orders.ts`'s own sweep — NOT a TTL index: the row must survive, only its PII
  * gets scrubbed, so nothing here may carry `expireAfterSeconds`.
  */
 orderSchema.index({ anonymizeAfter: 1 }, { name: 'orders_anonymizeAfter', sparse: true });

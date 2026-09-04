@@ -10,7 +10,7 @@
  *
  * Two callers need the same answer from the same rows:
  *
- *   - `scripts/export-demo-dataset.ts` publishes it, against a database it seeded from scratch;
+ *   - `scripts/demo/export-dataset.ts` publishes it, against a database it seeded from scratch;
  *   - `tests/unit/db/migration-demo-data.test.ts` re-derives it, against a database that has also
  *     run every migration, and compares the two.
  *

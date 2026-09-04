@@ -17,8 +17,8 @@ import 'dotenv/config';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { assembleDemoDataset, DEMO_DATA_PATH } from '../db/demo/assemble';
-import { enabledModules } from '../src/modules';
+import { assembleDemoDataset, DEMO_DATA_PATH } from '../../db/demo/assemble';
+import { enabledModules } from '../../src/modules';
 
 const checkOnly = process.argv.includes('--check');
 

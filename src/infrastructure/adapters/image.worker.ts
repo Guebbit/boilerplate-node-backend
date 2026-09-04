@@ -96,7 +96,7 @@ export const digestQuarantinedImage = (key: string): Promise<DigestedImageUrls> 
             )
             .then(([imageUrl, thumbnailUrl]) =>
                 // Best-effort: the promoted files are what matters, and a leftover quarantine file
-                // is cleaned up later by `scripts/reap-quarantine.ts` regardless.
+                // is cleaned up later by `ops/reap-quarantine.ts` regardless.
                 imageStore.removeQuarantined(key).then(() => ({ imageUrl, thumbnailUrl }))
             );
     });

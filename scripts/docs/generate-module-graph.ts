@@ -33,7 +33,7 @@ import { format, resolveConfig } from 'prettier';
 
 const checkOnly = process.argv.includes('--check');
 
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(__dirname, '..', '..');
 const PAGE = path.join(ROOT, 'docs', 'modules', 'index.md');
 const START = '<!-- module-graph:start -->';
 const END = '<!-- module-graph:end -->';

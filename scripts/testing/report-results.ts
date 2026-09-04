@@ -37,7 +37,7 @@ import path from 'node:path';
  * `process.cwd()`, not `__dirname`: this file is byte-identical in a CommonJS repo and an ESM one,
  * and `__dirname` does not exist in the second. `import.meta.url` is the mirror-image problem. The
  * cwd is the package root for anything started by `npm run`, which is the only way this is
- * invoked — the same trade `scripts/mutation-baseline.ts` already makes.
+ * invoked — the same trade `scripts/mutation/baseline.ts` already makes.
  */
 const REPO_ROOT = process.cwd();
 

@@ -42,7 +42,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-const REPO_ROOT = path.join(__dirname, '..');
+const REPO_ROOT = path.join(__dirname, '..', '..');
 
 /** What a changed file must look like to be worth mutating: production TypeScript, not a spec. */
 const MUTABLE = /^src\/.+\.ts$/;
@@ -103,7 +103,7 @@ if (stryker.error) {
     process.exit(2);
 }
 
-const check = spawnSync('npx', ['tsx', 'scripts/check-mutation-baseline.ts', '--deep'], {
+const check = spawnSync('npx', ['tsx', 'scripts/mutation/check-baseline.ts', '--deep'], {
     cwd: REPO_ROOT,
     stdio: 'inherit'
 });

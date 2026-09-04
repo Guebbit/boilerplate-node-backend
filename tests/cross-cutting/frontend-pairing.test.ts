@@ -17,7 +17,7 @@
  * actually over there, in both directions.
  *
  * That half is conditional on the sibling being present, and says so out loud rather than passing
- * quietly — the same bargain `tests/unit/scripts/spec-identity.test.ts` makes, for the same reason:
+ * quietly — the same bargain `tests/unit/scripts/pairing/spec-identity.test.ts` makes, for the same reason:
  * a guard that evaporates in silence is worse than one that is visibly absent.
  *
  * `why` is prose for a reader, on the entries where the counterpart is not simply the same name and
@@ -30,7 +30,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { enabledModules } from '../../src/modules';
-import { resolveFrontendPath } from '../../scripts/paired-frontend-path';
+import { resolveFrontendPath } from '../../scripts/pairing/paired-frontend-path';
 
 /** One module's counterpart in `boilerplate-vue-frontend`. */
 interface Pairing {

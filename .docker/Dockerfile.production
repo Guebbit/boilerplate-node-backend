@@ -117,12 +117,14 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #   shared/   EJS email templates (`shared/views/templates-emails`, resolved against the working
 #             directory by `adapters/mailer.ts`) and the contract fragments
 #   db/       migrations and seeds, for `npm run db:migrate:up` as a deploy step
+#   ops/      the scheduled `reap:*` jobs, run by a cron container against this image
 #   public/   express.static root — CSS, favicon, and the committed seed images
 #   openapi.yaml / asyncapi.yaml   served by the docs endpoints and read by response validation
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/api ./api
 COPY --from=build --chown=node:node /app/shared ./shared
 COPY --from=build --chown=node:node /app/db ./db
+COPY --from=build --chown=node:node /app/ops ./ops
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/openapi.yaml /app/asyncapi.yaml ./
 COPY --from=build --chown=node:node /app/tsconfig.json ./

@@ -24,6 +24,7 @@ flowchart TD
     Root --> Contracts["Contracts<br/><i>openapi · asyncapi · api/</i>"]
     Root --> Ops["Ops<br/><i>.docker · .github · public</i>"]
     Root --> Dev["Dev tooling<br/><i>scripts · eslint · .husky</i>"]
+    Root --> Jobs["Scheduled jobs<br/><i>ops/</i>"]
     Root --> Data["Data<br/><i>db/ · seeds · migrations</i>"]
     Root --> Tests["tests/ · k6/"]
 
@@ -37,7 +38,7 @@ flowchart TD
     classDef side fill:#ede9fe,stroke:#7c3aed,color:#111827;
     class Root entry;
     class Src,Infra,Kernel,Modules,App code;
-    class Contracts,Ops,Dev,Data,Tests side;
+    class Contracts,Ops,Dev,Jobs,Data,Tests side;
 ```
 
 | Page                                      | Covers                                                                                                        |
@@ -48,7 +49,7 @@ flowchart TD
 | [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                            |
 | [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api/`, collection exports, Spectral rulesets |
 | [Data](./data.md)                         | `db/` — migrations, the demo dataset, cache tools                                                             |
-| [Scripts & Hooks](./scripts.md)           | `scripts/`, `eslint/rules/`, `.husky/`                                                                        |
+| [Scripts & Hooks](./scripts.md)           | `scripts/`, `ops/`, `eslint/rules/`, `.husky/`                                                                |
 | [Tests](./tests.md)                       | `tests/`, the co-located module suites, `k6/`                                                                 |
 | [Ops & Assets](./ops.md)                  | `.docker/`, `.github/`, compose files, `public/`                                                              |
 

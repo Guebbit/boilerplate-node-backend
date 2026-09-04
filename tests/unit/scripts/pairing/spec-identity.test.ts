@@ -1,5 +1,5 @@
 /**
- * `scripts/spec-identity.ts` — the cross-repo contract check.
+ * `scripts/pairing/spec-identity.ts` — the cross-repo contract check.
  *
  * Two separate things are worth testing here, and only one of them is the comparison logic:
  *
@@ -32,8 +32,8 @@ import {
     hashFile,
     sharedFileProblems,
     type RepoRole
-} from '../../../scripts/spec-identity';
-import { resolveFrontendPath } from '../../../scripts/paired-frontend-path';
+} from '../../../../scripts/pairing/spec-identity';
+import { resolveFrontendPath } from '../../../../scripts/pairing/paired-frontend-path';
 
 /** Builds a throwaway repo root holding the named files with the given contents. */
 const makeRoot = (files: Record<string, string>): string => {

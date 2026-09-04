@@ -8,7 +8,7 @@
  * `channels` rather than sitting in the root document.
  *
  * Deliberately NOT `asyncapi bundle`: that dereferences every `$ref`, which triples the document
- * and leaves `scripts/generate-asyncapi-types.ts` — which walks those refs to name its models — with
+ * and leaves `scripts/contracts/generate-asyncapi-types.ts` — which walks those refs to name its models — with
  * nothing to follow. This merge copies four maps and refuses on a collision.
  *
  * Merged through the YAML AST so each node keeps its authored quoting and scalar style.

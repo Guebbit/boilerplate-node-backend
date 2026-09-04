@@ -59,7 +59,7 @@ const addressItemSchema = new Schema(
 /*
  * An entry serializes as the contract's `Address` — `_id` renamed to `id`, like the product
  * snapshot embedded in an order line. `./services/addresses` maps entries by hand instead, so no
- * request path uses this; only `scripts/export-demo-dataset.ts`'s `toJSON()` publishes stored
+ * request path uses this; only `scripts/demo/export-dataset.ts`'s `toJSON()` publishes stored
  * rows through it.
  */
 applySerialization(addressItemSchema);

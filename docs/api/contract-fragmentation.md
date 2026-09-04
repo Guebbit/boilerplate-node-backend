@@ -104,7 +104,7 @@ It would be tidier to ship only fragments and bundle on demand. Three reasons no
 
 - **The frontend's toolchain reads one file.** `orval.config.ts` there points at `./openapi.yaml`
   three times, and `spectral lint openapi.yaml` runs in both repos.
-- **Byte-identity is enforced by a test.** `scripts/spec-identity.ts` compares this repo's copy with
+- **Byte-identity is enforced by a test.** `scripts/pairing/spec-identity.ts` compares this repo's copy with
   the frontend's and fails the build when they fork. That check needs one file on each side to
   compare.
 - **Regeneration is not reproducible across repos.** `redocly bundle` output depends on the
@@ -221,7 +221,7 @@ npm run check:contracts-bundle        # fail if any committed bundle is stale
 ```
 
 To rebuild one document while iterating, name it: `npm run contracts:bundle -- openapi`. The
-ordering lives inside `scripts/build-contract-bundles.ts` rather than as an `&&` chain in `package.json`,
+ordering lives inside `scripts/contracts/build-bundles.ts` rather than as an `&&` chain in `package.json`,
 which is what makes that flag narrow the run instead of silently doing everything else. See
 [Regenerating After a Change](./regenerating.md#regenerate-one-bundle-only).
 
@@ -337,7 +337,7 @@ the right indentation.
 documents, is to shell out to `@asyncapi/cli` the way `openapi` shells out to Redocly. It was tried
 and it does the wrong thing: **`asyncapi bundle` dereferences.** Every `$ref` is inlined, the
 document grows from 239 lines to 819, each payload is repeated once per channel that names it *and*
-kept under `components` — and `scripts/generate-asyncapi-types.ts`, which walks
+kept under `components` — and `scripts/contracts/generate-asyncapi-types.ts`, which walks
 `channels[*].{publish,subscribe}.message.$ref` to decide what to name a generated model, is left
 with nothing to follow. So the merge happens in about thirty lines in
 `scripts/contracts/asyncapi-bundles.ts`, deliberately dumber than a bundler: it copies four maps and

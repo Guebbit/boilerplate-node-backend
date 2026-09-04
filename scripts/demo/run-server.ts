@@ -1,3 +1,4 @@
+#!/usr/bin/env tsx
 /**
  * The demo profile: the real API, self-contained and disposable — `npm run demo`.
  *
@@ -84,10 +85,10 @@ MongoMemoryServer.create()
         process.env.NODE_URL = `http://localhost:${process.env.NODE_PORT ?? '3000'}/`;
 
         // Import AFTER the environment is shaped — `src/app.ts` boots itself on import.
-        return import('../src/app')
+        return import('../../src/app')
             .then(() => import('@infrastructure/runtime/database'))
             .then(({ connection }) => waitForDatabase(() => connection.readyState))
-            .then(() => import('../src/app/demo'))
+            .then(() => import('../../src/app/demo'))
             .then(({ runDemoSeed }) => runDemoSeed(false))
             .then(() => {
                 console.log(

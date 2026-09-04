@@ -154,7 +154,7 @@ const updateStatusIfIn = (
         .exec();
 
 /**
- * Unset `userId` on every order this account placed, and mark them for `scripts/reap-orders.ts`
+ * Unset `userId` on every order this account placed, and mark them for `ops/reap-orders.ts`
  * to scrub later — `users`' `USER_DELETED` listener. The order row is never touched otherwise:
  * it is the invoice, kept whole until `anonymizeAfter`.
  *
@@ -179,7 +179,7 @@ const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
 const ANONYMIZED_TEXT = 'Anonymized';
 
 /**
- * `scripts/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has
+ * `ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has
  * elapsed gets its remaining PII scrubbed: `email` and the required `shippingAddress` fields
  * (`fullName`, `street`) are REPLACED, since the schema requires them; the optional
  * `shippingAddress.phone` is unset outright. City, country, zip, amounts, line items and dates

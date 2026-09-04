@@ -67,7 +67,7 @@ npm run check:contracts-bundle  # fail if a committed bundle is stale
 ```
 
 **It is a merge, not `asyncapi bundle`.** The CLI dereferences — inlining every payload into every
-channel that names it, 239 lines to 819, and leaving `scripts/generate-asyncapi-types.ts` with no `$ref`
+channel that names it, 239 lines to 819, and leaving `scripts/contracts/generate-asyncapi-types.ts` with no `$ref`
 to follow. `scripts/contracts/asyncapi-bundles.ts` copies four maps instead and refuses on a collision; its
 header carries the full argument, and is the file to read before trying the CLI again.
 
@@ -83,7 +83,7 @@ including why each bundle uses the verb it does.
 
 ## Generated TypeScript types
 
-Types are generated from `asyncapi.yaml` into `src/types/asyncapi.generated.ts` by a custom script (`scripts/generate-asyncapi-types.ts`).  
+Types are generated from `asyncapi.yaml` into `src/types/asyncapi.generated.ts` by a custom script (`scripts/contracts/generate-asyncapi-types.ts`).  
 They are re-exported from `src/types/index.ts` so all app code can import them consistently:
 
 ```ts
@@ -97,24 +97,24 @@ Regenerate types after editing `asyncapi.yaml`:
 npm run gen:asyncapi
 ```
 
-The generator (`scripts/generate-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
+The generator (`scripts/contracts/generate-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
 
 ### Shared with the frontend
 
-This script is **byte-identical** to `scripts/generate-asyncapi-types.ts` in `boilerplate-vue-frontend`,
+This script is **byte-identical** to `scripts/contracts/generate-asyncapi-types.ts` in `boilerplate-vue-frontend`,
 and both write the same path:
 
 | Repo | Command | Reads |
 | --- | --- | --- |
-| Backend | `tsx scripts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | this repo's `asyncapi.yaml` — every channel |
-| Frontend | `tsx scripts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | its `asyncapi.yaml`, which is a copy of `asyncapi.public.yaml` |
+| Backend | `tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | this repo's `asyncapi.yaml` — every channel |
+| Frontend | `tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | its `asyncapi.yaml`, which is a copy of `asyncapi.public.yaml` |
 
 The script is the same, the INPUT is not — so the two outputs differ, and are meant to: only this
 repo's carries `EmailJobPayload`, `PdfJobPayload` and `WORKER_CHANNELS`. Everything the frontend's
 does carry, it carries identically, because the shared half of the spec is one document copied
 across.
 
-`asyncapi.public.yaml` and this script are in `SHARED_FILES` (`scripts/spec-identity.ts`), so
+`asyncapi.public.yaml` and this script are in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
 `check:spec-identity` fails on the commit that forks either. **The generated outputs are not**, and
 deliberately: they legitimately differ now, and even where they overlap a cross-repo comparison
 would only re-ask a question the two entries above already answer, at the price of carrying another
@@ -127,7 +127,7 @@ catch. Same in the frontend, over its own copy.
 
 ## Tooling used here
 
-- `@asyncapi/modelina`: schema-to-code generator used by `scripts/generate-asyncapi-types.ts` to turn `asyncapi.yaml` schemas into TypeScript models/types (then the script appends repo-specific helper exports).
+- `@asyncapi/modelina`: schema-to-code generator used by `scripts/contracts/generate-asyncapi-types.ts` to turn `asyncapi.yaml` schemas into TypeScript models/types (then the script appends repo-specific helper exports).
 - `@asyncapi/cli`: CLI tooling used by this repo to validate `asyncapi.yaml` and open AsyncAPI Studio.
 
 ## Commands used in this repo

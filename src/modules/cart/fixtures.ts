@@ -1,7 +1,7 @@
 /**
  * @module
  * How a cart fixture is built. Pins an `_id` even though a cart is addressed by its owner
- * (`userId` is unique) — `scripts/export-demo-dataset.ts` commits a hash-compared
+ * (`userId` is unique) — `scripts/demo/export-dataset.ts` commits a hash-compared
  * `demo-data.json`, and a generated id would stale that artefact on every run. Ids arrive as
  * strings and leave as `ObjectId`s; a bare string would silently match nothing in Mongo.
  */

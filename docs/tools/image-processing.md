@@ -64,7 +64,7 @@ flowchart LR
 | Module writeback registration                    | `src/kernel/registry.ts` → `ImageTarget`, `resolveImageTargets`       |
 | `products` writeback                             | `src/modules/products/repository.ts` → `writebackImage`               |
 | `users`/`account` writeback                      | `src/modules/users/repository.ts` → `writebackImage`                  |
-| Quarantine reaper                                | `scripts/reap-quarantine.ts`                                          |
+| Quarantine reaper                                | `ops/reap-quarantine.ts`                                              |
 
 ## How it's used
 

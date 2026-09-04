@@ -1,5 +1,5 @@
 /*
- * Entry-point wrapper for the one-shot scripts in `db/`. Three things a bare promise chain does
+ * Entry-point wrapper for the one-shot scripts in `db/` and `ops/`. Three things a bare promise chain does
  * not give them:
  *
  *   - A NON-ZERO EXIT CODE on failure, so CI and shell `&&` chains notice. An unhandled

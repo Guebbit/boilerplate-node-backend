@@ -169,7 +169,7 @@ workers exit and return the memory.
 `ArrayBuffer` backing stores live outside it: V8 sees a comfortable heap, feels no pressure to
 collect, and RSS grows regardless — a worker capped at 1400 MB was measured at 6.6 GB. More RAM buys
 more mutants before the crash, never a finished run. `.env` leaves `STRYKER_WORKER_HEAP_MB` unset
-deliberately for exactly this reason, and `scripts/run-mutation-tests.ts` aborts a run that OOMs
+deliberately for exactly this reason, and `scripts/mutation/run-tests.ts` aborts a run that OOMs
 more than six times in ten minutes as one that will not converge.
 
 **This is now fixed, and the fix was one setting.** `stryker.deep.json` sets

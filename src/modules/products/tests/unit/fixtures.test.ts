@@ -1,7 +1,7 @@
 /**
  * @module
  * `makeProduct` — the catalogue fixture builder. Not test-only: `demo.ts` seeds the shipped demo
- * dataset through it, and `scripts/export-demo-dataset.ts` publishes the result as
+ * dataset through it, and `scripts/demo/export-dataset.ts` publishes the result as
  * `db/demo/demo-data.json`, so a defect here reaches a published artifact. The rule it holds:
  * anything a record doesn't state is left to the SCHEMA's `default:` — `stripUndefined` drops
  * unset overrides entirely, since a key present as `undefined` blocks Mongoose's default from

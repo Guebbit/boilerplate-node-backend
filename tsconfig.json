@@ -39,6 +39,7 @@
         "db/demo/demo-data.json",
         "eslint/**/*.ts",
         "scripts/**/*.ts",
+        "ops/**/*.ts",
         "shared/contracts/*.ts"
     ]
 }

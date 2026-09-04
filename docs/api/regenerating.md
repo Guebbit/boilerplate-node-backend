@@ -131,7 +131,7 @@ For the same reason `--check` refuses them outright — an uncommitted file cann
 ::: tip A narrowed run really does narrow
 It did not always. `contracts:bundle` used to be several commands joined by `&&` in `package.json`,
 and npm appends `--` arguments to the **last** one only — so naming a bundle bundled everything
-except the thing you named. The ordering lives in `scripts/build-contract-bundles.ts` now, precisely so
+except the thing you named. The ordering lives in `scripts/contracts/build-bundles.ts` now, precisely so
 the flag can mean what it says.
 :::
 

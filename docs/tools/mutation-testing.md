@@ -987,7 +987,7 @@ service — which is why the job is `continue-on-error` until a team decides oth
 
 Stryker's own thresholds are **global** — `high`, `low`, `break`, and nothing else. That is the same pooling failure that directory-shaped coverage thresholds have: a strong file carries a weak one, and the number that passes is an average nobody can act on. It gets worse as `mutate` widens, not better.
 
-So `mutation-baseline.json` records a score **per file**, and `scripts/check-mutation-baseline.ts` compares each run against it. The file is not in the repository right now: the scope was repointed at the current module layout and no run has measured it, so the first `npm run test:mutation:check` after a full run writes it from that report and every run after that compares against it:
+So `mutation-baseline.json` records a score **per file**, and `scripts/mutation/check-baseline.ts` compares each run against it. The file is not in the repository right now: the scope was repointed at the current module layout and no run has measured it, so the first `npm run test:mutation:check` after a full run writes it from that report and every run after that compares against it:
 
 - a file that drops below its recorded score **fails**;
 - a file that improves has its baseline **rewritten upward**, locking the gain in;
@@ -1128,8 +1128,8 @@ and a floor moved twice is worse than a floor moved once.
 | `stryker.deep.json`                  | The same scope plus the integration suites — see [The deep run](#the-deep-run)                 |
 | `jest.config.mutation.js`            | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication) |
 | `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.                  |
-| `scripts/mutation-baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                                    |
-| `scripts/check-mutation-baseline.ts` | CLI for the two commands below                                                                 |
+| `scripts/mutation/baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                                    |
+| `scripts/mutation/check-baseline.ts` | CLI for the two commands below                                                                 |
 | `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                                |
 | `reports/mutation/index.html`        | Human-readable report (generated per run)                                                      |
 | `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                                      |

@@ -144,7 +144,7 @@ jobs:
         # The cross-repo contract gate. Mirrors the job of the same name in the frontend.
         #
         # Two files exist in BOTH repos, byte-identical — the REST contract and the shared half
-        # of the async contract. `scripts/spec-identity.ts` holds the list and says, per entry,
+        # of the async contract. `scripts/pairing/spec-identity.ts` holds the list and says, per entry,
         # what a fork of it would break.
         #
         # Both are ASSEMBLED HERE from per-module fragments and copied to the frontend, so this

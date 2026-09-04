@@ -1,5 +1,5 @@
 /**
- * `scripts/mutation-baseline.ts` — the per-file mutation ratchet.
+ * `scripts/mutation/baseline.ts` — the per-file mutation ratchet.
  *
  * This is a GATE, so its own logic has to be right: a ratchet that silently re-records a
  * regression is worse than no ratchet, because it looks like one. The asymmetry is the whole
@@ -19,7 +19,7 @@ import {
     nextBaseline,
     scoresFromReport,
     type MutationBaseline
-} from '../../../scripts/mutation-baseline';
+} from '../../../../scripts/mutation/baseline';
 
 /*
  * Fixtures are built from TUPLES rather than object literals, because the keys are file paths:

@@ -20,7 +20,7 @@ import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
-const REPO_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /** Where jest's in-memory Mongo data directories live. Outside the sandbox, deliberately. */
 const TEST_TMP_BASE = path.join(REPO_ROOT, '.tmp');

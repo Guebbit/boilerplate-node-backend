@@ -14,7 +14,7 @@
  * `--check` writes nothing and exits 1 on a mismatch: the gate that stops a repo shipping types
  * for a contract it no longer has.
  *
- * Usage: tsx scripts/generate-asyncapi-types.ts --out <path> [--check]
+ * Usage: tsx scripts/contracts/generate-asyncapi-types.ts --out <path> [--check]
  *
  * See: docs/api/asyncapi-workflow.md#generated-typescript-types
  */
@@ -58,7 +58,7 @@ interface AsyncApiDocument {
     };
 }
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const INPUT = path.resolve(ROOT, 'asyncapi.yaml');
 
 /*

@@ -2,7 +2,7 @@
  * Every document this repo produces from sources it owns.
  *
  * Two kinds, and the difference decides what is guarded. The AUTHORED ones are committed and cover
- * the shared files of `scripts/spec-identity.ts` — the ones existing twice, here and in the paired
+ * the shared files of `scripts/pairing/spec-identity.ts` — the ones existing twice, here and in the paired
  * frontend, which holds byte-identical copies and never edits them. The GENERATED ones (the client
  * collections) are `.gitignore`d and listed only so the CLI can find them by name: an uncommitted
  * file cannot be stale.

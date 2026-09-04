@@ -52,7 +52,7 @@ jobs:
               run: npm run demo &
 
             # /products is public and unauthenticated — the same default probe
-            # scripts/run-prism-smoke-test.ts uses to know the app is actually up.
+            # scripts/testing/run-prism-smoke-test.ts uses to know the app is actually up.
             - name: Wait for the API to accept requests
               run: timeout 60 bash -c 'until curl -sf http://localhost:${{ env.NODE_PORT }}/products >/dev/null; do sleep 1; done'
 

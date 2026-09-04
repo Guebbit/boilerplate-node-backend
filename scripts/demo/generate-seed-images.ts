@@ -24,9 +24,9 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
-import { FILLER_IMAGE_ROLE_KEYS } from '../src/modules/products/demo-catalog';
+import { FILLER_IMAGE_ROLE_KEYS } from '../../src/modules/products/demo-catalog';
 
-const SEED_ROOT = path.join(__dirname, '../public/images/seed');
+const SEED_ROOT = path.join(__dirname, '../../public/images/seed');
 const THUMBS_ROOT = path.join(SEED_ROOT, 'thumbs/v1');
 
 interface ImageEntry {
@@ -116,7 +116,10 @@ const removeStaleOriginals = async (keep: ReadonlySet<string>): Promise<void> =>
 };
 
 const writeManifest = (relativePath: string, manifest: Record<string, ImageEntry>): Promise<void> =>
-    writeFile(path.join(__dirname, '..', relativePath), `${JSON.stringify(manifest, null, 4)}\n`);
+    writeFile(
+        path.join(__dirname, '..', '..', relativePath),
+        `${JSON.stringify(manifest, null, 4)}\n`
+    );
 
 const main = async (): Promise<void> => {
     await mkdir(SEED_ROOT, { recursive: true });

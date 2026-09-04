@@ -43,7 +43,7 @@ import {
 } from '../../scripts/contracts/bundle-registry';
 import { MODULE_SECTIONS, moduleSpec } from '../../scripts/contracts/openapi-bundle';
 import { allProbes } from '../../scripts/contracts/client-collections-bundle';
-import { SHARED_FILES } from '../../scripts/spec-identity';
+import { SHARED_FILES } from '../../scripts/pairing/spec-identity';
 
 /** How many requests a collection's folders hold, whichever key that tool nests them under. */
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>

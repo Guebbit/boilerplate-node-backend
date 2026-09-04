@@ -584,7 +584,7 @@ export default tseslint.config(
         settings: {
             /*
              * Only `src/`. The tiers live here, and this is the tree `no-unknown-files` is meant
-             * to hold exhaustively — `tests/`, `scripts/`, `db/` and `shared/` have no tier and
+             * to hold exhaustively — `tests/`, `scripts/`, `ops/`, `db/` and `shared/` have no tier and
              * would each need a descriptor for the sake of being ignored.
              */
             'boundaries/include': ['src/**/*.ts'],
@@ -1006,7 +1006,7 @@ export default tseslint.config(
      * `no-console` would flag every line of output it exists to produce.
      */
     {
-        files: ['scripts/**/*.ts', 'db/**/*.ts'],
+        files: ['scripts/**/*.ts', 'ops/**/*.ts', 'db/**/*.ts'],
         languageOptions: {
             globals: {
                 ...globals.node

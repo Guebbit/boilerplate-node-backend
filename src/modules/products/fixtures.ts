@@ -2,7 +2,7 @@
  * @module
  * Builds a product fixture — for the demo dataset in `./demo` and for any test needing a
  * catalogue row. Deliberately leaves the schema's own defaults unset, placeholdering only the
- * required `title` and `price`, so `scripts/export-demo-dataset.ts` reads seeded rows back
+ * required `title` and `price`, so `scripts/demo/export-dataset.ts` reads seeded rows back
  * through the real serializer instead of a guess.
  */
 

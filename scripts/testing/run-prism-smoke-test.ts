@@ -12,7 +12,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 
-const REPO_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const PORT = Number(process.env.PRISM_PORT ?? 4010);
 const PROBE = process.env.PRISM_PROBE ?? '/products';
 const BOOT_TIMEOUT_MS = 30_000;
