@@ -310,8 +310,8 @@ They write reports to `reports/audit/` and never touch source.
 
 | File                         | What it is                                                                                          | Read next                              |
 | ---------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `tests/audit/blind-spots.md` | The two-pass audit: freeze spec-derived expectations, then hunt tests that assert the code instead. | [AI Auditing](../tools/ai-auditing.md) |
-| `tests/audit/domain-gaps.md` | Business rules and security boundaries with zero coverage.                                          | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/spec-drift.md`  | The two-pass audit: freeze spec-derived expectations, then hunt tests that assert the code instead. | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/spec-gaps.md`   | Business rules and security boundaries with zero coverage.                                          | [AI Auditing](../tools/ai-auditing.md) |
 | `tests/audit/suite-bloat.md` | Near-duplicate tests that cost CI time and discriminate nothing.                                    | [AI Auditing](../tools/ai-auditing.md) |
 
 ## Co-located module tests

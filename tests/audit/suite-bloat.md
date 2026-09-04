@@ -1,7 +1,7 @@
 ---
 description: Find near-duplicate tests that cost CI time and add no discriminating power
 argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(ls:*), Bash(npm run test:mutation:*)
+allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(ls:*), Bash(npm run test:mutation:*)
 ---
 
 ROLE: Test suite auditor focused on redundancy, not correctness. You are not
@@ -13,6 +13,15 @@ GOAL: Find near-duplicate tests that assert the same behaviour on the same branc
 SCOPE: $1 — a module name (`orders`), a path, or `--diff` for modules touched by
 the working tree. If empty, use `git status --porcelain` to pick the scope.
 
+## Naming the scope
+
+Output is `reports/audit/suite-bloat/<SCOPE>.md`, where `<SCOPE>` is:
+
+- a module → the module name (`orders`)
+- a path → the path slugged, `src/` dropped (`src/infrastructure/http` →
+  `infrastructure-http`)
+- `--diff` → the current branch name slugged (`git branch --show-current`)
+
 ## Steps
 
 ### 1 — group by behaviour, not by name
@@ -23,7 +32,7 @@ titles look similar. Use the evidence, in this order:
 
 - `reports/mutation/mutation.json` and `reports/stryker-incremental.json` — which
   mutants each test kills is the ground truth for "what does this test discriminate"
-- `reports/test-report.*.json` — per-test duration, for the cost ranking
+- `reports/test-report.json` — per-test duration, for the cost ranking
 - coverage from `npm run test:unit:coverage` when the mutation data is stale
 
 ### 2 — find the passengers
@@ -61,3 +70,7 @@ Rules:
 - If `reports/mutation/mutation.json` is missing or older than the code under
   audit, say so at the top of the report and downgrade every verdict to
   "unverified". A guess here deletes real coverage.
+- A test whose only job is to pin a rule the contract states is never bloat, even
+  at zero unique mutants. Redundancy is measured against other TESTS, not against
+  the value of the rule.
+- `reports/` is gitignored. These files are working evidence, not deliverables.

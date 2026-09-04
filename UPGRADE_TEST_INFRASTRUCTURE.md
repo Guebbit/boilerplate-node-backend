@@ -1,7 +1,7 @@
 # Upgrade — contract-driven test generators
 
-Two ideas raised while implementing X-2 (server-side password complexity — see the correlated
-blind-spots audit rollup) but deliberately not built now: they touch shared test infrastructure
+Two ideas raised while implementing X-2 (server-side password complexity — see
+`TODO_TEST_AUDIT.md`) but deliberately not built now: they touch shared test infrastructure
 both repos rely on, and deserve a real design pass rather than a same-session patch. Written up
 here so that pass has a starting point.
 

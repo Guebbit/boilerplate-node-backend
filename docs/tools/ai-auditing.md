@@ -42,21 +42,39 @@ Two consequences, both non-negotiable:
 
 ## The three prompts
 
-| File                         | Asks                                                                          | Writes to                               |
-| ---------------------------- | ----------------------------------------------------------------------------- | --------------------------------------- |
-| `tests/audit/blind-spots.md` | Which tests assert what the **code** does rather than what the **spec** says? | `reports/audit/correlated-blind-spots/` |
-| `tests/audit/domain-gaps.md` | Which business rules and security boundaries have **zero** coverage?          | `reports/audit/domain-gaps/`            |
-| `tests/audit/suite-bloat.md` | Which tests cost CI time and discriminate nothing?                            | `reports/audit/suite-bloat/`            |
+| File                         | Asks                                                                          | Writes to                    |
+| ---------------------------- | ----------------------------------------------------------------------------- | ---------------------------- |
+| `tests/audit/spec-drift.md`  | Which tests assert what the **code** does rather than what the **spec** says? | `reports/audit/spec-drift/`  |
+| `tests/audit/spec-gaps.md`   | Which business rules and security boundaries have **zero** coverage?          | `reports/audit/spec-gaps/`   |
+| `tests/audit/suite-bloat.md` | Which tests cost CI time and discriminate nothing?                            | `reports/audit/suite-bloat/` |
 
 All three take one argument — a module (`orders`), a path, or `--diff` for whatever the working
 tree touched.
 
-`reports/` is gitignored, so a report is yours until you decide it is worth keeping.
+### Naming the scope
+
+The argument decides the filename, one way only:
+
+| Argument | `<SCOPE>`                                       |
+| -------- | ----------------------------------------------- |
+| a module | the module name — `orders`                      |
+| a path   | slugged, `src/` dropped — `infrastructure-http` |
+| `--diff` | the current branch name, slugged                |
+
+`orders.findings.md` tells the next reader what it covers. A batch number does not — never invent
+one.
+
+### The reports are disposable
+
+`reports/` is gitignored, and that is the intended end state, not an oversight. A report is working
+evidence: once its conclusions land as a fixed test, a commit message or a tracked issue, the file
+has done its job. Audit paperwork that outlives the audit goes stale silently and misleads the next
+reader — the prompts are the durable asset here, not their output.
 
 ## The two-pass method
 
-`blind-spots.md` is the one worth understanding, because its **ordering is the method**. A
-correlated blind spot is a test and an implementation sharing one wrong reading of the spec — CI is
+`spec-drift.md` is the one worth understanding, because its **ordering is the method**. Spec
+drift is a test and an implementation sharing one wrong reading of the spec — CI is
 green, and the test proves only that the test agrees with the code.
 
 You cannot find that by reading the test, because the test looks correct. You find it by deriving
@@ -66,10 +84,10 @@ what the behaviour _should_ be **before** the implementation can contaminate you
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart TD
     S["Pass 1 — spec only<br/><i>openapi.yaml, asyncapi.yaml, docs/</i>"] --> F["Freeze expectations<br/>to a file, one row per behaviour"]
-    F --> G["<b>Commit it.</b><br/>This is the control."]
+    F --> G["<b>Save it. Do not revise it.</b><br/>This is the control."]
     G --> I["Pass 2 — open the code<br/>and the tests"]
     I --> C{"spec says X<br/>code does Y<br/>test asserts Y"}
-    C -->|yes| M["MISMATCH —<br/>a correlated blind spot"]
+    C -->|yes| M["MISMATCH —<br/>spec drift"]
     C -->|no| O["OK, or spec-silent"]
 
     classDef pass fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -82,9 +100,14 @@ flowchart TD
     class O,C ok;
 ```
 
-Committing the expectations before opening `src/` is not ceremony — it is the only evidence the
-control was not contaminated. Skip it and the audit degrades into a code review that agrees with
+Writing the expectations down before opening `src/` is not ceremony — it is the only thing keeping
+the control uncontaminated. Skip it and the audit degrades into a code review that agrees with
 whatever it just read.
+
+The freeze is procedural, not cryptographic: the file is gitignored, so nothing stops you editing it
+after the fact. Nothing except the fact that doing so destroys the only reason the second pass is
+worth running. If a pass-1 row turns out to be wrong, add a pass-2 row saying so — do not quietly
+rewrite the control to match what you just learned.
 
 ## How to run one
 
@@ -96,13 +119,13 @@ mkdir -p .claude/commands
 ln -s ../../tests/audit .claude/commands/audit
 ```
 
-That gives `/audit:blind-spots orders`, `/audit:domain-gaps inventory`, `/audit:suite-bloat --diff`.
+That gives `/audit:spec-drift orders`, `/audit:spec-gaps inventory`, `/audit:suite-bloat --diff`.
 The symlink is local, gitignored and regenerable — the files under `tests/audit/` remain the only
 copy.
 
 Without the symlink, either works:
 
-- **Claude Code** — _"Follow `tests/audit/blind-spots.md`, scope `orders`."_
+- **Claude Code** — _"Follow `tests/audit/spec-drift.md`, scope `orders`."_
 - **Any other LLM** — strip the YAML frontmatter, replace `$1` with the scope, paste the body. It
   needs to be able to read the repo; an audit that cannot open `openapi.yaml` has nothing to
   compare against.
@@ -112,7 +135,7 @@ The frontmatter is not decoration. `allowed-tools` is the read-only boundary —
 source.
 
 ::: tip Which model
-Claude for `blind-spots` and `domain-gaps` — long-context reasoning over prose vs. code is exactly
+Claude for `spec-drift` and `spec-gaps` — long-context reasoning over prose vs. code is exactly
 where small local models confabulate citations most confidently, and a fabricated `file:line` costs
 more than the finding was worth.
 
@@ -157,13 +180,13 @@ apart — not on a schedule.
 Checked **2026-09-03**. Treat that as an expiry date, not a warranty — the whole reason this
 footnote exists is that the previous round of claims had quietly gone stale.
 
-| Tool                                 | State                                | Why not                                                                                                                                                                         |
-| ------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Mutahunter** (LLM mutants)         | Dead — last release 2025-04-17       | Also removed its coverage-driven mode in 1.3.2, the one feature that made it fit here.                                                                                          |
-| **LLMorpheus** (LLM mutants, JS)     | Archived 2025-02-03                  | The only JS-native equivalent, and it stopped.                                                                                                                                  |
-| **Qodo Cover / Cover-Agent**         | Unmaintained notice since 2025-06-15 | Gates generated tests on coverage and pass/fail, never the spec — so every test it keeps agrees with the code by construction. That is the defect `blind-spots` exists to find. |
-| **CodeRabbit / PR-Agent / Greptile** | Alive and healthy                    | Duplicate review surface. `/code-review` and `/security-review` already cover the diff, and there is no PR workflow here for a bot to attach to.                                |
-| **promptfoo**                        | Alive, MIT, weekly releases          | ~600 MB and 524 packages for a YAML runner — 513 MB of it a local ONNX inference runtime we would never call.                                                                   |
+| Tool                                 | State                                | Why not                                                                                                                                                                        |
+| ------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Mutahunter** (LLM mutants)         | Dead — last release 2025-04-17       | Also removed its coverage-driven mode in 1.3.2, the one feature that made it fit here.                                                                                         |
+| **LLMorpheus** (LLM mutants, JS)     | Archived 2025-02-03                  | The only JS-native equivalent, and it stopped.                                                                                                                                 |
+| **Qodo Cover / Cover-Agent**         | Unmaintained notice since 2025-06-15 | Gates generated tests on coverage and pass/fail, never the spec — so every test it keeps agrees with the code by construction. That is the defect `spec-drift` exists to find. |
+| **CodeRabbit / PR-Agent / Greptile** | Alive and healthy                    | Duplicate review surface. `/code-review` and `/security-review` already cover the diff, and there is no PR workflow here for a bot to attach to.                               |
+| **promptfoo**                        | Alive, MIT, weekly releases          | ~600 MB and 524 packages for a YAML runner — 513 MB of it a local ONNX inference runtime we would never call.                                                                  |
 
 Two notes worth keeping, because they outlived the tools:
 
