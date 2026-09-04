@@ -90,7 +90,7 @@ jobs:
               # Uploaded even on failure: a run that trips the break threshold is exactly the
               # run whose report someone needs to read.
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: mutation-report
                   path: reports/mutation/
@@ -179,7 +179,7 @@ jobs:
 
             - name: Upload the shard's report
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: mutation-deep-${{ matrix.name }}
                   path: reports/mutation-deep/
@@ -227,7 +227,7 @@ jobs:
 
             - name: Upload the diff report
               if: always()
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v7
               with:
                   name: mutation-diff
                   path: reports/mutation-deep/
