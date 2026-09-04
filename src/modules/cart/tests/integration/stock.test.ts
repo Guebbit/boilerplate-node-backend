@@ -405,6 +405,37 @@ describe('cancel releases the hold', () => {
         const stored = await orderRepository.findById(orderId);
         expect(stored?.status).toBe('cancelled');
     });
+
+    it('a customer cancel racing the expiry sweep releases the hold exactly once', async () =>
+        withoutWindow(async () => {
+            const user = await createUser();
+            const product = await createProduct({ onHand: 10 });
+            await cartService.cartItemAddById(user.id, String(product._id), 4);
+            const checkout = await cartService.orderConfirm(user.id, testCallerContext);
+            const orderId = String(checkout.success && checkout.data?._id);
+
+            /*
+             * Both paths call `cancelById` on the SAME order — the sweep's own admin-scoped
+             * cancel fires from inside `runReservationSweep` via the `RESERVATION_EXPIRED`
+             * subscription. Whichever wins `updateStatusIfIn` cancels the order; the loser
+             * no-ops on a status that has already moved. `claimStatus('held', 'released')`
+             * guards the reservation the same way, independent of which side wins the order
+             * race — so the units come back exactly once either way.
+             */
+            await Promise.all([
+                orderService.cancelById(orderId, { id: user.id, admin: false }),
+                inventoryService.runReservationSweep()
+            ]);
+
+            const stored = await orderRepository.findById(orderId);
+            expect(stored?.status).toBe('cancelled');
+            // Not 14 (double release) and not 4 (never released) — exactly the held 4 back.
+            expect(await countersOf(product._id)).toEqual({
+                onHand: 10,
+                reserved: 0,
+                available: 10
+            });
+        }));
 });
 
 describe('the expiry sweep', () => {
