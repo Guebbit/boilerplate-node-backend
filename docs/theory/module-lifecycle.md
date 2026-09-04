@@ -404,7 +404,7 @@ npx tsc --noEmit                                  # THE assertion: 0 errors in d
 # drop them from MODULE_SECTIONS, ASYNC_SECTION_ORDER,
 # and from generate-collections.ts if any of them declared probes
 npm run contracts:bundle
-npx spectral lint openapi.yaml --ruleset spectral.yaml
+npx spectral lint openapi.yaml --ruleset shared/contracts/spectral.yaml
 npm test                                          # everything else: a report, not a verdict
 ```
 

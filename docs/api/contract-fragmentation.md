@@ -52,7 +52,7 @@ npm run check:contracts-bundle        # fail if any committed bundle is stale
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
 every run, so a fragment edited without re-bundling fails the build rather than drifting.
 
-Nothing else is shared. `spectral.yaml`, `check-mutation-baseline.ts`, `report-test-results.ts` and
+Nothing else is shared. `shared/contracts/spectral.yaml`, `check-mutation-baseline.ts`, `report-test-results.ts` and
 `generate-asyncapi-types.ts` were on the list once, hand-maintained on both sides and compared but never
 written — a fork in one of those was a question (which copy is right?) that no script could answer.
 They came off it: the two repos still keep them identical because it is convenient, and convenience
@@ -103,7 +103,7 @@ it, and each is load-bearing:
 It would be tidier to ship only fragments and bundle on demand. Three reasons not to:
 
 - **The frontend's toolchain reads one file.** `orval.config.ts` there points at `./openapi.yaml`
-  three times, and `spectral lint openapi.yaml` runs in both repos.
+  three times, and Spectral lints `openapi.yaml` in both repos.
 - **Byte-identity is enforced by a test.** `scripts/pairing/spec-identity.ts` compares this repo's copy with
   the frontend's and fails the build when they fork. That check needs one file on each side to
   compare.

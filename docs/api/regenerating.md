@@ -144,7 +144,7 @@ across all seven.
 
 ```bash
 npm run check:contracts-bundle    # is any bundle stale against its fragments?
-npm run lint:openapi              # is openapi.yaml a valid spec, per spectral.yaml?
+npm run lint:openapi              # is openapi.yaml a valid spec, per the ruleset?
 npm run lint:asyncapi             # same, for asyncapi.yaml and asyncapi.public.yaml
 npm run check:spec-identity       # does the paired frontend hold the same bytes?
 npm run test:contract             # do real responses match the contract?

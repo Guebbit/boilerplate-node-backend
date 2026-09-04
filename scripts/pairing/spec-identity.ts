@@ -57,10 +57,10 @@ export const siblingRole = (role: RepoRole): RepoRole =>
  * as that repo is concerned.
  *
  * That is the whole membership rule, and it is narrower than it once was. Files the two repos keep
- * identical FOR CONVENIENCE used to be here under an `owner: 'mirror'` flag — `spectral.yaml` and
- * three shared scripts — hand-maintained on both sides, so a fork was a question no script could
- * answer and the gate could only report it. Convenience is not necessity: nothing silently breaks
- * when two repos lint under rulesets that have drifted apart, or when one holds a newer test
+ * identical FOR CONVENIENCE used to be here under an `owner: 'mirror'` flag — the Spectral ruleset
+ * and three shared scripts — hand-maintained on both sides, so a fork was a question no script
+ * could answer and the gate could only report it. Convenience is not necessity: nothing silently
+ * breaks when two repos lint under rulesets that have drifted apart, or when one holds a newer test
  * reporter. They were removed rather than kept as a flag with one member, and the flag with them.
  *
  * Also deliberately absent, for the same reason: `public/favicon/*`, `.prettierrc`,

@@ -409,7 +409,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** A syntactically valid OpenAPI document can still be incomplete or inconsistent — no 401 response defined, optional fields with no description, enums without documentation. Spectral catches these issues in CI before they cause runtime surprises or confuse API consumers.
 
-**In this repo.** `npm run lint:openapi` runs Spectral against `openapi.yaml` using `.spectral.yaml`. Runs in CI after TypeScript type-check.
+**In this repo.** `npm run lint:openapi` runs Spectral against `openapi.yaml` using `shared/contracts/spectral.yaml`. Runs in CI after TypeScript type-check.
 
 → [OpenAPI Workflow](../api/openapi-workflow.md)
 

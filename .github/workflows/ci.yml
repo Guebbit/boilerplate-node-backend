@@ -104,8 +104,8 @@ jobs:
               run: npm run prettier:check
 
     lint-openapi:
-        # Spectral lints openapi.yaml against spectral.yaml, the ruleset the paired frontend
-        # lints its identical copy under.
+        # Spectral lints openapi.yaml against shared/contracts/spectral.yaml, the ruleset the
+        # paired frontend lints its identical copy under.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:

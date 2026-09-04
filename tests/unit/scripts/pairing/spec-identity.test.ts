@@ -72,7 +72,7 @@ const sharedFiles = (role: RepoRole, suffix = ''): Record<string, string> =>
 const OPENAPI = 'openapi.yaml';
 const ASYNCAPI = 'asyncapi.public.yaml';
 /** Kept identical by convention, deliberately NOT shared — the negative case below. */
-const CONVENIENCE = 'spectral.yaml';
+const CONVENIENCE = 'shared/contracts/spectral.yaml';
 
 /** `sharedFiles(role)` with one entry replaced. */
 const sharedFilesWith = (
@@ -211,7 +211,7 @@ describe('compareSharedFiles', () => {
 
     it('says nothing about a file the two repos merely keep identical', () => {
         /*
-         * `spectral.yaml` was on the list once, as a hand-maintained mirror. It is convenience, not
+         * The Spectral ruleset was on the list once, as a hand-maintained mirror. It is convenience, not
          * necessity: two repos linting under rulesets that have drifted apart break nothing
          * silently — one job is simply stricter, and it says so. A gate that cannot resolve what it
          * reports is a gate people learn to skip, so the membership rule is now "produced here,

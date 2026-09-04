@@ -5,8 +5,9 @@ questions live — every one of them is a tool's entry point, sitting at the roo
 looks for it there by name.
 
 ::: tip Also at the root, explained elsewhere
-The REST and realtime specs, the client collections and the Spectral rulesets are on
-[Contracts](./contracts.md). The compose files and `.dockerignore` are on [Ops & Assets](./ops.md).
+The REST and realtime specs, the client collections and the Spectral rulesets (now under
+`shared/contracts/`) are on [Contracts](./contracts.md). The compose files and `.dockerignore`
+are on [Ops & Assets](./ops.md).
 :::
 
 ---

@@ -62,7 +62,7 @@ that a `links` chain matches the actual lifecycle, so keep it in sync with `life
 | Tool | Job |
 | --- | --- |
 | [`openapi.yaml`](https://spec.openapis.org/oas/latest.html) | single contract file (OpenAPI 3.x specification) |
-| [Spectral](https://stoplight.io/open-source/spectral) | lint the spec against `spectral.yaml` rules |
+| [Spectral](https://stoplight.io/open-source/spectral) | lint the spec against `shared/contracts/spectral.yaml` rules |
 | [orval](https://orval.dev) | generate `api/` types and Zod validators from the spec |
 | [Prism](https://stoplight.io/open-source/prism) | mock the API from the spec |
 | [Bruno](https://www.usebruno.com/) / [Mockoon](https://mockoon.com/) / [Insomnia](https://insomnia.rest/) | explore or fake the API during development (generated on demand) |
@@ -150,7 +150,7 @@ Those belong in the spec itself.
 - [OpenAPI 3.1 specification](https://spec.openapis.org/oas/v3.1.0)
 - [Swagger guide](https://swagger.io/docs/specification/about/)
 - [OpenAPI Initiative on GitHub](https://github.com/OAI/OpenAPI-Specification)
-- [Spectral rulesets](https://docs.stoplight.io/docs/spectral/01baf06bdd05a-rulesets) — basis for `spectral.yaml`
+- [Spectral rulesets](https://docs.stoplight.io/docs/spectral/01baf06bdd05a-rulesets) — basis for `shared/contracts/spectral.yaml`
 - [Prism mock options](https://docs.stoplight.io/docs/prism/83dbbd75532cf-http-mocking)
 - [orval documentation](https://orval.dev/guides/overview)
 - [orval configuration reference](https://orval.dev/reference/configuration/overview)

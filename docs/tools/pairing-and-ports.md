@@ -153,7 +153,7 @@ fails on that trains people to ignore it.
 ### Convenience is not necessity
 
 The list used to carry a second kind of entry, flagged `owner: 'mirror'`: files both repos
-maintained by hand and kept identical because it was convenient — `spectral.yaml` and three shared
+maintained by hand and kept identical because it was convenient — `shared/contracts/spectral.yaml` and three shared
 scripts (`check-mutation-baseline.ts`, `report-test-results.ts`, `generate-asyncapi-types.ts`). A fork in one of
 those was a question no script could answer, so `sync:frontend` could only report it and walk away.
 
