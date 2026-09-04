@@ -96,9 +96,12 @@ sequenceDiagram
     A-->>U: 200 { token } + refresh cookie, amr ['pwd','otp']
 ```
 
-The challenge is signed with the access secret but carries `purpose: 'mfa'`, and the resolver that
-turns any other token into a session rejects that purpose outright — so it can never authenticate a
-request on its own. It lives 5 minutes for a device-only account and **10** for one with a
+The challenge is a single-use, revocable, hashed-at-rest token — the same `tokens[]` mechanism
+`password-reset` and account-deletion confirmation use (`users/model.ts#tokenAdd`), not a JWT — so
+there is no shared secret to keep straight from an access token: it simply fails ordinary token
+verification. `POST /account/login/2fa` spends it the moment a right code arrives
+(`spendLiveToken`), so a second presentation of an already-answered challenge is refused outright,
+not merely re-checked. It lives 5 minutes for a device-only account and **10** for one with a
 delivered method armed, because a mailed code has an SMTP queue and an app switch to survive.
 
 ### Storage is asymmetric, per method

@@ -21,7 +21,9 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
  */
 export enum TokenType {
     REFRESH = 'refresh',
-    PASSWORD_RESET = 'password'
+    PASSWORD_RESET = 'password',
+    /** A login's second-factor challenge — see `account/services/two-factor.ts#buildLoginChallenge`. */
+    MFA_CHALLENGE = 'mfa-challenge'
 }
 
 /**

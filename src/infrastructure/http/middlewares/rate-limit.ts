@@ -234,10 +234,9 @@ const challengeKey = (request: Request): string => {
  */
 export const mfaChallengeLimiter: RequestHandler = rateLimit({
     store: rateLimitStore('mfa-challenge'),
-    // MFA_CHALLENGE_DELIVERED_TTL_SECONDS, restated rather than imported: `account` depends on
-    // `infrastructure`, never the other way around, and the two are pinned together by
-    // `tests/cross-cutting/step-up-auth-routes.test.ts`'s sibling test for this route. The LONGER
-    // of the two challenge tiers, so a window can never end before the challenge it is bounding.
+    // account/services/two-factor.ts#MFA_CHALLENGE_DELIVERED_TTL_MS, restated rather than
+    // imported: `account` depends on `infrastructure`, never the other way around. The LONGER of
+    // the two challenge tiers, so a window can never end before the challenge it is bounding.
     windowMs: 600 * 1000,
     standardHeaders: 'draft-7',
     legacyHeaders: false,

@@ -73,13 +73,9 @@ export const postLogin = (
              * `postLoginTwoFactor` is what finishes it.
              */
             if (data.twoFactorEnabledAt) {
-                successResponse(
-                    response,
-                    accountService.buildLoginChallenge(data),
-                    200,
-                    'Two-factor authentication required'
-                );
-                return;
+                return accountService.buildLoginChallenge(data).then((challenge) => {
+                    successResponse(response, challenge, 200, 'Two-factor authentication required');
+                });
             }
 
             return issueSession(response, userId, remember).then((accessToken) => {

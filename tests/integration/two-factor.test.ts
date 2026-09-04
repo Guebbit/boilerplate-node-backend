@@ -12,9 +12,9 @@ import { generate } from 'otplib';
 import { decode } from 'jsonwebtoken';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { userRepository, TokenType, hashToken } from '@modules/users';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { accountService } from '@modules/account/services';
-import { createMfaChallenge } from '@modules/account/session/jwt';
 import { DELIVERED_CODE_MAX_ATTEMPTS } from '@modules/account/two-factor';
 import { testCallerContext } from '@tests/caller-context';
 
@@ -106,6 +106,17 @@ const enrollEmail = async (bearer: string) => {
 /** Password step only — the half that answers with a challenge rather than a token. */
 const startLogin = (email: string) =>
     api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
+
+/**
+ * Mints a fresh, DB-backed MFA challenge for this user id, at the service level — the
+ * `POST /account/login` password step's own half, without a login round trip. For suites that
+ * need a NEW challenge per call, same reasoning `startLogin` gives at the HTTP level.
+ */
+const mintChallenge = (userId: string): Promise<string> =>
+    userRepository
+        .findByIdWithCredentials(userId)
+        .then((user) => accountService.buildLoginChallenge(user!))
+        .then(({ challenge }) => challenge);
 
 describe('status', () => {
     it('requires a live session', async () => {
@@ -408,6 +419,68 @@ describe('logging in with a device factor', () => {
 
         expect(attempts.some((response) => response.status === 429)).toBe(true);
     });
+
+    it('spends the challenge on success — presenting it again fails even with a fresh code', async () => {
+        // The property the JWT design never had: a challenge is a single-use, revocable token now
+        // (users/model.ts's tokens[]), not a self-verifying signature good for its whole TTL.
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        const login = await startLogin(user.email);
+        const { challenge } = login.body.data as { challenge: string };
+
+        const first = await api()
+            .post('/account/login/2fa')
+            .send({ challenge, code: await codeFor(secret, 1) });
+        expect(first.status).toBe(200);
+
+        // A different, otherwise-valid code — this fails on the CHALLENGE being gone, not on
+        // TOTP's own replay guard, which the earlier "replay protection" test already covers.
+        const second = await api()
+            .post('/account/login/2fa')
+            .send({ challenge, code: await codeFor(secret, 2) });
+        expect(second.status).toBe(401);
+    });
+
+    it('leaves the challenge live after a wrong code, for a right one to still use', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        const login = await startLogin(user.email);
+        const { challenge } = login.body.data as { challenge: string };
+
+        const wrong = await api().post('/account/login/2fa').send({ challenge, code: '000000' });
+        expect(wrong.status).toBe(422);
+
+        const right = await api()
+            .post('/account/login/2fa')
+            .send({ challenge, code: await codeFor(secret, 1) });
+        expect(right.status).toBe(200);
+    });
+
+    it('refuses a challenge past its expiry, the same as a forged one', async () => {
+        /*
+         * Seeded directly, like the stale-reset-token case in `self-service.test.ts`'s
+         * `findLiveToken` suite: `tokenAdd` cannot produce a past `expiration` itself, and this is
+         * the state a genuinely stale challenge reaches. Regression coverage for the gap the JWT
+         * design had — a signed challenge kept verifying for its whole TTL with no way to check it
+         * against anything; this one is refused the moment it's past its stored deadline.
+         */
+        await createUser({
+            email: 'stale-challenge@example.com',
+            tokens: [
+                {
+                    type: TokenType.MFA_CHALLENGE,
+                    token: hashToken('stale-mfa-challenge'),
+                    expiration: new Date(Date.now() - 1000)
+                }
+            ]
+        });
+
+        const response = await api()
+            .post('/account/login/2fa')
+            .send({ challenge: 'stale-mfa-challenge', code: '000000' });
+
+        expect(response.status).toBe(401);
+    });
 });
 
 describe('logging in with the email factor', () => {
@@ -501,7 +574,7 @@ describe('logging in with the email factor', () => {
         await enrollEmail(bearer);
         mockOutbox.length = 0;
         const userId = user._id.toString();
-        await accountService.sendLoginCode(createMfaChallenge(userId), 'email', testCallerContext);
+        await accountService.sendLoginCode(await mintChallenge(userId), 'email', testCallerContext);
         const code = mailedCode();
 
         /*
@@ -522,13 +595,13 @@ describe('logging in with the email factor', () => {
          */
         for (let attempt = 0; attempt < DELIVERED_CODE_MAX_ATTEMPTS; attempt++)
             await accountService.verifyLoginChallenge(
-                createMfaChallenge(userId),
+                await mintChallenge(userId),
                 '000000',
                 testCallerContext
             );
 
         const result = await accountService.verifyLoginChallenge(
-            createMfaChallenge(userId),
+            await mintChallenge(userId),
             code,
             testCallerContext
         );

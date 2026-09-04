@@ -48,16 +48,11 @@ import { router } from './routes';
  */
 const resolve = (verify: (token: string) => Promise<TokenData>) => (token: string) =>
     verify(token)
-        .then((claims) => {
-            // The wave-5 bypass check: an MFA challenge token (`purpose: 'mfa'`) must never
-            // authenticate a request on its own — only `POST /account/login/2fa` accepts one.
-            // Checked here, the one place every access/refresh token is resolved, rather than
-            // only where a challenge is expected — see `TokenData`'s doc in `session/jwt.ts`.
-            if (claims.purpose) throw new Error('Token not valid for authentication');
-            return claims;
-        })
         // Scoped, not `findById`: a deactivated or soft-deleted account must stop authenticating
         // on its very next request, not merely at its next login. See `findAuthenticatableById`.
+        // An MFA login challenge can never reach here at all — it isn't a JWT, so it fails
+        // `verify()` outright rather than needing a dedicated rejection; see
+        // `account/services/two-factor.ts#buildLoginChallenge`.
         .then((claims) =>
             userRepository.findAuthenticatableById(claims.id).then((user) => ({ user, claims }))
         )
