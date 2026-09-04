@@ -8,9 +8,9 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { accountService } from '../services';
+import { buildLoginChallenge } from '../services/two-factor';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { issueSession } from '../session/session';
-import { createMfaChallenge } from '../session/jwt';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -70,13 +70,14 @@ export const postLogin = (
 
             /*
              * 2FA branch: the password checked out, but the login is not complete — no
-             * cookies, no access token, just a short-lived challenge naming this attempt.
-             * Nothing is recorded as a login yet; `postLoginTwoFactor` is what finishes it.
+             * cookies, no access token, just a short-lived challenge naming this attempt and the
+             * factors the caller may answer it with. Nothing is recorded as a login yet;
+             * `postLoginTwoFactor` is what finishes it.
              */
             if (data.twoFactorEnabledAt) {
                 successResponse(
                     response,
-                    { mfaRequired: true, challenge: createMfaChallenge(userId) },
+                    buildLoginChallenge(data),
                     200,
                     'Two-factor authentication required'
                 );

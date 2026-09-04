@@ -65,30 +65,77 @@ flowchart LR
 
 ## Two-factor authentication
 
-An optional TOTP second factor, on top of the login flow above.
+An optional second factor on top of the login flow above. An account may arm **several**, and the
+set of them is a registry rather than a branch: `src/modules/account/two-factor/methods/` holds one
+handler per channel, and everything above it — services, controllers, contract — deals in a
+`method` string.
 
-- **Storage is asymmetric.** The TOTP secret must be recoverable to recompute a code against, so
-  it is ENCRYPTED (AES-256-GCM, key from `NODE_TOTP_ENCRYPTION_KEY`, versioned so a future key
-  rotation can decrypt old rows against their own key). Backup codes are one-time and
-  high-entropy, so they are hashed (sha256) the same way refresh tokens are — there is no
-  low-entropy secret to stretch.
-- **Enrollment is two steps.** `POST /account/2fa/setup` generates a secret with no
-  `twoFactorEnabledAt`; only `POST /account/2fa/confirm`, given a code the caller actually read
-  off their own device, arms it and mints backup codes.
-- **Login becomes two steps once enrolled.** `POST /account/login`'s `200` is a discriminated
-  union: a normal `{ token }`, or `{ mfaRequired: true, challenge }` when the account has 2FA on.
-  The challenge is a short-lived, signed, single-purpose token — `POST /account/login/2fa` is the
-  only thing that accepts it back, and the resolver that turns any OTHER token into a session
-  explicitly rejects one carrying that purpose, so a challenge can never authenticate a request on
-  its own.
-- **Replay and rate limits are separate controls.** A code's RFC 6238 time step is tracked per
-  account so the identical code cannot verify twice; `NODE_MFA_CHALLENGE_MAX` bounds attempts
-  against ONE still-live challenge, independent of the account/address budgets below.
-- **Disabling requires proving the factor being removed** — fresh critical auth plus a valid code
-  or backup code — so a stolen-but-fresh session cannot strip 2FA off an account on its own.
+Two methods ship: `totp`, an authenticator app, and `email`, a six-digit code mailed to the
+account's verified address. A future `sms` is a third handler and no other change.
+
+### The challenge is a claim check, not a code
+
+The single most misread part of the flow. `POST /account/login` cannot mint a session yet but must
+not hold the half-finished login in memory, so it hands the browser a signed note naming the
+attempt. The **code** is the separate secret, and where it comes from is what a method decides.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant A as API
+    U->>A: POST /account/login (email + password)
+    A-->>U: 200 { mfaRequired, challenge, methods, expiresAt }
+    opt a delivered method
+        U->>A: POST /account/login/2fa/send { challenge, method }
+        A-->>U: 200 { sentTo, resendAfter, expiresAt }
+        A-)U: the code, by email
+    end
+    U->>A: POST /account/login/2fa { challenge, code }
+    A-->>U: 200 { token } + refresh cookie, amr ['pwd','otp']
+```
+
+The challenge is signed with the access secret but carries `purpose: 'mfa'`, and the resolver that
+turns any other token into a session rejects that purpose outright — so it can never authenticate a
+request on its own. It lives 5 minutes for a device-only account and **10** for one with a
+delivered method armed, because a mailed code has an SMTP queue and an app switch to survive.
+
+### Storage is asymmetric, per method
+
+| what             | form                                                               | why                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| a device secret  | AES-256-GCM, key from `NODE_TOTP_ENCRYPTION_KEY`, version-prefixed | must be recoverable to recompute a code against; the prefix lets a future key rotation decrypt old rows with their own key     |
+| a delivered code | HMAC-SHA256 under the same key                                     | six digits is a space of one million — a bare digest falls to anyone holding a database dump, an HMAC does not without the key |
+| backup codes     | sha256                                                             | one-time and high-entropy, so there is no low-entropy secret to stretch                                                        |
+
+### The controls, and which attack each one answers
+
+- **Enrollment is two steps, per method.** `POST /account/2fa/methods/{method}/setup` arms nothing;
+  only `.../confirm`, given a code the caller demonstrably received, sets `enrolledAt`.
+- **Backup codes are minted once**, by whichever method an account arms first — they recover the
+  account, not the method. Losing the last factor discards them.
+- **Email requires a verified address.** 2FA by mail is only ever as strong as the mailbox behind
+  it, and an address nobody has proved control of is not a second factor at all.
+- **Replay** — a device code's RFC 6238 time step is stored, so the identical code cannot verify
+  twice; a delivered code is deleted the moment it is spent.
+- **Guessing** — `NODE_MFA_CHALLENGE_MAX` bounds attempts against ONE live challenge. On top of
+  that, a delivered code carries its own attempt ceiling, because the code outlives any single
+  challenge: a caller who simply logs in again would otherwise get a fresh budget to keep guessing
+  the same six digits with.
+- **Mail-bombing** — `NODE_MFA_SEND_MAX` bounds deliveries per challenge, and a per-code cooldown
+  paces the resend button. Both, because they bound different things: the limiter caps the total,
+  the cooldown paces one account's own retries.
+- **Disabling requires proving a factor** — fresh critical auth plus a valid code or backup code —
+  so a stolen-but-fresh session cannot strip 2FA off an account on its own. Removing one method
+  and removing all of them are held to the same bar.
 - **Recovery is admin-assisted, not self-service.** A lost device and lost backup codes reduce to
   the `/users` admin surface, deliberately: a mailbox-based reset would make 2FA only as strong as
   the inbox it defends against.
+
+### What is NOT covered
+
+`GET /account/oauth/{provider}/callback` mints a session without consulting `twoFactorEnabledAt`.
+An account with a linked provider therefore has an unchallenged way in, and 2FA on this deployment
+is a control on the password path only.
 
 ## The rate-limit budgets
 

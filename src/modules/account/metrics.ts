@@ -127,8 +127,20 @@ export const authAccountDeleteTotal = new Counter({
  */
 export const authTwoFactorEnrollTotal = new Counter({
     name: 'auth_two_factor_enroll_total',
-    help: 'Total two-factor enrollment confirmations, labelled by outcome.',
-    labelNames: ['status'] as const,
+    help: 'Total two-factor enrollment confirmations, labelled by method and outcome.',
+    labelNames: ['method', 'status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
+ * Login codes this deployment sent, by method.
+ * The one 2FA counter an unauthenticated caller can move: a spike here with no matching rise in
+ * `auth_two_factor_challenge_total` is someone using the send endpoint as a mail cannon.
+ */
+export const authTwoFactorCodeSentTotal = new Counter({
+    name: 'auth_two_factor_code_sent_total',
+    help: 'Total delivered two-factor codes sent, labelled by method and outcome.',
+    labelNames: ['method', 'status'] as const,
     registers: [metricsRegistry]
 });
 
@@ -139,8 +151,8 @@ export const authTwoFactorEnrollTotal = new Counter({
  */
 export const authTwoFactorDisableTotal = new Counter({
     name: 'auth_two_factor_disable_total',
-    help: 'Total two-factor disable attempts, labelled by outcome.',
-    labelNames: ['status'] as const,
+    help: 'Total two-factor disable attempts, labelled by method and outcome.',
+    labelNames: ['method', 'status'] as const,
     registers: [metricsRegistry]
 });
 

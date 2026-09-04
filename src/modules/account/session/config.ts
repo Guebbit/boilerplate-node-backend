@@ -58,10 +58,13 @@ export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
 export const getAccessTokenTTL = () => environmentNumber('NODE_TOKEN_ACCESS_TIME', 0);
 
 /**
- * The key TOTP secrets are encrypted with at rest — see `two-factor.ts`. Unlike the JWT secrets
- * above, this one is versioned: `two-factor.ts` prefixes every ciphertext with the version this
- * returns, so a future key rotation can decrypt old rows with their own key while signing new
- * ones with the new one, instead of a migration that cannot tell which key any given row used.
+ * The key every second factor's stored material is protected with — see `two-factor/`. It
+ * encrypts a device secret and keys the HMAC of a delivered code.
+ *
+ * Unlike the JWT secrets above, this one is versioned: `two-factor/totp.ts` prefixes every
+ * ciphertext with the version this returns, so a future key rotation can decrypt old rows with
+ * their own key while signing new ones with the new one, instead of a migration that cannot tell
+ * which key any given row used.
  */
 export const getTotpEncryptionKey = (): { version: string; key: string } => ({
     version: 'v1',

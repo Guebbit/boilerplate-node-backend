@@ -11,7 +11,7 @@
 export { userService } from './service';
 export { userRepository } from './repository';
 export { TokenType, zodUserSchema, hashToken } from './model';
-export type { UserDocument, Token, OAuthAccount } from './model';
+export type { UserDocument, Token, OAuthAccount, TwoFactorMethodRecord } from './model';
 
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */
 export { USER_DELETED, USER_SETUP_REQUESTED } from './events';

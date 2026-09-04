@@ -117,7 +117,9 @@ const ALLOWED_ELSEWHERE: Readonly<Record<string, string>> = {
     'emitAnalyticsEvent @ account/session/login-observability.ts':
         'Same file, same constraint as the audit record above — the login event is reported for outcomes that never reach a service.',
     'emitAuditEvent @ account/controllers/post-reset-request.ts':
-        'Fires unconditionally, whether or not the address belongs to an account, which is exactly what keeps the 200 identical either way and prevents user enumeration. A service reached only after a user is found cannot reproduce that.'
+        'Fires unconditionally, whether or not the address belongs to an account, which is exactly what keeps the 200 identical either way and prevents user enumeration. A service reached only after a user is found cannot reproduce that.',
+    'enqueueEmail @ account/two-factor/methods/email.ts':
+        'A second-factor handler owns reaching the user through ITS OWN channel — the whole point of the registry is that `services/two-factor.ts` never learns that one method sends mail and another does not. Hoisting the send into the service would put back the `if (method === ...)` the registry exists to delete, and the SMS handler that follows would call a different adapter from the same place.'
 };
 
 /** `<marker> → the files that call it, by layer`. */

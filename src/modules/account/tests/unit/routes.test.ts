@@ -45,6 +45,7 @@ const RATE_LIMITED = [
     'POST /verify-request',
     'POST /verify-confirm',
     'POST /login/2fa',
+    'POST /login/2fa/send',
     'GET /oauth/:provider',
     'GET /oauth/:provider/callback'
 ];
@@ -66,9 +67,11 @@ const AUTHENTICATED = [
     'POST /verify-request',
     'DELETE /tokens/expired',
     'POST /export',
-    'POST /2fa/setup',
-    'POST /2fa/confirm',
-    'DELETE /2fa'
+    'GET /2fa',
+    'DELETE /2fa',
+    'POST /2fa/methods/:method/setup',
+    'POST /2fa/methods/:method/confirm',
+    'DELETE /2fa/methods/:method'
 ];
 
 describe('account routes — what is mounted', () => {
@@ -97,10 +100,13 @@ describe('account routes — what is mounted', () => {
             'POST /verify-confirm',
             'DELETE /tokens/expired',
             'POST /export',
+            'POST /login/2fa/send',
             'POST /login/2fa',
-            'POST /2fa/setup',
-            'POST /2fa/confirm',
+            'GET /2fa',
             'DELETE /2fa',
+            'POST /2fa/methods/:method/setup',
+            'POST /2fa/methods/:method/confirm',
+            'DELETE /2fa/methods/:method',
             'GET /oauth/providers',
             'GET /oauth/:provider',
             'GET /oauth/:provider/callback'

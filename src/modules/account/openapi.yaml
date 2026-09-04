@@ -117,54 +117,27 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /account/2fa/setup:
-        post:
-            tags: [Auth]
-            summary: Start two-factor enrollment
-            description: Generates a fresh TOTP secret and returns it plaintext, once, along with the `otpauth://` URI to render as a QR code. Enrollment is not active until `POST /account/2fa/confirm` proves the caller scanned it. Calling this again — including on an account that already has 2FA on — replaces the pending secret and clears any confirmed one, for the "lost my phone, still have my session" recovery path.
-            operationId: setupTwoFactor
-            security:
-                - bearerAuth: []
-            responses:
-                '200':
-                    description: A fresh TOTP secret, awaiting confirmation
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/TwoFactorSetupEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /account/2fa/confirm:
-        post:
-            tags: [Auth]
-            summary: Confirm two-factor enrollment
-            description: Arms the pending secret from `POST /account/2fa/setup` against a code from the caller's authenticator app, and mints backup codes — returned in the clear exactly once.
-            operationId: confirmTwoFactor
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/TwoFactorConfirmRequest'
-            responses:
-                '200':
-                    description: Two-factor authentication is now on; here are the backup codes
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/TwoFactorConfirmEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
     /account/2fa:
+        get:
+            tags: [Auth]
+            summary: Two-factor status
+            description: 'What second factors this account has armed, and what it could still add. `available` crosses a deployment fact with an account fact — a method this deployment cannot reach at all (no SMTP configured) is absent entirely, while one the account is not yet eligible for (an unverified email address) is listed with `enrollable: false`.'
+            operationId: getTwoFactorStatus
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The account's second factors, armed and available
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorStatusEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
             tags: [Auth]
             summary: Disable two-factor authentication
-            description: Disables 2FA. Requires a valid TOTP code or an unused backup code in the body, on top of the route's own fresh-auth requirement — disabling from a stolen-but-fresh session is otherwise the cheapest way around the whole feature.
+            description: 'Drops EVERY enrolled method and every unused backup code. Requires a valid code from any enrolled method — or an unused backup code — in the body, on top of the route''s own fresh-auth requirement: disabling from a stolen-but-fresh session is otherwise the cheapest way around the whole feature. Removing one method and keeping the rest is DELETE /account/2fa/methods/{method}.'
             operationId: disableTwoFactor
             security:
                 - bearerAuth: []
@@ -173,10 +146,86 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/TwoFactorDisableRequest'
+                            $ref: '#/components/schemas/TwoFactorCodeRequest'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/methods/{method}/setup:
+        post:
+            tags: [Auth]
+            summary: Start enrolling one second factor
+            description: Begins — or restarts — enrollment of one method. A device method answers with the secret to scan; a delivered method sends a code and answers with where it went. Nothing is armed until POST /account/2fa/methods/{method}/confirm proves the caller received it. Calling this again replaces whatever that method had pending, and disarms it if it was already confirmed — the "lost my phone, still have my session" recovery path, which is why it is gated on fresh critical auth.
+            operationId: setupTwoFactorMethod
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TwoFactorMethodPath'
+            responses:
+                '200':
+                    description: What the caller needs to finish enrolling this method
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorSetupEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # 422 rather than 403 for a method the account cannot enroll (an unverified email
+                # address): the caller can fix it, and the message says how.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/methods/{method}/confirm:
+        post:
+            tags: [Auth]
+            summary: Arm one second factor
+            description: Arms the method pending from its setup call, against a code the caller has demonstrably received. Backup codes are minted here — but only by the FIRST factor an account arms, since they recover the account, not the method.
+            operationId: confirmTwoFactorMethod
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TwoFactorMethodPath'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorConfirmRequest'
+            responses:
+                '200':
+                    description: The method is armed; backup codes if this was the first one
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorConfirmEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/methods/{method}:
+        delete:
+            tags: [Auth]
+            summary: Remove one second factor
+            description: Drops one method and leaves the others armed. Requires a valid code — from any enrolled method, or a backup code — for the same reason the full disable does. Removing the LAST armed method turns two-factor authentication off and discards the backup codes with it, exactly as DELETE /account/2fa would.
+            operationId: removeTwoFactorMethod
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TwoFactorMethodPath'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorCodeRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -432,6 +481,33 @@ paths:
                 # A wrong code is a 422, same reasoning as /account/reauth: a 401 here would read
                 # as an expired challenge and send a caller back to /account/login for no reason.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/login/2fa/send:
+        post:
+            tags: [Auth]
+            summary: Send a login code
+            description: Delivers a fresh code for one armed delivered method, against a live challenge. Public like the rest of the login flow — the challenge token is the credential. Answers 429 while the previous code is still inside its cooldown, so a client that respects `resendAfter` never sees one; the cooldown exists because this endpoint sends mail on an unauthenticated caller's say-so.
+            operationId: sendTwoFactorCode
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorSendRequest'
+            responses:
+                '200':
+                    description: A code is on its way
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorDeliveryEnvelope'
+                # An expired or forged challenge, and an account with no such method armed, answer
+                # alike: neither should tell a caller which one they hit.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/oauth/providers:
@@ -726,7 +802,7 @@ components:
         MfaChallenge:
             type: object
             additionalProperties: false
-            required: [mfaRequired, challenge]
+            required: [mfaRequired, challenge, expiresAt, methods]
             properties:
                 mfaRequired:
                     type: boolean
@@ -734,7 +810,19 @@ components:
                     description: Always true — the credential check passed, but a second factor is required before a session is issued.
                 challenge:
                     type: string
-                    description: Short-lived signed token naming this login attempt. Submit it, with a code, to POST /account/login/2fa. Expires after five minutes.
+                    description: A claim check for this half-finished login, not a code — nothing is sent to the user to obtain it. Submit it, with a code, to POST /account/login/2fa, or to POST /account/login/2fa/send to have a code delivered first.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: When the challenge stops being accepted. Longer for an account with a delivered method armed, since the code has to survive an email round-trip.
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/TwoFactorMethodSummary'
+                    description: The factors armed on this account, in the order a client should offer them.
+                defaultMethod:
+                    type: string
+                    description: Which of `methods` to offer first — the cheapest one for the user, which is a device method when there is one.
 
         LoginOutcome:
             oneOf:
@@ -766,19 +854,111 @@ components:
                     description: The challenge token from POST /account/login.
                 code:
                     type: string
-                    description: A 6-digit TOTP code, or an unused backup code.
+                    description: A code from any armed method, or an unused backup code. Which method it came from is the server's problem, not the client's.
+
+        TwoFactorSendRequest:
+            type: object
+            additionalProperties: false
+            required: [challenge, method]
+            properties:
+                challenge:
+                    type: string
+                    description: The challenge token from POST /account/login.
+                method:
+                    type: string
+                    description: Which armed delivered method to send through — a `method` from the challenge's own `methods` list whose `delivers` is true.
+
+        TwoFactorMethodSummary:
+            type: object
+            additionalProperties: false
+            required: [method, delivers]
+            properties:
+                method:
+                    type: string
+                    description: 'Wire name of the factor — `totp`, `email`. A string rather than an enum on purpose: a deployment that gains a channel must not need a new contract to name it.'
+                delivers:
+                    type: boolean
+                    description: Whether the server sends the code (email, SMS) or the caller reads it off their own device (TOTP). A client renders a "send me a code" button for the former and nothing for the latter.
+                target:
+                    type: string
+                    description: Where a delivered code goes, MASKED by the server — never a full address, so no client has to decide how to redact one. Absent for device methods.
+                enrolledAt:
+                    type: string
+                    format: date-time
+                    description: When this factor was armed. Absent while its enrollment is still pending confirmation.
+                resendAfter:
+                    type: integer
+                    description: Seconds between two deliveries of this method. Absent for device methods.
+                enrollable:
+                    type: boolean
+                    description: Whether this account may add this method right now. Only meaningful in `TwoFactorStatus.available`; `false` comes with `reason`.
+                reason:
+                    type: string
+                    description: Why `enrollable` is false — a translated sentence a client can show as-is.
+
+        TwoFactorStatus:
+            type: object
+            additionalProperties: false
+            required: [enabled, methods, available, backupCodesRemaining]
+            properties:
+                enabled:
+                    type: boolean
+                    description: Whether a login on this account is challenged for a second factor. True exactly when `methods` holds at least one armed entry.
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/TwoFactorMethodSummary'
+                    description: The factors armed on this account, plus any enrollment still pending confirmation.
+                available:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/TwoFactorMethodSummary'
+                    description: 'What this account could still add. A method this deployment cannot reach at all is absent; one the account is not yet eligible for is present with `enrollable: false` and a `reason`.'
+                backupCodesRemaining:
+                    type: integer
+                    description: How many unused backup codes are left. Zero with `enabled` true is the state worth warning about — a lost device then means admin-assisted recovery.
+
+        TwoFactorStatusEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorStatus'
 
         TwoFactorSetup:
             type: object
             additionalProperties: false
-            required: [secret, otpauthUri]
+            required: [method, delivers]
             properties:
+                method:
+                    type: string
+                    description: The method being enrolled, echoed back.
+                delivers:
+                    type: boolean
+                    description: Which half of this object to read. True — a code was just sent, see `sentTo`. False — enroll from `secret`/`otpauthUri`.
                 secret:
                     type: string
-                    description: The TOTP secret, base32-encoded, shown once for manual entry as a fallback to scanning.
+                    description: A device method's secret, base32-encoded, shown once for manual entry as a fallback to scanning. Absent when `delivers`.
                 otpauthUri:
                     type: string
-                    description: An otpauth:// URI — the frontend renders it as a QR code; this API generates no image.
+                    description: An otpauth:// URI the client renders as a QR code — this API generates no image, so the secret crosses the wire once rather than twice. Absent when `delivers`.
+                sentTo:
+                    type: string
+                    description: Masked destination the enrollment code just went to. Absent unless `delivers`.
+                resendAfter:
+                    type: integer
+                    description: Seconds before another code may be requested. Absent unless `delivers`.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: When the delivered code stops being accepted. Absent unless `delivers`.
 
         TwoFactorSetupEnvelope:
             type: object
@@ -794,6 +974,39 @@ components:
                 data:
                     $ref: '#/components/schemas/TwoFactorSetup'
 
+        TwoFactorDelivery:
+            type: object
+            additionalProperties: false
+            required: [method, sentTo, resendAfter, expiresAt]
+            properties:
+                method:
+                    type: string
+                    description: The method the code went through, echoed back.
+                sentTo:
+                    type: string
+                    description: Masked destination — enough for the user to recognise the mailbox, not enough to learn a new address from.
+                resendAfter:
+                    type: integer
+                    description: Seconds before another code may be requested. A client counts down from this rather than inventing its own cooldown, so it never disagrees with the rate limiter.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: When this code stops being accepted.
+
+        TwoFactorDeliveryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorDelivery'
+
         TwoFactorConfirmRequest:
             type: object
             additionalProperties: false
@@ -801,18 +1014,33 @@ components:
             properties:
                 code:
                     type: string
-                    description: A 6-digit code from the authenticator app enrolled via POST /account/2fa/setup.
+                    description: 'The code for the method being armed — read off the device, or received through its channel. A backup code is NOT accepted here: the point of this call is to prove the new factor works.'
+
+        TwoFactorCodeRequest:
+            type: object
+            additionalProperties: false
+            required: [code]
+            properties:
+                code:
+                    type: string
+                    description: A code from any armed method, or an unused backup code. Used to prove the factor being removed — or the account it protects — really belongs to the caller.
 
         TwoFactorConfirmed:
             type: object
             additionalProperties: false
-            required: [backupCodes]
+            required: [method, backupCodesRemaining]
             properties:
+                method:
+                    type: string
+                    description: The method just armed, echoed back.
                 backupCodes:
                     type: array
                     items:
                         type: string
-                    description: One-time recovery codes for a lost authenticator, shown in the clear exactly once.
+                    description: One-time recovery codes, in the clear, shown exactly once and never retrievable again. Present ONLY when this was the first factor the account armed — they recover the account, not the method, so a second factor mints none.
+                backupCodesRemaining:
+                    type: integer
+                    description: How many unused backup codes the account now holds.
 
         TwoFactorConfirmEnvelope:
             type: object
@@ -827,15 +1055,6 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/TwoFactorConfirmed'
-
-        TwoFactorDisableRequest:
-            type: object
-            additionalProperties: false
-            required: [code]
-            properties:
-                code:
-                    type: string
-                    description: A TOTP code, or an unused backup code.
 
         LoginRequest:
             type: object
@@ -1406,3 +1625,14 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/AddressesResponse'
+
+
+    parameters:
+        # ---------- account — the parameters only this module's paths reference. ----------
+        TwoFactorMethodPath:
+            name: method
+            in: path
+            required: true
+            schema:
+                type: string
+            description: 'Wire name of a second factor — a `method` from `GET /account/2fa`. A bare string, not an enum: the set of methods is a deployment fact, and a contract that enumerated them would need regenerating to add a channel.'

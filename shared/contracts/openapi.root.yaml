@@ -171,6 +171,12 @@ components:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/ValidationErrorResponse'
+        TooManyRequests:
+            description: The caller has spent a rate-limit budget and must wait. The wait is in the standard `RateLimit`/`Retry-After` headers, and — where the endpoint has a budget of its own to report, like a resend cooldown — in the error `details` too.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
         InternalError:
             description: Internal server error
             content:
@@ -815,12 +821,16 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1export'
     /account/login/2fa:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~12fa'
-    /account/2fa/setup:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1setup'
-    /account/2fa/confirm:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1confirm'
+    /account/login/2fa/send:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~12fa~1send'
     /account/2fa:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa'
+    /account/2fa/methods/{method}:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}'
+    /account/2fa/methods/{method}/setup:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1setup'
+    /account/2fa/methods/{method}/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1confirm'
     /account/oauth/providers:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1providers'
     /account/oauth/{provider}:
