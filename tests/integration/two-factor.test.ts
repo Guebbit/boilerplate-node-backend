@@ -535,6 +535,27 @@ describe('logging in with the email factor', () => {
 
         expect(result.success).toBe(false);
     });
+
+    it('burns an ENROLLMENT code after the same ceiling', async () => {
+        const { bearer } = await authenticateVerified();
+        await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send();
+        const code = mailedCode();
+
+        // Over HTTP because the confirm route carries no limiter of its own — the ceiling is the
+        // only thing bounding guesses here, which is exactly what this asserts.
+        for (let attempt = 0; attempt < DELIVERED_CODE_MAX_ATTEMPTS; attempt++)
+            await api()
+                .post('/account/2fa/methods/email/confirm')
+                .set('Authorization', bearer)
+                .send({ code: '000000' });
+
+        const response = await api()
+            .post('/account/2fa/methods/email/confirm')
+            .set('Authorization', bearer)
+            .send({ code });
+
+        expect(response.status).toBe(422);
+    });
 });
 
 describe('several factors at once', () => {

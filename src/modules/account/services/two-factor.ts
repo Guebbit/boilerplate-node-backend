@@ -21,7 +21,11 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import type { CallerContext } from '@infrastructure/http/request';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import {
+    emitAuditEvent,
+    buildAuditEvent,
+    type AuditAction
+} from '@infrastructure/observability/audit';
 import type {
     MfaChallenge,
     TwoFactorConfirmed,
@@ -49,8 +53,12 @@ import {
     type TwoFactorMethodHandler
 } from '../two-factor';
 
-/** The error code a client branches on to render a resend countdown rather than a generic 429. */
-export const RESEND_TOO_SOON_CODE = 'TWO_FACTOR_RESEND_TOO_SOON';
+/**
+ * The error code a client branches on to render a resend countdown rather than a generic 429.
+ * Module-private like every other code in this app: a client reads it off the response, not off
+ * an exported constant.
+ */
+const RESEND_TOO_SOON_CODE = 'TWO_FACTOR_RESEND_TOO_SOON';
 
 /**
  * Persist a document whose method array was mutated in place.
@@ -63,6 +71,35 @@ const saveMethods = (user: UserDocument): Promise<UserDocument> => {
     user.markModified('twoFactorMethods');
     return userRepository.save(user);
 };
+
+/**
+ * Record one method-scoped 2FA action and pass the outcome through untouched. Both halves are
+ * kept: a failed enrollment or disable is exactly what a stolen session looks like from here.
+ */
+const audited = <T>(
+    outcome: Promise<ResponseSuccess<T> | ResponseReject>,
+    context: CallerContext,
+    action: AuditAction,
+    method: string
+): Promise<ResponseSuccess<T> | ResponseReject> =>
+    outcome.then((result) => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action,
+                outcome: result.success ? 'success' : 'failure',
+                metadata: { method }
+            })
+        );
+        return result;
+    });
+
+/**
+ * The rejection a wrong code earns, SAVED rather than discarded: a miss spends something — a
+ * delivered code's attempt budget — and dropping that write is how an attempt ceiling silently
+ * becomes no ceiling at all.
+ */
+const rejectWrongCode = (user: UserDocument): Promise<ResponseReject> =>
+    saveMethods(user).then(() => generateReject(422, [t('account.two-factor.wrong-code')]));
 
 /** The account's armed factors, in the registry's own order rather than enrollment order. */
 const armedEntries = (user: UserDocument) =>
@@ -302,20 +339,11 @@ export const confirmTwoFactorMethod = (
                 .verify(user, entry, code)
                 .then<
                     ResponseSuccess<TwoFactorConfirmed> | ResponseReject
-                >((matched) => (matched ? armMethod(user, entry) : generateReject(422, [t('account.two-factor.wrong-code')])));
+                >((matched) => (matched ? armMethod(user, entry) : rejectWrongCode(user)));
         })
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 
-    return outcome.then((result) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_2FA_ENROLLED,
-                outcome: result.success ? 'success' : 'failure',
-                metadata: { method }
-            })
-        );
-        return result;
-    });
+    return audited(outcome, context, accountAuditActions.AUTH_2FA_ENROLLED, method);
 };
 
 /**
@@ -369,7 +397,7 @@ export const removeTwoFactorMethod = (
             if (index === -1) return generateReject(422, [t('account.two-factor.not-enabled')]);
 
             return verifyAnyFactor(user, code).then((matched) => {
-                if (!matched) return generateReject(422, [t('account.two-factor.wrong-code')]);
+                if (!matched) return rejectWrongCode(user);
 
                 user.twoFactorMethods.splice(index, 1);
                 discardIfDisarmed(user);
@@ -378,16 +406,7 @@ export const removeTwoFactorMethod = (
         })
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 
-    return outcome.then((result) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_2FA_DISABLED,
-                outcome: result.success ? 'success' : 'failure',
-                metadata: { method }
-            })
-        );
-        return result;
-    });
+    return audited(outcome, context, accountAuditActions.AUTH_2FA_DISABLED, method);
 };
 
 /**
@@ -411,7 +430,7 @@ export const disableTwoFactor = (
                 return generateReject(422, [t('account.two-factor.not-enabled')]);
 
             return verifyAnyFactor(user, code).then((matched) => {
-                if (!matched) return generateReject(422, [t('account.two-factor.wrong-code')]);
+                if (!matched) return rejectWrongCode(user);
 
                 user.twoFactorMethods = [];
                 discardIfDisarmed(user);
@@ -420,16 +439,7 @@ export const disableTwoFactor = (
         })
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 
-    return outcome.then((result) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_2FA_DISABLED,
-                outcome: result.success ? 'success' : 'failure',
-                metadata: { method: 'all' }
-            })
-        );
-        return result;
-    });
+    return audited(outcome, context, accountAuditActions.AUTH_2FA_DISABLED, 'all');
 };
 
 /**
@@ -475,16 +485,7 @@ export const sendLoginCode = (
         () => generateReject(401, [t('account.two-factor.challenge-invalid')])
     );
 
-    return outcome.then((result) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_2FA_CODE_SENT,
-                outcome: result.success ? 'success' : 'failure',
-                metadata: { method }
-            })
-        );
-        return result;
-    });
+    return audited(outcome, context, accountAuditActions.AUTH_2FA_CODE_SENT, method);
 };
 
 /**
@@ -508,17 +509,11 @@ export const verifyLoginChallenge = (
                 .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
                     if (!user?.twoFactorEnabledAt) return generateReject(401, []);
 
-                    return verifyAnyFactor(user, code).then((matched) => {
-                        if (!matched) {
-                            // Persist anyway: a wrong guess SPENT something — a delivered code's
-                            // attempt budget — and dropping that write is how an attempt ceiling
-                            // silently becomes no ceiling at all.
-                            return saveMethods(user).then(() =>
-                                generateReject(422, [t('account.two-factor.wrong-code')])
-                            );
-                        }
-                        return saveMethods(user).then((saved) => generateSuccess(saved));
-                    });
+                    return verifyAnyFactor(user, code).then((matched) =>
+                        matched
+                            ? saveMethods(user).then((saved) => generateSuccess(saved))
+                            : rejectWrongCode(user)
+                    );
                 })
                 .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error)),
         () => generateReject(401, [t('account.two-factor.challenge-invalid')])

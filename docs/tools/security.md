@@ -182,6 +182,23 @@ configured, and one at a time per worker (`prefetch: 1`) when one is. Like `subm
 Default `NODE_UPLOAD_RATE_LIMIT_MAX=20` — generous enough for someone editing several product
 images in a row, well under the global brake.
 
+**The last two are keyed on a credential, not an address.** `mfaChallengeLimiter`
+(`POST /account/login/2fa`) and `mfaSendLimiter` (`POST /account/login/2fa/send`) both bucket on a
+sha256 of the challenge token rather than the caller's IP. That is the only key that bounds guesses
+against one login: an IP or account key lets a distributed attacker rotate addresses, while the
+challenge is the thing being attacked. Both windows are 600s, the longer of the two challenge
+tiers, so a window can never end before the challenge it bounds.
+
+They are two budgets and not one because they bound different costs — `NODE_MFA_CHALLENGE_MAX`
+caps GUESSES, `NODE_MFA_SEND_MAX` caps outbound mail — and sharing them would let a caller who
+typed three wrong codes lose the ability to be sent a right one.
+
+Neither is the whole story, because a delivered code lives on the user document and outlives the
+challenge it was sent for. Its own attempt ceiling is what closes that, and a ceiling only counts
+if a miss is WRITTEN: every path that checks a code — the login challenge, the enrollment confirm,
+and both removal routes — persists the spent attempt before answering, or the ceiling silently
+becomes no ceiling at all.
+
 ## Why the metrics endpoint has its own credential
 
 `/observability/metrics` cannot use the admin JWT the other observability routes use: it is scraped

@@ -38,15 +38,17 @@ setupTestDb();
 describe('accountService.signup', () => {
     it('creates a new user and returns a success response', async () => {
         const result = await accountService.signup(
-            'new@example.com',
-            'newuser',
-            'Password1!',
-            'Password1!',
-            undefined,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'new@example.com',
+                username: 'newuser',
+                password: 'Password1!',
+                passwordConfirm: 'Password1!',
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 
@@ -56,15 +58,17 @@ describe('accountService.signup', () => {
 
     it('rejects when passwords do not match', async () => {
         const result = await accountService.signup(
-            'new@example.com',
-            'newuser',
-            'Password1!',
-            'Different1!',
-            undefined,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'new@example.com',
+                username: 'newuser',
+                password: 'Password1!',
+                passwordConfirm: 'Different1!',
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 
@@ -76,15 +80,17 @@ describe('accountService.signup', () => {
         await createUser({ email: 'taken@example.com' });
 
         const result = await accountService.signup(
-            'taken@example.com',
-            'anotheruser',
-            'Password1!',
-            'Password1!',
-            undefined,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'taken@example.com',
+                username: 'anotheruser',
+                password: 'Password1!',
+                passwordConfirm: 'Password1!',
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 
@@ -94,15 +100,17 @@ describe('accountService.signup', () => {
 
     it('rejects with 422 when the email format is invalid', async () => {
         const result = await accountService.signup(
-            'not-an-email',
-            'user',
-            'Password1!',
-            'Password1!',
-            undefined,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'not-an-email',
+                username: 'user',
+                password: 'Password1!',
+                passwordConfirm: 'Password1!',
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 
@@ -114,15 +122,17 @@ describe('accountService.signup', () => {
 
     it('rejects with 422 when the password is too short', async () => {
         const result = await accountService.signup(
-            'short@example.com',
-            'shortpwd',
-            'abc',
-            'abc',
-            undefined,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'short@example.com',
+                username: 'shortpwd',
+                password: 'abc',
+                passwordConfirm: 'abc',
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 

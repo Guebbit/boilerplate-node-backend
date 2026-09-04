@@ -111,7 +111,8 @@ export const consumeDeliveredCode = (
     }
 
     // A wrong guess burns budget, not the account: past the ceiling only the code in flight dies,
-    // and the caller may ask for another one — subject to the cooldown and the route's limiter.
+    // and the caller may ask for another one. Burning takes `codeSentAt` with it, so the cooldown
+    // is gone too — `mfaSendLimiter` is what actually caps how many replacements one challenge buys.
     const attempts = (entry.codeAttempts ?? 0) + 1;
     entry.codeAttempts = attempts;
     if (attempts >= DELIVERED_CODE_MAX_ATTEMPTS) clearDeliveredCode(entry);

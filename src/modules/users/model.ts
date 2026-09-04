@@ -200,7 +200,7 @@ export interface UserMethods {
 /**
  * User Document model type. Business logic lives in the service and repository layers.
  */
-export type UserModel = Model<UserDocument, unknown, unknown>;
+export type UserModel = Model<UserDocument, unknown, UserMethods>;
 
 /**
  * Zod schema for user data validation, built on the orval-generated `CreateUserBody` so only
@@ -246,7 +246,7 @@ export const zodUserSchema = CreateUserBody.extend({
  * The Mongoose schema for user documents — field-level comments below cover the non-obvious
  * defaults.
  */
-export const userSchema = new Schema<UserDocument, UserModel, unknown>(
+export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
     {
         email: {
             type: String,

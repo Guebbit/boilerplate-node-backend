@@ -41,15 +41,17 @@ export const postSignup = (
 
     return accountService
         .signup(
-            email,
-            username,
-            password,
-            passwordConfirm,
-            analyticsConsent,
-            termsAccepted,
-            imageUrl,
-            thumbnailUrl,
-            pendingImageKey,
+            {
+                email,
+                username,
+                password,
+                passwordConfirm,
+                analyticsConsent,
+                termsAccepted,
+                imageUrl,
+                thumbnailUrl,
+                pendingImageKey
+            },
             callerContextOf(request)
         )
         .then((result) => {

@@ -94,14 +94,10 @@ export const emailMethod: TwoFactorMethodHandler = {
 
     target: (user) => maskEmail(user.email),
 
+    // An enrollment code and a login code are the same send: the setup payload is the delivery
+    // plus the discriminator a client reads to know which half of `TwoFactorSetup` is populated.
     setup: (user, entry, context) =>
-        deliver(user, entry, context).then((delivery) => ({
-            method: delivery.method,
-            delivers: true,
-            sentTo: delivery.sentTo,
-            resendAfter: delivery.resendAfter,
-            expiresAt: delivery.expiresAt
-        })),
+        deliver(user, entry, context).then((delivery) => ({ ...delivery, delivers: true })),
 
     send: deliver,
 

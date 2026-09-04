@@ -295,30 +295,76 @@ export const refreshAccessToken = (
         });
 
 /**
+ * Everything `POST /account/signup` collects: the submitted fields, plus the image paths
+ * `readUploadedImage` derived from the multipart body. One object rather than a positional list
+ * because half of these are optional and two are booleans — an argument order nothing but a
+ * comment would keep honest.
+ */
+export interface SignupInput {
+    /** The submitted address; `zodUserSchema` owns its shape. */
+    email: string;
+
+    /** The submitted display name. */
+    username: string;
+
+    /** The submitted password, in the clear; hashed on the way to the document. */
+    password: string;
+
+    /** The repeat, compared against `password` and never stored. */
+    passwordConfirm: string;
+
+    /**
+     * Optional like `UpdateAccountRequest`'s, but with no "leave it alone" reading — there is no
+     * prior value at signup, so absent and `false` mean the same thing here.
+     */
+    analyticsConsent: boolean | undefined;
+
+    /**
+     * Not a stored default: the contract requires it, and `signup`'s schema rejects anything but
+     * `true`. Validated there rather than on `userSchema` so OAuth linking and the admin `/users`
+     * route — neither of which shows this checkbox — aren't forced to restate it.
+     */
+    termsAccepted: boolean;
+
+    /**
+     * Not `| null`: the contract declares `imageUrl` a string, so a null reaches zod as
+     * "expected string, received null" and is rejected before `signup`'s `?? ''` could see it.
+     * The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
+     */
+    imageUrl: string | undefined;
+
+    /**
+     * Set together with `imageUrl` by `readUploadedImage` — never independently, and never part
+     * of the validated schema: both are server-derived, not client input.
+     */
+    thumbnailUrl: string | undefined;
+
+    /** The staged upload's storage key, handed to the image worker once the account exists. */
+    pendingImageKey: string | undefined;
+}
+
+/**
  * Register new user.
+ *
+ * @param input - the submitted fields and the server-derived image paths
+ * @param callerContext - the request's context, for the audit and analytics records
  */
 export const signup = (
-    email: string,
-    username: string,
-    password: string,
-    passwordConfirm: string,
-    // Optional like `UpdateAccountRequest`'s, but with no "leave it alone" reading — there is no
-    // prior value at signup, so absent and `false` mean the same thing here.
-    analyticsConsent: boolean | undefined,
-    // Not a stored default: the contract requires it, and the schema below rejects anything but
-    // `true`. Validated here rather than on `userSchema` so OAuth linking and the admin `/users`
-    // route — neither of which shows this checkbox — aren't forced to restate it.
-    termsAccepted: boolean,
-    // Not `| null`: the contract declares `imageUrl` a string, so a null reaches zod as
-    // "expected string, received null" and is rejected before the `?? ''` below could see it.
-    // The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
-    imageUrl: string | undefined,
-    // Set together with `imageUrl` by `readUploadedImage` — never independently, and never part
-    // of the validated schema below: both are server-derived, not client input.
-    thumbnailUrl: string | undefined,
-    pendingImageKey: string | undefined,
+    input: SignupInput,
     callerContext: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const {
+        email,
+        username,
+        password,
+        passwordConfirm,
+        analyticsConsent,
+        termsAccepted,
+        imageUrl,
+        thumbnailUrl,
+        pendingImageKey
+    } = input;
+
     const parseResult = zodUserSchema
         .extend({
             passwordConfirm: z.string(),

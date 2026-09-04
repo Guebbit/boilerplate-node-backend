@@ -7,8 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { accountService } from '../services';
-import { buildLoginChallenge } from '../services/two-factor';
+import { accountService, runTokenCleanup } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { issueSession } from '../session/session';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
@@ -16,7 +15,6 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import type { LoginRequest } from '@types';
-import { runTokenCleanup } from '../services';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
 const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optional() });
@@ -77,7 +75,7 @@ export const postLogin = (
             if (data.twoFactorEnabledAt) {
                 successResponse(
                     response,
-                    buildLoginChallenge(data),
+                    accountService.buildLoginChallenge(data),
                     200,
                     'Two-factor authentication required'
                 );

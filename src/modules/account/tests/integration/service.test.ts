@@ -36,15 +36,17 @@ describe('signup', () => {
     it('creates the account and returns it', async () => {
         const response = asSuccess(
             await accountService.signup(
-                'new@example.com',
-                'newuser',
-                VALID_PASSWORD,
-                VALID_PASSWORD,
-                undefined,
-                true,
-                undefined,
-                undefined,
-                undefined,
+                {
+                    email: 'new@example.com',
+                    username: 'newuser',
+                    password: VALID_PASSWORD,
+                    passwordConfirm: VALID_PASSWORD,
+                    analyticsConsent: undefined,
+                    termsAccepted: true,
+                    imageUrl: undefined,
+                    thumbnailUrl: undefined,
+                    pendingImageKey: undefined
+                },
                 testCallerContext
             )
         );
@@ -62,15 +64,17 @@ describe('signup', () => {
         // this service to write the field directly — every account in the database becomes a
         // plaintext credential, and no happy-path assertion notices.
         await accountService.signup(
-            'hashed@example.com',
-            'hasheduser',
-            VALID_PASSWORD,
-            VALID_PASSWORD,
-            undefined,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'hashed@example.com',
+                username: 'hasheduser',
+                password: VALID_PASSWORD,
+                passwordConfirm: VALID_PASSWORD,
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 
@@ -85,15 +89,17 @@ describe('signup', () => {
     it('rejects a mismatched confirmation with 422 and says so', async () => {
         const response = asReject(
             await accountService.signup(
-                'mismatch@example.com',
-                'mismatchuser',
-                VALID_PASSWORD,
-                'something-else',
-                undefined,
-                true,
-                undefined,
-                undefined,
-                undefined,
+                {
+                    email: 'mismatch@example.com',
+                    username: 'mismatchuser',
+                    password: VALID_PASSWORD,
+                    passwordConfirm: 'something-else',
+                    analyticsConsent: undefined,
+                    termsAccepted: true,
+                    imageUrl: undefined,
+                    thumbnailUrl: undefined,
+                    pendingImageKey: undefined
+                },
                 testCallerContext
             )
         );
@@ -109,15 +115,17 @@ describe('signup', () => {
 
         const response = asReject(
             await accountService.signup(
-                'taken@example.com',
-                'someoneelse',
-                VALID_PASSWORD,
-                VALID_PASSWORD,
-                undefined,
-                true,
-                undefined,
-                undefined,
-                undefined,
+                {
+                    email: 'taken@example.com',
+                    username: 'someoneelse',
+                    password: VALID_PASSWORD,
+                    passwordConfirm: VALID_PASSWORD,
+                    analyticsConsent: undefined,
+                    termsAccepted: true,
+                    imageUrl: undefined,
+                    thumbnailUrl: undefined,
+                    pendingImageKey: undefined
+                },
                 testCallerContext
             )
         );
@@ -132,15 +140,17 @@ describe('signup', () => {
     ])('rejects invalid input (%s / %s) with 422', async (email, username, password) => {
         const response = asReject(
             await accountService.signup(
-                email,
-                username,
-                password,
-                password,
-                undefined,
-                true,
-                undefined,
-                undefined,
-                undefined,
+                {
+                    email: email,
+                    username: username,
+                    password: password,
+                    passwordConfirm: password,
+                    analyticsConsent: undefined,
+                    termsAccepted: true,
+                    imageUrl: undefined,
+                    thumbnailUrl: undefined,
+                    pendingImageKey: undefined
+                },
                 testCallerContext
             )
         );
@@ -155,15 +165,17 @@ describe('signup', () => {
         // empty field the UI can branch on rather than a stock image it cannot tell apart from a
         // deliberate one.
         await accountService.signup(
-            'noimage@example.com',
-            'noimageuser',
-            VALID_PASSWORD,
-            VALID_PASSWORD,
-            undefined,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'noimage@example.com',
+                username: 'noimageuser',
+                password: VALID_PASSWORD,
+                passwordConfirm: VALID_PASSWORD,
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 
@@ -175,15 +187,17 @@ describe('signup', () => {
     it('rejects signup with 422 when terms are not accepted', async () => {
         const response = asReject(
             await accountService.signup(
-                'noterms@example.com',
-                'notermsuser',
-                VALID_PASSWORD,
-                VALID_PASSWORD,
-                undefined,
-                false,
-                undefined,
-                undefined,
-                undefined,
+                {
+                    email: 'noterms@example.com',
+                    username: 'notermsuser',
+                    password: VALID_PASSWORD,
+                    passwordConfirm: VALID_PASSWORD,
+                    analyticsConsent: undefined,
+                    termsAccepted: false,
+                    imageUrl: undefined,
+                    thumbnailUrl: undefined,
+                    pendingImageKey: undefined
+                },
                 testCallerContext
             )
         );
@@ -197,15 +211,17 @@ describe('signup', () => {
 
     it('persists an explicit analyticsConsent alongside the required termsAccepted', async () => {
         await accountService.signup(
-            'consenting@example.com',
-            'consentinguser',
-            VALID_PASSWORD,
-            VALID_PASSWORD,
-            true,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'consenting@example.com',
+                username: 'consentinguser',
+                password: VALID_PASSWORD,
+                passwordConfirm: VALID_PASSWORD,
+                analyticsConsent: true,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 
