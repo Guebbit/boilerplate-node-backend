@@ -109,15 +109,16 @@ apart.
 
 ## Configuration
 
-| Variable                          | Default                             | Meaning                                                |
-| --------------------------------- | ----------------------------------- | ------------------------------------------------------ |
-| `NODE_QUARANTINE_PATH`            | `quarantine`                        | Where uploads wait between staging and digesting       |
-| `NODE_IMAGE_MAX_INPUT_PIXELS`     | `50_000_000`                        | Decompression-bomb guard, checked before any resize    |
-| `NODE_IMAGE_MAX_DIMENSION`        | `2048`                              | Longest edge of a digested original                    |
-| `NODE_IMAGE_THUMBNAIL_DIMENSION`  | `320`                               | Longest edge of a thumbnail                            |
-| `NODE_PENDING_IMAGE_URL`          | `/images/system/pending.png`        | Placeholder shown while a digest job is pending        |
-| `NODE_PENDING_THUMBNAIL_URL`      | `/images/system/pending-thumb.webp` | Placeholder thumbnail, same lifetime as the above      |
-| `NODE_QUARANTINE_RETENTION_HOURS` | `24`                                | Age at which `reap:quarantine` unlinks a leftover file |
+| Variable                          | Default                             | Meaning                                                                                           |
+| --------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `NODE_QUARANTINE_PATH`            | `quarantine`                        | Where uploads wait between staging and digesting                                                  |
+| `NODE_IMAGE_MAX_INPUT_PIXELS`     | `50_000_000`                        | Decompression-bomb guard, checked before any resize                                               |
+| `NODE_IMAGE_MAX_DIMENSION`        | `2048`                              | Longest edge of a digested original                                                               |
+| `NODE_IMAGE_THUMBNAIL_DIMENSION`  | `320`                               | Longest edge of a thumbnail                                                                       |
+| `NODE_PENDING_IMAGE_URL`          | `/images/system/pending.png`        | Placeholder shown while a digest job is pending                                                   |
+| `NODE_PENDING_THUMBNAIL_URL`      | `/images/system/pending-thumb.webp` | Placeholder thumbnail, same lifetime as the above                                                 |
+| `NODE_QUARANTINE_RETENTION_HOURS` | `24`                                | Age at which `reap:quarantine` unlinks a leftover file                                            |
+| `NODE_MAX_UPLOAD_BYTES`           | `5242880` (5 MB)                    | Largest file multer accepts, per file — its own default is unlimited, so this is the only ceiling |
 
 ## Maintenance
 

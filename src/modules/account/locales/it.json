@@ -32,11 +32,19 @@
             "success": "Identità confermata."
         },
         "two-factor": {
-            "setup-not-started": "Avvia la configurazione prima di confermare un codice.",
-            "wrong-code": "Il codice non è corretto. Controlla la tua app di autenticazione e riprova.",
+            "setup-not-started": "Avvia la configurazione di questo metodo prima di confermare un codice.",
+            "wrong-code": "Il codice non è corretto. Controllalo e riprova.",
             "not-enabled": "L'autenticazione a due fattori non è attiva su questo account.",
+            "unknown-method": "Questo metodo di autenticazione a due fattori non è disponibile.",
+            "not-delivered": "Questo metodo non invia codici: leggilo dal tuo dispositivo.",
+            "email-unverified": "Conferma il tuo indirizzo email prima di usarlo come secondo fattore.",
+            "already-enrolled": "Questo metodo è già attivo su questo account.",
+            "resend-too-soon": "Un codice è stato appena inviato. Attendi prima di richiederne un altro.",
             "enrolled": "L'autenticazione a due fattori è ora attiva.",
+            "method-added": "Il secondo fattore è ora attivo.",
+            "method-removed": "Il secondo fattore è stato rimosso.",
             "disabled": "L'autenticazione a due fattori è ora disattivata.",
+            "code-sent": "Ti abbiamo inviato un codice.",
             "challenge-invalid": "Questo tentativo di accesso è scaduto. Effettua di nuovo l'accesso."
         },
         "logout": {
@@ -107,6 +115,14 @@
                 "meta-title": "Avviso di inattività",
                 "greeting": "Ciao, {{name}}!",
                 "body": "Non ti vediamo accedere da un po'. Per mantenere il tuo account, accedi entro i prossimi {{days}} giorni — trascorsi i quali verrà disattivato e, in seguito, eliminato definitivamente."
+            },
+            "two-factor-code": {
+                "subject": "Il tuo codice di accesso",
+                "meta-title": "Codice di accesso",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Ecco il codice per completare l'accesso:",
+                "expiry": "Scade tra {{minutes}} minuti.",
+                "ignore": "Se non stavi effettuando l'accesso, ignora questa email e cambia la password."
             }
         },
         "oauth": {

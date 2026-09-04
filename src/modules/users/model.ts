@@ -95,13 +95,10 @@ export interface UserRecord extends Omit<
      */
     inactivityWarnedAt?: Date;
 
-    /** Encrypted TOTP secret — see `two-factor.ts`. Never part of the `User` contract. */
-    twoFactorSecret?: string;
+    /** Every second factor this account has enrolled or half-enrolled — see {@link TwoFactorMethodRecord}. */
+    twoFactorMethods: TwoFactorMethodRecord[];
 
-    /** The RFC 6238 time step of the last code accepted — replay protection. */
-    twoFactorLastUsedStep?: number;
-
-    /** sha256 digests of unused backup codes — see `two-factor.ts#hashBackupCode`. */
+    /** sha256 digests of unused backup codes — see `account/two-factor/backup-codes.ts`. */
     twoFactorBackupCodes: string[];
 
     /*
@@ -120,6 +117,43 @@ export interface UserRecord extends Omit<
 
     /** The provider identities linked to this account — see `OAuthAccount` below. */
     oauthAccounts: OAuthAccount[];
+}
+
+/**
+ * One second factor on an account — armed or still pending confirmation.
+ *
+ * One shape for every method rather than a per-method collection: `account/two-factor/` decides
+ * what a given `method` does with these fields, and a deployment that gains a channel adds a
+ * handler, not a migration. `enrolledAt` is what separates a factor that guards logins from one
+ * whose setup was abandoned halfway.
+ */
+export interface TwoFactorMethodRecord {
+    /** The subdocument id Mongoose assigns; absent until the entry is first written. */
+    _id?: Types.ObjectId;
+
+    /** Wire name of the factor — `totp`, `email`. Unique within the array. */
+    method: string;
+
+    /** When this factor was armed. Absent means setup started and was never confirmed — login ignores it. */
+    enrolledAt?: Date;
+
+    /** A device method's encrypted secret — see `account/two-factor/totp.ts`. Absent for delivered methods. */
+    secret?: string;
+
+    /** The RFC 6238 time step of the last code accepted by a device method — replay protection. */
+    lastUsedStep?: number;
+
+    /** HMAC of the delivered code currently in flight — see `account/two-factor/delivered-codes.ts`. */
+    codeHash?: string;
+
+    /** When the code in flight stops being accepted. */
+    codeExpiresAt?: Date;
+
+    /** When the code in flight was sent — the anchor the resend cooldown is measured from. */
+    codeSentAt?: Date;
+
+    /** Wrong guesses against the code in flight. Past its ceiling the code is burned, not the account. */
+    codeAttempts?: number;
 }
 
 /**
@@ -166,7 +200,7 @@ export interface UserMethods {
 /**
  * User Document model type. Business logic lives in the service and repository layers.
  */
-export type UserModel = Model<UserDocument, unknown, UserMethods> & {};
+export type UserModel = Model<UserDocument, unknown, UserMethods>;
 
 /**
  * Zod schema for user data validation, built on the orval-generated `CreateUserBody` so only
@@ -352,27 +386,59 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: Date
         },
         /*
-         * Two-factor authentication. Asymmetric storage on purpose:
-         * `twoFactorSecret` must be recoverable to recompute a code against, so it is ENCRYPTED
-         * (`two-factor.ts`), never hashed. `select: false` since the login and 2FA-management
-         * flows are the only readers. Absent `twoFactorEnabledAt` means enrollment was started
-         * (`POST /account/2fa/setup`) but never confirmed — login ignores a pending secret.
+         * Two-factor authentication. Asymmetric storage on purpose: a device method's `secret`
+         * must be recoverable to recompute a code against, so it is ENCRYPTED
+         * (`account/two-factor/totp.ts`), never hashed, while a delivered method's code is only
+         * ever compared and so is kept as an HMAC. `select: false` since the login and
+         * 2FA-management flows are the only readers.
          */
-        twoFactorSecret: {
-            type: String,
-            select: false
-        },
-        twoFactorEnabledAt: {
-            type: Date
+        twoFactorMethods: {
+            type: [
+                {
+                    method: {
+                        type: String,
+                        required: true
+                    },
+                    enrolledAt: {
+                        type: Date,
+                        required: false
+                    },
+                    secret: {
+                        type: String,
+                        required: false
+                    },
+                    lastUsedStep: {
+                        type: Number,
+                        required: false
+                    },
+                    codeHash: {
+                        type: String,
+                        required: false
+                    },
+                    codeExpiresAt: {
+                        type: Date,
+                        required: false
+                    },
+                    codeSentAt: {
+                        type: Date,
+                        required: false
+                    },
+                    codeAttempts: {
+                        type: Number,
+                        required: false
+                    }
+                }
+            ],
+            select: false,
+            default: []
         },
         /*
-         * The RFC 6238 time step of the last code accepted — replay protection: a code
-         * already used within its own window must not work twice. `select: false`, same as the
-         * secret: nothing outside the verification path needs to read it.
+         * When the FIRST factor was armed, cleared when the last one goes. Derivable from
+         * `twoFactorMethods`, and stored anyway: it is the only 2FA field on the `User` contract,
+         * and `postLogin` has to branch on it without loading credentials it has no other use for.
          */
-        twoFactorLastUsedStep: {
-            type: Number,
-            select: false
+        twoFactorEnabledAt: {
+            type: Date
         },
         /*
          * Recovery codes for a lost authenticator — sha256 digests, same reasoning as `tokens`:
@@ -468,7 +534,7 @@ userSchema.index(
  * Pre-save hook: hashes the password with bcrypt whenever it changes, so a plaintext value never
  * reaches storage. See the bcrypt call below for the cost-factor rationale.
  */
-userSchema.pre('save', function () {
+userSchema.pre('save', function (this: UserDocument) {
     // The second half is only reachable in principle (`isModified` true, value falsy) — an
     // OAuth-only signup never sets `password` at all, so `isModified` is false for it — but it is
     // what lets TypeScript see `this.password` as a `string` below, now that it is optional.
@@ -497,6 +563,7 @@ userSchema.pre('save', function () {
  * only its {@link hashToken} digest is ever written to the document. See wave 3.1 above `hashToken`.
  */
 userSchema.methods.tokenAdd = function (
+    this: UserDocument,
     type: Token['type'],
     expirationMs: number,
     token: string
@@ -521,7 +588,7 @@ userSchema.methods.tokenAdd = function (
 /**
  * Remove all tokens of the given type from this user document and persist it.
  */
-userSchema.methods.tokenRemoveAll = function (type: Token['type']) {
+userSchema.methods.tokenRemoveAll = function (this: UserDocument, type: Token['type']) {
     return (this.constructor as UserModel)
         .updateOne({ _id: this._id }, { $pull: { tokens: { type } } }, { timestamps: false })
         .then(() => {
@@ -545,8 +612,8 @@ export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
     // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment.
-    // `twoFactorSecret`/`twoFactorLastUsedStep`/`twoFactorBackupCodes` are 2FA credential
-    // material — `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
+    // `twoFactorMethods`/`twoFactorBackupCodes` are 2FA credential material —
+    // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
     // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
     // part of the `User` contract, `select: false` on the schema already, this is defense in depth.
     omit: [
@@ -554,8 +621,7 @@ export const applyUserTransform = applySerialization(userSchema, {
         'tokens',
         'pendingImageKey',
         'inactivityWarnedAt',
-        'twoFactorSecret',
-        'twoFactorLastUsedStep',
+        'twoFactorMethods',
         'twoFactorBackupCodes',
         'oauthAccounts'
     ]

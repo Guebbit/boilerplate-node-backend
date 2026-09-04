@@ -146,17 +146,25 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the second step of a 2FA login — the challenge token is the credential, not a session'
     },
-    'account POST /2fa/setup': {
+    'account POST /login/2fa/send': {
+        requiresAuth: false,
+        reason: 'delivering a login code — same footing as the step it belongs to, the challenge token is the credential'
+    },
+    'account POST /2fa/methods/:method/setup': {
         requiresAuth: true,
         reason: "enrolling a second factor on the caller's own account"
     },
-    'account POST /2fa/confirm': {
+    'account POST /2fa/methods/:method/confirm': {
         requiresAuth: true,
-        reason: "arming the caller's own pending secret"
+        reason: "arming the caller's own pending factor"
+    },
+    'account DELETE /2fa/methods/:method': {
+        requiresAuth: true,
+        reason: "removing one of the caller's own second factors"
     },
     'account DELETE /2fa': {
         requiresAuth: true,
-        reason: "disabling the caller's own second factor"
+        reason: "disabling every one of the caller's own second factors"
     },
     'account POST /logout': {
         requiresAuth: false,

@@ -48,9 +48,13 @@ import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
 import { exportOwnData } from './export';
 import { loginOrCreateFromOAuth, recordOAuthFailure } from './oauth';
 import {
-    setupTwoFactor,
-    confirmTwoFactor,
+    buildLoginChallenge,
+    confirmTwoFactorMethod,
     disableTwoFactor,
+    removeTwoFactorMethod,
+    sendLoginCode,
+    setupTwoFactorMethod,
+    twoFactorStatus,
     verifyLoginChallenge
 } from './two-factor';
 
@@ -108,9 +112,13 @@ export const accountService = {
     runTokenCleanup,
     adminTokenCleanup,
     exportOwnData,
-    setupTwoFactor,
-    confirmTwoFactor,
+    buildLoginChallenge,
+    twoFactorStatus,
+    setupTwoFactorMethod,
+    confirmTwoFactorMethod,
+    removeTwoFactorMethod,
     disableTwoFactor,
+    sendLoginCode,
     verifyLoginChallenge,
     loginOrCreateFromOAuth,
     recordOAuthFailure

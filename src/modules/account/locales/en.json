@@ -32,11 +32,19 @@
             "success": "Identity confirmed."
         },
         "two-factor": {
-            "setup-not-started": "Start setup before confirming a code.",
-            "wrong-code": "That code didn't work. Check your authenticator app and try again.",
+            "setup-not-started": "Start setup for this method before confirming a code.",
+            "wrong-code": "That code didn't work. Check it and try again.",
             "not-enabled": "Two-factor authentication isn't enabled on this account.",
+            "unknown-method": "That two-factor method isn't available on this deployment.",
+            "not-delivered": "That method doesn't send codes — read it off your device instead.",
+            "email-unverified": "Confirm your email address before using it as a second factor.",
+            "already-enrolled": "That method is already armed on this account.",
+            "resend-too-soon": "A code was just sent. Wait a moment before asking for another.",
             "enrolled": "Two-factor authentication is now on.",
+            "method-added": "That second factor is now armed.",
+            "method-removed": "That second factor has been removed.",
             "disabled": "Two-factor authentication is now off.",
+            "code-sent": "We've sent you a code.",
             "challenge-invalid": "This login attempt has expired. Please sign in again."
         },
         "logout": {
@@ -107,6 +115,14 @@
                 "meta-title": "Inactivity warning",
                 "greeting": "Hello, {{name}}!",
                 "body": "We haven't seen you sign in for a while. To keep your account, sign in within the next {{days}} days — after that it will be deactivated, and eventually permanently deleted."
+            },
+            "two-factor-code": {
+                "subject": "Your sign-in code",
+                "meta-title": "Sign-in code",
+                "greeting": "Hello, {{name}}!",
+                "intro": "Here is the code to finish signing in:",
+                "expiry": "It stops working in {{minutes}} minutes.",
+                "ignore": "If you weren't signing in, ignore this email and change your password."
             }
         },
         "oauth": {

@@ -95,6 +95,18 @@ flowchart LR
     class E bad;
 ```
 
+## Configuration
+
+| Variable                | Default | Meaning                                                                                                                                  |
+| ----------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER` | `fake`  | Which implementation under `providers/` answers. A name this build does not carry throws at boot rather than silently taking no payments |
+| `NODE_DEFAULT_CURRENCY` | `EUR`   | ISO-4217, stamped on every payment document at creation                                                                                  |
+
+The currency is stamped rather than looked up, so changing it affects new payments and leaves
+existing ones reading in the currency they were actually taken in. There is no conversion
+anywhere in this module: a deployment that needs several currencies needs a price per currency
+on the product, not a rate here.
+
 ## Related pages
 
 - [The provider port](./payments-provider-port.md) — the interface and the fake behind it

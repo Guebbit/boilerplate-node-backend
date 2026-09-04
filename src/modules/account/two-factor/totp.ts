@@ -1,21 +1,13 @@
 /**
  * @module
- * TOTP secret encryption, code verification, and backup codes — the pure crypto layer this
- * builds on. No database access here; `services/two-factor.ts` is the orchestration that reads
- * and writes the user document. Kept separate so the crypto can be unit-tested against fixed
- * clocks and known secrets without a database in the loop.
+ * TOTP secret encryption and code verification — the crypto a device method is built on, with no
+ * database in the loop. Kept pure so it can be unit-tested against fixed clocks and known secrets;
+ * `methods/totp.ts` is the adapter that reads and writes the user document.
  */
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { generateSecret, generateURI, verify } from 'otplib';
-import { getTotpEncryptionKey } from './session/config';
-
-/**
- * A backup code's stored form — sha256, same shape and reasoning as the refresh-token digests:
- * high-entropy and one-time, so there is no low-entropy secret to stretch and bcrypt would
- * only slow the login path down.
- */
-export { hashToken as hashBackupCode } from '@modules/users';
+import { getTotpEncryptionKey } from '../session/config';
 
 /** RFC 6238 default: a code is valid for this many seconds. */
 const TOTP_STEP_SECONDS = 30;
@@ -26,9 +18,6 @@ const TOTP_STEP_SECONDS = 30;
  * code's guesswork cost, not a kindness to slow clocks.
  */
 const TOTP_EPOCH_TOLERANCE_SECONDS = TOTP_STEP_SECONDS;
-
-/** How many one-time backup codes `services/two-factor.ts` mints on enrollment. */
-export const BACKUP_CODE_COUNT = 10;
 
 /** AES-256-GCM needs a 32-byte key; `NODE_TOTP_ENCRYPTION_KEY` is an operator-chosen string of any length. */
 const deriveKey = (secret: string) => createHash('sha256').update(secret).digest();
@@ -41,7 +30,7 @@ const deriveKey = (secret: string) => createHash('sha256').update(secret).digest
  * new ones with the new key, rather than a migration that cannot tell which key a row used.
  *
  * @param plaintext - the base32 TOTP secret from `generateTotpSecret`
- * @returns the versioned ciphertext to store in `twoFactorSecret`
+ * @returns the versioned ciphertext to store in the method entry's `secret`
  */
 export const encryptTotpSecret = (plaintext: string): string => {
     const { version, key } = getTotpEncryptionKey();
@@ -54,7 +43,7 @@ export const encryptTotpSecret = (plaintext: string): string => {
 /**
  * Decrypt a stored TOTP secret.
  *
- * @param stored - the versioned ciphertext from `twoFactorSecret`
+ * @param stored - the versioned ciphertext from a method entry's `secret`
  * @returns the plaintext base32 secret
  * @throws when the format is malformed, the key is wrong, or the auth tag does not match
  *   (tampering, or the wrong key version)
@@ -76,7 +65,7 @@ export const decryptTotpSecret = (stored: string): string => {
     ]).toString('utf8');
 };
 
-/** A fresh base32 TOTP secret, one per enrollment attempt — see `setupTwoFactor`. */
+/** A fresh base32 TOTP secret, one per enrollment attempt. */
 export const generateTotpSecret = (): string => generateSecret();
 
 /**
@@ -96,10 +85,11 @@ const totpIssuer = (): string => process.env.NODE_SMTP_SENDER?.split('<')[0]?.tr
 export const buildOtpauthUri = (secret: string, label: string): string =>
     generateURI({ issuer: totpIssuer(), label, secret });
 
-/** What a TOTP verification decided, and the step it matched at — see `verifyTotpCode`. */
+/** What a TOTP verification decided, and the step it matched at — see {@link verifyTotpCode}. */
 export interface TotpVerification {
+    /** Whether the code verified against the secret. */
     valid: boolean;
-    /** The RFC 6238 time step the code matched, present only when `valid`. Store as `twoFactorLastUsedStep`. */
+    /** The RFC 6238 time step the code matched, present only when `valid`. Store as the entry's `lastUsedStep`. */
     timeStep?: number;
 }
 
@@ -132,15 +122,7 @@ export const verifyTotpCode = (
         .catch(
             // `verify` THROWS on a malformed token (wrong length, non-digits) rather than
             // resolving `{ valid: false }` — a shape guardrail, not a rejection this caller
-            // should propagate. `verifyCodeOrBackup` tries a backup code on any TOTP failure, and
-            // a backup code (ten hex characters) fails this guardrail on every attempt — the bug
-            // this catch closes made every backup-code login 500 instead of falling through.
+            // should propagate. The verification chain tries every other factor after this one,
+            // and a ten-character backup code fails that guardrail on every attempt.
             (): TotpVerification => ({ valid: false })
         );
-
-/**
- * `BACKUP_CODE_COUNT` fresh one-time codes — high-entropy (`randomBytes`), shown to the caller
- * exactly once at confirm time. Never stored in this form; `hashBackupCode` is what persists.
- */
-export const generateBackupCodes = (): string[] =>
-    Array.from({ length: BACKUP_CODE_COUNT }, () => randomBytes(5).toString('hex'));

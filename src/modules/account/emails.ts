@@ -85,6 +85,42 @@ export const setupRequestEmail = (locale: string, name: string, token: string): 
     };
 };
 
+/**
+ * Two-factor login code: the six digits themselves, not a link.
+ *
+ * No `linkUrl` anywhere in it, deliberately — a mail that both carries a code and offers a button
+ * teaches the recipient to click one, which is the exact reflex a phishing page needs. The
+ * recipient types the code into the tab they already opened.
+ *
+ * @param locale - the recipient's own language
+ * @param name - the display name for the greeting
+ * @param code - the delivered code, in the clear; the account stores only its HMAC
+ * @param minutes - how long the code lasts, so the copy and the server never disagree
+ */
+export const twoFactorCodeEmail = (
+    locale: string,
+    name: string,
+    code: string,
+    minutes: number
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.two-factor-code',
+        subject: t('account.email.two-factor-code.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.two-factor-code.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.two-factor-code.greeting', { name }),
+            intro: t('account.email.two-factor-code.intro'),
+            code,
+            expiry: t('account.email.two-factor-code.expiry', { minutes }),
+            ignore: t('account.email.two-factor-code.ignore'),
+            footer: t('email.footer')
+        }
+    };
+};
+
 /** Password reset: the confirmation, after the password actually changed. */
 export const resetConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);

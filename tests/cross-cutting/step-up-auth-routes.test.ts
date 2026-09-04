@@ -55,8 +55,9 @@ const STEP_UP_ROUTES: Record<string, string> = {
     'account POST /export': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
     // Enrolling, confirming or disabling a second factor is itself a sensitive action —
     // critical tier, same as `DELETE /` and the checkout/payment routes above.
-    'account POST /2fa/setup': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'account POST /2fa/confirm': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'account POST /2fa/methods/:method/setup': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'account POST /2fa/methods/:method/confirm': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'account DELETE /2fa/methods/:method': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'account DELETE /2fa': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`
 };
 

@@ -145,8 +145,16 @@ export const createRefreshToken = (
             return user.tokenAdd(TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
 
-/** How long an MFA login challenge lives — long enough to type a 6-digit code, no more. */
+/** How long an MFA login challenge lives when every armed factor is read off a device — long enough to type six digits, no more. */
 export const MFA_CHALLENGE_TTL_SECONDS = 300;
+
+/**
+ * The same, for an account with a DELIVERED factor armed. Double, because the window now has to
+ * cover an SMTP queue, a spam filter and a person switching apps — five minutes is a window a
+ * legitimate user loses races against, and a challenge that expires mid-login reads as the app
+ * being broken.
+ */
+export const MFA_CHALLENGE_DELIVERED_TTL_SECONDS = 600;
 
 /**
  * Sign a step-up MFA challenge: `POST /account/login` issues this instead of a session when the
@@ -156,11 +164,15 @@ export const MFA_CHALLENGE_TTL_SECONDS = 300;
  * one place every access token is resolved (`account/module.ts`'s `resolve()`) — see `TokenData`.
  *
  * @param id - the user who passed the password check and still owes a second factor
+ * @param ttlSeconds - how long it lives; the caller picks the tier from what the account has armed
  * @returns a short-lived, signed challenge token
  */
-export const createMfaChallenge = (id: string): string =>
+export const createMfaChallenge = (
+    id: string,
+    ttlSeconds: number = MFA_CHALLENGE_TTL_SECONDS
+): string =>
     sign({ id, purpose: 'mfa' } as TokenData, getAccessTokenSecret(), {
-        expiresIn: MFA_CHALLENGE_TTL_SECONDS,
+        expiresIn: ttlSeconds,
         algorithm: 'HS256'
     });
 

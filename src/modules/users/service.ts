@@ -293,7 +293,7 @@ export const consumeToken = (user: UserDocument, token: string): Promise<boolean
     });
 
 /**
- * Admin-assisted 2FA recovery: unconditionally strips a user's second factor, no code required.
+ * Admin-assisted 2FA recovery: unconditionally strips EVERY second factor, no code required.
  * The door that stays shut everywhere else — self-service disable and the login challenge both
  * demand a code — because a mailbox-based reset would make 2FA only as strong as the inbox it
  * exists to defend against. This is the one deliberate exception, and it is audited.
@@ -313,11 +313,11 @@ export const adminDisableTwoFactor = (
         .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
             if (!user) return generateReject(404, [t('users.not-found')]);
 
-            user.twoFactorSecret = undefined;
+            user.twoFactorMethods = [];
             user.twoFactorEnabledAt = undefined;
-            user.twoFactorLastUsedStep = undefined;
             user.twoFactorBackupCodes = [];
-
+            // Emptying an array Mongoose loaded is a change it sees; the field-level unsets the
+            // 2FA services have to mark by hand do not apply here.
             return userRepository.save(user).then((saved) => generateSuccess(saved));
         });
 

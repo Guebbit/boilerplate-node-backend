@@ -22,7 +22,7 @@ import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
  * them back, keeping re-selection in one place instead of scattered `.select('+password')` calls.
  */
 const CREDENTIAL_FIELDS =
-    '+password +tokens +twoFactorSecret +twoFactorLastUsedStep +twoFactorBackupCodes +oauthAccounts';
+    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +oauthAccounts';
 
 /**
  * The clause every login-adjacent lookup filters on: `active` may be absent on a row written

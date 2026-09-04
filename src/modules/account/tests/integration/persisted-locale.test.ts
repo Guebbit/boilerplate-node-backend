@@ -22,15 +22,17 @@ describe('a user’s persisted locale', () => {
     it('is captured from the request they signed up in', async () => {
         const result = await runWithLocale('it', () =>
             accountService.signup(
-                'nuovo@example.com',
-                'nuovo',
-                'Password1!',
-                'Password1!',
-                undefined,
-                true,
-                undefined,
-                undefined,
-                undefined,
+                {
+                    email: 'nuovo@example.com',
+                    username: 'nuovo',
+                    password: 'Password1!',
+                    passwordConfirm: 'Password1!',
+                    analyticsConsent: undefined,
+                    termsAccepted: true,
+                    imageUrl: undefined,
+                    thumbnailUrl: undefined,
+                    pendingImageKey: undefined
+                },
                 testCallerContext
             )
         );
@@ -41,15 +43,17 @@ describe('a user’s persisted locale', () => {
 
     it('falls back to the boot locale outside a request', async () => {
         const result = await accountService.signup(
-            'plain@example.com',
-            'plain',
-            'Password1!',
-            'Password1!',
-            undefined,
-            true,
-            undefined,
-            undefined,
-            undefined,
+            {
+                email: 'plain@example.com',
+                username: 'plain',
+                password: 'Password1!',
+                passwordConfirm: 'Password1!',
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
             testCallerContext
         );
 

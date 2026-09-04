@@ -35,9 +35,16 @@ export const accountAuditActions = {
     AUTH_TOKEN_EXPIRED_CLEANUP: 'auth.token.expired_cleanup',
     /** The caller pulled a full copy of their own data. */
     AUTH_DATA_EXPORTED: 'auth.data_export.completed',
-    /** A pending TOTP secret was confirmed and armed — 2FA is now on for this account. */
+    /** One second factor was confirmed and armed — `metadata.method` names which. */
     AUTH_2FA_ENROLLED: 'auth.two_factor.enrolled',
+    /** One factor was removed, or all of them — `metadata.method` is the wire name, or `all`. */
     AUTH_2FA_DISABLED: 'auth.two_factor.disabled',
+    /**
+     * A login code was mailed (or texted) against a live challenge. Worth a record of its own:
+     * this is the one 2FA action an UNAUTHENTICATED caller can cause an outbound message with, so
+     * the failure series is where a mail-bombing attempt shows up.
+     */
+    AUTH_2FA_CODE_SENT: 'auth.two_factor.code_sent',
     /**
      * A password checked out, but the code or backup code presented for the second factor did
      * not — a sharper signal than a login failure, same reasoning `AUTH_REAUTHENTICATED`'s

@@ -19,7 +19,10 @@ import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/login/2fa — the answer to the `{ mfaRequired: true, challenge }` response from
- * `POST /account/login`. `amr: ['pwd', 'otp']` on the resulting session is the whole payoff of carrying amr as an array:
+ * `POST /account/login`. The code may come from any armed factor, or be a backup code; which one
+ * it was is the service's business, not this adapter's.
+ *
+ * `amr: ['pwd', 'otp']` on the resulting session is the whole payoff of carrying amr as an array:
  * every guard that later demands a second factor reads it off there, unchanged.
  */
 export const postLoginTwoFactor = (
