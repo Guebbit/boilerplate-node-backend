@@ -265,6 +265,22 @@ hour. The response has already been sent by then, so observability is the only m
 `invalidateCacheTagsLogged` logs at `error` and increments `cache_invalidation_failures_total{tag}`.
 A non-zero rate on that counter means some endpoint is serving a stale answer to somebody.
 
+## Configuration
+
+| Variable                           | Default                 | Meaning                                                                                                                                |
+| ---------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_REDIS_CACHE_ENABLED`         | `1`                     | `0` serves every request uncached — the switch to reach for when a stale answer is worse than a slow one, and what the test suites set |
+| `NODE_REDIS_URL`                   | —                       | Wins outright; blanking it is how `npm run host` falls through to the host/port pair below                                             |
+| `NODE_REDIS_HOST` / `_PORT`        | `127.0.0.1` / —         | Used only when the URI is unset or empty                                                                                               |
+| `NODE_REDIS_CACHE_PREFIX`          | —                       | Namespaces every key, so two deployments may share one Redis                                                                           |
+| `NODE_REDIS_CACHE_DEV_TTL_MAX`     | `30`                    | Outside production, clamps every route's declared TTL — see [Writes that bypass the API](#writes-that-bypass-the-api)                  |
+| `NODE_REDIS_CACHE_MAX_BYTES`       | `262144` (256 KB)       | See [Entry size is bounded](#entry-size-is-bounded)                                                                                    |
+| `NODE_REDIS_MAXMEMORY` / `_POLICY` | `256mb` / `allkeys-lru` | Read by `docker-compose.yml`, not by the app — see [Memory is capped](#memory-is-capped-and-the-cap-evicts)                            |
+
+Disabling the cache is not the same as Redis being unreachable. `NODE_REDIS_CACHE_ENABLED=0`
+never builds a client at all; an unreachable Redis builds one, fails, and falls through — the
+difference shows up as a `warn` on boot in the second case and silence in the first.
+
 ## Works with
 
 - **[OpenTelemetry](./opentelemetry.md)** — every Redis command (`GET` for cache reads, `SET` for writes, `DEL` for tag invalidations) is automatically wrapped as a child span. In Grafana → Tempo a cache hit looks like a short Redis span with no following Mongoose span — the span tree makes the cache benefit immediately visible. A cache miss shows Redis then Mongoose back to back. → [What is instrumented out of the box](./opentelemetry.md#what-is-instrumented-out-of-the-box)
