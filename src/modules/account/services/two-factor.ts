@@ -34,6 +34,7 @@ import {
 } from '@infrastructure/observability/audit';
 import type {
     MfaChallenge,
+    TwoFactorBackupCodesRegenerated,
     TwoFactorConfirmed,
     TwoFactorDelivery,
     TwoFactorMethodSummary,
@@ -460,6 +461,47 @@ export const disableTwoFactor = (
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_DISABLED, 'all');
+};
+
+/**
+ * `POST /account/2fa/backup-codes` — mints a fresh set of `BACKUP_CODE_COUNT` codes and discards
+ * whatever was left of the old set, right down to a code {@link verifyAnyFactor} just spent to
+ * prove the caller: the replacement makes that spend moot. Requires fresh critical auth (the route
+ * guard) AND a valid code, same reasoning {@link disableTwoFactor} gives.
+ *
+ * @param userId - the caller
+ * @param code - a code from any armed method, or an unused backup code
+ */
+export const regenerateBackupCodes = (
+    userId: string,
+    code: string,
+    context: CallerContext
+): Promise<ResponseSuccess<TwoFactorBackupCodesRegenerated> | ResponseReject> => {
+    const outcome = userRepository
+        .findByIdWithCredentials(userId)
+        .then<ResponseSuccess<TwoFactorBackupCodesRegenerated> | ResponseReject>((user) => {
+            if (!user) return generateReject(401, []);
+            if (!user.twoFactorEnabledAt)
+                return generateReject(422, [t('account.two-factor.not-enabled')]);
+
+            return verifyAnyFactor(user, code).then((matched) => {
+                if (!matched) return rejectWrongCode(user);
+
+                const backupCodes = generateBackupCodes();
+                user.twoFactorBackupCodes = backupCodes.map((freshCode) =>
+                    hashBackupCode(freshCode)
+                );
+                return saveMethods(user).then(() =>
+                    generateSuccess({
+                        backupCodes,
+                        backupCodesRemaining: user.twoFactorBackupCodes.length
+                    })
+                );
+            });
+        })
+        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+
+    return audited(outcome, context, accountAuditActions.AUTH_2FA_BACKUP_CODES_REGENERATED, 'all');
 };
 
 /**

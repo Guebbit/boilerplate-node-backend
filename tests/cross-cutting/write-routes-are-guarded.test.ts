@@ -166,6 +166,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "disabling every one of the caller's own second factors"
     },
+    'account POST /2fa/backup-codes': {
+        requiresAuth: true,
+        reason: "regenerating the caller's own backup codes"
+    },
     'account POST /logout': {
         requiresAuth: false,
         reason: 'revoking THIS session — the refresh-token cookie is the credential, not a login'

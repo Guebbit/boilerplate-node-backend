@@ -58,7 +58,10 @@ const STEP_UP_ROUTES: Record<string, string> = {
     'account POST /2fa/methods/:method/setup': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'account POST /2fa/methods/:method/confirm': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'account DELETE /2fa/methods/:method': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'account DELETE /2fa': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`
+    'account DELETE /2fa': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    // Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
+    // as disabling a factor.
+    'account POST /2fa/backup-codes': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`
 };
 
 /** Every step-up label actually mounted on a router, keyed the same way as {@link STEP_UP_ROUTES}. */

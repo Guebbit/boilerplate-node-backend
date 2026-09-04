@@ -229,6 +229,32 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/2fa/backup-codes:
+        post:
+            tags: [Auth]
+            summary: Regenerate backup codes
+            description: Mints a fresh set of ten one-time backup codes and discards whatever was left of the old set — the answer to burning through them with no way back in short of admin-assisted recovery. Requires a valid code from any armed method, or an unused backup code, on top of the route's own fresh-auth requirement, same reasoning as disabling a factor.
+            operationId: regenerateBackupCodes
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorCodeRequest'
+            responses:
+                '200':
+                    description: The account's new backup codes, in the clear, shown exactly once
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorBackupCodesRegeneratedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # No factor armed at all — there is nothing to regenerate a recovery list for.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /account/logout:
         post:
             tags: [Auth]
@@ -1055,6 +1081,34 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/TwoFactorConfirmed'
+
+        TwoFactorBackupCodesRegenerated:
+            type: object
+            additionalProperties: false
+            required: [backupCodes, backupCodesRemaining]
+            properties:
+                backupCodes:
+                    type: array
+                    items:
+                        type: string
+                    description: The account's new one-time recovery codes, in the clear, shown exactly once — the old set no longer verifies.
+                backupCodesRemaining:
+                    type: integer
+                    description: How many unused backup codes the account now holds — `BACKUP_CODE_COUNT`, fresh off a regenerate.
+
+        TwoFactorBackupCodesRegeneratedEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorBackupCodesRegenerated'
 
         LoginRequest:
             type: object

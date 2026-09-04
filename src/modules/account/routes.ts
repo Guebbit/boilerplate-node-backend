@@ -40,6 +40,7 @@ import { post2faSetup } from './controllers/post-2fa-setup';
 import { post2faConfirm } from './controllers/post-2fa-confirm';
 import { delete2faMethod } from './controllers/delete-2fa-method';
 import { delete2fa } from './controllers/delete-2fa';
+import { post2faBackupCodes } from './controllers/post-2fa-backup-codes';
 import { getRefreshToken } from './controllers/get-refresh-token';
 import { postLogout } from './controllers/post-logout';
 import { postLogoutEverywhere } from './controllers/post-logout-everywhere';
@@ -250,6 +251,16 @@ router.delete(
     isAuth,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     delete2faMethod
+);
+
+// POST /account/2fa/backup-codes — mint a fresh set of ten, discarding the old ones. Critical
+// tier, same reasoning as disable: the old set stops being a stolen-but-fresh session's shortcut
+// around whichever factor is actually armed.
+router.post(
+    '/2fa/backup-codes',
+    isAuth,
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    post2faBackupCodes
 );
 
 // GET /account/oauth/providers — which providers this deployment has credentials for. Public,

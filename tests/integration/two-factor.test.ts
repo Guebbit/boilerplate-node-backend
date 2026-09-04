@@ -752,6 +752,69 @@ describe('disabling 2FA', () => {
     });
 });
 
+describe('regenerating backup codes', () => {
+    it('refuses on a wrong code', async () => {
+        const { bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+
+        const response = await api()
+            .post('/account/2fa/backup-codes')
+            .set('Authorization', bearer)
+            .send({ code: '000000' });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('refuses when 2FA is not enabled', async () => {
+        const { bearer } = await authenticateVerified();
+
+        const response = await api()
+            .post('/account/2fa/backup-codes')
+            .set('Authorization', bearer)
+            .send({ code: '000000' });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('mints a fresh set on the right code, and the old set stops working', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret, backupCodes: oldCodes } = await enrollTotp(bearer);
+
+        const regenerate = await api()
+            .post('/account/2fa/backup-codes')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 1) });
+
+        expect(regenerate.status).toBe(200);
+        const freshCodes = regenerate.body.data.backupCodes as string[];
+        expect(freshCodes.length).toBe(10);
+        expect(new Set(freshCodes).size).toBe(10);
+        // A fresh draw, not the same list handed back again.
+        expect(freshCodes.some((code) => oldCodes.includes(code))).toBe(false);
+
+        const status = await api().get('/account/2fa').set('Authorization', bearer).send();
+        expect(status.body.data.backupCodesRemaining).toBe(10);
+
+        const login = await startLogin(user.email);
+        const stale = await api()
+            .post('/account/login/2fa')
+            .send({ challenge: login.body.data.challenge, code: oldCodes[0] });
+        expect(stale.status).toBe(422);
+    });
+
+    it('accepts an unused backup code to prove the caller, same as disabling would', async () => {
+        const { bearer } = await authenticateVerified();
+        const { backupCodes } = await enrollTotp(bearer);
+
+        const regenerate = await api()
+            .post('/account/2fa/backup-codes')
+            .set('Authorization', bearer)
+            .send({ code: backupCodes[0] });
+
+        expect(regenerate.status).toBe(200);
+    });
+});
+
 describe('admin-assisted recovery', () => {
     it('strips every second factor with no code, and login stops challenging', async () => {
         const { user, bearer } = await authenticateVerified();

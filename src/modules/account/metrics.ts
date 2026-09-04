@@ -169,6 +169,18 @@ export const authTwoFactorChallengeTotal = new Counter({
 });
 
 /**
+ * Backup-code regeneration attempts.
+ * A failed one is the same signal `authTwoFactorDisableTotal` reads: a stolen-but-fresh session
+ * probing for the second factor before it can mint itself a fresh recovery list.
+ */
+export const authTwoFactorBackupCodesRegenerateTotal = new Counter({
+    name: 'auth_two_factor_backup_codes_regenerate_total',
+    help: 'Total backup-code regeneration attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
  * OAuth login/signup attempts, labelled by provider and outcome — kept separate from
  * `authLoginTotal` rather than adding a label to it, since every existing call site would
  * otherwise need a `provider: 'password'` to keep the series comparable. Lets a dashboard tell a

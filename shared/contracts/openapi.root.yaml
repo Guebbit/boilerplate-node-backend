@@ -832,6 +832,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1setup'
     /account/2fa/methods/{method}/confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1confirm'
+    /account/2fa/backup-codes:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1backup-codes'
     /account/oauth/providers:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1providers'
     /account/oauth/{provider}:

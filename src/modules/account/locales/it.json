@@ -44,6 +44,7 @@
             "method-added": "Il secondo fattore è ora attivo.",
             "method-removed": "Il secondo fattore è stato rimosso.",
             "disabled": "L'autenticazione a due fattori è ora disattivata.",
+            "backup-codes-regenerated": "I codici di backup sono stati rigenerati. Quelli vecchi non sono più validi.",
             "code-sent": "Ti abbiamo inviato un codice.",
             "challenge-invalid": "Questo tentativo di accesso è scaduto. Effettua di nuovo l'accesso."
         },

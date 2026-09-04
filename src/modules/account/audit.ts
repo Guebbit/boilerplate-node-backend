@@ -51,6 +51,8 @@ export const accountAuditActions = {
      * comment on `authReauthTotal` gives: someone holds a valid credential and still failed.
      */
     AUTH_2FA_CHALLENGE_FAILED: 'auth.two_factor.challenge_failed',
+    /** The backup-code list was regenerated, discarding whatever was left of the old one. */
+    AUTH_2FA_BACKUP_CODES_REGENERATED: 'auth.two_factor.backup_codes_regenerated',
     /** A new provider identity was linked onto an already-existing, verified-match account. */
     AUTH_OAUTH_LINKED: 'auth.oauth.linked',
     /** An OAuth login/callback did not complete — bad state, a declined consent, a refused link. */

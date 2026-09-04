@@ -44,6 +44,7 @@
             "method-added": "That second factor is now armed.",
             "method-removed": "That second factor has been removed.",
             "disabled": "Two-factor authentication is now off.",
+            "backup-codes-regenerated": "Your backup codes have been regenerated. The old ones no longer work.",
             "code-sent": "We've sent you a code.",
             "challenge-invalid": "This login attempt has expired. Please sign in again."
         },

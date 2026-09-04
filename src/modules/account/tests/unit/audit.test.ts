@@ -34,6 +34,7 @@ describe('the account audit vocabulary', () => {
             AUTH_2FA_DISABLED: 'auth.two_factor.disabled',
             AUTH_2FA_CODE_SENT: 'auth.two_factor.code_sent',
             AUTH_2FA_CHALLENGE_FAILED: 'auth.two_factor.challenge_failed',
+            AUTH_2FA_BACKUP_CODES_REGENERATED: 'auth.two_factor.backup_codes_regenerated',
             AUTH_OAUTH_LINKED: 'auth.oauth.linked',
             AUTH_OAUTH_FAILED: 'auth.oauth.failed'
         });
