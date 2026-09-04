@@ -17,6 +17,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
+import { sampleForPattern, usesLookaround } from './pattern-samples';
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
@@ -192,56 +193,72 @@ export const SUPPORTED_KEYWORDS = new Set([
 ]);
 
 /**
- * Keywords present in the spec's schemas that this walk does not understand.
+ * The child schemas directly beneath a node — the keywords whose VALUE is itself a schema.
  *
- * Walks STRUCTURALLY rather than over every key: the keys of a `properties` object are field
- * NAMES (`email`, `active`, `total`), not schema keywords, and checking them against the keyword
- * list reports the entire domain model as unsupported. That was the first version's bug, and it
- * is worth naming because it is the failure mode of any "walk the JSON and look at keys" check.
+ * Structural on purpose: the keys of a `properties` object are field NAMES (`email`, `active`,
+ * `total`), not schema keywords, so a walk that recursed over every key would report the entire
+ * domain model. That was the first version's bug, and it is the failure mode of any "walk the
+ * JSON and look at keys" check.
+ */
+const childSchemasOf = (node: Record<string, unknown>): unknown[] => [
+    ...Object.values((node.properties ?? {}) as Record<string, unknown>),
+    node.items,
+    node.additionalProperties,
+    ...((node.oneOf ?? []) as unknown[]),
+    ...((node.anyOf ?? []) as unknown[]),
+    ...((node.allOf ?? []) as unknown[])
+];
+
+/** Calls `visit` once per schema node under `components.schemas`, depth first. */
+const visitSchemaNodes = (
+    spec: SpecDocument,
+    visit: (node: Record<string, unknown>) => void
+): void => {
+    const walk = (node: unknown): void => {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+            for (const item of node) walk(item);
+            return;
+        }
+
+        const record = node as Record<string, unknown>;
+        visit(record);
+        for (const child of childSchemasOf(record)) walk(child);
+    };
+
+    for (const schema of Object.values(spec.components?.schemas ?? {})) walk(schema);
+};
+
+/**
+ * Keywords present in the spec's schemas that this walk does not understand.
+ * @returns the offending keywords, sorted; empty when the spec stays inside this walk's vocabulary
  */
 export const unsupportedKeywords = (spec: SpecDocument = readSpec()): string[] => {
     const found = new Set<string>();
 
-    const visitSchema = (node: unknown): void => {
-        if (!node || typeof node !== 'object') return;
-        if (Array.isArray(node)) {
-            for (const item of node) visitSchema(item);
-            return;
-        }
+    visitSchemaNodes(spec, (node) => {
+        for (const key of Object.keys(node)) if (!SUPPORTED_KEYWORDS.has(key)) found.add(key);
+    });
 
-        for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-            if (!SUPPORTED_KEYWORDS.has(key)) {
-                found.add(key);
-                continue;
-            }
-            // Recurse only where the VALUE is itself a schema (or a map/array of schemas).
-            // `properties` and `additionalProperties` hold field names as keys, so their values
-            // are visited but their keys never are.
-            switch (key) {
-                case 'properties': {
-                    for (const child of Object.values(value as Record<string, unknown>))
-                        visitSchema(child);
-                    break;
-                }
-                case 'items':
-                case 'additionalProperties': {
-                    visitSchema(value);
-                    break;
-                }
-                case 'oneOf':
-                case 'anyOf':
-                case 'allOf': {
-                    for (const child of (value as unknown[]) ?? []) visitSchema(child);
-                    break;
-                }
-                // Everything else is a scalar constraint with nothing beneath it.
-                default: {
-                    break;
-                }
-            }
-        }
-    };
+    return [...found].toSorted();
+};
 
-    for (const schema of Object.values(spec.components?.schemas ?? {})) visitSchema(schema);
+/**
+ * Patterns no generator can build a string for: lookaround, which `fast-check` cannot compile,
+ * and no sample registered in `tests/support/pattern-samples.ts` either.
+ *
+ * The sibling of {@link unsupportedKeywords}, for the same danger one level down — the keyword is
+ * understood, the VALUE is not, so the fuzzer omits the field and its endpoint 422s every run
+ * while the suite stays green.
+ * @returns the offending pattern sources, sorted; empty when every pattern can be generated
+ */
+export const ungeneratablePatterns = (spec: SpecDocument = readSpec()): string[] => {
+    const found = new Set<string>();
+
+    visitSchemaNodes(spec, ({ pattern }) => {
+        if (typeof pattern !== 'string') return;
+        if (usesLookaround(pattern) && sampleForPattern(pattern) === undefined) found.add(pattern);
+    });
+
     return [...found].toSorted();
 };

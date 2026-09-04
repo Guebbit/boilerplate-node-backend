@@ -21,7 +21,7 @@ This pairing is already the right shape. The gap is coverage, not structure:
 2. **`boilerplate-vue-frontend` has no equivalent at all.** No catalog copy, no defences page.
    Browser-side rows matter uniquely there and are currently unrecorded either way: XSS / output
    encoding, CSRF token handling, clickjacking / frame-ancestors, where the access token is stored
-   and why, CSP, cookie flags as *read* client-side (not just set by BE), dependency
+   and why, CSP, cookie flags as _read_ client-side (not just set by BE), dependency
    vulnerabilities in the FE's own package tree.
 3. **No single "what's still open" list.** Today the only recorded gaps are the few named in
    BE's "Not mitigated, and why that is a decision" section — a byproduct of the auth-only pass,

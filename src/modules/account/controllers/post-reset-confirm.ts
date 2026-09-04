@@ -5,6 +5,7 @@
  */
 
 import type { Request, Response } from 'express';
+import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { ConfirmPasswordResetBody } from '@api/schemas.zod';
 import { accountService, PASSWORD_RESET_TOKEN_TYPE } from '../services';
@@ -15,6 +16,17 @@ import { parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
+ * The contract's field list with the password rules dropped — same reason as
+ * `postPasswordChange`: the generated `minLength` refuses first and reaches the caller as the
+ * generic size sentence, shadowing the field's own copy from
+ * `accountService.validatePasswordChange`, which runs once the token is known to be live.
+ */
+const resetConfirmShape = ConfirmPasswordResetBody.extend({
+    password: z.string(),
+    passwordConfirm: z.string()
+});
+
+/**
  * POST /account/reset-confirm
  * Validate a one-time reset token and set the new password.
  */
@@ -23,7 +35,7 @@ export const postResetConfirm = (
     request: Request<{ token?: string }, unknown, PasswordResetConfirmRequest>,
     response: Response
 ) => {
-    const body = parseBody(ConfirmPasswordResetBody, request.body, response);
+    const body = parseBody(resetConfirmShape, request.body, response);
     if (!body) return;
 
     const { token, password, passwordConfirm } = body;

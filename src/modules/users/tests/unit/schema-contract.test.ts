@@ -9,6 +9,7 @@ import bcrypt from 'bcrypt';
 import { userSchema, applyUserTransform } from '@modules/users/model';
 import { TokenType } from '@modules/users';
 import { asStub } from '@tests/stub';
+import { PLAIN_PASSWORD } from '@modules/users/fixtures';
 import {
     defaultOf,
     indexOptionSpecs,
@@ -261,23 +262,23 @@ const preSaveHook = (): ((this: unknown) => Promise<void> | undefined) => {
 describe('userSchema — the pre-save password hook', () => {
     it('hashes a password that was set', async () => {
         const document = {
-            password: 'Password1!',
+            password: PLAIN_PASSWORD,
             isModified: jest.fn().mockReturnValue(true)
         };
 
         await preSaveHook().call(document);
 
-        expect(document.password).not.toBe('Password1!');
+        expect(document.password).not.toBe(PLAIN_PASSWORD);
         // A real bcrypt hash, at the cost factor the module chose — not merely "something else".
         expect(document.password.startsWith('$2')).toBe(true);
-        expect(await bcrypt.compare('Password1!', document.password)).toBe(true);
+        expect(await bcrypt.compare(PLAIN_PASSWORD, document.password)).toBe(true);
     });
 
     it('leaves an untouched password alone', async () => {
         // The guard that matters: without it, every profile update re-hashes the stored HASH,
         // and the account becomes unloggable-into with no error anywhere.
         // Cost factor 4 (bcrypt's minimum) — fast is fine here, this isn't the real hashing path.
-        const stored = await bcrypt.hash('Password1!', 4);
+        const stored = await bcrypt.hash(PLAIN_PASSWORD, 4);
         const document = { password: stored, isModified: jest.fn().mockReturnValue(false) };
 
         await preSaveHook().call(document);

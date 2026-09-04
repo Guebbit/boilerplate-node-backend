@@ -105,9 +105,10 @@ The PRNGs stay separate — Mulberry32 here, faker's Mersenne Twister there — 
 
 ## Endpoint-specific glue
 
-The walker only knows what a zod schema can express. Two things it structurally can't:
+The walker only knows what a zod schema can express. Three things it structurally can't:
 
 - **Cross-field rules.** `SignupBody.passwordConfirm` has its own independent `.min(8)`, with no `.refine()` tying it to `password` — the "must match" rule lives in application code, not the schema. `request-contract.test.ts` patches `passwordConfirm = payload.password` after generating, skipping that patch only for the one test case where `passwordConfirm` itself is the field under test.
+- **Strings for an arbitrary `pattern`.** Producing a value from a regex is a whole library's worth of work, and not worth it for a handful of patterns. `tests/support/pattern-samples.ts` holds a hand-written sample per tricky pattern, keyed on the regex source, and `satisfyPattern()` **throws** when a pattern has no entry — because ignoring the `pattern` would hand the endpoint a payload the contract forbids, and the resulting 422 would read as an endpoint bug rather than a generator gap. The fuzz generator reads the same table; see [Fuzz Testing](./fuzz-testing.md#the-tripwires-on-itself).
 - **Referential validity.** `CreateOrderBody.userId` / `items[].productId` are opaque strings to the schema — nothing in `openapi.yaml` can say "must reference a real document". The test file creates a real product and a real user first and patches their ids in, again skipping the patch for whichever field a given `invalidPayloads()` case is actually testing (an earlier version of this file didn't skip correctly for `userId` and silently "fixed" every one of its own violation cases — worth knowing if you're extending this pattern to a new endpoint).
 
 ## Real findings, left as findings

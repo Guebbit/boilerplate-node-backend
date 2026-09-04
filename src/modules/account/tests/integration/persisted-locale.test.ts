@@ -9,7 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import * as accountService from '@modules/account/services';
 import { userRepository, userService } from '@modules/users';
 import { getDefaultLocale, runWithLocale } from '@infrastructure/i18n';
@@ -25,8 +25,8 @@ describe('a user’s persisted locale', () => {
                 {
                     email: 'nuovo@example.com',
                     username: 'nuovo',
-                    password: 'Password1!',
-                    passwordConfirm: 'Password1!',
+                    password: PLAIN_PASSWORD,
+                    passwordConfirm: PLAIN_PASSWORD,
                     analyticsConsent: undefined,
                     termsAccepted: true,
                     imageUrl: undefined,
@@ -46,8 +46,8 @@ describe('a user’s persisted locale', () => {
             {
                 email: 'plain@example.com',
                 username: 'plain',
-                password: 'Password1!',
-                passwordConfirm: 'Password1!',
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
                 termsAccepted: true,
                 imageUrl: undefined,

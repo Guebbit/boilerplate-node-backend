@@ -91,22 +91,10 @@ const withMatchingPasswordConfirm = (payload: Record<string, unknown>) => ({
     passwordConfirm: payload.password
 });
 
-// `PasswordNew` (shared/contracts/openapi.root.yaml) deliberately carries its complexity rule
-// only in prose, not as a machine-checkable `pattern` — a lookahead-based pattern that expresses
-// it breaks `tests/support/spec-arbitraries.ts`'s fuzz generator (`fast-check` has no lookahead
-// support), so `zodUserSchema` (`src/modules/users/model.ts`) enforces it by hand instead. That
-// makes it invisible to this file's schema-introspection walker too, for the same reason
-// `PATTERN_SAMPLES` exists in `contract-data.ts`: a real constraint the generic algorithm cannot
-// see needs a known-good substitute here, not a `pattern` this project deliberately doesn't add.
-const withCompliantPassword = (payload: Record<string, unknown>) => ({
-    ...payload,
-    password: 'Aa1!aaaa'
-});
-
 describe('POST /users (contract-derived)', () => {
     it('accepts a payload the contract declares legal', async () => {
         const { bearer } = await authenticateAs('admin');
-        const payload = withCompliantPassword(validPayload(CreateUserBody));
+        const payload = validPayload(CreateUserBody);
 
         const response = await api().post('/users').set('Authorization', bearer).send(payload);
 
@@ -249,9 +237,7 @@ describe('POST /feedback/contact (contract-derived)', () => {
 
 describe('POST /account/signup (contract-derived)', () => {
     it('accepts a payload the contract declares legal', async () => {
-        const payload = withMatchingPasswordConfirm(
-            withCompliantPassword(validPayload(SignupBody))
-        );
+        const payload = withMatchingPasswordConfirm(validPayload(SignupBody));
 
         const response = await api().post('/account/signup').send(payload);
 

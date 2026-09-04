@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { userRepository } from '@modules/users';
-import { createUser } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 
@@ -38,7 +38,7 @@ describe('user schema', () => {
 
         const found = await userRepository.findByIdWithCredentials(created.id);
 
-        expect(found!.password).not.toBe('Password1!');
+        expect(found!.password).not.toBe(PLAIN_PASSWORD);
         // bcrypt output, not a plain string that merely differs.
         expect(found!.password).toMatch(/^\$2[aby]\$/);
     });

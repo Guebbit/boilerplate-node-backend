@@ -6,6 +6,7 @@
 
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
+import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { ChangePasswordBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -16,6 +17,20 @@ import { issueSession } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+
+/**
+ * The contract's field list with its content rules dropped, for the shape check below.
+ *
+ * `ChangePasswordBody`'s generated `minLength` would refuse first, and the global error map
+ * renders that as the GENERIC size sentence — shadowing the field's own copy, which
+ * `accountService.validatePasswordChange` gives. Derived from the contract, so a field added there
+ * still has to be accounted for here.
+ */
+const changePasswordShape = ChangePasswordBody.extend({
+    currentPassword: z.string(),
+    password: z.string(),
+    passwordConfirm: z.string()
+});
 
 /**
  * POST /account/password — changes the password by proving the current one (no email
@@ -30,8 +45,9 @@ export const postPasswordChange = (
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = authContextOf(request);
 
-    // Shape first: absent fields are a malformed request, not a wrong password.
-    const parseResult = ChangePasswordBody.safeParse(request.body);
+    // Shape first: absent fields are a malformed request, not a wrong password. Content rules
+    // are the service's, which answers in the caller's language.
+    const parseResult = changePasswordShape.safeParse(request.body);
     if (!parseResult.success) {
         authPasswordChangeTotal.inc({ status: 'failure' });
         return rejectValidation(response, parseResult.error);

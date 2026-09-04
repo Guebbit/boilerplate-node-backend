@@ -9,7 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
 import * as accountService from '@modules/account/services';
 // The namespace above is this file's house style, and `refreshAccessToken` is published on the
 // service object rather than as a bare name — so it is reached through the object, not the barrel.
@@ -41,8 +41,8 @@ describe('accountService.signup', () => {
             {
                 email: 'new@example.com',
                 username: 'newuser',
-                password: 'Password1!',
-                passwordConfirm: 'Password1!',
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
                 termsAccepted: true,
                 imageUrl: undefined,
@@ -61,7 +61,7 @@ describe('accountService.signup', () => {
             {
                 email: 'new@example.com',
                 username: 'newuser',
-                password: 'Password1!',
+                password: PLAIN_PASSWORD,
                 passwordConfirm: 'Different1!',
                 analyticsConsent: undefined,
                 termsAccepted: true,
@@ -83,8 +83,8 @@ describe('accountService.signup', () => {
             {
                 email: 'taken@example.com',
                 username: 'anotheruser',
-                password: 'Password1!',
-                passwordConfirm: 'Password1!',
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
                 termsAccepted: true,
                 imageUrl: undefined,
@@ -103,8 +103,8 @@ describe('accountService.signup', () => {
             {
                 email: 'not-an-email',
                 username: 'user',
-                password: 'Password1!',
-                passwordConfirm: 'Password1!',
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
                 termsAccepted: true,
                 imageUrl: undefined,
@@ -213,14 +213,22 @@ describe('accountService.tokenAdd', () => {
 describe('accountService.passwordChange', () => {
     it('changes the password when both fields match and meet requirements', async () => {
         const user = await createUser();
-        const result = await accountService.passwordChange(user, 'NewPassword1!', 'NewPassword1!');
+        const result = await accountService.passwordChange(
+            user,
+            REPLACEMENT_PASSWORD,
+            REPLACEMENT_PASSWORD
+        );
 
         expect(result.success).toBe(true);
     });
 
     it('rejects when passwords do not match', async () => {
         const user = await createUser();
-        const result = await accountService.passwordChange(user, 'NewPassword1!', 'Different1!');
+        const result = await accountService.passwordChange(
+            user,
+            REPLACEMENT_PASSWORD,
+            PLAIN_PASSWORD
+        );
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(422);

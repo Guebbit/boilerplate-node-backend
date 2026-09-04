@@ -9,7 +9,12 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/fixtures';
+import {
+    createUser,
+    LEGACY_PASSWORD,
+    PLAIN_PASSWORD,
+    REPLACEMENT_PASSWORD
+} from '@modules/users/tests/fixtures';
 import { accountService } from '@modules/account/services';
 import { userRepository, hashToken } from '@modules/users';
 import { TokenType, type Token, type UserDocument } from '@modules/users';
@@ -30,8 +35,6 @@ jest.mock('@infrastructure/observability/analytics', () => ({
 
 setupTestDb();
 
-const VALID_PASSWORD = 'Correct-Horse-Battery1';
-
 describe('signup', () => {
     it('creates the account and returns it', async () => {
         const response = asSuccess(
@@ -39,8 +42,8 @@ describe('signup', () => {
                 {
                     email: 'new@example.com',
                     username: 'newuser',
-                    password: VALID_PASSWORD,
-                    passwordConfirm: VALID_PASSWORD,
+                    password: PLAIN_PASSWORD,
+                    passwordConfirm: PLAIN_PASSWORD,
                     analyticsConsent: undefined,
                     termsAccepted: true,
                     imageUrl: undefined,
@@ -67,8 +70,8 @@ describe('signup', () => {
             {
                 email: 'hashed@example.com',
                 username: 'hasheduser',
-                password: VALID_PASSWORD,
-                passwordConfirm: VALID_PASSWORD,
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
                 termsAccepted: true,
                 imageUrl: undefined,
@@ -81,7 +84,7 @@ describe('signup', () => {
         const stored = await userRepository.findOneWithCredentials({ email: 'hashed@example.com' });
 
         expect(stored?.password).toBeDefined();
-        expect(stored?.password).not.toBe(VALID_PASSWORD);
+        expect(stored?.password).not.toBe(PLAIN_PASSWORD);
         // bcrypt's modular-crypt prefix, so this asserts "hashed with bcrypt", not merely "differs".
         expect(stored?.password).toMatch(/^\$2[aby]\$/);
     });
@@ -92,7 +95,7 @@ describe('signup', () => {
                 {
                     email: 'mismatch@example.com',
                     username: 'mismatchuser',
-                    password: VALID_PASSWORD,
+                    password: PLAIN_PASSWORD,
                     passwordConfirm: 'something-else',
                     analyticsConsent: undefined,
                     termsAccepted: true,
@@ -118,8 +121,8 @@ describe('signup', () => {
                 {
                     email: 'taken@example.com',
                     username: 'someoneelse',
-                    password: VALID_PASSWORD,
-                    passwordConfirm: VALID_PASSWORD,
+                    password: PLAIN_PASSWORD,
+                    passwordConfirm: PLAIN_PASSWORD,
                     analyticsConsent: undefined,
                     termsAccepted: true,
                     imageUrl: undefined,
@@ -134,8 +137,8 @@ describe('signup', () => {
     });
 
     it.each([
-        ['not-an-email', 'gooduser', VALID_PASSWORD],
-        ['bad-username@example.com', 'ab', VALID_PASSWORD],
+        ['not-an-email', 'gooduser', PLAIN_PASSWORD],
+        ['bad-username@example.com', 'ab', PLAIN_PASSWORD],
         ['short-password@example.com', 'gooduser', 'abc']
     ])('rejects invalid input (%s / %s) with 422', async (email, username, password) => {
         const response = asReject(
@@ -168,8 +171,8 @@ describe('signup', () => {
             {
                 email: 'noimage@example.com',
                 username: 'noimageuser',
-                password: VALID_PASSWORD,
-                passwordConfirm: VALID_PASSWORD,
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: undefined,
                 termsAccepted: true,
                 imageUrl: undefined,
@@ -190,8 +193,8 @@ describe('signup', () => {
                 {
                     email: 'noterms@example.com',
                     username: 'notermsuser',
-                    password: VALID_PASSWORD,
-                    passwordConfirm: VALID_PASSWORD,
+                    password: PLAIN_PASSWORD,
+                    passwordConfirm: PLAIN_PASSWORD,
                     analyticsConsent: undefined,
                     termsAccepted: false,
                     imageUrl: undefined,
@@ -214,8 +217,8 @@ describe('signup', () => {
             {
                 email: 'consenting@example.com',
                 username: 'consentinguser',
-                password: VALID_PASSWORD,
-                passwordConfirm: VALID_PASSWORD,
+                password: PLAIN_PASSWORD,
+                passwordConfirm: PLAIN_PASSWORD,
                 analyticsConsent: true,
                 termsAccepted: true,
                 imageUrl: undefined,
@@ -236,14 +239,14 @@ describe('login', () => {
         createUser({
             email: 'login@example.com',
             username: 'loginuser',
-            password: VALID_PASSWORD,
+            password: PLAIN_PASSWORD,
             ...overrides
         } as Parameters<typeof createUser>[0]);
 
     it('returns the user for correct credentials', async () => {
         await createLoginUser();
 
-        const response = asSuccess(await accountService.login('login@example.com', VALID_PASSWORD));
+        const response = asSuccess(await accountService.login('login@example.com', PLAIN_PASSWORD));
 
         expect(response.data.email).toBe('login@example.com');
     });
@@ -260,7 +263,7 @@ describe('login', () => {
         await createLoginUser();
 
         const unknownAccount = asReject(
-            await accountService.login('nobody@example.com', VALID_PASSWORD)
+            await accountService.login('nobody@example.com', PLAIN_PASSWORD)
         );
         const wrongPassword = asReject(
             await accountService.login('login@example.com', 'not-the-password')
@@ -278,7 +281,7 @@ describe('login', () => {
         // and every other login test still passes, because they use live accounts.
         await createLoginUser({ deletedAt: new Date() } as Partial<UserDocument>);
 
-        const response = asReject(await accountService.login('login@example.com', VALID_PASSWORD));
+        const response = asReject(await accountService.login('login@example.com', PLAIN_PASSWORD));
 
         expect(response.status).toBe(401);
     });
@@ -301,9 +304,9 @@ describe('login', () => {
     });
 
     it.each([
-        ['a missing email', undefined, VALID_PASSWORD],
+        ['a missing email', undefined, PLAIN_PASSWORD],
         ['a missing password', 'login@example.com', undefined],
-        ['a malformed email', 'not-an-email', VALID_PASSWORD]
+        ['a malformed email', 'not-an-email', PLAIN_PASSWORD]
     ])('rejects %s with 422, before touching the database', async (_label, email, password) => {
         // 422 rather than 401: the request could not be understood, which is a different fact
         // from "these credentials are wrong" and must not be flattened into it.
@@ -315,11 +318,14 @@ describe('login', () => {
 
 describe('validatePasswordChange', () => {
     it('returns no messages for an acceptable pair', () => {
-        expect(accountService.validatePasswordChange(VALID_PASSWORD, VALID_PASSWORD)).toEqual([]);
+        expect(accountService.validatePasswordChange(PLAIN_PASSWORD, PLAIN_PASSWORD)).toEqual([]);
     });
 
     it('reports a mismatch', () => {
-        const messages = accountService.validatePasswordChange(VALID_PASSWORD, 'different');
+        const messages = accountService.validatePasswordChange(
+            PLAIN_PASSWORD,
+            REPLACEMENT_PASSWORD
+        );
 
         expect(messages.length).toBeGreaterThan(0);
     });
@@ -339,11 +345,11 @@ describe('passwordChange', () => {
     it('writes the new password, hashed', async () => {
         const user = await createUser({
             email: 'change@example.com',
-            password: 'old-password-123'
+            password: LEGACY_PASSWORD
         });
 
         const response = asSuccess(
-            await accountService.passwordChange(user, VALID_PASSWORD, VALID_PASSWORD)
+            await accountService.passwordChange(user, PLAIN_PASSWORD, PLAIN_PASSWORD)
         );
 
         expect(response.status).toBe(200);
@@ -351,7 +357,7 @@ describe('passwordChange', () => {
         const stored = await userRepository.findOneWithCredentials({ email: 'change@example.com' });
         expect(stored?.password).toMatch(/^\$2[aby]\$/);
         // And it is the NEW one: the login flow is the honest way to assert that.
-        const loggedIn = await accountService.login('change@example.com', VALID_PASSWORD);
+        const loggedIn = await accountService.login('change@example.com', PLAIN_PASSWORD);
         expect(loggedIn.success).toBe(true);
     });
 
@@ -361,16 +367,16 @@ describe('passwordChange', () => {
         // be set to a value its owner never confirmed.
         const user = await createUser({
             email: 'unchanged@example.com',
-            password: 'old-password-123'
+            password: LEGACY_PASSWORD
         });
 
         const response = asReject(
-            await accountService.passwordChange(user, VALID_PASSWORD, 'nope')
+            await accountService.passwordChange(user, PLAIN_PASSWORD, REPLACEMENT_PASSWORD)
         );
 
         expect(response.status).toBe(422);
 
-        const stillWorks = await accountService.login('unchanged@example.com', 'old-password-123');
+        const stillWorks = await accountService.login('unchanged@example.com', LEGACY_PASSWORD);
         expect(stillWorks.success).toBe(true);
     });
 });

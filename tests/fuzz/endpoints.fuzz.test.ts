@@ -36,7 +36,12 @@ import { setupTestDb } from '@tests/setup-test-db';
 // Imported for its side effect: it calls `jestOpenAPI(openapi.yaml)`, which is what
 // registers the `toSatisfyApiSpec()` matcher used below.
 import '@tests/contract';
-import { listOperations, unsupportedKeywords, type Operation } from '@tests/spec-walk';
+import {
+    listOperations,
+    ungeneratablePatterns,
+    unsupportedKeywords,
+    type Operation
+} from '@tests/spec-walk';
 import { bodyArbitraryFor } from '@tests/spec-arbitraries';
 
 setupTestDb();
@@ -97,6 +102,14 @@ describe('the spec walk itself', () => {
         // while testing nothing. Failing here is the signal to teach the builder or drop to a
         // real OpenAPI tool.
         expect(unsupportedKeywords()).toEqual([]);
+    });
+
+    it('declares no pattern the arbitrary builder cannot build a string for', () => {
+        // One level below the keyword tripwire: `pattern` IS understood, but a lookaround one is
+        // more than `fc.stringMatching` can compile, so the field is omitted and its endpoint
+        // 422s every run while this suite stays green. Register a sample in
+        // `tests/support/pattern-samples.ts` — `contract-data.ts` reads the same table.
+        expect(ungeneratablePatterns()).toEqual([]);
     });
 
     it('skips only the multipart operations', () => {

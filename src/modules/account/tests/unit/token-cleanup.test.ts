@@ -11,6 +11,7 @@ import { asStub } from '@tests/stub';
 import { postLogin } from '@modules/account/controllers/post-login';
 import { getRefreshToken } from '@modules/account/controllers/get-refresh-token';
 import { accountService, runTokenCleanup } from '@modules/account/services';
+import { PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 
 /*
  * One `jest.mock` for the whole service folder: a second `jest.mock` of the same path REPLACES
@@ -68,7 +69,7 @@ describe('Auth controllers token cleanup trigger', () => {
         const request = {
             body: {
                 email: 'user@example.com',
-                password: 'Password1!'
+                password: PLAIN_PASSWORD
             }
         };
         const response = {} as Parameters<typeof postLogin>[1];

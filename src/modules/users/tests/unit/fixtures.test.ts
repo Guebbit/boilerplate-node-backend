@@ -7,8 +7,20 @@
  */
 import { Types } from 'mongoose';
 import { makeUser, PLAIN_PASSWORD } from '@modules/users/fixtures';
+import { zodUserSchema } from '@modules/users';
+import { createUserBodyPasswordMin } from '@api/schemas.zod';
+import {
+    LEGACY_PASSWORD,
+    MINIMAL_PASSWORD,
+    REPLACEMENT_PASSWORD,
+    WEAK_PASSWORD
+} from '@modules/users/tests/fixtures';
 
 const HEX = '65dc8a99604c307b702b5ccc';
+
+/** What every password-setting endpoint enforces, reduced to a yes/no. */
+const satisfiesPolicy = (password: string): boolean =>
+    zodUserSchema.pick({ password: true }).safeParse({ password }).success;
 
 describe('makeUser', () => {
     it('builds a complete, insertable user with no overrides', () => {
@@ -59,5 +71,54 @@ describe('makeUser', () => {
 
         expect(String(user._id)).toBe(HEX);
         expect(user.createdAt!.getTime()).toBe(new Types.ObjectId(HEX).getTimestamp().getTime());
+    });
+});
+
+/**
+ * The password vocabulary, checked against the REAL policy rather than a restatement of it.
+ *
+ * Tightening the policy still fails the tests that sign up with these values — that is unavoidable
+ * and correct. What this adds is a failure naming WHICH constant stopped playing its part, so the
+ * rest read as consequences rather than as unrelated 422s.
+ */
+describe('the password vocabulary', () => {
+    it.each([
+        ['PLAIN_PASSWORD', PLAIN_PASSWORD],
+        ['REPLACEMENT_PASSWORD', REPLACEMENT_PASSWORD],
+        ['MINIMAL_PASSWORD', MINIMAL_PASSWORD]
+    ])('accepts %s as a settable password', (_name, password) => {
+        expect(satisfiesPolicy(password)).toBe(true);
+    });
+
+    it.each([
+        ['LEGACY_PASSWORD', LEGACY_PASSWORD],
+        ['WEAK_PASSWORD', WEAK_PASSWORD]
+    ])('rejects %s as a settable password', (_name, password) => {
+        expect(satisfiesPolicy(password)).toBe(false);
+    });
+
+    it('keeps LEGACY_PASSWORD long enough to be an existing credential', () => {
+        // It fails only on character classes. A password below the length floor could not have
+        // been set under ANY past policy, so it would prove nothing about a legacy account.
+        expect(LEGACY_PASSWORD.length).toBeGreaterThanOrEqual(createUserBodyPasswordMin);
+    });
+
+    it('keeps MINIMAL_PASSWORD exactly at the length floor', () => {
+        // Its whole job is to be the shortest legal value. A longer one silently stops testing
+        // the boundary.
+        expect(MINIMAL_PASSWORD).toHaveLength(createUserBodyPasswordMin);
+    });
+
+    it('keeps every constant distinct', () => {
+        const all = [
+            PLAIN_PASSWORD,
+            REPLACEMENT_PASSWORD,
+            MINIMAL_PASSWORD,
+            LEGACY_PASSWORD,
+            WEAK_PASSWORD
+        ];
+
+        // A collision would make "the password changed" pass against an unchanged password.
+        expect(new Set(all).size).toBe(all.length);
     });
 });

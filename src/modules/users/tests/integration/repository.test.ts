@@ -7,7 +7,7 @@
 
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
-import { makeUser, createUser } from '@modules/users/tests/fixtures';
+import { makeUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { userRepository, hashToken } from '@modules/users';
 import { TokenType, type UserDocument } from '@modules/users';
 // The model directly: it is no longer on the barrel, because no sibling MODULE needs it. A spec
@@ -25,7 +25,7 @@ describe('userRepository', () => {
             expect(user.email).toBe('user@example.com');
             expect(user.username).toBe('testuser');
             // The pre-save hook hashes the password; we must NOT store plain text
-            expect(user.password).not.toBe('Password1!');
+            expect(user.password).not.toBe(PLAIN_PASSWORD);
         });
 
         it('sets admin to false by default', async () => {

@@ -9,6 +9,8 @@
 import { zodUserSchema } from '@modules/users';
 import { createUserBodyPasswordMin } from '@api/schemas.zod';
 import { readLocaleDictionary } from '@infrastructure/i18n';
+import { PLAIN_PASSWORD } from '@modules/users/fixtures';
+import { MINIMAL_PASSWORD } from '@modules/users/tests/fixtures';
 
 /** The shipped English copy, read from the same file the thunks resolve against. */
 const en = readLocaleDictionary('en') as { users: Record<string, string> };
@@ -18,7 +20,7 @@ const copy = (key: string) => en.users[key];
 const validUser = {
     email: 'valid@example.com',
     username: 'validuser',
-    password: 'Password1!',
+    password: PLAIN_PASSWORD,
     admin: false,
     active: true
 };
@@ -89,7 +91,7 @@ describe('password messages', () => {
     });
 
     it('accepts a password of exactly the contract minimum, complexity included', () => {
-        expect(messagesFor({ ...validUser, password: 'Aa1!aaaa' }, 'password')).toEqual([]);
+        expect(messagesFor({ ...validUser, password: MINIMAL_PASSWORD }, 'password')).toEqual([]);
     });
 
     // Length alone is not enough: the paired frontend's `usersPasswordSchema` also requires

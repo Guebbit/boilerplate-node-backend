@@ -37,6 +37,7 @@
  * how to act on, instead of one that means something in only one of them.
  */
 import { asStub } from './stub';
+import { sampleForPattern } from './pattern-samples';
 import type { ZodType } from 'zod';
 
 // ─── seeded PRNG ────────────────────────────────────────────────────────────────
@@ -169,23 +170,13 @@ const randomStringForFormat = (format?: string): string => {
 };
 
 /**
- * Values for `pattern` constraints the generic generator cannot satisfy on its own.
- *
- * Producing a string from an arbitrary regex is a whole library's worth of work and not worth
- * it for a handful of patterns. The important part is not the table — it is that
- * {@link satisfyPattern} REFUSES to return a value it knows is illegal. Ignoring a `pattern`
- * would let `validPayload` hand an endpoint a payload the contract forbids, and the resulting 422
- * would read as an endpoint bug rather than a generator gap. Adding a pattern to `openapi.yaml`
- * fails loudly here instead, with the fix named in the message.
- */
-const PATTERN_SAMPLES: Record<string, string> = {
-    // Locale — BCP 47 language tag
-    '^[a-z]{2}(-[A-Za-z0-9]+)*$': 'it'
-};
-
-/**
  * Ensures `value` satisfies every `regex` check on the field, substituting a known-good sample
  * when it does not.
+ *
+ * REFUSES to return a value it knows is illegal. Ignoring a `pattern` would let `validPayload`
+ * hand an endpoint a payload the contract forbids, and the resulting 422 would read as an
+ * endpoint bug rather than a generator gap.
+ * @throws {Error} when a pattern has no entry in `tests/support/pattern-samples.ts`
  */
 const satisfyPattern = (value: string, checks: ZodCheckDef[]): string => {
     let result = value;
@@ -194,11 +185,11 @@ const satisfyPattern = (value: string, checks: ZodCheckDef[]): string => {
         const { pattern } = check;
         if (!pattern || pattern.test(result)) continue;
 
-        const sample = PATTERN_SAMPLES[pattern.source];
+        const sample = sampleForPattern(pattern.source);
         if (sample === undefined)
             throw new Error(
                 `contract-data: no sample value for pattern ${pattern.source}. ` +
-                    'Add one to PATTERN_SAMPLES in tests/support/contract-data.ts — without it ' +
+                    'Add one to PATTERN_SAMPLES in tests/support/pattern-samples.ts — without it ' +
                     'validPayload() would emit a value the contract declares illegal.'
             );
 

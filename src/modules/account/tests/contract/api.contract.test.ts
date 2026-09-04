@@ -10,12 +10,16 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
 import { createProduct } from '@modules/products/tests/fixtures';
 import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import { userRepository } from '@modules/users';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
+import { TokenType } from '@modules/users';
 import * as mailerPort from '@infrastructure/adapters/mailer';
+import itUsers from '@modules/users/locales/it.json';
+import itShared from '../../../../locales/it.json';
+import { WEAK_PASSWORD } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 
@@ -191,14 +195,42 @@ describe('PUT /account', () => {
     });
 });
 
+/**
+ * `POST /account/reset-confirm` shares `postPasswordChange`'s shape-only parse, and for the same
+ * reason. Its own describe because the flow needs a live one-time token rather than a session.
+ */
+describe('POST /account/reset-confirm', () => {
+    it('answers a weak password with the password copy, not the generic size message', async () => {
+        const user = await createUser({ email: 'reset-copy@example.com' });
+        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'a-live-reset-token');
+
+        const response = await api()
+            .post('/account/reset-confirm')
+            .set('Accept-Language', 'it')
+            .send({
+                token: 'a-live-reset-token',
+                password: WEAK_PASSWORD,
+                passwordConfirm: WEAK_PASSWORD
+            });
+
+        const messages = (response.body.errors ?? []).map(
+            ({ message }: { message: string }) => message
+        );
+
+        expect(response.status).toBe(422);
+        expect(messages).toContain(itUsers.users['field-password-min']);
+        expect(messages).not.toContain(itShared.validation['too-small-string']);
+    });
+});
+
 describe('POST /account/password', () => {
     it('matches the contract and the new credential works', async () => {
         const { user, bearer } = await loginWithCookie();
 
         const response = await api().post('/account/password').set('Authorization', bearer).send({
             currentPassword: PLAIN_PASSWORD,
-            password: 'Brand-New-Secret1',
-            passwordConfirm: 'Brand-New-Secret1'
+            password: REPLACEMENT_PASSWORD,
+            passwordConfirm: REPLACEMENT_PASSWORD
         });
 
         expect(response.status).toBe(200);
@@ -206,8 +238,36 @@ describe('POST /account/password', () => {
 
         const relogin = await api()
             .post('/account/login')
-            .send({ email: user.email, password: 'Brand-New-Secret1' });
+            .send({ email: user.email, password: REPLACEMENT_PASSWORD });
         expect(relogin.status).toBe(200);
+    });
+
+    /**
+     * Message precedence, the same rule `tests/integration/locale.test.ts` pins for signup: a
+     * field with its own copy must not be answered with the generic size sentence from the global
+     * Zod error map. Parsing the generated `ChangePasswordBody` here would win that race, which is
+     * why this controller parses a shape-only schema and leaves the rules to the service.
+     */
+    it('answers a weak password with the password copy, not the generic size message', async () => {
+        const { bearer } = await loginWithCookie();
+
+        const response = await api()
+            .post('/account/password')
+            .set('Authorization', bearer)
+            .set('Accept-Language', 'it')
+            .send({
+                currentPassword: PLAIN_PASSWORD,
+                password: WEAK_PASSWORD,
+                passwordConfirm: WEAK_PASSWORD
+            });
+
+        const messages = (response.body.errors ?? []).map(
+            ({ message }: { message: string }) => message
+        );
+
+        expect(response.status).toBe(422);
+        expect(messages).toContain(itUsers.users['field-password-min']);
+        expect(messages).not.toContain(itShared.validation['too-small-string']);
     });
 
     it('matches the error contract for a wrong current password — 422, never 401', async () => {
@@ -215,8 +275,8 @@ describe('POST /account/password', () => {
 
         const response = await api().post('/account/password').set('Authorization', bearer).send({
             currentPassword: 'wrong-guess',
-            password: 'Brand-New-Secret1',
-            passwordConfirm: 'Brand-New-Secret1'
+            password: REPLACEMENT_PASSWORD,
+            passwordConfirm: REPLACEMENT_PASSWORD
         });
 
         expect(response.status).toBe(422);

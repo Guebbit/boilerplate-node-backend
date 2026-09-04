@@ -39,7 +39,7 @@
  */
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
 import { userRepository, hashToken } from '@modules/users';
 import { TokenType } from '@modules/users';
 // Not on the barrel — see `users/index.ts`. A spec may reach the model; runtime code may not.
@@ -255,8 +255,8 @@ describe('one-time tokens under contention', () => {
         const results = await raceN(2, () =>
             api().post('/account/reset-confirm').send({
                 token: 'one-time-reset-token',
-                password: 'BrandNew1!',
-                passwordConfirm: 'BrandNew1!'
+                password: REPLACEMENT_PASSWORD,
+                passwordConfirm: REPLACEMENT_PASSWORD
             })
         );
 

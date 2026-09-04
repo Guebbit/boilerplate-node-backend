@@ -7,7 +7,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createUser } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 
@@ -105,8 +105,8 @@ describe('POST /account/signup', () => {
         const response = await api().post('/account/signup').send({
             username: 'newcomer',
             email: 'newcomer@example.com',
-            password: 'Password1!',
-            passwordConfirm: 'Password1!',
+            password: PLAIN_PASSWORD,
+            passwordConfirm: PLAIN_PASSWORD,
             termsAccepted: true
         });
 
@@ -120,8 +120,8 @@ describe('POST /account/signup', () => {
         const payload = {
             username: 'duplicate',
             email: 'duplicate@example.com',
-            password: 'Password1!',
-            passwordConfirm: 'Password1!',
+            password: PLAIN_PASSWORD,
+            passwordConfirm: PLAIN_PASSWORD,
             termsAccepted: true
         };
         await api().post('/account/signup').send(payload);
@@ -142,7 +142,7 @@ describe('POST /users', () => {
         const response = await api().post('/users').set('Authorization', bearer).send({
             email: 'admin-created@example.com',
             username: 'admincreated',
-            password: 'Password1!'
+            password: PLAIN_PASSWORD
         });
 
         expect(response.status).toBe(201);

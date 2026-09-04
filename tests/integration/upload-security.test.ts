@@ -3,6 +3,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { maxUploadBytes } from '@infrastructure/adapters/storage';
 
 /**
@@ -57,8 +58,8 @@ const signupWith = (content: Buffer | string, filename: string, contentType: str
         .post('/account/signup')
         .field('email', `upload-${Date.now()}@example.com`)
         .field('username', 'uploader')
-        .field('password', 'Password1!')
-        .field('passwordConfirm', 'Password1!')
+        .field('password', PLAIN_PASSWORD)
+        .field('passwordConfirm', PLAIN_PASSWORD)
         .field('termsAccepted', 'true')
         .attach('imageUpload', Buffer.isBuffer(content) ? content : Buffer.from(content), {
             filename,

@@ -68,7 +68,7 @@ These are weighted rather than uniform. Uniform random strings essentially never
 
 **The response matches the spec**, via `jest-openapi`'s `toSatisfyApiSpec()`. This checks the status code as well as the body, and it is sharp here because most schemas are `additionalProperties: false` — an undeclared field fails, and so does an undocumented status.
 
-## The tripwire on itself
+## The tripwires on itself
 
 The obvious objection to a hand-rolled spec walk is: _who maintains it?_
 
@@ -84,6 +84,23 @@ When it fails, there are exactly two honest responses:
 2. conclude the spec has outgrown a hand-rolled walk and reach for a real OpenAPI tool.
 
 Silencing it is not on the list.
+
+### The second tripwire: patterns it cannot build
+
+A keyword can be understood and its **value** still be beyond the generator. `pattern` is the case: `fc.stringMatching` compiles most regexes, but throws `Assertions of kind Lookahead not implemented yet!` on lookaround — which is exactly what "a lowercase letter, an uppercase letter, a digit and a symbol, in any order" needs.
+
+The failure mode is the same silent-and-green one, so the answer is the same shape. `tests/support/pattern-samples.ts` holds a hand-written sample per pattern, keyed on the regex source, and `ungeneratablePatterns()` fails the suite when the spec declares a lookaround pattern with no sample registered.
+
+```mermaid
+flowchart TD
+    A["schema.pattern"] --> B{"uses lookaround?"}
+    B -->|no| C["fc.stringMatching<br/><i>full variety</i>"]
+    B -->|yes| D{"sample registered?"}
+    D -->|yes| E["fc.constant(sample)<br/><i>one value, but legal</i>"]
+    D -->|no| F["field omitted<br/><b>ungeneratablePatterns() fails</b>"]
+```
+
+One table, two readers: `tests/support/contract-data.ts` reads it too, so a tricky pattern is registered once rather than once per generator. The two differ only in how they refuse — `contract-data.ts` throws at generation time, because it builds a payload that is meant to be valid; the fuzzer degrades to omitting the field and lets the assertion above be the loud part, because it walks far more schema shapes per run.
 
 ## What it does not cover
 

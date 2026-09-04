@@ -7,7 +7,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
 import * as userService from '@modules/users/service';
 import { userRepository, USER_SETUP_REQUESTED } from '@modules/users';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
@@ -21,7 +21,7 @@ describe('userService.validateData', () => {
         const errors = userService.validateData({
             email: 'valid@example.com',
             username: 'validuser',
-            password: 'Password1!'
+            password: PLAIN_PASSWORD
         });
 
         expect(errors).toHaveLength(0);
@@ -31,7 +31,7 @@ describe('userService.validateData', () => {
         const errors = userService.validateData({
             email: 'not-an-email',
             username: 'validuser',
-            password: 'Password1!'
+            password: PLAIN_PASSWORD
         });
 
         expect(errors.length).toBeGreaterThan(0);
@@ -41,7 +41,7 @@ describe('userService.validateData', () => {
         const errors = userService.validateData({
             email: 'valid@example.com',
             username: 'ab',
-            password: 'Password1!'
+            password: PLAIN_PASSWORD
         });
 
         expect(errors.length).toBeGreaterThan(0);
@@ -65,7 +65,7 @@ describe('userService.validateData', () => {
         const errors = userService.validateData({
             email: 'valid@example.com',
             username: 'validuser',
-            password: 'Password1!',
+            password: PLAIN_PASSWORD,
             [field]: 'not-a-boolean'
         });
 
@@ -76,7 +76,7 @@ describe('userService.validateData', () => {
         const errors = userService.validateData({
             email: 'valid@example.com',
             username: 'validuser',
-            password: 'Password1!',
+            password: PLAIN_PASSWORD,
             admin
         });
 
@@ -89,7 +89,7 @@ describe('userService.validateData', () => {
         const errors = userService.validateData({
             email: 'valid@example.com',
             username: 'validuser',
-            password: 'Password1!',
+            password: PLAIN_PASSWORD,
             imageUrl: '/uploads/1700000000-avatar.jpg'
         });
 
@@ -102,7 +102,7 @@ describe('userService.validateData', () => {
             id: '65dc8a99604c307b702b5ccc',
             email: 'valid@example.com',
             username: 'validuser',
-            password: 'Password1!'
+            password: PLAIN_PASSWORD
         });
 
         expect(errors).toHaveLength(0);
@@ -388,7 +388,7 @@ describe('userService.updateById', () => {
         const id = user._id.toString();
         const originalHash = user.password;
 
-        await userService.updateById(id, { password: 'UpdatedPwd1!' }, testCallerContext);
+        await userService.updateById(id, { password: REPLACEMENT_PASSWORD }, testCallerContext);
 
         const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).not.toBe(originalHash);

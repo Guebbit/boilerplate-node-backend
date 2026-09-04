@@ -8,7 +8,12 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import {
+    createUser,
+    LEGACY_PASSWORD,
+    PLAIN_PASSWORD,
+    REPLACEMENT_PASSWORD
+} from '@modules/users/tests/fixtures';
 import {
     accountService,
     passwordChangeWithCurrent,
@@ -45,9 +50,6 @@ jest.mock('@infrastructure/observability/analytics', () => ({
 setupTestDb();
 
 afterEach(() => jest.restoreAllMocks());
-
-const CURRENT_PASSWORD = 'correct-horse-battery';
-const NEW_PASSWORD = 'Staple-Gun-Tuesday1';
 
 /** The stored tokens of a user, credentials re-selected. */
 const readTokens = async (userId: string) => {
@@ -150,60 +152,60 @@ describe('updateProfile', () => {
 
 describe('passwordChangeWithCurrent', () => {
     it('changes the password when the current one matches', async () => {
-        const user = await createUser({ password: CURRENT_PASSWORD });
+        const user = await createUser({ password: LEGACY_PASSWORD });
 
         asSuccess(
             await passwordChangeWithCurrent(
                 user.id,
-                CURRENT_PASSWORD,
-                NEW_PASSWORD,
-                NEW_PASSWORD,
+                LEGACY_PASSWORD,
+                REPLACEMENT_PASSWORD,
+                REPLACEMENT_PASSWORD,
                 testCallerContext
             )
         );
 
         // The new credential works and the old one is dead — both directions, or the test
         // passes on a no-op.
-        const withNew = await accountService.login(user.email, NEW_PASSWORD);
-        const withOld = await accountService.login(user.email, CURRENT_PASSWORD);
+        const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);
+        const withOld = await accountService.login(user.email, LEGACY_PASSWORD);
         expect(withNew.success).toBe(true);
         expect(withOld.success).toBe(false);
     });
 
     it('answers a wrong current password with 422, not 401', async () => {
-        const user = await createUser({ password: CURRENT_PASSWORD });
+        const user = await createUser({ password: LEGACY_PASSWORD });
 
         const response = asReject(
             await passwordChangeWithCurrent(
                 user.id,
                 'wrong-guess',
-                NEW_PASSWORD,
-                NEW_PASSWORD,
+                REPLACEMENT_PASSWORD,
+                REPLACEMENT_PASSWORD,
                 testCallerContext
             )
         );
 
         expect(response.status).toBe(422);
         // And nothing changed.
-        const login = await accountService.login(user.email, CURRENT_PASSWORD);
+        const login = await accountService.login(user.email, LEGACY_PASSWORD);
         expect(login.success).toBe(true);
     });
 
     it('validates the new pair before spending a bcrypt comparison', async () => {
-        const user = await createUser({ password: CURRENT_PASSWORD });
+        const user = await createUser({ password: LEGACY_PASSWORD });
 
         const response = asReject(
             await passwordChangeWithCurrent(
                 user.id,
-                CURRENT_PASSWORD,
-                NEW_PASSWORD,
+                LEGACY_PASSWORD,
+                REPLACEMENT_PASSWORD,
                 'different',
                 testCallerContext
             )
         );
 
         expect(response.status).toBe(422);
-        const login = await accountService.login(user.email, CURRENT_PASSWORD);
+        const login = await accountService.login(user.email, LEGACY_PASSWORD);
         expect(login.success).toBe(true);
     });
 });
@@ -464,18 +466,18 @@ describe('removeOwnAccount', () => {
 describe('passwordResetChange', () => {
     it('changes the password and audits a reset completion, distinct from a logged-in change', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ password: CURRENT_PASSWORD });
+        const user = await createUser({ password: LEGACY_PASSWORD });
 
         asSuccess(
             await accountService.passwordResetChange(
                 user,
-                NEW_PASSWORD,
-                NEW_PASSWORD,
+                REPLACEMENT_PASSWORD,
+                REPLACEMENT_PASSWORD,
                 testCallerContext
             )
         );
 
-        const withNew = await accountService.login(user.email, NEW_PASSWORD);
+        const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);
         expect(withNew.success).toBe(true);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -487,12 +489,12 @@ describe('passwordResetChange', () => {
 
     it('does not audit a rejected pair', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ password: CURRENT_PASSWORD });
+        const user = await createUser({ password: LEGACY_PASSWORD });
 
         const response = asReject(
             await accountService.passwordResetChange(
                 user,
-                NEW_PASSWORD,
+                REPLACEMENT_PASSWORD,
                 'different',
                 testCallerContext
             )
