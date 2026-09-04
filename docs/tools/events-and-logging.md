@@ -102,6 +102,13 @@ It is not a signal in the table above. Nothing reads it, nothing stores it, and 
 process — it is a call graph device, and the price it pays is the call graph itself: "find all
 references" no longer reaches the handler.
 
+**These are deliberately not AsyncAPI channels**, and their absence from `asyncapi.yaml` is not a
+gap to fill: a channel is declared only for something that crosses a process boundary
+([why](../api/asyncapi-workflow.md#naming-convention), including the one that was declared in error
+and removed). Each event's contract — when it fires, what the payload means, and what a listener may
+assume — is the JSDoc on the `DomainEventMap` augmentation in the emitting module's own
+`events.ts`. That is what a test asserting an event's effect is graded against.
+
 ### The three properties that matter
 
 - **Handlers run sequentially and awaited.** The emitters depend on the effect having happened — a

@@ -3,7 +3,7 @@
 **Nothing is outstanding.** Every item below is applied or resolved; this is the record of what was
 done there and why, kept because two of the conclusions are worth not re-deriving.
 
-Companion to `UPGRADE_TEST_INFRASTRUCTURE.md`, which is where the reasoning lives.
+The durable conclusions have been folded into [Pairing & Ports](docs/tools/pairing-and-ports.md#keeping-the-pair-in-step); this file is the spent working record.
 
 ## Already applied — no action
 
@@ -72,7 +72,7 @@ to be kept by hand. That is unchanged, and out of scope for this pass.
 
 ## Decided against — `E2E_ACCOUNTS` through `cy.env()`
 
-`UPGRADE_TEST_INFRASTRUCTURE.md` proposed routing `E2E_ACCOUNTS` through the
+The test-infrastructure pass proposed routing `E2E_ACCOUNTS` through the
 `process.env.X ?? default` → `env:` → `cy.env()` path that `apiUrl` uses, and asked whether to pay
 for it with a global `before()` hook or a per-spec one.
 

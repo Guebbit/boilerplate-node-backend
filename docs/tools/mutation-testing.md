@@ -1044,6 +1044,22 @@ files strengthened most recently, all four were the second kind — `cache.ts`'s
 read/write/invalidate path reported _no coverage_, because exercising it needs a Redis and the unit
 suite has none. The fix was a fake client, not sharper assertions.
 
+### Prefer a file with a rule to grade against
+
+Between two files with a similar blast radius, take the one whose behaviour is **stated somewhere
+other than the code** — a contract schema, a `docs/theory` rule, a documented policy. A survivor
+tells you a change was invisible; it does not tell you which behaviour was supposed to be there.
+Without an independent statement the natural move is to assert whatever the code currently does,
+and that produces exactly the tautology the [spec-drift audit](./ai-auditing.md) exists to find.
+
+`validation-messages.ts` scores worse than most and is a good first stop for precisely this reason
+— its contract is written down in `docs/theory/request-flow.md`. A file with an equally bad score
+and no stated rule is a worse target, not a better one.
+
+Do not keep a ranked file list here. Survivor counts are a snapshot of one run and go stale
+silently; `stryker-incremental.json` and a fresh report are the source of truth, and the filters
+above are what turn either into an order.
+
 ### Then falsify, every time
 
 A test written against a survivor is a test written to make a number move, which is exactly the

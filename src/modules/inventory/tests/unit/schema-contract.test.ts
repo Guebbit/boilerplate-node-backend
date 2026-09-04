@@ -35,7 +35,23 @@ describe('stockMovementSchema — the ledger', () => {
         // The reasons once had three independent declarations. Asserting against the generated
         // enum rather than a retyped list is what keeps this from becoming a fourth.
         expect(enumOf(stockMovementSchema, 'reason')).toEqual(Object.values(StockMovementReason));
-        expect(MOVEMENT_REASONS).toEqual(Object.values(StockMovementReason));
+    });
+
+    it('carries the six reasons the contract states, in order', () => {
+        /*
+         * The literal list from `StockMovementReason` in `src/modules/inventory/openapi.yaml`.
+         * `MOVEMENT_REASONS` is defined as `Object.values(StockMovementReason)`, so comparing the
+         * two would be the same expression on both sides — an assertion that cannot fail. Spelling
+         * the reasons out is what makes a dropped or reordered enum member show up here.
+         */
+        expect(MOVEMENT_REASONS).toEqual([
+            'reserve',
+            'commit',
+            'release',
+            'expire',
+            'receive',
+            'adjust'
+        ]);
     });
 
     it('points productId at the catalogue as a real ObjectId', () => {

@@ -93,6 +93,25 @@ because of it.
 - `npm run check:spec-identity` is the guard. It reports the shared bundles as forked when the two
   sides disagree, which is exactly what you want to see before a merge rather than after.
 
+### `FORKED` usually means _behind_
+
+The check compares two working copies, and it cannot tell "someone edited the contract" from "this
+checkout has not pulled". A second clone of this repo — `boilerplate-node-backend-2` and the like,
+same `origin`, different directory — will report `FORKED` the moment either one is a few commits
+stale, and the frontend's copy will look like it belongs to the _other_ backend.
+
+So pull both sides before concluding anything about pairing. A genuine fork is rare; a stale
+checkout is the ordinary explanation, and the two are indistinguishable from the message alone.
+
+### Seed credentials are matched by hand, on purpose
+
+`NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` here must agree with the literals in the
+frontend's `tests/support/e2e/accounts.ts`. Nothing enforces it, and that is a decision rather than
+an omission: divergence is not silent, because `cy.loginAs()` then cannot log in and the suite goes
+red on the next run. Routing those credentials through `cy.env()` instead would buy a clearer
+failure message at the cost of `before()`-hook ordering in every spec — worth revisiting only if
+someone actually runs e2e against a backend with `NODE_SEED_*` overridden.
+
 ## The shared-file list, and what earns a place on it
 
 `scripts/spec-identity.ts` holds the files that must be **byte-identical** in both checkouts. The
