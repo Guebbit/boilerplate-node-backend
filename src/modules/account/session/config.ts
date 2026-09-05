@@ -15,12 +15,17 @@ export enum RefreshTokenExpiryTime {
     LONG = 'long'
 }
 
-/** Maps each token tier to its corresponding env var name. */
-const TOKEN_EXPIRY_ENV: Record<RefreshTokenExpiryTime | 'default', string> = {
-    [RefreshTokenExpiryTime.SHORT]: 'NODE_TOKEN_REFRESH_TIME_SHORT',
-    [RefreshTokenExpiryTime.MEDIUM]: 'NODE_TOKEN_REFRESH_TIME_MEDIUM',
-    [RefreshTokenExpiryTime.LONG]: 'NODE_TOKEN_REFRESH_TIME_LONG',
-    default: 'NODE_TOKEN_ACCESS_TIME'
+/**
+ * Each tier's env var and the number of seconds used when it is unset.
+ *
+ * The fallbacks exist so an unset variable cannot mean a TTL of zero, which would expire every
+ * token the instant it is signed — a deployment that never sets these still issues usable ones.
+ */
+const TOKEN_EXPIRY: Record<RefreshTokenExpiryTime | 'default', readonly [string, number]> = {
+    [RefreshTokenExpiryTime.SHORT]: ['NODE_TOKEN_REFRESH_TIME_SHORT', 604_800],
+    [RefreshTokenExpiryTime.MEDIUM]: ['NODE_TOKEN_REFRESH_TIME_MEDIUM', 2_592_000],
+    [RefreshTokenExpiryTime.LONG]: ['NODE_TOKEN_REFRESH_TIME_LONG', 31_536_000],
+    default: ['NODE_TOKEN_ACCESS_TIME', 600]
 };
 
 /**
@@ -28,11 +33,11 @@ const TOKEN_EXPIRY_ENV: Record<RefreshTokenExpiryTime | 'default', string> = {
  * Falls back to `NODE_TOKEN_ACCESS_TIME` when no tier is given.
  *
  * @param remember - optional tier (short/medium/long)
- * @returns seconds as integer, 0 if env var is unset
+ * @returns seconds as integer, the tier's default if the env var is unset
  */
 export const getExpiryTime = (remember?: RefreshTokenExpiryTime) => {
-    const environmentKey = TOKEN_EXPIRY_ENV[remember ?? 'default'];
-    return environmentNumber(environmentKey, 0);
+    const [environmentKey, fallback] = TOKEN_EXPIRY[remember ?? 'default'];
+    return environmentNumber(environmentKey, fallback);
 };
 
 /**
@@ -51,11 +56,12 @@ export const getAccessTokenSecret = () => process.env.NODE_TOKEN_ACCESS ?? '';
 export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
 
 /**
- * Access token TTL in seconds.
+ * Access token TTL in seconds. The named entry point for the tierless case {@link getExpiryTime}
+ * already covers, so the variable and its default are declared once.
  *
- * @returns seconds as integer, 0 if env var is unset
+ * @returns seconds as integer, 600 if `NODE_TOKEN_ACCESS_TIME` is unset
  */
-export const getAccessTokenTTL = () => environmentNumber('NODE_TOKEN_ACCESS_TIME', 0);
+export const getAccessTokenTTL = () => getExpiryTime();
 
 /**
  * The key every second factor's stored material is protected with — see `two-factor/`. It

@@ -88,7 +88,7 @@ describe('the rate limiter across a real cluster', () => {
             env: {
                 NODE_RATE_LIMIT_REDIS_ENABLED: '1',
                 NODE_RATE_LIMIT_REDIS_URL: redis.url,
-                NODE_REDIS_RATE_LIMIT_PREFIX: keyPrefix(),
+                NODE_RATE_LIMIT_REDIS_PREFIX: keyPrefix(),
                 NODE_RATE_LIMIT_MAX: String(LIMIT),
                 NODE_RATE_LIMIT_WINDOW_MS: '60000'
             }

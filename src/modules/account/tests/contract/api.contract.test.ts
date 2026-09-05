@@ -20,6 +20,11 @@ import * as mailerPort from '@infrastructure/adapters/mailer';
 import itUsers from '@modules/users/locales/it.json';
 import itShared from '../../../../locales/it.json';
 import { WEAK_PASSWORD } from '@modules/users/tests/fixtures';
+import {
+    getAccessTokenTTL,
+    getExpiryTime,
+    RefreshTokenExpiryTime
+} from '@modules/account/session/config';
 
 setupTestDb();
 
@@ -112,7 +117,9 @@ describe('POST /account/login — remember me', () => {
 
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
-        const expected = Number(process.env.NODE_TOKEN_REFRESH_TIME_MEDIUM);
+        // Read through the same accessor the app signs with, not the raw variable: the tiers carry
+        // code-side defaults, so an environment that never sets them still has a right answer.
+        const expected = getExpiryTime(RefreshTokenExpiryTime.MEDIUM);
         expect(cookieMaxAge(response, 'jwt')).toBe(expected);
         // The UI hint expires in step with the credential it describes.
         expect(cookieMaxAge(response, 'isAuth')).toBe(expected);
@@ -125,7 +132,7 @@ describe('POST /account/login — remember me', () => {
             .send({ email: user.email, password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
-        expect(cookieMaxAge(response, 'jwt')).toBe(Number(process.env.NODE_TOKEN_ACCESS_TIME));
+        expect(cookieMaxAge(response, 'jwt')).toBe(getAccessTokenTTL());
     });
 
     it('answers 422 for a tier the contract does not declare, before checking credentials', async () => {

@@ -11,7 +11,7 @@
 
 import type { Router } from 'express';
 import type { SeedOutcome } from '@infrastructure/persistence/seed';
-import { isDemoMode } from '@infrastructure/adapters/demo-outbox';
+import { assertRequiredConfig } from '@kernel/required-config';
 
 /**
  * What a published collection is to the consumer reading it.
@@ -64,8 +64,16 @@ export interface RequiredConfig {
     key: string;
     /** The shortest acceptable value — catches an empty or drastically truncated secret. */
     minLength: number;
-    /** The `.env-example` placeholder this value must never still equal in a real deployment. */
-    placeholder: string;
+    /**
+     * The `.env-example` placeholder this value must never still equal in a real deployment.
+     * Omitted where the shipped value is a legitimate local one rather than a stand-in.
+     */
+    placeholder?: string;
+    /**
+     * Check only under `NODE_ENV=production`. For a variable whose code-side default is correct
+     * for a developer and certainly wrong for a deployment.
+     */
+    productionOnly?: boolean;
 }
 
 /**
@@ -190,38 +198,6 @@ export const resolveImageTargets = (
     Object.fromEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.imageTargets ?? {}))
     );
-
-/**
- * Refuse to boot when a declared {@link RequiredConfig} is missing, too short, or still its
- * `.env-example` placeholder. Skipped under `NODE_ENV=test`
- * (`tests/support/setup.ts` sets its own values, and a suite that has to satisfy a production
- * config assertion is a suite that gets weakened until it passes) and under the demo profile
- * (`npm run demo`, `isDemoMode()`) for the same reason: an ephemeral, local-only, in-memory
- * deployment that developers routinely boot straight off a copied `.env-example` is not the
- * placeholder-in-production risk this exists to catch, and blocking it breaks the paired
- * frontend's e2e/visual suites, which start this profile with no env of their own. Throws ONCE,
- * listing every offending variable across every module — not the first one, which would mean N
- * restarts to find N mistakes.
- *
- * @param appModules - the enabled module list
- * @throws when any required variable fails its check outside `NODE_ENV=test`/the demo profile
- */
-const assertRequiredConfig = (appModules: AppModule[]): void => {
-    if (process.env.NODE_ENV === 'test' || isDemoMode()) return;
-
-    const offending = appModules
-        .flatMap((appModule) => appModule.requiredConfig ?? [])
-        .filter(({ key, minLength, placeholder }) => {
-            const value = process.env[key] ?? '';
-            return value.length < minLength || value === placeholder;
-        })
-        .map(({ key }) => key);
-
-    if (offending.length > 0)
-        throw new Error(
-            `Refusing to boot: these environment variables are missing, too short, or still set to their .env-example placeholder — ${offending.join(', ')}`
-        );
-};
 
 /**
  * Let every module attach its domain-event handlers.

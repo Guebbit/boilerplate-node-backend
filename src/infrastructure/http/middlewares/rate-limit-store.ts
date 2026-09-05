@@ -22,7 +22,7 @@ import {
  * `NODE_REDIS_CACHE_PREFIX` can be rotated — or the cache flushed wholesale — without also
  * resetting everyone's budget.
  */
-const KEY_PREFIX = process.env.NODE_REDIS_RATE_LIMIT_PREFIX ?? 'rate-limit';
+const KEY_PREFIX = process.env.NODE_RATE_LIMIT_REDIS_PREFIX ?? 'rate-limit';
 
 /**
  * The limiter's own Redis URL. Falls back to the cache's, because one Redis is the normal

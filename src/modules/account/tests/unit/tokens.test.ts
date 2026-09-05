@@ -66,17 +66,19 @@ describe('getExpiryTime', () => {
         expect(getExpiryTime()).toBe(900);
     });
 
-    it('returns 0 when the variable is unset', () => {
-        expect(getExpiryTime()).toBe(0);
-        expect(getExpiryTime(RefreshTokenExpiryTime.LONG)).toBe(0);
+    it('falls back to the tier default when the variable is unset', () => {
+        // Each tier carries its own: an access token must not inherit a year-long refresh TTL
+        // just because both variables happen to be missing.
+        expect(getExpiryTime()).toBe(600);
+        expect(getExpiryTime(RefreshTokenExpiryTime.LONG)).toBe(31_536_000);
     });
 
-    it('returns 0 for an empty variable rather than NaN', () => {
+    it('falls back for an empty variable rather than returning NaN', () => {
         // `Number.parseInt('')` is NaN, which would flow into `expiresIn` and produce a token
-        // jsonwebtoken rejects. The documented answer for "no usable value" is 0.
+        // jsonwebtoken rejects. An unusable value resolves to the tier default, same as an absent one.
         process.env.NODE_TOKEN_ACCESS_TIME = '';
 
-        expect(getExpiryTime()).toBe(0);
+        expect(getExpiryTime()).toBe(600);
     });
 
     it('parses in base 10, so a zero-padded value is not read as octal', () => {
@@ -101,10 +103,10 @@ describe('getExpiryTimeMilliseconds', () => {
         expect(getExpiryTimeMilliseconds()).toBe(900_000);
     });
 
-    it('stays 0 (not NaN) when the variable is unset', () => {
+    it('stays a real number (not NaN) when the variable is unset', () => {
         // A NaN maxAge on a cookie is silently dropped by Express, producing a session cookie
         // instead of the intended persistent one — a bug with no error attached to it.
-        expect(getExpiryTimeMilliseconds()).toBe(0);
+        expect(getExpiryTimeMilliseconds()).toBe(600_000);
     });
 });
 
@@ -132,8 +134,10 @@ describe('getAccessTokenTTL', () => {
         expect(getAccessTokenTTL()).toBe(900);
     });
 
-    it('returns 0 when unset', () => {
-        expect(getAccessTokenTTL()).toBe(0);
+    it('falls back to ten minutes when unset', () => {
+        // Not 0: a zero TTL signs tokens that are already expired, and an operator who never set
+        // the variable gets a working login rather than a session that ends on arrival.
+        expect(getAccessTokenTTL()).toBe(600);
     });
 
     it('does not read any refresh tier variable', () => {
@@ -141,6 +145,6 @@ describe('getAccessTokenTTL', () => {
         // exactly the mistake this separation exists to prevent.
         process.env.NODE_TOKEN_REFRESH_TIME_LONG = '2592000';
 
-        expect(getAccessTokenTTL()).toBe(0);
+        expect(getAccessTokenTTL()).toBe(600);
     });
 });
