@@ -37,7 +37,7 @@ import {
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from './modules';
 
-import { installSecurity } from '@app/security';
+import { applyServerTimeouts, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
 import { installTelemetry } from '@app/telemetry';
 import { installStatic } from '@app/static-assets';
@@ -115,6 +115,12 @@ export const startServer = () => {
                             activeServer = server;
                             resolve(server);
                         });
+                        /*
+                         * After `listen`, because the server object is what carries them — and
+                         * before the first request can arrive, because they bound how long one may
+                         * take to send. See `app/security.ts`.
+                         */
+                        applyServerTimeouts(server);
                     })
             )
     );

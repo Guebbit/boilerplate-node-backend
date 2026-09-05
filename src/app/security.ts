@@ -10,6 +10,7 @@
 
 import express from 'express';
 import type { Express } from 'express';
+import type { Server } from 'node:http';
 import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -36,6 +37,45 @@ const allowedOrigins = new Set(
         .map((originValue) => originValue.trim())
         .filter(Boolean)
 );
+
+/**
+ * Bound how long a client may take to SEND a request, which Node's own defaults barely do.
+ *
+ * Slowloris and slow-POST are not floods: one client trickles bytes and holds a connection, and a
+ * few hundred such connections exhaust the pool while the rate limiter — which counts REQUESTS —
+ * sees almost nothing. Node ships 60s for headers and 300s for a whole request, so the process
+ * would hold a half-sent request for five minutes by default.
+ *
+ * Both bound RECEIVING only, never the handler: a slow invoice render is unaffected by
+ * `requestTimeout`, which is what makes tightening it safe.
+ *
+ * @param server - the listening server returned by `app.listen`
+ */
+export const applyServerTimeouts = (server: Server): void => {
+    /*
+     * Headers are small and arrive at once, so anything past a few seconds is a client trickling
+     * them. Measured from the request's FIRST BYTE, not from when the socket opened, so this may
+     * safely sit below `keepAliveTimeout` — an idle keep-alive socket is not affected.
+     */
+    server.headersTimeout = environmentNumber('NODE_HTTP_HEADERS_TIMEOUT_MS', 15_000, 1);
+
+    /*
+     * The whole request, headers and body. Generous rather than tight because it is also the
+     * ceiling on a legitimate upload: `NODE_MAX_UPLOAD_BYTES` (5 MB) over a poor mobile link needs
+     * most of this, and the endpoint answering 408 mid-upload is worse than the connection cost.
+     */
+    server.requestTimeout = environmentNumber('NODE_HTTP_REQUEST_TIMEOUT_MS', 120_000, 1);
+
+    /*
+     * Node's own 5s default, exposed rather than changed. RAISE it above the idle timeout of
+     * whatever proxy terminates TLS: if the proxy holds a socket this server has already closed,
+     * it sends the next request into a dead connection and answers 502 to a caller who did
+     * nothing wrong.
+     *
+     * See: docs/tools/security.md
+     */
+    server.keepAliveTimeout = environmentNumber('NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS', 5000, 1);
+};
 
 /**
  * Install secure headers, strict CORS, body parsing and rate limiting.
