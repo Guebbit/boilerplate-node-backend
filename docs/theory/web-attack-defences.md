@@ -67,14 +67,14 @@ Silence is not one of the three.
 
 ## Hardening — the small ones
 
-| Catalog row                                      | Control                                                                                                                               | Where                                                                  |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Unbounded queries (§11)                          | `page`, not only `pageSize`, is capped                                                                                                | `infrastructure/http/schemas.ts`, `shared/contracts/openapi.root.yaml` |
-| Timing attack on comparison / User enumeration   | a login miss compares against a dummy bcrypt hash, so an unknown email costs the same as a wrong password                             | `account/services/authentication.ts#DUMMY_PASSWORD_HASH`               |
-| JWT — `alg: none` / key confusion                | `{ algorithms: ['HS256'] }` pinned on every verify                                                                                    | `account/session/jwt.ts`                                               |
-| Log injection / log forging (§1), CRLF injection | `x-request-id` is validated against a UUID shape before it's ever reflected back or written to a log line                             | `app/request-context.ts`                                               |
-| Large request bodies (§11)                       | an explicit `limit` on `express.json()`/`express.urlencoded()`, rather than trusting the library default                              | `app/security.ts`                                                      |
-| Vulnerable dependencies (§14)                    | `npm audit fix` was run for the production-facing advisories — and has since drifted; see [Supply chain](#supply-chain--14-re-walked) | `package.json`                                                         |
+| Catalog row                                      | Control                                                                                                                                                      | Where                                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Unbounded queries (§11)                          | `page`, not only `pageSize`, is capped                                                                                                                       | `infrastructure/http/schemas.ts`, `shared/contracts/openapi.root.yaml` |
+| Timing attack on comparison / User enumeration   | a login miss compares against a dummy bcrypt hash, so an unknown email costs the same as a wrong password                                                    | `account/services/authentication.ts#DUMMY_PASSWORD_HASH`               |
+| JWT — `alg: none` / key confusion                | `{ algorithms: ['HS256'] }` pinned on every verify                                                                                                           | `account/session/jwt.ts`                                               |
+| Log injection / log forging (§1), CRLF injection | `x-request-id` is validated against a UUID shape before it's ever reflected back or written to a log line                                                    | `app/request-context.ts`                                               |
+| Large request bodies (§11)                       | an explicit `limit` on `express.json()`/`express.urlencoded()`, rather than trusting the library default                                                     | `app/security.ts`                                                      |
+| Vulnerable dependencies (§14)                    | the production tree carries one `low`, unreachable; the alarm that keeps it that way is the CI `audit` job — see [Supply chain](#supply-chain--14-re-walked) | `package.json`                                                         |
 
 ## Step-up authentication
 
@@ -225,18 +225,20 @@ half of it: declared type, then actual bytes, then quarantine-and-digest.
 
 ## The data layer — §12
 
-| Catalog row (§12)                   | Control                                                                                                                                             | Where                                                    |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Exposed database / broker           | neither Mongo, Redis nor RabbitMQ publishes a port in the production compose file; they are reachable on the compose network and nowhere else       | `docker-compose.production.yml`                          |
-| Default / weak DB credentials       | `MONGO_PASSWORD` and `RABBITMQ_PASSWORD` use compose's `:?` form, so the stack refuses to start rather than falling back to a default               | `docker-compose.production.yml`                          |
-| Missing tenant / owner scope        | the owner clause rides IN the read, and a caller with no id yields `''`, which is not a valid ObjectId — a bug here is a 500, never a widened query | `kernel/authorization.ts#createOwnerScope`               |
-| Cache poisoning (application cache) | the key carries the caller and the locale as well as the route — see §8 above                                                                       | `infrastructure/http/middlewares/cache.ts`               |
-| Stale authorization in cache        | `invalidateCache` clears by tag on every write, and `getCacheScope` means a revoked caller reads their own bucket rather than a shared one          | `cache.ts#invalidateCache`                               |
-| Secrets in database                 | refresh, reset, delete-confirmation and backup-code tokens are stored as sha256 digests; a TOTP device secret is AES-256-GCM under a versioned key  | `users/model.ts#hashToken`, `account/two-factor/`        |
-| Queue / event poisoning             | an unparseable message is dead-lettered without requeue rather than retried forever; the broker is internal, so the producer is this application    | `infrastructure/adapters/queue.ts`                       |
-| Orphaned / residual data            | soft-deleted rows are filtered by the repository's own `visibleScope`, not by each caller remembering to                                            | `infrastructure/persistence/create-repository.ts`        |
-| Unbounded / unindexed queries       | `findAll` applies a 1000-row backstop when no limit is named, and both `page` and `pageSize` are capped at the contract layer                       | `create-repository.ts`, `infrastructure/http/schemas.ts` |
-| ObjectId leakage                    | ids are identifiers, never secrets: every read that takes one is scoped, so knowing an id grants nothing                                            | `kernel/authorization.ts`                                |
+| Catalog row (§12)                   | Control                                                                                                                                                                                                       | Where                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Exposed database / broker           | neither Mongo, Redis nor RabbitMQ publishes a port in the production compose file; they are reachable on the compose network and nowhere else                                                                 | `docker-compose.production.yml`                          |
+| Default / weak DB credentials       | `MONGO_ROOT_PASSWORD`, `MONGO_APP_PASSWORD`, `RABBITMQ_PASSWORD` and `REDIS_PASSWORD` all use compose's `:?` form, so the stack refuses to start rather than falling back to a default                        | `docker-compose.production.yml`                          |
+| Over-privileged DB account          | the app authenticates as a `readWrite` user scoped to its own database, created by `.docker/mongo-init.js` — the root account `MONGO_INITDB_ROOT_*` creates is never used at runtime                          | `docker-compose.production.yml`, `.docker/mongo-init.js` |
+| Weak cache / broker credentials     | Redis carries `--requirepass`, the same value `NODE_REDIS_URL` embeds — it also backs the rate-limit store, so an unauthenticated reader could otherwise reset budgets or read another user's cached response | `docker-compose.production.yml`                          |
+| Missing tenant / owner scope        | the owner clause rides IN the read, and a caller with no id yields `''`, which is not a valid ObjectId — a bug here is a 500, never a widened query                                                           | `kernel/authorization.ts#createOwnerScope`               |
+| Cache poisoning (application cache) | the key carries the caller and the locale as well as the route — see §8 above                                                                                                                                 | `infrastructure/http/middlewares/cache.ts`               |
+| Stale authorization in cache        | `invalidateCache` clears by tag on every write, and `getCacheScope` means a revoked caller reads their own bucket rather than a shared one                                                                    | `cache.ts#invalidateCache`                               |
+| Secrets in database                 | refresh, reset, delete-confirmation and backup-code tokens are stored as sha256 digests; a TOTP device secret is AES-256-GCM under a versioned key                                                            | `users/model.ts#hashToken`, `account/two-factor/`        |
+| Queue / event poisoning             | an unparseable message is dead-lettered without requeue rather than retried forever; the broker is internal, so the producer is this application                                                              | `infrastructure/adapters/queue.ts`                       |
+| Orphaned / residual data            | soft-deleted rows are filtered by the repository's own `visibleScope`, not by each caller remembering to                                                                                                      | `infrastructure/persistence/create-repository.ts`        |
+| Unbounded / unindexed queries       | `findAll` applies a 1000-row backstop when no limit is named, and both `page` and `pageSize` are capped at the contract layer                                                                                 | `create-repository.ts`, `infrastructure/http/schemas.ts` |
+| ObjectId leakage                    | ids are identifiers, never secrets: every read that takes one is scoped, so knowing an id grants nothing                                                                                                      | `kernel/authorization.ts`                                |
 
 ## The API surface — §15
 
@@ -302,31 +304,31 @@ One surface: `GET /observability/events`, Server-Sent Events, admin-only.
 
 ## Supply chain — §14, re-walked
 
-The row in "Hardening" above says `npm audit fix` was run for the production-facing advisories.
-That was true when it was written and is not true now. As of this walk, `npm audit --omit=dev`
-reports 7 advisories in the production tree — 3 high, 2 moderate, 2 low:
+`npm audit --omit=dev` reports ONE advisory in the production tree: `esbuild`'s development-server
+file read, which is `low` and unreachable — `tsx` uses esbuild as a transpiler and never starts its
+server. Everything else was closed by taking the fixes below.
 
-| Advisory                                                                                | Reachable here?                                                                                                                                                                   | Fix                               |
-| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `mongoose` — prototype pollution via `__proto__`-prefixed dotted path in update casting | **Yes, in principle.** Every write goes through mongoose. The generated Zod schemas strip unknown keys before a body reaches a service, which is the layer that actually stops it | non-breaking, `npm audit fix`     |
-| `qs` — array-limit bypass, and DoS via attacker-controlled `isBuffer`                   | **Yes.** `express.urlencoded({ extended: true })` parses with `qs`                                                                                                                | non-breaking, `npm audit fix`     |
-| `body-parser` — an invalid `limit` value silently disables size enforcement             | **Operator-triggered.** The limit is `NODE_JSON_BODY_LIMIT`; a typo in it removes the body-size ceiling rather than failing loudly                                                | non-breaking, `npm audit fix`     |
-| `puppeteer-core` → `@puppeteer/browsers` → `extract-zip` (symlink path traversal)       | **No.** `extract-zip` is used by the browser DOWNLOAD path; this repo runs `puppeteer-core` against an `executablePath` and never downloads one                                   | major bump to `puppeteer-core@25` |
-| `esbuild` — file read via its development server on Windows                             | **No.** `tsx` uses esbuild as a transpiler; the dev server is never started                                                                                                       | non-breaking                      |
+| Advisory                                                                          | Was it reachable?                                                                                                                              | Closed by                          |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `mongoose` — prototype pollution via a `__proto__`-prefixed dotted path           | **Yes**, in principle — every write goes through mongoose, though the generated Zod schemas strip unknown keys before a body reaches a service | 9.3.3 → 9.9.5 (patched from 9.7.4) |
+| `qs` — array-limit bypass, and DoS via attacker-controlled `isBuffer`             | **Yes** — `express.urlencoded({ extended: true })` parses with `qs`                                                                            | 6.15.3 → 6.16.0                    |
+| `body-parser` — an invalid `limit` silently disables size enforcement             | **Operator-triggered** — the limit is `NODE_JSON_BODY_LIMIT`; a typo removed the ceiling rather than failing loudly                            | 2.2.2 → 2.3.0                      |
+| `puppeteer-core` → `@puppeteer/browsers` → `extract-zip` (symlink path traversal) | **No** — `extract-zip` serves the browser DOWNLOAD path, and this repo always runs against an `executablePath`                                 | 24.x → 25.10 (major)               |
 
-The alarm above is wired correctly and calibrated wrongly: `--audit-level=high` fails on the one
-row nothing can act on (the puppeteer chain) and stays silent about the three that are reachable,
-because all three are moderate or low. A permanently-red non-blocking job is a job nobody reads,
-which is how reachable advisories stayed invisible in a repo that audits on every push.
+The puppeteer major was taken even though its advisory was unreachable: "unreachable" is a claim
+that has to be re-proved after every puppeteer change, which costs more over time than the upgrade
+did once. What it cost once was real — v25 ships ESM only, so the test suite now maps the package
+to a stub (`tests/support/puppeteer-core.stub.ts`) rather than parsing it, and `setContent` lost
+`networkidle0`, which `adapters/pdf.ts` replaced with `'load'`.
 
-| Catalog row (§14)                    | Control                                                                                                                                                                                      | Where                                       |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Install scripts                      | the runtime image installs with `--ignore-scripts`, so no transitive `postinstall` runs at build time                                                                                        | `.docker/Dockerfile.production`             |
-| Lockfile tampering                   | `npm ci`, never `npm install`, in both image stages — it installs exactly the lockfile and never rewrites it                                                                                 | `.docker/Dockerfile.production`             |
-| Third-party scripts / CDN compromise | no surface on this side: this process serves JSON and its own static files, and loads no remote script                                                                                       | —                                           |
-| Build-pipeline compromise            | the build stage IS the gate: `tsc --noEmit && eslint` must pass or no image is produced                                                                                                      | `.docker/Dockerfile.production`             |
-| Base-image vulnerabilities           | pinned to `node:25-alpine` by major only, so a rebuild picks up patches — and only a rebuild does                                                                                            | `.docker/Dockerfile.production`             |
-| Vulnerable dependencies              | `npm audit --omit=dev` runs on every push and PR, deliberately OUTSIDE the `ci` gate — a transitive high with no non-breaking fix must not block every merge, so it alerts rather than gates | `.github/workflows/ci.yml`, the `audit` job |
+| Catalog row (§14)                    | Control                                                                                                                                                                                         | Where                                       |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Install scripts                      | the runtime image installs with `--ignore-scripts`, so no transitive `postinstall` runs at build time                                                                                           | `.docker/Dockerfile.production`             |
+| Lockfile tampering                   | `npm ci`, never `npm install`, in both image stages — it installs exactly the lockfile and never rewrites it                                                                                    | `.docker/Dockerfile.production`             |
+| Third-party scripts / CDN compromise | no surface on this side: this process serves JSON and its own static files, and loads no remote script                                                                                          | —                                           |
+| Build-pipeline compromise            | the build stage IS the gate: `tsc --noEmit && eslint` must pass or no image is produced                                                                                                         | `.docker/Dockerfile.production`             |
+| Base-image vulnerabilities           | pinned to `node:25-alpine` by major only, so a rebuild picks up patches — and only a rebuild does                                                                                               | `.docker/Dockerfile.production`             |
+| Vulnerable dependencies              | `npm audit --omit=dev` runs on every push and PR, deliberately OUTSIDE the `ci` gate — a transitive finding with no non-breaking fix must not block every merge, so it alerts rather than gates | `.github/workflows/ci.yml`, the `audit` job |
 
 ## What is still open
 
@@ -359,17 +361,6 @@ loud. Two lists — decisions, and findings.
 
 ### Found by this walk, not yet answered
 
-- **§14 Vulnerable dependencies — the production tree has drifted, and the alarm's threshold
-  hides it.** Seven advisories. `mongoose`, `qs` and `body-parser` all have non-breaking fixes
-  that are simply not applied, and all three are below the `--audit-level=high` the CI job uses —
-  so the job is red for the unfixable puppeteer chain and quiet about the reachable ones. See the
-  supply-chain table above for which are actually reachable.
-- **§12 Over-privileged DB account.** The application connects as the Mongo ROOT user
-  (`authSource=admin`, the account `MONGO_INITDB_ROOT_*` creates). One compromised connection
-  string reads and drops every database on the instance, not just this one.
-- **§12 Exposed message broker / weak cache credentials.** Redis runs with no `requirepass`.
-  Network isolation — no published port — is the entire control, so a second container on the
-  compose network, or any SSRF primitive that later appears, reaches it unauthenticated.
 - **§17 Unverified email at signup / §3 pre-account-takeover.** Nothing enforces `verified`: no
   route, no middleware, no guard reads it. An account bound to an address its holder does not own
   can order, check out and pay. The OAuth link path is the only place that demands a verified

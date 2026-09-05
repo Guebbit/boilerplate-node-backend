@@ -18,9 +18,10 @@
 # this file passes through only what has to differ inside the network (service hostnames) or what
 # an operator should be able to override per environment without editing a committed file.
 #
-# The secrets that MUST NOT keep their example values: NODE_JWT_SECRET, NODE_JWT_REFRESH_SECRET,
-# NODE_METRICS_TOKEN, and the Mongo credentials below. `.env` is in `.dockerignore` and `.gitignore`
-# on purpose — it is mounted at runtime, never baked into the image.
+# The secrets that MUST NOT keep their example values: NODE_TOKEN_ACCESS, NODE_TOKEN_REFRESH,
+# NODE_METRICS_TOKEN, and the Mongo/Redis/RabbitMQ credentials below. `.env` is in
+# `.dockerignore` and `.gitignore` on purpose — it is mounted at runtime, never baked into the
+# image.
 
 services:
     app:
@@ -48,8 +49,10 @@ services:
             # Service hostnames on the compose network. These override whatever `.env` holds,
             # because `.env` is written for a developer running the API on the host against
             # localhost ports, and inside the network the names are the addresses.
-            NODE_DB_URI: 'mongodb://${MONGO_USER:-api}:${MONGO_PASSWORD:?set MONGO_PASSWORD in .env}@database:27017/${MONGO_DB:-api}?authSource=admin'
-            NODE_REDIS_URL: 'redis://cache:6379'
+            # No `?authSource=admin`: this user is created ON `MONGO_DB` itself (see
+            # `.docker/mongo-init.js`), so the database already in the path is its auth source.
+            NODE_DB_URI: 'mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}@database:27017/${MONGO_DB:-api}'
+            NODE_REDIS_URL: 'redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@cache:6379'
             NODE_RABBITMQ_URL: 'amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@queue:5672'
             NODE_PORT: '${NODE_PORT:-3000}'
             # One process per container. Scale with `--scale app=N` or with the orchestrator, not
@@ -83,14 +86,22 @@ services:
         image: docker.io/library/mongo:8
         restart: unless-stopped
         environment:
-            MONGO_INITDB_ROOT_USERNAME: '${MONGO_USER:-api}'
-            MONGO_INITDB_ROOT_PASSWORD: '${MONGO_PASSWORD:?set MONGO_PASSWORD in .env}'
+            # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
+            # (see `NODE_DB_URI` above and `.docker/mongo-init.js`), so a leaked connection
+            # string can never `dropDatabase` on another database or read `admin.system.users`.
+            MONGO_INITDB_ROOT_USERNAME: '${MONGO_ROOT_USER:-root}'
+            MONGO_INITDB_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}'
             MONGO_INITDB_DATABASE: '${MONGO_DB:-api}'
+            MONGO_APP_USER: '${MONGO_APP_USER:-api}'
+            MONGO_APP_PASSWORD: '${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}'
         volumes:
             - mongo-data:/data/db
+            # First-run only, same as the Umami init script: creates MONGO_APP_USER against an
+            # empty data directory and never runs again on that volume.
+            - ./.docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
         # No `ports:` entry, deliberately. The database is reachable from the compose network and
         # from nowhere else. Reach it for maintenance with
-        # `docker compose -f docker-compose.production.yml exec database mongosh`.
+        # `docker compose -f docker-compose.production.yml exec database mongosh -u "$MONGO_ROOT_USER" -p`.
         healthcheck:
             test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
             interval: 10s
@@ -103,11 +114,29 @@ services:
         restart: unless-stopped
         # `--save 60 1` keeps an RDB snapshot so a restart does not cold-start every cache key at
         # once. The cache is not a source of truth: losing it is a latency event, not a data loss.
-        command: ['redis-server', '--save', '60', '1', '--appendonly', 'no']
+        #
+        # `--requirepass`: this instance also backs the rate-limit store (see
+        # `NODE_RATE_LIMIT_REDIS_URL`'s fallback to `NODE_REDIS_URL`), so an unauthenticated
+        # reader on the compose network could reset rate-limit budgets or read another user's
+        # cached response, not just warm the cache.
+        command:
+            [
+                'redis-server',
+                '--save',
+                '60',
+                '1',
+                '--appendonly',
+                'no',
+                '--requirepass',
+                '${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}'
+            ]
         volumes:
             - redis-data:/data
         healthcheck:
-            test: ['CMD', 'redis-cli', 'ping']
+            # `-a` + `--no-auth-warning`: same password as `--requirepass` above, silencing
+            # redis-cli's "insecure on the command line" notice — this runs inside the
+            # container, never on a shared shell history.
+            test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', '--no-auth-warning', 'ping']
             interval: 10s
             timeout: 3s
             retries: 5

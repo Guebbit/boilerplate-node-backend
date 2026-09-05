@@ -19,13 +19,13 @@ cp .env-example .env
 
 Then edit `.env`. Three groups of values need real ones before the first deploy:
 
-| Variable                                  | Why                                                                                                                                                                          |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH` | JWT signing secrets. Any two long random strings — never the example values.                                                                                                 |
-| `NODE_METRICS_TOKEN`                      | Bearer credential a scraper needs to read `/observability/metrics`.                                                                                                          |
-| `MONGO_PASSWORD`, `RABBITMQ_PASSWORD`     | Not in `.env-example` at all — dev Mongo runs unauthenticated. Add both yourself; the compose file refuses to start without `MONGO_PASSWORD` (`RABBITMQ_PASSWORD` the same). |
+| Variable                                                                           | Why                                                                                                                                                       |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`                                          | JWT signing secrets. Any two long random strings — never the example values.                                                                              |
+| `NODE_METRICS_TOKEN`                                                               | Bearer credential a scraper needs to read `/observability/metrics`.                                                                                       |
+| `MONGO_ROOT_PASSWORD`, `MONGO_APP_PASSWORD`, `RABBITMQ_PASSWORD`, `REDIS_PASSWORD` | Not in `.env-example` at all — dev runs every one of these unauthenticated. Add all four yourself; the compose file refuses to start without any of them. |
 
-`MONGO_USER` and `MONGO_DB` default to `api` if left unset; `RABBITMQ_USER` defaults to `guest`.
+`MONGO_ROOT_USER` defaults to `root`, `MONGO_APP_USER` and `MONGO_DB` default to `api`, `RABBITMQ_USER` defaults to `guest`. `MONGO_ROOT_USER`/`MONGO_ROOT_PASSWORD` are maintenance-only — the app itself authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to `MONGO_DB` and created by `.docker/mongo-init.js` the first time the volume is empty.
 
 ```bash
 docker compose -f docker-compose.production.yml up -d --build
@@ -48,14 +48,14 @@ network. That is deliberate, see [Putting a reverse proxy in front](#putting-a-r
 
 ## What's different from dev
 
-| Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                            |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                               |
-| API port published to all interfaces                        | API port published to `127.0.0.1` only                                  |
-| Full observability stack included                           | No observability containers — see [below](#observability-in-production) |
-| `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always          |
-| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image                       |
-| Mongo has no auth                                           | Mongo requires `MONGO_USER` / `MONGO_PASSWORD`                          |
+| Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                    |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                       |
+| API port published to all interfaces                        | API port published to `127.0.0.1` only                                                          |
+| Full observability stack included                           | No observability containers — see [below](#observability-in-production)                         |
+| `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always                                  |
+| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image                                               |
+| Mongo and Redis have no auth                                | Mongo runs a scoped `readWrite` app user behind a root account, Redis requires `REDIS_PASSWORD` |
 
 Clustering is off on purpose: scale replicas with `--scale app=N` or an orchestrator instead, so
 one thing decides how many processes are live, not two layers of process management fighting a

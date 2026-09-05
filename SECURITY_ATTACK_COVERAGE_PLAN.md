@@ -22,40 +22,46 @@ replaces the old "Not mitigated" list. Two headline results:
 
 ## Findings that need a change, in the order worth doing them
 
-### 1. The audit alarm is inverted — it is red for what cannot be fixed and silent about what can
+### 1. ~~The audit alarm is inverted~~ — DONE
 
-**The CI wiring is not the problem.** `.github/workflows/ci.yml`'s `audit` job runs
-`npm audit --omit=dev --audit-level=high` on every push and PR, and is deliberately excluded from
-the `ci` gate's `needs:` — an alert, not a blocker, for exactly the reason its own comment gives:
-a transitive high with no non-breaking fix would otherwise block every merge indefinitely. That
-was the right call and it should stay.
+The production tree went from 7 advisories (3 high) to **one `low`** — `esbuild`'s dev-server file
+read, unreachable because `tsx` uses esbuild as a transpiler and never starts its server. The CI
+threshold is now `--audit-level=moderate`, so the job is green and the next reachable advisory is
+not filtered out the way these were.
 
-The problem is what the threshold lets through. Severities in the current production tree:
+| Package          | From   | To     |
+| ---------------- | ------ | ------ |
+| `mongoose`       | 9.3.3  | 9.9.5  |
+| `qs`             | 6.15.3 | 6.16.0 |
+| `body-parser`    | 2.2.2  | 2.3.0  |
+| `puppeteer-core` | 24.40  | 25.10  |
 
-| Severity | Package                | Advisory                                                   | Reachable here                                     | Fix          |
-| -------- | ---------------------- | ---------------------------------------------------------- | -------------------------------------------------- | ------------ |
-| high     | `puppeteer-core` chain | `extract-zip` unvalidated symlink path traversal           | **no** — the browser-DOWNLOAD path, unused         | major bump   |
-| moderate | `mongoose`             | prototype pollution via `__proto__`-prefixed dotted path   | **yes** — every write goes through it              | non-breaking |
-| moderate | `qs`                   | array-limit bypass; DoS via attacker-controlled `isBuffer` | **yes** — `express.urlencoded({ extended: true })` | non-breaking |
-| low      | `body-parser`          | an invalid `limit` silently disables size enforcement      | operator-triggered via `NODE_JSON_BODY_LIMIT`      | non-breaking |
-| low      | `esbuild`              | file read via its dev server on Windows                    | **no** — `tsx` uses it as a transpiler only        | non-breaking |
+**Two things were not the non-breaking bumps `npm audit fix` advertises**, and both are worth
+knowing before the next dependency pass:
 
-`--audit-level=high` fails the job on the ONE row nobody can act on and says nothing about the
-three that are both reachable and trivially fixable. The job has therefore been red for a while,
-and a permanently-red non-blocking job is a job nobody reads — which is how three reachable
-advisories stayed invisible in a repo that audits on every push.
+- **mongoose's own types broke, on a MINOR bump.** 9.9 stopped accepting `unknown` in the
+  `TQueryHelpers` slot, so `Model<Doc, unknown, …>` in `orders`, `products` and `users` no longer
+  compiled — those three were the outliers, the other ten models already used the default, so the
+  fix made them consistent rather than working around anything. A second break needed the
+  `QueryFilter` cast `create-repository.ts` already uses, because spreading a
+  `Record<string, unknown>` scope widens the filter past what the generic accepts. Bisecting showed
+  the advisory is patched from **9.7.4** and that EVERY patched version has that second break —
+  there was no version that both closed the advisory and compiled untouched.
+- **puppeteer-core 25 is ESM-only** and dropped its CommonJS build. Any jest suite reaching
+  `adapters/pdf.ts`, even transitively through a route table, failed to PARSE. Carving it into
+  `transformIgnorePatterns` just moved the error to `@puppeteer/browsers` and would have cascaded;
+  a lazy `import()` does not help either, since `tsconfig.jest.json` is `module: node16` and
+  downlevels it to `require()`. The suite now maps the package to
+  `tests/support/puppeteer-core.stub.ts`, whose `launch` THROWS — nothing wanted the real package
+  (CI installs no Chromium, `INSTALL_CHROMIUM` defaults to false), and a silent no-op would let a
+  test pass while asserting nothing. v25 also removed `networkidle0` from `setContent`, replaced
+  with `'load'`; the invoice template loads nothing external, so it costs nothing.
 
-**Do, in this order:**
+The allowlist from step 4 was NOT built — the puppeteer major removed the only advisory that
+would have needed one. Still the right move if an unfixable finding ever parks the job on red;
+`ci.yml`'s own comment now says so.
 
-1. `npm audit fix` — clears `mongoose`, `qs`, `body-parser`, `esbuild`, non-breaking.
-2. Decide on `puppeteer-core@25`. The PDF adapter is the only consumer and its surface is two
-   functions, so the major is cheap. Taking it makes the job green, which is worth more than the
-   "not reachable" argument — that argument has to be re-proved after every puppeteer change.
-3. Once the noise is gone, **lower the threshold to `--audit-level=moderate`**. The reachable
-   findings in this tree were all moderate or low; a high-only alarm would not have caught any of
-   them. Keep the job out of `needs:` either way.
-
-### 2. Mongo runs as root — bad, but bounded, and worth fixing while nothing is on fire
+### 2. ~~Mongo runs as root~~ — DONE
 
 **Is this bad?** Not as an entry point. It is not exploitable as the stack ships: the database
 publishes no port, and the connection string only exists inside the app container. Nothing in this
@@ -75,10 +81,12 @@ With a `readWrite`-on-one-database user, the same leak gets an attacker exactly 
 application could already read anyway. That is the whole delta, and it is why this is worth a day
 rather than a sprint.
 
-**Do:** a Mongo init script that creates a scoped `readWrite` user on the app's database, and a
-compose change to connect as it. Keep the root account for maintenance only.
+**Done:** `.docker/mongo-init.js` creates a scoped `readWrite` user on `MONGO_DB` the first time
+the volume is empty, and `docker-compose.production.yml` connects as it (`MONGO_APP_USER` /
+`MONGO_APP_PASSWORD`) instead of root. `MONGO_ROOT_USER` / `MONGO_ROOT_PASSWORD` remain, for
+maintenance access only.
 
-### 3. Redis has no password — and it holds more than a cache
+### 3. ~~Redis has no password~~ — DONE
 
 **What is actually at stake.** Redis here is not only the response cache: it is also the
 rate-limit store (`infrastructure/http/middlewares/rate-limit-store.ts`, a separate connection to
@@ -102,7 +110,9 @@ network position first. But `--requirepass` is one line in the compose command a
 URL, on the same `:?`-refuses-to-start pattern `MONGO_PASSWORD` and `RABBITMQ_PASSWORD` already
 use. There is no reason for it to be the one credential that trusts the network.
 
-**Do:** add `--requirepass` and carry it in `NODE_REDIS_URL` / `NODE_RATE_LIMIT_REDIS_URL`.
+**Done:** `docker-compose.production.yml`'s `cache` service now runs `--requirepass`
+(`REDIS_PASSWORD`), and `NODE_REDIS_URL` carries it. `NODE_RATE_LIMIT_REDIS_URL` needed no
+change — unset, it already falls back to `NODE_REDIS_URL`.
 
 ### 4. Email verification is enforced nowhere — moved out
 
@@ -175,10 +185,9 @@ the verdict. Both pages keep linking back to the shared catalog.
 
 ## Sequencing
 
-1. **Finding 1** — `npm audit fix` first, then the puppeteer decision, then lower the threshold.
-   No design work, and it turns the alarm back into something worth reading.
-2. **Findings 2 and 3** — mechanical, touch compose and `.env-example` only, and both are cheaper
-   now than after anything else changes around them.
+1. ~~**Finding 1**~~ — done. Advisories closed, threshold recalibrated, gate green.
+2. ~~**Findings 2 and 3**~~ — done. Mongo connects as a scoped `readWrite` user, Redis requires
+   `--requirepass`; both touched `docker-compose.production.yml` only.
 3. **Finding 6**, and finding 7's first bullet — an hour each.
 4. **[`EMAIL_VERIFICATION_PLAN.md`](EMAIL_VERIFICATION_PLAN.md)** — its own plan, starting with
    the mount decision it opens on.

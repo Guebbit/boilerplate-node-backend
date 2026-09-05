@@ -45,6 +45,12 @@ export default tseslint.config(
          * rules written for the app on a file the app never loads.
          */
         'k6/**',
+        /*
+         * Mongo's own init convention: a script mongosh runs directly against `db`, a global
+         * that mongosh injects and this project never defines. Same shape as the k6 scripts
+         * above — foreign runtime, not this project's JavaScript.
+         */
+        '.docker/mongo-init.js',
         '**/node_modules/**',
         '**/dist/**',
         '**/coverage/**',
