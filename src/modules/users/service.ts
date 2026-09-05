@@ -37,7 +37,13 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
  * 422 the contract promises. Takes `unknown` since this is the boundary that establishes the type.
  */
 export const validateData = (userData: unknown, requirePassword = true): ResponseErrorItem[] => {
-    const schema = requirePassword ? zodUserSchema : zodUserSchema.partial({ password: true });
+    // `.strip()`: loosen only here, not on `zodUserSchema` itself. A PUT body legitimately
+    // carries `id` — row identity, not user data — and `zodUserSchema` stays strict for its
+    // other callers (signup, `PUT /account`), which must refuse a field their own contract
+    // never declared.
+    const schema = (
+        requirePassword ? zodUserSchema : zodUserSchema.partial({ password: true })
+    ).strip();
 
     const parseResult = schema.safeParse(userData);
     if (!parseResult.success) return validationErrors(parseResult.error);

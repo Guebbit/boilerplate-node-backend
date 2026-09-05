@@ -97,7 +97,10 @@ describe('updateProfile', () => {
     it('cannot escalate: admin, active and password do not pass through', async () => {
         const user = await createUser();
 
-        asSuccess(
+        // `zodProfileSchema` is strict — `admin`/`active`/`password` aren't fields `PUT
+        // /account` accepts, so the whole body is refused rather than applying `username` and
+        // silently dropping the rest.
+        const response = asReject(
             await updateProfile(
                 user.id,
                 {
@@ -109,6 +112,7 @@ describe('updateProfile', () => {
                 testCallerContext
             )
         );
+        expect(response.status).toBe(422);
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(stored?.admin).toBe(false);

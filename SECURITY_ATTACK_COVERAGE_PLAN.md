@@ -121,14 +121,15 @@ to be two problems sharing one mechanism — nothing reads `verified`, AND an em
 new address before it is proven while never telling the old one — plus a product decision about
 where the guard mounts. Too much to carry as a bullet here.
 
-### 5. Anti-automation is rate limits and one honeypot — scoping, not implementation
+### 5. ~~Anti-automation~~ — moved out
 
-No CAPTCHA, proof-of-work or device signal anywhere, and the rate limits are per address, which a
-distributed client does not have one of. This is a real gap and also a genuine boilerplate
-question: a CAPTCHA is a third-party dependency and a privacy decision, not a line of code. Worth
-naming a recommended integration point rather than shipping one.
+Split into its own plan: [`ANTI_AUTOMATION_PLAN.md`](ANTI_AUTOMATION_PLAN.md). It grew past a
+bullet once the shape became clear — four independent rungs, each switched on by one environment
+variable and each off by default, because a boilerplate must not choose a CAPTCHA vendor on a
+project's behalf. The free tier (identity-keyed rather than address-keyed limits) is the part that
+should have been there already.
 
-### 6. `additionalProperties: false` is decorative at runtime — an hour
+### 6. ~~`additionalProperties: false` is decorative at runtime~~ — DONE
 
 **What the problem is: the contract states a rule that nothing enforces.** Every module fragment
 declares `additionalProperties: false` on its request bodies. orval turns that into
@@ -148,20 +149,41 @@ truthfulness, and it is paid by everything downstream that believes the contract
 - and the day someone cites "the contract rejects unknown fields" as a security argument in a
   review, they will be wrong.
 
-**Do:** pick one and make the two agree — either configure orval to emit `.strict()`, or drop
-`additionalProperties: false` from the fragments so the contract stops promising it. Making them
-strict is the better half of the trade: it is the behaviour the contract already describes, and
-`parseBody` already answers 422 for a Zod failure, so no controller changes.
+**Done:** `orval.config.ts` sets `override.zod.strict.body = true` — `body` only, since no
+controller ever runs a generated response schema through `safeParse` at runtime, so making those
+strict too would add risk for no gain. `parseBody` needed no change: it already answers 422 for
+any `ZodError`, `unrecognized_keys` included.
+
+Two hand-composed schemas turned out to inherit strictness from the generated body schemas they
+build on, and needed a decision each rather than a blanket exemption:
+
+- `updateProfile`'s `zodProfileSchema` (`PUT /account`) is now correctly strict — `admin`,
+  `active` and `password` are refused outright rather than silently dropped, which is the
+  intended tightening. The escalation test in `self-service.test.ts` was updated to assert the
+  422 instead of a success that ignored the extra fields.
+- `userService.validateData`, the admin panel's create/edit FORM validator, calls `.strip()` on
+  its schema locally rather than inheriting strict from `zodUserSchema`: a PUT body legitimately
+  carries `id` — row identity, not user data — so this ONE caller stays lenient while
+  `zodUserSchema`'s other callers (signup, the schema `validateData` itself builds on) keep the
+  strictness their own contracts require.
 
 ### 7. Smaller, and honest about being smaller
 
-- **Slow HTTP.** Node's `headersTimeout`/`requestTimeout` defaults are unchanged and unaudited.
-  Nothing in-process bounds a slow-read client.
-- **Queue messages are shape-checked, not schema-parsed.** Acceptable while this application is
-  the only producer; stops being acceptable the day it is not.
-- **The PSP is a stub.** The whole webhook half of §20 reads "no surface" because
-  `payments/providers/fake.ts` never talks to anything. A real integration brings callback
-  forgery, callback replay and 3-D Secure back in one commit, and none of those controls exist.
+- ~~**Slow HTTP.**~~ Done: `applyServerTimeouts` sets `headersTimeout` 15s and `requestTimeout`
+  120s (Node ships 60s/300s), both configurable. Verified empirically first — `headersTimeout`
+  counts from a request's first byte rather than the socket's, so it may safely sit below
+  `keepAliveTimeout`, and `requestTimeout` bounds receipt only, so tightening it cannot cut off a
+  slow PDF render. `keepAliveTimeout` is exposed at Node's own 5s: the right value depends on the
+  proxy in front, and guessing it causes the 502s it is meant to prevent.
+- ~~**Queue messages are shape-checked, not schema-parsed.**~~ Done: `gen:asyncapi` now emits a Zod
+  validator beside each payload interface, and `consumeFromQueue` takes the matching schema. A
+  message that fails it dead-letters rather than requeueing, and `.strict()` means a field the
+  contract never declared is refused rather than passed through.
+- ~~**The PSP is a stub.**~~ Done, as documentation rather than code: the three requirements a real
+  provider must meet — verify the signature over the raw body, refuse a repeated event id, never
+  trust a browser-reported status — are stated on the provider port, where whoever writes the
+  integration passes through before writing the happy path. The "no surface" verdicts elsewhere are
+  now explicitly conditional on the stub.
 
 ## The other half: the frontend has no page at all
 
@@ -188,8 +210,9 @@ the verdict. Both pages keep linking back to the shared catalog.
 1. ~~**Finding 1**~~ — done. Advisories closed, threshold recalibrated, gate green.
 2. ~~**Findings 2 and 3**~~ — done. Mongo connects as a scoped `readWrite` user, Redis requires
    `--requirepass`; both touched `docker-compose.production.yml` only.
-3. **Finding 6**, and finding 7's first bullet — an hour each.
+3. ~~**Finding 6**~~ — done. Finding 7's three bullets are also done (see above).
 4. **[`EMAIL_VERIFICATION_PLAN.md`](EMAIL_VERIFICATION_PLAN.md)** — its own plan, starting with
    the mount decision it opens on.
 5. **The frontend page** — its own session, its own repo, same discipline.
-6. **Finding 5 and finding 7's remaining bullets** — recorded, deliberately not scheduled.
+6. **[`ANTI_AUTOMATION_PLAN.md`](ANTI_AUTOMATION_PLAN.md)** — its own plan; rung 1 is the part
+   worth doing regardless of whether any vendor is ever switched on.

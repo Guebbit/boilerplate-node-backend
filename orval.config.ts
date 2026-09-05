@@ -30,7 +30,19 @@ export default defineConfig({
             // 'zod'   - schemas/types only, no call functions (current choice) - matches how this project actually uses generated api code
             // 'hono'  - generates server-side route-handler scaffolding - requires the Hono framework, not Express
             // 'mcp'   - generates an MCP server exposing these endpoints as tools for LLM agents
-            client: 'zod'
+            client: 'zod',
+            override: {
+                zod: {
+                    // Every fragment already declares `additionalProperties: false` on request
+                    // bodies; without this, orval emits a plain `zod.object({…})`, which Zod
+                    // SILENTLY STRIPS unknown keys from rather than rejecting — so the generated
+                    // validator was weaker than the contract it came from. `body` only: no
+                    // controller reads a generated response schema at runtime, so making those
+                    // strict too would change nothing but risk.
+                    // https://orval.dev/docs/reference/configuration/output#strict
+                    strict: { body: true }
+                }
+            }
         }
     }
 });
