@@ -7,16 +7,19 @@
  * `db:migrate:up && db:seed`, and on a long-lived database the two interleave the other way round
  * — rows were seeded months ago and a migration lands on top of them.
  *
- * Eight of the twelve migrations rewrite DATA rather than indexes, and one of them
- * (`20260806140000-image-url-separators.js`) rewrites `imageUrl` on products, on users, and inside
- * every order's embedded product snapshot, matching against a hardcoded list of fixture filenames.
- * A fixture whose image name drifts from that list leaves the migration rewriting seeded rows into
- * a shape the artefact does not record — and every other gate stays green while it does:
+ * Both orders matter, and each can break differently:
  *
- *   - `check:seed-export` re-runs the migration-free path, so it agrees with itself;
- *   - `seed-conformance.test.ts` validates the artefact against the generated schemas, which the
- *     drifted rows would still satisfy;
- *   - `check:spec-identity` compares the frontend's copy to this one, and both are the same file.
+ *   - MIGRATE THEN SEED. The migration builds unique indexes before a single row exists, so a
+ *     seeder writing two rows that collide on one of them fails here and nowhere else — every
+ *     other suite seeds into a database that has never been migrated.
+ *   - SEED THEN MIGRATE. A migration that rewrites DATA acts on rows the artefact already
+ *     describes, leaving them in a shape nothing else notices:
+ *
+ *       - `check:seed-export` re-runs the migration-free path, so it agrees with itself;
+ *       - `seed-conformance.test.ts` validates the artefact against the generated schemas, which
+ *         the rewritten rows would still satisfy;
+ *       - `check:spec-identity` compares the frontend's copy to this one, and both are the same
+ *         file.
  *
  * Nothing else puts a migration and a seeder in the same database. This does, in both orders, and
  * asserts the result is byte-identical to what is committed.
@@ -32,8 +35,8 @@
  * design removes in the first place.
  *
  * ── DELIBERATELY NOT ASSERTED ────────────────────────────────────────────────────────────────────
- * That the migrations produce the artefact from an UNSEEDED database. They cannot — most of them
- * rewrite rows the seeders write, so there is nothing to act on. Seeding is what creates the data;
+ * That the migrations produce the artefact from an UNSEEDED database. They cannot — a migration
+ * acts on rows the seeders write, so there is nothing to act on. Seeding is what creates the data;
  * migrating is what is allowed to leave it alone.
  */
 
@@ -56,9 +59,9 @@ const runSeeders = () =>
 /**
  * Empty every collection without dropping the database.
  *
- * Dropping would take the indexes with it, and several migrations only create an index once — so a
- * later case would run against a database missing what an earlier one built, and fail for a reason
- * that has nothing to do with the dataset.
+ * Dropping would take the indexes with it, and the migration only creates them once — so a later
+ * case would run against a database missing what an earlier one built, and fail for a reason that
+ * has nothing to do with the dataset.
  */
 const wipeRows = async () => {
     const collections = await nativeDb().collections();

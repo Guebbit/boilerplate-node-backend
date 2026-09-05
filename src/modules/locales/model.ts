@@ -30,7 +30,7 @@ export interface LocaleDocument extends Omit<Language, 'id' | 'createdAt' | 'upd
 }
 
 /** Mongoose document type for one translated string. */
-export interface LocaleMessageDocument
+export interface LocaleEntryDocument
     extends Omit<LocaleEntry, 'id' | 'createdAt' | 'updatedAt'>, Document {
     createdAt?: Date;
     updatedAt?: Date;
@@ -40,7 +40,7 @@ export interface LocaleMessageDocument
 export type LocaleModel = Model<LocaleDocument>;
 
 /** Mongoose model type for the entries collection. */
-export type LocaleMessageModel = Model<LocaleMessageDocument>;
+export type LocaleEntryModel = Model<LocaleEntryDocument>;
 
 /** The languages. */
 export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
@@ -119,9 +119,9 @@ localeSchema.pre('validate', function derivesBaseLanguage() {
 });
 
 /*
- * Named explicitly, not derived: `db/migrations/20260817140000-locale-collections.js` creates
- * this same index under this same name, and a derived name would conflict at boot on migrated
- * databases (see `users/model.ts`).
+ * Named explicitly, not derived: `db/migrations/20260905000000-baseline.js` creates this same
+ * index under this same name, and a derived name would conflict at boot on migrated databases
+ * (see `users/model.ts`).
  *
  * UNIQUE on tag: a language is created by check-then-insert, so only the database can refuse two
  * concurrent creations of `es`.
@@ -129,7 +129,7 @@ localeSchema.pre('validate', function derivesBaseLanguage() {
 localeSchema.index({ tag: 1 }, { name: 'locales_tag', unique: true });
 
 /** The words. One row per (language, tenant, key). */
-export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessageModel>(
+export const localeEntrySchema = new Schema<LocaleEntryDocument, LocaleEntryModel>(
     {
         /*
          * The language's `tag`, stored as a string rather than an ObjectId reference — the read
@@ -149,7 +149,6 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
          *
          * A plain string, not an enum: which tenants exist is configuration (`./tenants`), and the
          * service refuses an unknown one with 422 before a row is written.
-         * `db/migrations/20260822120000-locale-entry-tenant.js` renames the old `scope` column.
          */
         tenant: {
             type: String,
@@ -189,31 +188,30 @@ export const localeMessageSchema = new Schema<LocaleMessageDocument, LocaleMessa
  *
  * `tenant` sits in the middle, not the end: a compound index serves any PREFIX of its keys, so
  * this one answers both `find({ locale, tenant })` (the per-download read) and `find({ locale })`
- * (the admin listing) without a scan. No separate `locale`-only index for that reason —
- * `db/migrations/20260808180000-prune-unused-indexes.js` removed it.
+ * (the admin listing) without a scan. No separate `locale`-only index for that reason.
  */
-localeMessageSchema.index(
+localeEntrySchema.index(
     { locale: 1, tenant: 1, key: 1 },
-    { name: 'localeMessages_locale_tenant_key', unique: true }
+    { name: 'localeEntries_locale_tenant_key', unique: true }
 );
 
 /** Normalizes a serialized language: `_id` → `id`, drops `__v`. */
 export const applyLocaleTransform = applySerialization(localeSchema);
 
 /** Normalizes a serialized entry, for the lean results `search()` returns. */
-export const applyLocaleMessageTransform = applySerialization(localeMessageSchema);
+export const applyLocaleEntryTransform = applySerialization(localeEntrySchema);
 
 /** Language model entrypoint. */
 export const localeModel = model<LocaleDocument, LocaleModel>('Locale', localeSchema);
 
 /**
- * Entry model entrypoint.
+ * Entry model entrypoint. One row per (language, tenant, key) — the stored dictionary, as opposed
+ * to `LocaleMessages`, which is the flat map assembled from these rows and served to a client.
  *
- * Mongoose derives the collection name by lowercasing and pluralising, so this is `localemessages`
- * on disk — the same derivation that gives `audit-logs` its `auditlogs`. The migration and the
- * exported dataset name it accordingly.
+ * Mongoose derives the collection name by lowercasing and pluralising, so this is `localeentries`
+ * on disk — the same derivation that gives `audit-logs` its `auditlogs`.
  */
-export const localeMessageModel = model<LocaleMessageDocument, LocaleMessageModel>(
-    'LocaleMessage',
-    localeMessageSchema
+export const localeEntryModel = model<LocaleEntryDocument, LocaleEntryModel>(
+    'LocaleEntry',
+    localeEntrySchema
 );

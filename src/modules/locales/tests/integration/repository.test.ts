@@ -9,7 +9,7 @@
 import { BACKEND, FRONTEND } from '../unit/tenants.fixture';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/fixtures';
-import { localeMessageRepository, localeRepository } from '@modules/locales/repository';
+import { localeEntryRepository, localeRepository } from '@modules/locales/repository';
 import type { LocaleDocument } from '@modules/locales/model';
 import { localeService } from '@modules/locales/services';
 
@@ -26,7 +26,7 @@ const givenLanguage = async (
     );
 
     for (const [key, value] of Object.entries(entries))
-        await localeMessageRepository.create(
+        await localeEntryRepository.create(
             makeLocaleEntry({ locale: tag, tenant: FRONTEND, key, value })
         );
 
@@ -35,7 +35,7 @@ const givenLanguage = async (
 
 /** One row in one tenant, written past the service so the tenant is exactly what a test says. */
 const givenEntry = (locale: string, tenant: string, key: string, value: string) =>
-    localeMessageRepository.create(makeLocaleEntry({ locale, tenant, key, value }));
+    localeEntryRepository.create(makeLocaleEntry({ locale, tenant, key, value }));
 
 /** The language's revision as stored right now. */
 const revisionOf = async (tag: string): Promise<number> => {
@@ -53,7 +53,7 @@ describe('the revision counter', () => {
     it('moves when a key is added', async () => {
         await givenLanguage('es');
 
-        await localeMessageRepository.createEntry('es', FRONTEND, {
+        await localeEntryRepository.createEntry('es', FRONTEND, {
             key: 'cart.title',
             value: 'Carrito'
         });
@@ -63,18 +63,18 @@ describe('the revision counter', () => {
 
     it('moves when a value is edited', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
-        const entry = await localeMessageRepository.findOne({ locale: 'es' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
 
-        await localeMessageRepository.saveEntryValue(entry!, 'Tu carrito');
+        await localeEntryRepository.saveEntryValue(entry!, 'Tu carrito');
 
         expect(await revisionOf('es')).toBe(1);
     });
 
     it('moves when a key is removed', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
-        const entry = await localeMessageRepository.findOne({ locale: 'es' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
 
-        await localeMessageRepository.removeEntry(entry!);
+        await localeEntryRepository.removeEntry(entry!);
 
         expect(await revisionOf('es')).toBe(1);
     });
@@ -82,7 +82,7 @@ describe('the revision counter', () => {
     it('moves once for a whole import, not once per row', async () => {
         await givenLanguage('es');
 
-        await localeMessageRepository.importEntries(
+        await localeEntryRepository.importEntries(
             'es',
             FRONTEND,
             [
@@ -109,7 +109,7 @@ describe('the revision counter', () => {
         await givenLanguage('es');
         await givenLanguage('it');
 
-        await localeMessageRepository.createEntry('es', FRONTEND, {
+        await localeEntryRepository.createEntry('es', FRONTEND, {
             key: 'cart.title',
             value: 'Carrito'
         });
@@ -122,7 +122,7 @@ describe('importEntries', () => {
     it('counts what it created and what it overwrote', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
-        const { counts } = await localeMessageRepository.importEntries(
+        const { counts } = await localeEntryRepository.importEntries(
             'es',
             FRONTEND,
             [
@@ -142,7 +142,7 @@ describe('importEntries', () => {
     it('deletes what the body did not name, when replacing', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito', 'cart.empty': 'Vacío' });
 
-        const { counts } = await localeMessageRepository.importEntries(
+        const { counts } = await localeEntryRepository.importEntries(
             'es',
             FRONTEND,
             [{ key: 'cart.title', value: 'Tu carrito' }],
@@ -150,20 +150,20 @@ describe('importEntries', () => {
         );
 
         expect(counts.removed).toBe(1);
-        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('leaves what the body did not name, when merging', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito', 'cart.empty': 'Vacío' });
 
-        const { counts } = await localeMessageRepository.importEntries(
+        const { counts } = await localeEntryRepository.importEntries(
             'es',
             FRONTEND,
             [{ key: 'cart.title', value: 'Tu carrito' }],
             { replace: false }
         );
 
-        const remaining = await localeMessageRepository.listKeys('es', FRONTEND);
+        const remaining = await localeEntryRepository.listKeys('es', FRONTEND);
 
         expect(counts.removed).toBe(0);
         expect(remaining.toSorted()).toEqual(['cart.empty', 'cart.title']);
@@ -174,21 +174,21 @@ describe('importEntries', () => {
         // route sits behind an admin token and an audit record rather than behind a confirmation.
         await givenLanguage('es', { 'cart.title': 'Carrito' });
 
-        const { counts } = await localeMessageRepository.importEntries('es', FRONTEND, [], {
+        const { counts } = await localeEntryRepository.importEntries('es', FRONTEND, [], {
             replace: true
         });
 
         expect(counts.removed).toBe(1);
-        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual([]);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual([]);
     });
 
     it('touches only the language it was given', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
         await givenLanguage('it', { 'cart.title': 'Carrello' });
 
-        await localeMessageRepository.importEntries('es', FRONTEND, [], { replace: true });
+        await localeEntryRepository.importEntries('es', FRONTEND, [], { replace: true });
 
-        expect(await localeMessageRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
+        expect(await localeEntryRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
     });
 });
 
@@ -201,7 +201,7 @@ describe('deleting a language', () => {
         expect(result.success).toBe(false);
         expect(result.status).toBe(409);
         // Nothing was destroyed on the way to the refusal.
-        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('cascades its entries once it is inactive', async () => {
@@ -218,7 +218,7 @@ describe('deleting a language', () => {
         expect(result.success).toBe(true);
         expect(result.data).toEqual({ removedEntries: 2 });
         expect(await localeRepository.findByTag('es')).toBeNull();
-        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual([]);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual([]);
     });
 
     it('leaves another language’s strings standing', async () => {
@@ -227,7 +227,7 @@ describe('deleting a language', () => {
 
         await localeService.deleteLanguage('es');
 
-        expect(await localeMessageRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
+        expect(await localeEntryRepository.listKeys('it', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('404s for a language that was never registered', async () => {
@@ -337,7 +337,7 @@ describe('importEntries, through the service', () => {
         );
 
         expect(result.status).toBe(409);
-        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual([]);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual([]);
     });
 
     it('refuses a merge that would collide with a key it is leaving standing', async () => {
@@ -370,7 +370,7 @@ describe('importEntries, through the service', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual(['products.list']);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['products.list']);
     });
 
     it('refuses a batch naming one key twice', async () => {
@@ -446,7 +446,7 @@ describe('updateEntry and deleteEntry', () => {
         // would silently edit Spanish.
         await givenLanguage('es', { 'cart.title': 'Carrito' });
         await givenLanguage('it');
-        const entry = await localeMessageRepository.findOne({ locale: 'es' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
 
         const updated = await localeService.updateEntry('it', String(entry!._id), {
             value: 'Carrello'
@@ -455,12 +455,12 @@ describe('updateEntry and deleteEntry', () => {
 
         expect(updated.status).toBe(404);
         expect(deleted.status).toBe(404);
-        expect(await localeMessageRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
     });
 
     it('edits the value and leaves the key alone', async () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
-        const entry = await localeMessageRepository.findOne({ locale: 'es' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
 
         const result = await localeService.updateEntry('es', String(entry!._id), {
             value: 'Tu carrito'
@@ -511,7 +511,7 @@ describe('countEntriesByLocale', () => {
         await givenLanguage('es', { a: '1', b: '2' });
         await givenLanguage('it', { a: '1' });
 
-        const counts = await localeMessageRepository.countEntriesByLocale();
+        const counts = await localeEntryRepository.countEntriesByLocale();
 
         expect([...counts].toSorted()).toEqual([
             ['es', 2],

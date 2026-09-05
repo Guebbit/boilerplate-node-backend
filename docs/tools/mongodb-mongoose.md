@@ -73,7 +73,7 @@ module.exports = {
 };
 ```
 
-Name files with a timestamp prefix so they run in order, e.g. `20240101000000-initial-indexes.js`.
+Name files with a timestamp prefix so they run in order, e.g. `20260905000000-baseline.js`.
 
 ### The index rule
 
@@ -86,16 +86,20 @@ They collide on **names**. Mongo treats an index's name as part of its identity,
 
 > **The rule: an index may be declared on the schema, in a migration, or in both — but if in both, they must give it the same name.**
 
-**Declare indexes on the schema.** That is the rule for anything new: one author, so nothing can disagree. A migration is still the only way to _drop_ an index — a schema can say what should exist, not what should stop existing — and the only way to build one on a deployed database ahead of the code that needs it.
+**Declare indexes on the schema.** That is where an index is authored — one author, so nothing can disagree. A migration is still the only way to _drop_ an index: a schema says what should exist, not what should stop existing.
 
-| Collection                                 | Where its indexes are declared                                                                                                                                                               |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `carts`, `feedback-requests`, `audit-logs` | Schema only. Mongoose names them.                                                                                                                                                            |
-| `users`, `products`, `orders`              | Schema, **and** `20240101000000-initial-indexes.js` under the same explicit names. That migration is already applied everywhere, so it agrees with the schema rather than competing with it. |
+`db/migrations/20260905000000-baseline.js` then mirrors that declaration, so `db:migrate:up` alone is enough to put the whole index set in place — including the ten unique constraints that are correctness, not speed. Without it those would exist only because `autoIndex` is on, and would silently vanish the day it is turned off.
+
+| Index                                          | Where it is built                                                                                                                                                                                                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Everything except TTL                          | Schema **and** the baseline, same key spec and same name. The baseline is grouped by owning module, which is who decides an entry belongs there.                                                                                                      |
+| TTL — `auditlogs`, `carts`, `feedbackrequests` | Schema only. `expireAfterSeconds` comes from an env var, and a second copy of that arithmetic in a migration could disagree with the schema's and make every boot a conflict. Changing a live window is a `collMod` — see [Ops](../reference/ops.md). |
+
+Adding an index is therefore two edits: the schema, then the baseline's table. The test below fails if you do only one.
 
 Options count too: same key and name but a different `unique`, `expireAfterSeconds` or partial filter fails the same way.
 
-`tests/unit/db/migration-model-indexes.test.ts` enforces this. It runs every migration and every model's index build against one database in both orders, and fails on a conflict or on two indexes sharing a key — the state no other suite can reach, since every other test runs on a database that has never been migrated.
+`tests/integration/db/migration-model-indexes.test.ts` enforces this. It runs every migration and every model's index build against one database in both orders, and fails on a conflict or on two indexes sharing a key — the state no other suite can reach, since every other test runs on a database that has never been migrated.
 
 ---
 

@@ -25,9 +25,9 @@ const CREDENTIAL_FIELDS =
     '+password +tokens +twoFactorMethods +twoFactorBackupCodes +oauthAccounts';
 
 /**
- * The clause every login-adjacent lookup filters on: `active` may be absent on a row written
- * before `db/migrations/20260808120000-user-active-column.js`, so `{ $ne: false }` rather than
- * `true`. Shared by `findAuthenticatableById` and `findByTokenValue` so the two can't drift.
+ * The clause every login-adjacent lookup filters on. `{ $ne: false }` rather than `true`: a
+ * document carrying no `active` field is enabled, and must not be locked out by its absence.
+ * Shared by `findAuthenticatableById` and `findByTokenValue` so the two can't drift.
  */
 const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: undefined };
 

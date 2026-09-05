@@ -125,14 +125,13 @@ Three kinds in this repo are real and invisible here, and each is written down i
 the top of the relevant `module.ts` because nothing mechanical can find them:
 
 - **A shared document.** `inventory` owns the only writes to `onHand` and `reserved`, which are
-  columns on the **product** document — and the migration that put them there,
-  `20260817120000-inventory-counters.js`, belongs to `inventory` and alters `products`' collection.
-  `account` and `users` likewise read and write one User record between them.
+  columns on the **product** document, declared by `products`. `account` and `users` likewise read
+  and write one User record between them.
 - **A name, not a symbol.** `observability` reads every domain's counters by string off the shared
   metrics registry, deliberately, so it can report on domains it may not import. Rename a counter
   and this compiles, lints and passes — and the dashboard goes flat.
 - **Schema in the database.** `audit-logs` enforces its retention window with a TTL index, not with
-  code. Six migrations touch the `users` collection.
+  code. The baseline migration creates indexes on collections five other modules own.
 
 This is the reason those couplings are recorded as **prose next to the imports** rather than as a
 typed field. A manifest field reconciled against the import graph — which is what this repo used to

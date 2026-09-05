@@ -15,8 +15,8 @@
  *   - GATED — refuses to touch a production database
  *
  * Note what idempotent means here: `upsertById()` SKIPS a fixture whose `_id` already exists, it
- * does not rewrite it. So re-running this does NOT repair a database seeded before the fixtures' image
- * URLs were corrected — `db/migrations/20260806140000-image-url-separators.js` does that.
+ * does not rewrite it. So re-running this does NOT repair a fixture whose stored row has since
+ * drifted from the one below — `npm run db:seed:reset` is what does.
  *
  * Passwords are given in PLAIN TEXT: the model's pre-save hook hashes them. Anything hashed by
  * hand here would drift from that hook, and its plaintext would be lost (which is exactly what

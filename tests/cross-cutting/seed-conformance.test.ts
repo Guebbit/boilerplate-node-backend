@@ -298,7 +298,7 @@ describe('the exported dataset conforms to the generated contract', () => {
             /* The state between `POST /locales` and the first entry. Every count that reads this
              * collection has to survive it — `entryCount` of 0, a `revision` still at its default
              * — and a dataset where every language has rows checks none of that. */
-            const translated = new Set(collections.localeMessages.map((entry) => entry.locale));
+            const translated = new Set(collections.localeEntries.map((entry) => entry.locale));
             const untranslated = collections.locales.filter(
                 (language) => !translated.has(language.tag)
             );
@@ -310,8 +310,8 @@ describe('the exported dataset conforms to the generated contract', () => {
 
     describe('locale entries', () => {
         it('parse against the generated entry schema', () => {
-            expect(collections.localeMessages.length).toBeGreaterThan(0);
-            for (const entry of collections.localeMessages) {
+            expect(collections.localeEntries.length).toBeGreaterThan(0);
+            for (const entry of collections.localeEntries) {
                 expect(() => localeEntrySchema.parse(entry)).not.toThrow();
             }
         });
@@ -322,7 +322,7 @@ describe('the exported dataset conforms to the generated contract', () => {
              * manifest never lists — and `scripts/demo/export-dataset.ts`'s dangling-reference sweep
              * cannot see it, because it matches keys ending in `Id`. */
             const tags = new Set(collections.locales.map((language) => language.tag));
-            for (const entry of collections.localeMessages) {
+            for (const entry of collections.localeEntries) {
                 expect(tags).toContain(entry.locale);
             }
         });
@@ -331,7 +331,7 @@ describe('the exported dataset conforms to the generated contract', () => {
             /* A flat fixture set would let a tree builder that only ever nests once pass its own
              * tests and the contract suite alike. */
             expect(
-                collections.localeMessages.some((entry) => entry.key.split('.').length >= 3)
+                collections.localeEntries.some((entry) => entry.key.split('.').length >= 3)
             ).toBe(true);
         });
 
@@ -340,7 +340,7 @@ describe('the exported dataset conforms to the generated contract', () => {
              * a dataset containing the pair would make `GET /locales/:locale/messages` throw for
              * the seeded language — and would do it in the paired frontend's mocks too. */
             const byLanguage = new Map<string, string[]>();
-            for (const entry of collections.localeMessages)
+            for (const entry of collections.localeEntries)
                 byLanguage.set(entry.locale, [...(byLanguage.get(entry.locale) ?? []), entry.key]);
 
             for (const [, keys] of byLanguage)

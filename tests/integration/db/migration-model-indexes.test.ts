@@ -17,19 +17,18 @@
  * descriptive name of its own is therefore a boot failure on every migrated database, and nowhere
  * else.
  *
- * The rule this enforces: indexes are declared on the schema. One early migration also creates
- * several of them, under the same explicit names, because it has already run against every
- * database — agreement, not competition.
+ * The rule this enforces: indexes are declared on the schema. The baseline migration also creates
+ * some of them, under the same explicit names, so that a deploy can build the constraints ahead of
+ * the code that needs them — agreement, not competition.
  *
  * The last case is quieter and has nothing to do with migrations: Mongoose copies an embedded
  * schema's indexes onto whatever embeds it, so indexing the catalogue can silently index a frozen
  * product snapshot inside every order too.
  *
- * Deliberately NOT asserted here: that every schema-declared index is also created by a migration.
- * That is a different rule, and this codebase does not follow it — most collections declare their
- * indexes on the schema only, and rely on `autoIndex` to build them. That is a legitimate choice
- * while `autoIndex` is on; it would become a gap the day it is turned off. Failing on it here
- * would assert a policy nobody has adopted.
+ * The one exemption is TTL. A TTL index's window comes from an environment variable, so a second
+ * copy of that arithmetic in a migration could disagree with the schema's — those three are
+ * schema-only by design, and the coverage case below exempts them by name of their option rather
+ * than by collection, so a new TTL index is exempt without an edit here.
  */
 
 import fs from 'node:fs';
@@ -106,6 +105,32 @@ describe('migrations and models agree about indexes', () => {
 
         await expect(runMigrations()).resolves.toBeUndefined();
         await expect(buildModelIndexes()).resolves.toBeDefined();
+    });
+
+    it('the migrations alone build every index a schema declares, TTL aside', async () => {
+        /*
+         * What stops the baseline from silently falling behind. A module added tomorrow declares
+         * its indexes on its schema and `autoIndex` builds them, so every other suite passes — and
+         * a deployment that migrates without booting, or one running with `autoIndex` off, quietly
+         * loses the constraint. Unique ones are correctness, not speed: `reservations.orderId` is
+         * what stops a double reservation.
+         *
+         * Asserted WITHOUT `buildModelIndexes()`, so only the migration can satisfy it.
+         */
+        await dropAllIndexes();
+        await runMigrations();
+
+        const missing: string[] = [];
+        for (const model of Object.values(mongoose.models)) {
+            const storedIndexes = await model.collection.indexes();
+            const stored = new Set<string>(storedIndexes.map((index) => JSON.stringify(index.key)));
+
+            for (const [key, options] of model.schema.indexes())
+                if (!options?.expireAfterSeconds && !stored.has(JSON.stringify(key)))
+                    missing.push(`${model.collection.name}: ${JSON.stringify(key)}`);
+        }
+
+        expect(missing).toEqual([]);
     });
 
     it('actually registered a model from every module that ships one', () => {

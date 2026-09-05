@@ -2,12 +2,12 @@
  * @module
  * The locale schemas' contracts, and the base-language derivation in front of them. Two unique
  * indexes make the translation tier addressable: `locales_tag` gives one row per language tag,
- * and `localeMessages_locale_tenant_key` gives one value per (locale, tenant, key) — letting a
+ * and `localeEntries_locale_tenant_key` gives one value per (locale, tenant, key) — letting a
  * merge be an upsert. The `lowercase: true` flags guard the same index: `EN-gb` and `en-GB` must
  * not occupy two rows.
  */
 
-import { localeSchema, localeMessageSchema, deriveBaseLanguage } from '@modules/locales/model';
+import { localeSchema, localeEntrySchema, deriveBaseLanguage } from '@modules/locales/model';
 import { LocaleDirection } from '@types';
 import {
     defaultOf,
@@ -81,21 +81,21 @@ describe('deriveBaseLanguage', () => {
     });
 });
 
-describe('localeMessageSchema', () => {
+describe('localeEntrySchema', () => {
     it('requires the full compound identity of a translation', () => {
         // `value` is not required: an empty string is a legitimate translation — it is how a
         // string is deliberately blanked — and the default below makes that the initial state.
-        expect(requiredPaths(localeMessageSchema)).toEqual(['key', 'locale', 'tenant']);
+        expect(requiredPaths(localeEntrySchema)).toEqual(['key', 'locale', 'tenant']);
     });
 
     it('makes one value per locale, tenant and key a database fact', () => {
         // The compound identity. This is what lets a merge be an upsert rather than a
         // read-modify-write, and what stops a re-save from shadowing the original with a copy.
-        expect(indexSpecs(localeMessageSchema)).toEqual([
-            'localeMessages_locale_tenant_key: locale+1, tenant+1, key+1'
+        expect(indexSpecs(localeEntrySchema)).toEqual([
+            'localeEntries_locale_tenant_key: locale+1, tenant+1, key+1'
         ]);
-        expect(indexOptionSpecs(localeMessageSchema)).toEqual([
-            'localeMessages_locale_tenant_key: unique=true'
+        expect(indexOptionSpecs(localeEntrySchema)).toEqual([
+            'localeEntries_locale_tenant_key: unique=true'
         ]);
     });
 
@@ -103,20 +103,20 @@ describe('localeMessageSchema', () => {
         // Locale and tenant are addresses and are case-insensitive; a KEY is not. `Cart.Empty`
         // and `cart.empty` are different keys, and lower-casing them would silently merge two
         // strings into one.
-        expect(normalises(localeMessageSchema, 'locale')).toMatchObject({ lowercase: true });
-        expect(normalises(localeMessageSchema, 'tenant')).toMatchObject({ lowercase: true });
-        expect(normalises(localeMessageSchema, 'key').lowercase).toBeUndefined();
-        expect(normalises(localeMessageSchema, 'key')).toMatchObject({ trim: true });
+        expect(normalises(localeEntrySchema, 'locale')).toMatchObject({ lowercase: true });
+        expect(normalises(localeEntrySchema, 'tenant')).toMatchObject({ lowercase: true });
+        expect(normalises(localeEntrySchema, 'key').lowercase).toBeUndefined();
+        expect(normalises(localeEntrySchema, 'key')).toMatchObject({ trim: true });
     });
 
     it('defaults a value to the empty string rather than leaving it absent', () => {
         // A missing key and a key set to nothing are different states to an editor; `''` is what
         // makes "declared but untranslated" representable.
-        expect(defaultOf(localeMessageSchema, 'value')).toBe('');
+        expect(defaultOf(localeEntrySchema, 'value')).toBe('');
     });
 
     it('keeps timestamps on both collections', () => {
         expect(optionsOf(localeSchema).timestamps).toBe(true);
-        expect(optionsOf(localeMessageSchema).timestamps).toBe(true);
+        expect(optionsOf(localeEntrySchema).timestamps).toBe(true);
     });
 });

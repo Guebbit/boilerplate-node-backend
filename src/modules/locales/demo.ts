@@ -8,8 +8,8 @@
 
 import { backendTenant, frontendTenant } from './tenants';
 import { makeLocale, makeLocaleEntry } from './fixtures';
-import { localeModel, localeMessageModel } from './model';
-import { localeRepository, localeMessageRepository } from './repository';
+import { localeModel, localeEntryModel } from './model';
+import { localeRepository, localeEntryRepository } from './repository';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
@@ -215,7 +215,7 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
         localeFixtures.map((language) => upsertById(localeRepository, language))
     );
     const entries = await Promise.all(
-        localeEntryFixtures.map((entry) => upsertById(localeMessageRepository, entry))
+        localeEntryFixtures.map((entry) => upsertById(localeEntryRepository, entry))
     );
 
     return [...languages, ...entries];
@@ -229,5 +229,5 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
  */
 export const exportSeededLocales = async (): Promise<Record<string, unknown[]>> => ({
     locales: await exportCollection(localeModel, { tag: 1 }),
-    localeMessages: await exportCollection(localeMessageModel, { locale: 1, tenant: 1, key: 1 })
+    localeEntries: await exportCollection(localeEntryModel, { locale: 1, tenant: 1, key: 1 })
 });

@@ -9,9 +9,8 @@
  * Reaches:      products
  * Reached by:   cart, orders, payments — all three ask for a transition by name and get a boolean
  * Not imports:  the counters are COLUMNS ON THE PRODUCT DOCUMENT. `products` declares them and this
- *               module is the only writer, and `20260817120000-inventory-counters.js` — a migration
- *               owned by this domain — is what put them on that collection. Nothing in the import
- *               graph shows that, which is why it is written here.
+ *               module is the only writer. Nothing in the import graph shows that, which is why it
+ *               is written here.
  *
  * See: docs/modules/inventory.md
  */

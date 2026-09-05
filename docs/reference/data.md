@@ -32,10 +32,10 @@ flowchart LR
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `db/migrations/*.js` | One file per schema change, named with a leading timestamp, each exporting an up and a down. Applied in timestamp order and recorded in a changelog collection, so a migration runs exactly once per database. Plain JavaScript because `migrate-mongo` loads them through its own CommonJS resolver with no TypeScript in the chain — the same reason `migrate-mongo-config.js` is a `.js` file. Run them with `npm run db:migrate:up`. | [MongoDB & Mongoose](../tools/mongodb-mongoose.md) · [Repository Root](./root.md) |
 
-Two tests guard the set: `tests/unit/db/migration-model-indexes.test.ts` checks the indexes the
-migrations create against the ones the models declare, and
-`tests/unit/db/migration-demo-data.test.ts` checks a migration against the dataset it has to keep
-loadable.
+Two tests guard the set: `tests/integration/db/migration-model-indexes.test.ts` checks the indexes
+the migrations create against the ones the models declare, and
+`tests/integration/db/migration-demo-data.test.ts` checks a migration against the dataset it has to
+keep loadable.
 
 ## The demo dataset
 

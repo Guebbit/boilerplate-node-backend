@@ -11,7 +11,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { LocaleDirection } from '@types';
-import { localeRepository, localeMessageRepository } from '@modules/locales/repository';
+import { localeRepository, localeEntryRepository } from '@modules/locales/repository';
 import { localeService } from '@modules/locales/services';
 import { makeLocale } from '@modules/locales/fixtures';
 
@@ -57,7 +57,7 @@ describe('language serialization', () => {
 describe('entry serialization', () => {
     it('normalizes a lean list via the search path', async () => {
         await localeRepository.create({ tag: 'es', name: 'Spanish', nativeName: 'Español' });
-        await localeMessageRepository.create({
+        await localeEntryRepository.create({
             locale: 'es',
             tenant: 'demo-fe',
             key: 'cart.title',
@@ -75,7 +75,7 @@ describe('entry serialization', () => {
     it('stores an empty translation, which `required: true` on a String would have refused', async () => {
         // An untranslated row is a legitimate state — an import that supplied keys and no text —
         // and the contract still requires the field on the wire, which the default guarantees.
-        const entry = await localeMessageRepository.create({
+        const entry = await localeEntryRepository.create({
             locale: 'es',
             tenant: 'demo-fe',
             key: 'cart.title'

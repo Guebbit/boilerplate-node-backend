@@ -15,7 +15,7 @@ import {
 } from '@infrastructure/persistence/fixtures';
 import type { Language, LocaleEntry } from '@types';
 import { deriveBaseLanguage } from './model';
-import type { LocaleDocument, LocaleMessageDocument } from './model';
+import type { LocaleDocument, LocaleEntryDocument } from './model';
 
 /** The fields `makeLocale` accepts, overriding what the schema would otherwise default. */
 export type LocaleOverrides = OverridesFor<Language> & {
@@ -54,8 +54,8 @@ export type LocaleEntryOverrides = OverridesFor<LocaleEntry> & {
     key: string;
 };
 
-/** One translated string, ready for `localeMessageRepository.create`. */
-export type LocaleEntryFixture = Partial<LocaleMessageDocument> & {
+/** One translated string, ready for `localeEntryRepository.create`. */
+export type LocaleEntryFixture = Partial<LocaleEntryDocument> & {
     _id: Types.ObjectId;
     locale: string;
     key: string;

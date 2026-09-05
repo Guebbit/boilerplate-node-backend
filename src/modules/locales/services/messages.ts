@@ -12,7 +12,7 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { localeMessageRepository, localeRepository } from '../repository';
+import { localeEntryRepository, localeRepository } from '../repository';
 import { backendTenant, frontendTenant, isFrontendTenant } from '../tenants';
 import { buildMessageTree } from './keys';
 import { languageNotFound } from './languages';
@@ -37,7 +37,7 @@ export const readMessages = async (
     const language = await localeRepository.findByTag(tag);
     if (!language?.active) return languageNotFound();
 
-    const entries = await localeMessageRepository.listEntries(language.tag, tenant);
+    const entries = await localeEntryRepository.listEntries(language.tag, tenant);
 
     return generateSuccess({
         locale: language.tag,
@@ -57,7 +57,7 @@ export const readMessages = async (
  * malformed dictionary does not take the whole refresh down.
  */
 export const readApiOverrides = async (): Promise<Record<string, Record<string, unknown>>> => {
-    const rows = await localeMessageRepository.listEntriesByTenant(backendTenant());
+    const rows = await localeEntryRepository.listEntriesByTenant(backendTenant());
 
     const byLocale = new Map<string, { key: string; value: string }[]>();
     for (const { locale, key, value } of rows)

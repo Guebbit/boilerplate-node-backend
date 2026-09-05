@@ -23,8 +23,8 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
-import type { LocaleMessageDocument } from '../model';
-import { localeMessageRepository, localeRepository } from '../repository';
+import type { LocaleEntryDocument } from '../model';
+import { localeEntryRepository, localeRepository } from '../repository';
 import { findBatchCollision, findDuplicateKey, rejectUnusableKey } from './keys';
 import { languageNotFound, readableTenant, rejectUnknownTenant } from './languages';
 
@@ -43,7 +43,7 @@ export const searchEntries = async (
         tenant?: LocaleTenant;
     } = {}
 ): Promise<
-    ResponseSuccess<{ items: LocaleMessageDocument[]; meta: PaginatedMeta }> | ResponseReject
+    ResponseSuccess<{ items: LocaleEntryDocument[]; meta: PaginatedMeta }> | ResponseReject
 > => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
@@ -54,7 +54,7 @@ export const searchEntries = async (
      * already the total order that keeps a row off two pages.
      */
     return generateSuccess(
-        await localeMessageRepository.search(
+        await localeEntryRepository.search(
             { ...filters, tenant: readableTenant(filters.tenant) },
             { locale: language.tag },
             { key: 1 }
@@ -71,7 +71,7 @@ export const createEntry = async (
     tag: string,
     payload: CreateLocaleEntryRequest,
     context?: CallerContext
-): Promise<ResponseSuccess<LocaleMessageDocument> | ResponseReject> => {
+): Promise<ResponseSuccess<LocaleEntryDocument> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
 
@@ -85,7 +85,7 @@ export const createEntry = async (
      * every row would refuse the second half of a perfectly correct pair, and a collision between
      * `products.list` and `products.list.title` only matters inside the tree they share.
      */
-    const existingKeys = await localeMessageRepository.listKeys(language.tag, payload.tenant);
+    const existingKeys = await localeEntryRepository.listKeys(language.tag, payload.tenant);
 
     if (existingKeys.includes(key))
         return generateReject(409, [t('locales.error-key-exists', { key })]);
@@ -93,7 +93,7 @@ export const createEntry = async (
     const unusable = rejectUnusableKey(key, existingKeys);
     if (unusable) return unusable;
 
-    const { entry } = await localeMessageRepository.createEntry(language.tag, payload.tenant, {
+    const { entry } = await localeEntryRepository.createEntry(language.tag, payload.tenant, {
         key,
         value: payload.value
     });
@@ -123,12 +123,12 @@ export const updateEntry = async (
     entryId: string,
     payload: UpdateLocaleEntryRequest,
     context?: CallerContext
-): Promise<ResponseSuccess<LocaleMessageDocument> | ResponseReject> => {
-    const entry = await localeMessageRepository.findById(entryId);
+): Promise<ResponseSuccess<LocaleEntryDocument> | ResponseReject> => {
+    const entry = await localeEntryRepository.findById(entryId);
     if (entry?.locale !== tag.trim().toLowerCase())
         return generateReject(404, [t('locales.error-entry-not-found')]);
 
-    const { entry: saved } = await localeMessageRepository.saveEntryValue(entry, payload.value);
+    const { entry: saved } = await localeEntryRepository.saveEntryValue(entry, payload.value);
 
     if (context)
         emitAuditEvent(
@@ -157,12 +157,12 @@ export const deleteEntry = async (
     entryId: string,
     context?: CallerContext
 ): Promise<ResponseSuccess<{ key: string }> | ResponseReject> => {
-    const entry = await localeMessageRepository.findById(entryId);
+    const entry = await localeEntryRepository.findById(entryId);
     if (entry?.locale !== tag.trim().toLowerCase())
         return generateReject(404, [t('locales.error-entry-not-found')]);
 
     const { key } = entry;
-    await localeMessageRepository.removeEntry(entry);
+    await localeEntryRepository.removeEntry(entry);
 
     if (context)
         emitAuditEvent(
@@ -221,7 +221,7 @@ export const importEntries = async (
      * would refuse imports that are perfectly consistent with themselves.
      */
     const incoming = new Set(keys);
-    const stored = await localeMessageRepository.listKeys(language.tag, tenant);
+    const stored = await localeEntryRepository.listKeys(language.tag, tenant);
     const survivors = mode === 'replace' ? [] : stored.filter((key) => !incoming.has(key));
 
     for (const key of keys) {
@@ -229,7 +229,7 @@ export const importEntries = async (
         if (unusable) return unusable;
     }
 
-    const { counts, revision } = await localeMessageRepository.importEntries(
+    const { counts, revision } = await localeEntryRepository.importEntries(
         language.tag,
         tenant,
         inputs,

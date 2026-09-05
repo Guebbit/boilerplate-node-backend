@@ -1,0 +1,191 @@
+/*
+ * Every index the application needs, built before it boots.
+ *
+ * Each one is also declared on the schema that owns it, under the same name and key spec, so this
+ * file and Mongoose's own `autoIndex` agree instead of competing — a mismatch is
+ * `IndexKeySpecsConflict` at startup, which `tests/integration/db/migration-model-indexes.test.ts`
+ * is what catches. Grouped by owning module, because that is who decides an entry belongs here.
+ */
+
+/**
+ * The indexes this migration owns, as `[collection, keySpec, options]`.
+ *
+ * Options must match the schema's EXACTLY — `unique`, `sparse`, a partial filter, and the name
+ * where one is given explicitly. An entry with no `name` relies on Mongo deriving the same default
+ * Mongoose would (`userId_1`), so leaving it off is what keeps the two in step.
+ *
+ * TTL indexes are deliberately absent: their `expireAfterSeconds` comes from an environment
+ * variable, and a second copy of that arithmetic here could disagree with the schema's and make
+ * every boot an `IndexOptionsConflict`. `auditlogs`, `carts` and `feedbackrequests` build theirs
+ * from the schema alone — see `docs/reference/ops.md` for changing a window on a live database.
+ */
+const INDEXES = [
+    /* account */
+    ['addressbooks', { userId: 1 }, { unique: true }],
+
+    /* audit-logs */
+    ['auditlogs', { actor_user_id: 1, timestamp: -1 }, {}],
+    ['auditlogs', { action: 1, timestamp: -1 }, {}],
+
+    /* cart */
+    ['carts', { userId: 1 }, { unique: true }],
+    ['carts', { 'items.productId': 1 }, {}],
+
+    /* delivery */
+    ['shipments', { orderId: 1 }, { unique: true }],
+
+    /* feedback */
+    ['feedbackrequests', { status: 1, createdAt: -1 }, {}],
+
+    /* inventory */
+    ['reservations', { orderId: 1 }, { unique: true }],
+    ['reservations', { status: 1, expiresAt: 1 }, { name: 'reservations_status_expiresAt' }],
+    [
+        'stockmovements',
+        { productId: 1, createdAt: -1 },
+        { name: 'stockmovements_productId_createdAt' }
+    ],
+    ['stockmovements', { createdAt: -1 }, { name: 'stockmovements_createdAt' }],
+
+    /* locales */
+    ['locales', { tag: 1 }, { name: 'locales_tag', unique: true }],
+    [
+        'localeentries',
+        { locale: 1, tenant: 1, key: 1 },
+        { name: 'localeEntries_locale_tenant_key', unique: true }
+    ],
+
+    /* orders */
+    ['orders', { userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt' }],
+    ['orders', { email: 1 }, { name: 'orders_email' }],
+    ['orders', { userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt' }],
+    ['orders', { anonymizeAfter: 1 }, { name: 'orders_anonymizeAfter', sparse: true }],
+
+    /* payments */
+    ['payments', { orderId: 1 }, { unique: true }],
+
+    /* products */
+    ['products', { createdAt: -1 }, { name: 'products_createdAt' }],
+    ['products', { active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' }],
+
+    /* users */
+    ['users', { email: 1 }, { name: 'users_email', unique: true }],
+    ['users', { 'tokens.token': 1 }, { name: 'users_tokens_token' }],
+    [
+        'users',
+        { 'oauthAccounts.provider': 1, 'oauthAccounts.providerId': 1 },
+        {
+            name: 'users_oauth_identity',
+            unique: true,
+            // Without it, a compound multikey index over two fields of the SAME array indexes an
+            // empty `oauthAccounts` as one null entry, so the second password-only account ever
+            // created would collide with the first. See `users/model.ts` for the full note.
+            partialFilterExpression: { 'oauthAccounts.0': { $exists: true } }
+        }
+    ],
+
+    /* wishlist */
+    ['wishlists', { userId: 1 }, { unique: true }],
+    ['wishlists', { 'items.productId': 1 }, {}]
+];
+
+/**
+ * The name Mongo gives an index created without one: every key and its direction, joined by `_`.
+ *
+ * Needed only by `down`, which has to name an index the driver will accept as a string.
+ *
+ * @param {Record<string, number>} keySpec the index's keys
+ * @returns {string} the derived index name
+ */
+const derivedName = (keySpec) =>
+    Object.entries(keySpec)
+        .map(([field, direction]) => `${field}_${direction}`)
+        .join('_');
+
+/**
+ * Groups of documents sharing a value on every key of a unique index, worst first.
+ *
+ * Documents missing any key are excluded: an absent required field is a different problem, and
+ * grouping them would report a phantom duplicate. A partial index is skipped entirely — it
+ * constrains only the subset its filter selects, which this scan does not model.
+ *
+ * @param {import('mongodb').Db} db native driver handle
+ * @param {string} collectionName collection to scan
+ * @param {string[]} keys the unique index's fields
+ * @returns {Promise<{_id: Record<string, unknown>, count: number, ids: unknown[]}[]>}
+ */
+const findDuplicates = (db, collectionName, keys) =>
+    db
+        .collection(collectionName)
+        .aggregate([
+            { $match: Object.fromEntries(keys.map((key) => [key, { $exists: true, $ne: null }])) },
+            {
+                $group: {
+                    _id: Object.fromEntries(
+                        keys.map((key) => [key.replaceAll('.', '_'), `$${key}`])
+                    ),
+                    count: { $sum: 1 },
+                    ids: { $push: '$_id' }
+                }
+            },
+            { $match: { count: { $gt: 1 } } },
+            { $sort: { count: -1 } }
+        ])
+        .toArray();
+
+/**
+ * Refuses the run when a collection already holds rows a unique index would reject.
+ *
+ * `createIndex` fails on the FIRST offending value and says nothing about the rest, which is the
+ * worst way to learn the shape of the problem. This reports every group at once and stops, because
+ * which document survives a merge is a product decision this file does not get to make.
+ *
+ * @param {import('mongodb').Db} db native driver handle
+ * @param {string} collectionName collection to scan
+ * @param {string[]} keys the unique index's fields
+ * @throws {Error} when any group holds more than one document
+ */
+const refuseDuplicates = async (db, collectionName, keys) => {
+    const duplicates = await findDuplicates(db, collectionName, keys);
+    if (duplicates.length === 0) return;
+
+    const report = duplicates
+        .map(({ _id, count, ids }) => `  ${JSON.stringify(_id)} — ${count} rows: ${ids.join(', ')}`)
+        .join('\n');
+
+    throw new Error(
+        `Cannot make ${collectionName}.(${keys.join(', ')}) unique: ${duplicates.length} ` +
+            `value(s) are held by more than one document.\n${report}\n\n` +
+            `Merge or remove the duplicates, then run this migration again.`
+    );
+};
+
+module.exports = {
+    async up(db) {
+        // Every unique index is pre-flighted before anything is built, so a database that cannot
+        // satisfy one of them is reported in full rather than left half-indexed.
+        for (const [collection, keySpec, options] of INDEXES)
+            if (options.unique && !options.partialFilterExpression)
+                await refuseDuplicates(db, collection, Object.keys(keySpec));
+
+        // `createIndex` is a no-op when name, key spec AND options all match, so a database that
+        // has already booted once passes through this untouched.
+        await Promise.all(
+            INDEXES.map(([collection, keySpec, options]) =>
+                db.collection(collection).createIndex(keySpec, options)
+            )
+        );
+    },
+
+    async down(db) {
+        // Best-effort: a database that never ran `up`, or one where an index was dropped by hand,
+        // must not fail the rollback.
+        for (const [collection, keySpec, options] of INDEXES)
+            await db
+                .collection(collection)
+                .dropIndex(options.name ?? derivedName(keySpec))
+                .catch(() => {
+                    /* never created, or already dropped */
+                });
+    }
+};

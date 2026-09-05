@@ -1,7 +1,7 @@
 /**
  * @module
  * The two collections' queries, and the one invariant that could not be left to a caller: every
- * write to `localemessages` goes through a function below that also bumps `revision`, so no
+ * write to `localeentries` goes through a function below that also bumps `revision`, so no
  * service call can change an entry without moving the number a client uses to know when to
  * re-download. Not a transaction — the two writes are ordered rows-then-counter, so a crash
  * between them only makes a client under-fetch once, never cache a stale dictionary as current.
@@ -9,11 +9,11 @@
 
 import {
     localeModel,
-    localeMessageModel,
+    localeEntryModel,
     applyLocaleTransform,
-    applyLocaleMessageTransform
+    applyLocaleEntryTransform
 } from './model';
-import type { LocaleDocument, LocaleMessageDocument } from './model';
+import type { LocaleDocument, LocaleEntryDocument } from './model';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
 import type { LocaleTenant } from '@types';
 import { frontendTenantIds } from './tenants';
@@ -41,8 +41,8 @@ const localeBase = createRepository<LocaleDocument>(localeModel, {
 });
 
 /** Base CRUD/search repository over the entries collection. */
-const entryBase = createRepository<LocaleMessageDocument>(localeMessageModel, {
-    transform: applyLocaleMessageTransform,
+const entryBase = createRepository<LocaleEntryDocument>(localeEntryModel, {
+    transform: applyLocaleEntryTransform,
     searchable: {
         /*
          * One filter, and it searches both columns. A translator looking for "Catálogo" and a
@@ -84,7 +84,7 @@ const list = (scope?: Record<string, unknown>): Promise<LocaleDocument[]> =>
  * overrides would advertise a language as having strings a client cannot actually download.
  */
 const countEntriesByLocale = async (): Promise<Map<string, number>> => {
-    const rows = await localeMessageModel
+    const rows = await localeEntryModel
         .aggregate<{
             _id: string;
             count: number;
@@ -104,12 +104,8 @@ const countEntriesByLocale = async (): Promise<Map<string, number>> => {
  * received every tenant would nest the API's `generic` over a client's and hand a frontend strings
  * it never authored. `(locale, tenant)` is a prefix of the unique index, so this stays one lookup.
  */
-const listEntries = (locale: string, tenant: LocaleTenant): Promise<LocaleMessageDocument[]> =>
-    localeMessageModel
-        .find({ locale, tenant })
-        .sort({ key: 1 })
-        .lean<LocaleMessageDocument[]>()
-        .exec();
+const listEntries = (locale: string, tenant: LocaleTenant): Promise<LocaleEntryDocument[]> =>
+    localeEntryModel.find({ locale, tenant }).sort({ key: 1 }).lean<LocaleEntryDocument[]>().exec();
 
 /**
  * Every row of one tenant, across every language, for the override overlay.
@@ -118,11 +114,11 @@ const listEntries = (locale: string, tenant: LocaleTenant): Promise<LocaleMessag
  * handful of rows by construction. Sorted by `(locale, key)` so a rebuilt overlay is
  * byte-identical to the last one when nothing changed.
  */
-const listEntriesByTenant = (tenant: LocaleTenant): Promise<LocaleMessageDocument[]> =>
-    localeMessageModel
+const listEntriesByTenant = (tenant: LocaleTenant): Promise<LocaleEntryDocument[]> =>
+    localeEntryModel
         .find({ tenant })
         .sort({ locale: 1, key: 1 })
-        .lean<LocaleMessageDocument[]>()
+        .lean<LocaleEntryDocument[]>()
         .exec();
 
 /**
@@ -132,7 +128,7 @@ const listEntriesByTenant = (tenant: LocaleTenant): Promise<LocaleMessageDocumen
  * write, and it has no use for the values — which are the whole weight of the collection.
  */
 const listKeys = async (locale: string, tenant: LocaleTenant): Promise<string[]> => {
-    const rows = await localeMessageModel
+    const rows = await localeEntryModel
         .find({ locale, tenant })
         .select({ key: 1, _id: 0 })
         .lean<{ key: string }[]>()
@@ -161,27 +157,27 @@ const createEntry = async (
     locale: string,
     tenant: LocaleTenant,
     input: EntryInput
-): Promise<{ entry: LocaleMessageDocument; revision: number }> => {
+): Promise<{ entry: LocaleEntryDocument; revision: number }> => {
     const entry = await entryBase.create({
         locale,
         tenant,
         ...input
-    } as Partial<LocaleMessageDocument>);
+    } as Partial<LocaleEntryDocument>);
     return { entry, revision: await bumpRevision(locale) };
 };
 
 /** Change one entry's value, and bump. */
 const saveEntryValue = async (
-    entry: LocaleMessageDocument,
+    entry: LocaleEntryDocument,
     value: string
-): Promise<{ entry: LocaleMessageDocument; revision: number }> => {
+): Promise<{ entry: LocaleEntryDocument; revision: number }> => {
     entry.value = value;
     const saved = await entryBase.save(entry);
     return { entry: saved, revision: await bumpRevision(entry.locale) };
 };
 
 /** Remove one entry, and bump. */
-const removeEntry = async (entry: LocaleMessageDocument): Promise<number> => {
+const removeEntry = async (entry: LocaleEntryDocument): Promise<number> => {
     await entryBase.deleteOne(entry);
     return bumpRevision(entry.locale);
 };
@@ -205,7 +201,7 @@ const importEntries = async (
     const removedKeys = replace ? [...existing].filter((key) => !incoming.has(key)) : [];
 
     if (inputs.length > 0)
-        await localeMessageModel.bulkWrite(
+        await localeEntryModel.bulkWrite(
             [...incoming].map(([key, value]) => ({
                 updateOne: {
                     filter: { locale, tenant, key },
@@ -216,7 +212,7 @@ const importEntries = async (
         );
 
     if (removedKeys.length > 0)
-        await localeMessageModel.deleteMany({ locale, tenant, key: { $in: removedKeys } }).exec();
+        await localeEntryModel.deleteMany({ locale, tenant, key: { $in: removedKeys } }).exec();
 
     const created = [...incoming.keys()].filter((key) => !existing.has(key)).length;
 
@@ -241,7 +237,7 @@ const importEntries = async (
  * interrupted this way, it is briefly empty, which is the state the caller asked for anyway.
  */
 const deleteLocaleCascade = async (locale: LocaleDocument): Promise<number> => {
-    const { deletedCount } = await localeMessageModel.deleteMany({ locale: locale.tag }).exec();
+    const { deletedCount } = await localeEntryModel.deleteMany({ locale: locale.tag }).exec();
     await localeBase.deleteOne(locale);
     return deletedCount;
 };
@@ -270,21 +266,21 @@ export const localeRepository: Repository<LocaleDocument> & {
 };
 
 /** The words. */
-export const localeMessageRepository: Repository<LocaleMessageDocument> & {
+export const localeEntryRepository: Repository<LocaleEntryDocument> & {
     countEntriesByLocale: () => Promise<Map<string, number>>;
-    listEntries: (locale: string, tenant: LocaleTenant) => Promise<LocaleMessageDocument[]>;
-    listEntriesByTenant: (tenant: LocaleTenant) => Promise<LocaleMessageDocument[]>;
+    listEntries: (locale: string, tenant: LocaleTenant) => Promise<LocaleEntryDocument[]>;
+    listEntriesByTenant: (tenant: LocaleTenant) => Promise<LocaleEntryDocument[]>;
     listKeys: (locale: string, tenant: LocaleTenant) => Promise<string[]>;
     createEntry: (
         locale: string,
         tenant: LocaleTenant,
         input: EntryInput
-    ) => Promise<{ entry: LocaleMessageDocument; revision: number }>;
+    ) => Promise<{ entry: LocaleEntryDocument; revision: number }>;
     saveEntryValue: (
-        entry: LocaleMessageDocument,
+        entry: LocaleEntryDocument,
         value: string
-    ) => Promise<{ entry: LocaleMessageDocument; revision: number }>;
-    removeEntry: (entry: LocaleMessageDocument) => Promise<number>;
+    ) => Promise<{ entry: LocaleEntryDocument; revision: number }>;
+    removeEntry: (entry: LocaleEntryDocument) => Promise<number>;
     importEntries: (
         locale: string,
         tenant: LocaleTenant,

@@ -16,7 +16,7 @@ import { getDefaultLocale, getFallbackLocale, listSupportedLocales } from '@infr
 import { logger } from '@infrastructure/adapters/logger';
 import { createVisibilityScope } from '@kernel/authorization';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
-import { localeMessageRepository, localeRepository } from '../repository';
+import { localeEntryRepository, localeRepository } from '../repository';
 import { backendTenant, frontendTenant, listTenants as configuredTenants } from '../tenants';
 
 /**
@@ -139,7 +139,7 @@ export const readDynamicTier = (
         // `active` gates what a VISITOR may select and nothing else — the admin, who is the
         // one toggling the flag, reads every row. Same rule as products and users.
         localeRepository.list(scope),
-        localeMessageRepository.countEntriesByLocale()
+        localeEntryRepository.countEntriesByLocale()
     ])
         .then(([languages, entryCounts]) => ({ languages, entryCounts }))
         .catch((error: unknown) => {

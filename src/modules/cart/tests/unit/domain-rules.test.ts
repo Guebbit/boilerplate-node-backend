@@ -77,8 +77,8 @@ describe('evaluateCheckout', () => {
     /*
      * A missing count means REFUSE, not allow. Reading absence as "unconstrained" would let any
      * quantity through on exactly the documents nothing is known about — the safe reading of "we
-     * don't know how many" is "don't sell it". Backfilled by `20260817120000-inventory-counters.js`,
-     * so this defends a document that shouldn't exist, not a state the shop relies on.
+     * don't know how many" is "don't sell it". The schema defaults both counters, so this defends
+     * a document that shouldn't exist, not a state the shop relies on.
      */
     it('treats absent counters as nothing to sell', () => {
         expect(evaluateCheckout([line(1)])).toMatchObject({
