@@ -1,7 +1,8 @@
 #!/usr/bin/env tsx
 /**
  * Runs Stryker — `npm run test:mutation`. A wrapper rather than a bare `stryker run`, for three
- * jobs a JSON config cannot do. The frontend mirrors it.
+ * jobs a JSON config cannot do. The frontend has the same wrapper over a different scratch root,
+ * a different OOM hint and ESM's `import.meta.dirname` — same shape, not the same bytes.
  *
  *   1. MACHINE SETTINGS COME FROM `.env`. Concurrency and per-worker heap are properties of the
  *      machine, not the project, and `stryker.config.json` is committed. An explicit CLI flag

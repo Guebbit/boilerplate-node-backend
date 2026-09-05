@@ -16,7 +16,8 @@
  * a timeout or a survivor depends on machine load, and a gate that fails randomly gets switched
  * off. Deliberately small — a real regression moves a file by far more.
  *
- * The frontend mirrors this file.
+ * The frontend has its own copy, same shape and one scope: no `MUTATION_PROFILES`, because it runs
+ * no deep pass. Nothing compares the two — `diff` them by hand when you change this one.
  *
  * See: docs/tools/mutation-testing.md#the-per-file-ratchet
  */

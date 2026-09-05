@@ -103,12 +103,12 @@ This backend and its frontend share a set of files byte-for-byte. These four kee
 
 ## Mutation testing — `scripts/mutation/`
 
-| File                                 | What it is                                                                                                                   | Read next                                        |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `scripts/mutation/run-tests.ts`      | Runs Stryker — `npm run test:mutation`. A wrapper rather than a bare invocation, for the three jobs a JSON config cannot do. | [Mutation Testing](../tools/mutation-testing.md) |
-| `scripts/mutation/baseline.ts`       | The per-file mutation ratchet: the recorded score for each file, and the comparison that fails when one drops.               | [Mutation Testing](../tools/mutation-testing.md) |
-| `scripts/mutation/check-baseline.ts` | Its CLI — `npm run test:mutation:check` to compare, `npm run test:mutation:baseline` to record a new floor.                  | [Mutation Testing](../tools/mutation-testing.md) |
-| `scripts/mutation/run-diff.ts`       | The same Stryker run narrowed to the files a branch changed, then the ordinary ratchet — `npm run test:mutation:diff`.       | [Mutation Testing](../tools/mutation-testing.md) |
+| File                                 | What it is                                                                                                                                                                                                             | Read next                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `scripts/mutation/run-tests.ts`      | Runs Stryker — `npm run test:mutation`. A wrapper rather than a bare invocation, for the three jobs a JSON config cannot do.                                                                                           | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/baseline.ts`       | The per-file mutation ratchet: the recorded score for each file, and the comparison that fails when one drops. Also the two scopes — standard and `--deep` — since a score only compares to one measured the same way. | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/check-baseline.ts` | Its CLI — `npm run test:mutation:check` to compare, `npm run test:mutation:baseline` to record a new floor.                                                                                                            | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/run-diff.ts`       | The same Stryker run narrowed to the files a branch changed, then the ordinary ratchet — `npm run test:mutation:diff`.                                                                                                 | [Mutation Testing](../tools/mutation-testing.md) |
 
 ## Testing — `scripts/testing/`
 

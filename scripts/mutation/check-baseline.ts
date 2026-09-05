@@ -11,6 +11,8 @@
  * the gate across steps.
  *
  * Exit codes: 0 fine, 1 a file regressed, 2 no report to read.
+ *
+ * The frontend's copy is the same CLI without `--deep`, since it measures one scope.
  */
 import {
     compareToBaseline,

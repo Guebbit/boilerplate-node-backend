@@ -99,6 +99,22 @@ npm run gen:asyncapi
 
 The generator (`scripts/contracts/generate-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
 
+### One alias per payload shape
+
+Several messages share one payload — `observability.metrics.snapshot`, `.updated` and `heartbeat`
+all carry `ObservabilityMetricsPayload`. Aliasing each separately produced three names for one
+shape, and no hand-written caller used any of them: real code imports the shared payload type
+directly, the same way `mailer.ts` names its own `EmailJob` rather than a generated
+`EmailJobMessage`.
+
+So the generator emits **one alias per shape**, in declaration order — which is the name a caller
+who does want the message-level spelling actually finds. The others were never a second fact, just
+a second spelling of the first.
+
+Deduping is safe at that point because the SSE map is resolved through the same
+`resolveMessagePayloadType` the alias loop uses: `SseEventPayloadMap` never names a message-level
+alias, so it cannot be left pointing at one the loop dropped.
+
 ### Shared with the frontend
 
 This script is **byte-identical** to `scripts/contracts/generate-asyncapi-types.ts` in `boilerplate-vue-frontend`,
@@ -114,8 +130,13 @@ repo's carries `EmailJobPayload`, `PdfJobPayload` and `WORKER_CHANNELS`. Everyth
 does carry, it carries identically, because the shared half of the spec is one document copied
 across.
 
-`asyncapi.public.yaml` and this script are in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
-`check:spec-identity` fails on the commit that forks either. **The generated outputs are not**, and
+`asyncapi.public.yaml` is in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
+`check:spec-identity` fails on the commit that forks it. **This script is not, and neither are the
+generated outputs.** The script is held identical by hand — nothing fails if the two copies drift,
+so compare them with `diff` when you change one. It is off the list for the reason the list itself
+gives: everything on it is produced in the backend and copied, which is what makes "which side is
+right" answerable, and a hand-maintained twin has no such answer. The outputs are off it for a
+different reason, and
 deliberately: they legitimately differ now, and even where they overlap a cross-repo comparison
 would only re-ask a question the two entries above already answer, at the price of carrying another
 file to the frontend on every contract change.

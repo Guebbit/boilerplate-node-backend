@@ -278,16 +278,13 @@ const channelNamespaceBlocks = [...groupChannelsByNamespace(Object.keys(channels
 );
 
 /*
- * Every target type this pass has already aliased. Several messages in this contract share one
- * payload — `observability.metrics.snapshot`/`.updated`/`heartbeat` all carry
- * `ObservabilityMetricsPayload` — and aliasing each separately produced three names for one
- * shape, none of which any hand-written caller used: real code imports the shared payload type
- * directly, the same way `mailer.ts` names its own `EmailJob` rather than importing a generated
- * `EmailJobMessage`. One alias per shape, kept in declaration order, is what a caller who does
- * want the message-level name actually finds — the others were never a second fact, just a second
- * spelling of the first. `sseEntries` above resolves through the same `resolveMessagePayloadType`
- * this loop uses, which is what makes deduping here safe: `SseEventPayloadMap` never names a
- * message-level alias, so it cannot be left pointing at one this loop just dropped.
+ * Every target type this pass has already aliased, so one shape gets one alias.
+ *
+ * Safe here because `sseEntries` above resolves through the same `resolveMessagePayloadType`:
+ * `SseEventPayloadMap` never names a message-level alias, so it cannot be left pointing at one
+ * this loop dropped.
+ *
+ * See: docs/api/asyncapi-workflow.md#one-alias-per-payload-shape
  */
 const seenTargets = new Set<string>();
 

@@ -9,8 +9,10 @@
  * Deliberately dumber than a semantic diff: IDENTITY, not equivalence. Two specs that mean the same
  * thing but differ in key order are still a fork in the making.
  *
- * The frontend mirrors this file; only `THIS_REPO` differs, so a file added on one side is a
- * one-line copy on the other.
+ * The frontend carries the same list and the same comparison, so a file added on one side is a
+ * one-line copy on the other. It is not the same file: `THIS_REPO` differs, and it exports a
+ * `fingerprint` this repo has no use for — it pairs with either backend twin, which do not
+ * serialise YAML identically.
  *
  * See: docs/tools/pairing-and-ports.md#the-shared-file-list-and-what-earns-a-place-on-it
  */

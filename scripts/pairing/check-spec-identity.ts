@@ -3,7 +3,7 @@
  * CLI for the cross-repo contract check — `npm run check:spec-identity`.
  *
  * Wired into `ci.yml` (which checks the sibling out first and passes `FRONTEND_PATH`) and into
- * `npm run complete`. The frontend mirrors this file.
+ * `npm run complete`. The frontend runs the mirror image of it, against `BACKEND_PATH`.
  *
  * Exit codes are the interface:
  *   0  identical — or the sibling is absent and this is a developer's machine
