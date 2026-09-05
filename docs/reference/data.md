@@ -38,6 +38,21 @@ exactly as `openapi.yaml` has one author in the per-module fragments. `check:mig
 `complete` gate when the two have diverged. Data migrations are still written by hand: a rename or
 a backfill cannot be derived from a schema.
 
+**Regenerating only reaches databases that have never run it.** `migrate-mongo` records the
+baseline as applied by FILENAME, so rewriting its contents does not make it run again — a database
+that already holds the old set never sees the new index. Adding an index to a live deployment is
+therefore a new migration file of its own, alongside the regenerated baseline.
+
+```mermaid
+flowchart LR
+    Schema["a module's model.ts<br/><i>the only author</i>"] --> Gen["gen:migration"]
+    Gen --> Baseline["…-baseline.js"]
+    Baseline -->|"never migrated"| Fresh["new database<br/><b>gets every index</b>"]
+    Baseline -.->|"already applied"| Live["live database<br/><b>unchanged</b>"]
+    Schema --> Extra["a new migration file"]
+    Extra --> Live
+```
+
 Two tests guard the set: `tests/integration/db/migration-model-indexes.test.ts` runs the migrations
 against a real database and checks the indexes that land against the ones the models declare, and
 `tests/integration/db/migration-demo-data.test.ts` checks a migration against the dataset it has to
