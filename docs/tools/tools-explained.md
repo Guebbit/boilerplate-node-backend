@@ -385,7 +385,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** Schema and data changes need to be reproducible across environments (dev, staging, production). Without a migration tool, every developer applies changes manually and environments drift apart. migrate-mongo gives you versioned, ordered, undoable change scripts.
 
-**In this repo.** Migrations live in `db/migrations/`. `npm run db:migrate` applies pending ones; `npm run db:migrate:down` rolls back the last one. Config reads `NODE_DB_URI` from env.
+**In this repo.** Migrations live in `db/migrations/`. `npm run db:migrate:up` applies pending ones; `npm run db:migrate:down` rolls back the last one. Config reads `NODE_DB_URI` from env.
 
 → [MongoDB & Mongoose](./mongodb-mongoose.md)
 

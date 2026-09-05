@@ -2,7 +2,7 @@
 /**
  * Copy every backend-owned shared file into the paired frontend — `npm run sync:frontend`.
  *
- * Three files are produced here and held byte-identical over there, one of them named differently
+ * Two files are produced here and held byte-identical over there, one of them named differently
  * on the other side. The list and the per-side paths both come from `SHARED_FILES`, so a file added
  * there is synced without touching this script.
  *

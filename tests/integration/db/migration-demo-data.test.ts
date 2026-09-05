@@ -17,9 +17,7 @@
  *
  *       - `check:seed-export` re-runs the migration-free path, so it agrees with itself;
  *       - `seed-conformance.test.ts` validates the artefact against the generated schemas, which
- *         the rewritten rows would still satisfy;
- *       - `check:spec-identity` compares the frontend's copy to this one, and both are the same
- *         file.
+ *         the rewritten rows would still satisfy.
  *
  * Nothing else puts a migration and a seeder in the same database. This does, in both orders, and
  * asserts the result is byte-identical to what is committed.
