@@ -81,7 +81,7 @@ export interface OrderDocument
  * Business logic lives in the service (`./service`); queries live in the repository
  * (`./repository`).
  */
-export type OrderModel = Model<OrderDocument, unknown, unknown>;
+export type OrderModel = Model<OrderDocument>;
 
 /**
  * Schema for a single embedded order item.

@@ -202,7 +202,7 @@ export interface UserMethods {
 /**
  * User Document model type. Business logic lives in the service and repository layers.
  */
-export type UserModel = Model<UserDocument, unknown, UserMethods>;
+export type UserModel = Model<UserDocument, Record<string, never>, UserMethods>;
 
 /**
  * Zod schema for user data validation, built on the orval-generated `CreateUserBody` so only

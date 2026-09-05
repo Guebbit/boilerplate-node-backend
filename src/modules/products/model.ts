@@ -57,7 +57,7 @@ export type ProductMethods = unknown;
  * Business logic (search, remove, validate) lives in the service (`./service`); queries live in
  * the repository (`./repository`).
  */
-export type ProductModel = Model<ProductDocument, unknown, ProductMethods>;
+export type ProductModel = Model<ProductDocument, Record<string, never>, ProductMethods>;
 
 /**
  * Zod schema for product data, built on the generated `CreateProductBody` — only fields needing

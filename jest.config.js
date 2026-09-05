@@ -211,6 +211,12 @@ module.exports = {
 
         '^@infrastructure/(.*)$': '<rootDir>/src/infrastructure/$1',
         '^@kernel/(.*)$': '<rootDir>/src/kernel/$1',
-        '^@modules/(.*)$': '<rootDir>/src/modules/$1'
+        '^@modules/(.*)$': '<rootDir>/src/modules/$1',
+
+        /*
+         * The one third-party module replaced wholesale: `puppeteer-core` v25 is ESM-only and
+         * cannot be parsed here. See the stub for why nothing wanted the real package anyway.
+         */
+        '^puppeteer-core$': '<rootDir>/tests/support/puppeteer-core.stub.ts'
     }
 };

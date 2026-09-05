@@ -503,11 +503,18 @@ jobs:
               run: npm run test:contract
 
     audit:
-        # Reports known high/critical severity vulnerabilities in production dependencies.
-        # Deliberately NOT in the `ci` gate's `needs:` below: a transitive high/critical finding
-        # with no non-breaking fix (see extract-zip -> puppeteer-core) would otherwise block every
-        # merge indefinitely with nothing anyone here can do about it in the same PR. This still
-        # runs on every push/PR and still shows red when it fails — an alert, not a gate.
+        # Reports known moderate-and-above vulnerabilities in production dependencies.
+        #
+        # `moderate`, not `high`: every advisory this repo has actually had to act on was moderate
+        # or low (mongoose prototype pollution, qs, body-parser), so a high-only threshold was red
+        # for the one chain nobody could fix and silent about the three that mattered.
+        #
+        # Deliberately NOT in the `ci` gate's `needs:` below: a transitive finding with no
+        # non-breaking fix would otherwise block every merge indefinitely with nothing anyone here
+        # can do about it in the same PR. This still runs on every push/PR and still shows red when
+        # it fails — an alert, not a gate. That only stays useful while it is usually GREEN: if an
+        # unfixable advisory ever parks this job on red, add an allowlist keyed by advisory id
+        # rather than raising the threshold back up.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -522,7 +529,7 @@ jobs:
                   node-version: ${{ env.NODE_VERSION }}
 
             - name: Audit dependencies
-              run: npm audit --omit=dev --audit-level=high
+              run: npm audit --omit=dev --audit-level=moderate
 
     ci:
         # Single status check to require in branch protection, so adding/renaming

@@ -59,10 +59,16 @@ export const renderHtmlToPdf = (
                     // `setContent` writes the HTML directly instead of navigating to a URL —
                     // no local web server needed.
                     .setContent(html, {
-                        // Wait until there have been no network connections for 500 ms, so
-                        // referenced images/fonts/CSS are actually loaded before we print.
-                        // Without this, remote assets routinely render as blanks.
-                        waitUntil: 'networkidle0'
+                        /*
+                         * Wait for the `load` event, which fires once images, stylesheets and
+                         * subframes have finished — so referenced assets are painted, not blank.
+                         * The only stronger option, `networkidle0`, no longer exists here:
+                         * puppeteer 25 excludes it from `setContent`, which does not navigate.
+                         * What `load` misses is a resource a SCRIPT fetches afterwards, and these
+                         * templates run none.
+                         * https://pptr.dev/api/puppeteer.page.setcontent
+                         */
+                        waitUntil: 'load'
                     })
                     // Prints to a PDF byte array (not a file) so the caller decides whether to
                     // stream it, attach it to an email, or persist it.

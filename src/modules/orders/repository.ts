@@ -8,7 +8,7 @@
 
 import { orderModel, applyOrderTransform } from './model';
 import type { OrderDocument } from './model';
-import type { PipelineStage } from 'mongoose';
+import type { PipelineStage, QueryFilter } from 'mongoose';
 import {
     createRepository,
     toObjectId,
@@ -147,7 +147,14 @@ const updateStatusIfIn = (
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
-            { _id: toObjectId(id), ...scope, status: { $in: [...from] } },
+            // `as QueryFilter`, the same cast `create-repository.ts` makes for the same reason:
+            // spreading a `Record<string, unknown>` scope widens the object past what the filter
+            // generic accepts, and the alternative is typing every caller's scope per collection.
+            {
+                _id: toObjectId(id),
+                ...scope,
+                status: { $in: [...from] }
+            } as QueryFilter<OrderDocument>,
             { $set: { status: to } },
             { returnDocument: 'after' }
         )

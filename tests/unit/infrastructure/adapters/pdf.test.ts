@@ -7,7 +7,7 @@
  *
  *   - the browser binary is resolved at CALL time, so an environment set after import still counts;
  *   - the two `--no-sandbox` flags, which are a deliberate risk accepted for our own templates;
- *   - `networkidle0`, without which referenced assets print as blanks;
+ *   - `waitUntil: 'load'`, without which referenced assets print as blanks;
  *   - `finally`, which closes the browser even when the render throws. That one is the reason this
  *     file is worth testing at all: a leaked Chromium per failed invoice exhausts the container.
  *
@@ -72,14 +72,17 @@ describe('renderHtmlToPdf', () => {
             await renderHtmlToPdf('<h1>Invoice</h1>');
 
             expect(setContent).toHaveBeenCalledWith('<h1>Invoice</h1>', {
-                waitUntil: 'networkidle0'
+                waitUntil: 'load'
             });
         });
 
-        it('waits for the network to fall idle, so referenced assets are loaded before printing', async () => {
+        it('waits for the load event, so referenced assets are loaded before printing', async () => {
             await renderHtmlToPdf('<img src="https://cdn.example.com/logo.png" />');
 
-            expect(setContent.mock.calls.at(-1)?.[1]).toEqual({ waitUntil: 'networkidle0' });
+            // `load` fires once images, stylesheets and subframes are done. Asserted rather than
+            // left to the default, which is the same value — the point is that it is CHOSEN, and
+            // that a future puppeteer changing its default cannot silently print blanks.
+            expect(setContent.mock.calls.at(-1)?.[1]).toEqual({ waitUntil: 'load' });
         });
 
         it('defaults to A4 portrait', async () => {
