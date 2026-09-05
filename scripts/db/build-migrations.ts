@@ -14,6 +14,7 @@ import path from 'node:path';
 import mongoose from 'mongoose';
 import type { IndexDefinition, IndexOptions } from 'mongoose';
 import { format, resolveConfig } from 'prettier';
+import { collectModuleMigrations } from './module-migrations';
 
 const ROOT = path.join(__dirname, '..', '..');
 const MODULES_ROOT = path.join(ROOT, 'src', 'modules');
@@ -28,15 +29,6 @@ const MIGRATIONS_DIR = path.join(ROOT, 'db', 'migrations');
 const MIGRATION_FILE = '20260905000000-baseline.js';
 
 const MIGRATION_PATH = path.join(MIGRATIONS_DIR, MIGRATION_FILE);
-
-/**
- * What a module's migration filename must look like: `20260905000000-what-it-does.js`.
- *
- * `migrate-mongo` orders migrations by filename alone, so the leading timestamp is the ONLY thing
- * sequencing one module's change against another's. A file without one sorts wherever its first
- * letter falls and would run in an order nobody chose.
- */
-const MIGRATION_NAME_PATTERN = /^\d{14}-[\da-z-]+\.js$/;
 
 /**
  * The parts of a registered model this generator reads.
@@ -281,64 +273,6 @@ module.exports = {
 `;
 
 /**
- * One migration a module owns, resolved to where it comes from and where it lands.
- */
-interface ModuleMigration {
-    /** The module that declared the `migrations` directory holding it. */
-    module: string;
-    /** Its filename, which is also its identity in the changelog — preserved verbatim. */
-    file: string;
-    /** Absolute path to the authored file. */
-    source: string;
-}
-
-/**
- * Every enabled module's migrations, in the order `migrate-mongo` will apply them.
- *
- * Imported dynamically, and only here, so that the baseline above is computed against exactly the
- * models `registerModels` walked — pulling the manifest in at the top would register every model
- * ahead of that walk and could reattribute one to whichever module names it first.
- *
- * @returns the migrations, sorted by filename across all modules
- * @throws when a filename is malformed, or two modules claim the same one
- */
-const collectModuleMigrations = async (): Promise<ModuleMigration[]> => {
-    const { enabledModules } = await import('../../src/modules');
-
-    const found = enabledModules.flatMap(({ name, migrations }) =>
-        migrations && fs.existsSync(migrations)
-            ? fs
-                  .readdirSync(migrations)
-                  .filter((file) => file.endsWith('.js'))
-                  .map((file) => ({ module: name, file, source: path.join(migrations, file) }))
-            : []
-    );
-
-    const malformed = found.filter(({ file }) => !MIGRATION_NAME_PATTERN.test(file));
-    if (malformed.length > 0)
-        throw new Error(
-            `Migration filenames must be \`<14-digit timestamp>-kebab-name.js\` — ` +
-                `migrate-mongo orders by filename alone:\n` +
-                malformed.map(({ module, file }) => `  ${module}/migrations/${file}`).join('\n')
-        );
-
-    // Two modules picking the same filename would silently collapse into one copied file, and the
-    // changelog records by name, so the survivor would mark the other as already applied.
-    const byFile = new Map<string, string>();
-    for (const { module, file } of found) {
-        const claimed = byFile.get(file);
-        if (claimed)
-            throw new Error(
-                `Two modules own a migration named ${file} — ${claimed} and ${module}. ` +
-                    `Rename one: the filename is its identity in the changelog.`
-            );
-        byFile.set(file, module);
-    }
-
-    return found.toSorted((a, b) => a.file.localeCompare(b.file));
-};
-
-/**
  * Rebuild `db/migrations/` from scratch.
  *
  * Emptied rather than merged into: the directory is generated output, so a migration deleted from
@@ -362,9 +296,16 @@ const main = async () => {
         filepath: MIGRATION_PATH
     });
 
-    // Resolved before anything is deleted, so a malformed or duplicated filename leaves the
-    // existing bundle intact instead of emptying it and then failing.
-    const moduleMigrations = await collectModuleMigrations();
+    /*
+     * Imported here, and only here, so the baseline above is computed against exactly the models
+     * `registerModels` walked — pulling the manifest in at the top would register every model
+     * ahead of that walk and could reattribute one to whichever module names it first.
+     *
+     * Resolved before anything is deleted, so a malformed or duplicated filename leaves the
+     * existing bundle intact instead of emptying it and then failing.
+     */
+    const { enabledModules } = await import('../../src/modules');
+    const moduleMigrations = collectModuleMigrations(enabledModules);
 
     resetMigrationsDirectory();
     fs.writeFileSync(MIGRATION_PATH, baseline);
