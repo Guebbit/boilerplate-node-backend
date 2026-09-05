@@ -1,0 +1,149 @@
+# Production stack for the API.
+#
+# `docker-compose.yml` is the DEVELOPMENT stack: it bind-mounts the working tree, runs the dev
+# server with hot reload, and brings up the full observability estate (Prometheus, Loki, Tempo,
+# Grafana, Alloy, Umami) because being able to see everything is the point of a development box.
+#
+# This file is the deployment. It runs the image built by `.docker/Dockerfile.production`, mounts
+# no source, exposes no database port to the host, and stops at the four services the application
+# cannot run without. Telemetry is exported over OTLP to a collector that is deliberately NOT
+# defined here — see the note at the bottom.
+#
+#   docker compose -f docker-compose.production.yml up -d --build
+#   docker compose -f docker-compose.production.yml logs -f app
+#   docker compose -f docker-compose.production.yml down          # add -v to drop the data too
+#
+# ── BEFORE THE FIRST DEPLOY ──────────────────────────────────────────────────────────────────────
+# Copy `.env-example` to `.env` and set real values. The application reads `.env` through dotenv;
+# this file passes through only what has to differ inside the network (service hostnames) or what
+# an operator should be able to override per environment without editing a committed file.
+#
+# The secrets that MUST NOT keep their example values: NODE_JWT_SECRET, NODE_JWT_REFRESH_SECRET,
+# NODE_METRICS_TOKEN, and the Mongo credentials below. `.env` is in `.dockerignore` and `.gitignore`
+# on purpose — it is mounted at runtime, never baked into the image.
+
+services:
+    app:
+        build:
+            context: .
+            dockerfile: .docker/Dockerfile.production
+            args:
+                # ~200 MB of Chromium, needed only by the PDF invoice endpoint. See the Dockerfile.
+                INSTALL_CHROMIUM: '${INSTALL_CHROMIUM:-false}'
+
+        # `unless-stopped` rather than `always`: a container an operator stopped by hand stays
+        # stopped across a daemon restart, which is what someone debugging a live incident expects.
+        restart: unless-stopped
+
+        # Runs `dumb-init` as PID 1 already (see the Dockerfile ENTRYPOINT), so compose does not
+        # need to inject its own. Left explicit because the graceful shutdown in `src/cluster.ts`
+        # depends on SIGTERM arriving, and that is worth stating twice.
+        stop_grace_period: 30s
+
+        env_file:
+            - .env
+
+        environment:
+            NODE_ENV: 'production'
+            # Service hostnames on the compose network. These override whatever `.env` holds,
+            # because `.env` is written for a developer running the API on the host against
+            # localhost ports, and inside the network the names are the addresses.
+            NODE_DB_URI: 'mongodb://${MONGO_USER:-api}:${MONGO_PASSWORD:?set MONGO_PASSWORD in .env}@database:27017/${MONGO_DB:-api}?authSource=admin'
+            NODE_REDIS_URL: 'redis://cache:6379'
+            NODE_RABBITMQ_URL: 'amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@queue:5672'
+            NODE_PORT: '${NODE_PORT:-3000}'
+            # One process per container. Scale with `--scale app=N` or with the orchestrator, not
+            # with an in-container cluster — see the Dockerfile CMD note.
+            NODE_ENABLE_CLUSTERING: '0'
+            OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
+            NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
+
+        ports:
+            # Bound to the loopback interface, NOT to 0.0.0.0. Put a TLS-terminating reverse proxy
+            # in front of this; publishing the API directly on a public interface means serving it
+            # over plain HTTP, and the auth cookies this application sets are not safe that way.
+            - '127.0.0.1:${NODE_PORT:-3000}:${NODE_PORT:-3000}'
+
+        volumes:
+            # Uploaded images. WITHOUT this the container's own filesystem holds them and a
+            # redeploy loses every one. A named volume is the stopgap; it still pins the deployment
+            # to one host, and two replicas do not share it. The durable answer is an
+            # S3-compatible `ImageStore` backend — see `infrastructure/adapters/image-store.ts`.
+            - uploads:/app/public/images
+
+        depends_on:
+            database:
+                condition: service_healthy
+            cache:
+                condition: service_healthy
+            queue:
+                condition: service_healthy
+
+    database:
+        image: docker.io/library/mongo:8
+        restart: unless-stopped
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: '${MONGO_USER:-api}'
+            MONGO_INITDB_ROOT_PASSWORD: '${MONGO_PASSWORD:?set MONGO_PASSWORD in .env}'
+            MONGO_INITDB_DATABASE: '${MONGO_DB:-api}'
+        volumes:
+            - mongo-data:/data/db
+        # No `ports:` entry, deliberately. The database is reachable from the compose network and
+        # from nowhere else. Reach it for maintenance with
+        # `docker compose -f docker-compose.production.yml exec database mongosh`.
+        healthcheck:
+            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+
+    cache:
+        image: docker.io/library/redis:8-alpine
+        restart: unless-stopped
+        # `--save 60 1` keeps an RDB snapshot so a restart does not cold-start every cache key at
+        # once. The cache is not a source of truth: losing it is a latency event, not a data loss.
+        command: ['redis-server', '--save', '60', '1', '--appendonly', 'no']
+        volumes:
+            - redis-data:/data
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 10s
+            timeout: 3s
+            retries: 5
+
+    queue:
+        image: docker.io/library/rabbitmq:4-alpine
+        restart: unless-stopped
+        environment:
+            RABBITMQ_DEFAULT_USER: '${RABBITMQ_USER:-guest}'
+            RABBITMQ_DEFAULT_PASS: '${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}'
+        volumes:
+            - rabbitmq-data:/var/lib/rabbitmq
+        healthcheck:
+            test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+            interval: 15s
+            timeout: 10s
+            retries: 5
+            start_period: 30s
+
+volumes:
+    mongo-data:
+    redis-data:
+    rabbitmq-data:
+    uploads:
+# ── OBSERVABILITY IS NOT IN THIS FILE, ON PURPOSE ───────────────────────────────────────────────
+# The development stack runs Prometheus, Loki, Tempo, Grafana and an OTel collector next to the
+# API because a developer wants the whole estate on one machine with one command.
+#
+# A deployment usually does not: telemetry outlives any single service and belongs to a collector
+# the application merely points at. So the API exports OTLP to whatever
+# `OTEL_EXPORTER_OTLP_ENDPOINT` names — a collector you already run, a managed backend, or nothing
+# at all, which is what an empty value means and is a valid choice.
+#
+# To run the estate here anyway, the definitions are already written: the observability services in
+# `docker-compose.yml` and their configuration under `.docker/observability/` work unchanged.
+# Compose merges files left to right, so
+#   docker compose -f docker-compose.production.yml -f docker-compose.yml up -d
+# is the wrong way to do it — it drags the bind-mounts and dev commands back in. Copy the services
+# you want into an override file instead.

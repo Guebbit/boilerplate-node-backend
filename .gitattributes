@@ -1,0 +1,36 @@
+# Generated files.
+#
+# `linguist-generated=true` is the one marker that works on EVERY format here. Half of these are
+# JSON, which has no comments, so a "do not edit" header can never cover them — the ones whose
+# format allows a comment carry one as well, and this file is what covers the rest.
+#
+# What it buys, all on GitHub: the diff is collapsed by default in pull requests, the file is
+# skipped when computing the repo's language breakdown, and `git diff` shows it as generated rather
+# than as work someone did. It changes nothing about how the files are built or read.
+#
+# NONE of these should ever be hand-edited. Each is rebuilt from sources this repo owns, and a
+# committed copy that disagrees with a fresh run fails the build:
+#
+#   npm run contracts:bundle   -> the specs and the frontend's analytics names
+#   npm run seed:export        -> the demo dataset
+#   npm run gen:asyncapi       -> the realtime types
+#   npm run gen:api            -> the orval client
+#
+# The four client collections (`contract.<tool>.*`) are generated too, but they are `.gitignore`d
+# rather than committed, so they never appear in a diff and there is nothing here to mark.
+#
+# See docs/api/contract-fragmentation.md for who owns what.
+
+# ── The REST and realtime contracts ──────────────────────────────────────────────────────────
+openapi.yaml                                                   linguist-generated=true
+asyncapi.yaml                                                  linguist-generated=true
+asyncapi.public.yaml                                           linguist-generated=true
+
+# ── The demo dataset, as the API actually serves it ──────────────────────────────────────────
+db/demo/demo-data.json                                         linguist-generated=true
+
+# ── Realtime types, generated from the async contract ────────────────────────────────────────
+src/types/asyncapi.generated.ts                                linguist-generated=true
+
+# ── The orval client, generated from openapi.yaml ────────────────────────────────────────────
+api/**                                                         linguist-generated=true

@@ -1,0 +1,370 @@
+/**
+ * @module
+ * Integration tests for the feedback request service. Pins three behaviours: create normalises
+ * (lowercased email, trimmed fields, blank `name` → `undefined`); `toFeedbackStatus` accepts only
+ * generated `FeedbackRequestStatus` values; and `respondedAt` stamps once, so re-resolving an
+ * already-resolved item never moves it. Also covers the honeypot disposition and `remove`.
+ */
+
+import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
+import { observePort } from '@tests/ports';
+import { create, search, updateStatus, updateStatusById, remove } from '@modules/feedback/service';
+import { feedbackRequestRepository } from '@modules/feedback/repository';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import * as auditPort from '@infrastructure/observability/audit';
+import { feedbackAuditActions } from '@modules/feedback/audit';
+import { FeedbackRequestStatus } from '@types';
+import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
+import type { FeedbackRequestDocument } from '@modules/feedback/model';
+
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    __esModule: true,
+    enqueueEmail: jest.fn().mockResolvedValue(undefined)
+}));
+const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
+
+/* Replaced for the same reason `orders/tests/integration/cancel.test.ts` replaces it — see
+ * `tests/support/ports.ts`. */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
+
+setupTestDb();
+
+/*
+ * `notifyMailbox()` reads `NODE_CONTACT_NOTIFY_EMAIL` from the environment at call time. `.env`
+ * supplies it via `dotenv/config` in `src/app.ts`, which a service-level suite never imports — so
+ * without this the honeypot tests below would pass for the wrong reason (nothing configured to
+ * notify, rather than the honeypot suppressing the notification).
+ */
+const originalNotifyEmail = process.env.NODE_CONTACT_NOTIFY_EMAIL;
+beforeAll(() => {
+    process.env.NODE_CONTACT_NOTIFY_EMAIL = 'admin@example.com';
+});
+afterAll(() => {
+    if (originalNotifyEmail === undefined) delete process.env.NODE_CONTACT_NOTIFY_EMAIL;
+    else process.env.NODE_CONTACT_NOTIFY_EMAIL = originalNotifyEmail;
+});
+
+afterEach(() => jest.clearAllMocks());
+
+const MISSING_ID = '507f1f77bcf86cd799439011';
+
+const asSuccess = (result: unknown) => result as ResponseSuccess<FeedbackRequestDocument>;
+const asReject = (result: unknown) => result as ResponseReject;
+
+/** A valid creation payload; overrides let each test vary one field at a time. */
+const makePayload = (overrides: Record<string, string> = {}) => ({
+    name: 'Ada Lovelace',
+    email: 'ada@example.com',
+    subject: 'Broken checkout',
+    message: 'The cart total is wrong.',
+    ...overrides
+});
+
+describe('create', () => {
+    it('stores a new request with status "new"', async () => {
+        const feedback = await create(makePayload());
+
+        // Every request starts in the same state regardless of what a client sent — the status
+        // field is admin-controlled, not caller-controlled.
+        expect(feedback.status).toBe(FeedbackRequestStatus.new);
+        expect(feedback.subject).toBe('Broken checkout');
+    });
+
+    it('lowercases the email so the same address is one identity', async () => {
+        const feedback = await create(makePayload({ email: 'Ada@Example.COM' }));
+
+        expect(feedback.email).toBe('ada@example.com');
+    });
+
+    it('trims surrounding whitespace from every text field', async () => {
+        const feedback = await create(
+            makePayload({
+                name: '  Ada Lovelace  ',
+                email: '  ada@example.com  ',
+                subject: '  Broken checkout  ',
+                message: '  The cart total is wrong.  '
+            })
+        );
+
+        expect(feedback.name).toBe('Ada Lovelace');
+        expect(feedback.email).toBe('ada@example.com');
+        expect(feedback.subject).toBe('Broken checkout');
+        expect(feedback.message).toBe('The cart total is wrong.');
+    });
+
+    it('treats a blank name as absent rather than empty', async () => {
+        // `|| undefined` — the field is optional, and '' would render as an empty author line in
+        // any admin view instead of falling back to the email.
+        const feedback = await create(makePayload({ name: '   ' }));
+
+        expect(feedback.name).toBeUndefined();
+    });
+
+    it('keeps a name that is only whitespace-padded', async () => {
+        const feedback = await create(makePayload({ name: ' A ' }));
+
+        expect(feedback.name).toBe('A');
+    });
+});
+
+describe('create — honeypot', () => {
+    it('sends the operator notification when the honeypot is empty', async () => {
+        await create(makePayload());
+
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('writes a suspected-spam submission as status "spam" and sends no notification', async () => {
+        const feedback = await create(makePayload({ website: 'https://spammer.example' }));
+
+        expect(feedback.status).toBe(FeedbackRequestStatus.spam);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('treats a whitespace-only honeypot as empty, same as a real client leaves it', async () => {
+        const feedback = await create(makePayload({ website: '   ' }));
+
+        expect(feedback.status).toBe(FeedbackRequestStatus.new);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('never persists or returns the honeypot field itself', async () => {
+        const feedback = await create(makePayload({ website: 'https://spammer.example' }));
+
+        const serialized = feedback.toJSON() as Record<string, unknown>;
+        expect(serialized).not.toHaveProperty('website');
+
+        const reloaded = await feedbackRequestRepository.findByIdRaw(String(feedback._id));
+        expect(reloaded).not.toHaveProperty('website');
+    });
+});
+
+/** Seeds a small, deliberately varied corpus. */
+const seed = async () => {
+    await create(makePayload({ email: 'ada@example.com', subject: 'Checkout bug' }));
+    await create(makePayload({ email: 'grace@example.com', subject: 'Login trouble' }));
+    const third = await create(makePayload({ email: 'alan@example.com', subject: 'Feature idea' }));
+    third.status = FeedbackRequestStatus.resolved;
+    await feedbackRequestRepository.save(third);
+};
+
+describe('search', () => {
+    it('returns every request when no filter is given', async () => {
+        await seed();
+
+        const { items, meta } = await search();
+
+        expect(items).toHaveLength(3);
+        expect(meta.totalItems).toBe(3);
+    });
+
+    it('filters by status', async () => {
+        await seed();
+
+        const { items } = await search({ status: 'resolved' });
+
+        expect(items).toHaveLength(1);
+        expect(items[0].email).toBe('alan@example.com');
+    });
+
+    it('filters by email fragment', async () => {
+        await seed();
+
+        const { items } = await search({ email: 'grace' });
+
+        expect(items).toHaveLength(1);
+        expect(items[0].email).toBe('grace@example.com');
+    });
+
+    it('searches free text across name, subject and message', async () => {
+        await seed();
+
+        const { items } = await search({ text: 'Login' });
+
+        expect(items).toHaveLength(1);
+        expect(items[0].subject).toBe('Login trouble');
+    });
+
+    it('paginates and reports coherent meta', async () => {
+        await seed();
+
+        const { items, meta } = await search({ page: 1, pageSize: 2 });
+
+        expect(items).toHaveLength(2);
+        // The three meta fields must agree with each other and with the page actually returned;
+        // a totalPages computed from the page size rather than the total is a classic off-by-one.
+        expect(meta).toMatchObject({ page: 1, pageSize: 2, totalItems: 3, totalPages: 2 });
+    });
+
+    it('matches nothing for an unknown status rather than widening the search', async () => {
+        // An unrecognised status is truthy, so `where.status` is set, but `toFeedbackStatus`
+        // maps it to `undefined`. The important property is the *direction* of the failure: an
+        // unparseable filter must narrow to nothing, never fall through to "return everything".
+        await seed();
+
+        const { items } = await search({ status: 'NOT_A_STATUS' });
+
+        expect(items).toHaveLength(0);
+    });
+
+    it('does not honour the uppercase status aliases the contract removed', async () => {
+        // The generated status values are lowercase-only, matching openapi.yaml's enum. 'NEW' is
+        // therefore not a status at all — it must not quietly behave like `new`.
+        await seed();
+
+        const { items } = await search({ status: 'NEW' });
+
+        expect(items).toHaveLength(0);
+        // Contrast with the lowercase form, which does filter — proving the assertion above is
+        // about the alias and not about the filter being broken outright.
+        const lowercase = await search({ status: 'new' });
+        expect(lowercase.items).toHaveLength(2);
+    });
+});
+
+describe('updateStatus', () => {
+    it('applies a new status', async () => {
+        const feedback = await create(makePayload());
+
+        const result = await updateStatus(feedback, {
+            status: FeedbackRequestStatus.in_progress
+        });
+
+        expect(asSuccess(result).data!.status).toBe(FeedbackRequestStatus.in_progress);
+    });
+
+    it('persists the change rather than only mutating in memory', async () => {
+        const feedback = await create(makePayload());
+
+        await updateStatus(feedback, { status: FeedbackRequestStatus.spam });
+
+        const reloaded = await feedbackRequestRepository.findById(String(feedback._id));
+        expect(reloaded!.status).toBe(FeedbackRequestStatus.spam);
+    });
+
+    it('records admin notes', async () => {
+        const feedback = await create(makePayload());
+
+        const result = await updateStatus(feedback, { adminNotes: 'Duplicate of #12' });
+
+        expect(asSuccess(result).data!.adminNotes).toBe('Duplicate of #12');
+    });
+
+    it('leaves the status untouched when the payload carries none', async () => {
+        const feedback = await create(makePayload());
+        feedback.status = FeedbackRequestStatus.in_progress;
+        await feedbackRequestRepository.save(feedback);
+
+        await updateStatus(feedback, { adminNotes: 'Just a note' });
+
+        expect(feedback.status).toBe(FeedbackRequestStatus.in_progress);
+    });
+
+    it('allows admin notes to be cleared to an empty string', async () => {
+        // `!== undefined`, not a truthiness check: '' is a deliberate clear, and a truthy guard
+        // would make notes impossible to remove once written.
+        const feedback = await create(makePayload());
+        await updateStatus(feedback, { adminNotes: 'temporary' });
+
+        await updateStatus(feedback, { adminNotes: '' });
+
+        expect(feedback.adminNotes).toBe('');
+    });
+
+    it('stamps respondedAt when the request becomes resolved', async () => {
+        const feedback = await create(makePayload());
+
+        await updateStatus(feedback, { status: FeedbackRequestStatus.resolved });
+
+        expect(feedback.respondedAt).toBeInstanceOf(Date);
+    });
+
+    it('does not stamp respondedAt for a non-resolved status', async () => {
+        const feedback = await create(makePayload());
+
+        await updateStatus(feedback, { status: FeedbackRequestStatus.in_progress });
+
+        expect(feedback.respondedAt).toBeUndefined();
+    });
+
+    it('keeps the original respondedAt when resolved a second time', async () => {
+        // "When did we answer this" must not drift every time an admin re-saves the record.
+        const feedback = await create(makePayload());
+        await updateStatus(feedback, { status: FeedbackRequestStatus.resolved });
+        const firstStamp = feedback.respondedAt!.getTime();
+
+        await updateStatus(feedback, { status: FeedbackRequestStatus.resolved });
+
+        expect(feedback.respondedAt!.getTime()).toBe(firstStamp);
+    });
+});
+
+describe('updateStatusById', () => {
+    it('updates an existing request', async () => {
+        const feedback = await create(makePayload());
+
+        const result = await updateStatusById(String(feedback._id), {
+            status: FeedbackRequestStatus.resolved
+        });
+
+        expect(result.success).toBe(true);
+        expect(asSuccess(result).data!.status).toBe(FeedbackRequestStatus.resolved);
+    });
+
+    it('rejects with 404 for an id that does not exist', async () => {
+        const result = await updateStatusById(MISSING_ID, {
+            status: FeedbackRequestStatus.resolved
+        });
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(404);
+    });
+});
+
+describe('remove', () => {
+    it('permanently deletes an existing request', async () => {
+        const feedback = await create(makePayload());
+
+        const result = await remove(String(feedback._id));
+
+        expect(result.success).toBe(true);
+        expect(await feedbackRequestRepository.findById(String(feedback._id))).toBeNull();
+    });
+
+    it('rejects with 404 for an id that does not exist', async () => {
+        const result = await remove(MISSING_ID);
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(404);
+    });
+
+    it('emits admin.feedback.deleted with the target id when a context is given', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const feedback = await create(makePayload());
+
+        await remove(String(feedback._id), testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: feedbackAuditActions.ADMIN_FEEDBACK_DELETED,
+                outcome: 'success',
+                target_type: 'feedback',
+                target_id: String(feedback._id)
+            })
+        );
+    });
+
+    it('emits no audit event when no context is given', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const feedback = await create(makePayload());
+
+        await remove(String(feedback._id));
+
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+});

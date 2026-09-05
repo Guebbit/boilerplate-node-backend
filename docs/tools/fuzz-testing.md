@@ -1,0 +1,163 @@
+# Spec-Driven Fuzzing
+
+Every other suite tests endpoints somebody thought about. This one tests the endpoints **nobody thought about** — including the ones added after it was written.
+
+It walks `openapi.yaml`, generates requests for every operation it finds, throws them at the real app, and asserts two things: the server never answers **5xx**, and every response **matches the contract**.
+
+## The idea
+
+A test suite has a blind spot shaped exactly like its author's imagination. You write cases for the endpoint you just built, the bug you just fixed, the edge you happen to remember. Nothing writes a case for the endpoint a colleague added last month, or for the field you have never once sent as an empty string.
+
+Fuzzing removes the author from the loop. The list of what to test comes from the contract, and the values come from a generator.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
+flowchart TB
+    Spec["openapi.yaml"] --> Walk["spec walk\nevery path × method"]
+    Walk --> Ops["one jest case per operation"]
+    Spec --> Schema["each operation's\nrequest body schema"]
+    Schema --> Arb["fast-check arbitrary\nspec-valid, hostile values"]
+    Arb --> Drive["supertest → the real app"]
+    Ops --> Drive
+    Drive --> A1{"status < 500?"}
+    A1 -->|no| Bug["FINDING:\na well-formed request crashed it"]
+    A1 -->|yes| A2{"matches the spec?"}
+    A2 -->|no| Drift["FINDING:\nundocumented status or shape"]
+    A2 -->|yes| Ok["pass"]
+
+    classDef src fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef proc fill:#ddd6fe,stroke:#7c3aed,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
+    classDef good fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class Spec,Schema src;
+    class Walk,Ops,Arb,Drive,A1,A2 proc;
+    class Bug,Drift bad;
+    class Ok good;
+```
+
+## Why the endpoint list is derived, never written
+
+This is the property that makes it worth having, and it is why the suite does not contain a list of URLs.
+
+A hand-maintained list rots. Somebody adds `PATCH /products/{id}`, nobody adds it to the fuzz list, and the suite reports green over a shrinking fraction of the API — the worst possible outcome, because it _looks_ like coverage.
+
+`listOperations()` reads the spec. Add a route to `openapi.yaml` and it is fuzzed on the next run.
+
+That auto-discovery is the main thing [`schemathesis`](https://schemathesis.readthedocs.io/) offers, and it is why choosing against it needed a reason. The reason is that this is a **boilerplate**: every project derived from it would inherit a Python toolchain alongside Node, for a capability that can be assembled from four things the repo already has — the spec, `fast-check`, `supertest`, and `jest-openapi`.
+
+## Spec-valid, but hostile
+
+The generated values are **legal per the contract** and **nasty within it**. Both halves matter, and getting this backwards is the usual way a fuzzer ends up testing nothing.
+
+Generating outright garbage would mostly re-test the validator: every write endpoint parses its body with a generated Zod schema and answers 422. A wall of expected 422s is where a genuine 500 goes to hide.
+
+So the generator honours `minLength`, `maximum`, `pattern`, `enum`, `format` and `minItems`, and then heads for the edges of what those allow:
+
+| Kind    | What it reaches for                                                                                                                           |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| strings | empty, whitespace, `'null'`, `'undefined'`, emoji, right-to-left marks, 1000 characters, regex metacharacters, traversal and injection shapes |
+| numbers | exactly `minimum`, exactly `maximum`, `0`, `1`                                                                                                |
+| objects | optional properties genuinely omitted — "absent" is a different case from "empty"                                                             |
+| arrays  | `minItems` respected, so the request is not rejected before it reaches the handler                                                            |
+
+These are weighted rather than uniform. Uniform random strings essentially never produce an empty one.
+
+## The two assertions
+
+**No 5xx.** A malformed request deserves a 4xx. A 5xx means a well-formed request reached an unhandled throw — a correctness bug and an availability signal at once, especially on a public endpoint.
+
+**The response matches the spec**, via `jest-openapi`'s `toSatisfyApiSpec()`. This checks the status code as well as the body, and it is sharp here because most schemas are `additionalProperties: false` — an undeclared field fails, and so does an undocumented status.
+
+## The tripwires on itself
+
+The obvious objection to a hand-rolled spec walk is: _who maintains it?_
+
+The answer is that it maintains itself, loudly. `SUPPORTED_KEYWORDS` lists every JSON Schema keyword the generator honours, and a test fails when the spec starts using one that is missing.
+
+That matters because the failure mode is otherwise **silent and green**: an unknown keyword means the generator stops constraining that field, the endpoint rightly rejects every request as 422, and the suite passes while testing the validator instead of the handler.
+
+It has already fired once, for `minItems`.
+
+When it fails, there are exactly two honest responses:
+
+1. teach the generator the keyword, or
+2. conclude the spec has outgrown a hand-rolled walk and reach for a real OpenAPI tool.
+
+Silencing it is not on the list.
+
+### The second tripwire: patterns it cannot build
+
+A keyword can be understood and its **value** still be beyond the generator. `pattern` is the case: `fc.stringMatching` compiles most regexes, but throws `Assertions of kind Lookahead not implemented yet!` on lookaround — which is exactly what "a lowercase letter, an uppercase letter, a digit and a symbol, in any order" needs.
+
+The failure mode is the same silent-and-green one, so the answer is the same shape. `tests/support/pattern-samples.ts` holds a hand-written sample per pattern, keyed on the regex source, and `ungeneratablePatterns()` fails the suite when the spec declares a lookaround pattern with no sample registered.
+
+```mermaid
+flowchart TD
+    A["schema.pattern"] --> B{"uses lookaround?"}
+    B -->|no| C["fc.stringMatching<br/><i>full variety</i>"]
+    B -->|yes| D{"sample registered?"}
+    D -->|yes| E["fc.constant(sample)<br/><i>one value, but legal</i>"]
+    D -->|no| F["field omitted<br/><b>ungeneratablePatterns() fails</b>"]
+```
+
+One table, two readers: `tests/support/contract-data.ts` reads it too, so a tricky pattern is registered once rather than once per generator. The two differ only in how they refuse — `contract-data.ts` throws at generation time, because it builds a payload that is meant to be valid; the fuzzer degrades to omitting the field and lets the assertion above be the loud part, because it walks far more schema shapes per run.
+
+## What it does not cover
+
+`multipart/form-data` operations are skipped. Their bodies are files, and `fast-check` has nothing useful to say about a PNG; the upload path is covered by `tests/integration/upload-security.test.ts`, which drives real magic-byte checks. A test asserts that the skipped set stays small, so "skipped" cannot quietly become "skipped everything".
+
+It also drives **one request at a time**. `create order → pay → cancel → pay again` is a real class of bug — a status check that only runs on the happy path, a reservation released twice — and nothing above can see it, because nothing above remembers the response of one request while building the next.
+
+## Stateful fuzzing: sequences, not single requests
+
+That gap is real enough to change the answer above. `openapi.yaml` now declares `links` on the operations that chain into an order's lifecycle (`createOrder`/`checkout` → `createPaymentIntent` → `confirmPayment` → `refundPaymentByOrder`/`cancelOrderById`) — contract work, in the leaf `src/modules/*/openapi.yaml` fragments, independent of any test. See [OpenAPI Workflow](../api/openapi-workflow.md).
+
+Following those links to build a legal, in-order **sequence** of requests is not something the hand-rolled walk above does, and re-implementing it would be re-implementing Schemathesis's one genuinely hard feature. So `.github/workflows/schemathesis.yml` runs the real [`schemathesis`](https://schemathesis.readthedocs.io/) CLI, from its own Docker image, against the app booted via `npm run demo`:
+
+```bash
+docker run --rm --network host \
+  -v "$PWD/openapi.yaml:/spec/openapi.yaml:ro" \
+  schemathesis/schemathesis:stable \
+  run /spec/openapi.yaml \
+  --url http://localhost:3000 \
+  --checks all --stateful=links --hypothesis-derandomize
+```
+
+The reasoning against a Python dependency in the first section still holds for the single-request case, which is why `tests/fuzz/` stays hand-rolled. It does not hold for sequences: `--stateful=links` is not a capability worth re-deriving from four building blocks when the actual gap is state, not generation. `--hypothesis-derandomize` keeps a red run reproducible, same requirement as the seeded run below. Python never enters `package.json` — the workflow is the only place it exists, exactly like `test:prism`'s relationship with the Prism CLI.
+
+Nightly, same as the per-request fuzzer, and advisory for the same reason: a stateful failure is a finding, not something a merge should block on.
+
+## Why it is a nightly, not a PR gate
+
+Same reasoning as [Mutation Testing](./mutation-testing.md): it is slow, and a failure is usually a **finding** that needs a person to read it rather than a red X that should stop a merge.
+
+It also means a green PR is not a promise the fuzzer agrees — that is what the nightly is for.
+
+## File map
+
+| Path                                 | Contents                                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: one jest case per operation, the two assertions, the self-tripwire                   |
+| `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref`/`allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
+| `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                               |
+| `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites      |
+| `tests/support/contract.ts`          | Registers `toSatisfyApiSpec()` against `openapi.yaml` (imported for its side effect)             |
+| `.github/workflows/fuzz.yml`         | The nightly schedule and manual dispatch                                                         |
+| `.github/workflows/schemathesis.yml` | Stateful sequence fuzzing, following `openapi.yaml`'s `links` — see above                        |
+
+## Commands
+
+| Command                                   | Effect                                            |
+| ----------------------------------------- | ------------------------------------------------- |
+| `npm run test:fuzz`                       | Run the whole fuzzer. Not part of `npm run test`. |
+| `npx jest tests/fuzz -t 'POST /products'` | Fuzz one operation while working on it            |
+
+The run is **seeded**, so a failure is reproducible rather than a story about something that happened once. A counterexample printed by `fast-check` can be pasted straight into a regression test.
+
+## Related pages
+
+- [Contract Testing](./contract-testing.md) — the same `toSatisfyApiSpec()` assertion, driven by hand-written cases
+- [Contract-Derived Request Data](./contract-request-data.md) — generation from the zod side rather than the spec side
+- [Property Testing](./property-testing.md) — the same generate-don't-enumerate idea, applied to pure functions
+- [Mutation Testing](./mutation-testing.md) — the other hunter, and the other nightly
+- [Testing & Docs](./testing-and-docs.md) — the map

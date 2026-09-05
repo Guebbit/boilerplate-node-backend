@@ -1,0 +1,11 @@
+{
+    "products": {
+        "not-found": "The requested product was not found.",
+        "field-title-required": "Title is required",
+        "field-title-min": "Title is too short",
+        "field-price-invalid": "Price is missing or invalid",
+        "field-price-min": "Price cannot be negative",
+        "hard-deleted": "Product was permanently deleted.",
+        "soft-deleted": "Product was soft deleted (users only)."
+    }
+}

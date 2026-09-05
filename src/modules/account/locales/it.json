@@ -1,0 +1,140 @@
+{
+    "account": {
+        "login": {
+            "invalid-data": "I dati inseriti non sono validi.",
+            "wrong-data": "Email o password non validi.",
+            "success": "Accesso effettuato."
+        },
+        "signup": {
+            "email-already-used": "L'email è già stata utilizzata.",
+            "password-dont-match": "La password di conferma deve essere uguale alla password.",
+            "terms-not-accepted": "Devi accettare i Termini di Servizio e l'Informativa sulla Privacy per registrarti."
+        },
+        "reset": {
+            "token-not-found": "Token non valido o scaduto, riprova.",
+            "email-sent": "È stata inviata un'email con un link, clicca per reimpostare la password.",
+            "success": "Password modificata, accedi con la nuova password."
+        },
+        "delete": {
+            "email-sent": "È stata inviata un'email di conferma. Clicca sul link per confermare l'eliminazione dell'account.",
+            "token-not-found": "Token non valido o scaduto, riprova.",
+            "success": "Account eliminato definitivamente."
+        },
+        "update": {
+            "success": "Profilo aggiornato."
+        },
+        "password-change": {
+            "wrong-current": "La password attuale non è corretta.",
+            "success": "Password modificata."
+        },
+        "reauth": {
+            "wrong-password": "La password non è corretta.",
+            "success": "Identità confermata."
+        },
+        "two-factor": {
+            "setup-not-started": "Avvia la configurazione di questo metodo prima di confermare un codice.",
+            "wrong-code": "Il codice non è corretto. Controllalo e riprova.",
+            "not-enabled": "L'autenticazione a due fattori non è attiva su questo account.",
+            "unknown-method": "Questo metodo di autenticazione a due fattori non è disponibile.",
+            "not-delivered": "Questo metodo non invia codici: leggilo dal tuo dispositivo.",
+            "email-unverified": "Conferma il tuo indirizzo email prima di usarlo come secondo fattore.",
+            "already-enrolled": "Questo metodo è già attivo su questo account.",
+            "resend-too-soon": "Un codice è stato appena inviato. Attendi prima di richiederne un altro.",
+            "enrolled": "L'autenticazione a due fattori è ora attiva.",
+            "method-added": "Il secondo fattore è ora attivo.",
+            "method-removed": "Il secondo fattore è stato rimosso.",
+            "disabled": "L'autenticazione a due fattori è ora disattivata.",
+            "backup-codes-regenerated": "I codici di backup sono stati rigenerati. Quelli vecchi non sono più validi.",
+            "code-sent": "Ti abbiamo inviato un codice.",
+            "challenge-invalid": "Questo tentativo di accesso è scaduto. Effettua di nuovo l'accesso."
+        },
+        "logout": {
+            "success": "Disconnessione effettuata."
+        },
+        "sessions": {
+            "revoked": "Sessione revocata.",
+            "not-found": "Sessione non trovata."
+        },
+        "verify": {
+            "email-sent": "È stata inviata un'email di verifica, clicca sul link per confermare il tuo indirizzo.",
+            "already-verified": "Questo account è già verificato.",
+            "token-not-found": "Token non valido o scaduto, riprova.",
+            "success": "Indirizzo email verificato."
+        },
+        "email": {
+            "verify-request": {
+                "subject": "Conferma il tuo indirizzo email",
+                "meta-title": "Verifica email",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Conferma che questo indirizzo email è tuo.",
+                "cta": "Clicca su questo link per verificare il tuo indirizzo email.",
+                "link-label": "Verifica la mia email",
+                "ignore": "Se non hai creato questo account, puoi ignorare questa email."
+            },
+            "reset-request": {
+                "subject": "Reimpostazione della password",
+                "meta-title": "Reimpostazione della password richiesta",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Abbiamo ricevuto una richiesta di reimpostazione della password.",
+                "cta": "Clicca su questo link per impostare una nuova password.",
+                "link-label": "Reimposta la password",
+                "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
+            },
+            "setup-request": {
+                "subject": "Configura il tuo account",
+                "meta-title": "Configurazione dell'account richiesta",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Un amministratore ha creato un account per te. Scegli una password per completare la registrazione.",
+                "cta": "Clicca su questo link per impostare la tua password.",
+                "link-label": "Imposta la mia password",
+                "ignore": "Se non te lo aspettavi, contatta chi gestisce questo sito."
+            },
+            "reset-confirm": {
+                "subject": "La tua password è stata cambiata",
+                "meta-title": "Password reimpostata",
+                "greeting": "Ciao, {{name}}!",
+                "body": "La tua password è stata reimpostata."
+            },
+            "delete-request": {
+                "subject": "Conferma l'eliminazione dell'account",
+                "meta-title": "Eliminazione dell'account richiesta",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Abbiamo ricevuto una richiesta di eliminazione definitiva del tuo account.",
+                "cta": "Clicca su questo link per confermare l'eliminazione dell'account.",
+                "link-label": "Conferma l'eliminazione",
+                "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
+            },
+            "delete-confirm": {
+                "subject": "Il tuo account è stato eliminato",
+                "meta-title": "Account eliminato",
+                "greeting": "Ciao, {{name}}!",
+                "body": "Il tuo account è stato eliminato definitivamente.",
+                "farewell": "Ci dispiace vederti andare via. Se si è trattato di un errore, contatta l'assistenza."
+            },
+            "inactivity-warning": {
+                "subject": "Il tuo account è inattivo",
+                "meta-title": "Avviso di inattività",
+                "greeting": "Ciao, {{name}}!",
+                "body": "Non ti vediamo accedere da un po'. Per mantenere il tuo account, accedi entro i prossimi {{days}} giorni — trascorsi i quali verrà disattivato e, in seguito, eliminato definitivamente."
+            },
+            "two-factor-code": {
+                "subject": "Il tuo codice di accesso",
+                "meta-title": "Codice di accesso",
+                "greeting": "Ciao, {{name}}!",
+                "intro": "Ecco il codice per completare l'accesso:",
+                "expiry": "Scade tra {{minutes}} minuti.",
+                "ignore": "Se non stavi effettuando l'accesso, ignora questa email e cambia la password."
+            }
+        },
+        "oauth": {
+            "unknown-provider": "Questo metodo di accesso non è disponibile.",
+            "invalid-state": "Questo tentativo di accesso è scaduto. Riprova."
+        },
+        "addresses": {
+            "added": "Indirizzo salvato.",
+            "updated": "Indirizzo aggiornato.",
+            "removed": "Indirizzo rimosso.",
+            "not-found": "L'indirizzo richiesto non è stato trovato"
+        }
+    }
+}

@@ -1,0 +1,19 @@
+{
+    "cart": {
+        "changed": "Your cart changed while the order was being placed. Check it and try again.",
+        "emptied": "All products removed from cart.",
+        "empty": "Your cart is empty.",
+        "product-removed": "Product removed from cart.",
+        "product-unavailable": "One or more products in your cart are no longer available.",
+        "product-added": "Product successfully added to cart.",
+        "reorder": {
+            "success": "Order added to cart.",
+            "unavailable": "None of the products on this order are still available.",
+            "order-not-found": "The requested order was not found"
+        },
+        "insufficient-stock": "Some items are no longer available in the quantity you asked for — see `details.lines`.",
+        "address-not-found": "The selected shipping address was not found.",
+        "shipping-method-not-found": "The chosen shipping method does not exist.",
+        "shipping-not-applicable": "Your cart contains only digital products, which do not need a shipping method."
+    }
+}

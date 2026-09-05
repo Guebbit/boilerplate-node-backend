@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="<%= locale %>">
+<%- include("../layouts/email-template-head.ejs"); %>
+<body>
+<main class="centered">
+    <h1><%= greeting %></h1>
+    <p><%= intro %></p>
+    <p style="font-size: 2rem; font-weight: 700; letter-spacing: 0.35rem; margin: 1.5rem 0;"><%= code %></p>
+    <p><%= expiry %></p>
+    <p><%= ignore %></p>
+</main>
+<%- include("../layouts/default-footer.ejs"); %>
+</body>
+</html>

@@ -1,0 +1,82 @@
+/* ── Mermaid diagram zoom ──────────────────────────────────────────────────── */
+
+/* Clickable hint */
+.vp-doc .mermaid {
+    cursor: zoom-in;
+    border-radius: 8px;
+    transition: box-shadow 0.2s ease;
+    user-select: none;
+}
+
+.vp-doc .mermaid:hover {
+    box-shadow:
+        0 0 0 2px var(--vp-c-brand-1),
+        0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Small hint label that appears on hover */
+.vp-doc .mermaid::after {
+    content: '⤢  click to enlarge';
+    display: block;
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--vp-c-text-3);
+    margin-top: 0.35rem;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.vp-doc .mermaid:hover::after {
+    opacity: 1;
+}
+
+/* Prevent page scroll while overlay is open */
+body.mermaid-zoom-active {
+    overflow: hidden;
+}
+
+/* ── Overlay backdrop ─────────────────────────────────────────────────────── */
+
+.mermaid-zoom-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: rgba(0, 0, 0, 0);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    cursor: zoom-out;
+    transition:
+        background 0.2s ease,
+        backdrop-filter 0.2s ease;
+}
+
+.mermaid-zoom-overlay--visible {
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+/* ── Enlarged SVG ─────────────────────────────────────────────────────────── */
+
+.mermaid-zoom-overlay svg {
+    max-width: 94vw;
+    max-height: 90vh;
+    width: auto;
+    height: auto;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 2.5rem;
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.45);
+    cursor: default;
+}
+
+/* Dark-mode tweak: SVG background matches the site's surface colour */
+.dark .mermaid-zoom-overlay svg {
+    background: #1e1e2e;
+    box-shadow: 0 32px 80px rgba(0, 0, 0, 0.65);
+}

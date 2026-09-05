@@ -1,7 +1,21 @@
+# How each container's stdout is stored on the host, and therefore whether Promtail can read it.
+#
+# Promtail tails log FILES. Docker writes them by default (`json-file`), podman does not: its
+# default here is `journald`, which keeps log lines in the systemd journal and writes no file at
+# all — so Promtail tails a glob that matches nothing, Loki stays empty, and Grafana's log panels
+# are blank with no error anywhere. `k8s-file` is podman's file-based driver and writes the CRI
+# format `promtail.podman.config.yaml` already parses.
+#
+# Anchored rather than repeated: every service needs the same driver, because Promtail scrapes the
+# whole directory and a service left on the default would simply be missing from the logs.
+x-logging: &container-logging
+    driver: ${CONTAINER_LOG_DRIVER:-json-file}
+
 # Top level block where each service (container) is defined
 services:
     # Single service (container). Name used as network hostname
     app:
+        logging: *container-logging
         # (Optional) Custom container name
         # container_name: boilerplate-node
 
@@ -26,13 +40,58 @@ services:
         # Enviroment variables that get injected into the container at runtime
         # If the .env variable change: a rebuild is necessary to apply the change.
         environment:
-            MONGODB_URI: 'mongodb://database:27017/${DB_NAME:-boilerplate_mongodb}' # Mongodb connection string. "database" is the service name of the database service.
+            # The Mongo connection string comes from `.env` (NODE_DB_URI), which already points at
+            # the "database" service hostname. Do not redeclare it here — an entry in this block
+            # shadows `.env` and makes an Atlas/external URI impossible to set without editing compose.
             NODE_ENV: 'development' # Node environment (production or development)
             NODE_REDIS_URL: 'redis://redis:6379'
+            NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
-            # Observability: send traces to Tempo over OTLP/HTTP.
-            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://tempo:4318'
+            # 0 = one worker per CPU core (see `.env-example`). On a many-core dev machine that is
+            # a lot of Node processes for one person's traffic — `NODE_CLUSTER_WORKERS=1 npm run
+            # compose:restart` trims it for a live E2E run without editing `.env`, same escape
+            # hatch as the rate limits below. The default matches `.env`, so an ordinary `up` is
+            # unchanged.
+            NODE_CLUSTER_WORKERS: '${NODE_CLUSTER_WORKERS:-0}'
+            # Per-IP rate limits, sized for one person browsing. A live E2E run drives the whole
+            # frontend suite from a single address and exceeds both budgets, at which point the API
+            # answers 429 and the failures read as "login is broken" rather than "out of allowance".
+            # Declared here so a run can raise them from the shell — `NODE_RATE_LIMIT_MAX=1000
+            # NODE_AUTH_RATE_LIMIT_MAX=1000 NODE_AUTH_RATE_LIMIT_ADDRESS_MAX=1000 npm run
+            # compose:restart` — instead of editing `.env`. The defaults match `.env`, so an
+            # ordinary `up` is unchanged. Three buckets, deliberately decoupled: the credential
+            # ones are what make password guessing expensive, so widening the global one must
+            # never widen them. Never raise any of them in a deployed environment.
+            NODE_RATE_LIMIT_MAX: '${NODE_RATE_LIMIT_MAX:-100}'
+            NODE_AUTH_RATE_LIMIT_MAX: '${NODE_AUTH_RATE_LIMIT_MAX:-10}'
+            # The credential budget is a PAIR — per account named, and per address calling — so
+            # raising only the one above just moves which bucket a live run trips over. Both are
+            # declared here for the same reason: a run raises them from the shell, never in `.env`.
+            NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '${NODE_AUTH_RATE_LIMIT_ADDRESS_MAX:-30}'
+            # Observability: send traces to OTel Collector, which fans out to backends.
+            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel-collector:4318'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
+            # The three URLs `GET /observability/health` reports as `integrations.loki`,
+            # `integrations.umami` and `integrations.faro`. They are declarative — the app never
+            # calls them — but they are set here rather than left to `.env` because this file is
+            # what starts those three containers. Left unset, health answered `false` for all
+            # three while they were running in this very stack, which makes the one endpoint you
+            # would check to find out what is wired up the least trustworthy thing in it.
+            # Host-facing URLs, not service names: they describe what a browser can reach.
+            NODE_LOKI_HOST: 'http://localhost:${LOKI_PORT:-3100}'
+            NODE_UMAMI_HOST: 'http://localhost:${UMAMI_PORT:-3080}'
+            NODE_FARO_COLLECTOR_URL: 'http://localhost:${ALLOY_FARO_PORT:-12347}/collect'
+            # Where `emitAnalyticsEvent` delivers (see infrastructure/observability/analytics).
+            # `umami` is the default and needs the website id as well as the host above — the
+            # same fixed id `umami-init` seeds and the paired frontend hardcodes, so both halves
+            # of a funnel land on one website instead of two.
+            #
+            # The host is the SERVICE name here, not localhost: unlike NODE_UMAMI_HOST above —
+            # which is declarative, describing what a browser reaches — this one is dialled by
+            # the API from inside the compose network, where `localhost` is its own container.
+            NODE_ANALYTICS_PROVIDER: '${NODE_ANALYTICS_PROVIDER:-umami}'
+            NODE_UMAMI_INGEST_HOST: 'http://umami:3000'
+            NODE_UMAMI_WEBSITE_ID: '${UMAMI_WEBSITE_ID:-00000000-0000-4000-8000-000000000001}'
 
         # Persist data.
         # Compose manages the lifecycle of this volume when up/down
@@ -52,23 +111,45 @@ services:
             # - example-volume:/data/db
 
         # Commands to be executed at RUNTIME when the container starts. Replaces Dockerfile commands (if any)
+        #
+        # `db:bootstrap` runs migrate-mongo (schema/indexes) then the seeder (demo data) before the
+        # server starts, so a fresh `compose up` yields a populated, browsable stack instead of empty
+        # lists that read as "not wired". Both halves are idempotent, so every later boot is a no-op,
+        # and the seeder refuses to run when NODE_ENV=production.
         command:
             [
                 'sh',
                 '-c',
-                'if [ "$${NODE_ENABLE_CLUSTERING:-0}" = "1" ]; then npm run dev:docker:cluster; else npm run dev:docker; fi'
+                'npm run db:bootstrap && if [ "$${NODE_ENABLE_CLUSTERING:-0}" = "1" ]; then npm run dev:docker:cluster; else npm run dev:docker; fi'
             ]
 
         # Containers which this container depends on. Affects container start order.
+        # `database` waits for the healthcheck rather than just for the container to start:
+        # `db:bootstrap` runs before the server and needs Mongo actually accepting connections.
         depends_on:
-            - database
-            - redis
-            - tempo
+            database:
+                condition: service_healthy
+            redis:
+                condition: service_started
+            rabbitmq:
+                condition: service_started
+            otel-collector:
+                condition: service_started
 
         # Health check to verify the container is ready to accept traffic
         # Inspect with "podman ps" or "podman inspect <container name>"
         healthcheck:
-            test: ['CMD', 'curl', '-f', 'http://localhost:${NODE_PORT:-3000}/healthz']
+            # `node -e`, not `curl -f`: the image is node:*-alpine and does not ship curl, so the
+            # curl form exited non-zero every time and parked the container on `unhealthy` while
+            # the API was answering 200 on `/` throughout. Node's built-in fetch needs nothing
+            # added to the image.
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
             # How often to run the test
             interval: 2m
             # How long to wait for the test to complete
@@ -76,10 +157,11 @@ services:
             # How many consecutive failures needed to consider the container unhealthy
             retries: 3
             # Initial grace period to wait before starting health check
-            start_period: 10s
+            start_period: 30s
 
     # Another container
     database:
+        logging: *container-logging
         # Same
         # container_name: boilerplate-mongodb
 
@@ -92,8 +174,8 @@ services:
 
         # Same
         environment:
-            # Name of the database to create
-            MONGO_INITDB_DATABASE: ${DB_NAME:-boilerplate_mongodb}
+            # Name of the database to create. Must match the database in NODE_DB_URI.
+            MONGO_INITDB_DATABASE: ${NODE_MONGODB_NAME:-boilerplate-node-backend}
 
         # Same
         volumes:
@@ -104,46 +186,259 @@ services:
         ports:
             - '${NODE_MONGODB_PORT:-27017}:27017'
 
+        # The app's boot-time db:bootstrap waits on this before it runs.
+        healthcheck:
+            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            interval: 5s
+            timeout: 5s
+            retries: 12
+            start_period: 30s
+
     # Redis is used as an in-memory cache layer. The app stores response data here with a TTL so repeated
     # requests are served from memory instead of hitting MongoDB again. On restart the cache is cold (data is lost),
     # which is fine since Redis here is cache-only, not a primary store.
     redis:
+        logging: *container-logging
         image: redis:7
         restart: unless-stopped
+        # Redis defaults to `maxmemory 0` — unlimited — and would grow until the host or the
+        # container limit stops it. That is the wrong default for a cache: entries here are worth
+        # keeping only while they are cheap, and nothing in the app bounds how many accumulate.
+        # `GET /products` is public and its answers live for an hour, so entry count follows
+        # traffic rather than catalogue size.
+        #
+        # `allkeys-lru` is what makes the cap a cache policy rather than an error: at the ceiling
+        # Redis evicts the least recently used key and accepts the write. The default
+        # `noeviction` would instead start REFUSING writes — the app fails open and would keep
+        # serving, but it would log a warning per request and never cache again until something
+        # expired. `allkeys-` (not `volatile-`) because every key here carries a TTL anyway.
+        command: >-
+            redis-server
+            --maxmemory ${NODE_REDIS_MAXMEMORY:-256mb}
+            --maxmemory-policy ${NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru}
         ports:
             - '${NODE_REDIS_PORT:-6379}:6379'
 
-    # Tempo: stores OpenTelemetry traces emitted by the app. Receives OTLP/HTTP on :4318.
+    # RabbitMQ: message broker for async tasks (email, PDF generation, etc.).
+    rabbitmq:
+        logging: *container-logging
+        image: rabbitmq:3-management
+        restart: unless-stopped
+        environment:
+            RABBITMQ_DEFAULT_USER: guest
+            RABBITMQ_DEFAULT_PASS: guest
+        ports:
+            - '${RABBITMQ_AMQP_PORT:-5672}:5672' # AMQP protocol
+            - '${RABBITMQ_MANAGEMENT_PORT:-15672}:15672' # Management UI
+        volumes:
+            - rabbitmq_volume:/var/lib/rabbitmq
+
+    # Tempo: stores OpenTelemetry traces. Receives OTLP/gRPC from the OTel Collector.
     tempo:
-        image: grafana/tempo:latest
+        logging: *container-logging
+        image: grafana/tempo:2.6.1
         restart: unless-stopped
         command: ['-config.file=/etc/tempo/tempo.yaml']
         volumes:
-            - ./.docker/observability/tempo.yaml:/etc/tempo/tempo.yaml:Z
+            - ./.docker/observability/tempo.config.yaml:/etc/tempo/tempo.yaml:Z
             - tempo_volume:/var/tempo
-        ports:
-            - '4318:4318' # OTLP/HTTP (used by the app)
+        # Port 4318 is no longer exposed to the host — the collector talks to Tempo internally.
 
-    # Grafana: single UI to read Tempo traces. Default datasource is auto-provisioned.
+    # OTel Collector: single ingestion point for all telemetry signals from the app.
+    # Receives OTLP/HTTP on :4318 and OTLP/gRPC on :4317, then fans out to Tempo.
+    otel-collector:
+        logging: *container-logging
+        image: otel/opentelemetry-collector-contrib:0.114.0
+        restart: unless-stopped
+        command: ['--config=/etc/otel-collector-config.yaml']
+        volumes:
+            - ./.docker/observability/otel-collector.config.yaml:/etc/otel-collector-config.yaml:Z
+        ports:
+            - '${OTEL_OTLP_HTTP_PORT:-4318}:4318' # OTLP/HTTP (used by the app)
+            - '${OTEL_OTLP_GRPC_PORT:-4317}:4317' # OTLP/gRPC (optional direct use)
+        depends_on:
+            - tempo
+
+    # Prometheus: scrapes /metrics from the app and stores numeric time-series.
+    prometheus:
+        logging: *container-logging
+        image: prom/prometheus:v2.55.1
+        restart: unless-stopped
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.retention.time=7d'
+        volumes:
+            - ./.docker/observability/prometheus.config.yaml:/etc/prometheus/prometheus.yml:Z
+            - ./.docker/observability/prometheus.alert-rules.yaml:/etc/prometheus/rules/alerts.yml:Z
+            - prometheus_volume:/prometheus
+        ports:
+            - '${PROMETHEUS_PORT:-9090}:9090'
+        depends_on:
+            - alertmanager
+
+    # Alertmanager: receives firing alerts from Prometheus and routes notifications.
+    alertmanager:
+        logging: *container-logging
+        image: prom/alertmanager:v0.27.0
+        restart: unless-stopped
+        command: ['--config.file=/etc/alertmanager/alertmanager.yml']
+        volumes:
+            - ./.docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:Z
+        ports:
+            - '${ALERTMANAGER_PORT:-9093}:9093'
+
+    # Loki: stores log lines shipped by Promtail. Grafana queries it for log exploration.
+    loki:
+        logging: *container-logging
+        image: grafana/loki:3.3.2
+        restart: unless-stopped
+        command: ['-config.file=/etc/loki/loki-config.yaml']
+        volumes:
+            - ./.docker/observability/loki.config.yaml:/etc/loki/loki-config.yaml:Z
+            - loki_volume:/var/loki
+        ports:
+            - '${LOKI_PORT:-3100}:3100'
+
+    # Promtail: tails Docker container log files and ships them to Loki.
+    promtail:
+        logging: *container-logging
+        image: grafana/promtail:3.3.2
+        restart: unless-stopped
+        command: ['-config.file=/etc/promtail/promtail-config.yaml']
+        # The only part of this stack that differs between docker and podman, and it is two
+        # values: where the host keeps container logs, and which parser reads them (docker wraps
+        # each line in a JSON envelope, podman's k8s-file driver writes CRI). Both come from
+        # `.env`, which compose reads on its own — so there is no override file to select and no
+        # `-f` list to get wrong. Defaults are docker's, so docker users set neither.
+        #
+        # The host path is mounted at one fixed location whichever engine you run, which is why
+        # both configs below can hardcode their `__path__` under it.
+        volumes:
+            - ./.docker/observability/${PROMTAIL_CONFIG:-promtail.config.yaml}:/etc/promtail/promtail-config.yaml:Z
+            - ${CONTAINER_LOGS_PATH:-/var/lib/docker/containers}:/var/log/host-containers:ro
+        depends_on:
+            - loki
+
+    # Grafana: single UI to explore traces (Tempo), metrics (Prometheus), and logs (Loki).
     grafana:
-        image: grafana/grafana:latest
+        logging: *container-logging
+        image: grafana/grafana:11.4.0
         restart: unless-stopped
         environment:
             GF_AUTH_ANONYMOUS_ENABLED: 'true'
             GF_AUTH_ANONYMOUS_ORG_ROLE: 'Admin'
             GF_AUTH_DISABLE_LOGIN_FORM: 'true'
         volumes:
-            - ./.docker/observability/grafana/provisioning:/etc/grafana/provisioning:Z
+            - ./.docker/observability/grafana.datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:Z
+            - ./.docker/observability/grafana.dashboard-providers.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:Z
             - ./.docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:Z
         ports:
-            - '3001:3000'
+            - '${GRAFANA_PORT:-3001}:3000'
         depends_on:
             - tempo
+            - prometheus
+            - loki
+
+    # Alloy: browser-facing collector for the frontend (Grafana Faro Web SDK).
+    # Receives errors/logs/web-vitals/traces from the browser on the Faro port, then fans
+    # them into Loki (logs) and the OTel Collector -> Tempo (traces). See the config for wiring.
+    alloy:
+        logging: *container-logging
+        image: grafana/alloy:v1.5.1
+        restart: unless-stopped
+        command:
+            - 'run'
+            - '--server.http.listen-addr=0.0.0.0:12345'
+            - '--storage.path=/tmp/alloy'
+            - '/etc/alloy/config.alloy'
+        volumes:
+            - ./.docker/observability/alloy.config.alloy:/etc/alloy/config.alloy:Z
+        ports:
+            - '${ALLOY_FARO_PORT:-12347}:12347' # Faro receiver — the frontend posts telemetry here
+            - '${ALLOY_UI_PORT:-12345}:12345' # Alloy UI — inspect the ingest pipeline while debugging
+        depends_on:
+            - loki
+            - otel-collector
+
+    # Umami: self-hosted product analytics (pageviews + custom events) — replaces PostHog cloud.
+    # The frontend loads its tracking script from this origin; events land in umami-db.
+    umami:
+        logging: *container-logging
+        image: ghcr.io/umami-software/umami:postgresql-v2.14.0
+        restart: unless-stopped
+        environment:
+            DATABASE_TYPE: 'postgresql'
+            DATABASE_URL: 'postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami-db:5432/${UMAMI_DB_NAME:-umami}'
+            # Salt used to hash session IDs. Change this to any random string.
+            APP_SECRET: '${UMAMI_APP_SECRET:-change-me-please}'
+        ports:
+            # 3080, not 8090: 8080-8099 is the paired frontend's port block (see the port map in
+            # the README) and 8090 is where its docs container lives.
+            - '${UMAMI_PORT:-3080}:3000'
+        depends_on:
+            umami-db:
+                condition: service_healthy
+
+    # Postgres backing store for Umami (kept separate from the app's MongoDB).
+    umami-db:
+        logging: *container-logging
+        image: postgres:16-alpine
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: '${UMAMI_DB_NAME:-umami}'
+            POSTGRES_USER: '${UMAMI_DB_USER:-umami}'
+            POSTGRES_PASSWORD: '${UMAMI_DB_PASSWORD:-umami}'
+        volumes:
+            - umami_db_volume:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U ${UMAMI_DB_USER:-umami} -d ${UMAMI_DB_NAME:-umami}']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+
+    # Umami init: one-shot job that stamps the admin username/password from .env onto
+    # Umami's default seeded account, so the stack comes up ready to log in (no manual step).
+    umami-init:
+        logging: *container-logging
+        image: postgres:16-alpine
+        restart: 'no'
+        entrypoint: ['/bin/sh', '/umami-init.sh']
+        environment:
+            DATABASE_URL: 'postgresql://${UMAMI_DB_USER:-umami}:${UMAMI_DB_PASSWORD:-umami}@umami-db:5432/${UMAMI_DB_NAME:-umami}'
+            UMAMI_ADMIN_USER: '${UMAMI_ADMIN_USER:-admin}'
+            UMAMI_ADMIN_PASSWORD: '${UMAMI_ADMIN_PASSWORD:-umami}'
+            # Fixed website id so the frontend's data-website-id is known up front.
+            UMAMI_WEBSITE_ID: '${UMAMI_WEBSITE_ID:-00000000-0000-4000-8000-000000000001}'
+            UMAMI_WEBSITE_NAME: '${UMAMI_WEBSITE_NAME:-Frontend}'
+            UMAMI_WEBSITE_DOMAIN: '${UMAMI_WEBSITE_DOMAIN:-localhost}'
+        volumes:
+            - ./.docker/observability/umami-init.sh:/umami-init.sh:ro,Z
+        depends_on:
+            umami-db:
+                condition: service_healthy
+            umami:
+                condition: service_started
+
+    # Docs: VitePress static site served by Nginx.
+    docs:
+        logging: *container-logging
+        build:
+            context: .
+            dockerfile: .docker/Dockerfile.docs
+        restart: unless-stopped
+        ports:
+            # 3090 sits in this repo's 3000-3099 block. It used to be 4173, which the paired
+            # frontend also claimed — for its own docs AND for its e2e vite server.
+            - '${DOCS_PORT:-3090}:80'
 
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:
     boilerplate_mongodb_volume:
     tempo_volume:
+    rabbitmq_volume:
+    prometheus_volume:
+    loki_volume:
+    umami_db_volume:
 
 # Commands:
 # podman ps: list running containers (-a for all)

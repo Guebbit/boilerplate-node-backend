@@ -1,0 +1,558 @@
+name: CI
+
+# The merge gate. Everything here runs on every PR and on every push to main, and the aggregate
+# `ci` job at the bottom is the single check branch protection requires.
+#
+# Deliberately many small jobs rather than one `npm run complete`: they run in parallel, and
+# a red square names the thing that broke (formatting? contract? integration?) without anyone
+# opening a log. The trade is repeated checkout/setup/install boilerplate in each.
+#
+# The jobs fall into four groups:
+#   - style           commitlint, lint, prettier
+#   - contract        lint-openapi, lint-asyncapi, their per-module counterparts,
+#                     contracts-bundle-freshness, seed-export-freshness,
+#                     spec-identity — the spec is valid, and the paired frontend still agrees with
+#                     it. api/ and src/types/asyncapi.generated.ts are no longer committed — see
+#                     `postinstall` in package.json — so there is nothing left to go stale for
+#                     them to check.
+#   - correctness     typecheck, build, test-unit, test-integration, test-contract
+#   - supply chain    audit
+#
+# The slow suites live elsewhere on a nightly schedule: mutation.yml and fuzz.yml.
+
+on:
+    # Run on every PR and on direct pushes to main.
+    # This gives fast feedback for feature branches and protects main.
+    pull_request:
+    push:
+        branches:
+            - main
+
+concurrency:
+    # Cancel stale runs for the same branch/PR when newer commits arrive.
+    group: ci-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    NODE_VERSION: 22
+
+jobs:
+    commitlint:
+        # Lint commit messages against the conventional-commit rules in commitlint.config.cjs.
+        # Runs on PRs (gates the merge) and on push to main (backstop for commits made
+        # with --no-verify or on a machine where the Husky hook never installed).
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  # Need full history to walk the commit range.
+                  fetch-depth: 0
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Lint commit messages (PR)
+              if: github.event_name == 'pull_request'
+              run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
+            - name: Lint commit messages (push)
+              if: github.event_name == 'push'
+              run: npx commitlint --from ${{ github.event.before }} --to ${{ github.event.after }} --verbose
+
+    lint:
+        # ESLint over the whole repo, including the layering rules in eslint.config.ts that
+        # forbid src/infrastructure/** from importing the application layers.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Lint
+              run: npm run lint
+
+    prettier:
+        # Formatting only — a separate job from `lint` so "you forgot to format" and "you wrote
+        # a lint error" are two different red squares.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check formatting
+              run: npm run prettier:check
+
+    lint-openapi:
+        # Spectral lints openapi.yaml against shared/contracts/spectral.yaml, the ruleset the
+        # paired frontend lints its identical copy under.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Lint OpenAPI spec
+              run: npm run lint:openapi
+
+    lint-asyncapi:
+        # The same, for the realtime contract that drives the SSE types.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Lint AsyncAPI spec
+              run: npm run lint:asyncapi
+
+    spec-identity:
+        # The cross-repo contract gate. Mirrors the job of the same name in the frontend.
+        #
+        # Two files exist in BOTH repos, byte-identical — the REST contract and the shared half
+        # of the async contract. `scripts/pairing/spec-identity.ts` holds the list and says, per entry,
+        # what a fork of it would break.
+        #
+        # Both are ASSEMBLED HERE from per-module fragments and copied to the frontend, so this
+        # job asks whether the copies over there are still the bundles built here.
+        # `tests/cross-cutting/contract-bundles.test.ts` asks the other half of the question —
+        # whether the bundle here still matches the fragments it is built from — and runs in the
+        # test job, so a fragment edited without re-bundling fails before this job is reached.
+        #
+        # Until this job existed they were checked by nothing. `lint-openapi` and `lint-asyncapi`
+        # lint THIS repo's copy and pass, because a forked spec is still a valid spec. What nobody
+        # could see was the fork itself.
+        #
+        # Two of the ten sit at different paths in each repo (the seed identities are production
+        # seed data here and test scaffolding there; the realtime types are named for their
+        # generator here and their consumer there), which is why the list is path *pairs* rather
+        # than names — a same-path check could not express them, so they went unguarded longest.
+        #
+        # The sibling is checked out read-only, at its default branch: the question is whether this
+        # PR agrees with what the frontend has actually shipped, not with some pinned older copy.
+        #
+        # A fork in the pair is a genuine failure, but an unreachable sibling is an infrastructure
+        # problem — so `checkout` is allowed to fail and the step below says which of the two
+        # happened. A copy of this boilerplate that has no paired frontend should delete this job
+        # rather than watch it fail forever.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Checkout paired frontend
+              id: sibling
+              continue-on-error: true
+              uses: actions/checkout@v4
+              with:
+                  # Override with a repository variable when the pair lives elsewhere.
+                  repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
+                  path: .spec-sibling
+                  # Only needed when the sibling is private; falls back to this repo's token.
+                  token: ${{ secrets.SPEC_SIBLING_TOKEN || github.token }}
+
+            - name: Report an unreachable sibling
+              if: steps.sibling.outcome == 'failure'
+              run: |
+                  echo "::error::Could not check out the paired frontend "\
+                  "(${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}). "\
+                  "Set the SPEC_SIBLING_REPO variable, add a SPEC_SIBLING_TOKEN secret if it is "\
+                  "private, or delete this job if this copy has no paired frontend."
+                  exit 1
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Compare the shared contract files
+              env:
+                  FRONTEND_PATH: .spec-sibling
+              run: npm run check:spec-identity
+
+    lint-openapi-modules:
+        # The per-module REST fragments, against the narrower ruleset they are bundled from.
+        # `lint-openapi` above only sees the bundle, so a fragment can be invalid and still bundle.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Lint per-module OpenAPI fragments
+              run: npm run lint:openapi:modules
+
+    lint-asyncapi-modules:
+        # The per-module async fragments, for the same reason as the REST ones above.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Lint per-module AsyncAPI fragments
+              run: npm run lint:asyncapi:modules
+
+    contracts-bundle-freshness:
+        # The published bundles are what their fragments say they are. Without this, a merged
+        # fragment edit leaves `openapi.yaml` describing the previous version of the API.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check contract bundles are current
+              run: npm run check:contracts-bundle
+
+    seed-export-freshness:
+        # `db/demo/demo-data.json` matches what the seeders produce. It is the specimen the
+        # contract suite compares responses against, so a stale copy weakens every test using it.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check the exported demo dataset is current
+              run: npm run check:seed-export
+
+    cluster:
+        # The only suite that boots `src/cluster.ts` and forks real workers. It is not in
+        # `complete` — two clusters and a Redis is ~25s and needs a container engine — so CI is
+        # where it runs on every push. `complete:manual` is the local equivalent.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        services:
+            redis:
+                image: redis:7-alpine
+                ports:
+                    - 6379:6379
+                options: >-
+                    --health-cmd "redis-cli ping"
+                    --health-interval 5s
+                    --health-timeout 3s
+                    --health-retries 10
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Rate limiting spends one budget across workers
+              # The service container above is already listening, so the suite uses it instead of
+              # starting its own — see tests/cluster/support/redis.ts.
+              env:
+                  NODE_TEST_REDIS_URL: redis://127.0.0.1:6379
+              run: npm run test:cluster
+
+    dependency-graph:
+        # The two questions ESLint cannot answer, because it sees one file's imports and no
+        # further: does any cycle exist, and can a tier REACH something it may not import.
+        # The walls themselves are enforced by eslint-plugin-boundaries in the lint job.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check the dependency graph
+              run: npm run check:dependencies
+
+    docs:
+        # The documentation site is a build like any other: VitePress fails on a dead link between
+        # pages, which is the only thing checking that the cross-references in `docs/` still
+        # resolve. `check:docs-graph` is the second half — `docs/modules/index.md` publishes the
+        # module graph, generated from the same dependency-cruiser output the job above uses, so a
+        # new cross-module import that nobody regenerated the page for fails here rather than
+        # leaving a diagram that quietly describes last month's architecture.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check the module graph is current
+              run: npm run check:docs-graph
+
+            - name: Build the documentation site
+              run: npm run docs:build
+
+    typecheck:
+        # `tsc --noEmit` — types only. `build` below repeats it as part of its own script; this
+        # job exists so a type error is reported as one, not as a build failure.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Type check
+              run: npm run ts-check
+
+    build:
+        # Proves the project still builds from a clean checkout.
+        #
+        # `build` is `ts-check && lint`, so this overlaps the two jobs above on purpose: they report
+        # which half failed, this one proves the composite gate a developer actually runs still
+        # passes. It used to call `build-only`, an alias for `npm run lint` inherited from a
+        # frontend template, which made the overlap total rather than partial.
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Build
+              run: npm run build
+
+    test-unit:
+        # The fast suite: pure functions, services and repositories against in-memory Mongo.
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Run unit tests
+              run: npm run test:unit
+
+            # The per-file floors in `jest.config.js` are enforced here and NOT in the pre-commit
+            # hook: coverage runs the suite again under `--runInBand`, which is minutes rather than
+            # the ~60s the hook is designed around (see .husky/pre-commit). A gate that makes the
+            # hook unusable gets bypassed with --no-verify, which is worse than one that runs here.
+            #
+            # `test:unit:coverage` fails the step on its own when a file drops below its floor —
+            # jest exits non-zero on a threshold miss, so no extra check is needed.
+            - name: Run unit tests with coverage thresholds
+              run: npm run test:unit:coverage
+
+            - name: Per-module test report
+              # Reads the JSON the run just wrote and prints the rollup into the job log, so a
+              # red build names the MODULE before anyone opens an artifact.
+              if: always()
+              run: npm run test:unit:report && npm run test:report
+
+            - name: Upload test report
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: test-report-unit
+                  path: reports/test-report.json
+                  retention-days: 14
+                  if-no-files-found: ignore
+
+            - name: Upload coverage report
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: coverage-report
+                  path: coverage/
+                  retention-days: 14
+
+    test-integration:
+        # No Mongo/Redis service is started here: today's integration suite only
+        # exercises an in-process Express app (see tests/integration/app-health.test.ts).
+        # Add service containers here if a future test needs a real database/cache.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Run integration tests
+              run: npm run test:integration
+
+    test-contract:
+        # Drives the real Express app over HTTP (supertest + in-memory Mongo) and validates every
+        # response against openapi.yaml, including `additionalProperties: false`.
+        #
+        # This is the gate for the over-serialization class — a field appearing on a response
+        # without being declared in the spec fails here. The generated Zod schemas do not cover it:
+        # nothing in this service validates a *response* with Zod (they guard request bodies), and
+        # they are generated non-strict, so unknown keys would be stripped rather than rejected.
+        #
+        # No Mongo/Redis service container is needed: the suite uses mongodb-memory-server, and the
+        # cache adapter treats an unreachable Redis as a miss.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Run contract tests
+              run: npm run test:contract
+
+    audit:
+        # Reports known high/critical severity vulnerabilities in production dependencies.
+        # Deliberately NOT in the `ci` gate's `needs:` below: a transitive high/critical finding
+        # with no non-breaking fix (see extract-zip -> puppeteer-core) would otherwise block every
+        # merge indefinitely with nothing anyone here can do about it in the same PR. This still
+        # runs on every push/PR and still shows red when it fails — an alert, not a gate.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Audit dependencies
+              run: npm audit --omit=dev --audit-level=high
+
+    ci:
+        # Single status check to require in branch protection, so adding/renaming
+        # jobs above doesn't require updating the required-checks list every time.
+        if: always()
+        needs:
+            - commitlint
+            - lint
+            - prettier
+            - lint-openapi
+            - lint-asyncapi
+            - spec-identity
+            - lint-openapi-modules
+            - lint-asyncapi-modules
+            - contracts-bundle-freshness
+            - seed-export-freshness
+            - typecheck
+            - build
+            - test-unit
+            - test-integration
+            - test-contract
+            # `audit` is deliberately excluded — see its own comment above.
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+        steps:
+            - name: Check all jobs succeeded
+              run: |
+                  if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+                      echo "One or more required jobs failed."
+                      exit 1
+                  fi

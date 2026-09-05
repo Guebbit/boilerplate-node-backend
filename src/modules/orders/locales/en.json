@@ -1,0 +1,31 @@
+{
+    "orders": {
+        "not-found": "The requested order was not found",
+        "hard-deleted": "Order was permanently deleted.",
+        "soft-deleted": "Order was soft deleted (hidden from the customer).",
+        "creation-success": "Order created with success.",
+        "cancel": {
+            "success": "Order cancelled.",
+            "not-cancellable": "This order can no longer be cancelled."
+        },
+        "transition": {
+            "not-allowed": "This order cannot move to that status from where it is now.",
+            "cancel-elsewhere": "Cancelling an order runs the cancellation sequence — cancel it through the order's cancel endpoint instead."
+        },
+        "invoice": {
+            "meta-title": "Invoice — order {{order}}",
+            "title": "The order has been confirmed",
+            "line": "{{title}} — {{quantity}} × {{price}}"
+        },
+        "email-confirm": {
+            "subject": "Order confirmed",
+            "meta-title": "Order confirmed",
+            "greeting": "Hello, {{name}}!",
+            "body": "Your order has been confirmed.",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "total": "Total: {{total}}"
+        },
+        "items-held": "This order's items cannot be changed while its stock is held or already sold.",
+        "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`."
+    }
+}

@@ -1,0 +1,1692 @@
+openapi: 3.0.3
+info:
+    title: account — module contract
+    version: '2.0.0'
+
+paths:
+    # --------- Authentication and profile ---------
+    /account:
+        get:
+            tags: [Account]
+            summary: Current user info
+            description: Returns the full profile of the currently authenticated user
+            operationId: getAccount
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Current user info
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+        put:
+            tags: [Account]
+            summary: Update own profile
+            description: Updates the authenticated user's own profile — email, username, locale, image. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email resets `verified` and sends a fresh verification email to the new address.
+            operationId: updateAccount
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAccountRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAccountRequestMultipart'
+            responses:
+                '200':
+                    description: Updated profile
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Changing the email to an address another account already holds.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Account]
+            summary: Request account deletion
+            description: Initiates the account-deletion flow for the authenticated user. A one-time confirmation token is sent to the user's email address. The token must then be submitted to `/account/delete-confirm` to complete the deletion.
+            operationId: requestAccountDelete
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/password:
+        post:
+            tags: [Auth]
+            summary: Change password
+            description: Changes the authenticated user's password. Unlike the reset flow this proves possession of the current password rather than of the mailbox, so it needs no email round-trip. Every OTHER session is revoked; the response carries a fresh access token for this one, and sets fresh session cookies.
+            operationId: changePassword
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ChangePasswordRequest'
+            responses:
+                '200':
+                    description: Password changed; a fresh access token for this session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # A wrong current password is a 422 with a translated message, NOT a 401: a 401
+                # here would read as "your token expired" to every client interceptor and log
+                # the user out of a session that is perfectly valid.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/reauth:
+        post:
+            tags: [Auth]
+            summary: Re-authenticate (step-up)
+            description: Re-proves the caller's password to refresh how recently they authenticated, without ending the session — the answer to a `401 REAUTH_REQUIRED` challenge from a route gated by freshness (checkout, payments, deleting the account, changing the email, session management). Re-mints the session and returns a fresh access token, same as `POST /account/password`.
+            operationId: reauth
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReauthRequest'
+            responses:
+                '200':
+                    description: Re-authenticated; a fresh access token for this session
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # A wrong password is a 422 with a translated message, NOT a 401 — same reasoning
+                # as changePassword above: a 401 here would read as "your session expired" to
+                # every client interceptor and log out a session that is, in fact, still valid.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa:
+        get:
+            tags: [Auth]
+            summary: Two-factor status
+            description: 'What second factors this account has armed, and what it could still add. `available` crosses a deployment fact with an account fact — a method this deployment cannot reach at all (no SMTP configured) is absent entirely, while one the account is not yet eligible for (an unverified email address) is listed with `enrollable: false`.'
+            operationId: getTwoFactorStatus
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The account's second factors, armed and available
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorStatusEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Auth]
+            summary: Disable two-factor authentication
+            description: 'Drops EVERY enrolled method and every unused backup code. Requires a valid code from any enrolled method — or an unused backup code — in the body, on top of the route''s own fresh-auth requirement: disabling from a stolen-but-fresh session is otherwise the cheapest way around the whole feature. Removing one method and keeping the rest is DELETE /account/2fa/methods/{method}.'
+            operationId: disableTwoFactor
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorCodeRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/methods/{method}/setup:
+        post:
+            tags: [Auth]
+            summary: Start enrolling one second factor
+            description: Begins — or restarts — enrollment of one method. A device method answers with the secret to scan; a delivered method sends a code and answers with where it went. Nothing is armed until POST /account/2fa/methods/{method}/confirm proves the caller received it. Calling this again replaces whatever that method had pending, and disarms it if it was already confirmed — the "lost my phone, still have my session" recovery path, which is why it is gated on fresh critical auth.
+            operationId: setupTwoFactorMethod
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TwoFactorMethodPath'
+            responses:
+                '200':
+                    description: What the caller needs to finish enrolling this method
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorSetupEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # 422 rather than 403 for a method the account cannot enroll (an unverified email
+                # address): the caller can fix it, and the message says how.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/methods/{method}/confirm:
+        post:
+            tags: [Auth]
+            summary: Arm one second factor
+            description: Arms the method pending from its setup call, against a code the caller has demonstrably received. Backup codes are minted here — but only by the FIRST factor an account arms, since they recover the account, not the method.
+            operationId: confirmTwoFactorMethod
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TwoFactorMethodPath'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorConfirmRequest'
+            responses:
+                '200':
+                    description: The method is armed; backup codes if this was the first one
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorConfirmEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/methods/{method}:
+        delete:
+            tags: [Auth]
+            summary: Remove one second factor
+            description: Drops one method and leaves the others armed. Requires a valid code — from any enrolled method, or a backup code — for the same reason the full disable does. Removing the LAST armed method turns two-factor authentication off and discards the backup codes with it, exactly as DELETE /account/2fa would.
+            operationId: removeTwoFactorMethod
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TwoFactorMethodPath'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorCodeRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/2fa/backup-codes:
+        post:
+            tags: [Auth]
+            summary: Regenerate backup codes
+            description: Mints a fresh set of ten one-time backup codes and discards whatever was left of the old set — the answer to burning through them with no way back in short of admin-assisted recovery. Requires a valid code from any armed method, or an unused backup code, on top of the route's own fresh-auth requirement, same reasoning as disabling a factor.
+            operationId: regenerateBackupCodes
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorCodeRequest'
+            responses:
+                '200':
+                    description: The account's new backup codes, in the clear, shown exactly once
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorBackupCodesRegeneratedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # No factor armed at all — there is nothing to regenerate a recovery list for.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/logout:
+        post:
+            tags: [Auth]
+            summary: Logout this session
+            description: Logs out the CURRENT session only — revokes the refresh token carried by the `jwt` cookie and clears the authentication cookies. Other devices stay signed in; `POST /account/logout-all` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
+            operationId: logout
+            security: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/sessions:
+        get:
+            tags: [Account]
+            summary: List active sessions
+            description: Lists the authenticated user's live refresh tokens as sessions — issue-agnostic handles with an expiry and a `current` marker, never the token values themselves. The one carried by the caller's own refresh cookie is flagged `current`.
+            operationId: getSessions
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Active sessions
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/sessions/{sessionId}:
+        delete:
+            tags: [Account]
+            summary: Revoke one session
+            description: Revokes a single refresh token by its session id — "log out that device". Revoking the current session is allowed and equivalent to `POST /account/logout`, except that the cookies of OTHER clients cannot be cleared from here; their next refresh simply fails.
+            operationId: revokeSession
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: sessionId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Session identifier from `GET /account/sessions`
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed session id that matches none of the caller's live sessions.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/addresses:
+        get:
+            tags: [Account]
+            summary: List saved addresses
+            description: The authenticated user's address book. Whenever it is non-empty, exactly one entry carries `default` — the one checkout ships to when no `addressId` is named.
+            operationId: getAddresses
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Account]
+            summary: Add an address
+            description: Adds an entry to the authenticated user's address book. The first entry becomes the default automatically; a later entry claims the default slot only by sending `default true`, which demotes the previous holder.
+            operationId: addAddress
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AddressInput'
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/addresses/{addressId}:
+        put:
+            tags: [Account]
+            summary: Update an address
+            description: Updates one entry of the caller's own book. `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
+            operationId: updateAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateAddressRequest'
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed id that names none of the CALLER's addresses — someone else's
+                # entry answers the same 404 as an invented one.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Account]
+            summary: Remove an address
+            description: Removes one entry of the caller's own book. Removing the default promotes the oldest remaining entry, so a non-empty book always has exactly one default.
+            operationId: removeAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/verify-request:
+        post:
+            tags: [Auth]
+            summary: Request email verification
+            description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/verify-confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived.
+            operationId: requestEmailVerification
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # The account is already verified — there is nothing to send.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/verify-confirm:
+        post:
+            tags: [Auth]
+            summary: Confirm email verification
+            description: Completes the email-verification flow. Validates the one-time token issued at signup or by `/account/verify-request` and, if valid, marks the account's email address as verified.
+            operationId: confirmEmailVerification
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/VerifyEmailConfirmRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/delete-confirm:
+        delete:
+            tags: [Account]
+            summary: Confirm account deletion
+            description: Completes the account-deletion flow. Validates the one-time token issued by `DELETE /account` and, if valid, permanently removes the user account.
+            operationId: confirmAccountDelete
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AccountDeleteConfirmRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/login:
+        post:
+            tags: [Auth]
+            summary: Login
+            description: Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests — OR, when the account has two-factor authentication enabled, a short-lived challenge that must be submitted to `POST /account/login/2fa` instead.
+            operationId: login
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginRequest'
+            responses:
+                '200':
+                    description: Auth tokens, or a two-factor challenge
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/LoginResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/login/2fa:
+        post:
+            tags: [Auth]
+            summary: Complete a two-factor login
+            description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, returns the same auth tokens `POST /account/login` returns for an account with no second factor.
+            operationId: loginTwoFactor
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginTwoFactorRequest'
+            responses:
+                '200':
+                    description: Auth tokens
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # A wrong code is a 422, same reasoning as /account/reauth: a 401 here would read
+                # as an expired challenge and send a caller back to /account/login for no reason.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/login/2fa/send:
+        post:
+            tags: [Auth]
+            summary: Send a login code
+            description: Delivers a fresh code for one armed delivered method, against a live challenge. Public like the rest of the login flow — the challenge token is the credential. Answers 429 while the previous code is still inside its cooldown, so a client that respects `resendAfter` never sees one; the cooldown exists because this endpoint sends mail on an unauthenticated caller's say-so.
+            operationId: sendTwoFactorCode
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/TwoFactorSendRequest'
+            responses:
+                '200':
+                    description: A code is on its way
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TwoFactorDeliveryEnvelope'
+                # An expired or forged challenge, and an account with no such method armed, answer
+                # alike: neither should tell a caller which one they hit.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/oauth/providers:
+        get:
+            tags: [Auth]
+            summary: List enabled OAuth providers
+            description: The OAuth providers this deployment holds credentials for — an empty list means none are configured. The frontend uses this to decide which "Continue with…" buttons to render.
+            operationId: listOAuthProviders
+            security: []
+            responses:
+                '200':
+                    description: Enabled provider names
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OAuthProvidersEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/oauth/{provider}:
+        get:
+            tags: [Auth]
+            summary: Start an OAuth login
+            description: 'Browser-navigated only: redirects to `provider`''s consent screen, having minted the CSRF `state` as a cookie. Not called programmatically — the frontend points a plain `<a href>` at this URL.'
+            operationId: startOAuthLogin
+            security: []
+            parameters:
+                - name: provider
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+                  description: One of the names `GET /account/oauth/providers` lists.
+            responses:
+                '302':
+                    description: Redirect to the provider's consent screen
+                    headers:
+                        Location:
+                            schema: { type: string }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+
+    /account/oauth/{provider}/callback:
+        get:
+            tags: [Auth]
+            summary: Complete an OAuth login
+            description: 'Browser-navigated only: where `provider` sends the browser back after consent. Validates `state`, exchanges the code, finds-or-creates the account, and redirects to the frontend with the session cookies set — or with `?error=<code>` on failure.'
+            operationId: completeOAuthLogin
+            security: []
+            parameters:
+                - name: provider
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+                - name: code
+                  in: query
+                  required: false
+                  schema: { type: string }
+                - name: state
+                  in: query
+                  required: false
+                  schema: { type: string }
+                - name: error
+                  in: query
+                  required: false
+                  description: Set by the provider instead of `code` when the user declines consent.
+                  schema: { type: string }
+            responses:
+                '302':
+                    description: Redirect to the frontend, session cookies set on success
+                    headers:
+                        Location:
+                            schema: { type: string }
+                '400':
+                    description: Missing or mismatched CSRF state
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ErrorResponse'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+
+    /account/signup:
+        post:
+            tags: [Auth]
+            summary: Signup
+            description: Registers a new user account with optional image upload. Returns the newly created user profile on success.
+            operationId: signup
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SignupRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/SignupRequestMultipart'
+            responses:
+                '201':
+                    description: Created
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                # Signing up with an email that is already registered.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/reset:
+        post:
+            tags: [Auth]
+            summary: Request password reset
+            operationId: requestPasswordReset
+            description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PasswordResetRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/reset-confirm:
+        post:
+            tags: [Auth]
+            summary: Confirm password reset
+            operationId: confirmPasswordReset
+            description: Completes the password-reset flow. Validates the one-time reset token issued by `/account/reset` and, if valid, updates the user's password to the supplied value.
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PasswordResetConfirmRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/refresh:
+        get:
+            tags: [Auth]
+            summary: Refresh access token
+            description: Creates a new short-lived access token from the refresh token in the `jwt` cookie. The cookie is `HttpOnly`, so the token is never readable by page scripts and never appears in a URL, a proxy log or a `Referer` header.
+            operationId: refreshToken
+            security: []
+            responses:
+                '200':
+                    description: New access token
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefreshTokenEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/logout-all:
+        post:
+            tags: [Auth]
+            summary: Logout from all devices
+            description: Logs out the authenticated user from ALL devices by removing all refresh tokens from the database and clearing authentication cookies.
+            operationId: logoutAll
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/tokens/expired:
+        delete:
+            tags: [Auth]
+            summary: Remove expired tokens
+            description: Removes all expired tokens (refresh, password-reset, etc.) from every user record in the database. Restricted to administrators.
+            operationId: deleteExpiredTokens
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/export:
+        post:
+            tags: [Auth]
+            summary: Export the caller's own data
+            description: One JSON answer to "give me my data" (Art. 15, 20), assembled from every collection that holds something of the caller's — profile, address book, orders, payments, shipments, cart, wishlist, live sessions (metadata only, never a token value), and their own audit trail. Requires a FRESH session (`requireFreshAuth`) rather than a request body — a full personal-data dump is worth re-proving identity for, and this repository already has the mechanism.
+            operationId: exportAccountData
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The caller's own data
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AccountExportEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- account — the schemas only this module's paths reference. ----------
+        OAuthProviders:
+            type: object
+            additionalProperties: false
+            required: [providers]
+            properties:
+                providers:
+                    type: array
+                    items: { type: string }
+                    description: Registry names this deployment holds credentials for, e.g. `["google", "github"]`.
+
+        OAuthProvidersEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/OAuthProviders'
+
+        AuthTokensEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AuthTokens'
+
+        RefreshTokenEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/RefreshTokenResponse'
+
+        AuthTokens:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: Access JWT
+                refreshToken:
+                    type: string
+                    description: Refresh token if returned by backend
+                expiresIn:
+                    type: integer
+                    description: Access token expiry in seconds
+
+        RefreshTokenResponse:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: New access JWT
+                refreshToken:
+                    type: string
+                    description: New refresh token if returned by backend
+                expiresIn:
+                    type: integer
+                    description: New access token expiry in seconds
+
+        MfaChallenge:
+            type: object
+            additionalProperties: false
+            required: [mfaRequired, challenge, expiresAt, methods]
+            properties:
+                mfaRequired:
+                    type: boolean
+                    enum: [true]
+                    description: Always true — the credential check passed, but a second factor is required before a session is issued.
+                challenge:
+                    type: string
+                    description: A claim check for this half-finished login, not a code — nothing is sent to the user to obtain it. Submit it, with a code, to POST /account/login/2fa, or to POST /account/login/2fa/send to have a code delivered first.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: When the challenge stops being accepted. Longer for an account with a delivered method armed, since the code has to survive an email round-trip.
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/TwoFactorMethodSummary'
+                    description: The factors armed on this account, in the order a client should offer them.
+                defaultMethod:
+                    type: string
+                    description: Which of `methods` to offer first — the cheapest one for the user, which is a device method when there is one.
+
+        LoginOutcome:
+            oneOf:
+                - $ref: '#/components/schemas/AuthTokens'
+                - $ref: '#/components/schemas/MfaChallenge'
+            description: Either a full session (AuthTokens) or a step-up challenge (MfaChallenge) when the account has two-factor authentication enabled.
+
+        LoginResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/LoginOutcome'
+
+        LoginTwoFactorRequest:
+            type: object
+            additionalProperties: false
+            required: [challenge, code]
+            properties:
+                challenge:
+                    type: string
+                    description: The challenge token from POST /account/login.
+                code:
+                    type: string
+                    description: A code from any armed method, or an unused backup code. Which method it came from is the server's problem, not the client's.
+
+        TwoFactorSendRequest:
+            type: object
+            additionalProperties: false
+            required: [challenge, method]
+            properties:
+                challenge:
+                    type: string
+                    description: The challenge token from POST /account/login.
+                method:
+                    type: string
+                    description: Which armed delivered method to send through — a `method` from the challenge's own `methods` list whose `delivers` is true.
+
+        TwoFactorMethodSummary:
+            type: object
+            additionalProperties: false
+            required: [method, delivers]
+            properties:
+                method:
+                    type: string
+                    description: 'Wire name of the factor — `totp`, `email`. A string rather than an enum on purpose: a deployment that gains a channel must not need a new contract to name it.'
+                delivers:
+                    type: boolean
+                    description: Whether the server sends the code (email, SMS) or the caller reads it off their own device (TOTP). A client renders a "send me a code" button for the former and nothing for the latter.
+                target:
+                    type: string
+                    description: Where a delivered code goes, MASKED by the server — never a full address, so no client has to decide how to redact one. Absent for device methods.
+                enrolledAt:
+                    type: string
+                    format: date-time
+                    description: When this factor was armed. Absent while its enrollment is still pending confirmation.
+                resendAfter:
+                    type: integer
+                    description: Seconds between two deliveries of this method. Absent for device methods.
+                enrollable:
+                    type: boolean
+                    description: Whether this account may add this method right now. Only meaningful in `TwoFactorStatus.available`; `false` comes with `reason`.
+                reason:
+                    type: string
+                    description: Why `enrollable` is false — a translated sentence a client can show as-is.
+
+        TwoFactorStatus:
+            type: object
+            additionalProperties: false
+            required: [enabled, methods, available, backupCodesRemaining]
+            properties:
+                enabled:
+                    type: boolean
+                    description: Whether a login on this account is challenged for a second factor. True exactly when `methods` holds at least one armed entry.
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/TwoFactorMethodSummary'
+                    description: The factors armed on this account, plus any enrollment still pending confirmation.
+                available:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/TwoFactorMethodSummary'
+                    description: 'What this account could still add. A method this deployment cannot reach at all is absent; one the account is not yet eligible for is present with `enrollable: false` and a `reason`.'
+                backupCodesRemaining:
+                    type: integer
+                    description: How many unused backup codes are left. Zero with `enabled` true is the state worth warning about — a lost device then means admin-assisted recovery.
+
+        TwoFactorStatusEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorStatus'
+
+        TwoFactorSetup:
+            type: object
+            additionalProperties: false
+            required: [method, delivers]
+            properties:
+                method:
+                    type: string
+                    description: The method being enrolled, echoed back.
+                delivers:
+                    type: boolean
+                    description: Which half of this object to read. True — a code was just sent, see `sentTo`. False — enroll from `secret`/`otpauthUri`.
+                secret:
+                    type: string
+                    description: A device method's secret, base32-encoded, shown once for manual entry as a fallback to scanning. Absent when `delivers`.
+                otpauthUri:
+                    type: string
+                    description: An otpauth:// URI the client renders as a QR code — this API generates no image, so the secret crosses the wire once rather than twice. Absent when `delivers`.
+                sentTo:
+                    type: string
+                    description: Masked destination the enrollment code just went to. Absent unless `delivers`.
+                resendAfter:
+                    type: integer
+                    description: Seconds before another code may be requested. Absent unless `delivers`.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: When the delivered code stops being accepted. Absent unless `delivers`.
+
+        TwoFactorSetupEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorSetup'
+
+        TwoFactorDelivery:
+            type: object
+            additionalProperties: false
+            required: [method, sentTo, resendAfter, expiresAt]
+            properties:
+                method:
+                    type: string
+                    description: The method the code went through, echoed back.
+                sentTo:
+                    type: string
+                    description: Masked destination — enough for the user to recognise the mailbox, not enough to learn a new address from.
+                resendAfter:
+                    type: integer
+                    description: Seconds before another code may be requested. A client counts down from this rather than inventing its own cooldown, so it never disagrees with the rate limiter.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: When this code stops being accepted.
+
+        TwoFactorDeliveryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorDelivery'
+
+        TwoFactorConfirmRequest:
+            type: object
+            additionalProperties: false
+            required: [code]
+            properties:
+                code:
+                    type: string
+                    description: 'The code for the method being armed — read off the device, or received through its channel. A backup code is NOT accepted here: the point of this call is to prove the new factor works.'
+
+        TwoFactorCodeRequest:
+            type: object
+            additionalProperties: false
+            required: [code]
+            properties:
+                code:
+                    type: string
+                    description: A code from any armed method, or an unused backup code. Used to prove the factor being removed — or the account it protects — really belongs to the caller.
+
+        TwoFactorConfirmed:
+            type: object
+            additionalProperties: false
+            required: [method, backupCodesRemaining]
+            properties:
+                method:
+                    type: string
+                    description: The method just armed, echoed back.
+                backupCodes:
+                    type: array
+                    items:
+                        type: string
+                    description: One-time recovery codes, in the clear, shown exactly once and never retrievable again. Present ONLY when this was the first factor the account armed — they recover the account, not the method, so a second factor mints none.
+                backupCodesRemaining:
+                    type: integer
+                    description: How many unused backup codes the account now holds.
+
+        TwoFactorConfirmEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorConfirmed'
+
+        TwoFactorBackupCodesRegenerated:
+            type: object
+            additionalProperties: false
+            required: [backupCodes, backupCodesRemaining]
+            properties:
+                backupCodes:
+                    type: array
+                    items:
+                        type: string
+                    description: The account's new one-time recovery codes, in the clear, shown exactly once — the old set no longer verifies.
+                backupCodesRemaining:
+                    type: integer
+                    description: How many unused backup codes the account now holds — `BACKUP_CODE_COUNT`, fresh off a regenerate.
+
+        TwoFactorBackupCodesRegeneratedEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/TwoFactorBackupCodesRegenerated'
+
+        LoginRequest:
+            type: object
+            additionalProperties: false
+            required: [email, password]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                remember:
+                    type: string
+                    enum: [short, medium, long]
+                    description: >-
+                        How long the refresh cookie outlives the tab — the "remember me" tiers,
+                        each sized by the deployment. Omitted, the cookie lives only as long as an
+                        access token.
+
+        SignupRequest:
+            type: object
+            additionalProperties: false
+            required: [email, username, password, passwordConfirm, termsAccepted]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                passwordConfirm:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                # Must be `true` — the checkbox gating the Terms of Service / Privacy Policy.
+                # Server-enforced (see `accountService.signup`), not just a client-side gate.
+                termsAccepted:
+                    type: boolean
+                    enum: [true]
+                # Optional, unlike `termsAccepted`: the second signup checkbox, opt-in and
+                # unchecked by default. Absent is the same as `false` — there is no "leave it
+                # alone" reading at signup, unlike `UpdateAccountRequest`'s.
+                analyticsConsent:
+                    type: boolean
+
+        SignupRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [email, username, password, passwordConfirm, termsAccepted]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                passwordConfirm:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                termsAccepted:
+                    type: boolean
+                    enum: [true]
+                analyticsConsent:
+                    type: boolean
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+
+        PasswordResetRequest:
+            type: object
+            additionalProperties: false
+            required: [email]
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+
+        PasswordResetConfirmRequest:
+            type: object
+            additionalProperties: false
+            required: [token, password, passwordConfirm]
+            properties:
+                token:
+                    type: string
+                    description: One-time password reset token (NOT a JWT).
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                passwordConfirm:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+
+        AccountDeleteConfirmRequest:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: One-time account deletion token (NOT a JWT).
+
+        # Self-service profile update. Deliberately narrower than `UpdateUserRequest`: no
+        # `admin`, no `active`, no `password` — role and account state are the admin
+        # endpoints' to change, and the password has its own flow (`POST /account/password`)
+        # because it must prove knowledge of the current one.
+        UpdateAccountRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                phone:
+                    type: string
+                website:
+                    type: string
+                # Absent means "leave it alone" like every other field here — a client withdraws
+                # consent by sending `false` explicitly, never by omission.
+                analyticsConsent:
+                    type: boolean
+
+        UpdateAccountRequestMultipart:
+            type: object
+            additionalProperties: false
+            properties:
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                username:
+                    type: string
+                    minLength: 3
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional user profile image
+                phone:
+                    type: string
+                website:
+                    type: string
+                analyticsConsent:
+                    type: boolean
+
+        ChangePasswordRequest:
+            type: object
+            additionalProperties: false
+            required: [currentPassword, password, passwordConfirm]
+            properties:
+                currentPassword:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                passwordConfirm:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+
+        ReauthRequest:
+            type: object
+            additionalProperties: false
+            required: [password]
+            properties:
+                password:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+
+        VerifyEmailConfirmRequest:
+            type: object
+            additionalProperties: false
+            required: [token]
+            properties:
+                token:
+                    type: string
+                    description: One-time email verification token (NOT a JWT).
+
+        # One live refresh token, presented as a session. The token VALUE is never exposed —
+        # a live refresh token is as good as a password — so the subdocument id is the handle
+        # revocation takes.
+        Session:
+            type: object
+            additionalProperties: false
+            required: [id, current]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                expiration:
+                    type: string
+                    format: date-time
+                    description: Absent on a token issued without an expiry tier.
+                lastUsedAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When this session last made a request. Absent until it makes one, which is
+                        what makes an idle session visible as idle in the list.
+                current:
+                    type: boolean
+                    description: >-
+                        Whether this session is the one making the request, matched through the
+                        refresh cookie. Always `false` for a caller authenticating by bearer
+                        token alone — an access token does not identify a session.
+
+        SessionsResponse:
+            type: object
+            additionalProperties: false
+            required: [sessions]
+            properties:
+                sessions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Session'
+
+        SessionsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/SessionsResponse'
+
+        # ---------- POST /account/export ----------
+        # Payment/Shipment/AuditEntry are declared INLINE here rather than $ref'd from
+        # `payments`/`delivery`/`observability` — this repo's fragments never reference a
+        # SIBLING module's fragment, only the shared root (see `docs/api/contract-
+        # fragmentation.md`), and none of these three schemas live there. Mirrors each
+        # module's own real response shape as of this writing; a field added to one of those
+        # does not automatically appear here.
+
+        ExportSession:
+            type: object
+            additionalProperties: false
+            required: [id, type]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                type:
+                    type: string
+                    enum: [refresh]
+                expiration:
+                    type: string
+                    format: date-time
+                lastUsedAt:
+                    type: string
+                    format: date-time
+
+        # Mirrors payments/openapi.yaml's Payment, minus `userId` and `actions` — `userId` is
+        # redundant (an export already scopes every payment to the caller) and `actions` is
+        # computed PER CALLER by `paymentService`'s own read path, which this endpoint's bulk
+        # read (`paymentService.findOwnPayments`) deliberately bypasses.
+        ExportPayment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, amount, currency, status, provider]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                currency:
+                    type: string
+                status:
+                    type: string
+                    enum: [requires_confirmation, succeeded, declined, refunded]
+                provider:
+                    type: string
+                cardLast4:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        # Mirrors delivery/openapi.yaml's shipment response exactly — every field there is
+        # already the caller's own (a shipment carries no other account's data to strip).
+        ExportShipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, trackingCode, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                trackingCode:
+                    type: string
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                deliveredAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        # Mirrors observability/openapi.yaml's AuditEventItem exactly, scoped to `actor_user_id`
+        # matching the caller — see `services/export.ts`. `ip`/`user_agent` here are RAW, same as
+        # `GET /observability/audit` already answers with: the hashing applied elsewhere in this
+        # codebase's logging is for Winston log LINES (`adapters/logger.ts`), not this queryable
+        # collection.
+        ExportAuditEntry:
+            type: object
+            additionalProperties: false
+            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            properties:
+                actor_user_id:
+                    type: string
+                actor_role:
+                    type: string
+                    enum: [admin, user, anonymous]
+                action:
+                    type: string
+                    description: Dotted action name, e.g. `order.created`.
+                outcome:
+                    type: string
+                    enum: [success, failure]
+                ip:
+                    type: string
+                user_agent:
+                    type: string
+                request_id:
+                    type: string
+                trace_id:
+                    type: string
+                target_type:
+                    type: string
+                target_id:
+                    type: string
+                metadata:
+                    type: object
+                    additionalProperties: true
+                timestamp:
+                    type: string
+                    format: date-time
+                level:
+                    type: string
+                    enum: [info, warn]
+
+        # The one place this module describes a feedback ticket — `adminNotes` is deliberately
+        # absent; see `services/export.ts`'s `toExportFeedback` for why.
+        ExportFeedbackTicket:
+            type: object
+            additionalProperties: false
+            required: [id, email, subject, message, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                status:
+                    type: string
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+
+        AccountExportResponse:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    exportedAt,
+                    profile,
+                    addresses,
+                    orders,
+                    payments,
+                    shipments,
+                    cart,
+                    wishlist,
+                    sessions,
+                    auditLog
+                ]
+            properties:
+                exportedAt:
+                    type: string
+                    format: date-time
+                profile:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                addresses:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Address'
+                orders:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                payments:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportPayment'
+                shipments:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportShipment'
+                cart:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
+                wishlist:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId]
+                        properties:
+                            productId:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                sessions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportSession'
+                auditLog:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ExportAuditEntry'
+                feedback:
+                    type: array
+                    description: Present only when `NODE_EXPORT_INCLUDE_FEEDBACK=true`.
+                    items:
+                        $ref: '#/components/schemas/ExportFeedbackTicket'
+
+        AccountExportEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AccountExportResponse'
+
+        # A saved address — `OrderAddress` (the shared snapshot an order embeds) plus the two
+        # facts that belong to the BOOK entry rather than to any shipment: its handle and
+        # whether it is the default. Exactly one entry is default whenever the book is
+        # non-empty; the API maintains that, not the client.
+        Address:
+            type: object
+            additionalProperties: false
+            required: [id, fullName, street, city, zip, country, default]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                label:
+                    type: string
+                    description: The caller's own name for the entry — "home", "office".
+                fullName:
+                    type: string
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    type: string
+                phone:
+                    type: string
+                default:
+                    type: boolean
+
+        AddressInput:
+            type: object
+            additionalProperties: false
+            required: [fullName, street, city, zip, country]
+            properties:
+                label:
+                    type: string
+                fullName:
+                    type: string
+                    minLength: 1
+                street:
+                    type: string
+                    minLength: 1
+                city:
+                    type: string
+                    minLength: 1
+                zip:
+                    type: string
+                    minLength: 1
+                country:
+                    type: string
+                    minLength: 1
+                phone:
+                    type: string
+                # On create: `true` claims the default slot, absent means "first entry becomes
+                # default, later ones do not". On update: `true` claims the slot, `false` and
+                # absent both leave the assignment alone — demoting the default without naming
+                # a successor would leave the book with none.
+                default:
+                    type: boolean
+
+        UpdateAddressRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                label:
+                    type: string
+                fullName:
+                    type: string
+                    minLength: 1
+                street:
+                    type: string
+                    minLength: 1
+                city:
+                    type: string
+                    minLength: 1
+                zip:
+                    type: string
+                    minLength: 1
+                country:
+                    type: string
+                    minLength: 1
+                phone:
+                    type: string
+                default:
+                    type: boolean
+
+        AddressesResponse:
+            type: object
+            additionalProperties: false
+            required: [addresses]
+            properties:
+                addresses:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Address'
+
+        AddressesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AddressesResponse'
+
+
+    parameters:
+        # ---------- account — the parameters only this module's paths reference. ----------
+        TwoFactorMethodPath:
+            name: method
+            in: path
+            required: true
+            schema:
+                type: string
+            description: 'Wire name of a second factor — a `method` from `GET /account/2fa`. A bare string, not an enum: the set of methods is a deployment fact, and a contract that enumerated them would need regenerating to add a channel.'

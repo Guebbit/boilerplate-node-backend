@@ -1,0 +1,55 @@
+# Promtail reads container logs and ships them to Loki.
+# Why this file exists: log shipping/parsing rules are defined by scrape + pipeline stages.
+# Local goal: parse Docker JSON logs, extract useful labels, keep correlation fields.
+#
+# The default — compose mounts this unless PROMTAIL_CONFIG names the podman variant. The host log
+# directory arrives at /var/log/host-containers whichever engine you run, so the glob below is
+# fixed and only CONTAINER_LOGS_PATH in .env changes.
+
+server:
+    # Promtail debug/metrics HTTP endpoint.
+    http_listen_port: 9080
+    # Disable gRPC server in this local setup.
+    grpc_listen_port: 0
+
+positions:
+    # Tracks read offsets so restarts continue from the last processed line.
+    filename: /tmp/positions.yaml
+
+clients:
+    # Loki push endpoint.
+    - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+    # Read all Docker container json-file logs from the host bind mount.
+    - job_name: docker-containers
+      static_configs:
+          - targets: ['localhost']
+            labels:
+                job: docker
+                __path__: /var/log/host-containers/*/*-json.log
+
+      pipeline_stages:
+          # Stage 1: parse Docker outer JSON envelope.
+          - json:
+                expressions:
+                    log: log
+                    stream: stream
+                    time: time
+
+          # Stage 2: replace line with inner log payload.
+          - output:
+                source: log
+
+          # Stage 3: parse app JSON log payload (Winston fields).
+          - json:
+                expressions:
+                    level: level
+                    service: service
+                    trace_id: trace_id
+
+          # Stage 4: promote fields to labels for filtering in LogQL.
+          - labels:
+                stream:
+                level:
+                service:

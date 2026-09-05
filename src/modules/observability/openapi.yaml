@@ -1,0 +1,438 @@
+openapi: 3.0.3
+info:
+    title: observability — module contract
+    version: '2.0.0'
+
+paths:
+    # --------- Observability ---------
+    /observability/events:
+        get:
+            tags: [Observability]
+            summary: Observability SSE stream
+            description: |
+                Live Server-Sent Events stream for demo dashboards.
+                Sends `metrics.snapshot` on connect, followed by periodic `metrics.updated` and `heartbeat` events.
+            operationId: getObservabilityEvents
+            responses:
+                '200':
+                    description: Server-Sent Events stream
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                # Guarded by `isAdminViaCookie`: an EventSource cannot set an Authorization
+                # header, so the HttpOnly refresh cookie is the credential here.
+                '401':
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized'
+                '403':
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden'
+
+    /observability/health:
+        get:
+            tags: [Observability]
+            summary: Health snapshot
+            description: |
+                Readiness snapshot: whether this instance can serve what it promises, and which
+                backing service is missing when it cannot. Also carries uptime, memory, system and
+                telemetry-wiring detail for the dashboard card.
+
+                This is NOT the liveness probe — `GET /` is, and it is what the container
+                HEALTHCHECK calls. Nothing here performs I/O; every dependency is read from the
+                connection state its adapter already maintains.
+
+                Requires admin role.
+            operationId: getObservabilityHealth
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Health summary
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ObservabilityHealthResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /observability/metrics:
+        get:
+            tags: [Observability]
+            summary: Prometheus metrics
+            description: |
+                Raw Prometheus text (exposition format 0.0.4).
+                Intended for Prometheus scraping, not for browser clients.
+                Use `GET /observability/metrics/overview` for a JSON summary suitable for dashboards.
+            operationId: getObservabilityMetrics
+            responses:
+                '200':
+                    description: Prometheus exposition text
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
+                # Guarded by `isMetricsScraper`, which takes a static bearer credential rather
+                # than the admin JWT — Prometheus cannot log in or refresh a token.
+                '401':
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized'
+                '503':
+                    description: |
+                        No metrics token is configured. The endpoint denies by default rather
+                        than opening: an unauthenticated metrics endpoint is not a state to arrive
+                        at by forgetting an environment variable.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ErrorResponse'
+
+    /observability/metrics/overview:
+        get:
+            tags: [Observability]
+            summary: Metrics overview (JSON)
+            description: |
+                Key operational metrics derived from Prometheus counters/histograms,
+                returned as structured JSON for dashboard KPI cards and charts.
+                Requires admin role.
+            operationId: getObservabilityMetricsOverview
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Metrics overview
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ObservabilityMetricsSummaryResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /observability/audit:
+        get:
+            tags: [Observability]
+            summary: Recent audit events
+            description: |
+                Returns the most recent audit events, newest first, from the persisted audit trail.
+                Events include auth flows, admin CRUD actions, and security blocks.
+                Entries are retained for a deployment-configured period (90 days by default) and expire after.
+                `meta.totalItems` counts every event matching the filters, not just the returned page.
+                Requires admin role.
+            operationId: getObservabilityAuditLogs
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: actor
+                  in: query
+                  schema: { type: string }
+                  description: Filter by actor user ID
+                - name: action
+                  in: query
+                  schema: { type: string }
+                  description: 'Filter by action name (e.g. order.created)'
+                - name: outcome
+                  in: query
+                  schema:
+                      type: string
+                      enum: [success, failure]
+                  description: Filter by outcome
+                - name: since
+                  in: query
+                  schema:
+                      type: string
+                      format: date-time
+                  description: Return events strictly after this ISO-8601 timestamp — an exclusive bound
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+            responses:
+                '200':
+                    description: Audit events
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuditLogsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- observability — the schemas only this module's paths reference. ----------
+        ObservabilityHealthResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ObservabilityHealth'
+
+        ObservabilityMetricsSummaryResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ObservabilityMetricsSummary'
+
+        AuditLogsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AuditLogsPage'
+
+        ObservabilityHealthTelemetry:
+            type: object
+            additionalProperties: false
+            required: [loki, otel, umami, faro, analytics]
+            description: >-
+                Which telemetry sinks this deployment is WIRED TO — read off the environment, never
+                probed.
+
+                Deliberately not part of `status`: these are destinations this service writes to,
+                and losing one costs visibility rather than capability. An unreachable Loki does not
+                make a checkout fail, so it must not colour the dot a dashboard shows for "can this
+                instance serve traffic".
+            properties:
+                loki: { type: boolean }
+                otel: { type: boolean }
+                umami: { type: boolean }
+                faro: { type: boolean }
+                # Which backend `emitAnalyticsEvent` delivers to, AND whether it can. The choice is
+                # between three implementations, so a bare boolean could not tell "unconfigured"
+                # from "deliberately collecting nothing" — and a bare name could not tell a working
+                # provider from one warned once and discarding ever since.
+                analytics:
+                    type: object
+                    additionalProperties: false
+                    required: [provider, configured]
+                    properties:
+                        provider: { type: string, enum: [umami, posthog, none] }
+                        configured:
+                            type: boolean
+                            description: >-
+                                Whether the selected provider has the credentials it needs. `none`
+                                is always true: collecting nothing is its configuration.
+
+        DependencyStatus:
+            type: string
+            enum: [ready, connecting, unavailable, disabled]
+            description: >-
+                One backing service's state, in the four words this payload uses for all of them.
+
+                `disabled` means "not configured in this deployment" and is a supported state, not a
+                failure — it never degrades `status`. `connecting` is separate from `unavailable`
+                because the production HEALTHCHECK allows a start period, during which
+                "not yet" and "broken" look identical on the wire and mean opposite things.
+
+        ObservabilityDependency:
+            type: object
+            additionalProperties: false
+            required: [status]
+            properties:
+                status: { $ref: '#/components/schemas/DependencyStatus' }
+
+        ObservabilityHealthDependencies:
+            type: object
+            additionalProperties: false
+            required: [database, cache, queue]
+            description: >-
+                Every backing service this process needs, read from the connection state each
+                adapter already maintains. No I/O: a health endpoint that opens sockets is polled
+                every few seconds by every replica forever, and becomes an amplifier pointed at the
+                infrastructure it reports on.
+            properties:
+                # Never `disabled`: there is no deployment of this service without Mongo.
+                database: { $ref: '#/components/schemas/ObservabilityDependency' }
+                cache: { $ref: '#/components/schemas/ObservabilityDependency' }
+                queue: { $ref: '#/components/schemas/ObservabilityDependency' }
+
+        ProcessMemory:
+            type: object
+            additionalProperties: false
+            required: [rss, heapUsed, heapTotal, external]
+            description: >-
+                Process memory in BYTES, exactly as the runtime reports it, published
+                identically by every payload that describes this process.
+
+                Bytes rather than megabytes because the conversion is a presentation decision and a
+                lossy one: a rounded megabyte cannot express the 400 KB move between two polls that
+                a leak hunter is looking for. The same four fields, in the same units and the same
+                order, are on the SSE payload in this module's `asyncapi.yaml`. The two documents
+                cannot `$ref` each other, so each implementation owns a check that they stay
+                identical.
+            properties:
+                rss: { type: integer, minimum: 0 }
+                heapUsed: { type: integer, minimum: 0 }
+                heapTotal: { type: integer, minimum: 0 }
+                external: { type: integer, minimum: 0 }
+
+        ObservabilityHealthSystem:
+            type: object
+            additionalProperties: false
+            required: [platform, cpuCount, loadAvg]
+            properties:
+                platform: { type: string }
+                cpuCount: { type: integer }
+                loadAvg:
+                    type: array
+                    items: { type: number }
+
+        ObservabilityHealth:
+            type: object
+            additionalProperties: false
+            required:
+                [status, environment, service, runtimeVersion, uptimeSeconds, dependencies, timestamp]
+            properties:
+                status:
+                    type: string
+                    enum: [ok, degraded]
+                    description: >-
+                        READINESS: `ok` when every dependency is `ready` or `disabled`, `degraded`
+                        otherwise. Which part is missing is `dependencies`' job to say.
+
+                        This is not liveness. `GET /` answers that, and is what the container
+                        HEALTHCHECK probes — an orchestrator restarts on liveness, and restarting
+                        this process would not bring a downed Redis back.
+                environment: { type: string }
+                service: { type: string }
+                # Named for what it IS, not for what produces it here. It was `nodeVersion`,
+                # which the PHP implementation had to satisfy with `PHP_VERSION` — a field named
+                # for one runtime carrying another's number. The description it never had is half
+                # the reason nobody noticed.
+                runtimeVersion:
+                    type: string
+                    description: >-
+                        The version of the language runtime serving this API, as that runtime
+                        reports it. Diagnostic only — what is actually deployed right now, which
+                        is the question a release leaves open.
+                uptimeSeconds: { type: integer, minimum: 0 }
+                dependencies: { $ref: '#/components/schemas/ObservabilityHealthDependencies' }
+                telemetry: { $ref: '#/components/schemas/ObservabilityHealthTelemetry' }
+                memory: { $ref: '#/components/schemas/ProcessMemory' }
+                system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
+                timestamp: { type: string, format: date-time }
+
+        ObservabilityMetricsLatency:
+            type: object
+            additionalProperties: false
+            required: [p50, p95]
+            properties:
+                p50: { type: number, description: Median latency in ms }
+                p95: { type: number, description: 95th-percentile latency in ms }
+
+        ObservabilityMetricsSummary:
+            type: object
+            additionalProperties: false
+            required: [http, auth, business, database, process, timestamp]
+            properties:
+                http:
+                    type: object
+                    additionalProperties: false
+                    required: [totalRequests, totalErrors, errorRate, inFlight, latencyMs]
+                    properties:
+                        totalRequests: { type: integer, minimum: 0 }
+                        totalErrors: { type: integer, minimum: 0 }
+                        errorRate:
+                            type: number
+                            minimum: 0
+                            maximum: 1
+                            description: Fraction of requests that returned 4xx/5xx
+                        inFlight: { type: integer, minimum: 0 }
+                        latencyMs: { $ref: '#/components/schemas/ObservabilityMetricsLatency' }
+                auth:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        loginSuccess: { type: integer, minimum: 0 }
+                        loginFailure: { type: integer, minimum: 0 }
+                        signupSuccess: { type: integer, minimum: 0 }
+                business:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        checkoutSuccess: { type: integer, minimum: 0 }
+                        ordersCreated: { type: integer, minimum: 0 }
+                        # Products whose AVAILABLE units are at or under NODE_LOW_STOCK_THRESHOLD,
+                        # recounted at read time. Availability rather than units on hand: a
+                        # product with forty units all reserved is out of stock to every customer
+                        # looking at it. Zero in builds without the inventory module.
+                        lowStockProducts: { type: integer, minimum: 0 }
+                        # Units held by open reservations across the catalogue. A steadily
+                        # climbing figure against flat sales means holds are being opened and
+                        # never resolved — abandoned checkouts the sweep is not reaching, or a
+                        # payment integration that has stopped confirming.
+                        reservedUnits: { type: integer, minimum: 0 }
+                database:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        queriesTotal: { type: integer, minimum: 0 }
+                        errorsTotal: { type: integer, minimum: 0 }
+                process:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                        uptimeSeconds: { type: integer, minimum: 0 }
+                        memory: { $ref: '#/components/schemas/ProcessMemory' }
+                timestamp: { type: string, format: date-time }
+
+        AuditLogsPage:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEventItem' }
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+        AuditEventItem:
+            type: object
+            additionalProperties: false
+            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            properties:
+                actor_user_id: { type: string }
+                actor_role:
+                    type: string
+                    enum: [admin, user, anonymous]
+                action:
+                    {
+                        type: string,
+                        description: 'Dot-notation action name (e.g. order.created)'
+                    }
+                outcome:
+                    type: string
+                    enum: [success, failure]
+                ip: { type: string }
+                user_agent: { type: string }
+                request_id: { type: string }
+                trace_id: { type: string }
+                target_type: { type: string }
+                target_id: { type: string }
+                metadata:
+                    type: object
+                    additionalProperties: true
+                timestamp: { type: string, format: date-time }
+                level:
+                    type: string
+                    enum: [info, warn]

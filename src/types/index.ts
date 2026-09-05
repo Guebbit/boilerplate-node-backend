@@ -1,24 +1,16 @@
-import type {
-    SignupRequest,
-    CreateUserRequest,
-    UpdateUserRequest,
-    UpdateUserByIdRequest,
-    CreateProductRequest,
-    UpdateProductRequest,
-    UpdateProductByIdRequest
-} from '@api/index';
-export * from '@api/index';
+/**
+ * @module
+ * The public type barrel: re-exports generated API models, generated AsyncAPI types, and the
+ * hand-written auth context DTO, so consumers import from one path (`@types`) regardless of which
+ * of the three a type actually comes from.
+ */
 
-// Generic helper
-export type WithFileUpload<T, K extends string = 'imageUpload'> = T & {
-    [P in K]?: File | Buffer;
-};
+export * from '@api/models';
 
-// openapi doesn't generate multipart/form-data types
-export type SignupRequestMultipart = WithFileUpload<SignupRequest>;
-export type CreateUserRequestMultipart = WithFileUpload<CreateUserRequest>;
-export type UpdateUserRequestMultipart = WithFileUpload<UpdateUserRequest>;
-export type UpdateUserByIdRequestMultipart = WithFileUpload<UpdateUserByIdRequest>;
-export type CreateProductRequestMultipart = WithFileUpload<CreateProductRequest>;
-export type UpdateProductRequestMultipart = WithFileUpload<UpdateProductRequest>;
-export type UpdateProductByIdRequestMultipart = WithFileUpload<UpdateProductByIdRequest>;
+// Re-export generated AsyncAPI types so consumers use a single import path. The file is named
+// after the spec it comes from — `npm run gen:asyncapi` writes it from `asyncapi.yaml` — and the
+// paired frontend names its own the same way, from its own copy of the shared half.
+export * from './asyncapi.generated';
+
+// Auth context DTO (DIP: transport-safe user representation)
+export type { AuthContext, Caller } from './auth-context';

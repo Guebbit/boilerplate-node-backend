@@ -1,6 +1,35 @@
+# Dependencies (installed inside the container)
 node_modules
+
+# Version control
 .git
+
+# Secrets
 .env
+
+# IDE
 .idea
+
+# App build output
 dist
+
+# VitePress build output and dep cache (both rebuilt inside the docs container)
+docs/.vitepress/dist
+docs/.vitepress/cache
+
+# Test and analysis output. None of it is read at runtime, and `reports/` alone is ~20 MB of
+# mutation HTML — every megabyte here is copied into the build context on every single build.
+coverage
+reports
+.stryker-tmp
+.tmp
+
+# Generated API-client collections for Bruno, Insomnia and Mockoon: ~900 KB of developer tooling
+# rebuilt by `npm run contracts:collections`. Only `tests/cross-cutting/contract-bundles.test.ts`
+# reads them, and the image build runs no tests — `npm run build` is type-check plus lint.
+contract.bruno.yml
+contract.insomnia.json
+contract.mockoon.json
+
+# Logs
 *.log

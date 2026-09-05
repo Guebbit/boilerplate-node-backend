@@ -1,0 +1,172 @@
+/**
+ * @module
+ * The invoice PDF comes out in the language its producer resolved. The code under test is the
+ * generic PDF worker, but the scenario is this module's, so it lives here rather than in a
+ * worker test asserting against strings that vanish once `orders` is deleted. `invoiceDocument`
+ * resolves the copy up front and the worker only interpolates; the second half covers the upload
+ * chain, which re-enters the locale by hand because multer consumes the stream mid-request.
+ */
+
+import { asStub } from '@tests/stub';
+import type { NextFunction, Request, Response } from 'express';
+import { runWithLocale, getLocaleContext } from '@infrastructure/i18n';
+import enOrders from '@modules/orders/locales/en.json';
+import itOrders from '@modules/orders/locales/it.json';
+import { invoiceDocument } from '../../emails';
+
+/**
+ * EJS `<%= %>` escapes its output — deliberately, since these templates interpolate
+ * user-supplied product titles — so `L'ordine` reaches the page as `L&#39;ordine`. Expectations
+ * are escaped the same way rather than the templates being loosened to `<%- %>`.
+ */
+const escaped = (value: string) =>
+    value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&#34;')
+        .replaceAll("'", '&#39;');
+
+const renderHtmlToPdfMock = jest.fn().mockResolvedValue(Buffer.from('pdf'));
+jest.mock('@infrastructure/adapters/pdf', () => ({
+    renderHtmlToPdf: (html: string, options?: unknown) => renderHtmlToPdfMock(html, options)
+}));
+
+/** The HTML handed to the (mocked) PDF renderer. */
+const renderedHtml = () => renderHtmlToPdfMock.mock.calls[0][0] as string;
+
+/**
+ * A job as a producer would publish it: the builder's output, unmodified. No locale field on the
+ * envelope — the only trace of the language is the `<html lang>` value inside the copy.
+ */
+const invoiceJob = (locale = 'en') => ({
+    templatePath: 'shared/views/templates-files/orders.invoice.ejs',
+    outputPath: '/tmp/invoice-test.pdf',
+    templateData: invoiceDocument(locale, {
+        id: 'an-order-id',
+        items: [{ product: { title: 'A product', price: 10 }, quantity: 2 }]
+    })
+});
+
+/**
+ * Drives a middleware the way express does, from OUTSIDE any locale scope — which is the
+ * situation multer leaves the chain in.
+ */
+const runMiddleware = async (middleware: unknown, request: Request) =>
+    new Promise<string | undefined>((resolve) => {
+        (middleware as (r: Request, s: Response, n: NextFunction) => void)(
+            request,
+            {} as Response,
+            (() => resolve(getLocaleContext()?.locale)) as NextFunction
+        );
+    });
+
+describe('the PDF worker renders the copy it was given', () => {
+    beforeEach(() => jest.clearAllMocks());
+
+    it('renders the Italian copy an Italian request produced', async () => {
+        const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
+
+        await expect(handlePdfJob(invoiceJob('it'))).resolves.toBe(true);
+
+        expect(renderedHtml()).toContain(escaped(itOrders.orders.invoice.title));
+        expect(renderedHtml()).toContain('<html lang="it"');
+    });
+
+    it('renders English copy as English', async () => {
+        const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
+
+        await expect(handlePdfJob(invoiceJob('en'))).resolves.toBe(true);
+
+        expect(renderedHtml()).toContain(escaped(enOrders.orders.invoice.title));
+    });
+
+    /**
+     * The document has to name the order for the customer downloading it. `invoiceJob`'s order
+     * is owner-shaped — `id` only, no `_id` — since a scoped read's `applyOrderTransform` deletes
+     * `_id` after writing `id`. An admin's unscoped read keeps both, so code reading `_id` renders
+     * the literal string `undefined` for everyone else.
+     */
+    it('names the order in the title for an owner-shaped read, not `undefined`', async () => {
+        const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
+
+        await expect(handlePdfJob(invoiceJob('en'))).resolves.toBe(true);
+
+        expect(renderedHtml()).toContain(
+            escaped(enOrders.orders.invoice['meta-title'].replace('{{order}}', 'an-order-id'))
+        );
+        expect(renderedHtml()).not.toContain('undefined');
+    });
+
+    /**
+     * The point of the design: draining a queue from inside an unrelated locale scope cannot
+     * colour the output, because the worker never consults a dictionary at all.
+     */
+    it('ignores the ambient locale entirely', async () => {
+        const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
+
+        await runWithLocale('en', () => handlePdfJob(invoiceJob('it')));
+
+        expect(renderedHtml()).toContain(escaped(itOrders.orders.invoice.title));
+    });
+
+    it('discards a malformed job rather than rendering one', async () => {
+        const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
+
+        await expect(handlePdfJob({ outputPath: '/tmp/x.pdf' })).resolves.toBe(false);
+
+        expect(renderHtmlToPdfMock).not.toHaveBeenCalled();
+    });
+
+    it('lets a failed render reject, so the invoice is retried rather than dropped', async () => {
+        renderHtmlToPdfMock.mockRejectedValueOnce(new Error('puppeteer died'));
+        const { handlePdfJob } = await import('@infrastructure/adapters/pdf.worker');
+
+        // A dead browser says nothing about the job. `false` would dead-letter it; a rejection
+        // puts it back on the queue — see the worker's own docblock.
+        await expect(handlePdfJob(invoiceJob('it'))).rejects.toThrow('puppeteer died');
+    });
+});
+
+/**
+ * `upload.single` wraps multer so the request's locale survives the stream being consumed (see
+ * `infrastructure/adapters/storage.ts`). Asserted at the unit level too, distinct from the
+ * integration suite's coverage of the mounted route.
+ */
+describe('upload.single restores the locale', () => {
+    /**
+     * Returns the whole pipeline — locale-restoring wrapper, content check, then image-store
+     * commit. Asserted rather than assumed: mounting only the first would accept non-image bytes,
+     * and mounting only the first two would leave uploads staged with nothing pointing at them.
+     */
+    it('returns the full guard chain', async () => {
+        const { upload } = await import('@infrastructure/adapters/storage');
+        const handlers = upload.single('imageUpload');
+
+        expect(handlers).toHaveLength(3);
+    });
+
+    it('re-enters the request locale', async () => {
+        const { upload } = await import('@infrastructure/adapters/storage');
+        const [localeAware] = upload.single('imageUpload');
+
+        const observed = await runMiddleware(
+            localeAware,
+            asStub<Request>({
+                locale: 'it',
+                headers: {}
+            })
+        );
+
+        expect(observed).toBe('it');
+    });
+
+    it('leaves the chain alone when no locale was negotiated', async () => {
+        const { upload } = await import('@infrastructure/adapters/storage');
+        const [localeAware] = upload.single('imageUpload');
+
+        const observed = await runMiddleware(localeAware, asStub<Request>({ headers: {} }));
+
+        expect(observed).toBeUndefined();
+    });
+});

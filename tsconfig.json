@@ -3,16 +3,15 @@
         "target": "ES6",
         "lib": ["ES2023"],
         "module": "es2020",
-        "baseUrl": ".",
         "paths": {
-            "@types": ["src/types"],
-            "@api/*": ["api/*"],
-            "@controllers/*": ["src/controllers/*"],
-            "@services/*": ["src/services/*"],
-            "@repositories/*": ["src/repositories/*"],
-            "@models/*": ["src/models/*"],
-            "@middlewares/*": ["src/middlewares/*"],
-            "@utils/*": ["src/utils/*"]
+            "@types": ["./src/types"],
+            "@api/*": ["./api/*"],
+            "@tests/*": ["./tests/support/*"],
+            "@app/*": ["./src/app/*"],
+
+            "@infrastructure/*": ["./src/infrastructure/*"],
+            "@kernel/*": ["./src/kernel/*"],
+            "@modules/*": ["./src/modules/*"]
         },
         "strict": true,
         "composite": true,
@@ -23,10 +22,9 @@
         "forceConsistentCasingInFileNames": true,
         "noPropertyAccessFromIndexSignature": false,
         "resolveJsonModule": true,
-        "moduleResolution": "Node",
+        "moduleResolution": "bundler",
+        "verbatimModuleSyntax": true,
         "outDir": "./dist",
-        "importsNotUsedAsValues": "remove",
-        "ignoreDeprecations": "5.0",
         "types": ["node", "jest"],
         "typeRoots": ["./src/types", "./node_modules/@types"]
     },
@@ -37,6 +35,11 @@
         "src/**/*.ts",
         "src/**/*.json",
         "tests/**/*.ts",
-        "db/**/*.ts"
+        "db/**/*.ts",
+        "db/demo/demo-data.json",
+        "eslint/**/*.ts",
+        "scripts/**/*.ts",
+        "ops/**/*.ts",
+        "shared/contracts/*.ts"
     ]
 }

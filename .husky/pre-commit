@@ -1,0 +1,43 @@
+# The full gate, and the only one: build, lint, both spec lints, format check, the contract-bundle
+# and cross-repo contract checks, then unit, cross-cutting, integration and contract tests.
+#
+# About 90 seconds, which is why it is not split into tiers. Integration and contract cost 14s and
+# 49s against an in-memory Mongo — there is nothing worth trading away, and one gate is easier to
+# trust than three.
+#
+# `check:spec-identity` SKIPS rather than fails when the paired frontend is not on disk, so a
+# half-cloned pair can still commit. It stays fatal under CI, where a missing sibling means the
+# workflow is misconfigured.
+#
+# `test:fuzz` IS here, inside `npm run test`. It was held back to nightly while the 500 it found on
+# `POST /products/search` was open; that is fixed, and the suite has since caught two more of the
+# same shape — a bad request answered as a server fault. It earns its place in the gate.
+#
+# Deliberately not here, and run by hand for the occasions that want them: `test:mutation`
+# (re-executes the unit suite once per mutant — nightly in CI), `complete:manual` (`test:prism`,
+# which binds a real port), and `bench` / `bench:search` (need a running server, and report numbers
+# rather than a verdict).
+# Write the generated artefacts first, then verify them. Regenerating here rather than leaving it
+# to whoever remembers is what stops a commit failing the gate with "STALE" for a file no human
+# authors. Costs about five seconds: contracts:bundle 1s, gen:api 1s, gen:asyncapi 2s,
+# seed:export 1s.
+#
+# `--no-sync` is not optional. A full `regenerate` ends with `sync:frontend`, which writes into the
+# PAIRED REPO's working tree — a commit here would silently dirty a checkout you are not looking
+# at, and possibly one with its own work in progress. Hand the files over deliberately, with
+# `npm run regenerate` by itself, when you mean to.
+#
+# `git add` is required for what's still committed: a file rewritten after staging is not in the
+# commit, so the gate below would pass against content that is not what gets committed. Note this
+# widens a partial `git add -p` to include the whole regenerated output — which is what you want
+# for a generated file, and a surprise exactly once.
+#
+# `openapi.yaml`, `api/`, `src/types/asyncapi.generated.ts` and `db/migrations/` are NOT named
+# here — they are
+# gitignored (postinstall rebuilds them, see package.json), and `git add` errors outright on an
+# explicitly-named ignored path. `regenerate` above still has to build them: the gate that follows
+# reads them off disk regardless of git's opinion of them.
+npm run regenerate -- --no-sync
+git add asyncapi.yaml asyncapi.public.yaml db/demo/demo-data.json
+
+npm run complete

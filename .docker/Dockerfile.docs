@@ -1,0 +1,37 @@
+# ============================================
+# Stage 1: Builder — install deps & build VitePress
+# ============================================
+FROM docker.io/library/node:25-alpine AS builder
+
+WORKDIR /app
+
+# Copy the whole build context before `npm ci`, not just the manifests: `npm ci`'s postinstall
+# runs contracts:bundle + gen:api + gen:asyncapi, which need scripts/, shared/contracts/,
+# orval.config.ts, etc. on disk to run at all. Costs the dependency-layer cache (any source change
+# now invalidates `npm ci` too), but this is a from-scratch `--no-cache` build already, and the
+# postinstall step needs the source present before it, not after.
+COPY . .
+
+# Install all dependencies (including devDeps needed by VitePress)
+RUN npm ci
+
+# Build the static VitePress site into docs/.vitepress/dist
+RUN npm run docs:build
+
+# ============================================
+# Stage 2: Server — serve static files with Nginx
+# ============================================
+FROM docker.io/library/nginx:alpine
+
+# Remove default nginx static assets
+RUN rm -rf /usr/share/nginx/html/*
+
+# Copy built VitePress output from builder stage
+COPY --from=builder /app/docs/.vitepress/dist /usr/share/nginx/html
+
+# Custom nginx config (optional: SPA-like fallback, caching headers)
+COPY .docker/nginx.docs.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

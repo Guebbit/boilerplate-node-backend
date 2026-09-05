@@ -1,3 +1,38 @@
 api
 .prism
-.dev
+contract.bruno.yml
+contract.insomnia.json
+contract.mockoon.json
+contract.postman.json
+src/types/asyncapi.generated.ts
+
+# The REST contract. `redocly bundle` decides its layout now — 2-space, its own key order — and
+# `check:contracts-bundle` asserts the committed bytes equal a fresh run. Prettier reformatting it
+# afterwards would make that check fail on a file nobody edited, exactly as it would for the demo
+# dataset below. The MODULE documents it is built from are formatted as normal.
+openapi.yaml
+
+# The demo dataset. `npm run seed:export` writes it by seeding a throwaway database and recording
+# what the API answers, and `check:seed-export` asserts the committed bytes match what a fresh run
+# produces. Prettier reformatting it afterwards makes that check fail on a file nobody edited — two
+# writers, one artefact — and the copy in the paired frontend is hash-compared against this one, so
+# a format-only difference would read as a forked dataset.
+db/demo/demo-data.json
+
+# The mutation incremental cache. Committed on purpose — see the note in `.gitignore` and
+# `stryker.config.json` — and written by Stryker, not by anyone typing JSON. Same reasoning as the
+# two files above: reformatting a file only a tool writes fails the check on a commit nobody made.
+reports/stryker-incremental.json
+
+# graphify cache — generated JSON, not ours to format
+graphify-out/
+
+# Working directories that belong to tooling rather than to this codebase, and to whoever is
+# running it rather than to this repo's formatting rules. Prettier scans the whole tree, so an
+# unformatted scratch directory here fails `prettier:check` — which is in `npm run complete`, which
+# the pre-commit hook runs. One person's working notes would otherwise block every commit in every
+# concurrent session, and the way out people find is `--no-verify`, which costs the whole gate.
+.2repo/
+.codeboarding/
+.claude/
+CLAUDE.md

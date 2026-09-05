@@ -1,51 +1,37 @@
 {
-    "login": {
-        "invalid-data": "Inserted data are invalid.",
-        "wrong-data": "Invalid email or password.",
-        "success": "Login successful.",
-        "user-field-email-required": "Email is required",
-        "user-field-email-invalid": "Not a valid email",
-        "user-field-username-required": "Username is required",
-        "user-field-username-min": "Name is too short",
-        "user-field-password-required": "Password is required",
-        "user-field-password-min": "Password is too short"
-    },
-    "signup": {
-        "email-already-used": "Email was already used.",
-        "registration-successful": "Registration successful, confirm via email to login.",
-        "password-dont-match": "Confirmation password must be the same of password."
-    },
-    "reset": {
-        "email-not-found": "No user associated with the inserted email was found.",
-        "token-not-found": "Invalid or expired token, please try again.",
-        "email-sent": "An email with a link was sent, click to reset password.",
-        "success": "Password changed, login with the new password."
-    },
-    "ecommerce": {
-        "product-not-found": "The requested product was not found.",
-        "product-field-title-required": "Title is required",
-        "product-field-title-min": "Title is too short",
-        "product-field-price-required": "Price is missing",
-        "product-field-price-invalid": "Price is missing or invalid",
-        "product-field-image-required": "Image is required",
-        "product-added-to-cart": "Product successfully added to cart.",
-        "product-hard-deleted": "Product was permanently deleted.",
-        "product-soft-deleted": "Product was soft deleted (users only).",
-        "product-was-deleted-from-all-carts": "Product ID {{product}} was removed from {{count}} carts.",
-        "user-not-found": "The requested user was not found.",
-        "user-hard-deleted": "User was permanently deleted.",
-        "user-soft-deleted": "User was soft deleted (deactivated).",
-        "order-not-found": "The requested order was not found",
-        "order-deleted": "Order was permanently deleted.",
-        "order-creation-success": "Order created with success.",
-        "order-creation-failure": "Order creation failed.",
-        "order-invoice-missing": "No invoice file was found",
-        "cart-product-removed": "Product removed from cart.",
-        "cart-emptied": "All products removed from cart."
-    },
     "generic": {
         "error-unknown": "Something went wrong with the request.",
         "error-invalid-data": "Error: invalid data provided.",
-        "error-missing-data": "Error: missing data."
+        "error-missing-data": "Error: missing data.",
+        "error-internal": "Something went wrong on our side.",
+        "error-unauthorized": "You are not signed in, or your session has expired.",
+        "error-forbidden": "You do not have permission to do that.",
+        "error-not-found": "That item no longer exists.",
+        "error-rate-limited": "Too many requests. Try again shortly.",
+        "error-reauth-required": "Please confirm it's you before continuing."
+    },
+    "validation": {
+        "required": "This field is required.",
+        "invalid": "This value is not valid.",
+        "invalid-type": "Expected {{expected}}.",
+        "invalid-format": "This value is not in the expected format.",
+        "format-email": "Enter a valid email address.",
+        "format-url": "Enter a valid URL.",
+        "format-uuid": "Enter a valid identifier.",
+        "format-datetime": "Enter a valid date and time.",
+        "format-date": "Enter a valid date.",
+        "format-time": "Enter a valid time.",
+        "too-small-string": "Must be at least {{minimum}} characters.",
+        "too-big-string": "Must be at most {{maximum}} characters.",
+        "too-small-number": "Must be at least {{minimum}}.",
+        "too-big-number": "Must be at most {{maximum}}.",
+        "too-small-items": "Must have at least {{minimum}} items.",
+        "too-big-items": "Must have at most {{maximum}} items.",
+        "not-multiple-of": "Must be a multiple of {{divisor}}.",
+        "unrecognized-keys": "Unknown field: {{keys}}.",
+        "invalid-value": "Must be one of: {{values}}."
+    },
+    "email": {
+        "footer": "Sent by the Ecommerce Demo team."
     }
 }
