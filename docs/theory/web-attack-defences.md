@@ -92,6 +92,9 @@ only a useful verdict against a named row.
 | NoSQL injection (§1)                              | search input reaching a `$regex` filter is escaped before it gets there                                             | `infrastructure/persistence/search.ts#escapeRegex`                  |
 | Excessive data exposure / IDOR (§10 / §4)         | a caller's own resource is looked up scoped to their id, not fetched by id and checked after                        | `orders/repository.ts#findByIdScoped` and the equivalent per module |
 | Sensitive data in logs / Credential leakage (§10) | password hashes, live tokens and (configurably) personal fields are redacted or hashed before a log line is written | `infrastructure/adapters/logger.ts#SENSITIVE_FIELDS`                |
+| CSRF on the OAuth callback (§3)                   | a double-submit `state` cookie, minted and set in the same response that hands it to the provider; the callback rejects a mismatch with 400 | `account/oauth/state.ts`, `account/controllers/get-oauth-callback.ts` |
+| Open redirect / callback confusion (§3/§7)        | the redirect URI and the post-login frontend URL are both derived from server config (`NODE_URL`, `NODE_FRONTEND_URL`), never from the request or the provider's response | `account/oauth/config.ts#oauthRedirectUri`                          |
+| Pre-emptive account takeover via OAuth linking (§3) | a provider identity is linked to an existing email only once that provider reports the address as verified; an unverified match is rejected rather than linked | `account/services/oauth.ts#loginOrCreateFromOAuth`                  |
 
 ## Not mitigated, and why that is a decision
 
@@ -105,7 +108,10 @@ only a useful verdict against a named row.
 - **§3 Enforcing 2FA on admins** — open: worth wanting, but a policy layer on top of everything
   above, and it needs an answer for the admin who enrols nothing and locks the panel. Not
   answered here.
-- **§3 SSO / OAuth rows** — not applicable; this build has no external identity provider.
+- **§3 2FA bypass via linked OAuth provider** — `GET /account/oauth/:provider/callback` mints a
+  session without consulting `twoFactorEnabledAt`. An account with a linked provider has an
+  unchallenged way in, so 2FA on this deployment is a control on the password path only. See
+  [Security](../tools/security.md#what-is-not-covered).
 
 ## Keeping this page true
 

@@ -95,8 +95,8 @@ Nothing anywhere records that these are **declarative only**: nothing dials them
 configuration and set carefully for no effect. `NODE_UMAMI_HOST` is the third of this shape and
 _is_ documented, which makes the omission of the other two look deliberate.
 
-**Where it goes:** `docs/tools/observability-reference.md`, next to whatever documents
-`NODE_UMAMI_HOST`.
+**Where it goes:** `docs/tools/observability-reference.md`, next to `NODE_UMAMI_HOST`'s own
+paragraph in `docs/tools/analytics.md` — same "declarative only" shape, cross-link the two.
 
 ### 6. `NODE_JSON_BODY_LIMIT` — 1 variable
 

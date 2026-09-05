@@ -17,7 +17,9 @@ This pairing is already the right shape. The gap is coverage, not structure:
    its own scoping line. Everything else in the catalog — injection rows beyond NoSQL, money/stock
    business-logic abuse in `orders`/`payments`/`inventory`, upload/image rows beyond the
    magic-byte check, SSRF, path traversal, dependency management beyond one `npm audit fix` note —
-   has never been walked row by row against this repo.
+   has never been walked row by row against this repo. Social login (`account/oauth/*`) landed
+   after the auth-only pass and is included in scope now — CSRF/state, open-redirect and
+   account-linking rows are covered; the 2FA-bypass-via-OAuth gap is recorded in "Not mitigated".
 2. **`boilerplate-vue-frontend` has no equivalent at all.** No catalog copy, no defences page.
    Browser-side rows matter uniquely there and are currently unrecorded either way: XSS / output
    encoding, CSRF token handling, clickjacking / frame-ancestors, where the access token is stored
@@ -25,7 +27,27 @@ This pairing is already the right shape. The gap is coverage, not structure:
    vulnerabilities in the FE's own package tree.
 3. **No single "what's still open" list.** Today the only recorded gaps are the few named in
    BE's "Not mitigated, and why that is a decision" section — a byproduct of the auth-only pass,
-   not a deliberate sweep of the full catalog.
+   not a deliberate sweep of the full catalog. The catalog sections below have never been walked at
+   all — not "reviewed clean", simply untouched:
+
+   | § | Section | Rows this repo has never walked |
+   | - | ------- | -------------------------------- |
+   | 5  | Business logic | money/stock abuse in `orders`/`payments`/`inventory` |
+   | 6  | Files and paths | upload/image rows beyond the magic-byte check, path traversal |
+   | 7  | SSRF | server as the attacker's client |
+   | 8  | HTTP protocol and intermediaries | proxies, caches, load balancers |
+   | 12 | Data layer | databases, caches, queues beyond NoSQL injection |
+   | 15 | API-specific | REST/GraphQL/webhook rows |
+   | 16 | Real-time and messaging | WebSockets, SSE, brokers |
+   | 17 | Email and notifications | — |
+   | 19 | Runtime and language level | Node.js and native-code rows |
+   | 20 | Payments and money | logic flaws that become theft |
+   | 21 | Automation and abuse | legitimate features at machine scale |
+
+   (§1 Injection is partly walked — NoSQL only; §2 Client-side, §3 Authentication, §4
+   Authorization, §9 Cryptography/transport, §10 Information disclosure, §11 DoS, §13
+   Infrastructure/config, §14 Supply chain, §18 Human/social each have at least one row walked, not
+   the whole section.)
 
 ## What the scan should produce
 
