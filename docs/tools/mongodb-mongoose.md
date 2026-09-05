@@ -95,7 +95,7 @@ They collide on **names**. Mongo treats an index's name as part of its identity,
 | Everything except TTL                          | Schema **and** the baseline, same key spec and same name. The baseline is grouped by owning module, which is who decides an entry belongs there.                                                                                                      |
 | TTL — `auditlogs`, `carts`, `feedbackrequests` | Schema only. `expireAfterSeconds` comes from an env var, and a second copy of that arithmetic in a migration could disagree with the schema's and make every boot a conflict. Changing a live window is a `collMod` — see [Ops](../reference/ops.md). |
 
-Adding an index is therefore two edits: the schema, then the baseline's table. The test below fails if you do only one.
+Adding an index is therefore one edit — the schema — followed by `npm run gen:migration`, which rewrites the baseline's table from it. `check:migration` and the test below both fail if you skip the regeneration.
 
 Options count too: same key and name but a different `unique`, `expireAfterSeconds` or partial filter fails the same way.
 

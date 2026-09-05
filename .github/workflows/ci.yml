@@ -282,6 +282,26 @@ jobs:
             - name: Check the exported demo dataset is current
               run: npm run check:seed-export
 
+    migration-freshness:
+        # The baseline index migration is generated from the schemas that declare the indexes. A
+        # stale copy means `db:migrate:up` builds an index set the application no longer wants —
+        # including unique constraints that are correctness, not speed.
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check the baseline index migration is current
+              run: npm run check:migration
+
     cluster:
         # The only suite that boots `src/cluster.ts` and forks real workers. It is not in
         # `complete` — two clusters and a Redis is ~25s and needs a container engine — so CI is
