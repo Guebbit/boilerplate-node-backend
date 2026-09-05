@@ -14,6 +14,17 @@ export { cardLastFour, type CardDetails } from './card';
 /** What a charge attempt can come back as. Everything else a provider can say is a throw. */
 export type ChargeOutcome = 'succeeded' | 'declined';
 
+/**
+ * What an implementation must provide — and, for a REAL one, what it must additionally defend.
+ *
+ * `fake` never leaves the process, which is the only reason callback forgery, callback replay and
+ * 3-D Secure bypass currently read as "no surface" here. A live PSP answers asynchronously: it
+ * sends THIS server the request that decides an order is paid. An implementation that adds that
+ * endpoint must verify the provider's signature over the raw body, refuse a repeated event id,
+ * and trust no payment status reported by the browser.
+ *
+ * See: docs/theory/web-attack-defences.md
+ */
 export interface PaymentProvider {
     /** The name persisted on each payment document, so a row says who handled it. */
     name: string;
