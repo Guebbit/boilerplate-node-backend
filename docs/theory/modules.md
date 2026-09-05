@@ -261,22 +261,23 @@ flowchart TD
     class CN,EX,TS side;
 ```
 
-| File                                                             | Required?                             | What it is                                                                          |
-| ---------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| `module.ts`                                                      | **yes**                               | the manifest — the only file `src/modules.ts` imports                               |
-| `index.ts`                                                       | only if a sibling imports this module | the public barrel; a module nothing imports has none                                |
-| `routes.ts` + `controllers/`                                     | only if the domain serves HTTP        | `audit-logs` has neither                                                            |
-| `service.ts` · `repository.ts` · `model.ts`                      | only if it owns data                  | `observability` owns none — it serves URLs over other domains' data                 |
-| `services/`                                                      | when `service.ts` outgrows one file   | see [Layers](./layers.md#when-service-ts-becomes-services)                          |
-| `domain/`                                                        | only if the module has rules to prove | see [Domain Layer](./domain-layer.md)                                               |
-| `openapi.yaml`                                                   | if it serves HTTP                     | its standalone slice of the REST contract                                           |
-| `asyncapi.yaml`                                                  | if it owns a channel                  | the same, for the async contract, server included — `observability` is the only one |
-| `probes.ts`                                                      | as needed                             | the requests a spec cannot describe — see below                                     |
-| `providers/`                                                     | if the domain has an outbound port    | `payments` is the only one — see below                                              |
-| `audit.ts` · `metrics.ts` · `demo.ts` · `locales/` · `events.ts` | as needed                             | the domain's slice of what used to be shared registries                             |
-| `analytics.ts` · `fixtures.ts`                                   | as needed                             | the event names it emits; how its records are built                                 |
-| `emails.ts`                                                      | only if the domain sends email        | the finished copy of its emails — see below                                         |
-| `tests/unit/` · `tests/contract/`                                | yes, in practice                      | deleted with the module                                                             |
+| File                                                             | Required?                             | What it is                                                                                  |
+| ---------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `module.ts`                                                      | **yes**                               | the manifest — the only file `src/modules.ts` imports                                       |
+| `index.ts`                                                       | only if a sibling imports this module | the public barrel; a module nothing imports has none                                        |
+| `routes.ts` + `controllers/`                                     | only if the domain serves HTTP        | `audit-logs` has neither                                                                    |
+| `service.ts` · `repository.ts` · `model.ts`                      | only if it owns data                  | `observability` owns none — it serves URLs over other domains' data                         |
+| `services/`                                                      | when `service.ts` outgrows one file   | see [Layers](./layers.md#when-service-ts-becomes-services)                                  |
+| `domain/`                                                        | only if the module has rules to prove | see [Domain Layer](./domain-layer.md)                                                       |
+| `openapi.yaml`                                                   | if it serves HTTP                     | its standalone slice of the REST contract                                                   |
+| `asyncapi.yaml`                                                  | if it owns a channel                  | the same, for the async contract, server included — `observability` is the only one         |
+| `probes.ts`                                                      | as needed                             | the requests a spec cannot describe — see below                                             |
+| `providers/`                                                     | if the domain has an outbound port    | `payments` is the only one — see below                                                      |
+| `audit.ts` · `metrics.ts` · `demo.ts` · `locales/` · `events.ts` | as needed                             | the domain's slice of what used to be shared registries                                     |
+| `migrations/`                                                    | only if a change needs a backfill     | timestamped `.js` files, assembled into `db/migrations/` — see [Data](../reference/data.md) |
+| `analytics.ts` · `fixtures.ts`                                   | as needed                             | the event names it emits; how its records are built                                         |
+| `emails.ts`                                                      | only if the domain sends email        | the finished copy of its emails — see below                                                 |
+| `tests/unit/` · `tests/contract/`                                | yes, in practice                      | deleted with the module                                                                     |
 
 The table lists what a module MAY have. What decides **where** in the module a file goes is one
 rule, and `account` is the module that forced it to be written down:
@@ -295,8 +296,8 @@ rule is what makes the table above readable as a shape rather than a suggestion:
 is a layer, and a folder is a subject.
 
 Nothing central enumerates these. `audit.ts`, `metrics.ts` and `events.ts` register or augment
-themselves on import; `seeds` and `locales` are declared in the manifest so the seeder and the i18n
-boot can walk the registry without naming a domain.
+themselves on import; `seeds`, `locales` and `migrations` are declared in the manifest so the
+seeder, the i18n boot and the migration assembler can walk the registry without naming a domain.
 
 `probes.ts` is the one row that is not obvious from the name. A generated API collection can only
 contain the calls the contract describes, and a contract describes valid calls and their declared
@@ -338,9 +339,10 @@ export default {
 } satisfies AppModule;
 ```
 
-Every field is read by something at boot: the router is mounted at `basePath`, `locales` is handed
-to i18next, `subscribe` attaches the module's event handlers, `seeds` is called by the seeding
-script. That is the bar for a field being here at all — the manifest used to also carry `subdomain`
+Every field is read by something: the router is mounted at `basePath`, `locales` is handed to
+i18next, `subscribe` attaches the module's event handlers, `seeds` is called by the seeding script,
+`migrations` is copied into the `db/migrations/` bundle by `gen:migrations`. That is the bar for a
+field being here at all — the manifest used to also carry `subdomain`
 and a labelled `dependsOn` graph, which nothing read and three tests checked; see
 [Strategic DDD](./strategic-ddd.md) §2 and §4 for where that description lives now.
 

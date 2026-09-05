@@ -77,3 +77,13 @@ src/types/asyncapi.generated.ts
 .2repo/modules/.modules-cache.json
 .codeboarding/
 # 2repo:end
+
+# The assembled migration bundle. `npm run gen:migrations` writes it from two generated-or-owned
+# sources — the index baseline read off each module's schema, and every `src/modules/*/migrations/`
+# a module declares on its manifest — and `postinstall` runs it, so a fresh clone has one before
+# anything can read it. Committing it meant a second copy of every module's migration that could
+# go stale, which is the same trap `/openapi.yaml` above was pulled out of.
+#
+# `db:bootstrap` rebuilds it too, so a deploy that only ever runs migrations does not depend on
+# postinstall having happened first.
+/db/migrations/

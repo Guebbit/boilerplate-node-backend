@@ -37,7 +37,7 @@ This repo uses [migrate-mongo](https://github.com/seppevs/migrate-mongo#readme),
 
 ### Config
 
-`migrate-mongo-config.js` at the project root points at `db/migrations/` and uses the `NODE_DB_URI` env var.
+`migrate-mongo-config.js` at the project root points at `db/migrations/` and uses the `NODE_DB_URI` env var. That directory is **assembled, not authored** — see [Writing a migration](#writing-a-migration).
 
 ```js
 module.exports = {
@@ -60,7 +60,19 @@ module.exports = {
 
 ### Writing a migration
 
-Each file in `db/migrations/` exports an `up` and a `down` function that receive the raw MongoDB `db` driver:
+A migration belongs to the module whose collection it touches — `src/modules/<name>/migrations/`, next to the `model.ts` it must never import. The module points at the directory from its manifest, exactly as it does for `locales`:
+
+```ts
+export default {
+    name: 'orders',
+    migrations: path.join(__dirname, 'migrations')
+    // …
+} satisfies AppModule;
+```
+
+`npm run gen:migrations` then copies every enabled module's files into `db/migrations/`, alongside the generated index baseline, and that assembled directory is the only one `migrate-mongo` reads. It is gitignored; `postinstall` and `db:bootstrap` both rebuild it.
+
+Each file exports an `up` and a `down` function that receive the raw MongoDB `db` driver:
 
 ```js
 module.exports = {
@@ -73,7 +85,9 @@ module.exports = {
 };
 ```
 
-Name files with a timestamp prefix so they run in order, e.g. `20260905000000-baseline.js`.
+Name files `<14-digit timestamp>-kebab-name.js`, e.g. `20261110120000-detach-user.js`. The timestamp is what sequences one module's migration against another's, so the assembler refuses a name without one — and refuses two modules claiming the same name, since the changelog records by name and a collision would mark one module's work as already applied.
+
+A migration talks to the **driver**, never to this application: it is replayed against databases written before today's schema existed, so reaching for a Mongoose model would run today's hooks, defaults and validators over yesterday's documents. ESLint enforces this on both the authored copies and the assembled bundle.
 
 ### The index rule
 
@@ -88,14 +102,14 @@ They collide on **names**. Mongo treats an index's name as part of its identity,
 
 **Declare indexes on the schema.** That is where an index is authored — one author, so nothing can disagree. A migration is still the only way to _drop_ an index: a schema says what should exist, not what should stop existing.
 
-`db/migrations/20260905000000-baseline.js` then mirrors that declaration, so `db:migrate:up` alone is enough to put the whole index set in place — including the ten unique constraints that are correctness, not speed. Without it those would exist only because `autoIndex` is on, and would silently vanish the day it is turned off.
+The generated `20260905000000-baseline.js` then mirrors that declaration, so `db:migrate:up` alone is enough to put the whole index set in place — including the ten unique constraints that are correctness, not speed. Without it those would exist only because `autoIndex` is on, and would silently vanish the day it is turned off.
 
 | Index                                          | Where it is built                                                                                                                                                                                                                                     |
 | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Everything except TTL                          | Schema **and** the baseline, same key spec and same name. The baseline is grouped by owning module, which is who decides an entry belongs there.                                                                                                      |
 | TTL — `auditlogs`, `carts`, `feedbackrequests` | Schema only. `expireAfterSeconds` comes from an env var, and a second copy of that arithmetic in a migration could disagree with the schema's and make every boot a conflict. Changing a live window is a `collMod` — see [Ops](../reference/ops.md). |
 
-Adding an index is therefore one edit — the schema — followed by `npm run gen:migration`, which rewrites the baseline's table from it. `check:migration` and the test below both fail if you skip the regeneration.
+Adding an index is therefore one edit — the schema. `npm run gen:migrations` rewrites the baseline's table from it, and `postinstall`, `db:bootstrap` and `regenerate` all run it, so there is no committed copy that can be left stale.
 
 Options count too: same key and name but a different `unique`, `expireAfterSeconds` or partial filter fails the same way.
 

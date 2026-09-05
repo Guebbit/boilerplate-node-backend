@@ -36,7 +36,7 @@ Over in the paired frontend the mirror command is `npm run regenerate` as well â
 pull, or the app ships a client for the previous contract.
 
 The steps are still individually runnable (`contracts:bundle`, `gen:api`, `gen:asyncapi`,
-`gen:migration`, `seed:export`, `sync:frontend`) and worth reaching for when you know exactly what changed. The
+`gen:migrations`, `seed:export`, `sync:frontend`) and worth reaching for when you know exactly what changed. The
 umbrella exists because the order is not guessable â€” see below.
 
 ## Why two steps and not one

@@ -4,6 +4,9 @@
 **`migrate-mongo` owns schema, `db:seed` owns data.** A migration changes the shape of a
 collection; a seed fills one. Neither does the other's job.
 
+Neither half is authored here. A module owns its migrations and its fixtures the same way it owns
+its `openapi.yaml` fragment; `db/` is where the assembled result lands.
+
 ---
 
 ## The two halves
@@ -11,7 +14,10 @@ collection; a seed fills one. Neither does the other's job.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart LR
-    Cfg["migrate-mongo-config.js"] --> Mig["db/migrations<br/><i>schema</i>"]
+    Cfg["migrate-mongo-config.js"] --> Mig["db/migrations<br/><i>assembled bundle</i>"]
+    Own["per-module migrations<br/><i>schema</i>"] --> Build["gen:migrations"]
+    Models["per-module model.ts<br/><i>indexes</i>"] --> Build
+    Build --> Mig
     Mig --> Mongo[("MongoDB")]
     Seeds["per-module seeds<br/><i>fixtures</i>"] --> Index["db/demo/index.ts<br/><i>the seeder</i>"]
     Index --> Mongo
@@ -21,22 +27,27 @@ flowchart LR
     classDef schema fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef data fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef store fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class Cfg,Mig schema;
+    class Cfg,Mig,Own,Models,Build schema;
     class Seeds,Index,Assemble,Data data;
     class Mongo store;
 ```
 
 ## Migrations
 
-| Pattern              | What it is                                                                                                                                                                                                                                                                                                                                                                                                                               | Read next                                                                         |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `db/migrations/*.js` | One file per schema change, named with a leading timestamp, each exporting an up and a down. Applied in timestamp order and recorded in a changelog collection, so a migration runs exactly once per database. Plain JavaScript because `migrate-mongo` loads them through its own CommonJS resolver with no TypeScript in the chain — the same reason `migrate-mongo-config.js` is a `.js` file. Run them with `npm run db:migrate:up`. | [MongoDB & Mongoose](../tools/mongodb-mongoose.md) · [Repository Root](./root.md) |
+| Pattern                           | What it is                                                                                                                                                                                                                                                                                                                                                                                                             | Read next                                                                        |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/modules/<m>/migrations/*.js` | A data migration the module owns, named with a leading timestamp, exporting an `up` and a `down`. Written by hand — a rename or a backfill cannot be derived from a schema. Declared on the module's manifest as `migrations: path.join(__dirname, 'migrations')`, the same shape as `locales`. Plain JavaScript because `migrate-mongo` loads them through its own CommonJS resolver with no TypeScript in the chain. | [Modules](./src-modules.md) · [MongoDB & Mongoose](../tools/mongodb-mongoose.md) |
+| `db/migrations/*.js`              | **Generated** by `npm run gen:migrations`, and gitignored. The index baseline plus a copy of every enabled module's migrations, applied in timestamp order and recorded in a changelog collection so each runs exactly once per database. This is the only directory `migrate-mongo` reads — run them with `npm run db:migrate:up`.                                                                                    | [Repository Root](./root.md)                                                     |
 
-The baseline is GENERATED. `npm run gen:migration` reads the indexes each module's schema declares
-and rewrites `db/migrations/…-baseline.js` from them, so an index has one author — the schema —
-exactly as `openapi.yaml` has one author in the per-module fragments. `check:migration` fails the
-`complete` gate when the two have diverged. Data migrations are still written by hand: a rename or
-a backfill cannot be derived from a schema.
+Both halves have ONE author. The baseline's indexes come from the schemas that declare them; a data
+migration comes from the module whose collection it touches. `gen:migrations` assembles the two into
+`db/migrations/`, exactly as `contracts:bundle` assembles `openapi.yaml` from per-module fragments —
+and, like `api/`, the result is gitignored because `postinstall` rebuilds it, so there is no
+committed copy left to go stale.
+
+Timestamps are what sequence one module's migration against another's, so the assembler refuses a
+filename without a 14-digit one, and refuses two modules claiming the same filename — the changelog
+records by name, so a collision would mark one module's work as already applied.
 
 **Regenerating only reaches databases that have never run it.** `migrate-mongo` records the
 baseline as applied by FILENAME, so rewriting its contents does not make it run again — a database
@@ -45,11 +56,11 @@ therefore a new migration file of its own, alongside the regenerated baseline.
 
 ```mermaid
 flowchart LR
-    Schema["a module's model.ts<br/><i>the only author</i>"] --> Gen["gen:migration"]
+    Schema["a module's model.ts<br/><i>the only author</i>"] --> Gen["gen:migrations"]
     Gen --> Baseline["…-baseline.js"]
     Baseline -->|"never migrated"| Fresh["new database<br/><b>gets every index</b>"]
     Baseline -.->|"already applied"| Live["live database<br/><b>unchanged</b>"]
-    Schema --> Extra["a new migration file"]
+    Schema --> Extra["a new module migration"]
     Extra --> Live
 ```
 

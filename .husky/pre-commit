@@ -32,7 +32,8 @@
 # widens a partial `git add -p` to include the whole regenerated output — which is what you want
 # for a generated file, and a surprise exactly once.
 #
-# `openapi.yaml`, `api/` and `src/types/asyncapi.generated.ts` are NOT named here — they are
+# `openapi.yaml`, `api/`, `src/types/asyncapi.generated.ts` and `db/migrations/` are NOT named
+# here — they are
 # gitignored (postinstall rebuilds them, see package.json), and `git add` errors outright on an
 # explicitly-named ignored path. `regenerate` above still has to build them: the gate that follows
 # reads them off disk regardless of git's opinion of them.

@@ -80,7 +80,7 @@ run.
 All three share one caveat, worth stating once rather than three times: **Mongo will not modify an
 existing TTL index's `expireAfterSeconds` when the value changes.** Raising or lowering any of
 these variables on a database that already holds the index does nothing until the index is dropped
-and recreated — a migration under `db/migrations/` (`collMod`), not a restart. `feedback`'s window
+and recreated — a migration under the owning module's `migrations/` (`collMod`), not a restart. `feedback`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
 sits inside the common limitation periods. `carts` ties to `updatedAt`, so any edit restarts the
 clock — only a genuinely abandoned cart is ever removed.

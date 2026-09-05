@@ -138,6 +138,20 @@ export type AppModule = {
     locales?: string;
 
     /**
+     * Absolute path to this module's `migrations/` directory, holding one timestamped `.js` file
+     * per data migration it owns. Most modules have none — an index needs no migration, since the
+     * baseline is generated from the schema that declares it.
+     *
+     * A path rather than loaded modules, for the same reason as `locales`: nothing here may
+     * `require` a migration, which talks to the driver and is replayed against databases older
+     * than this code. `scripts/db/build-migrations.ts` copies the directory's contents into the
+     * `db/migrations/` bundle `migrate-mongo` reads.
+     *
+     * See: docs/reference/data.md
+     */
+    migrations?: string;
+
+    /**
      * Write this module's slice of the demo dataset. Called only by `db/demo/index.ts`, never at
      * boot — seeding is a script, not part of starting the application.
      */

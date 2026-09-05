@@ -386,9 +386,13 @@ export default tseslint.config(
      * never contains. (Its predecessor matched `db/migrations/**\/*.ts` — a glob with zero
      * matching files, so the rule it carried never fired.) The path aliases are unresolvable at
      * migrate-mongo runtime anyway; `../../src/` is the spelling a mistake would actually use.
+     *
+     * A module authors its migrations next to the `model.ts` they must not touch, which is where
+     * the temptation actually lives — so the authored copies are linted, not just the assembled
+     * `db/migrations/` bundle they are copied into.
      */
     {
-        files: ['db/migrations/**/*.js'],
+        files: ['db/migrations/**/*.js', 'src/modules/*/migrations/*.js'],
         rules: {
             'no-restricted-syntax': [
                 'error',
@@ -1086,7 +1090,8 @@ export default tseslint.config(
             'jest.config.mutation.js',
             'commitlint.config.cjs',
             'migrate-mongo-config.js',
-            'db/migrations/**/*.js'
+            'db/migrations/**/*.js',
+            'src/modules/*/migrations/*.js'
         ],
         extends: [tseslint.configs.disableTypeChecked],
         languageOptions: {

@@ -52,9 +52,9 @@ const STEPS: readonly Step[] = [
         because: 'src/types/asyncapi.generated.ts, from the full asyncapi.yaml'
     },
     {
-        script: 'gen:migration',
+        script: 'gen:migrations',
         because:
-            'db/migrations/…-baseline.js — every index the schemas declare, read off the models (needs api/)'
+            'db/migrations/ — the index baseline read off the models, plus each module’s own migrations (needs api/)'
     },
     {
         script: 'docs:graph',
