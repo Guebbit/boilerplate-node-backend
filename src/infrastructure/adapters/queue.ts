@@ -13,6 +13,7 @@
 // `ack`/`nack` reference.
 import type { EventEmitter } from 'node:events';
 import amqplib, { type ChannelModel, type Channel, type ConsumeMessage } from 'amqplib';
+import type { ZodType } from 'zod';
 import { logger } from '@infrastructure/adapters/logger';
 import { manageConnection } from '@infrastructure/adapters/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
@@ -321,6 +322,15 @@ export interface ConsumeOptions<TPayload = unknown> {
     queue: string;
     /** Handler called for each message. Return true to ack, false to nack. */
     handler: (message: TPayload, raw: ConsumeMessage) => Promise<boolean>;
+    /**
+     * The contract schema this queue's messages must satisfy, from
+     * `@types`' generated validators.
+     *
+     * A payload crosses a process boundary, which is where its TypeScript type stops being a fact
+     * and becomes a claim. Supplying this turns the claim back into a check; omitting it leaves
+     * the handler to defend itself, which is the older arrangement and still works.
+     */
+    schema?: ZodType;
     /** Make queue survive broker restarts. Default: true. */
     durable?: boolean;
     /** Number of unacknowledged messages allowed at once. Default: 1. */
@@ -365,7 +375,8 @@ const handleDelivery = <TPayload>(
     ch: Channel,
     queue: string,
     handler: ConsumeOptions<TPayload>['handler'],
-    incoming: ConsumeMessage
+    incoming: ConsumeMessage,
+    schema?: ZodType
 ): void => {
     const parsed = parseMessageBody(incoming);
     if (parsed === undefined) {
@@ -374,6 +385,22 @@ const handleDelivery = <TPayload>(
         // delivery, requeue=false discards it. Requeuing would loop forever
         // since the bytes will never become valid JSON.
         logger.warn({ message: 'Queue message parse failed, nacking.', queue });
+        ch.nack(incoming, false, false);
+        return;
+    }
+
+    /*
+     * Dead-lettered, not requeued, for the same reason a parse failure is: a message that does not
+     * match the contract will not start matching it on a retry. Logged at `warn` with the reason,
+     * because the interesting case is not this one message — it is a producer that has drifted.
+     */
+    const verdict = schema?.safeParse(parsed);
+    if (verdict && !verdict.success) {
+        logger.warn({
+            message: 'Queue message failed contract validation, nacking.',
+            queue,
+            issues: verdict.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`)
+        });
         ch.nack(incoming, false, false);
         return;
     }
@@ -416,7 +443,7 @@ export const consumeFromQueue = <TPayload = unknown>(
     getChannel().then((ch) => {
         if (!ch) return;
 
-        const { queue, handler, durable = true, prefetch = 1 } = options;
+        const { queue, handler, schema, durable = true, prefetch = 1 } = options;
 
         return (
             // Same idempotent declaration as on the publish side — the consumer may boot first.
@@ -433,7 +460,7 @@ export const consumeFromQueue = <TPayload = unknown>(
                         // (queue deleted, channel closing) — nothing to ack.
                         if (!incoming) return;
 
-                        handleDelivery(ch, queue, handler, incoming);
+                        handleDelivery(ch, queue, handler, incoming, schema);
                     })
                 )
                 // Discard the consumerTag reply; callers only need "consumer registered".

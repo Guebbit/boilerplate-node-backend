@@ -1,3 +1,5 @@
+import type { ZodType } from 'zod';
+import { EmailJobPayloadSchema } from '@types';
 import {
     isQueueEnabled,
     publishToQueue,
@@ -240,14 +242,14 @@ describe('startQueue() / stopQueue()', () => {
  * single boolean that no other assertion looks at.
  */
 /** Register a consumer and hand back the callback the broker would invoke per delivery. */
-const captureConsumerCallback = async (handler: jest.Mock) => {
+const captureConsumerCallback = async (handler: jest.Mock, schema?: ZodType) => {
     enableRabbitMQ();
     mockAssertQueue.mockResolvedValue({ queue: 'jobs', messageCount: 0, consumerCount: 0 });
     mockPrefetch.mockImplementation(() => Promise.resolve());
     mockConsume.mockResolvedValue({ consumerTag: 'tag-1' });
     mockCreateChannel.mockImplementation(() => Promise.resolve(channelMock()));
 
-    await consumeFromQueue({ queue: 'jobs', handler });
+    await consumeFromQueue({ queue: 'jobs', handler, schema });
 
     return mockConsume.mock.calls[0]![1] as (
         message: { content: Buffer } | undefined
@@ -334,5 +336,75 @@ describe('consumeFromQueue acknowledgement policy', () => {
         expect(handler).not.toHaveBeenCalled();
         expect(mockAck).not.toHaveBeenCalled();
         expect(mockNack).not.toHaveBeenCalled();
+    });
+});
+
+/**
+ * Contract validation on the consuming side.
+ *
+ * A queue payload crosses a process boundary, and that is exactly where its TypeScript type stops
+ * being a fact: the broker delivers whatever was published, by whoever published it. The schema is
+ * generated from `asyncapi.yaml`, so this is the contract enforced rather than a second copy of it.
+ *
+ * The failure arm matters as much as the passing one — a message that does not match will not
+ * start matching on a retry, so it must dead-letter rather than requeue.
+ */
+describe('consumeFromQueue contract validation', () => {
+    afterEach(disableRabbitMQ);
+
+    it('runs the handler when the payload matches the contract', async () => {
+        const handler = jest.fn().mockResolvedValue(true);
+        const onMessage = await captureConsumerCallback(handler, EmailJobPayloadSchema);
+
+        await onMessage(
+            delivery({ request: { to: 'a@example.com' }, templateName: 'account.reset', data: {} })
+        );
+        await Promise.resolve();
+
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(mockAck).toHaveBeenCalledTimes(1);
+    });
+
+    it('never reaches the handler when a required field is missing', async () => {
+        const handler = jest.fn().mockResolvedValue(true);
+        const onMessage = await captureConsumerCallback(handler, EmailJobPayloadSchema);
+
+        // No `templateName`: the worker would have refused this too, but only after the payload
+        // had already reached code that trusts it.
+        await onMessage(delivery({ request: { to: 'a@example.com' }, data: {} }));
+        await Promise.resolve();
+
+        expect(handler).not.toHaveBeenCalled();
+        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
+    });
+
+    it('rejects a field the contract does not declare, rather than passing it through', async () => {
+        const handler = jest.fn().mockResolvedValue(true);
+        const onMessage = await captureConsumerCallback(handler, EmailJobPayloadSchema);
+
+        // `additionalProperties: false` in the contract becomes `.strict()` in the generated
+        // schema. Without it a producer could smuggle a field the consumer's own type never
+        // mentions, which is the whole shape of a message-injection bug.
+        await onMessage(
+            delivery({
+                request: { to: 'a@example.com', bcc: 'attacker@example.com' },
+                templateName: 'account.reset',
+                data: {}
+            })
+        );
+        await Promise.resolve();
+
+        expect(handler).not.toHaveBeenCalled();
+        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
+    });
+
+    it('still delivers when no schema is declared, so an unvalidated queue keeps working', async () => {
+        const handler = jest.fn().mockResolvedValue(true);
+        const onMessage = await captureConsumerCallback(handler);
+
+        await onMessage(delivery({ anything: 'at all' }));
+        await Promise.resolve();
+
+        expect(handler).toHaveBeenCalledTimes(1);
     });
 });

@@ -16,6 +16,7 @@ import {
     handleImageDigestJob,
     registerImageWritebackResolver
 } from '@infrastructure/adapters/image.worker';
+import { EmailJobPayloadSchema, ImageDigestJobPayloadSchema, PdfJobPayloadSchema } from '@types';
 import { resolveImageTargets } from '@kernel/registry';
 import { enabledModules } from '../modules';
 
@@ -42,12 +43,27 @@ export const registerWorkers = (): Promise<void> => {
     return Promise.all([
         // `prefetch: 5` — sending an email is I/O-bound, not CPU-bound, so several in flight per
         // worker is cheap.
-        consumeFromQueue({ queue: EMAIL_QUEUE, handler: handleEmailJob, prefetch: 5 }),
+        consumeFromQueue({
+            queue: EMAIL_QUEUE,
+            handler: handleEmailJob,
+            schema: EmailJobPayloadSchema,
+            prefetch: 5
+        }),
         // `prefetch: 2` — producerless today (see the module header); kept low in case that changes.
-        consumeFromQueue({ queue: PDF_QUEUE, handler: handlePdfJob, prefetch: 2 }),
+        consumeFromQueue({
+            queue: PDF_QUEUE,
+            handler: handlePdfJob,
+            schema: PdfJobPayloadSchema,
+            prefetch: 2
+        }),
         // `prefetch: 1` — decoding, re-encoding and thumbnailing is the most CPU-bound job this
         // process runs; one at a time per worker keeps a burst of uploads from starving requests.
-        consumeFromQueue({ queue: IMAGE_QUEUE, handler: handleImageDigestJob, prefetch: 1 })
+        consumeFromQueue({
+            queue: IMAGE_QUEUE,
+            handler: handleImageDigestJob,
+            schema: ImageDigestJobPayloadSchema,
+            prefetch: 1
+        })
     ]).then(() => {
         logger.info('Queue workers registered.');
     });
