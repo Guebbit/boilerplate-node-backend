@@ -57,7 +57,12 @@ export const deleteAccountConfirm = (
                 return accountService.removeOwnAccount(user, callerContextOf(request)).then(() => {
                     destroyRefreshCookie(response);
                     destroyLoggedCookie(response);
-                    successResponse(response, undefined, 200, t('account.delete.success'));
+                    successResponse<undefined>(
+                        response,
+                        undefined,
+                        200,
+                        t('account.delete.success')
+                    );
                 });
             });
         })

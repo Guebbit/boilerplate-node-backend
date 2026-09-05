@@ -13,6 +13,7 @@ import { t } from '@infrastructure/i18n';
 import { AdjustStockBody } from '@api/schemas.zod';
 import { inventoryService } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
+import type { InventoryLevel } from '@types';
 
 /** Handles `POST /inventory/adjustments`. */
 export const postAdjustment = (request: Request, response: Response) => {
@@ -31,7 +32,10 @@ export const postAdjustment = (request: Request, response: Response) => {
         .adjust(productId, delta, note, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data, 200, result.message);
+            // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
+            // `adjust` always resolves one on success, so this is exhaustiveness.
+            if (!result.data) return rejectResponse(response, 500, [t('generic.error-internal')]);
+            successResponse<InventoryLevel>(response, result.data, 200, result.message);
         })
         .catch(catchAs(response, 'postAdjustment'));
 };

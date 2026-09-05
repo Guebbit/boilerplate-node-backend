@@ -10,7 +10,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateLocaleBody, UpdateLocaleBody } from '@api/schemas.zod';
-import type { CreateLocaleRequest, UpdateLocaleRequest } from '@types';
+import type { CreateLocaleRequest, Language, UpdateLocaleRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
@@ -43,7 +43,13 @@ export const createLocale = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return successResponse(response, result.data, 201);
+            // A success result for this endpoint always carries the created language; this
+            // satisfies the type checker without loosening it.
+            if (!result.data) throw new Error('locale create succeeded without a language');
+
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
+            // document is typed as stored, not as the wire shape `Language` promises.
+            return successResponse<Language>(response, result.data.toJSON() as Language, 201);
         })
         .catch(catchAs(response, 'createLocale'));
 };
@@ -68,7 +74,12 @@ export const updateLocale = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return successResponse(response, result.data);
+            // A success result for this endpoint always carries the updated language; this
+            // satisfies the type checker without loosening it.
+            if (!result.data) throw new Error('locale update succeeded without a language');
+
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
+            return successResponse<Language>(response, result.data.toJSON() as Language);
         })
         .catch(catchAs(response, 'updateLocale'));
 };

@@ -8,6 +8,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { AuditEventItem, AuditLogsPage } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { auditLogService } from '@modules/audit-logs';
 import { t } from '@infrastructure/i18n';
@@ -55,6 +56,16 @@ export const getObservabilityAuditLogs = (request: Request, response: Response) 
             since: sinceDate,
             ...pagination
         })
-        .then((result) => successResponse(response, result))
+        .then((result) => {
+            // `search()` already returns normalized (wire-shape) rows — unlike `findById`/`findOne`,
+            // it never hands back a hydrated document, so there is no `.toJSON()` to apply here.
+            // The repository factory's `PaginatedResult<TDocument>` names the pre-normalize type,
+            // which is why `items` needs the cast below.
+            const items: unknown = result.items;
+            return successResponse<AuditLogsPage>(response, {
+                items: items as AuditEventItem[],
+                meta: result.meta
+            });
+        })
         .catch(catchAs(response, 'getObservabilityAuditLogs'));
 };

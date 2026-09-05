@@ -7,6 +7,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { ConfirmPaymentBody } from '@api/schemas.zod';
 import { paymentConfirmTotal } from '../metrics';
@@ -35,7 +36,16 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
                 paymentConfirmTotal.inc({ outcome: result.success ? 'succeeded' : 'declined' });
 
             if (refused(response, result)) return;
-            successResponse(response, result.data, 200, result.message);
+            // A success result for this endpoint always carries the confirmed payment; this
+            // satisfies the type checker without loosening it.
+            if (!result.data) throw new Error('payment confirm succeeded without a payment');
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
+            successResponse<Payment>(
+                response,
+                result.data.toJSON() as Payment,
+                200,
+                result.message
+            );
         })
         .catch(catchAs(response, 'postPaymentConfirm'));
 };

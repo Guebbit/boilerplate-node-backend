@@ -18,7 +18,7 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { createOwnerScope } from '@kernel/authorization';
 import { OrderStatus } from '@types';
-import type { PaymentStatus, Caller } from '@types';
+import type { Payment, PaymentStatus, Caller } from '@types';
 import {
     orderService,
     orderRepository,
@@ -261,7 +261,7 @@ export const confirmPayment = (
 export const getForOrder = (
     orderId: string,
     authContext?: Caller
-): Promise<ResponseSuccess<Record<string, unknown>> | ResponseReject> =>
+): Promise<ResponseSuccess<Payment> | ResponseReject> =>
     paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
         if (!payment) return generateReject(404, [t('payments.not-found')]);
 
@@ -281,8 +281,10 @@ const withActions = (
     payment: PaymentDocument,
     order: OrderDocument | undefined,
     authContext?: Caller
-): Record<string, unknown> => ({
-    ...(payment.toJSON() as Record<string, unknown>),
+): Payment => ({
+    // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document
+    // itself is typed as stored, not as the wire shape `Payment` promises.
+    ...(payment.toJSON() as Payment),
     actions: {
         // Confirmable, and the order can still get to `paid`. Both halves, because a retryable
         // decline on an order that has since been cancelled is not a payment anyone may complete.

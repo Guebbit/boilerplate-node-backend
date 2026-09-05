@@ -8,12 +8,13 @@ import type { Request, Response } from 'express';
 import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { readUploadedImage } from '@infrastructure/adapters/image-store';
-import type { SignupRequest, SignupRequestMultipart } from '@types';
+import type { SignupRequest, SignupRequestMultipart, User } from '@types';
 import type { CastError } from 'mongoose';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { sendVerificationEmail } from '../services';
+import { toUser } from '@modules/users';
 
 /**
  * POST /account/signup
@@ -61,6 +62,15 @@ export const postSignup = (
                     rejectResponse(response, result.status, result.errors);
                 });
 
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without a user is a broken service contract, not a bad request.
+                authSignupTotal.inc({ status: 'failure' });
+                return deleteUpload().then(() => {
+                    rejectResponse(response, 500, []);
+                });
+            }
+
             // Registration successful
             authSignupTotal.inc({ status: 'success' });
             /*
@@ -68,10 +78,8 @@ export const postSignup = (
              * informational), so this is fire-and-forget like every other account email and the
              * 201 does not wait on the queue.
              */
-            if (result.data) void sendVerificationEmail(result.data, callerContextOf(request));
-            // create() returns the in-memory document; the schema's toJSON transform
-            // strips the hashed password before it ever reaches res.json
-            successResponse(response, result.data, 201);
+            void sendVerificationEmail(data, callerContextOf(request));
+            successResponse<User>(response, toUser(data), 201);
         })
         .catch((error: CastError | Error) => {
             authSignupTotal.inc({ status: 'failure' });

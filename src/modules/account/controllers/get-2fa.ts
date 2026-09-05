@@ -6,6 +6,7 @@
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import type { TwoFactorStatus } from '@types';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authContextOf } from '@infrastructure/http/request';
 import { accountService } from '../services';
@@ -24,7 +25,15 @@ export const get2fa = (request: Request, response: Response) => {
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
-            successResponse(response, result.data);
+
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without a status is a broken service contract, not a bad request.
+                rejectResponse(response, 500, []);
+                return;
+            }
+
+            successResponse<TwoFactorStatus>(response, data);
         })
         .catch((error: CastError | Error) => rejectDatabaseError(response, 'get2fa', error));
 };

@@ -10,10 +10,11 @@ import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readUploadedImage } from '@infrastructure/adapters/image-store';
-import type { UpdateAccountRequest, UpdateAccountRequestMultipart } from '@types';
+import type { UpdateAccountRequest, UpdateAccountRequestMultipart, User } from '@types';
 import { accountService } from '../services';
 import { sendVerificationEmail } from '../services';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { toUser } from '@modules/users';
 
 /**
  * PUT /account — the authenticated user updates their OWN profile (email, username, locale,
@@ -62,16 +63,23 @@ export const putAccount = (
                     rejectResponse(response, result.status, result.errors);
                 });
 
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without a user is a broken service contract, not a bad request.
+                rejectResponse(response, 500, []);
+                return;
+            }
+
             /*
              * A changed address restarts verification: `updateProfile` has already unset
              * `verified`, and the fresh link goes to the NEW address — proving the mailbox that
              * now backs the account, not the one that used to. Fire-and-forget like every other
              * account email; the response does not wait on the queue.
              */
-            if (email !== undefined && email !== currentEmail && result.data)
-                void sendVerificationEmail(result.data, callerContextOf(request));
+            if (email !== undefined && email !== currentEmail)
+                void sendVerificationEmail(data, callerContextOf(request));
 
-            successResponse(response, result.data, 200, t('account.update.success'));
+            successResponse<User>(response, toUser(data), 200, t('account.update.success'));
         })
         .catch((error: CastError | Error) => {
             rejectDatabaseError(response, 'putAccount', error);

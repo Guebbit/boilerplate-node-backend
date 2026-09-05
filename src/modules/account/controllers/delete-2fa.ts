@@ -41,7 +41,7 @@ export const delete2fa = (
                 return;
             }
             authTwoFactorDisableTotal.inc({ method: 'all', status: 'success' });
-            successResponse(response, undefined, 200, t('account.two-factor.disabled'));
+            successResponse<undefined>(response, undefined, 200, t('account.two-factor.disabled'));
         })
         .catch((error: CastError | Error) => rejectDatabaseError(response, 'delete2fa', error));
 };

@@ -11,6 +11,7 @@ import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import type { CartResponse } from '@types';
 
 /**
  * DELETE /cart/all
@@ -22,7 +23,7 @@ export const clearCart = (request: Request, response: Response) => {
     return cartService
         .cartRemove(userId, callerContextOf(request))
         .then((cart) => {
-            successResponse(response, cart);
+            successResponse<CartResponse>(response, cart);
         })
         .catch(catchAs(response, 'clearCart'));
 };

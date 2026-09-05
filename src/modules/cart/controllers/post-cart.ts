@@ -8,7 +8,7 @@ import { t } from '@infrastructure/i18n';
 import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import type { UpsertCartItemRequest } from '@types';
+import type { CartResponse, UpsertCartItemRequest } from '@types';
 import { authContextOf, isValidObjectId, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
@@ -40,7 +40,8 @@ export const postCart = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse(response, result.data, 200, t('cart.product-added'));
+            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
+            successResponse<CartResponse>(response, result.data!, 200, t('cart.product-added'));
         })
         .catch(catchAs(response, 'upsertCartItem'));
 };

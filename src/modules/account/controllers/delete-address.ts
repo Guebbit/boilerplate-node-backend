@@ -5,7 +5,8 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import type { AddressesResponse } from '@types';
 import { accountService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
@@ -24,7 +25,15 @@ export const deleteAddress = (request: Request<{ addressId: string }>, response:
         .addressRemove(id, addressId)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data, 200, result.message);
+
+            const { data, message } = result;
+            if (data === undefined) {
+                // A success verdict without a book is a broken service contract, not a bad request.
+                rejectResponse(response, 500, []);
+                return;
+            }
+
+            successResponse<AddressesResponse>(response, data, 200, message);
         })
         .catch(catchAs(response, 'deleteAddress'));
 };

@@ -33,7 +33,7 @@ export const deleteSession = (request: Request<{ sessionId: string }>, response:
                 return;
             }
 
-            successResponse(response, undefined, 200, t('account.sessions.revoked'));
+            successResponse<undefined>(response, undefined, 200, t('account.sessions.revoked'));
         })
         .catch(catchAs(response, 'deleteSession'));
 };

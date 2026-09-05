@@ -90,7 +90,7 @@ export interface UserRecord extends Omit<
     deletedAt?: Date;
 
     /**
-     * Stamped by `scripts/reap-inactive-accounts.ts` the first time it warns
+     * Stamped by `ops/reap-inactive-accounts.ts` the first time it warns
      * this account about impending removal — never set anywhere else. Absent means "never
      * warned"; it is also how the script tells its OWN soft-deletes apart from an admin's when
      * deciding what is safe to hard-delete next, since `deletedAt` alone doesn't say who set it.
@@ -333,8 +333,7 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         /*
          * Whether the account is enabled — independent of `deletedAt`, matching `products`:
          * deactivation and soft-delete are separate states that produce the same effect from
-         * outside. `default: true`; existing rows backfilled by
-         * `db/migrations/20260808120000-user-active-column.js`.
+         * outside.
          */
         active: {
             type: Boolean,
@@ -344,7 +343,6 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
          * Whether the address is confirmed via the verify flow. Defaults `false` for self-signup,
          * until `POST /account/verify-confirm` flips it; `userService.create` (admin path) sets it
          * `true` since an operator typing the address in is the vouching. Informational only.
-         * Existing rows backfilled by `db/migrations/20260813090000-user-verified-column.js`.
          */
         verified: {
             type: Boolean,
@@ -495,10 +493,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
  * Login and signup both look up by email. UNIQUE is a correctness constraint, not a performance
  * one: signup is check-then-insert, so two concurrent signups for one address can both read absent
  * and both insert — only the database can refuse the second write. Paired with the E11000 branch
- * in `@infrastructure/http/errors` (409, not 500) and
- * `db/migrations/20260808200000-users-email-unique.js`, which refuses to build the index on a
- * database already holding duplicates. Mongo won't silently upgrade an existing non-unique
- * `users_email`; a database that skipped the migration fails loudly at startup instead.
+ * in `@infrastructure/http/errors` (409, not 500) and `db/migrations/20260905000000-baseline.js`,
+ * which refuses to build the index on a database already holding duplicates. Mongo won't silently
+ * upgrade an existing non-unique `users_email`; a database that skipped the migration fails loudly
+ * at startup instead.
  */
 userSchema.index({ email: 1 }, { name: 'users_email', unique: true });
 /* Refresh-token verification and the reset/delete flows query by token value. */
@@ -627,6 +625,37 @@ export const applyUserTransform = applySerialization(userSchema, {
         'twoFactorBackupCodes',
         'oauthAccounts'
     ]
+});
+
+/**
+ * Maps a document straight onto the `User` contract, ISO-stringifying the four fields
+ * {@link UserRecord} redeclares as `Date`. A controller that calls `successResponse<User>` with
+ * the document itself compiles fine ONLY by luck of those fields being optional and missing —
+ * `Date` is not a `string`, so any populated record fails the check; this is the honest fix rather
+ * than a wider `UserDocument` generic argument.
+ */
+export const toUser = (document: UserDocument): User => ({
+    id: document.id,
+    email: document.email,
+    username: document.username,
+    ...(document.admin === undefined ? {} : { admin: document.admin }),
+    ...(document.active === undefined ? {} : { active: document.active }),
+    ...(document.verified === undefined ? {} : { verified: document.verified }),
+    ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
+    ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
+    ...(document.locale === undefined ? {} : { locale: document.locale }),
+    ...(document.phone === undefined ? {} : { phone: document.phone }),
+    ...(document.website === undefined ? {} : { website: document.website }),
+    ...(document.analyticsConsent === undefined
+        ? {}
+        : { analyticsConsent: document.analyticsConsent }),
+    ...(document.termsAccepted === undefined ? {} : { termsAccepted: document.termsAccepted }),
+    ...(document.twoFactorEnabledAt
+        ? { twoFactorEnabledAt: document.twoFactorEnabledAt.toISOString() }
+        : {}),
+    ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
+    ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
+    ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {})
 });
 
 /** The compiled Mongoose model. */

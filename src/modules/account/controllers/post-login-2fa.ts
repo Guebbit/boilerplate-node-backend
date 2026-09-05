@@ -7,7 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { LoginTwoFactorBody } from '@api/schemas.zod';
-import type { LoginTwoFactorRequest } from '@types';
+import type { LoginTwoFactorRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
@@ -55,7 +55,12 @@ export const postLoginTwoFactor = (
             return issueSession(response, userId, undefined, ['pwd', 'otp']).then((accessToken) => {
                 authTwoFactorChallengeTotal.inc({ status: 'success' });
                 recordLoginSuccess(request, userId, !!data.admin);
-                successResponse(response, { token: accessToken }, 200, 'Authentication successful');
+                successResponse<AuthTokens>(
+                    response,
+                    { token: accessToken },
+                    200,
+                    'Authentication successful'
+                );
             });
         })
         .catch((error: Error) => {

@@ -7,6 +7,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { paymentService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -22,6 +23,15 @@ export const postPaymentRefund = (request: Request<{ orderId?: string }>, respon
         )
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data, 200, result.message);
+            // A success result for this endpoint always carries the refunded payment; this
+            // satisfies the type checker without loosening it.
+            if (!result.data) throw new Error('payment refund succeeded without a payment');
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
+            successResponse<Payment>(
+                response,
+                result.data.toJSON() as Payment,
+                200,
+                result.message
+            );
         })
         .catch(catchAs(response, 'postPaymentRefund'));

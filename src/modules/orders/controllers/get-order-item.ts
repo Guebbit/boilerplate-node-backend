@@ -10,6 +10,7 @@ import { orderService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
+import type { Order } from '@types';
 
 /**
  * GET /orders/:id — single order by path id; non-admin callers see only their own.
@@ -35,7 +36,7 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
             }
             // The body carries what THIS caller may do to the order, so the client renders its
             // controls from the server's answer rather than from a copy of the lifecycle.
-            successResponse(response, orderService.withActions(order, request.authContext));
+            successResponse<Order>(response, orderService.withActions(order, request.authContext));
         })
         .catch(catchAs(response, 'getOrderItem'));
 };

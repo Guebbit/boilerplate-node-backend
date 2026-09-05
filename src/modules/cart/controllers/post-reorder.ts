@@ -8,6 +8,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { cartService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import type { CartResponse } from '@types';
 
 /**
  * POST /cart/reorder/:orderId
@@ -24,7 +25,8 @@ export const postReorder = (request: Request<{ orderId: string }>, response: Res
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse(response, result.data, 200, result.message);
+            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
+            successResponse<CartResponse>(response, result.data!, 200, result.message);
         })
         .catch(catchAs(response, 'postReorder'));
 };

@@ -16,7 +16,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { ShippingMethod, Caller } from '@types';
+import type { ShippingMethodsResponse, Shipment, Caller } from '@types';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -36,8 +36,20 @@ import type { ShipmentDocument } from './model';
 const trackingCodeFor = (orderId: string): string => `TRK-${orderId.slice(-8).toUpperCase()}`;
 
 /** The methods list, for the checkout page's selector. Static, so always a success. */
-const listMethods = (): ResponseSuccess<{ methods: readonly ShippingMethod[] }> =>
-    generateSuccess({ methods: SHIPPING_METHODS });
+const listMethods = (): ResponseSuccess<ShippingMethodsResponse> =>
+    // `SHIPPING_METHODS` is `readonly` (frozen table); the response owns a fresh, mutable copy.
+    generateSuccess({ methods: [...SHIPPING_METHODS] });
+
+/** The shipment as `openapi.yaml` declares it: `Shipment`, built rather than serialized. */
+const toShipmentResponse = (shipment: ShipmentDocument): Shipment => ({
+    id: String(shipment._id),
+    orderId: String(shipment.orderId),
+    trackingCode: shipment.trackingCode,
+    status: shipment.status,
+    ...(shipment.deliveredAt ? { deliveredAt: shipment.deliveredAt.toISOString() } : {}),
+    ...(shipment.createdAt ? { createdAt: shipment.createdAt.toISOString() } : {}),
+    ...(shipment.updatedAt ? { updatedAt: shipment.updatedAt.toISOString() } : {})
+});
 
 /**
  * The shipment behind one of the caller's orders. Ownership is the order's, scoped like every
@@ -48,12 +60,12 @@ const listMethods = (): ResponseSuccess<{ methods: readonly ShippingMethod[] }> 
 export const getForOrder = (
     orderId: string,
     authContext?: Caller
-): Promise<ResponseSuccess<ShipmentDocument> | ResponseReject> =>
+): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
         return shipmentRepository.findByOrderId(orderId).then((shipment) => {
             if (!shipment) return generateReject(404, [t('delivery.not-shipped')]);
-            return generateSuccess(shipment);
+            return generateSuccess(toShipmentResponse(shipment));
         });
     });
 

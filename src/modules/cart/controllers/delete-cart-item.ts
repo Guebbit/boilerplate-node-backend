@@ -10,7 +10,7 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import type { RemoveCartItemRequest } from '@types';
+import type { CartResponse, RemoveCartItemRequest } from '@types';
 import {
     authContextOf,
     isValidObjectId,
@@ -44,7 +44,8 @@ export const deleteCartItem = (
         .cartItemRemoveById(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data, 200, t('cart.product-removed'));
+            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
+            successResponse<CartResponse>(response, result.data!, 200, t('cart.product-removed'));
         })
         .catch(catchAs(response, 'deleteCartItem'));
 };

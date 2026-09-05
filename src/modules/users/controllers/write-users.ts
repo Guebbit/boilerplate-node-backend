@@ -10,6 +10,7 @@ import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';
 import { userService } from '../service';
+import { toUser } from '@modules/users';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
@@ -126,9 +127,9 @@ export const writeUsers = (
                 callerContextOf(request)
             )
             .then((user) => {
-                // create() returns the in-memory document; the schema's toJSON transform
-                // strips the hashed password before it ever reaches res.json
-                successResponse(response, user, 201);
+                // `toUser` picks only the `User` contract's own fields, so the hashed password
+                // and tokens on the document never reach `res.json`.
+                successResponse<User>(response, toUser(user), 201);
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
@@ -147,7 +148,13 @@ export const writeUsers = (
                 return deleteUpload().then(() => {
                     rejectResponse(response, result.status, result.errors);
                 });
-            successResponse(response, result.data);
+            // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
+            // `updateById` always resolves one on success, so this is exhaustiveness.
+            if (!result.data)
+                return deleteUpload().then(() => {
+                    rejectResponse(response, 500, [t('generic.error-internal')]);
+                });
+            successResponse<User>(response, toUser(result.data));
         })
         .catch((error: Error) =>
             // Matches the create branch above: an upload this request wrote must not survive a

@@ -7,7 +7,7 @@
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { RegenerateBackupCodesBody } from '@api/schemas.zod';
-import type { TwoFactorCodeRequest } from '@types';
+import type { TwoFactorBackupCodesRegenerated, TwoFactorCodeRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
@@ -40,10 +40,18 @@ export const post2faBackupCodes = (
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
+
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without codes is a broken service contract, not a bad request.
+                rejectResponse(response, 500, []);
+                return;
+            }
+
             authTwoFactorBackupCodesRegenerateTotal.inc({ status: 'success' });
-            successResponse(
+            successResponse<TwoFactorBackupCodesRegenerated>(
                 response,
-                result.data,
+                data,
                 200,
                 t('account.two-factor.backup-codes-regenerated')
             );

@@ -11,12 +11,13 @@ import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { deliveryService } from '../service';
 import { catchAs } from '@infrastructure/http/controller';
+import type { CourierAdvanceResponse } from '@types';
 
 /** Handles `POST /delivery/advance`. */
 export const postCourierAdvance = (request: Request, response: Response) =>
     deliveryService
         .runCourierAdvance(callerContextOf(request))
         .then((advanced) => {
-            successResponse(response, { advanced });
+            successResponse<CourierAdvanceResponse>(response, { advanced });
         })
         .catch(catchAs(response, 'postCourierAdvance'));

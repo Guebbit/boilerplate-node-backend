@@ -8,6 +8,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { productService } from '../service';
 import { catchAs } from '@infrastructure/http/controller';
+import type { CatalogueFacetsResponse } from '@types';
 
 /**
  * GET /products/categories
@@ -19,6 +20,6 @@ export const getCatalogueFacets = (request: Request, response: Response) =>
     productService
         .facets()
         .then((facets) => {
-            successResponse(response, facets);
+            successResponse<CatalogueFacetsResponse>(response, facets);
         })
         .catch(catchAs(response, 'getCatalogueFacets'));

@@ -27,13 +27,18 @@ export const deleteAccountRequest = (request: Request, response: Response) => {
         .then((user) => {
             if (!user) {
                 authAccountDeleteTotal.inc({ status: 'failure' });
-                return successResponse(response, undefined, 200, t('account.delete.email-sent'));
+                return successResponse<undefined>(
+                    response,
+                    undefined,
+                    200,
+                    t('account.delete.email-sent')
+                );
             }
             return accountService
                 .requestAccountDeletion(user, callerContextOf(request))
                 .then(() => {
                     authAccountDeleteTotal.inc({ status: 'success' });
-                    return successResponse(
+                    return successResponse<undefined>(
                         response,
                         undefined,
                         200,

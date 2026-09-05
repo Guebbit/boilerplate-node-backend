@@ -10,7 +10,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { CreateFeedbackRequestBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
-import type { CreateFeedbackRequest } from '@types';
+import type { CreateFeedbackRequest, FeedbackRequest } from '@types';
 import { feedbackRequestService } from '../service';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
@@ -44,7 +44,13 @@ export const postFeedbackContact = (
     return feedbackRequestService
         .create(body)
         .then((createdFeedbackRequest) => {
-            successResponse(response, createdFeedbackRequest, 201);
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
+            // document itself is typed as stored, not as the wire shape `FeedbackRequest` promises.
+            successResponse<FeedbackRequest>(
+                response,
+                createdFeedbackRequest.toJSON() as FeedbackRequest,
+                201
+            );
         })
         .catch(catchAs(response, 'postFeedbackContact'));
 };

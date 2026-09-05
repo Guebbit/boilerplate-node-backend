@@ -8,9 +8,11 @@
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { deliveryService } from '../service';
+import type { ShippingMethodsResponse } from '@types';
 
 /** Handles `GET /delivery/methods`. */
 export const getShippingMethods = (_request: Request, response: Response) => {
     const result = deliveryService.listMethods();
-    successResponse(response, result.data);
+    // Always a success (see `listMethods`' own docblock); `data` is always set.
+    successResponse<ShippingMethodsResponse>(response, result.data!);
 };

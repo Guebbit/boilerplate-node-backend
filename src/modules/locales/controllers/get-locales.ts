@@ -5,6 +5,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { LocaleCapabilities, LocaleDictionary } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { listSupportedLocales, readLocaleDictionary, t } from '@infrastructure/i18n';
 import { localeService } from '../services';
@@ -21,7 +22,7 @@ export const getLocales = (request: Request, response: Response) =>
     localeService
         // Role-based row filtering — `getAuth` on the route is what makes it readable here.
         .listCapabilities(localeService.callerScope(request.authContext))
-        .then((capabilities) => successResponse(response, capabilities))
+        .then((capabilities) => successResponse<LocaleCapabilities>(response, capabilities))
         .catch(catchAs(response, 'getLocales'));
 
 /**
@@ -38,7 +39,7 @@ export const getLocaleDictionary = (request: Request<{ locale?: string }>, respo
     if (!locale || !listSupportedLocales().includes(locale))
         return rejectResponse(response, 404, [t('generic.error-invalid-data')]);
 
-    return successResponse(response, {
+    return successResponse<LocaleDictionary>(response, {
         locale,
         messages: readLocaleDictionary(locale)
     });

@@ -9,8 +9,8 @@
 
 import type { Request, Response } from 'express';
 import { AddAddressBody, UpdateAddressBody } from '@api/schemas.zod';
-import { successResponse } from '@infrastructure/http/response';
-import type { AddressInput, UpdateAddressRequest } from '@types';
+import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import type { AddressInput, UpdateAddressRequest, AddressesResponse } from '@types';
 import { accountService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
@@ -35,7 +35,13 @@ export const postAddress = (
         .addressAdd(id, body)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data, 200, result.message);
+            const { data, message } = result;
+            if (data === undefined) {
+                // A success verdict without a book is a broken service contract, not a bad request.
+                rejectResponse(response, 500, []);
+                return;
+            }
+            successResponse<AddressesResponse>(response, data, 200, message);
         })
         .catch(catchAs(response, 'postAddress'));
 };
@@ -61,7 +67,13 @@ export const putAddress = (
         .addressUpdate(id, addressId, body)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data, 200, result.message);
+            const { data, message } = result;
+            if (data === undefined) {
+                // A success verdict without a book is a broken service contract, not a bad request.
+                rejectResponse(response, 500, []);
+                return;
+            }
+            successResponse<AddressesResponse>(response, data, 200, message);
         })
         .catch(catchAs(response, 'putAddress'));
 };

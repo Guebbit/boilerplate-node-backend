@@ -4,6 +4,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { LocaleTenants } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { localeService } from '../services';
 
@@ -14,4 +15,4 @@ import { localeService } from '../services';
  * Public and cacheable: no user data, identical for every caller.
  */
 export const getLocaleTenants = (_request: Request, response: Response) =>
-    successResponse(response, { tenants: localeService.listTenants() });
+    successResponse<LocaleTenants>(response, { tenants: localeService.listTenants() });

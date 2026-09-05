@@ -10,7 +10,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { orderConfirmEmail } from './emails';
 import { OrderStatus } from '@types';
-import type { SearchOrdersRequest, CartItem, Caller, UpdateOrderByIdRequest } from '@types';
+import type { SearchOrdersRequest, CartItem, Caller, UpdateOrderByIdRequest, Order } from '@types';
 import type { OrderDocument, OrderDocumentItem } from './model';
 import {
     generateReject,
@@ -467,21 +467,17 @@ const actorOf = (authContext?: Caller): OrderActor => (authContext?.admin ? 'adm
  * on the wire shape or the schema's transform drops it.
  * @returns the serialized order carrying its `actions`
  */
-const withActions = (
-    order: OrderDocument | undefined,
-    authContext?: Caller
-): Record<string, unknown> | undefined => {
-    // A success envelope types its payload as optional. No order, no actions — the caller's
-    // `undefined` passes straight through rather than becoming an empty capability block.
-    if (!order) return undefined;
+const withActions = (order: OrderDocument, authContext?: Caller): Order => {
     // `unknown` first, then one assertion: the scoped branch already hands back a normalized plain
-    // object typed as a document, so neither shape can be spread without saying so once.
+    // object typed as a document, so neither shape can be spread without saying so once. The
+    // second assertion states what the merge actually produces — the contract's wire shape — which
+    // structural typing can't verify past the first `unknown` step.
     const serialized: unknown = typeof order.toJSON === 'function' ? order.toJSON() : order;
 
     return {
         ...(serialized as Record<string, unknown>),
         actions: orderActionsFor(order.status, actorOf(authContext))
-    };
+    } as Order;
 };
 
 /**

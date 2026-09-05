@@ -8,6 +8,7 @@ import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import type { CartResponse } from '@types';
 
 /**
  * GET /cart
@@ -18,7 +19,7 @@ export const getCart = (request: Request, response: Response) => {
     return cartService
         .cartGetForView(authContextOf(request).id, callerContextOf(request))
         .then((cart) => {
-            successResponse(response, cart);
+            successResponse<CartResponse>(response, cart);
         })
         .catch(catchAs(response, 'getCart'));
 };

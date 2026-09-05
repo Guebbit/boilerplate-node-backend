@@ -10,7 +10,7 @@ import { t } from '@infrastructure/i18n';
 import { ReauthBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import type { ReauthRequest } from '@types';
+import type { ReauthRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
 import { issueSession } from '../session/session';
 import { authReauthTotal } from '../metrics';
@@ -54,7 +54,12 @@ export const postReauth = (
             return issueSession(response, id)
                 .then((token) => {
                     authReauthTotal.inc({ status: 'success' });
-                    successResponse(response, { token }, 200, t('account.reauth.success'));
+                    successResponse<AuthTokens>(
+                        response,
+                        { token },
+                        200,
+                        t('account.reauth.success')
+                    );
                 })
                 .catch(() => {
                     authReauthTotal.inc({ status: 'success' });

@@ -11,7 +11,7 @@ import { CreateOrderBody, UpdateOrderBody, UpdateOrderByIdBody } from '@api/sche
 import { orderService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
+import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest, Order } from '@types';
 import { orderCreatedTotal } from '../metrics';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
@@ -56,11 +56,15 @@ export const writeOrders = (
             .create(userId, email, items, callerContextOf(request))
             .then((result) => {
                 if (refused(response, result)) return;
+                // `ResponseSuccess.data` is optional at the type level for endpoints with no
+                // payload; `create` always resolves one on success, so this is exhaustiveness.
+                if (!result.data)
+                    return rejectResponse(response, 500, [t('generic.error-internal')]);
 
                 // The confirmation mail is `orderService.create`'s — it is a fact about the order,
                 // not about the request that asked for one. See `CallerContext.locale`.
                 orderCreatedTotal.inc();
-                successResponse(
+                successResponse<Order>(
                     response,
                     orderService.withActions(result.data, request.authContext),
                     201
@@ -84,8 +88,14 @@ export const writeOrders = (
         .updateById(id, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
+            // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
+            // `updateById` always resolves one on success, so this is exhaustiveness.
+            if (!result.data) return rejectResponse(response, 500, [t('generic.error-internal')]);
 
-            successResponse(response, orderService.withActions(result.data, request.authContext));
+            successResponse<Order>(
+                response,
+                orderService.withActions(result.data, request.authContext)
+            );
         })
         .catch(catchAs(response, 'writeOrder'));
 };

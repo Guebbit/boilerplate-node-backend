@@ -4,6 +4,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { LocaleMessages } from '@types';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { localeService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
@@ -21,9 +22,11 @@ export const getLocaleMessages = (
     localeService
         // `?tenant=` names which frontend's copy; omitted, the deployment's default one.
         .readMessages(request.params.locale, request.query.tenant?.trim() || undefined)
-        .then((result) =>
-            result.success
-                ? successResponse(response, result.data)
-                : rejectResponse(response, result.status, result.errors)
-        )
+        .then((result) => {
+            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            // A success result for this endpoint always carries a dictionary; this satisfies the
+            // type checker without loosening it.
+            if (!result.data) throw new Error('locale message read succeeded without a dictionary');
+            return successResponse<LocaleMessages>(response, result.data);
+        })
         .catch(catchAs(response, 'getLocaleMessages'));

@@ -9,7 +9,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { UpdateFeedbackRequestStatusBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
-import type { UpdateFeedbackRequestStatusRequest } from '@types';
+import type { FeedbackRequest, UpdateFeedbackRequestStatusRequest } from '@types';
 import { feedbackRequestService } from '../service';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -40,7 +40,14 @@ export const putFeedbackStatus = (
         .updateStatusById(request.params.id, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            return successResponse(response, result.data);
+            // `refused` only reports the reject branch; a success result for this endpoint always
+            // carries the saved document, so this satisfies the type checker without loosening it.
+            if (!result.data) throw new Error('feedback status update succeeded without a ticket');
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
+            return successResponse<FeedbackRequest>(
+                response,
+                result.data.toJSON() as FeedbackRequest
+            );
         })
         .catch(catchAs(response, 'putFeedbackStatus'));
 };

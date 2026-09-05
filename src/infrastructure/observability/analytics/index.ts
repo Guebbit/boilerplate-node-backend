@@ -75,9 +75,12 @@ export type AnalyticsEventInput = AnalyticsEvent & {
 // ─── The port ────────────────────────────────────────────────────────────────
 
 /** The seam an analytics backend plugs into. Three implementations ship; see the registry below. */
+/** The closed set of implementations this build ships — matches `ObservabilityHealth`'s enum. */
+export type AnalyticsProviderName = 'umami' | 'posthog' | 'none';
+
 export interface AnalyticsProvider {
     /** Reported by `GET /observability/health` as `integrations.analytics`. */
-    name: string;
+    name: AnalyticsProviderName;
 
     /**
      * Record one event. Fire-and-forget by contract: analytics must never delay or fail a user

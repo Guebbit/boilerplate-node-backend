@@ -7,7 +7,11 @@
 
 import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import type { SearchFeedbackRequestsRequest } from '@types';
+import type {
+    FeedbackRequest,
+    FeedbackRequestsResponse,
+    SearchFeedbackRequestsRequest
+} from '@types';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { successResponse } from '@infrastructure/http/response';
@@ -58,6 +62,16 @@ export const getFeedback = (
             },
             callerContextOf(request)
         )
-        .then((result) => successResponse(response, result))
+        .then((result) => {
+            // `search()` already returns normalized (wire-shape) rows — unlike `findById`/`findOne`,
+            // it never hands back a hydrated document, so there is no `.toJSON()` to apply here.
+            // The repository factory's `PaginatedResult<TDocument>` names the pre-normalize type,
+            // which is why `items` needs the cast below.
+            const items: unknown = result.items;
+            return successResponse<FeedbackRequestsResponse>(response, {
+                items: items as FeedbackRequest[],
+                meta: result.meta
+            });
+        })
         .catch(catchAs(response, 'getFeedback'));
 };

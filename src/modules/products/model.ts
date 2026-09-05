@@ -36,6 +36,9 @@ export interface ProductSnapshot extends Omit<
  * Product Document interface — the stored fields, plus everything Mongoose adds.
  */
 export interface ProductDocument extends ProductSnapshot, Document {
+    /** String version of _id — provided by Mongoose's Document getter. */
+    id: string;
+
     /**
      * Document-only bookkeeping for the image digest pipeline — deliberately NOT on
      * `ProductSnapshot`, so it never rides along on the embedded copy `orders` keeps of a product.
@@ -205,6 +208,37 @@ export const applyProductTransform = applySerialization(productSchema, {
     omit: ['pendingImageKey'],
     after: applyProductAvailability
 });
+
+/**
+ * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
+ * derived from the two stock counters (never stored), the three dates ISO-stringified. Same
+ * reasoning as `users/model.ts`'s `toUser`.
+ */
+export const toProduct = (document: ProductDocument): Product => {
+    const onHand = document.onHand ?? 0;
+    const reserved = document.reserved ?? 0;
+
+    return {
+        id: document.id,
+        title: document.title,
+        price: document.price,
+        available: Math.max(0, onHand - reserved),
+        ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
+        ...(document.reserved === undefined ? {} : { reserved: document.reserved }),
+        ...(document.description === undefined ? {} : { description: document.description }),
+        ...(document.active === undefined ? {} : { active: document.active }),
+        ...(document.requiresShipping === undefined
+            ? {}
+            : { requiresShipping: document.requiresShipping }),
+        ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
+        ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
+        ...(document.categories === undefined ? {} : { categories: document.categories }),
+        ...(document.tags === undefined ? {} : { tags: document.tags }),
+        ...(document.createdAt ? { createdAt: document.createdAt.toISOString() } : {}),
+        ...(document.updatedAt ? { updatedAt: document.updatedAt.toISOString() } : {}),
+        ...(document.deletedAt ? { deletedAt: document.deletedAt.toISOString() } : {})
+    };
+};
 
 /**
  * Mongoose model for product CRUD operations.

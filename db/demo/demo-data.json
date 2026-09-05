@@ -3,7 +3,7 @@
         "shapes": {
             "addressBooks": "stored",
             "carts": "stored",
-            "localeMessages": "stored",
+            "localeEntries": "stored",
             "locales": "stored",
             "orders": "response",
             "products": "response",
@@ -127,7 +127,7 @@
                 "userId": "67f0c2000000000000000009"
             }
         ],
-        "localeMessages": [
+        "localeEntries": [
             {
                 "createdAt": "2024-02-29T06:11:22.000Z",
                 "id": "65e0200a9a7d4b2e1c0f3002",

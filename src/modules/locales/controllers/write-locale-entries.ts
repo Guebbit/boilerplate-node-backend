@@ -15,7 +15,9 @@ import {
 } from '@api/schemas.zod';
 import type {
     CreateLocaleEntryRequest,
+    LocaleEntry,
     LocaleEntryInput,
+    LocaleImportResult,
     LocaleTenant,
     MergeLocaleEntriesRequest,
     ReplaceLocaleEntriesRequest,
@@ -52,9 +54,15 @@ export const createLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
+            // A success result for this endpoint always carries the created entry; this satisfies
+            // the type checker without loosening it.
+            if (!result.data) throw new Error('locale entry create succeeded without an entry');
+
             refreshOverrides();
 
-            return successResponse(response, result.data, 201);
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
+            // document is typed as stored, not as the wire shape `LocaleEntry` promises.
+            return successResponse<LocaleEntry>(response, result.data.toJSON() as LocaleEntry, 201);
         })
         .catch(catchAs(response, 'createLocaleEntry'));
 };
@@ -81,9 +89,14 @@ export const updateLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
+            // A success result for this endpoint always carries the saved entry; this satisfies
+            // the type checker without loosening it.
+            if (!result.data) throw new Error('locale entry update succeeded without an entry');
+
             refreshOverrides();
 
-            return successResponse(response, result.data);
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
+            return successResponse<LocaleEntry>(response, result.data.toJSON() as LocaleEntry);
         })
         .catch(catchAs(response, 'updateLocaleEntry'));
 };
@@ -101,9 +114,13 @@ const importEntries = (
         .then((result) => {
             if (refused(response, result)) return;
 
+            // A success result for this endpoint always carries the import counts; this satisfies
+            // the type checker without loosening it.
+            if (!result.data) throw new Error('locale entry import succeeded without a result');
+
             refreshOverrides();
 
-            return successResponse(response, result.data);
+            return successResponse<LocaleImportResult>(response, result.data);
         })
         .catch((error: Error) => rejectDatabaseError(response, `${mode}LocaleEntries`, error));
 

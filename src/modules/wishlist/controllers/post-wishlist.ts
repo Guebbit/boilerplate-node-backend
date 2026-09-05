@@ -8,7 +8,7 @@ import { AddWishlistItemBody } from '@api/schemas.zod';
 import { t } from '@infrastructure/i18n';
 import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import type { AddWishlistItemRequest } from '@types';
+import type { AddWishlistItemRequest, WishlistResponse } from '@types';
 import { wishlistService } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
@@ -40,7 +40,8 @@ export const postWishlist = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse(response, result.data, 200, result.message);
+            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
+            successResponse<WishlistResponse>(response, result.data!, 200, result.message);
         })
         .catch(catchAs(response, 'postWishlist'));
 };

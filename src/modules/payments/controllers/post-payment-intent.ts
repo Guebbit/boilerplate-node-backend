@@ -7,6 +7,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { CreatePaymentIntentBody } from '@api/schemas.zod';
 import { paymentService } from '../service';
@@ -21,7 +22,11 @@ export const postPaymentIntent = (request: Request, response: Response) => {
         .createIntent(body.orderId, request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data, 201);
+            // A success result for this endpoint always carries the intent; this satisfies the
+            // type checker without loosening it.
+            if (!result.data) throw new Error('payment intent create succeeded without a payment');
+            // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
+            successResponse<Payment>(response, result.data.toJSON() as Payment, 201);
         })
         .catch(catchAs(response, 'postPaymentIntent'));
 };

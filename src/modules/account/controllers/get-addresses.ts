@@ -5,6 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
+import type { AddressesResponse } from '@types';
 import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
@@ -23,7 +24,7 @@ export const getAddresses = (request: Request, response: Response) => {
     return accountService
         .addressesGet(id)
         .then((view) => {
-            successResponse(response, view);
+            successResponse<AddressesResponse>(response, view);
         })
         .catch(catchAs(response, 'getAddresses'));
 };

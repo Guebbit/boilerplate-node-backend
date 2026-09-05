@@ -11,7 +11,7 @@ import { t } from '@infrastructure/i18n';
 import { ChangePasswordBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import type { ChangePasswordRequest } from '@types';
+import type { ChangePasswordRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
 import { issueSession } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
@@ -80,7 +80,12 @@ export const postPasswordChange = (
             return issueSession(response, id)
                 .then((token) => {
                     authPasswordChangeTotal.inc({ status: 'success' });
-                    successResponse(response, { token }, 200, t('account.password-change.success'));
+                    successResponse<AuthTokens>(
+                        response,
+                        { token },
+                        200,
+                        t('account.password-change.success')
+                    );
                 })
                 .catch(() => {
                     authPasswordChangeTotal.inc({ status: 'success' });

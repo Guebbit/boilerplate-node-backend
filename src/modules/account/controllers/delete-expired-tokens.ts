@@ -27,7 +27,7 @@ export const deleteExpiredTokens = (request: Request, response: Response) => {
              * `Success` response's `MessageResponse` schema forbids `data`, so sending it here
              * would break the contract.
              */
-            successResponse(response, undefined, result.status, result.message);
+            successResponse<undefined>(response, undefined, result.status, result.message);
         })
         .catch(catchAs(response, 'deleteExpiredTokens'));
 };

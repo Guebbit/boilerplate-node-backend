@@ -11,6 +11,18 @@ import { successResponse } from '@infrastructure/http/response';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { cartCheckoutTotal } from '../metrics';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import type { OrderDocument } from '@modules/orders';
+import type { CheckoutResponse, Order } from '@types';
+
+/**
+ * The order as `CheckoutResponse` declares it. `toJSON()`'s static type mirrors the stored
+ * document, not the transform `orders/model.ts` wires into the schema (`_id` → `id`, totals
+ * derived) — the same `unknown`-typed handoff `orderService.withActions` uses for this boundary.
+ */
+const toOrderResponse = (order: OrderDocument): Order => {
+    const serialized: unknown = order.toJSON();
+    return serialized as Order;
+};
 
 /**
  * POST /cart/checkout
@@ -31,9 +43,10 @@ export const postCheckout = (request: Request, response: Response) => {
             cartCheckoutTotal.inc({ status: result.success ? 'success' : 'failure' });
             if (refused(response, result)) return;
 
-            successResponse(
+            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
+            successResponse<CheckoutResponse>(
                 response,
-                { order: result.data, message: t('orders.creation-success') },
+                { order: toOrderResponse(result.data!), message: t('orders.creation-success') },
                 201
             );
         })

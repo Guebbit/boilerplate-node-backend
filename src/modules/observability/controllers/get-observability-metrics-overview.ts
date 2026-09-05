@@ -9,6 +9,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { ObservabilityMetricsSummary } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import {
@@ -88,7 +89,7 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                 const snapshot = processSnapshot();
                 const inFlight = inflightMetric.values.reduce((s, v) => s + v.value, 0);
 
-                const data = {
+                const data: ObservabilityMetricsSummary = {
                     http: {
                         totalRequests,
                         totalErrors,
@@ -118,7 +119,7 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                     timestamp: new Date().toISOString()
                 };
 
-                successResponse(response, data);
+                successResponse<ObservabilityMetricsSummary>(response, data);
             }
         )
         .catch(catchAs(response, 'getObservabilityMetricsOverview'));

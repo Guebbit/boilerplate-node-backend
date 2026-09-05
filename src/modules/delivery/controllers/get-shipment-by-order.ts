@@ -9,6 +9,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { deliveryService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
+import type { Shipment } from '@types';
 
 /** Handles `GET /delivery/order/:orderId`. */
 export const getShipmentByOrder = (request: Request<{ orderId?: string }>, response: Response) =>
@@ -16,6 +17,7 @@ export const getShipmentByOrder = (request: Request<{ orderId?: string }>, respo
         .getForOrder(String(request.params.orderId), request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data);
+            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
+            successResponse<Shipment>(response, result.data!);
         })
         .catch(catchAs(response, 'getShipmentByOrder'));

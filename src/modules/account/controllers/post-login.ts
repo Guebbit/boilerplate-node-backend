@@ -14,7 +14,7 @@ import { recordLoginFailure, recordLoginSuccess } from '../session/login-observa
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
-import type { LoginRequest } from '@types';
+import type { LoginRequest, LoginOutcome } from '@types';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
 const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optional() });
@@ -74,13 +74,23 @@ export const postLogin = (
              */
             if (data.twoFactorEnabledAt) {
                 return accountService.buildLoginChallenge(data).then((challenge) => {
-                    successResponse(response, challenge, 200, 'Two-factor authentication required');
+                    successResponse<LoginOutcome>(
+                        response,
+                        challenge,
+                        200,
+                        'Two-factor authentication required'
+                    );
                 });
             }
 
             return issueSession(response, userId, remember).then((accessToken) => {
                 recordLoginSuccess(request, userId, !!data.admin);
-                successResponse(response, { token: accessToken }, 200, 'Authentication successful');
+                successResponse<LoginOutcome>(
+                    response,
+                    { token: accessToken },
+                    200,
+                    'Authentication successful'
+                );
             });
         })
         .catch((error: Error) => {

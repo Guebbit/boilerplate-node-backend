@@ -4,6 +4,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { LocaleEntriesResponse, LocaleEntry } from '@types';
 import { readInput } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
@@ -36,10 +37,20 @@ export const getLocaleEntries = (
     // service's call (dropped on read, refused on write); see services/languages.ts.
     return localeService
         .searchEntries(request.params.locale, { ...parseResult.data, text, tenant })
-        .then((result) =>
-            result.success
-                ? successResponse(response, result.data)
-                : rejectResponse(response, result.status, result.errors)
-        )
+        .then((result) => {
+            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            // A success result for this endpoint always carries a page; this satisfies the type
+            // checker without loosening it.
+            if (!result.data) throw new Error('locale entry search succeeded without a page');
+            // `search()` already returns normalized (wire-shape) rows — unlike `findById`/`findOne`,
+            // it never hands back a hydrated document, so there is no `.toJSON()` to apply here.
+            // The repository factory's `PaginatedResult<TDocument>` names the pre-normalize type,
+            // which is why `items` needs the cast below.
+            const items: unknown = result.data.items;
+            return successResponse<LocaleEntriesResponse>(response, {
+                items: items as LocaleEntry[],
+                meta: result.data.meta
+            });
+        })
         .catch(catchAs(response, 'getLocaleEntries'));
 };

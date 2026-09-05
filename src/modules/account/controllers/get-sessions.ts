@@ -4,7 +4,8 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import type { SessionsResponse } from '@types';
 import { accountService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
@@ -24,7 +25,15 @@ export const getSessions = (request: Request, response: Response) => {
         .sessionsList(id, cookieToken)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse(response, result.data);
+
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without sessions is a broken service contract, not a bad request.
+                rejectResponse(response, 500, []);
+                return;
+            }
+
+            successResponse<SessionsResponse>(response, data);
         })
         .catch(catchAs(response, 'getSessions'));
 };

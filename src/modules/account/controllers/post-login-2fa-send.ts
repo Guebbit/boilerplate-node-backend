@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { SendTwoFactorCodeBody } from '@api/schemas.zod';
-import type { TwoFactorSendRequest } from '@types';
+import type { TwoFactorSendRequest, TwoFactorDelivery } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
@@ -38,8 +38,20 @@ export const postLoginTwoFactorSend = (
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without a payload is a broken service contract, not a bad request.
+                authTwoFactorCodeSentTotal.inc({ method, status: 'failure' });
+                rejectResponse(response, 500, []);
+                return;
+            }
             authTwoFactorCodeSentTotal.inc({ method, status: 'success' });
-            successResponse(response, result.data, 200, t('account.two-factor.code-sent'));
+            successResponse<TwoFactorDelivery>(
+                response,
+                data,
+                200,
+                t('account.two-factor.code-sent')
+            );
         })
         .catch((error: Error) => {
             authTwoFactorCodeSentTotal.inc({ method, status: 'failure' });

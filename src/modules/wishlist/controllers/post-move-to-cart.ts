@@ -10,6 +10,7 @@ import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
+import type { WishlistResponse } from '@types';
 
 /**
  * POST /wishlist/:productId/move-to-cart
@@ -33,7 +34,8 @@ export const postMoveToCart = (request: Request<{ productId: string }>, response
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse(response, result.data, 200, result.message);
+            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
+            successResponse<WishlistResponse>(response, result.data!, 200, result.message);
         })
         .catch(catchAs(response, 'postMoveToCart'));
 };

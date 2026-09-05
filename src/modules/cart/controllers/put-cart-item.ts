@@ -8,7 +8,7 @@ import { t } from '@infrastructure/i18n';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import type { UpdateCartItemByIdRequest } from '@types';
+import type { CartResponse, UpdateCartItemByIdRequest } from '@types';
 import {
     authContextOf,
     isValidObjectId,
@@ -46,7 +46,8 @@ export const putCartItem = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            successResponse(response, result.data);
+            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
+            successResponse<CartResponse>(response, result.data!);
         })
         .catch(catchAs(response, 'updateCartItemById'));
 };

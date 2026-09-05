@@ -9,6 +9,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { ObservabilityHealth } from '@types';
 import os from 'node:os';
 import { successResponse } from '@infrastructure/http/response';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
@@ -34,7 +35,7 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
     const dependencies = dependencyHealth();
     const analyticsProvider = resolveAnalyticsProvider();
 
-    successResponse(response, {
+    successResponse<ObservabilityHealth>(response, {
         status: overallStatus(dependencies),
         environment: process.env.NODE_ENV ?? 'development',
         service: process.env.NODE_SERVICE_NAME ?? 'boilerplate-node-backend',

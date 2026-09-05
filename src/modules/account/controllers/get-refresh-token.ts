@@ -6,6 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import type { RefreshTokenResponse } from '@types';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
 import { accountService, runTokenCleanup } from '../services';
@@ -40,7 +41,7 @@ export const getRefreshToken = (request: Request, response: Response) => {
                     createRefreshCookie(response, rotated, refreshMaxAgeMs);
                     createLoggedCookie(response, refreshMaxAgeMs);
                     authRefreshTotal.inc({ status: 'success' });
-                    successResponse(response, { token: accessToken });
+                    successResponse<RefreshTokenResponse>(response, { token: accessToken });
                 })
                 .catch(() => {
                     authRefreshTotal.inc({ status: 'failure' });

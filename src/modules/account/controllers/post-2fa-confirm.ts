@@ -7,7 +7,7 @@
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { ConfirmTwoFactorMethodBody, ConfirmTwoFactorMethodParams } from '@api/schemas.zod';
-import type { TwoFactorConfirmRequest } from '@types';
+import type { TwoFactorConfirmed, TwoFactorConfirmRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
@@ -44,8 +44,22 @@ export const post2faConfirm = (
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
+
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without the confirmed method is a broken service contract, not a
+                // bad request.
+                rejectResponse(response, 500, []);
+                return;
+            }
+
             authTwoFactorEnrollTotal.inc({ method, status: 'success' });
-            successResponse(response, result.data, 200, t('account.two-factor.method-added'));
+            successResponse<TwoFactorConfirmed>(
+                response,
+                data,
+                200,
+                t('account.two-factor.method-added')
+            );
         })
         .catch((error: CastError | Error) =>
             rejectDatabaseError(response, 'post2faConfirm', error)
