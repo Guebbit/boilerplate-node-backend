@@ -299,6 +299,16 @@ instance starts its own server) and racy. A WiredTiger file removed mid-copy fai
 with an `ENOENT` naming a filename nothing in the project mentions. `run-mutation-tests.ts` clears
 `.tmp` before it starts, which hid this until two runs overlapped.
 
+`ignorePatterns` also lists `.claude/**`, `.2repo/**` and `.codeboarding/**` — untracked agent
+tooling that only exists on a developer's machine, which is why CI never hit either problem it
+causes. `.claude/commands/audit` is an optional SYMLINK to `tests/audit/` (see
+[AI Auditing](./ai-auditing.md)), and Stryker's sandbox copy is a plain `copyfile`, so it aborts the
+whole run with `EISDIR` before a single mutant is instrumented. The other two are 42 MB of generated
+wiki text copied into every sandbox for nothing.
+
+The rule the three share: a directory that is gitignored, absent in CI and not read by the suite
+belongs here — the sandbox needs what the TESTS read, not what the repository happens to contain.
+
 `ignorePatterns` must **not** list `public/**`, even though `coverage/`, `reports/`, `dist/` and
 `docs/` are all excluded there — the sandbox is the only filesystem the tests see, and
 `tests/unit/db/seed-fixtures.test.ts` asserts every seed fixture's `imageUrl` resolves to a
@@ -669,7 +679,7 @@ not spend a day rediscovering it.
 it_. Identifying a kind of object and then guessing its owner from what that kind is usually for is
 not a diagnosis — it is the same guess with a number attached to it.
 
-### Related: the same arithmetic kills a plain `npm test`
+### Related: the same arithmetic kills a plain `npm test` {#jest-worker-count}
 
 Stryker is where the accumulation becomes unbounded, but the per-worker cost exists in an ordinary
 run too, and it is enough on its own. A worker peaks at 772–905 MB here; jest's default worker count
@@ -712,6 +722,12 @@ throws `Cannot access '<name>' before initialization` under swc. The fix is to r
 from inside a function — a getter, or a wrapping arrow — so the read happens on access rather than
 at factory time. `tests/unit/infrastructure/adapters/mailer-dispatch.test.ts` carries a worked
 example in its comments.
+
+**A second note, and this one is a property to preserve rather than a problem to fix.** swc
+transpiles file-by-file with no cross-file knowledge — which is what makes it cheap, and is also its
+one constraint: a type-only import must be written `import type`, or swc emits a real `require` for
+a value that does not exist at runtime. The app is already written that way, enforced by
+`verbatimModuleSyntax` in `tsconfig.json`, so nothing needs doing here beyond not turning that off.
 
 ### Preventing it
 

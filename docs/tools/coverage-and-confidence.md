@@ -197,8 +197,8 @@ Honesty about instruments in use matters more than the instruments.
 **Coverage.** `test:unit:coverage` runs `tests/unit`, `tests/cross-cutting` and each module's own
 `tests/unit` — not the integration or contract suites. So a service covered entirely by integration
 specs reads near zero, and that is a fact about the RUN, not about the code. The floors were
-re-fitted to what that run actually measures on 2026-08-29; `jest.config.js` explains what they do
-and do not buy.
+re-fitted to what that run actually measures on 2026-08-29; [How the floors are
+written](#how-the-floors-are-written) explains what they do and do not buy.
 
 **Mutation.** `stryker.config.json` mutates `src/modules/*/**/*.ts` while excluding those same
 suites from the tests it runs, so it currently shares the blind spot — it mutates code whose killing
@@ -210,6 +210,99 @@ process dies on a V8 fatal assertion with the fuzz suite, and on
 `FATAL ERROR: JavaScript heap out of memory` (~4 GB, ~8 minutes) without it. It would need an
 enlarged heap or per-suite runs with merged reports: real machinery, for the weaker instrument,
 answering a question mutation testing answers better. Recorded so nobody spends the afternoon again.
+
+## 7. How the floors are written {#how-the-floors-are-written}
+
+`coverageThreshold` in `jest.config.js` is a map of key → minima. How a key is SHAPED decides what
+it measures, and the two shapes fail differently:
+
+- A key naming a **directory** (`src/modules/`) pools every file beneath it into ONE total. Four
+  files at 0% hide behind six at 95%, and the gate stays green.
+- A key that is a **glob** (a wildcard segment, or a recursive `.ts` wildcard) is applied to each
+  matching file separately, and Jest prints one failure per file, naming it.
+
+Only the second is a gate. Under the pooled form this repo passed a 70% floor on `src/middlewares/`
+while `auth-jwt.ts`, `locale.ts` and `security.ts` each sat at 0% — and `security.ts` holds
+`isMetricsScraper`, the credential check on the Prometheus endpoint.
+
+### The three shapes a floor takes
+
+`jest.config.js` builds every entry through one helper rather than repeating four numbers:
+
+| Written as       | Means                                                               |
+| ---------------- | ------------------------------------------------------------------- |
+| `STANDARD`       | 70/70/70 — what a file with its own unit suite is expected to clear |
+| `UNTESTED`       | 0/0/0 — no suite drives it; the honest zero, for the ratchet        |
+| `floor(s, b, f)` | a measured value, fitted to the lowest file the key matches         |
+
+`floor` takes `lines` as a fourth parameter defaulting to `statements`, because `coverageProvider:
+'v8'` derives both from the same range data — every floor in the repo measures identical on the two.
+The parameter stays overridable rather than hard-coded, since another provider would let them
+diverge.
+
+Raising `STANDARD` raises every key using it at once, which is the point of it being one value. A
+bare `floor(...)` call is a per-file record and moves on its own.
+
+### The drift trap
+
+**A threshold key matching no file is silently ignored.** It does not warn, it does not fail — it
+reads like a gate and enforces nothing. Every rename of a source directory has to re-check these
+keys, because the failure mode is a green run rather than an error.
+`tests/cross-cutting/coverage-thresholds.test.ts` exists to turn the next such rename red.
+
+```mermaid
+flowchart TD
+    A[A source directory is renamed] --> B{Does a threshold key still match it?}
+    B -->|Yes| C[Still measured]
+    B -->|No| D[Key matches nothing]
+    D --> E[Jest ignores it, no warning]
+    E --> F[Green run, zero enforcement]
+    F --> G[coverage-thresholds.test.ts fails instead]
+```
+
+### The exemption mechanism
+
+One file below the rest is exempted in TWO parts, and both are required:
+
+1. Negate it out of the glob with an extglob — `src/infrastructure/adapters/!(pdf|mailer).ts`.
+2. Give it its own key at its measured value.
+
+It cannot simply get a lower key alongside the glob. **Jest adds a file to EVERY matching group**
+rather than picking the most specific, so both checks run and the stricter one still fails it. An
+exemption has to leave the glob to be an exemption.
+
+Barrels are excluded the same way (`domain/!(index).ts`). A pure re-export file's `functions`
+metric counts the re-export arrows, "covered" only if something imported the barrel during the run
+— that measures wiring, not testing, and four `domain/index.ts` files dragged one key's `functions`
+floor from 100 to 0 while every file with logic in it measured 100.
+
+### What `functions: 0` means, which is nothing
+
+Ten of twelve `repository.ts`, eight of nine `service.ts` and twelve of seventeen `services/*.ts`
+files report 0% functions on this run. That is not a set of outliers to carve out — carving out ten
+of twelve leaves a rule with two members — it is the key saying it does not apply to this suite.
+Those keys still floor `statements`, `branches` and `lines`; the `functions` entry is a formality.
+
+### Controllers are deliberately unfloored
+
+They report ~0% on the unit run because `tests/contract/` and `tests/integration/` cover them,
+driving the real app over HTTP — a legitimate choice for handlers this thin. A floor here would
+measure the wrong suite, and the only way to satisfy it would be unit tests duplicating the
+contract suite less well. If they ever need a floor, it belongs on a coverage run that includes
+those suites.
+
+### Read them as a ratchet
+
+The floors are a record of where the code IS, not a target: a drop fails the build, an improvement
+should be ratcheted up. Several are low, for the reason the controller note gives spread wider —
+this run is `tests/unit` + `tests/cross-cutting` + each module's own `tests/unit`, and excludes
+integration and contract. Two ways out, both decisions rather than chores:
+
+1. Add a second coverage run including the integration and contract suites, and put the real floors
+   there. That is the run these numbers are asking for.
+2. Leave it, and read the job as "the unit layer did not get worse", which is what it honestly is.
+
+A file matched by no key is UNMEASURED, not zero.
 
 ---
 

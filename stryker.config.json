@@ -42,7 +42,10 @@
         "docs/**",
         ".tmp/**",
         ".tmp-*/**",
-        ".stryker-tmp*/**"
+        ".stryker-tmp*/**",
+        ".claude/**",
+        ".2repo/**",
+        ".codeboarding/**"
     ],
     "thresholds": {
         "high": 80,
