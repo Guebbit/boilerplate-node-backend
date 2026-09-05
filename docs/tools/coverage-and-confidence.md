@@ -225,23 +225,38 @@ Only the second is a gate. Under the pooled form this repo passed a 70% floor on
 while `auth-jwt.ts`, `locale.ts` and `security.ts` each sat at 0% — and `security.ts` holds
 `isMetricsScraper`, the credential check on the Prometheus endpoint.
 
-### The three shapes a floor takes
+### The three tiers a floor takes
 
 `jest.config.js` builds every entry through one helper rather than repeating four numbers:
 
-| Written as       | Means                                                               |
-| ---------------- | ------------------------------------------------------------------- |
-| `STANDARD`       | 70/70/70 — what a file with its own unit suite is expected to clear |
-| `UNTESTED`       | 0/0/0 — no suite drives it; the honest zero, for the ratchet        |
-| `floor(s, b, f)` | a measured value, fitted to the lowest file the key matches         |
+| Written as       | Means                                                                      |
+| ---------------- | -------------------------------------------------------------------------- |
+| `STANDARD`       | 70/70/70 — a file with its own unit suite                                  |
+| `PARTIAL`        | 25/70/0 — integration- and contract-covered; the unit layer only grazes it |
+| `UNTESTED`       | 0/0/0 — nothing drives it at all                                           |
+| `floor(s, b, f)` | a measured value, for the keys that fit no tier                            |
 
 `floor` takes `lines` as a fourth parameter defaulting to `statements`, because `coverageProvider:
 'v8'` derives both from the same range data — every floor in the repo measures identical on the two.
 The parameter stays overridable rather than hard-coded, since another provider would let them
 diverge.
 
-Raising `STANDARD` raises every key using it at once, which is the point of it being one value. A
-bare `floor(...)` call is a per-file record and moves on its own.
+Raising a tier raises every key using it at once, which is the point of it being one value. A bare
+`floor(...)` call is a per-key record and moves on its own.
+
+**`PARTIAL` is the honest name for the blind spot** in section 5. A repository or service floored at
+`functions: 0` is not untested — the unit suite simply calls none of its exports, because the suites
+that do are excluded from this run. Branches stay floored at 70 because the unit suite does reach
+the guard clauses. Read a `PARTIAL` key as "the unit layer did not get worse", never as a grade.
+
+::: warning A tier is a claim that decays
+Floors are measured records, and code improves after they are written. `pdf.ts` and `stream.ts` sat
+at `0/0/0` while both had reached 100/100/100 — the label had been false for weeks, because nothing
+re-fits a floor automatically and these thresholds are not in the commit gate (see the note under
+[§2](#_2-so-why-keep-coverage-at-all)). When a negated exemption's file climbs back above its tier,
+delete the negation: `adapters/!(pdf|mailer).ts` and
+`observability/!(stream|metrics-http|tracer).ts` both collapsed into plain globs that way.
+:::
 
 ### The drift trap
 
