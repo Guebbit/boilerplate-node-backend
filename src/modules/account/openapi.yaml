@@ -621,6 +621,8 @@ paths:
             description: Registers a new user account with optional image upload. Returns the newly created user profile on success.
             operationId: signup
             security: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
             requestBody:
                 required: true
                 content:
@@ -637,7 +639,11 @@ paths:
                         application/json:
                             schema:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
-                # Signing up with an email that is already registered.
+                # Also answered when a human-challenge provider is active and the caller's
+                # token is missing or refused — see antibot/openapi.yaml.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Signing up with an email that is already registered — or, with rung 3 on, a
+                # challenge token already spent.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -649,6 +655,8 @@ paths:
             operationId: requestPasswordReset
             description: Initiates the password-reset flow by sending a one-time reset token to the provided email address. The token should then be submitted to `/account/reset-confirm`.
             security: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
             requestBody:
                 required: true
                 content:
@@ -657,6 +665,8 @@ paths:
                             $ref: '#/components/schemas/PasswordResetRequest'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                # A human-challenge provider is active and the caller's token is missing or refused.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 

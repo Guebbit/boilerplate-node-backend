@@ -35,9 +35,12 @@ const MODULES_ROOT = path.join(__dirname, '../../src/modules');
  * `audit-logs` owns and reads the trail — it is the destination, not a writer. `observability` is
  * infrastructure (health, metrics, the audit read endpoint, the SSE stream) and records nothing of
  * its own. `wishlist` saves and unsaves product references — low-stakes user data with no money,
- * no stock and no identity attached. A fourth entry needs the same kind of argument in review.
+ * no stock and no identity attached. `antibot` issues and verifies a stateless challenge to a
+ * caller who, by construction, has no account and no resource yet — there is no subject an audit
+ * row could name. A refusal is already visible where it matters: `rate-limit.ts`'s own limiters
+ * audit a spent budget, and a burst of solved-but-refused challenges is exactly that shape.
  */
-const EXPECTED_NON_AUDITING: string[] = ['audit-logs', 'observability', 'wishlist'];
+const EXPECTED_NON_AUDITING: string[] = ['antibot', 'audit-logs', 'observability', 'wishlist'];
 
 /** Every directory under `src/modules/`. */
 const moduleFolders = (): string[] =>

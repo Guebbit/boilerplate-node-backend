@@ -82,10 +82,12 @@ rules:
                 match: '^[A-Z][a-zA-Z0-9]*Response$'
 
     # --- Parameter naming ---
+    # `in: header` is excluded: HTTP headers are conventionally hyphenated on the wire
+    # (`x-antibot-challenge-token`), and camelCasing one would just be a made-up name nothing sends.
     parameter-name-camel-case:
         description: 'Parameter names must be camelCase.'
         severity: error
-        given: '$.components.parameters[*].name'
+        given: '$.components.parameters[?(@.in != "header")].name'
         then:
             function: pattern
             functionOptions:

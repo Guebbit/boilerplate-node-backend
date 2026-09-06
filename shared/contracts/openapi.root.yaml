@@ -27,6 +27,7 @@ servers:
 
 tags:
     - name: Auth
+    - name: Antibot
     - name: Account
     - name: Users
     - name: Products
@@ -78,6 +79,19 @@ components:
             required: false
             schema:
                 $ref: '#/components/schemas/Text'
+
+        # Rung 3 of the anti-automation ladder (`NODE_ANTIBOT_PROVIDER`) — see antibot/openapi.yaml.
+        # Optional at the contract level: absent while the provider is `none`, required by the
+        # server once a real one is selected.
+        AntibotChallengeTokenHeader:
+            name: x-antibot-challenge-token
+            in: header
+            required: false
+            schema:
+                type: string
+            description: >
+                The token the active human-challenge provider issued to the client — see
+                `GET /antibot/config`. Absent when that provider is `none`.
 
         # Query ID parameters (just for filtering)
         IdParam:
@@ -780,6 +794,12 @@ paths:
         $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1metrics~1overview'
     /observability/audit:
         $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1audit'
+
+    # ---------- antibot ----------
+    /antibot/config:
+        $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1config'
+    /antibot/challenge:
+        $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1challenge'
 
     # ---------- account ----------
     /account:

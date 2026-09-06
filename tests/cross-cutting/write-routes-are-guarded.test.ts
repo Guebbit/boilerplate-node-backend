@@ -35,6 +35,7 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 );
 
 import { router as accountRouter } from '@modules/account/routes';
+import { router as antibotRouter } from '@modules/antibot/routes';
 import { router as cartRouter } from '@modules/cart/routes';
 import { router as deliveryRouter } from '@modules/delivery/routes';
 import { router as feedbackRouter } from '@modules/feedback/routes';
@@ -58,6 +59,7 @@ const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
  */
 const ROUTED_MODULES: Record<string, Router> = {
     account: accountRouter,
+    antibot: antibotRouter,
     cart: cartRouter,
     delivery: deliveryRouter,
     feedback: feedbackRouter,

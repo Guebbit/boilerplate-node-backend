@@ -128,3 +128,23 @@ describe('feedback routes — submission rate limiting', () => {
         expect(unexpected).toEqual([]);
     });
 });
+
+describe('feedback routes — human-challenge gate (rung 4)', () => {
+    it('carries humanChallengeGate on POST /contact, after contactLimiters', () => {
+        const chain = chainOf('POST /contact');
+
+        expect(chain).toContain('humanChallengeGate');
+        expect(chain.indexOf('humanChallengeGate')).toBeGreaterThan(
+            chain.indexOf('contactLimiters[2]')
+        );
+    });
+
+    it('mounts the gate on no other route', () => {
+        const unexpected = routeSignatures(router).filter(
+            (signature) =>
+                signature !== 'POST /contact' && chainOf(signature).includes('humanChallengeGate')
+        );
+
+        expect(unexpected).toEqual([]);
+    });
+});

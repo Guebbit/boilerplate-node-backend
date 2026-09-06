@@ -25,6 +25,7 @@ import {
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
+import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { contactRequestEmail } from './emails';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import type { CallerContext } from '@infrastructure/http/request';
@@ -75,54 +76,64 @@ const notifyMailbox = (): string =>
  * reliably fills, declared in the contract but never persisted (see `FeedbackRequestDocument`) or
  * read back. A non-empty value writes the row as `spam` and skips the notification — the bot still
  * gets its `201`, so it learns nothing, but nobody's inbox hears about it.
+ *
+ * A disposable-inbox domain (`checkEmailPolicy`, off by default) is treated the same way: filed
+ * as `spam`, notification skipped, still a `201` — a visible refusal would tell a spam script
+ * exactly which signal caught it.
  */
 export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> => {
-    const suspectedSpam = Boolean(payload.website?.trim());
+    const email = payload.email.trim().toLowerCase();
+    const honeypotFilled = Boolean(payload.website?.trim());
 
-    return feedbackRequestRepository
-        .create({
-            name: payload.name?.trim() || undefined,
-            email: payload.email.trim().toLowerCase(),
-            subject: payload.subject.trim(),
-            message: payload.message.trim(),
-            status: suspectedSpam ? FeedbackRequestStatus.spam : FeedbackRequestStatus.new
-        })
-        .then((created) => {
-            if (suspectedSpam) return created;
+    return checkEmailPolicy(email).then((verdict) => {
+        const suspectedSpam = honeypotFilled || verdict === 'refused';
 
-            const notifyEmail = notifyMailbox();
-            if (!notifyEmail) return created;
+        return feedbackRequestRepository
+            .create({
+                name: payload.name?.trim() || undefined,
+                email,
+                subject: payload.subject.trim(),
+                message: payload.message.trim(),
+                status: suspectedSpam ? FeedbackRequestStatus.spam : FeedbackRequestStatus.new
+            })
+            .then((created) => {
+                if (suspectedSpam) return created;
 
-            /*
-             * The one email that must NOT follow the request's language.
-             *
-             * It goes to the support mailbox, not to the person who filled in the form, so it is
-             * built in `NODE_DEFAULT_LOCALE` — the operator's language, passed explicitly rather
-             * than inherited from whoever happened to submit the form. This is why it takes no
-             * `CallerContext`: there is deliberately nothing about the caller in it. The
-             * customer's own words (`subject`, `message`) pass through untouched, as they must.
-             */
-            const operatorMail = contactRequestEmail(getDefaultLocale(), {
-                name: created.name,
-                email: created.email,
-                subject: created.subject,
-                message: created.message,
-                createdAt: created.createdAt?.toISOString()
+                const notifyEmail = notifyMailbox();
+                if (!notifyEmail) return created;
+
+                /*
+                 * The one email that must NOT follow the request's language.
+                 *
+                 * It goes to the support mailbox, not to the person who filled in the form, so it
+                 * is built in `NODE_DEFAULT_LOCALE` — the operator's language, passed explicitly
+                 * rather than inherited from whoever happened to submit the form. This is why it
+                 * takes no `CallerContext`: there is deliberately nothing about the caller in it.
+                 * The customer's own words (`subject`, `message`) pass through untouched, as they
+                 * must.
+                 */
+                const operatorMail = contactRequestEmail(getDefaultLocale(), {
+                    name: created.name,
+                    email: created.email,
+                    subject: created.subject,
+                    message: created.message,
+                    createdAt: created.createdAt?.toISOString()
+                });
+
+                void enqueueEmail(
+                    { to: notifyEmail, subject: operatorMail.subject },
+                    operatorMail.template,
+                    operatorMail.data
+                ).catch((error: Error) =>
+                    logger.error({
+                        message: 'feedback contact notification email failed',
+                        error: error.message
+                    })
+                );
+
+                return created;
             });
-
-            void enqueueEmail(
-                { to: notifyEmail, subject: operatorMail.subject },
-                operatorMail.template,
-                operatorMail.data
-            ).catch((error: Error) =>
-                logger.error({
-                    message: 'feedback contact notification email failed',
-                    error: error.message
-                })
-            );
-
-            return created;
-        });
+    });
 };
 
 /**

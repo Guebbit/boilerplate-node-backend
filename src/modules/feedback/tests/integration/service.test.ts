@@ -144,6 +144,36 @@ describe('create — honeypot', () => {
     });
 });
 
+describe('create — disposable-email policy', () => {
+    const originalPolicy = process.env.NODE_ANTIBOT_EMAIL_POLICY;
+
+    afterEach(() => {
+        if (originalPolicy === undefined) delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+        else process.env.NODE_ANTIBOT_EMAIL_POLICY = originalPolicy;
+    });
+
+    // Required by the plan: every anti-automation rung must be provably off by default.
+    it('is off by default — a known disposable domain still notifies as normal', async () => {
+        delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+
+        const feedback = await create(makePayload({ email: 'someone@mailinator.com' }));
+
+        expect(feedback.status).toBe(FeedbackRequestStatus.new);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+
+    it('files a disposable-domain submission as spam, same as the honeypot, with a 201-shaped result', async () => {
+        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'disposable';
+
+        const feedback = await create(makePayload({ email: 'someone@mailinator.com' }));
+
+        // Filed and returned exactly like the honeypot catches a bot: no visible refusal that
+        // would tell a spam script which signal caught it.
+        expect(feedback.status).toBe(FeedbackRequestStatus.spam);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+});
+
 /** Seeds a small, deliberately varied corpus. */
 const seed = async () => {
     await create(makePayload({ email: 'ada@example.com', subject: 'Checkout bug' }));

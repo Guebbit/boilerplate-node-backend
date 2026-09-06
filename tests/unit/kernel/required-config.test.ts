@@ -18,6 +18,10 @@ const TOUCHED = [
     'NODE_SMTP_USER',
     'NODE_SMTP_PASS',
     'NODE_SMTP_SENDER',
+    'NODE_ANTIBOT_PROVIDER',
+    'NODE_ANTIBOT_ALTCHA_SECRET',
+    'NODE_ANTIBOT_TURNSTILE_SITE_KEY',
+    'NODE_ANTIBOT_TURNSTILE_SECRET',
     'SECRET'
 ] as const;
 
@@ -29,6 +33,7 @@ const configure = (): void => {
     process.env.NODE_URL = 'https://api.example.com/';
     delete process.env.NODE_DEMO;
     delete process.env.NODE_SMTP_HOST;
+    delete process.env.NODE_ANTIBOT_PROVIDER;
 };
 
 afterEach(() => {
@@ -133,6 +138,39 @@ describe('the environments that skip the gate', () => {
         process.env.NODE_ENV = 'development';
         process.env.NODE_DEMO = 'true';
         delete process.env.NODE_URL;
+
+        expect(() => assertRequiredConfig([])).not.toThrow();
+    });
+});
+
+describe('the antibot provider group', () => {
+    it('asks for nothing while the rung is off — the default', () => {
+        configure();
+
+        expect(() => assertRequiredConfig([])).not.toThrow();
+    });
+
+    it('refuses a self-hosted provider selected without its signing secret', () => {
+        configure();
+        process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
+        delete process.env.NODE_ANTIBOT_ALTCHA_SECRET;
+
+        expect(() => assertRequiredConfig([])).toThrow(/NODE_ANTIBOT_ALTCHA_SECRET/);
+    });
+
+    it('refuses a vendor provider missing either half of its key pair', () => {
+        configure();
+        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        process.env.NODE_ANTIBOT_TURNSTILE_SITE_KEY = 'site-key';
+        delete process.env.NODE_ANTIBOT_TURNSTILE_SECRET;
+
+        expect(() => assertRequiredConfig([])).toThrow(/NODE_ANTIBOT_TURNSTILE_SECRET/);
+    });
+
+    it('accepts a fully configured provider', () => {
+        configure();
+        process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
+        process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'an-altcha-signing-secret-value';
 
         expect(() => assertRequiredConfig([])).not.toThrow();
     });

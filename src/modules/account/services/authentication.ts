@@ -12,6 +12,7 @@ import { getCurrentLocale, getDefaultLocale, t } from '@infrastructure/i18n';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { deleteRequestEmail, resetRequestEmail, setupRequestEmail } from '../emails';
 import type { CastError } from 'mongoose';
 import { LoginBody } from '@api/schemas.zod';
@@ -397,30 +398,41 @@ export const signup = (
         });
 
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
-        ? userRepository
-              .findOne({ email })
-              .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                  if (user) return generateReject(409, [t('account.signup.email-already-used')]);
-                  return userRepository
-                      .create({
-                          username,
-                          email,
-                          imageUrl: imageUrl ?? '',
-                          thumbnailUrl,
-                          pendingImageKey,
-                          password,
-                          analyticsConsent,
-                          termsAccepted,
-                          // The language they signed up in, kept for work that happens later
-                          // without a request to read `Accept-Language` from — a queued email, a
-                          // nightly job. Editable afterwards from the user endpoints.
-                          locale: getCurrentLocale()
-                      })
-                      .then((createdUser) =>
-                          generateSuccess<UserDocument>(userService.enqueueIfPending(createdUser))
-                      );
-              })
-              .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
+        ? // Rung 2 of the anti-automation ladder — off by default, see `adapters/antibot`.
+          checkEmailPolicy(email).then((verdict) =>
+              verdict === 'refused'
+                  ? generateReject(422, [t('account.signup.email-domain-refused')])
+                  : userRepository
+                        .findOne({ email })
+                        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+                            if (user)
+                                return generateReject(409, [
+                                    t('account.signup.email-already-used')
+                                ]);
+                            return userRepository
+                                .create({
+                                    username,
+                                    email,
+                                    imageUrl: imageUrl ?? '',
+                                    thumbnailUrl,
+                                    pendingImageKey,
+                                    password,
+                                    analyticsConsent,
+                                    termsAccepted,
+                                    // The language they signed up in, kept for work that happens
+                                    // later without a request to read `Accept-Language` from — a
+                                    // queued email, a nightly job. Editable afterwards from the
+                                    // user endpoints.
+                                    locale: getCurrentLocale()
+                                })
+                                .then((createdUser) =>
+                                    generateSuccess<UserDocument>(
+                                        userService.enqueueIfPending(createdUser)
+                                    )
+                                );
+                        })
+                        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
+          )
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return outcome.then((result) => {

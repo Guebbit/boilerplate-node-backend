@@ -16,6 +16,7 @@ import { putFeedbackStatus } from './controllers/put-feedback-status';
 import { deleteFeedback } from './controllers/delete-feedback';
 import { invalidateCache, searchCache } from '@infrastructure/http/middlewares/cache';
 import { contactLimiters } from '@infrastructure/http/middlewares/rate-limit';
+import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 
 /** Express router for feedback/contact endpoints (public contact form; admin read/update). */
 export const router = Router();
@@ -28,8 +29,17 @@ export const router = Router();
  * cost a database write. Three dimensions — address, submitted email, address block — none of
  * them skipping success: this form's abuse is a successful post repeated, not a failed one.
  * See docs/tools/security.md#the-rate-limit-budgets.
+ *
+ * `humanChallengeGate` next — rung 4, off by default (`NODE_ANTIBOT_PROVIDER`) — before the write it
+ * would otherwise refuse just as cheaply after.
  */
-router.post('/contact', contactLimiters, invalidateCache(['feedback']), postFeedbackContact);
+router.post(
+    '/contact',
+    contactLimiters,
+    humanChallengeGate,
+    invalidateCache(['feedback']),
+    postFeedbackContact
+);
 
 /*
  * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why

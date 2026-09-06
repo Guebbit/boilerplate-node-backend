@@ -42,6 +42,10 @@ interface Pairing {
 
 const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
     account: { counterparts: ['account'] },
+    antibot: {
+        counterparts: [],
+        why: 'It has no screen of its own — whichever form is guarded (signup, reset, contact) calls `POST /antibot/challenge` and attaches the solved headers inline, in the frontend module that owns that form.'
+    },
     'audit-logs': {
         counterparts: ['admin'],
         why: 'This module owns the trail and no URL; the endpoint that reads it belongs to `observability`, and the screen that renders it is the frontend’s admin dashboard.'

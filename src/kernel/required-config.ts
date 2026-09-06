@@ -30,6 +30,15 @@ const APP_REQUIRED_CONFIG: readonly RequiredConfig[] = [
 const SMTP_COMPANIONS = ['NODE_SMTP_USER', 'NODE_SMTP_PASS', 'NODE_SMTP_SENDER'] as const;
 
 /**
+ * What each selectable human-challenge provider cannot run without. `none` — the default — needs
+ * nothing, which is why the rung costs an untouched deployment no configuration at all.
+ */
+const ANTIBOT_PROVIDER_SECRETS: Readonly<Record<string, readonly string[]>> = {
+    altcha: ['NODE_ANTIBOT_ALTCHA_SECRET'],
+    turnstile: ['NODE_ANTIBOT_TURNSTILE_SITE_KEY', 'NODE_ANTIBOT_TURNSTILE_SECRET']
+};
+
+/**
  * Whether a `productionOnly` entry is in scope for the current `NODE_ENV`.
  */
 const applies = ({ productionOnly }: RequiredConfig): boolean =>
@@ -55,6 +64,18 @@ const missingSmtpCompanions = (): string[] =>
     process.env.NODE_SMTP_HOST ? SMTP_COMPANIONS.filter((key) => !process.env[key]) : [];
 
 /**
+ * Selecting a human-challenge provider is a choice; selecting one without its secret is not. The
+ * provider would throw on the first guarded request instead of at boot — a signup outage that
+ * looks like a bug rather than a missing variable.
+ *
+ * @returns the variables the selected provider needs and does not have
+ */
+const missingAntibotProviderSecrets = (): string[] =>
+    (ANTIBOT_PROVIDER_SECRETS[process.env.NODE_ANTIBOT_PROVIDER ?? 'none'] ?? []).filter(
+        (key) => !process.env[key]
+    );
+
+/**
  * Refuse to boot on a missing, truncated or still-placeholder required variable.
  *
  * Skipped under `NODE_ENV=test` and in the demo profile: a demo deployment that developers
@@ -75,7 +96,8 @@ export const assertRequiredConfig = (appModules: AppModule[]): void => {
     ];
     const offending = [
         ...declared.filter((entry) => applies(entry) && fails(entry)).map(({ key }) => key),
-        ...missingSmtpCompanions()
+        ...missingSmtpCompanions(),
+        ...missingAntibotProviderSecrets()
     ];
 
     if (offending.length > 0)

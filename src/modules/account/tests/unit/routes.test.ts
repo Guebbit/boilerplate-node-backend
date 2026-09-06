@@ -227,6 +227,33 @@ describe('account routes — signup and reset rate limiting', () => {
     });
 });
 
+describe('account routes — human-challenge gate (rung 4)', () => {
+    it.each([
+        ['POST /signup', 'signupLimiters'],
+        ['POST /reset', 'resetRequestLimiters']
+    ])('%s carries humanChallengeGate, after its own rate-limit budget', (signature, limiterName) => {
+        const chain = chainOf(signature);
+
+        expect(chain).toContain('humanChallengeGate');
+        // A spent budget should not reach the gate at all — see rate-limit.ts's own reasoning
+        // for mounting a budget before the cost it exists to avoid.
+        expect(chain.indexOf('humanChallengeGate')).toBeGreaterThan(
+            chain.indexOf(`${limiterName}[2]`)
+        );
+    });
+
+    it('mounts the gate on no other route', () => {
+        const unexpected = routeSignatures(router).filter(
+            (signature) =>
+                signature !== 'POST /signup' &&
+                signature !== 'POST /reset' &&
+                chainOf(signature).includes('humanChallengeGate')
+        );
+
+        expect(unexpected).toEqual([]);
+    });
+});
+
 describe('account routes — cache invalidation and uploads', () => {
     it.each([
         'PUT /',

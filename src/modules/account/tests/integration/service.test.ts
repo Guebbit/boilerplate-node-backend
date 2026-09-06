@@ -136,6 +136,66 @@ describe('signup', () => {
         expect(response.status).toBe(409);
     });
 
+    describe('NODE_ANTIBOT_EMAIL_POLICY', () => {
+        const originalPolicy = process.env.NODE_ANTIBOT_EMAIL_POLICY;
+
+        afterEach(() => {
+            if (originalPolicy === undefined) delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+            else process.env.NODE_ANTIBOT_EMAIL_POLICY = originalPolicy;
+        });
+
+        // Required by the plan: every anti-automation rung must be provably off by default.
+        it('is off by default — a known disposable domain still signs up', async () => {
+            delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+
+            const response = asSuccess(
+                await accountService.signup(
+                    {
+                        email: 'someone@mailinator.com',
+                        username: 'disposableuser',
+                        password: PLAIN_PASSWORD,
+                        passwordConfirm: PLAIN_PASSWORD,
+                        analyticsConsent: undefined,
+                        termsAccepted: true,
+                        imageUrl: undefined,
+                        thumbnailUrl: undefined,
+                        pendingImageKey: undefined
+                    },
+                    testCallerContext
+                )
+            );
+
+            expect(response.data.email).toBe('someone@mailinator.com');
+        });
+
+        it('rejects a disposable domain with 422 when the policy is on', async () => {
+            process.env.NODE_ANTIBOT_EMAIL_POLICY = 'disposable';
+
+            const response = asReject(
+                await accountService.signup(
+                    {
+                        email: 'someone@mailinator.com',
+                        username: 'disposableuser',
+                        password: PLAIN_PASSWORD,
+                        passwordConfirm: PLAIN_PASSWORD,
+                        analyticsConsent: undefined,
+                        termsAccepted: true,
+                        imageUrl: undefined,
+                        thumbnailUrl: undefined,
+                        pendingImageKey: undefined
+                    },
+                    testCallerContext
+                )
+            );
+
+            expect(response.status).toBe(422);
+
+            // Not persisted — the refused address never became an account.
+            const stored = await userRepository.findOne({ email: 'someone@mailinator.com' });
+            expect(stored).toBeNull();
+        });
+    });
+
     it.each([
         ['not-an-email', 'gooduser', PLAIN_PASSWORD],
         ['bad-username@example.com', 'ab', PLAIN_PASSWORD],

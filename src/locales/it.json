@@ -8,7 +8,9 @@
         "error-forbidden": "Non hai i permessi per farlo.",
         "error-not-found": "Questo elemento non esiste più.",
         "error-rate-limited": "Troppe richieste. Riprova tra poco.",
-        "error-reauth-required": "Conferma che sei tu prima di continuare."
+        "error-reauth-required": "Conferma che sei tu prima di continuare.",
+        "error-antibot-verification-failed": "Non è stato possibile verificare che questa richiesta provenga da una persona. Riprova la verifica.",
+        "error-antibot-no-challenge": "Questa installazione non emette una verifica da risolvere."
     },
     "validation": {
         "required": "Questo campo è obbligatorio.",

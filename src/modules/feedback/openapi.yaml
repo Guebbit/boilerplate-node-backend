@@ -11,6 +11,8 @@ paths:
             description: Creates a user feedback/contact request and notifies admins via email.
             operationId: createFeedbackRequest
             security: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
             requestBody:
                 required: true
                 content:
@@ -24,6 +26,8 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/FeedbackRequestEnvelope'
+                # A human-challenge provider is active and the caller's token is missing or refused.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 

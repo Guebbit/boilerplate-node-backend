@@ -41,6 +41,7 @@ outside the markers, including the warning below, is written by hand.
 %%{init: {'flowchart': {'nodeSpacing': 26, 'rankSpacing': 52}}}%%
 flowchart TD
     account
+    antibot
     audit_logs["audit-logs"]
     cart
     delivery
@@ -89,7 +90,7 @@ flowchart TD
     class cart,orders,products core;
     class delivery,inventory,payments,wishlist supporting;
     class account,audit_logs,feedback,observability,users generic;
-    class locales isolated;
+    class antibot,locales isolated;
 ```
 
 |                 | Reaches                                                                 | Reached by                                          |
@@ -106,6 +107,7 @@ flowchart TD
 | `audit-logs`    | —                                                                       | account, observability                              |
 | `feedback`      | —                                                                       | account                                             |
 | `observability` | audit-logs                                                              | —                                                   |
+| `antibot`       | —                                                                       | —                                                   |
 | `locales`       | —                                                                       | —                                                   |
 
 <!-- module-graph:end -->

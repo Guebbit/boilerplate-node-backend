@@ -17,6 +17,7 @@ import {
     mfaChallengeLimiter,
     mfaSendLimiter
 } from '@infrastructure/http/middlewares/rate-limit';
+import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import {
     getAuth,
     isAuth,
@@ -122,11 +123,13 @@ router.post('/login', credentialLimiters, postLogin);
 
 // POST /account/signup — register new user. `signupLimiters`, not `credentialLimiters`: the
 // abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
-// would spend nothing on — see rate-limit.ts.
+// would spend nothing on — see rate-limit.ts. `humanChallengeGate` (rung 4, off by default) sits
+// ahead of the upload parse, so a request that fails it never pays for a file read.
 router.post(
     '/signup',
     signupLimiters,
     uploadLimiter,
+    humanChallengeGate,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
     postSignup
@@ -134,7 +137,7 @@ router.post(
 
 // POST /account/reset — request password reset email. `resetRequestLimiters`, same reasoning as
 // signup: this route always answers 200, so only a budget spent by success bounds anything.
-router.post('/reset', resetRequestLimiters, postResetRequest);
+router.post('/reset', resetRequestLimiters, humanChallengeGate, postResetRequest);
 
 // POST /account/reset-confirm — complete password reset with token
 router.post(
