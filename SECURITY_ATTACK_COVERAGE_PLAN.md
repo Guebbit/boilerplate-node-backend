@@ -185,25 +185,30 @@ build on, and needed a decision each rather than a blanket exemption:
   integration passes through before writing the happy path. The "no surface" verdicts elsewhere are
   now explicitly conditional on the stub.
 
-## The other half: the frontend has no page at all
+## ~~The other half: the frontend has no page at all~~ — DONE
 
-`boilerplate-vue-frontend` (at `../boilerplate-vue-frontend`) has neither a catalog copy nor a
-defences page. The catalog is project-agnostic and belongs in both repos verbatim; the defences
-page has to be written from scratch, because the rows only a browser can answer are exactly the
-ones this backend's page marks out of reach:
+`boilerplate-vue-frontend` now carries a verbatim copy of the catalog and its own
+[Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/theory/web-attack-defences.md)
+page, walked the same way: one section at a time, read the catalog row, read the code, write the
+verdict. All seven rows this file used to list as "only the frontend can answer" are on it now —
+XSS in every form (none found: no `v-html`, no `innerHTML`, no `eval` anywhere in `src/`), CSP
+(unset, and why), clickjacking (`X-Frame-Options` from the app's own nginx config), token storage
+(in-memory access token, `HttpOnly` refresh cookie), cookie flags as read/set client-side, the
+client half of CSRF, and its own dependency tree (two `high` advisories, both build-time-only).
 
-| §   | Rows only the frontend can answer                                                   |
-| --- | ----------------------------------------------------------------------------------- |
-| 2   | XSS in all five forms, `v-html` usage, DOM clobbering, `postMessage`, tabnabbing    |
-| 2   | CSP: whether one exists, and whether it is escapable                                |
-| 2   | Clickjacking — `frame-ancestors` as the app declares it, not just as helmet sets it |
-| 2   | Where the access token lives, and why that choice                                   |
-| 2   | Cookie flags as READ client-side, not just as this backend sets them                |
-| 2   | CSRF token handling on the client half of the double-submit                         |
-| 14  | The frontend's own dependency tree, and any third-party script in the bundle        |
+Turned out not to split as cleanly as "backend rows vs. frontend rows": CSRF, clickjacking, cookie
+flags, CORS, missing security headers and the contact form's honeypot each need a control on both
+sides to close, so this backend's own page now marks those **shared** and names the other repo's
+half inline, instead of waving the whole row across the boundary.
 
-Same discipline as this pass: one section at a time, read the catalog row, read the code, write
-the verdict. Both pages keep linking back to the shared catalog.
+The walk also found two real findings on the frontend side, both fixed in the same pass rather
+than left open: `identifyUser` no longer forwards the visitor's email to Umami's `identify()` —
+only Faro, this deployment's own error/session tool, still gets it — and the `isAuth`/`rememberMe`
+cookies it sets client-side now carry `Secure` whenever the page is served over `https:`. See the
+frontend page's own
+[What is still open](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/theory/web-attack-defences.md#what-is-still-open)
+for what is still genuinely open there (missing SRI on the Umami script, two build-time-only
+dependency advisories).
 
 ## Sequencing
 
@@ -211,8 +216,8 @@ the verdict. Both pages keep linking back to the shared catalog.
 2. ~~**Findings 2 and 3**~~ — done. Mongo connects as a scoped `readWrite` user, Redis requires
    `--requirepass`; both touched `docker-compose.production.yml` only.
 3. ~~**Finding 6**~~ — done. Finding 7's three bullets are also done (see above).
-4. **[`EMAIL_VERIFICATION_PLAN.md`](EMAIL_VERIFICATION_PLAN.md)** — its own plan, starting with
+4. ~~**The frontend page**~~ — done, in its own repo, same discipline. See above.
+5. **[`EMAIL_VERIFICATION_PLAN.md`](EMAIL_VERIFICATION_PLAN.md)** — its own plan, starting with
    the mount decision it opens on.
-5. **The frontend page** — its own session, its own repo, same discipline.
 6. **[`ANTI_AUTOMATION_PLAN.md`](ANTI_AUTOMATION_PLAN.md)** — its own plan; rung 1 is the part
    worth doing regardless of whether any vendor is ever switched on.

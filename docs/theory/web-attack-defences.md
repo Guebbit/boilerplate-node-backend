@@ -10,8 +10,12 @@ Scoped to this backend, and now walked across the whole catalog rather than the 
 half of it. Personal-data handling (retention, consent, redaction, the export/erasure endpoints)
 is a different lens on an overlapping set of files; see [Data Protection](./data-protection.md)
 for that side of it. The paired Vue frontend owns the browser-side rows (§2 in full, the client
-half of §9 and §14) and has no page of its own yet — that gap is named in
-[What is still open](#what-is-still-open).
+half of §9 and §14) on its own
+[Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/theory/web-attack-defences.md)
+page. A handful of rows need both halves to close — CSRF, clickjacking, cookie flags, CORS,
+missing security headers, the honeypot field, and validating the shared contract at the boundary —
+and those are marked **shared** below, with their other half named inline rather than left to
+"see the frontend".
 
 ## How far each catalog section is walked
 
@@ -29,7 +33,7 @@ flowchart TB
     end
     subgraph N["Out of this repo's reach"]
         direction LR
-        N1["§2 Client-side<br/><i>browser code — frontend repo</i>"]
+        N1["§2 Client-side<br/><i>browser code — frontend repo's own page</i>"]
         N2["§9 Crypto and transport<br/><i>partly: TLS terminates upstream</i>"]
         N3["§18 Human and social<br/><i>process, not code</i>"]
     end
@@ -118,8 +122,9 @@ because "clean" is only a useful verdict against a named row.
 
 | Catalog row                                         | Control                                                                                                                                                                     | Where                                                                 |
 | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Missing security headers (§13)                      | `helmet()`, applied globally                                                                                                                                                | `app/security.ts`                                                     |
-| Permissive CORS (§13/§2)                            | an explicit origin allowlist, not `*`                                                                                                                                       | `app/security.ts`                                                     |
+| Missing security headers (§13) — **shared**         | `helmet()`, applied globally; the frontend's own static server sets the equivalent set (`X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`) for the responses this app never touches | `app/security.ts`                                                     |
+| Permissive CORS (§13/§2) — **shared**               | an explicit origin allowlist, not `*` — load-bearing because the frontend sends every request with `withCredentials: true`, which a browser refuses to honour against a wildcard origin | `app/security.ts`                                                     |
+| Cookie flag omissions (§3) — **shared**             | the refresh cookie (`jwt`) is `httpOnly`, `sameSite: 'lax'`, `secure` in production; the `isAuth` UI hint this app also sets alongside it is deliberately none of those, since it carries no credential — the frontend maintains its own copy of that same hint client-side, plus a `rememberMe` marker, for the same reason | `account/session/cookies.ts#createRefreshCookie`, `#createLoggedCookie` |
 | No WAF / rate limiting at the edge (§13)            | a global per-address burst brake, plus the credential-specific budgets identity/address pair below it                                                                       | `infrastructure/http/middlewares/rate-limit.ts`                       |
 | Insufficient logging and monitoring (§13)           | every 429 logs at `warn`, audited or not — the limiters mount before the request logger, so a refusal short-circuits ahead of the only thing that would otherwise record it | `infrastructure/http/middlewares/rate-limit.ts#refuse`                |
 | Brute force / Credential stuffing (§3)              | `credentialLimiters` — two independent budgets, per account and per address, spent only by failures                                                                         | `infrastructure/http/middlewares/rate-limit.ts#credentialLimiters`    |
@@ -127,7 +132,8 @@ because "clean" is only a useful verdict against a named row.
 | NoSQL injection (§1)                                | search input reaching a `$regex` filter is escaped before it gets there                                                                                                     | `infrastructure/persistence/search.ts#escapeRegex`                    |
 | Excessive data exposure / IDOR (§10 / §4)           | a caller's own resource is looked up scoped to their id, not fetched by id and checked after                                                                                | `orders/repository.ts#findByIdScoped` and the equivalent per module   |
 | Sensitive data in logs / Credential leakage (§10)   | password hashes, live tokens and (configurably) personal fields are redacted or hashed before a log line is written                                                         | `infrastructure/adapters/logger.ts#SENSITIVE_FIELDS`                  |
-| CSRF on the OAuth callback (§3)                     | a double-submit `state` cookie, minted and set in the same response that hands it to the provider; the callback rejects a mismatch with 400                                 | `account/oauth/state.ts`, `account/controllers/get-oauth-callback.ts` |
+| CSRF, on the API in general (§2) — **shared**       | no ambient cookie authenticates a mutation — every write requires an `Authorization: Bearer` header the browser never attaches on its own, only code the frontend runs can; the refresh cookie the browser DOES send automatically only reaches `GET /account/refresh`, which mints a token rather than acting on one | this backend accepts no other credential shape on a write route; the frontend attaches the header — `infrastructure/http/interceptors.ts#onRequest` there |
+| CSRF on the OAuth callback (§3) — **shared**        | a double-submit `state` cookie, minted and set in the same response that hands it to the provider; the callback rejects a mismatch with 400 — the frontend's only role is the top-level navigation that starts the dance | `account/oauth/state.ts`, `account/controllers/get-oauth-callback.ts` |
 | Open redirect / callback confusion (§3/§7)          | the redirect URI and the post-login frontend URL are both derived from server config (`NODE_URL`, `NODE_FRONTEND_URL`), never from the request or the provider's response   | `account/oauth/config.ts#oauthRedirectUri`                            |
 | Pre-emptive account takeover via OAuth linking (§3) | a provider identity is linked to an existing email only once that provider reports the address as verified; an unverified match is rejected rather than linked              | `account/services/oauth.ts#loginOrCreateFromOAuth`                    |
 
@@ -302,11 +308,55 @@ nothing about someone who is actually trying — see [What is still open](#what-
 
 | Catalog row (§21)          | Control                                                                                                                                                                                             | Where                            |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| Spam via forms             | a honeypot field (`website`) the contract declares and nothing persists: a non-empty value writes the row as `spam` and skips the notification, and the bot still gets its 201 so it learns nothing | `feedback/service.ts#create`     |
+| Spam via forms — **shared**             | a honeypot field (`website`) the contract declares and nothing persists: a non-empty value writes the row as `spam` and skips the notification, and the bot still gets its 201 so it learns nothing — the frontend builds the field itself (`aria-hidden`, `tabindex="-1"`, invisible to a sighted visitor) | `feedback/service.ts#create`     |
 | Fake account creation      | `credentialLimiters` on signup — a per-address and a per-identity budget                                                                                                                            | `account/routes.ts`              |
 | Scraping                   | every listing is paginated and capped at 100 rows per page, with `page` capped too, so there is no one call that returns the catalogue                                                              | `infrastructure/http/schemas.ts` |
 | Review / vote manipulation | no surface: there are no ratings, reviews or votes                                                                                                                                                  | —                                |
 | SMS pumping                | no surface: no SMS factor exists — see "What two-factor auth adds, honestly" above                                                                                                                  | —                                |
+
+### A ladder for what the table above doesn't cover
+
+Every control above is keyed on an IP address, which residential proxy pools ($20 for millions of
+addresses) and IPv6 (18 quintillion per customer) make a weak bound on anyone actually trying — see
+[What is still open](#what-is-still-open). Closing that gap is not one control but a ladder: each
+rung independent, off by default, switched on by one environment variable, so a deployment climbs
+only as far as its abuse actually justifies. None of this is built yet — it is the documented
+possibility, not a claim about the current build.
+
+```mermaid
+flowchart TB
+    R["Request to a human-facing endpoint"] --> A
+    A["Rung 1 · Identity-keyed limits<br/><i>always on</i>"] --> B
+    B["Rung 2 · Disposable-email refusal<br/><code>NODE_ANTIBOT_EMAIL_POLICY</code>"] --> C
+    C["Rung 3 · Proof-of-work<br/><code>NODE_ANTIBOT_POW</code>"] --> D
+    D["Rung 4 · Human-challenge provider<br/><code>NODE_ANTIBOT_PROVIDER</code>"] --> H
+    H["Handler"]
+
+    classDef on fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef off fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef sink fill:#dbeafe,stroke:#2563eb,color:#111827;
+    class A on;
+    class B,C,D off;
+    class R,H sink;
+```
+
+| Rung                       | What it costs an attacker                                                                        | Why it isn't on by default                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------| --------------------------------------------------------------------------------------- |
+| 1 — identity-keyed limits   | keying signup/contact/reset on the submitted address, not only the caller's, plus a per-block budget (a /64, a /24) above the per-address one | it isn't off — no switch, no dependency, this is what the limits should already do      |
+| 2 — refuse disposable email | a blocklist, optionally backed by an MX check, on signup                                          | a blocklist is upkeep, and an aggressive one refuses real people using forwarding services |
+| 3 — proof-of-work           | CPU burned per request before the server considers it, no vendor involved                         | runs backwards: a second on a rented attacker server is cheaper than a second on a visitor's phone — it taxes real users to raise the price of abuse |
+| 4 — human-challenge provider | an actual solve, though solver farms exist to pass it                                            | a third-party script in the pages, a data-protection question, an accessibility cost — a deployment's decision, not a boilerplate's to make for it |
+
+Rung 4 would follow the same port shape as `PaymentProvider` (`payments/providers/index.ts`): a
+`none` no-op ships in the box and always passes (what every test and the demo run through), a real
+vendor is a name away behind `NODE_ANTIBOT_PROVIDER`, and its public parameters (site key, etc.)
+are read from an endpoint so the frontend knows whether to render a challenge at all. Login is the
+one endpoint that should only challenge AFTER a budget is partly spent, not on every attempt — an
+honest first try should never see it.
+
+Sequenced were it built: rung 1 first (no decision required), then the provider port with `none`
+so the seam exists before anything plugs into it, then rung 2, then rung 4's reference
+implementation, then rung 3 last — its value is the most situational of the four.
 
 ## Supply chain — §14, re-walked
 
@@ -360,10 +410,11 @@ loud. Two lists — decisions, and findings.
 - **§8 request smuggling, §9 TLS, §13 edge WAF** — one Node process, no proxy in this repo.
   `docker-compose.production.yml` binds the API to loopback so a TLS-terminating proxy is
   structurally required, and that proxy's configuration is deliberately out of scope here.
-- **§2 Client-side in full** — XSS, CSP, clickjacking, token storage and the browser half of CSRF
-  are the frontend's rows. This backend sets `helmet()` and `SameSite=Lax`, `HttpOnly`,
-  `Secure`-in-production cookies; everything downstream of that is `boilerplate-vue-frontend`'s
-  to answer, and it has no defences page yet.
+- **§2 Client-side, past the shared rows above** — XSS, DOM clobbering, `postMessage`, tabnabbing
+  and CSP are the frontend's rows alone, walked on its own
+  [Web Attack Defences](https://github.com/Guebbit/boilerplate-vue-frontend/blob/main/docs/theory/web-attack-defences.md)
+  page. CSRF, clickjacking, cookie flags, CORS and missing security headers needed both halves and
+  are marked **shared** in the tables above rather than deferred wholesale to the other repo.
 
 ### Found by this walk, not yet answered
 
@@ -371,15 +422,10 @@ loud. Two lists — decisions, and findings.
   route, no middleware, no guard reads it. An account bound to an address its holder does not own
   can order, check out and pay. The OAuth link path is the only place that demands a verified
   address, and it demands it of the PROVIDER, not of this account.
-- **§21 Insufficient anti-automation.** Nothing anywhere asks whether a caller is a person. The
-  whole defence is per-address rate limiting plus one honeypot field on the contact form, and a
-  honeypot stops only a bot that does not read the form it is submitting. What that leaves open is
-  not abstract: fake accounts at scale, the contact form used as a spam relay (this server sends
-  the mail, so this domain's sending reputation is the one that burns), reset-mail flooding at a
-  victim until the mail provider suspends the sender, and credential stuffing from leaked lists.
-  Deliberately unanswered rather than overlooked — a CAPTCHA is a third-party dependency, a
-  privacy decision and an accessibility cost, which is not something a boilerplate should choose
-  on a project's behalf.
+- **§21 Insufficient anti-automation.** Nothing anywhere asks whether a caller is a person.
+  Deliberately unanswered rather than overlooked — see
+  [A ladder for what the table above doesn't cover](#a-ladder-for-what-the-table-above-doesnt-cover)
+  for the shape of an answer and why no rung of it is on by default.
 - **§20 The PSP is a stub, and three rows are "no surface" only because of it.** Callback forgery,
   callback replay and 3-D Secure bypass all arrive together the day a real processor is wired in,
   because a live PSP decides that an order is paid by sending THIS server a request from the
