@@ -7,7 +7,7 @@
  * under `public/`, a bucket object, or something it does not own at all. One backend exists
  * today: local, under `NODE_PUBLIC_PATH/images/`.
  *
- * See: IMAGE_PIPELINE_PLAN.md, docs/tools/image-processing.md
+ * See: docs/tools/image-processing.md
  */
 
 import path from 'node:path';

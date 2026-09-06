@@ -34,19 +34,18 @@
  * model imports the shared transform"). It is a real feature and it is not used here on purpose.
  * Every candidate rule turned out to be a shape a reader can see in one file, enforced by a tool
  * that has to load the whole graph to say so — and the failure it prevents is one the first
- * request or the first test already reports. See `OVERENGINEERED.md` for the standard this repo
- * holds guards to. Reach for it if a REQUIRED edge ever becomes invisible at the call site; do not
- * reach for it to make a convention feel official.
+ * request or the first test already reports. The standard a guard here has to meet: it catches
+ * something no reader and no test would. Reach for it if a REQUIRED edge ever becomes invisible at
+ * the call site; do not reach for it to make a convention feel official.
  */
 
 /**
  * Which siblings each module may reach, and nothing else may.
  *
- * This is the enforceable half of what a `dependsOn` field on each manifest used to declare: the
- * field was read by nothing at runtime and reconciled against the imports by a 217-line test, so
- * it went (`OVERENGINEERED.md` §1, §5). What it genuinely bought — a new cross-module coupling
- * being a deliberate edit rather than a one-line import nobody questions — is bought here instead,
- * in one place, reported at the offending import.
+ * The enforceable half of a per-manifest `dependsOn` field, without the field: declaring one
+ * buys nothing at runtime and costs a reconciliation test to keep honest. What it genuinely
+ * bought — a new cross-module coupling being a deliberate edit rather than a one-line import
+ * nobody questions — is bought here instead, in one place, reported at the offending import.
  *
  * WHY the docblock still matters: this map holds the PAIR. What is reached across an edge, and why
  * it is that kind of relationship, is prose at the top of each `module.ts` — beside the imports it

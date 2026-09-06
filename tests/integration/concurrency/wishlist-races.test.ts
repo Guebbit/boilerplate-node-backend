@@ -126,7 +126,7 @@ describe('a save and a move-to-cart on the same line', () => {
      * claim instead would close it, and would contradict `openapi.yaml`'s move-to-cart
      * description — "the cart is written before the wishlist line is removed" — which is prose
      * three repos must be byte-identical on. It belongs with the other implementation details
-     * that leaked into the shared contract; see `HANDOFF_BEOLD.md` §7.
+     * that leaked into the shared contract, and closing it is a cross-repo contract change.
      */
     it('never produces a second wishlist, a duplicate line, or a 5xx', async () => {
         const { user, bearer } = await authenticateAs();

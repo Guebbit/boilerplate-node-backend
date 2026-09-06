@@ -81,7 +81,7 @@ export interface RequiredConfig {
  * fallback) turns a finished digest into a persisted `imageUrl`/`thumbnailUrl` on ITS collection.
  *
  * `infrastructure/adapters/image.worker.ts` may not import `src/modules/*` (see
- * IMAGE_PIPELINE_PLAN.md's "the writeback problem"), so it cannot call a module's repository
+ * docs/tools/image-processing.md#architecture), so it cannot call a module's repository
  * directly. A module registers this instead, keyed under `imageTargets` on its manifest, and the
  * worker resolves it by the `collection` string its job payload carries.
  */

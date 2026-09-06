@@ -64,8 +64,8 @@ const mailedCode = (): string => {
 /**
  * A signed-in account whose address is VERIFIED, which is what the email factor requires.
  * `authenticateAs` defaults to a verified account (most callers want one usable end to end,
- * `PUT /account`'s `EMAIL_VERIFICATION_PLAN.md` among the reasons), so this suite states the
- * requirement explicitly rather than depending on that default.
+ * `PUT /account`'s pending-email rules among the reasons), so this suite states the requirement
+ * explicitly rather than depending on that default.
  */
 const authenticateVerified = async () => {
     const user = await createUser({ verified: true, email: 'ada@example.com' });

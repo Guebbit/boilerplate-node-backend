@@ -7,7 +7,7 @@
  * inverted port — {@link ImageWriteback} plus a registration function — supplied at boot by
  * `app/workers.ts`.
  *
- * See: IMAGE_PIPELINE_PLAN.md, docs/tools/image-processing.md
+ * See: docs/tools/image-processing.md
  */
 
 import type { ImageDigestJobPayload } from '@types';
@@ -175,9 +175,8 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
         .catch((error: Error) => {
             // A bad decode is permanent — every redelivery decodes the same bytes the same way —
             // so it is dead-lettered rather than retried. `digestQuarantinedImage` throwing for any
-            // OTHER reason (disk full, a storage write failing) looks identical from here; see
-            // IMAGE_PIPELINE_PLAN.md's failure-mode table for why both still resolve `false` today,
-            // and revisit if that distinction ever needs a second code path.
+            // OTHER reason (disk full, a storage write failing) looks identical from here; both
+            // still resolve `false` today. Revisit if that distinction ever needs its own path.
             logger.error({ message: 'Image digest worker failed.', error: error.message, key });
             return imageStore.removeQuarantined(key).then(() => false);
         });

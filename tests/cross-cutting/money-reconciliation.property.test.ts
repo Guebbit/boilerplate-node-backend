@@ -4,8 +4,8 @@
  * that cart's checkout, the payment intent freeze, and the confirmation email each perform
  * themselves rather than call one another for. `totals.property.test.ts` and
  * `money.property.test.ts` prove `orders`' own functions in isolation; neither proves the
- * composition every caller of both modules relies on agreeing with. See DETERMINISTIC_TOOLS.md,
- * "money invariants as one shared property". Seeded, so a counterexample reproduces.
+ * composition every caller of both modules relies on agreeing with — money invariants as one
+ * shared property, see docs/tools/property-testing.md. Seeded, so a counterexample reproduces.
  */
 import fc from 'fast-check';
 import { sumLineItems, orderTotal } from '@modules/orders';
@@ -17,6 +17,7 @@ const RUN = { seed: 20_260_902, numRuns: 300, endOnFailure: true } as const;
 /** A catalogue price, cents-precise — `Product.price` is `format: double`, never a whole dollar only. */
 const decimalPrice = () => fc.integer({ min: 0, max: 10_000_000 }).map((cents) => cents / 100);
 
+/** One order line: a quantity and the embedded product row `orderTotal` reads its price from. */
 const lineItem = () =>
     fc.record({
         quantity: fc.integer({ min: 0, max: 1000 }),

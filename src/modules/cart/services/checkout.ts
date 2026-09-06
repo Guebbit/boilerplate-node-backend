@@ -249,7 +249,7 @@ export const orderConfirm = (
         .then((result) => {
             /*
              * `order_created` fires here too, not just from the admin route's `create()` —
-             * see §0 of `OBSERVABILITY_EMISSION_LAYER.md`. `actorRole` is forced to `'user'`:
+             * see docs/tools/observability-layer.md. `actorRole` is forced to `'user'`:
              * a purchase is a customer action even on an admin's account.
              */
             if (result.success && result.data) {

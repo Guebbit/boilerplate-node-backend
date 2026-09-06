@@ -3,9 +3,9 @@ import supertest from 'supertest';
 
 /**
  * `submissionLimiter` — the budget for `POST /feedback/contact` — spends on a SUCCESSFUL request,
- * the opposite of `credentialLimiters`' `skipSuccessfulRequests`. This is the regression test for
- * `FEEDBACK_PLAN.md` correction 1: mounting `credentialLimiters` on `/contact` would count zero of
- * the requests that matter, because every abusive contact-form submission gets a `201`.
+ * the opposite of `credentialLimiters`' `skipSuccessfulRequests`. The regression it guards:
+ * mounting `credentialLimiters` on `/contact` would count zero of the requests that matter,
+ * because every abusive contact-form submission gets a `201`.
  *
  * Lives here rather than in the unit suite because it sends a real request through
  * `express-rate-limit`'s middleware — `tests/unit/infrastructure/http/middlewares/rate-limit.test.ts`

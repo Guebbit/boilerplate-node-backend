@@ -3,10 +3,10 @@
  * The module graph in `docs/modules/index.md`, plus one neighbourhood diagram per module page,
  * generated from the imports and subscriptions they describe.
  *
- * The diagram used to be hand-drawn, and a hand-drawn graph of thirteen modules is a published
- * number with no guard behind it — correct on the day it is written and quietly wrong after the
- * next import. `dependency-cruiser` already builds the real graph for `check:dependencies`, so
- * the page can read it rather than restate it.
+ * Generated rather than hand-drawn: a hand-drawn graph of thirteen modules is a published number
+ * with no guard behind it — correct on the day it is written and quietly wrong after the next
+ * import. `dependency-cruiser` already builds the real graph for `check:dependencies`, so the
+ * page reads it rather than restating it.
  *
  * WHAT IS SWEPT, and why each narrowing matters:
  *   - `--exclude /tests/` — a co-located spec may legitimately reach a sibling's barrel, manifest
@@ -33,8 +33,13 @@ import { format, resolveConfig } from 'prettier';
 
 const checkOnly = process.argv.includes('--check');
 
+/** The repo root, two levels up from `scripts/docs/`. */
 const ROOT = path.join(__dirname, '..', '..');
+
+/** The index page carrying the whole-repo graph; each module page is found from its own name. */
 const PAGE = path.join(ROOT, 'docs', 'modules', 'index.md');
+
+/** Markers bounding the generated block — everything between them is replaced, nothing outside. */
 const START = '<!-- module-graph:start -->';
 const END = '<!-- module-graph:end -->';
 

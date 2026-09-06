@@ -283,7 +283,7 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         /*
          * Set together with `imageUrl` by `readUploadedImage` — never independently, and never by
          * a client: `ThumbnailUrl` is `readOnly` on the contract. Absent for a user whose image
-         * came from a remote/default url rather than an upload (see IMAGE_PIPELINE_PLAN.md).
+         * came from a remote/default url rather than an upload.
          */
         thumbnailUrl: {
             type: String

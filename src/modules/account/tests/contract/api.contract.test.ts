@@ -180,7 +180,7 @@ describe('PUT /account', () => {
             .send({ email: 'fresh-address@example.com' });
 
         expect(response.status).toBe(200);
-        // The account keeps its current, proven address — see EMAIL_VERIFICATION_PLAN.md.
+        // The account keeps its current, proven address until the new one is confirmed.
         expect(response.body.data.email).toBe(user.email);
         expect(response.body.data.pendingEmail).toBe('fresh-address@example.com');
         expect(response.body.data.verified).toBe(true);

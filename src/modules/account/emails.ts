@@ -55,7 +55,7 @@ export const verifyRequestEmail = (
  * Email-change notice: sent to the OLD address the moment a change is REQUESTED, not when it
  * completes — a warning that arrives before a takeover is a warning, one that arrives after is a
  * receipt. Carries no token and no link that acts: "this wasn't me" is a password change and a
- * logout-everywhere, both of which already exist (see `EMAIL_VERIFICATION_PLAN.md`).
+ * logout-everywhere, both of which already exist (docs/modules/account.md#proving-an-address).
  */
 export const emailChangeNoticeEmail = (
     locale: string,

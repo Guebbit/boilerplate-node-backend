@@ -3,9 +3,9 @@
  * Email verification — issuing a token and sending the mail, in one place. Two KINDS of
  * verification share this mechanism — proving the address an account already has (signup, the
  * explicit re-send), and proving the address a `PUT /account` change has asked for
- * (`EMAIL_VERIFICATION_PLAN.md`) — and every flow that starts either one calls this and nothing
- * else, so they cannot drift. Old tokens of the SAME kind are removed before the new one is
- * issued — not for security, since spending any of them proves the same mailbox, but so "the
+ * (docs/modules/account.md#proving-an-address) — and every flow that starts either one calls this
+ * and nothing else, so they cannot drift. Old tokens of the SAME kind are removed before the new
+ * one is issued — not for security, since spending any of them proves the same mailbox, but so "the
  * newest email is the one that works" and a re-send never confuses the user.
  */
 
@@ -42,6 +42,7 @@ export const EMAIL_CHANGE_TOKEN_TYPE = 'email-change';
 /** How long a verification link works: 24 hours, in milliseconds. Shared by both token kinds. */
 export const EMAIL_VERIFY_TOKEN_TTL_MS = 86_400_000;
 
+/** The two kinds a token may be. A union of the constants, so a third one cannot be passed. */
 type VerificationTokenType = typeof EMAIL_VERIFY_TOKEN_TYPE | typeof EMAIL_CHANGE_TOKEN_TYPE;
 
 /**
@@ -171,9 +172,9 @@ export const completeEmailVerification = (
  * already found and spent the token before calling this, same split as
  * {@link completeEmailVerification}.
  *
- * The revoke is `EMAIL_VERIFICATION_PLAN.md`'s open question, answered yes: an email change is
- * the stronger takeover primitive of the two, and this is the same treatment `passwordChange`
- * already gives a changed password. Its own failure is swallowed, not turned into a rejection —
+ * The revoke is deliberate: an email change is the stronger takeover primitive of the two, and
+ * this is the same treatment `passwordChange` already gives a changed password
+ * (docs/modules/account.md#proving-an-address). Its own failure is swallowed, not a rejection —
  * the swap already succeeded, and a lost revoke is defense in depth this codebase can afford to
  * lose once.
  * @param user - the token's holder, loaded with credentials (`pendingEmail`, `tokens`)

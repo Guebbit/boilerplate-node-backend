@@ -8,8 +8,8 @@
  * FRESH, VERIFIED session on top of `isAuth` (`requireFreshAuth`, `requireVerified`): it is where
  * this app's money actually moves. `/all` is mounted ABOVE `/:productId`: Express matches in mount
  * order, so a `/:productId`-shaped route registered first would match the literal string `all` as
- * a product id (see CONTRACT_PLAN_POLYMORPHISM.md, "Mount `/search` before `/:id`" — the same
- * rule, a different static segment).
+ * a product id. The same rule that mounts `/search` before `/:id` elsewhere, a different static
+ * segment.
  */
 
 import { Router } from 'express';

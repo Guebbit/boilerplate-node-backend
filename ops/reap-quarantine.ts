@@ -14,7 +14,7 @@
  * read by anything but the digest pipeline, so there is nothing here a concurrent request could
  * be relying on past the retention window.
  *
- * See: IMAGE_PIPELINE_PLAN.md, docs/tools/image-processing.md
+ * See: docs/tools/image-processing.md
  */
 import 'dotenv/config';
 import { readdir, stat, unlink } from 'node:fs/promises';

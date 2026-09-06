@@ -107,9 +107,9 @@ const parseValue = (raw: string): unknown => {
 /**
  * The recorded options of one factory call on a chain, parsed back out of its rendered label.
  *
- * A stopgap over structured labels (see step 5a in `ROUTE_TABLE_TESTS.md`): it parses a string
- * this same file just built, so the coupling to the rendered format lives here and nowhere else
- * rather than in every module test's `toContain` calls. Only reliable for `key=value` pairs — a
+ * A stopgap over structured labels: it parses a string this same file just built, so the coupling
+ * to the rendered format lives here and nowhere else rather than in every module test's
+ * `toContain` calls. Only reliable for `key=value` pairs — a
  * factory's leading positional argument (`setCache`'s `ttl`) has no key and is skipped.
  *
  * @param chain - one route's middleware chain, as returned by {@link routeTable}
@@ -294,9 +294,8 @@ interface Layer {
  * The single place coupled to the undocumented Express internals `router.stack`,
  * `layer.route.methods` and `route.stack[].handle` — see `tests/unit/infrastructure/http/router-
  * internals.test.ts` for the pinned shape. Everything exported from this file is a projection of
- * this one pass; there used to be three separate walkers here; and `handlerName`'s two callers
- * used to disagree about the fallback below (a `router.use` layer's own Express name vs the
- * literal `'(anonymous)'`) purely because the logic had been copied rather than shared.
+ * this one pass — one walker, so `handlerName`'s two callers cannot disagree about the fallback
+ * below (a `router.use` layer's own Express name vs the literal `'(anonymous)'`).
  *
  * @param router - the module's exported Express router
  * @returns `rows`, one per mounted endpoint with the `use` layers accumulated above it, in mount

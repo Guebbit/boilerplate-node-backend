@@ -20,8 +20,8 @@
  *   4. **Coverage, not just shape.** The three checks above only ever see what a module declares —
  *      a module that should audit something and doesn't looks identical to one that legitimately
  *      has nothing to record. `EXPECTED_NON_AUDITING` below is the explicit, reviewed answer for
- *      the modules where that absence is a decision rather than an oversight; see
- *      `AUDIT_COVERAGE_GAPS.md` for the reasoning behind each entry.
+ *      the modules where that absence is a decision rather than an oversight — its own comment
+ *      gives the reasoning per module, and docs/modules/audit-logs.md has the wider picture.
  */
 
 import { existsSync, readdirSync, statSync } from 'node:fs';

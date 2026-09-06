@@ -3,7 +3,7 @@
  * `PUT /account` controller — thin HTTP adapter over `accountService.updateProfile`, plus the
  * uploaded-image cleanup that rides along with a self-service edit. A changed email's side
  * effects (the pending-change notice, the fresh verification link) are `updateProfile`'s own
- * business — see `EMAIL_VERIFICATION_PLAN.md` — not the controller's.
+ * business — see docs/modules/account.md#proving-an-address — not the controller's.
  */
 
 import type { Request, Response } from 'express';

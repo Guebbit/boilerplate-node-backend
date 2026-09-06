@@ -2,9 +2,9 @@
  * `registerModules` — the whole of what the registry does at boot.
  *
  * Two properties, and there is nothing else left to assert: every module's `subscribe` is called,
- * and a module that declares none is not a special case. The duplicate-name, unknown-dependency
- * and cycle checks this file used to exercise validated a `dependsOn` field nothing read at
- * runtime — see `OVERENGINEERED.md` §1 for why they and the field went together.
+ * and a module that declares none is not a special case. There is no duplicate-name,
+ * unknown-dependency or cycle check to assert: they validated a `dependsOn` field nothing read at
+ * runtime, so the field and its checks are both gone.
  */
 import { registerModules, type AppModule } from '@kernel/registry';
 

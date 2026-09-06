@@ -14,9 +14,9 @@
  * now added by `templateFile()` at the one point the name becomes a path, and the case below is
  * what keeps it there.
  *
- * Stripping the suffix cost one guarantee that used to be free: a name WAS a filename, so a
- * mistyped one could not resolve. Now it can, and only at send time — so the last case asserts
- * every published name still points at a real template.
+ * A suffixless name is not a filename, so a mistyped one resolves — and only fails at send time.
+ * That is the guarantee this file has to supply by hand: the last case asserts every published
+ * name points at a real template.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
@@ -130,8 +130,8 @@ it('publishes the set the pair agreed on', () => {
      * here and **not yet** in `tests/CrossCutting/OutboxNamesTest.php` in
      * boilerplate-php-laravel-backend: the admin "create a user, let them set their own password"
      * flow, the inactive-account reaper and the email second factor only exist on this backend so
-     * far — and neither does the pending-email-change notice (`EMAIL_VERIFICATION_PLAN.md`). The
-     * other eight are the agreed, mirrored set.
+     * far — and neither does the pending-email-change notice. The other eight are the agreed,
+     * mirrored set.
      */
     const agreed = [
         'account.delete-confirm',

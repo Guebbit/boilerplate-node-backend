@@ -17,7 +17,7 @@
  * `./demo.ts` and `./demo-catalog.ts` (products), and the users equivalent, read the resulting
  * `demo-images.generated.json` files — nothing there is hand-edited.
  *
- * See: IMAGE_PIPELINE_PLAN.md, docs/tools/image-processing.md
+ * See: docs/tools/image-processing.md
  */
 import 'dotenv/config';
 import { randomBytes } from 'node:crypto';
@@ -26,9 +26,13 @@ import path from 'node:path';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import { FILLER_IMAGE_ROLE_KEYS } from '../../src/modules/products/demo-catalog';
 
+/** Where the full-size seed photos land — served directly, so this is a public path. */
 const SEED_ROOT = path.join(__dirname, '../../public/images/seed');
+
+/** Thumbnails, versioned: a changed pipeline writes `v2` rather than overwriting `v1`. */
 const THUMBS_ROOT = path.join(SEED_ROOT, 'thumbs/v1');
 
+/** One role's pair of urls, as the generated manifest stores it. */
 interface ImageEntry {
     imageUrl: string;
     thumbnailUrl: string;
@@ -47,6 +51,7 @@ const PRODUCT_ROLES = [
     ...FILLER_IMAGE_ROLE_KEYS
 ];
 
+/** The two named accounts that carry an avatar; every generated customer cycles between them. */
 const USER_ROLES = ['root', 'ginopinoshow'];
 
 /**
@@ -115,12 +120,14 @@ const removeStaleOriginals = async (keep: ReadonlySet<string>): Promise<void> =>
     }
 };
 
+/** Writes one `demo-images.generated.json`, four-space indented to match what Prettier expects. */
 const writeManifest = (relativePath: string, manifest: Record<string, ImageEntry>): Promise<void> =>
     writeFile(
         path.join(__dirname, '..', '..', relativePath),
         `${JSON.stringify(manifest, null, 4)}\n`
     );
 
+/** Fetch and digest every role's photo, sweep whatever the role lists no longer name, write both manifests. */
 const main = async (): Promise<void> => {
     await mkdir(SEED_ROOT, { recursive: true });
     await mkdir(THUMBS_ROOT, { recursive: true });
