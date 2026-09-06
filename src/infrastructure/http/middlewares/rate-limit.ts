@@ -311,6 +311,8 @@ const CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT = 0.5;
  * login fails when the budget it reads already failed open.
  */
 const identityBudgetMostlySpent = (request: Request): boolean => {
+    // The cast is the only way to read it: express-rate-limit stashes the info under a name chosen
+    // at RUNTIME (`requestPropertyName`), which its `Request` augmentation cannot describe.
     const info = (request as Request & Record<string, RateLimitInfo | undefined>)[
         IDENTITY_RATE_LIMIT_PROPERTY
     ];

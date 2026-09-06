@@ -301,7 +301,11 @@ export function createRepository<TDocument extends Document>(
     /** Persist in-memory changes to an already-fetched document. */
     const save = (document: TDocument): Promise<TDocument> => document.save();
 
-    /** Never touches the database — schema defaults still apply, `.save()` just isn't called. */
+    /**
+     * Mongoose: `new Model(doc)` hydrates a document without writing it — defaults, casting and
+     * virtuals all apply, and `isNew` stays `true` until something calls `.save()`.
+     * https://mongoosejs.com/docs/api/model.html#Model()
+     */
     const build = (data: Partial<TDocument>): TDocument => new mongooseModel(data);
 
     /** Remove a single document. */
