@@ -6,10 +6,6 @@
  * cart — a deleted product or account cleans up via domain events, keeping the import graph
  * acyclic. No rules worth modelling here: deleting it costs a convenience, not a capability.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      cart, products, users
- * Reached by:   account (the data export reads the caller's own wishlist)
- *
  * See: docs/modules/wishlist.md
  */
 

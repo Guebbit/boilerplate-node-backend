@@ -6,10 +6,6 @@
  * path, so a database outage costs only a stale overlay. No `index.ts`: nothing imports this
  * module and nothing should; everything else reaches i18n through `@infrastructure/i18n`.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      nothing
- * Reached by:   nothing, and nothing should — see above
- *
  * See: docs/modules/locales.md
  */
 

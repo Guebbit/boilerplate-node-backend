@@ -6,11 +6,6 @@
  * this module's HTTP surface. Shipping is specific to how this shop operates but isn't what
  * anyone buys here — worth its own rules in `domain/`, not worth an aggregate.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      orders, users
- * Reached by:   cart (prices a method at checkout through `./domain`); account (the data export
- *               joins shipments onto the caller's own orders)
- *
  * See: docs/modules/delivery.md
  */
 

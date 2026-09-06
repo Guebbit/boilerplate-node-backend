@@ -5,11 +5,8 @@
  * one-way arrow. Authentication lives in `account`, which reaches this module's barrel for the
  * record it authenticates.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      nothing
- * Reached by:   account, cart, delivery, payments, wishlist
- * Not imports:  `account` writes this same document — the shared kernel. Six migrations touch this
- *               collection, more than any other.
+ * Not in the import graph: `account` writes this same document — the shared kernel. Six migrations
+ *   touch this collection, more than any other.
  *
  * See: docs/modules/users.md
  */

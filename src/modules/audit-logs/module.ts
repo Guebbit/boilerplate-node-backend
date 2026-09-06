@@ -6,12 +6,8 @@
  * `@infrastructure/observability/audit`, and this module installs itself as that sink at import
  * time — fire-and-forget, so deleting the module just stops persistence.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      nothing
- * Reached by:   observability (for `GET /observability/audit`); account (the data export reads
- *               the caller's own audit trail)
- * Not imports:  retention is a TTL index on the collection, not code — see `./model`. Change the
- *               window and nothing in TypeScript moves.
+ * Not in the import graph: retention is a TTL index on the collection, not code — see `./model`.
+ *   Change the window and nothing in TypeScript moves.
  *
  * See: docs/modules/audit-logs.md
  */

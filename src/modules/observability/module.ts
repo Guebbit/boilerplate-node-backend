@@ -6,14 +6,10 @@
  * route is authenticated, but not with the same style — see `routes.ts`. No `index.ts`: this
  * module owns URLs, not data, so it has nothing to promise a sibling.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      audit-logs
- * Reached by:   nothing
- * Not imports:  reads every domain's counters BY STRING off the shared registry
- *               (`metricsRegistry.getSingleMetric('auth_login_total')`), never by import. That is
- *               deliberate — it is what lets this module report on domains it may not name — and it
- *               is why `metric-names.test.ts` exists. Renaming a counter compiles fine and breaks
- *               this silently.
+ * Not in the import graph: reads every domain's counters BY STRING off the shared registry
+ *   (`metricsRegistry.getSingleMetric('auth_login_total')`), never by import. That is deliberate —
+ *   it is what lets this module report on domains it may not name — and it is why
+ *   `metric-names.test.ts` exists. Renaming a counter compiles fine and breaks this silently.
  */
 
 import path from 'node:path';

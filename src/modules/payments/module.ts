@@ -6,10 +6,6 @@
  * held stock into a sale). Depends on users to resolve the payer, and to detach one on
  * `USER_DELETED` — the payment survives account erasure, same as the order it paid for.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      inventory, orders, users
- * Reached by:   account (the data export reads the caller's own payments)
- *
  * See: docs/modules/payments.md
  */
 

@@ -5,11 +5,6 @@
  * middleware (`humanChallengeGate`), so `account` and `feedback` depend on
  * `infrastructure/adapters/antibot-providers` directly rather than on this module.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      nothing
- * Reached by:   nothing — the configuration is read anonymously, by anyone about to call a
- *               guarded route, not by another module
- *
  * See: docs/modules/antibot.md
  */
 

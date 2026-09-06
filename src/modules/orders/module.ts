@@ -1,18 +1,15 @@
 /**
  * @module
  * Placed orders: admin write and soft delete, plus each account reading back its own. See
- * `TACTICAL_DDD_PLAN.md` §5 for the invariants — totals, legal status transitions, what
+ * docs/theory/tactical-ddd.md for the invariants — totals, legal status transitions, what
  * cancelling restores. Depends on products (an order embeds the catalogue row at purchase time)
  * and inventory (a claim on units, released on cancel or `RESERVATION_EXPIRED`); cart depends on
  * this module in turn, keeping the import graph acyclic.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      inventory, products, users
- * Reached by:   cart, delivery, payments, account (the data export reads the caller's own orders)
- * Not imports:  an order EMBEDS `productSchema` rather than referencing it, so a change to the
- *               catalogue's shape is a change to this collection's stored history. `users` is
- *               reached for exactly one thing — `USER_DELETED` below — not for resolving a live
- *               account, which stays `delivery`'s and `payments`' job.
+ * Not in the import graph: an order EMBEDS `productSchema` rather than referencing it, so a change
+ *   to the catalogue's shape is a change to this collection's stored history. `users` is reached
+ *   for exactly one thing — `USER_DELETED` below — not for resolving a live account, which stays
+ *   `delivery`'s and `payments`' job.
  */
 
 import path from 'node:path';

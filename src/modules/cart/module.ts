@@ -4,11 +4,6 @@
  * products, users and orders — a checkout is where a cart stops being a cart; products and users
  * reach back via domain events instead, keeping the import graph acyclic.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      account, delivery, inventory, orders, products, users
- * Reached by:   wishlist (the move-to-cart exit); account (the data export reads the caller's
- *               own cart)
- *
  * See: docs/modules/cart.md
  */
 

@@ -2,21 +2,15 @@
  * @module
  * Authentication and the account lifecycle: signup, login, refresh, password reset, logout
  * everywhere, and the two-step account deletion. A second service over `users`' record rather
- * than a merged one — `/account` and `/users` are different mounts. The address book is the one
- * collection this module owns outright; the User record stays with `users`, kept replaceable for
- * a future identity provider.
+ * than a merged one — `/account` and `/users` are different mounts.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      users, orders, payments, delivery, cart, wishlist, audit-logs, feedback
- * Reached by:   cart
- * Not imports:  shares the User document with `users` — the one shared kernel in the repo. Both
- *               read and write it, so a schema change there has to be agreed twice.
- *
- * `POST /account/export` is why this module reaches nearly everything: a data export is
- * inherently cross-cutting, and the alternative — an event asking every module to publish its
- * own slice — would turn one synchronous read into an async fan-out with nothing to wait on it.
- * Every one of those reads goes through the OWNING module's own function, scoped to the
- * caller's id; see `services/export.ts`.
+ * Owns:        the address book, outright. The User record stays with `users`, kept replaceable
+ *              for a future identity provider.
+ * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
+ *              import graph. Both read and write it, so a schema change there is agreed twice.
+ * Reaches far: `POST /account/export`. A data export is inherently cross-cutting, and the
+ *              alternative — an event asking each module to publish its own slice — is an async
+ *              fan-out with nothing to wait on it. See `services/export.ts`.
  *
  * See: docs/modules/account.md
  */

@@ -5,11 +5,8 @@
  * which is what makes this the one model other contexts conform to. It stays a leaf by emitting
  * `product.deleted` rather than importing the cart directly.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      nothing
- * Reached by:   cart, inventory, orders, wishlist — the most-depended-on module here
- * Not imports:  `onHand` and `reserved` are declared on this document and written ONLY by
- *               `inventory`. This module never moves them. See that module's docblock.
+ * Not in the import graph: `onHand` and `reserved` are declared on this document and written ONLY
+ *   by `inventory`. This module never moves them. See that module's docblock.
  *
  * See: docs/modules/products.md
  */

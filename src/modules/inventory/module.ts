@@ -5,12 +5,9 @@
  * each transition is exactly-once via a conditionally claimed status, so a cancel racing the
  * sweep or a duplicate webhook still resolves to one winner.
  *
- * ── Position ───────────────────────────────────────────────────────────────────────────────
- * Reaches:      products
- * Reached by:   cart, orders, payments — all three ask for a transition by name and get a boolean
- * Not imports:  the counters are COLUMNS ON THE PRODUCT DOCUMENT. `products` declares them and this
- *               module is the only writer. Nothing in the import graph shows that, which is why it
- *               is written here.
+ * Not in the import graph: the counters are COLUMNS ON THE PRODUCT DOCUMENT. `products` declares
+ *   them and this module is the only writer. Nothing in the import graph shows that, which is why
+ *   it is written here.
  *
  * See: docs/modules/inventory.md
  */
