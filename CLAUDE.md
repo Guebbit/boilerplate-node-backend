@@ -101,8 +101,8 @@ See `docs/reference/tests.md`.
   rule across every module) · `integration` (a real database, or the real app over HTTP) ·
   `contract` (HTTP against the spec) · `fuzz` (the spec, hostile).
 - MUST ship tests in the same change as the behaviour. New branch in the code, new test.
-- MUST NOT commit a skipped, `.only`, or known-failing test. Pass rate is 100%, always — fix it or
-  delete it.
+- Pass rate is 100%, always — fix it or delete it. `jest/no-focused-tests` and
+  `jest/no-disabled-tests` refuse a `.only` or a `.skip` outright.
 - Assert through the public door (the route, the service, the repository), not on private
   internals. A test shaped like the implementation fails on every refactor and catches nothing.
 - **Mutation score is the signal; coverage is the proxy.** A line can be executed by a test that
@@ -123,8 +123,8 @@ brevity — a comment that needs more room is allowed it. What is capped is the 
 A seventh consecutive sentence is where a reader loses the thread; a seventh labelled row is still
 scannable. So running out of budget means **change form**, never delete the content.
 
-`local/comment-shape` counts it for you, and does not count a list item, a `Label:` row and its
-indented continuations, a table rule, a fenced block, or a JSDoc tag:
+Count the PROSE only. A list item, a `Label:` row and its indented continuations, a table rule, a
+fenced block and a JSDoc tag are all nearly free:
 
 | | prose lines |
 | --- | --- |
@@ -132,7 +132,8 @@ indented continuations, a table rule, a fenced block, or a JSDoc tag:
 | any other declaration | 8 |
 | total lines, whatever the form | 24 |
 
-Needing more than six lines of prose is the signal to go schematic:
+No rule enforces this — it is a judgement about shape, and a linter that guesses at it costs more
+than it catches. Needing more than six lines of prose is the signal to go schematic:
 
 ```ts
 /**
@@ -167,8 +168,11 @@ The rest:
   ephemeral; only `docs/` is a stable target. `local/comment-links` refuses it; external URLs are
   exempt.
 
-MUST: every exported function gets `@param`/`@returns`/`@throws` as needed, within the cap above.
-MUST: every exported interface/type states its purpose and what each field means, within the cap.
+MUST: every exported function, interface, type and enum carries a docblock — `jsdoc/require-jsdoc`.
+An interface says its purpose and what each field means; a function adds `@param`/`@returns`/
+`@throws` **as needed**. "As needed" is yours to judge, but a tag you do write is checked:
+`jsdoc/check-param-names` refuses a name that is not in the signature, and the `*-description`
+rules refuse an empty one.
 MUST: docs describing flow, architecture or process include Mermaid diagrams — that detail belongs
 there, not in a comment.
 
