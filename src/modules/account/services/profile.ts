@@ -254,7 +254,7 @@ interface EmailChangeOutcome {
 /**
  * Applies `PUT /account`'s `email` field to `user.pendingEmail` — never straight to `user.email`.
  * The account keeps its current, PROVEN address until the new one is confirmed through
- * `POST /account/email-change-confirm` (`EMAIL_VERIFICATION_PLAN.md`).
+ * `POST /account/email-change-confirm` — docs/modules/account.md#proving-an-address.
  *
  * Three outcomes: an absent field leaves everything alone; the CURRENT address cancels whatever
  * change was pending — cheaper than a dedicated endpoint, and what a user retyping their real
@@ -305,6 +305,47 @@ const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promis
 };
 
 /**
+ * The fields `PUT /account` accepts, after parsing — the input half of {@link writeProfile}.
+ */
+type ProfileFields = z.infer<typeof zodProfileSchema>;
+
+/**
+ * Sends the two mails a genuine change owes, then records that it was requested. The audit event
+ * follows the mail rather than the write: what is worth auditing is that a confirmation is now in
+ * someone's inbox, not that a field was set.
+ */
+const notifyEmailChangeRequested = (user: UserDocument, context: CallerContext): Promise<void> =>
+    sendEmailChangeMail(user, context).then(() => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: accountAuditActions.AUTH_EMAIL_CHANGE_REQUESTED,
+                outcome: 'success'
+            })
+        );
+    });
+
+/**
+ * Persists the parsed fields, then sends the change mail when — and only when — this call is what
+ * set `pendingEmail`. `email` is never forwarded: {@link applyEmailChangeRequest} has already run
+ * and is the only writer of `email`/`pendingEmail` on this path.
+ * @param emailOutcome - {@link applyEmailChangeRequest}'s verdict for this request's `email`
+ */
+const writeProfile = (
+    user: UserDocument,
+    fields: ProfileFields,
+    emailOutcome: EmailChangeOutcome,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    if (emailOutcome.conflict)
+        return Promise.resolve(generateReject(409, [t('account.update.email-already-used')]));
+
+    return userService.update(user, { ...fields, email: undefined }).then((result) => {
+        if (!result.success || !result.data || !emailOutcome.requested) return result;
+        return notifyEmailChangeRequested(result.data, context).then(() => result);
+    });
+};
+
+/**
  * Update the caller's own profile — email, username, locale, image.
  * Narrower than the admin `userService.update`: no `admin`/`active`/`password` — those belong to
  * `/users` and to {@link passwordChangeWithCurrent}, which proves the current password first.
@@ -331,29 +372,7 @@ export const updateProfile = (
                   if (!user) return generateReject(401, []);
 
                   return applyEmailChangeRequest(user, parseResult.data.email).then(
-                      (emailOutcome) => {
-                          if (emailOutcome.conflict)
-                              return generateReject(409, [t('account.update.email-already-used')]);
-
-                          // `email` is never forwarded — `applyEmailChangeRequest` above is the
-                          // only writer of `email`/`pendingEmail` from this endpoint.
-                          return userService
-                              .update(user, { ...parseResult.data, email: undefined })
-                              .then((result) => {
-                                  if (!result.success || !result.data || !emailOutcome.requested)
-                                      return result;
-
-                                  return sendEmailChangeMail(result.data, context).then(() => {
-                                      emitAuditEvent(
-                                          buildAuditEvent(context, {
-                                              action: accountAuditActions.AUTH_EMAIL_CHANGE_REQUESTED,
-                                              outcome: 'success'
-                                          })
-                                      );
-                                      return result;
-                                  });
-                              });
-                      }
+                      (emailOutcome) => writeProfile(user, parseResult.data, emailOutcome, context)
                   );
               })
               .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
