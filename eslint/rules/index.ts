@@ -23,14 +23,12 @@
  * unit-tested with `RuleTester` — see `tests/unit/eslint/`.
  */
 import { commentLinks } from './comment-links';
-import { commentShape } from './comment-shape';
 import { controllerChainMustCatch } from './controller-chain-must-catch';
 import { noHardcodedUserText } from './no-hardcoded-user-text';
 import { noPersistenceImports } from './no-persistence-imports';
 
 export default {
     'comment-links': commentLinks,
-    'comment-shape': commentShape,
     'controller-chain-must-catch': controllerChainMustCatch,
     'no-hardcoded-user-text': noHardcodedUserText,
     'no-persistence-imports': noPersistenceImports

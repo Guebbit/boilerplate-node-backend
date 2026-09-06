@@ -38,40 +38,6 @@ are on [Ops & Assets](./ops.md).
 | `.prettierignore`       | What Prettier must not touch. Mostly generated artefacts whose bytes are asserted against a fresh run — reformatting `openapi.yaml` or `db/demo/demo-data.json` would fail a check on a file nobody edited.                                                  | [Contract Ownership & Fragmentation](../api/contract-fragmentation.md)      |
 | `commitlint.config.cjs` | Three lines: conventional commits, nothing custom. `.husky/commit-msg` runs it on every commit — including the 100-character header limit, which is the only subject-length rule there is.                                                                   | [Scripts & Hooks](./scripts.md)                                             |
 
-### Comment shape {#comment-shape}
-
-`local/comment-shape` caps a comment's **prose**, not its length. Structured lines — a list item,
-a `Label:` row and its indented continuations, a table rule, a fenced block, a JSDoc tag — are not
-counted.
-
-|                                          | prose lines |
-| ---------------------------------------- | ----------- |
-| module header (the block opening a file) | 6           |
-| any other declaration                    | 8           |
-| total lines, whatever the form           | 24          |
-
-The budget is deliberately spent on the expensive thing. A seventh consecutive sentence is where a
-reader loses the thread; a seventh labelled row is still scannable. So running out of room is the
-signal to **change form**, not to delete the content:
-
-```ts
-/**
- * Authentication and the account lifecycle: signup, login, refresh, password reset, logout
- * everywhere, and the two-step account deletion.
- *
- * Owns:        the address book, outright.
- * Shares:      the User document with `users` — the repo's one shared kernel.
- * Reaches far: `POST /account/export`. A data export is inherently cross-cutting.
- */
-```
-
-Past 24 lines no form rescues it: that much reasoning belongs on a page under `docs/`, where it can
-carry a diagram, with a link left behind.
-
-The rule is a **warning**, and `npm run lint` runs with `--max-warnings` set to the count the repo
-currently carries. That number is a ratchet recording where the code _is_ — the same arrangement as
-the coverage floors in `jest.config.js`. Lower it when you reshape a comment; never raise it.
-
 ### Comment links
 
 `local/comment-links` refuses a Markdown reference in a comment that is not under `docs/`.
