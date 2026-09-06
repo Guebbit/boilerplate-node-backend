@@ -41,7 +41,8 @@ import {
     sendVerificationEmail,
     requestEmailVerification,
     requestEmailVerificationFor,
-    completeEmailVerification
+    completeEmailVerification,
+    completeEmailChange
 } from './verification';
 import { findLiveToken, spendLiveToken, sessionsList } from './tokens';
 import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
@@ -68,7 +69,12 @@ import {
 export { tokenAdd, signup, login, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
 export { passwordChange, passwordChangeWithCurrent, updateProfile } from './profile';
 export { addressForCheckout } from './addresses';
-export { sendVerificationEmail, EMAIL_VERIFY_TOKEN_TYPE } from './verification';
+export {
+    sendVerificationEmail,
+    EMAIL_VERIFY_TOKEN_TYPE,
+    EMAIL_CHANGE_TOKEN_TYPE,
+    completeEmailChange
+} from './verification';
 export { runTokenCleanup } from './token-cleanup';
 export { loginOrCreateFromOAuth, recordOAuthFailure, OAuthEmailUnverifiedError } from './oauth';
 
@@ -107,6 +113,7 @@ export const accountService = {
     requestEmailVerification,
     requestEmailVerificationFor,
     completeEmailVerification,
+    completeEmailChange,
     findLiveToken,
     spendLiveToken,
     sessionsList,

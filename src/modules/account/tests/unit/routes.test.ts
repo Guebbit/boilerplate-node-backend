@@ -30,6 +30,7 @@ const TOKEN_BEARING = [
     'DELETE /delete-confirm',
     'POST /reset-confirm',
     'POST /verify-confirm',
+    'POST /email-change-confirm',
     'GET /refresh',
     'POST /logout'
 ];
@@ -46,6 +47,7 @@ const RATE_LIMITED = [
     'POST /reauth',
     'POST /verify-request',
     'POST /verify-confirm',
+    'POST /email-change-confirm',
     'POST /login/2fa',
     'POST /login/2fa/send',
     'GET /oauth/:provider',
@@ -101,6 +103,7 @@ describe('account routes — what is mounted', () => {
             'DELETE /addresses/:addressId',
             'POST /verify-request',
             'POST /verify-confirm',
+            'POST /email-change-confirm',
             'DELETE /tokens/expired',
             'POST /export',
             'POST /login/2fa/send',
@@ -234,6 +237,7 @@ describe('account routes — cache invalidation and uploads', () => {
         'POST /signup',
         'POST /reset-confirm',
         'POST /verify-confirm',
+        'POST /email-change-confirm',
         'DELETE /tokens/expired'
     ])('%s clears both the users and account tags', (signature) => {
         // The same row is served as `/account` to its owner and `/users/:id` to an admin.

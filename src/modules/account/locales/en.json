@@ -21,7 +21,8 @@
             "success": "Account permanently deleted."
         },
         "update": {
-            "success": "Profile updated."
+            "success": "Profile updated.",
+            "email-already-used": "Email was already used."
         },
         "password-change": {
             "wrong-current": "The current password is incorrect.",
@@ -60,6 +61,10 @@
             "already-verified": "This account is already verified.",
             "token-not-found": "Invalid or expired token, please try again.",
             "success": "Email address verified."
+        },
+        "email-change": {
+            "token-not-found": "Invalid or expired token, please try again.",
+            "success": "Email address changed."
         },
         "email": {
             "verify-request": {
@@ -124,6 +129,12 @@
                 "intro": "Here is the code to finish signing in:",
                 "expiry": "It stops working in {{minutes}} minutes.",
                 "ignore": "If you weren't signing in, ignore this email and change your password."
+            },
+            "email-change-notice": {
+                "subject": "Your email address is changing",
+                "meta-title": "Email change requested",
+                "greeting": "Hello, {{name}}!",
+                "body": "Someone asked to change the email address on this account to {{newEmail}}. If this was you, no action is needed — it takes effect once the new address is confirmed. If it wasn't, change your password and sign out of every device right away."
             }
         },
         "oauth": {

@@ -98,6 +98,18 @@ const verifyTokenFromMail = (): string => {
     return token;
 };
 
+/**
+ * The queued mail addressed to `to` — a SEARCH, not "the last one": a genuine `PUT /account`
+ * email change queues two mails per request (the notice to the OLD address, the link to the
+ * NEW one), so reading only the last call would miss the notice.
+ */
+const mailTo = (to: string) => {
+    const enqueueEmail = mailerPort.enqueueEmail as jest.MockedFunction<
+        typeof mailerPort.enqueueEmail
+    >;
+    return enqueueEmail.mock.calls.find(([envelope]) => envelope.to === to);
+};
+
 /** `Max-Age` of the named cookie on a response, in seconds. */
 const cookieMaxAge = (response: { headers: Record<string, unknown> }, name: string) => {
     const setCookie = response.headers['set-cookie'] ?? [];
@@ -159,8 +171,8 @@ describe('PUT /account', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('unverifies the account and reports it when the email changes', async () => {
-        const { bearer } = await authenticateAs('user');
+    it('holds a new address as pending rather than changing email immediately', async () => {
+        const { user, bearer } = await authenticateAs('user');
 
         const response = await api()
             .put('/account')
@@ -168,8 +180,27 @@ describe('PUT /account', () => {
             .send({ email: 'fresh-address@example.com' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.email).toBe('fresh-address@example.com');
-        expect(response.body.data.verified).toBe(false);
+        // The account keeps its current, proven address — see EMAIL_VERIFICATION_PLAN.md.
+        expect(response.body.data.email).toBe(user.email);
+        expect(response.body.data.pendingEmail).toBe('fresh-address@example.com');
+        expect(response.body.data.verified).toBe(true);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('cancels a pending change when the CURRENT address is restated', async () => {
+        const { user, bearer } = await loginWithCookie({ verified: true });
+        await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'someone-else-typed-this@example.com' });
+
+        const response = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: user.email });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.pendingEmail).toBeUndefined();
         expect(response).toSatisfyApiSpec();
     });
 
@@ -593,6 +624,115 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         expect(first.status).toBe(200);
         expect(second.status).toBe(422);
         expect(second).toSatisfyApiSpec();
+    });
+});
+
+describe('PUT /account (email change) and /account/email-change-confirm', () => {
+    it('notifies the OLD address and mails a link to the NEW one, the moment the change is requested', async () => {
+        const { user, bearer } = await loginWithCookie({ verified: true });
+
+        const response = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'new-address@example.com' });
+
+        expect(response.status).toBe(200);
+        // The old address gets a warning, not a receipt — sent at request time, not on swap.
+        expect(mailTo(user.email)).toBeDefined();
+        // The new address gets the token-bearing link.
+        expect(mailTo('new-address@example.com')).toBeDefined();
+    });
+
+    it('confirming the token swaps pendingEmail into email and re-verifies the account', async () => {
+        const { user, bearer } = await loginWithCookie({ verified: true });
+        await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'new-address@example.com' });
+        const token = verifyTokenFromMail();
+
+        const confirm = await api().post('/account/email-change-confirm').send({ token });
+
+        expect(confirm.status).toBe(200);
+        expect(confirm).toSatisfyApiSpec();
+        const stored = await userRepository.findById(user.id);
+        expect(stored?.email).toBe('new-address@example.com');
+        expect(stored?.verified).toBe(true);
+    });
+
+    it('keeps authenticating under the OLD address until the token is spent', async () => {
+        const { user, bearer } = await loginWithCookie({ verified: true });
+        await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'new-address@example.com' });
+
+        // The swap has not happened yet — the OLD credential is still the account's.
+        const stillOld = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD });
+        expect(stillOld.status).toBe(200);
+
+        const token = verifyTokenFromMail();
+        await api().post('/account/email-change-confirm').send({ token });
+
+        const oldNowFails = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD });
+        expect(oldNowFails.status).toBe(401);
+        const newNowWorks = await api()
+            .post('/account/login')
+            .send({ email: 'new-address@example.com', password: PLAIN_PASSWORD });
+        expect(newNowWorks.status).toBe(200);
+    });
+
+    it('revokes every other session on a confirmed email change', async () => {
+        const { user, bearer, jwtCookie } = await loginWithCookie({ verified: true });
+        await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'new-address@example.com' });
+        const token = verifyTokenFromMail();
+
+        await api().post('/account/email-change-confirm').send({ token });
+
+        const refreshed = await api().get('/account/refresh').set('Cookie', jwtCookie);
+        expect(refreshed.status).toBe(401);
+        expect(await userRepository.findById(user.id)).not.toBeNull();
+    });
+
+    it('a `verify` token is refused by email-change-confirm', async () => {
+        const { bearer } = await loginWithCookie();
+        await api().post('/account/verify-request').set('Authorization', bearer);
+        const token = verifyTokenFromMail();
+
+        const response = await api().post('/account/email-change-confirm').send({ token });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('an `email-change` token is refused by the plain verify-confirm', async () => {
+        const { bearer } = await loginWithCookie({ verified: true });
+        await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'new-address@example.com' });
+        const token = verifyTokenFromMail();
+
+        const response = await api().post('/account/verify-confirm').send({ token });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for an invented email-change token', async () => {
+        const response = await api()
+            .post('/account/email-change-confirm')
+            .send({ token: 'not-a-real-token' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
     });
 });
 

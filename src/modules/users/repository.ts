@@ -17,12 +17,13 @@ import {
 import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
 
 /**
- * `password`, `tokens`, the 2FA secret fields and `oauthAccounts` are `select: false` on the
- * schema, so plain finders never load them. These two helpers are the ONLY sanctioned way to get
- * them back, keeping re-selection in one place instead of scattered `.select('+password')` calls.
+ * `password`, `tokens`, the 2FA secret fields, `oauthAccounts` and `pendingEmail` are
+ * `select: false` on the schema, so plain finders never load them. These two helpers are the ONLY
+ * sanctioned way to get them back, keeping re-selection in one place instead of scattered
+ * `.select('+password')` calls.
  */
 const CREDENTIAL_FIELDS =
-    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +oauthAccounts';
+    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +oauthAccounts +pendingEmail';
 
 /**
  * The clause every login-adjacent lookup filters on. `{ $ne: false }` rather than `true`: a
@@ -57,6 +58,8 @@ export const userRepository: Repository<UserDocument> & {
     ) => Promise<UpdateWriteOpResult>;
     findByIdWithCredentials: (id: string) => Promise<UserDocument | null>;
     findOneWithCredentials: (where: QueryFilter<UserDocument>) => Promise<UserDocument | null>;
+    findByIdWithPendingEmail: (id: string) => Promise<UserDocument | null>;
+    emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
     findByToken: (token: string, type: Token['type']) => Promise<UserDocument | null>;
     findAuthenticatableById: (id: string) => Promise<UserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
@@ -107,6 +110,31 @@ export const userRepository: Repository<UserDocument> & {
      */
     findOneWithCredentials: (where: QueryFilter<UserDocument>) =>
         userModel.findOne(where).select(CREDENTIAL_FIELDS).exec(),
+
+    /**
+     * Fetch a user by id WITH `pendingEmail` — for the caller's own profile
+     * (`GET /account`), which shows a pending change as a banner but has no other use for
+     * `password`/`tokens`/2FA material, unlike {@link findByIdWithCredentials}'s callers.
+     */
+    findByIdWithPendingEmail: (id: string) => userModel.findById(id).select('+pendingEmail').exec(),
+
+    /**
+     * Whether `email` already backs another account — either its proven `email`, or another
+     * account's `pendingEmail` in flight. The REQUEST-TIME half of the check
+     * `EMAIL_VERIFICATION_PLAN.md` asks for; `users_pending_email` and `users_email` (both
+     * unique) are the swap-time half, since this read and the eventual swap are up to 24 hours
+     * apart and only the indexes are still there for both.
+     * @param email - the address being requested
+     * @param excludingId - the caller's own id, so re-requesting the address already pending for
+     *   THEM doesn't read as a collision
+     */
+    emailOrPendingEmailTaken: (email: string, excludingId: string) =>
+        userModel
+            .exists({
+                _id: { $ne: toObjectId(excludingId) },
+                $or: [{ email }, { pendingEmail: email }]
+            })
+            .then((match) => match !== null),
 
     /**
      * Fetch the user holding a token of this exact type, WITH its credential fields. `$elemMatch`

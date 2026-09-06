@@ -431,6 +431,17 @@ components:
                 # so clients render it as a banner, not a wall.
                 verified:
                     type: boolean
+                # Set only by `PUT /account` requesting a new address, cleared once
+                # `POST /account/email-change-confirm` proves it (or a second `PUT /account`
+                # naming the CURRENT address cancels it). Inlined rather than `$ref`ing `Email`:
+                # that schema is shared with WRITABLE request bodies, and `readOnly` belongs to
+                # this field's use here, not to every one of them. A client shows it as a banner,
+                # never writes it — the request body's own `email` is what starts a change (see
+                # `EMAIL_VERIFICATION_PLAN.md`).
+                pendingEmail:
+                    type: string
+                    format: email
+                    readOnly: true
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
                 thumbnailUrl:
@@ -802,6 +813,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-request'
     /account/verify-confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-confirm'
+    /account/email-change-confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-confirm'
     /account/delete-confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1delete-confirm'
     /account/login:

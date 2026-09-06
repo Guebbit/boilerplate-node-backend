@@ -19,7 +19,9 @@ import {
     passwordChangeWithCurrent,
     updateProfile,
     sendVerificationEmail,
-    EMAIL_VERIFY_TOKEN_TYPE
+    EMAIL_VERIFY_TOKEN_TYPE,
+    EMAIL_CHANGE_TOKEN_TYPE,
+    completeEmailChange
 } from '@modules/account/services';
 import { userRepository, TokenType, hashToken } from '@modules/users';
 import { asReject, asSuccess } from '@tests/response';
@@ -122,14 +124,16 @@ describe('updateProfile', () => {
         expect(login.success).toBe(true);
     });
 
-    it('unverifies the account when the email changes', async () => {
+    it('holds the new address as pendingEmail, and does not touch email or verified', async () => {
         const user = await createUser({ email: 'before@example.com', verified: true });
 
         const response = asSuccess(
             await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext)
         );
 
-        expect(response.data.verified).toBe(false);
+        expect(response.data.email).toBe('before@example.com');
+        expect(response.data.pendingEmail).toBe('after@example.com');
+        expect(response.data.verified).toBe(true);
     });
 
     it('keeps the verification when the email is restated unchanged', async () => {
@@ -140,9 +144,23 @@ describe('updateProfile', () => {
         );
 
         expect(response.data.verified).toBe(true);
+        expect(response.data.pendingEmail).toBeUndefined();
     });
 
-    it('answers the unique index with 409 when the email belongs to someone else', async () => {
+    it('cancels a pending change when the CURRENT address is restated', async () => {
+        const user = await createUser({ email: 'before@example.com', verified: true });
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+
+        const response = asSuccess(
+            await updateProfile(user.id, { email: 'before@example.com' }, testCallerContext)
+        );
+
+        expect(response.data.pendingEmail).toBeUndefined();
+        const stored = await userRepository.findByIdWithCredentials(user.id);
+        expect(stored?.pendingEmail).toBeUndefined();
+    });
+
+    it('answers the request-time collision check with 409 when the address belongs to someone else', async () => {
         await createUser({ email: 'taken@example.com', username: 'first' });
         const user = await createUser({ email: 'second@example.com', username: 'second' });
 
@@ -151,6 +169,76 @@ describe('updateProfile', () => {
         );
 
         expect(response.status).toBe(409);
+    });
+
+    it("answers 409 when the address is ALREADY someone else's pendingEmail", async () => {
+        const first = await createUser({ email: 'first@example.com', username: 'first' });
+        await updateProfile(first.id, { email: 'contested@example.com' }, testCallerContext);
+        const second = await createUser({ email: 'second@example.com', username: 'second' });
+
+        const response = asReject(
+            await updateProfile(second.id, { email: 'contested@example.com' }, testCallerContext)
+        );
+
+        expect(response.status).toBe(409);
+    });
+});
+
+describe('completeEmailChange', () => {
+    it('swaps pendingEmail into email, marks verified, clears pendingEmail, and revokes refresh tokens', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ email: 'before@example.com', verified: true });
+        await user.tokenAdd(TokenType.REFRESH, 60_000, 'live-session');
+        await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
+        const loaded = await userRepository.findByIdWithCredentials(user.id);
+
+        const saved = await completeEmailChange(loaded!, testCallerContext);
+
+        expect(saved.email).toBe('after@example.com');
+        expect(saved.verified).toBe(true);
+        expect(saved.pendingEmail).toBeUndefined();
+        const stored = await userRepository.findByIdWithCredentials(user.id);
+        expect(stored?.email).toBe('after@example.com');
+        expect(stored?.pendingEmail).toBeUndefined();
+        expect(stored?.tokens.some((token) => token.type === (TokenType.REFRESH as string))).toBe(
+            false
+        );
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
+                actor_user_id: user.id,
+                outcome: 'success'
+            })
+        );
+    });
+});
+
+describe("`verify` and `email-change` tokens do not do each other's work", () => {
+    it('a `verify` token is not found under EMAIL_CHANGE_TOKEN_TYPE', async () => {
+        const user = await createUser();
+        await user.tokenAdd(EMAIL_VERIFY_TOKEN_TYPE, 3_600_000, 'shared-value');
+
+        await expect(
+            accountService.findLiveToken(EMAIL_CHANGE_TOKEN_TYPE, 'shared-value')
+        ).resolves.toBeUndefined();
+    });
+
+    it('an `email-change` token is not found under EMAIL_VERIFY_TOKEN_TYPE', async () => {
+        const user = await createUser();
+        await user.tokenAdd(EMAIL_CHANGE_TOKEN_TYPE, 3_600_000, 'shared-value');
+
+        await expect(
+            accountService.findLiveToken(EMAIL_VERIFY_TOKEN_TYPE, 'shared-value')
+        ).resolves.toBeUndefined();
+    });
+
+    it('sendVerificationEmail(..., EMAIL_CHANGE_TOKEN_TYPE) does nothing without a pendingEmail', async () => {
+        const user = await createUser({ email: 'a@example.com' });
+
+        await sendVerificationEmail(user, testCallerContext, EMAIL_CHANGE_TOKEN_TYPE);
+
+        const tokens = await readTokens(user.id);
+        expect(tokens.some((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)).toBe(false);
     });
 });
 

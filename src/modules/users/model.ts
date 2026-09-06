@@ -119,6 +119,14 @@ export interface UserRecord extends Omit<
 
     /** The provider identities linked to this account — see `OAuthAccount` below. */
     oauthAccounts: OAuthAccount[];
+
+    /**
+     * An address requested through `PUT /account` but not yet proven — `select: false`, same
+     * reasoning as `password`. The account keeps its current, verified `email` until this is
+     * confirmed through the `'email-change'` token (`account/services/verification.ts`); absent
+     * means no change is pending. See `docs/modules/users.md`.
+     */
+    pendingEmail?: string;
 }
 
 /**
@@ -348,6 +356,15 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: Boolean,
             default: false
         },
+        /*
+         * The address a pending `PUT /account` email change is waiting to prove — see the field's
+         * own doc comment on `UserRecord`. `select: false` for the same reason as `password`: an
+         * address in flight is as credential-adjacent as a token, not public profile data.
+         */
+        pendingEmail: {
+            type: String,
+            select: false
+        },
         // sub documents always have _id
         // `select: false` for the same reason as `password` — live refresh tokens are as good as
         // a password to anyone who reads them.
@@ -525,6 +542,25 @@ userSchema.index(
     }
 );
 /*
+ * A pending email change is claimed by at most one account at a time — same UNIQUE reasoning as
+ * `users_email`, and load-bearing for the same reason: the request-time collision check
+ * (`account/services/profile.ts`) and the confirm-time swap into `email` are up to 24 hours
+ * apart, so this index, not the request-time read, is what actually stops two accounts racing to
+ * claim one address. `partialFilterExpression` restricts it to documents that HOLD one — most
+ * users never have `pendingEmail` set, and an unfiltered unique index would index every absent
+ * value as an equal `null`, colliding on the second such account. See
+ * `src/modules/users/migrations/20260906000000-pending-email-index.js`: this index shipped after
+ * the baseline, so a database that already migrated needs that file to pick it up.
+ */
+userSchema.index(
+    { pendingEmail: 1 },
+    {
+        name: 'users_pending_email',
+        unique: true,
+        partialFilterExpression: { pendingEmail: { $exists: true } }
+    }
+);
+/*
  * `deletedAt` is deliberately not indexed — nothing searches on it. The admin listing filters
  * `active` instead, and the one login query that mentions it also matches on the near-unique,
  * indexed `email`.
@@ -641,6 +677,7 @@ export const toUser = (document: UserDocument): User => ({
     ...(document.admin === undefined ? {} : { admin: document.admin }),
     ...(document.active === undefined ? {} : { active: document.active }),
     ...(document.verified === undefined ? {} : { verified: document.verified }),
+    ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),
     ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
     ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
     ...(document.locale === undefined ? {} : { locale: document.locale }),

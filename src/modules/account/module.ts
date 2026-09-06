@@ -75,7 +75,11 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       // consent WITHDRAWAL has to apply to the very next event, not wait for the
                       // caller to log in again. `?? false` for the same reason as `admin` above —
                       // the schema defaults it, but the contract-derived type doesn't know that.
-                      analyticsConsent: user.analyticsConsent ?? false
+                      analyticsConsent: user.analyticsConsent ?? false,
+                      // Same "read fresh, never cache in the JWT" reasoning as `analyticsConsent`:
+                      // a signup token minted before the mailbox is confirmed must not keep
+                      // `requireVerified` open for its whole lifetime.
+                      verified: user.verified ?? false
                   }
                 : undefined
         );

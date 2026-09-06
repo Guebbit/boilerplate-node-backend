@@ -21,7 +21,8 @@
             "success": "Account eliminato definitivamente."
         },
         "update": {
-            "success": "Profilo aggiornato."
+            "success": "Profilo aggiornato.",
+            "email-already-used": "L'email è già stata utilizzata."
         },
         "password-change": {
             "wrong-current": "La password attuale non è corretta.",
@@ -60,6 +61,10 @@
             "already-verified": "Questo account è già verificato.",
             "token-not-found": "Token non valido o scaduto, riprova.",
             "success": "Indirizzo email verificato."
+        },
+        "email-change": {
+            "token-not-found": "Token non valido o scaduto, riprova.",
+            "success": "Indirizzo email modificato."
         },
         "email": {
             "verify-request": {
@@ -124,6 +129,12 @@
                 "intro": "Ecco il codice per completare l'accesso:",
                 "expiry": "Scade tra {{minutes}} minuti.",
                 "ignore": "Se non stavi effettuando l'accesso, ignora questa email e cambia la password."
+            },
+            "email-change-notice": {
+                "subject": "Il tuo indirizzo email sta per cambiare",
+                "meta-title": "Modifica email richiesta",
+                "greeting": "Ciao, {{name}}!",
+                "body": "Qualcuno ha richiesto di modificare l'indirizzo email di questo account in {{newEmail}}. Se sei stato tu, non devi fare nulla — la modifica avrà effetto una volta confermato il nuovo indirizzo. Se non sei stato tu, cambia subito la password e disconnetti tutti i dispositivi."
             }
         },
         "oauth": {

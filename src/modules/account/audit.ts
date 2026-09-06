@@ -19,6 +19,10 @@ export const accountAuditActions = {
     AUTH_ACCOUNT_DELETE_COMPLETED: 'auth.account_delete.completed',
     AUTH_EMAIL_VERIFY_REQUESTED: 'auth.email_verify.requested',
     AUTH_EMAIL_VERIFY_COMPLETED: 'auth.email_verify.completed',
+    /** `PUT /account` set `pendingEmail` — the request that starts the change, not the swap. */
+    AUTH_EMAIL_CHANGE_REQUESTED: 'auth.email_change.requested',
+    /** `pendingEmail` swapped into `email` and every refresh token revoked. */
+    AUTH_EMAIL_CHANGE_COMPLETED: 'auth.email_change.completed',
     AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
     /*
      * A refresh token was presented AFTER it was already rotated away, and outside the grace

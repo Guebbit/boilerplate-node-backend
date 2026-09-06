@@ -11,7 +11,8 @@ import { z } from 'zod';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import bcrypt from 'bcrypt';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { resetConfirmEmail, deleteConfirmEmail } from '../emails';
+import { resetConfirmEmail, deleteConfirmEmail, emailChangeNoticeEmail } from '../emails';
+import { sendVerificationEmail, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
 import type { CastError } from 'mongoose';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { analyticsConsentSchema } from '@infrastructure/http/schemas';
@@ -106,16 +107,21 @@ export const passwordChange = (
 
 /**
  * Read the caller's own profile.
- * A wrapper rather than an emit inside `userService.getById`: that read is shared with the
- * admin's `get-user-item.ts` lookup, and an unconditional `user_profile_viewed` there would
- * miscount admin lookups as the user's own profile view.
+ * `findByIdWithPendingEmail`, not `userService.getById`: that read is shared with the admin's
+ * `get-user-item.ts` lookup, which has no business seeing a pending change, and the caller's own
+ * client needs it to show "verification pending for …" — `pendingEmail` is otherwise
+ * `select: false`. Not a wrapper around an emit inside `getById` either, for a second reason: an
+ * unconditional `user_profile_viewed` there would miscount admin lookups as the user's own view.
  */
-export const getOwnProfile = (userId: string, context: CallerContext) => {
+export const getOwnProfile = (
+    userId: string,
+    context: CallerContext
+): Promise<UserDocument | undefined> => {
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),
         event: accountAnalyticsEvents.USER_PROFILE_VIEWED
     });
-    return userService.getById(userId);
+    return userRepository.findByIdWithPendingEmail(userId).then((user) => user ?? undefined);
 };
 
 /**
@@ -235,13 +241,76 @@ const zodProfileSchema = zodUserSchema
     .partial();
 
 /**
+ * Result of evaluating `PUT /account`'s `email` field against the pending-change rules — see
+ * {@link applyEmailChangeRequest}. `requested` is true only when THIS call is what set
+ * `pendingEmail`, which is what gates the old-address notice and the new verification link: a
+ * plain cancellation or a profile update that never touched `email` sends neither.
+ */
+interface EmailChangeOutcome {
+    conflict: boolean;
+    requested: boolean;
+}
+
+/**
+ * Applies `PUT /account`'s `email` field to `user.pendingEmail` — never straight to `user.email`.
+ * The account keeps its current, PROVEN address until the new one is confirmed through
+ * `POST /account/email-change-confirm` (`EMAIL_VERIFICATION_PLAN.md`).
+ *
+ * Three outcomes: an absent field leaves everything alone; the CURRENT address cancels whatever
+ * change was pending — cheaper than a dedicated endpoint, and what a user retyping their real
+ * address would naturally do; any OTHER address is checked against every account's `email` AND
+ * `pendingEmail` before being accepted. That check is the REQUEST-TIME half of the collision
+ * rule — `users_pending_email` and `users_email` (both unique) are the swap-time half, since the
+ * two are up to 24 hours apart and only the indexes are still there for both.
+ *
+ * Mutates `user` in place; the caller's own `save()` (inside `userService.update`) persists it.
+ * @param user - the loaded document; must carry `pendingEmail` (`findByIdWithCredentials`)
+ * @param requestedEmail - `parseResult.data.email`, or `undefined` when the field was omitted
+ */
+const applyEmailChangeRequest = (
+    user: UserDocument,
+    requestedEmail: string | undefined
+): Promise<EmailChangeOutcome> => {
+    if (requestedEmail === undefined) return Promise.resolve({ conflict: false, requested: false });
+
+    if (requestedEmail === user.email) {
+        user.pendingEmail = undefined;
+        return Promise.resolve({ conflict: false, requested: false });
+    }
+
+    return userRepository.emailOrPendingEmailTaken(requestedEmail, user.id).then((taken) => {
+        if (taken) return { conflict: true, requested: false };
+        user.pendingEmail = requestedEmail;
+        return { conflict: false, requested: true };
+    });
+};
+
+/**
+ * The two mails a genuine `pendingEmail` request sends: a notice to the OLD address — no token,
+ * no link, see {@link emailChangeNoticeEmail} — and the verification link to the new one.
+ * AWAITED, unlike most account mail: the verification half pushes a token onto this same
+ * document first (`sendVerificationEmail`'s own `tokenAdd`), matching `requestEmailVerificationFor`'s
+ * treatment of the identical function — responding before either finishes would race the token
+ * with whatever the client does next.
+ */
+const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promise<void> => {
+    const locale = user.locale ?? context.locale ?? getDefaultLocale();
+    const mail = emailChangeNoticeEmail(locale, user.username, user.pendingEmail ?? '');
+    return enqueueEmail(
+        { to: user.email, subject: mail.subject },
+        mail.template,
+        mail.data,
+        'high'
+    ).then(() => sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE));
+};
+
+/**
  * Update the caller's own profile — email, username, locale, image.
  * Narrower than the admin `userService.update`: no `admin`/`active`/`password` — those belong to
  * `/users` and to {@link passwordChangeWithCurrent}, which proves the current password first.
- * Changing the email UNVERIFIES the account before the write, so a verified mailbox can't be
- * carried over to launder a new address; the caller decides whether to re-verify.
- * A duplicate email surfaces as the unique index's E11000, mapped to 409 like signup's — the
- * two flows can't disagree about what "taken" means.
+ * `email` never reaches `userService.update` directly — {@link applyEmailChangeRequest} routes it
+ * through `pendingEmail` instead, so `verified` (describing the account's CURRENT address) is
+ * untouched by a change still waiting to be proven.
  */
 export const updateProfile = (
     userId: string,
@@ -252,7 +321,7 @@ export const updateProfile = (
 
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
         ? userRepository
-              // Credentials included: the caller may follow a successful email change with
+              // Credentials included: a genuine email request follows with
               // `sendVerificationEmail`, which pushes a token onto this same document.
               .findByIdWithCredentials(userId)
               .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
@@ -261,10 +330,31 @@ export const updateProfile = (
                   // case (token valid, user gone) as 401 for every other route.
                   if (!user) return generateReject(401, []);
 
-                  if (parseResult.data.email !== undefined && parseResult.data.email !== user.email)
-                      user.verified = false;
+                  return applyEmailChangeRequest(user, parseResult.data.email).then(
+                      (emailOutcome) => {
+                          if (emailOutcome.conflict)
+                              return generateReject(409, [t('account.update.email-already-used')]);
 
-                  return userService.update(user, parseResult.data);
+                          // `email` is never forwarded — `applyEmailChangeRequest` above is the
+                          // only writer of `email`/`pendingEmail` from this endpoint.
+                          return userService
+                              .update(user, { ...parseResult.data, email: undefined })
+                              .then((result) => {
+                                  if (!result.success || !result.data || !emailOutcome.requested)
+                                      return result;
+
+                                  return sendEmailChangeMail(result.data, context).then(() => {
+                                      emitAuditEvent(
+                                          buildAuditEvent(context, {
+                                              action: accountAuditActions.AUTH_EMAIL_CHANGE_REQUESTED,
+                                              outcome: 'success'
+                                          })
+                                      );
+                                      return result;
+                                  });
+                              });
+                      }
+                  );
               })
               .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));

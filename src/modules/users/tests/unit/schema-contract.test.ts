@@ -204,24 +204,29 @@ describe('userSchema — a linked OAuth identity', () => {
 });
 
 describe('userSchema — indexes', () => {
-    it('declares exactly the three documented indexes', () => {
+    it('declares exactly the four documented indexes', () => {
         // `users_tokens_token` is what makes `verifyRefreshToken`'s lookup — by token value,
         // across every user — an index hit rather than a collection scan on every refresh.
         // `users_oauth_identity` is the OAuth callback's equivalent, keyed on (provider, providerId).
+        // `users_pending_email` is the swap-time half of the `PUT /account` collision check — see
+        // its own comment on the schema.
         expect(indexSpecs(userSchema)).toEqual([
             'users_email: email+1',
             'users_oauth_identity: oauthAccounts.provider+1, oauthAccounts.providerId+1',
+            'users_pending_email: pendingEmail+1',
             'users_tokens_token: tokens.token+1'
         ]);
     });
 
-    it('makes one account per email address, and one per linked identity, a database fact', () => {
+    it('makes one account per email address, one per linked identity, and one per pending change, a database fact', () => {
         // Uniqueness here is an authentication invariant, not hygiene: two rows for one address
-        // (or two accounts claiming the same provider identity) make "the user this credential
-        // names" ambiguous at exactly the moment it is checked.
+        // (or two accounts claiming the same provider identity, or two racing to claim the same
+        // pending address) make "the user this credential names" ambiguous at exactly the moment
+        // it is checked.
         expect(indexOptionSpecs(userSchema)).toEqual([
             'users_email: unique=true',
             'users_oauth_identity: partialFilterExpression={"oauthAccounts.0":{"$exists":true}}, unique=true',
+            'users_pending_email: partialFilterExpression={"pendingEmail":{"$exists":true}}, unique=true',
             'users_tokens_token: (none)'
         ]);
     });
