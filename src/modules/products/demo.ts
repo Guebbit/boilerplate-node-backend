@@ -163,6 +163,7 @@ export const productFixtures = [...namedProducts, ...fillerProductRows];
  * `orders` needs the actual record — it embeds a product SNAPSHOT, not a reference — so the throw
  * lives here, next to the data it validates, instead of every consumer reimplementing it. Returns
  * the fixture type directly; reshaping to `orders`' own snapshot type is the caller's job.
+ * @throws {Error} when no demo product carries that id
  */
 export const seedProductById = (productId: string): (typeof productFixtures)[number] => {
     const product = productFixtures.find((candidate) => candidate._id.toString() === productId);

@@ -257,6 +257,7 @@ const assertJobQueue = (ch: Channel, queue: string, durable: boolean): Promise<v
 
 // ─── Publish ──────────────────────────────────────────────────────────────────
 
+/** One publish, described in full — every caller of {@link publishToQueue} passes this object. */
 export interface PublishOptions<TPayload = unknown> {
     /** Queue name to publish to. */
     queue: string;
@@ -317,6 +318,7 @@ export const publishToQueue = <TPayload = unknown>(
 
 // ─── Consume ──────────────────────────────────────────────────────────────────
 
+/** One consumer's registration — the queue, the handler, and the contract its messages must meet. */
 export interface ConsumeOptions<TPayload = unknown> {
     /** Queue name to consume from. */
     queue: string;

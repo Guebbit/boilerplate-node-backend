@@ -21,6 +21,11 @@ import {
     toPosixPath
 } from '@infrastructure/http/uploads';
 
+/**
+ * The seam between an upload and wherever bytes actually live. One implementation ships today —
+ * local, under `NODE_PUBLIC_PATH/images/` — and `imageUrl` stays an opaque handle so a second one
+ * needs no caller to change.
+ */
 export interface ImageStore {
     /**
      * Move a staged upload into quarantine — durable, but NOT under `NODE_PUBLIC_PATH`, so nothing

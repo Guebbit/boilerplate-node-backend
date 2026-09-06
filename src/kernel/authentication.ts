@@ -58,6 +58,7 @@ export const registerAuthResolver = (implementation: AuthResolver): void => {
  *
  * Unregistered is a real state, not a misconfiguration: a build with no `account` module has no
  * authentication. Rejecting for the same reason a bad token does means the guards need no branch.
+ * @throws {Error} when no module has registered one
  */
 const requireResolver = (): AuthResolver => {
     if (!resolver)

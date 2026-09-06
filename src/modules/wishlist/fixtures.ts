@@ -11,6 +11,7 @@ import { identityOf, type FactoryIdentity } from '@infrastructure/persistence/fi
 import type { Id } from '@types';
 import type { WishlistDocument } from './model';
 
+/** What a caller may vary when building a wishlist fixture; everything else takes a schema default. */
 export interface WishlistOverrides extends FactoryIdentity {
     /** 24-char hex of the owning user. */
     userId: Id;

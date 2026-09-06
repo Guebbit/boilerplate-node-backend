@@ -69,7 +69,6 @@ export const search = (
  * Get a single order by ID.
  * Returns undefined if id is falsy or if not found.
  *
- * @param id
  * @param scope - Optional extra filter (e.g. restrict to a specific userId)
  */
 export const getById = (
@@ -230,8 +229,6 @@ export const create = async (
 /**
  * Update an existing order document (admin), only the fields provided. Writes pure-status moves
  * (`processing`, `shipped`, `delivered`); cancellation lives in `cancelById`.
- * @param order
- * @param data
  */
 // `async` for the same reason the repositories are: `toObjectId(data.userId)` below throws on a
 // malformed id, and a function typed `Promise<T>` must reject rather than throw synchronously.
@@ -333,9 +330,6 @@ export const update = async (
 /**
  * Update an existing order by ID (admin).
  * Fetches the document then delegates to update().
- *
- * @param id
- * @param data
  */
 export const updateById = (
     id: string,
@@ -367,8 +361,8 @@ export const updateById = (
  * the units back first: an order holds stock, and destroying the row without releasing it
  * leaves the shelf holding units for nothing, until the TTL sweep records the deletion as an
  * expiry.
- * @param order
- * @param hardDelete
+ * @param hardDelete - `true` destroys the row; `false` toggles `deletedAt`, which
+ *   acts as a restore when the row is already soft-deleted.
  */
 export const remove = (
     order: OrderDocument,
@@ -400,8 +394,8 @@ export const remove = (
  * Remove an order by ID (soft or hard delete).
  * Fetches the document then delegates to remove().
  *
- * @param id
- * @param hardDelete
+ * @param hardDelete - `true` destroys the row; `false` toggles `deletedAt`, which
+ *   acts as a restore when the row is already soft-deleted.
  */
 export const removeById = (
     id: string,

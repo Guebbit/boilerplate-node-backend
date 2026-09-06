@@ -58,8 +58,9 @@ let shutdownPromise: Promise<void> | undefined;
  */
 const getPort = () => environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
 
-/*
- * Boot sequence: connect infra → mount i18n → listen
+/**
+ * Boot sequence: connect infra, mount i18n, then listen. Idempotent — a second call while the
+ * server is already listening resolves with the running instance rather than binding twice.
  */
 export const startServer = () => {
     if (activeServer?.listening) return Promise.resolve(activeServer);
@@ -126,8 +127,9 @@ export const startServer = () => {
     );
 };
 
-/*
- * Graceful shutdown wrapper — ensures single execution
+/**
+ * Graceful shutdown. The in-flight promise is memoised, so concurrent callers (a signal handler
+ * and a test's `afterAll`) share one shutdown rather than racing two.
  */
 export const stopServer = () => {
     if (shutdownPromise) return shutdownPromise;

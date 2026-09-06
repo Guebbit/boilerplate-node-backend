@@ -267,8 +267,6 @@ export const remove = (
 /**
  * Find a user by email address.
  * Returns the document if found, or undefined if no match.
- *
- * @param email
  */
 export const findByEmail = (email: string): Promise<UserDocument | undefined | null> =>
     // Credentials included: both callers (reset-request, delete-request) immediately push a

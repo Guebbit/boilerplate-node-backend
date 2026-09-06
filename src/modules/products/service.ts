@@ -34,8 +34,6 @@ import { createVisibilityScope } from '@kernel/authorization';
  * Validates product data against the Zod schema; empty array means valid.
  * Takes `unknown` on purpose: this is the boundary that establishes the type, so callers passing
  * raw request bodies don't have to cast on the way in.
- *
- * @param productData
  */
 export const validateData = (productData: unknown): ResponseErrorItem[] => {
     const parseResult = zodProductSchema.safeParse(productData);
@@ -105,7 +103,6 @@ export const searchViewed = (
  * Get a single product by ID.
  * Returns undefined if the id is falsy; null if no matching document is found.
  *
- * @param id
  * @param scope - which rows this caller may read ({@link callerScope})
  */
 export const getById = (id: string | undefined, scope?: Record<string, unknown>) => {
@@ -157,8 +154,6 @@ const enqueueIfPending = (product: ProductDocument): ProductDocument => {
 
 /**
  * Create a new product document in the database.
- *
- * @param data
  */
 export const create = (
     data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> & {
@@ -188,9 +183,6 @@ export const create = (
 /**
  * Update an existing product document.
  * If a new image URL differs from the old one, deletes the old image file after saving.
- *
- * @param product
- * @param data
  */
 export const update = (
     product: ProductDocument,
@@ -240,9 +232,6 @@ export const update = (
 /**
  * Update an existing product by ID.
  * Fetches the document then delegates to update().
- *
- * @param id
- * @param data
  */
 export const updateById = (
     id: string,
@@ -275,8 +264,8 @@ export const updateById = (
  * references (cart empties the product from every cart) has run before it can stop resolving —
  * this module doesn't know who listens, which keeps the dependency arrow one-way.
  *
- * @param product
- * @param hardDelete
+ * @param hardDelete - `true` destroys the row; `false` toggles `deletedAt`, which
+ *   acts as a restore when the row is already soft-deleted.
  */
 export const remove = (
     product: ProductDocument,
@@ -304,8 +293,8 @@ export const remove = (
  * Remove a product by ID (soft or hard delete).
  * Fetches the document then delegates to remove().
  *
- * @param id
- * @param hardDelete
+ * @param hardDelete - `true` destroys the row; `false` toggles `deletedAt`, which
+ *   acts as a restore when the row is already soft-deleted.
  */
 export const removeById = (
     id: string,

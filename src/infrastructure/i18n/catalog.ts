@@ -19,10 +19,10 @@ import type { Resource } from 'i18next';
  */
 const LOCALES_DIRECTORY = path.join(__dirname, '..', '..', 'locales');
 
-/**
- * Fallbacks match `.env-example`; both are read lazily so a test can set them after import.
- */
+/** The locale a request falls back to when it asks for none. Read lazily, so a test can set it after import. */
 export const getDefaultLocale = (): string => process.env.NODE_DEFAULT_LOCALE ?? 'en';
+
+/** The locale a MISSING KEY falls back to. Same lazy read, same `.env-example` default. */
 export const getFallbackLocale = (): string => process.env.NODE_FALLBACK_LOCALE ?? 'en';
 
 /** Memoised result of {@link listSupportedLocales}; `undefined` until the first call. */

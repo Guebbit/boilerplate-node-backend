@@ -37,6 +37,7 @@ export const googleConfigured = (): boolean => isOAuthProviderConfigured(PROVIDE
  * `exp` are still checked, since decoding without verifying is only as safe as the channel it came
  * over, never a substitute for checking the token actually names THIS app and hasn't expired.
  * https://developers.google.com/identity/openid-connect/openid-connect#validatinganidtoken
+ * @throws {Error} when the issuer, the audience or the expiry does not check out
  */
 const assertValidClaims = (claims: GoogleIdTokenClaims): void => {
     const { clientId } = getOAuthCredentials(PROVIDER_NAME);

@@ -4,6 +4,8 @@ import globals from 'globals';
 import configPrettier from 'eslint-config-prettier';
 import pluginUnicorn from 'eslint-plugin-unicorn';
 import pluginBoundaries from 'eslint-plugin-boundaries';
+import pluginJsdoc from 'eslint-plugin-jsdoc';
+import pluginJest from 'eslint-plugin-jest';
 import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import { globalIgnores } from 'eslint/config';
 import path from 'node:path';
@@ -143,13 +145,6 @@ export default tseslint.config(
              * becomes a dangling pointer nothing catches.
              */
             'local/comment-links': 'error',
-            /*
-             * Continuous prose is capped; structured lines are free. Running out of budget is the
-             * signal to say it schematically, not to delete the content — see the rule's own
-             * docblock. A warning, not an error: it is a judgement about shape, and the one case
-             * in fifty where a paragraph really is the clearest form should not fail a build.
-             */
-            'local/comment-shape': 'warn',
             /*
              * `nesting <= 3 levels`, the block-statement half. The callback half is
              * `max-nested-callbacks`, deliberately not set — see docs/reference/root.md.
@@ -460,6 +455,73 @@ export default tseslint.config(
                         'try/catch in production code is for the rare spot where a throwing API has no safe wrapper and the failure has a local answer. Prefer returning a verdict or letting the rejection reach the pipeline’s handler; if this spot truly needs one, disable this rule on the line with a description of what is being contained.'
                 }
             ]
+        }
+    },
+
+    /**
+     * Exported API carries its own documentation, and the documentation is checked.
+     *
+     * Two halves, both of them MUSTs in CLAUDE.md and neither previously guarded:
+     *
+     * Presence:   an exported function, interface, type or enum has a docblock.
+     * Accuracy:   `@param` names match the signature, and tag names are real ones.
+     *
+     * Warnings, not errors, and `publicOnly` — the point is the contract a caller reads, not a
+     * docblock ceremony on every internal helper. Accuracy is the half that pays: a `@param` left
+     * behind by a rename is worse than no comment, and only a rule ever notices.
+     * https://github.com/gajus/eslint-plugin-jsdoc
+     */
+    {
+        files: ['src/**/*.ts'],
+        // Co-located module specs are exempt: their exports are fixtures for one file, not API.
+        ignores: ['src/modules/*/tests/**/*.ts'],
+
+        plugins: {
+            jsdoc: pluginJsdoc
+        },
+
+        // TypeScript mode: types live in the signature, so the tags are not asked to repeat them.
+        settings: {
+            jsdoc: { mode: 'typescript' }
+        },
+
+        rules: {
+            'jsdoc/require-jsdoc': [
+                'warn',
+                {
+                    publicOnly: true,
+                    require: {
+                        FunctionDeclaration: true,
+                        ArrowFunctionExpression: true,
+                        FunctionExpression: true,
+                        ClassDeclaration: true
+                    },
+                    contexts: [
+                        'TSInterfaceDeclaration',
+                        'TSTypeAliasDeclaration',
+                        'TSEnumDeclaration'
+                    ]
+                }
+            ],
+            /*
+             * CLAUDE.md asks for the tags "as needed", and no rule can read that word. So the
+             * checks here are about truth, not presence:
+             *
+             * Not set:                    `require-param`, `require-returns` — they would demand
+             *                             1,057 rows that mostly restate a typed signature.
+             * disableMissingParamChecks:  document the one parameter that needs a word, skip the
+             *                             three that do not — but never name one that is not there.
+             * checkDestructured: false:   an options bag is documented on its interface, not one
+             *                             `@param` row per property at every call site.
+             */
+            'jsdoc/check-param-names': [
+                'error',
+                { checkDestructured: false, disableMissingParamChecks: true }
+            ],
+            'jsdoc/check-tag-names': 'error',
+            'jsdoc/require-param-description': 'warn',
+            'jsdoc/require-returns-description': 'warn',
+            'jsdoc/require-throws': 'warn'
         }
     },
 
@@ -1259,6 +1321,10 @@ export default tseslint.config(
     {
         files: ['tests/**/*', 'src/modules/*/tests/**/*'],
 
+        plugins: {
+            jest: pluginJest
+        },
+
         languageOptions: {
             globals: {
                 ...globals.jest
@@ -1266,6 +1332,16 @@ export default tseslint.config(
         },
 
         rules: {
+            /*
+             * Pass rate is 100%, always. A focused spec turns the suite green while running a
+             * fraction of it, and a disabled one reads as green having run none — both are the
+             * same failure, a gate that reports success it did not earn.
+             *
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-focused-tests.md
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-disabled-tests.md
+             */
+            'jest/no-focused-tests': 'error',
+            'jest/no-disabled-tests': 'error',
             /*
              * One level more than production code gets. A spec that walks a table exhaustively —
              * every actor against every from-status against every to-status — is at four levels by
