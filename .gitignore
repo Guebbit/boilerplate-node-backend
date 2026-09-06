@@ -33,13 +33,11 @@ coverage
 # convenience, regenerable with a single ln -s.
 /.claude/commands/audit
 
-# Mutation reports are generated, EXCEPT the incremental cache, which is committed on purpose:
-# Stryker reuses it to re-test only what changed, and CI can only read it if it is in the repo.
-# `reports/*` and not `reports/`: git does not descend into an excluded DIRECTORY, so the negation
-# below is silently dead if this loses its `*` — the file stops being committed and runs quietly
-# go back to full length with nothing reporting an error.
+# Mutation reports are generated, the incremental cache included. It is a CACHE and nothing
+# automated reads it: `mutation.yml` passes `--force` to rebuild from scratch, and the PR run that
+# would consume it does not exist. A local run still keeps and reuses its own copy on disk.
+# See docs/tools/mutation-testing.md#incremental-mode-what-it-is.
 reports/*
-!reports/stryker-incremental.json
 
 # API client collections. Generated whole from openapi.yaml on demand — `npm run contracts:bundle
 # -- bruno insomnia postman` — and never read by the suite, the app or CI. Committing them put
