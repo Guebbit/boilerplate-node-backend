@@ -66,7 +66,13 @@ import {
  * Address-book CRUD and `tokenRemoveAll` stay out of this list — nothing imports them by name, so
  * a second list would just be a name that could quietly drift from `accountService`.
  */
-export { tokenAdd, signup, login, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
+export {
+    tokenAdd,
+    signup,
+    login,
+    wasRefusedByEmailPolicy,
+    PASSWORD_RESET_TOKEN_TYPE
+} from './authentication';
 export { passwordChange, passwordChangeWithCurrent, updateProfile } from './profile';
 export { addressForCheckout } from './addresses';
 export {

@@ -102,8 +102,8 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12)
 /**
  * The `tokens.type` a password-reset link carries.
  *
- * Named here rather than spelled at each call site because it is policy, not detail: it used to
- * live as a bare string in a controller where nothing connected it to the TTL it belonged to.
+ * Named here rather than spelled at each call site because it is policy, not detail — and because
+ * a bare string in a controller connects to nothing, least of all the TTL it belongs to.
  * `./verification` states its own pair the same way.
  */
 export const PASSWORD_RESET_TOKEN_TYPE = 'password';
@@ -345,6 +345,18 @@ export interface SignupInput {
 }
 
 /**
+ * Whether a `success` from {@link signup} is rung 2's ruse rather than a registration.
+ *
+ * Mongoose's `Document#isNew` is the signal: it stays `true` until `.save()` is called, and the
+ * refusal path is the only one that returns a document never saved. Named, because `isNew` reads
+ * backwards here — true means NO account was created.
+ * https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+ *
+ * @param user - the document from a successful `signup` result
+ */
+export const wasRefusedByEmailPolicy = (user: UserDocument): boolean => user.isNew;
+
+/**
  * Register new user.
  *
  * @param input - the submitted fields and the server-derived image paths
@@ -402,9 +414,8 @@ export const signup = (
           checkEmailPolicy(email).then((verdict) =>
               verdict === 'refused'
                   ? // Answer exactly like a genuine signup, from a document this call never
-                    // persists — a script gets nothing to iterate on. `signup`'s own `outcome.then`
-                    // and `post-signup.ts` both read `isNew` to keep the audit trail and the
-                    // upload cleanup honest.
+                    // persists — a script gets nothing to iterate on. {@link wasRefusedByEmailPolicy}
+                    // is how the audit trail and the upload cleanup still tell the two apart.
                     Promise.resolve(
                         generateSuccess<UserDocument>(
                             userRepository.build({
@@ -451,10 +462,9 @@ export const signup = (
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return outcome.then((result) => {
-        // `isNew` on a `success` result means rung 2 refused this address and the ruse above
-        // built a document that was never saved — the audit trail must not name that account, or
-        // record it as anything other than the refusal it was.
-        if (!result.success || result.data?.isNew) {
+        // The audit trail must not name an account rung 2 refused, or record it as anything other
+        // than the refusal it was.
+        if (!result.success || (result.data && wasRefusedByEmailPolicy(result.data))) {
             emitAuditEvent(
                 buildAuditEvent(callerContext, {
                     action: accountAuditActions.AUTH_SIGNED_UP,

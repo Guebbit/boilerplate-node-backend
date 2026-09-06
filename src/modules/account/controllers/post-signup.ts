@@ -2,8 +2,8 @@
  * @module
  * `POST /account/signup` controller — thin HTTP adapter over `accountService.signup`, plus the
  * uploaded-image cleanup that has to run on every path except a genuine registration: failure, and
- * the 201 rung 2 fabricates for a refused address (`data.isNew`), which the caller cannot tell
- * apart from a real one.
+ * the 201 rung 2 fabricates for a refused address, which the caller cannot tell apart from a real
+ * one.
  */
 
 import type { Request, Response } from 'express';
@@ -15,7 +15,7 @@ import type { CastError } from 'mongoose';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
-import { sendVerificationEmail } from '../services';
+import { sendVerificationEmail, wasRefusedByEmailPolicy } from '../services';
 import { toUser } from '@modules/users';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
 
@@ -74,7 +74,7 @@ export const postSignup = (
                 });
             }
 
-            if (data.isNew) {
+            if (wasRefusedByEmailPolicy(data)) {
                 // Rung 2 refused this address — `signup` still hands back an unsaved document so
                 // this answers exactly like a real signup. No verification email, and the upload
                 // is discarded same as any other refusal.
