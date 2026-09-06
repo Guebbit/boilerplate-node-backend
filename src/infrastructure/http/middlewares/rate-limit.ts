@@ -93,6 +93,17 @@ const refuse =
                 })
             );
 
+        /*
+         * Every refusal, audited or not. `installSecurity` mounts these limiters before
+         * `installRequestContext` mounts the request logger, so a 429 short-circuits before
+         * anything else would record it — leaving the global brake with no trace at all.
+         */
+        logger.warn(`Rate limit refused ${request.method} ${request.path}`, {
+            method: request.method,
+            route: request.path,
+            status_code: 429
+        });
+
         return rejectResponse(response, 429, [
             { code: 'RATE_LIMITED', message: t('generic.error-rate-limited') }
         ]);

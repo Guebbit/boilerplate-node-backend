@@ -68,4 +68,34 @@ describe('submissionLimiter', () => {
         expect(statuses.slice(0, 3)).toEqual([422, 422, 422]);
         expect(statuses.slice(3)).toEqual([429, 429]);
     });
+
+    /**
+     * A refusal has to leave a trace of its own. `installSecurity` mounts the limiters before
+     * `installRequestContext` mounts the request logger, so a 429 never reaches the logger that
+     * records every other status — and the global brake emits no audit event either, by design.
+     * Without this line a rate-limited run looks, in the log, exactly like a run that was never
+     * made.
+     */
+    it('logs every refusal, since nothing downstream will', async () => {
+        const submissionLimiter = await submissionLimiterWithBudget(1);
+        const { logger } = await import('@infrastructure/adapters/logger');
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+
+        const limited = express();
+        limited.post('/contact', submissionLimiter, (_request, response) => {
+            response.status(201).json({ success: true });
+        });
+
+        await supertest(limited).post('/contact');
+        expect(warn).not.toHaveBeenCalled();
+
+        await supertest(limited).post('/contact');
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.stringContaining('POST /contact'),
+            expect.objectContaining({ method: 'POST', route: '/contact', status_code: 429 })
+        );
+
+        warn.mockRestore();
+    });
 });
