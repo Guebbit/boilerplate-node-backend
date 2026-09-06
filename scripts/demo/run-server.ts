@@ -23,11 +23,29 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // Real secrets guard real tokens; a demo signs throwaway tokens for a throwaway database.
     NODE_TOKEN_ACCESS: 'demo-access-secret',
     NODE_TOKEN_REFRESH: 'demo-refresh-secret',
-    // The e2e suite is not a person browsing: 85 specs from one address clear the human-sized
-    // budget in minutes and every 429 downstream reads as "login is broken".
+    /*
+     * The e2e suite is not a person browsing: 85 specs from one address clear the human-sized
+     * budget in minutes and every 429 downstream reads as "login is broken" — the failure lands on
+     * whatever request happened to be next, never on the limiter that caused it.
+     *
+     * EVERY budget, not the three the global brake used to be: each rung of the anti-automation
+     * ladder added its own, and one left at its human default throttles the suite exactly as the
+     * global one did. `docs/tools/security.md` lists what each bounds.
+     */
     NODE_RATE_LIMIT_MAX: '1000',
     NODE_AUTH_RATE_LIMIT_MAX: '1000',
-    NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '1000'
+    NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: '1000',
+    NODE_AUTH_RATE_LIMIT_BLOCK_MAX: '1000',
+    NODE_SIGNUP_RATE_LIMIT_MAX: '1000',
+    NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX: '1000',
+    NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX: '1000',
+    NODE_RESET_RATE_LIMIT_MAX: '1000',
+    NODE_RESET_RATE_LIMIT_ADDRESS_MAX: '1000',
+    NODE_RESET_RATE_LIMIT_BLOCK_MAX: '1000',
+    NODE_SUBMISSION_RATE_LIMIT_MAX: '1000',
+    NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX: '1000',
+    NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX: '1000',
+    NODE_UPLOAD_RATE_LIMIT_MAX: '1000'
 };
 
 /** External services have no place here — force-disable whatever the shell happens to carry. */
