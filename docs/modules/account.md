@@ -99,6 +99,54 @@ flowchart LR
     class V,G,SU,AB done;
 ```
 
+## Proving an address {#proving-an-address}
+
+Two **kinds** of email verification share one mechanism, and the distinction is the whole design.
+One proves the address an account **already has** — signup, and the explicit re-send. The other
+proves the address a `PUT /account` change has **asked for**. They are stored under different
+`tokens.type` values (`verify` and `email-change`), and neither can do the other's work: a signup
+token that could swap in a `pendingEmail` would be an account takeover with an extra step.
+
+A change never writes `user.email` directly. It parks the requested address in `pendingEmail`, so
+the account keeps its current, proven address — and its `verified` flag, which describes that
+proven address — until the new one is confirmed.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
+flowchart TB
+    P["PUT /account<br/><i>email: new@…</i>"] --> C{"which address?"}
+    C -->|"the current one"| X["cancels any pending change<br/><i>no mail, no token</i>"]
+    C -->|"taken by another account"| R["409<br/><i>email or pendingEmail</i>"]
+    C -->|"any other"| W["pendingEmail set"]
+    W --> N["notice → OLD address<br/><i>no token, no link that acts</i>"]
+    W --> V["verification link → NEW address<br/><i>email-change token · 24h</i>"]
+    V --> F["POST /account/email-change-confirm"]
+    F --> S["pendingEmail → email<br/>verified = true<br/>refresh tokens revoked"]
+
+    classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class P,F entry;
+    class R,N warn;
+    class X,W,V,S done;
+```
+
+Three things in that diagram are decisions rather than mechanics:
+
+- **The notice goes to the old address when the change is _requested_, not when it completes.** A
+  warning that arrives before a takeover is a warning; one that arrives after is a receipt. It
+  carries no token and no link that acts — "this wasn't me" is a password change and a
+  logout-everywhere, both of which already exist.
+- **Re-typing the current address cancels a pending change.** Cheaper than a dedicated endpoint,
+  and it is what a user who changed their mind would naturally do.
+- **Confirming revokes every refresh token.** An email change is the stronger takeover primitive
+  of the two, and this is the same treatment a changed password already gets.
+
+Collision is checked twice, because the two checks catch different things. At **request time**,
+the requested address is compared against every account's `email` _and_ `pendingEmail`. At **swap
+time**, the `users_email` and `users_pending_email` unique indexes catch whatever changed in the
+up-to-24-hours between the two.
+
 ## Related pages
 
 - [Sessions](./account-sessions.md) — the token mechanics, in detail
