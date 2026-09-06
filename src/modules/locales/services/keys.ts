@@ -26,6 +26,42 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
+ * Writes the last segment of a key, refusing to overwrite a group with a string.
+ * @throws {Error} when `segment` already holds a group — the collision the caller cannot resolve
+ */
+const setLeaf = (
+    node: Record<string, unknown>,
+    segment: string,
+    key: string,
+    value: unknown
+): void => {
+    if (isPlainObject(node[segment]))
+        throw new Error(
+            `locale key "${key}" is both a string and a group; ` + `one of the two must be renamed`
+        );
+    node[segment] = value;
+};
+
+/**
+ * Walks one segment deeper, creating the group when nothing is there yet.
+ * @param path - the dotted prefix up to and including `segment`, for the error message
+ * @throws {Error} when `segment` holds a string where a group is needed
+ */
+const descend = (
+    node: Record<string, unknown>,
+    segment: string,
+    key: string,
+    path: string
+): Record<string, unknown> => {
+    if (node[segment] === undefined) node[segment] = Object.create(null) as unknown;
+    else if (!isPlainObject(node[segment]))
+        throw new Error(
+            `locale key "${key}" needs "${path}" ` + `to be a group, but it is already a string`
+        );
+    return node[segment] as Record<string, unknown>;
+};
+
+/**
  * Flat dotted rows into the nested shape `GET /locales/{locale}` already serves.
  *
  * THROWS on a collision (`products.list` and `products.list.title` both existing) rather than
@@ -47,23 +83,10 @@ export const buildMessageTree = (
 
         for (const [index, segment] of segments.entries()) {
             if (index === segments.length - 1) {
-                if (isPlainObject(node[segment]))
-                    throw new Error(
-                        `locale key "${key}" is both a string and a group; ` +
-                            `one of the two must be renamed`
-                    );
-                node[segment] = value;
+                setLeaf(node, segment, key, value);
                 continue;
             }
-
-            if (node[segment] === undefined) node[segment] = Object.create(null) as unknown;
-            else if (!isPlainObject(node[segment]))
-                throw new Error(
-                    `locale key "${key}" needs "${segments.slice(0, index + 1).join('.')}" ` +
-                        `to be a group, but it is already a string`
-                );
-
-            node = node[segment] as Record<string, unknown>;
+            node = descend(node, segment, key, segments.slice(0, index + 1).join('.'));
         }
     }
 

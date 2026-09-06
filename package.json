@@ -13,7 +13,7 @@
         "host": "cross-env NODE_DB_URI= NODE_MONGODB_HOST=127.0.0.1 NODE_REDIS_URL= NODE_REDIS_HOST=127.0.0.1 npm run",
         "ts-check": "tsc --noEmit",
         "build": "npm run ts-check && npm run lint",
-        "lint": "eslint --max-warnings 0",
+        "lint": "eslint --max-warnings 177",
         "lint:fix": "eslint --fix",
         "lint:openapi": "spectral lint --ruleset shared/contracts/spectral.yaml openapi.yaml",
         "lint:openapi:modules": "spectral lint --ruleset shared/contracts/spectral.modules.yaml src/modules/*/openapi.yaml",

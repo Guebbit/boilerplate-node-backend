@@ -33,9 +33,9 @@ export default tseslint.config(
      * Excluded files — GENERATED OR FOREIGN ONLY.
      *
      * The bar for an entry here: linting it is impossible or meaningless, not merely
-     * inconvenient. Tool configs, migrations and CLI scripts used to sit in this list because
-     * they fall outside the `tsconfig` project; they are linted now, through the scoped blocks
-     * near the bottom that switch off the type-aware program instead of the whole linter.
+     * inconvenient. Tool configs, migrations and CLI scripts fall outside the `tsconfig` project
+     * but still belong to us, so they are linted through the scoped blocks near the bottom, which
+     * switch off the type-aware program instead of the whole linter.
      */
     globalIgnores([
         /*
@@ -137,6 +137,24 @@ export default tseslint.config(
             'no-console': 'warn',
             'no-debugger': 'warn',
             'no-restricted-syntax': ['error', ...bannedDoubleCasts],
+            /*
+             * A comment may point at `docs/` and nothing else that ends in `.md`. Root-level plan
+             * and audit docs are deleted when their change lands, and every comment that named one
+             * becomes a dangling pointer nothing catches.
+             */
+            'local/comment-links': 'error',
+            /*
+             * Continuous prose is capped; structured lines are free. Running out of budget is the
+             * signal to say it schematically, not to delete the content — see the rule's own
+             * docblock. A warning, not an error: it is a judgement about shape, and the one case
+             * in fifty where a paragraph really is the clearest form should not fail a build.
+             */
+            'local/comment-shape': 'warn',
+            /*
+             * `nesting <= 3 levels`, the block-statement half. The callback half is
+             * `max-nested-callbacks`, deliberately not set — see docs/reference/root.md.
+             */
+            'max-depth': ['error', 3],
             /*
              * `!` is allowed where a value has ALREADY been proven present by something the
              * compiler cannot follow — the `isAdmin` middleware guaranteeing `request.authContext`,
@@ -570,7 +588,7 @@ export default tseslint.config(
      * plain TypeScript over plain data, reaching nothing at all.
      *
      * ── Why a plugin rather than `no-restricted-imports` ──────────────────────────────────────
-     * Two properties the built-in rule cannot express, both of which used to be carried by tests:
+     * Two properties the built-in rule cannot express, and a test is the wrong place for either:
      *
      *   1. **Coverage, at both levels.** `no-restricted-imports` is scoped by file glob, so a NEW
      *      top-level directory under `src/` matches no block, is bound by no wall, and is reported
@@ -908,7 +926,8 @@ export default tseslint.config(
                         },
 
                         /*
-                         * Co-located specs, and the rule that used to need a test.
+                         * Co-located specs, and the two reaches they are allowed that production
+                         * code is not.
                          *
                          * A spec is deleted with the module it belongs to, so it cannot leave
                          * coupling behind that outlives either one — and it legitimately needs two
@@ -1159,16 +1178,16 @@ export default tseslint.config(
     /**
      * The unit layer does not boot the application, and does not open a database.
      *
-     * "Unit" here means two things: no HTTP, and no Mongo, real or in-memory. It was not always the
-     * second — 36 module specs used to call `setupTestDb()` against the run's shared in-memory
-     * mongod, on the reasoning that most of what a repository or a service does IS what Mongo does.
-     * That reasoning was sound for `npm test`; it stopped being sound the moment mutation testing
-     * entered the picture. Stryker executes the unit suite once per mutant, so anything the layer
-     * imports or connects to at module scope is paid thousands of times over, and a `beforeEach`
-     * wipe that is microseconds in a normal run adds up across a mutant count in the thousands. Those
-     * 36 specs now live in each module's `tests/integration/` — see NODE_MUTATION_MONGOD.md for the
-     * per-module breakdown — and `unit-layer-stays-database-free` in `.dependency-cruiser.cjs` is
-     * what keeps a new spec from drifting back in. That rule is stated as REACHABILITY, so it also
+     * "Unit" here means two things: no HTTP, and no Mongo, real or in-memory. The second is what
+     * mutation testing costs. Calling `setupTestDb()` from a unit spec is defensible for
+     * `npm test` — most of what a repository or a service does IS what Mongo does — and indefensible
+     * under Stryker, which executes the unit suite once per mutant: anything the layer imports or
+     * connects to at module scope is paid thousands of times over, and a `beforeEach` wipe that is
+     * microseconds in a normal run adds up across a mutant count in the thousands. A spec that needs
+     * a database belongs in its module's `tests/integration/` — see
+     * docs/tools/mutation-testing.md#why-only-the-unit-suite-runs — and
+     * `unit-layer-stays-database-free` in `.dependency-cruiser.cjs` is
+     * what keeps one from drifting back in. That rule is stated as REACHABILITY, so it also
      * catches the way it actually arrives: a spec importing a helper that already had the database.
      * The bans below give the direct form at lint time, in the editor, for the two entry points
      * that are clean import names.
@@ -1244,6 +1263,16 @@ export default tseslint.config(
             globals: {
                 ...globals.jest
             }
+        },
+
+        rules: {
+            /*
+             * One level more than production code gets. A spec that walks a table exhaustively —
+             * every actor against every from-status against every to-status — is at four levels by
+             * the third `for`, and flattening it into `flatMap` hides the very shape the case is
+             * asserting. The limit still holds where nesting is logic rather than enumeration.
+             */
+            'max-depth': ['error', 4]
         }
     },
 
