@@ -60,6 +60,16 @@ were removed and are kept out by a test.
 
 ## Unreleased
 
+### Breaking — contract
+
+- **`analyticsConsent` is a `boolean`.** It was `enum: [granted, denied]` on `User`,
+  `UpdateAccountRequest` and `UpdateAccountRequestMultipart`; the tri-state it modelled had no
+  third state, since an absent value and `denied` were always treated alike. A generated client
+  cannot absorb this without being regenerated. The migration backfills existing rows —
+  `granted` → `true`, `denied` and absent → `false` — and `analyticsConsent` no longer reaches
+  `updateProfile` from a request body at all: the field was dead on the self-service path
+  regardless of type, and is reachable only through the admin `/users` route.
+
 ### Fixed
 
 - `GET /products/{id}`, `GET /orders/{id}`, `GET /orders/{id}/invoice` and `GET /users/{id}` now
