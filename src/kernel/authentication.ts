@@ -26,6 +26,13 @@ export interface AuthenticatedUser {
     amr: readonly string[];
     /** The account's analytics consent choice, read fresh from the document on every request. */
     analyticsConsent: boolean;
+    /**
+     * Whether the account's email is proven, read fresh from the document on every request, same
+     * reasoning as `analyticsConsent`: a verification landing mid-session (or a pending change
+     * completing) must gate the very next request, not wait for a new token. What
+     * `requireVerified` reads.
+     */
+    verified: boolean;
 }
 
 /** Turns a signed token into the user it names. Implemented by `account`. */

@@ -22,6 +22,8 @@ describe('the account audit vocabulary', () => {
             AUTH_ACCOUNT_DELETE_COMPLETED: 'auth.account_delete.completed',
             AUTH_EMAIL_VERIFY_REQUESTED: 'auth.email_verify.requested',
             AUTH_EMAIL_VERIFY_COMPLETED: 'auth.email_verify.completed',
+            AUTH_EMAIL_CHANGE_REQUESTED: 'auth.email_change.requested',
+            AUTH_EMAIL_CHANGE_COMPLETED: 'auth.email_change.completed',
             AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
             AUTH_REFRESH_TOKEN_REUSE_DETECTED: 'auth.refresh_token.reuse_detected',
             AUTH_REAUTHENTICATED: 'auth.reauth',

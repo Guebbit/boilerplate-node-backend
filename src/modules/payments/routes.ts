@@ -5,7 +5,9 @@
  * left open to any caller, versus an intent or confirm locked to admins being a checkout nobody
  * can complete. Every route that moves money also requires a FRESH session
  * (`requireFreshAuth(REAUTH_TIME_CRITICAL)`) — a stolen access token
- * proves nothing about how recently the account holder actually typed their password.
+ * proves nothing about how recently the account holder actually typed their password — and, on
+ * the two the customer themselves drives, a VERIFIED one (`requireVerified`): an unproven address
+ * must not be able to pay and start receiving payment mail at an inbox nobody confirmed.
  */
 
 import { Router } from 'express';
@@ -14,6 +16,7 @@ import {
     isAuth,
     isAdmin,
     requireFreshAuth,
+    requireVerified,
     REAUTH_TIME_CRITICAL
 } from '@kernel/middlewares/authorizations';
 import { postPaymentIntent } from './controllers/post-payment-intent';
@@ -28,7 +31,7 @@ export const router = Router();
 router.use(getAuth, isAuth);
 
 // POST /payments/intent — freeze an order's price, ready to confirm.
-router.post('/intent', requireFreshAuth(REAUTH_TIME_CRITICAL), postPaymentIntent);
+router.post('/intent', requireFreshAuth(REAUTH_TIME_CRITICAL), requireVerified, postPaymentIntent);
 
 // GET /payments/order/:orderId — the payment behind an order
 router.get('/order/:orderId', getPaymentByOrder);
@@ -43,4 +46,9 @@ router.post(
 );
 
 // POST /payments/:id/confirm — the card dialog's submit.
-router.post('/:id/confirm', requireFreshAuth(REAUTH_TIME_CRITICAL), postPaymentConfirm);
+router.post(
+    '/:id/confirm',
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requireVerified,
+    postPaymentConfirm
+);

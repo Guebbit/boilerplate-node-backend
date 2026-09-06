@@ -24,7 +24,7 @@ paths:
         put:
             tags: [Account]
             summary: Update own profile
-            description: Updates the authenticated user's own profile — email, username, locale, image. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email resets `verified` and sends a fresh verification email to the new address.
+            description: Updates the authenticated user's own profile — email, username, locale, image. Role, account state and password are out of scope — the first two belong to the admin `/users` endpoints, the password to `POST /account/password`. Changing the email does NOT take effect immediately — it is held as `pendingEmail` until `POST /account/email-change-confirm` proves the new address, and a notice is sent to the OLD address the moment the change is requested. Sending the CURRENT address cancels a pending change.
             operationId: updateAccount
             security:
                 - bearerAuth: []
@@ -429,6 +429,24 @@ paths:
             summary: Confirm email verification
             description: Completes the email-verification flow. Validates the one-time token issued at signup or by `/account/verify-request` and, if valid, marks the account's email address as verified.
             operationId: confirmEmailVerification
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/VerifyEmailConfirmRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/email-change-confirm:
+        post:
+            tags: [Auth]
+            summary: Confirm a pending email change
+            description: Completes the email-change flow started by `PUT /account`. Validates the one-time `email-change` token sent to the NEW address and, if valid, swaps `pendingEmail` into `email`, marks the account verified, and revokes every refresh token — the same treatment `POST /account/password` gives a password change, since an email change is the stronger takeover primitive of the two. A `verify` token from the signup flow is refused here, and this token is refused by `/account/verify-confirm` — the two prove different things.
+            operationId: confirmEmailChange
             security: []
             requestBody:
                 required: true

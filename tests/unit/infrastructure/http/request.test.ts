@@ -639,7 +639,8 @@ describe('callerContextOf', () => {
                     admin: false,
                     authTime: 0,
                     amr: [],
-                    analyticsConsent: false
+                    analyticsConsent: false,
+                    verified: false
                 },
                 requestId: 'req-111'
             })
@@ -653,7 +654,8 @@ describe('callerContextOf', () => {
                 admin: false,
                 authTime: 0,
                 amr: [],
-                analyticsConsent: false
+                analyticsConsent: false,
+                verified: false
             },
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
@@ -709,7 +711,8 @@ describe('callerContextOf', () => {
                     admin: false,
                     authTime: 0,
                     amr: [],
-                    analyticsConsent: true
+                    analyticsConsent: true,
+                    verified: false
                 }
             })
         );

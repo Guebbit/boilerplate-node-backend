@@ -204,6 +204,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the emailed verification token is the credential'
     },
+    'account POST /email-change-confirm': {
+        requiresAuth: false,
+        reason: 'the emailed email-change token is the credential'
+    },
     'cart POST /checkout': { requiresAuth: true, reason: "checking out the caller's own cart" },
     'cart POST /reorder/:orderId': {
         requiresAuth: true,

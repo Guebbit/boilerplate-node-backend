@@ -25,6 +25,12 @@ export interface AuthContext {
      * `CallerContext` for `emitAnalyticsEvent`'s own gate; nothing else should need to read it.
      */
     analyticsConsent: boolean;
+    /**
+     * Whether the account's email is proven, read fresh from `AuthenticatedUser` on every
+     * request. `requireVerified` (`kernel/middlewares/authorizations.ts`) is what reads this;
+     * nothing else should need to.
+     */
+    verified: boolean;
 }
 
 /**

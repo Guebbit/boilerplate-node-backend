@@ -51,6 +51,7 @@ import { getSessions } from './controllers/get-sessions';
 import { deleteSession } from './controllers/delete-session';
 import { postVerifyRequest } from './controllers/post-verify-request';
 import { postVerifyConfirm } from './controllers/post-verify-confirm';
+import { postEmailChangeConfirm } from './controllers/post-email-change-confirm';
 import { deleteExpiredTokens } from './controllers/delete-expired-tokens';
 import { postAccountExport } from './controllers/post-account-export';
 import { getAddresses } from './controllers/get-addresses';
@@ -202,6 +203,15 @@ router.post(
     credentialLimiters,
     invalidateCache(['users', 'account']),
     postVerifyConfirm
+);
+
+// POST /account/email-change-confirm — spend the emailed `email-change` token; public, same
+// reasoning as verify-confirm. A DIFFERENT token type — see `services/verification.ts`.
+router.post(
+    '/email-change-confirm',
+    credentialLimiters,
+    invalidateCache(['users', 'account']),
+    postEmailChangeConfirm
 );
 
 // DELETE /account/tokens/expired — remove expired tokens from the DB (admin only)

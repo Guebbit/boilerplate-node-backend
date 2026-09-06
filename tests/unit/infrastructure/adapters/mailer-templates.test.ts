@@ -19,7 +19,8 @@ import {
     deleteRequestEmail,
     deleteConfirmEmail,
     inactivityWarningEmail,
-    twoFactorCodeEmail
+    twoFactorCodeEmail,
+    emailChangeNoticeEmail
 } from '@modules/account/emails';
 import { contactRequestEmail } from '@modules/feedback/emails';
 import { orderConfirmEmail, invoiceDocument } from '@modules/orders/emails';
@@ -77,6 +78,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.delete-confirm.ejs': deleteConfirmEmail(locale, 'Ada'),
     'account.inactivity-warning.ejs': inactivityWarningEmail(locale, 'Ada', 30),
     'account.two-factor-code.ejs': twoFactorCodeEmail(locale, 'Ada', '492013', 10),
+    'account.email-change-notice.ejs': emailChangeNoticeEmail(locale, 'Ada', 'new@example.com'),
     'orders.order-confirm.ejs': orderConfirmEmail(locale, 'Ada', {
         items: [
             { quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } },

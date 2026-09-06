@@ -1,7 +1,9 @@
 /**
  * @module
  * `PUT /account` controller — thin HTTP adapter over `accountService.updateProfile`, plus the
- * uploaded-image cleanup and re-verification trigger that ride along with a self-service edit.
+ * uploaded-image cleanup that rides along with a self-service edit. A changed email's side
+ * effects (the pending-change notice, the fresh verification link) are `updateProfile`'s own
+ * business — see `EMAIL_VERIFICATION_PLAN.md` — not the controller's.
  */
 
 import type { Request, Response } from 'express';
@@ -12,7 +14,6 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readUploadedImage } from '@infrastructure/adapters/image-store';
 import type { UpdateAccountRequest, UpdateAccountRequestMultipart, User } from '@types';
 import { accountService } from '../services';
-import { sendVerificationEmail } from '../services';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 import { toUser } from '@modules/users';
 
@@ -27,7 +28,7 @@ export const putAccount = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id, email: currentEmail } = authContextOf(request);
+    const { id } = authContextOf(request);
 
     // No `= ''` default here, unlike the create paths: `updateProfile` treats an absent
     // `imageUrl` as "not sent" and leaves the stored one alone, where `''` would clear it.
@@ -69,15 +70,6 @@ export const putAccount = (
                 rejectResponse(response, 500, []);
                 return;
             }
-
-            /*
-             * A changed address restarts verification: `updateProfile` has already unset
-             * `verified`, and the fresh link goes to the NEW address — proving the mailbox that
-             * now backs the account, not the one that used to. Fire-and-forget like every other
-             * account email; the response does not wait on the queue.
-             */
-            if (email !== undefined && email !== currentEmail)
-                void sendVerificationEmail(data, callerContextOf(request));
 
             successResponse<User>(response, toUser(data), 200, t('account.update.success'));
         })

@@ -10,7 +10,8 @@
         "error-rate-limited": "Too many requests. Try again shortly.",
         "error-reauth-required": "Please confirm it's you before continuing.",
         "error-antibot-verification-failed": "This request could not be verified as coming from a person. Please try the challenge again.",
-        "error-antibot-no-challenge": "This deployment does not issue a challenge to solve."
+        "error-antibot-no-challenge": "This deployment does not issue a challenge to solve.",
+        "error-email-not-verified": "Please confirm your email address before continuing."
     },
     "validation": {
         "required": "This field is required.",

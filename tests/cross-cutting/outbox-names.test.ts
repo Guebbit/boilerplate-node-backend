@@ -130,11 +130,13 @@ it('publishes the set the pair agreed on', () => {
      * here and **not yet** in `tests/CrossCutting/OutboxNamesTest.php` in
      * boilerplate-php-laravel-backend: the admin "create a user, let them set their own password"
      * flow, the inactive-account reaper and the email second factor only exist on this backend so
-     * far. The other eight are the agreed, mirrored set.
+     * far — and neither does the pending-email-change notice (`EMAIL_VERIFICATION_PLAN.md`). The
+     * other eight are the agreed, mirrored set.
      */
     const agreed = [
         'account.delete-confirm',
         'account.delete-request',
+        'account.email-change-notice',
         'account.inactivity-warning',
         'account.reset-confirm',
         'account.reset-request',

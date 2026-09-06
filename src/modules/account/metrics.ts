@@ -99,6 +99,19 @@ export const authEmailVerifyTotal = new Counter({
 });
 
 /**
+ * Email-change confirmations (the token-spending step for a `pendingEmail` swap).
+ * Its own counter rather than a label on {@link authEmailVerifyTotal}: a `verify` token and an
+ * `email-change` token are refused by each other's endpoint by design, so mixing their series
+ * would hide that the two are answering different questions.
+ */
+export const authEmailChangeConfirmTotal = new Counter({
+    name: 'auth_email_change_confirm_total',
+    help: 'Total email-change confirmation attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
  * Expired-token cleanup runs (admin endpoint).
  * Note: no `labelNames` — a maintenance job either ran or did not, so there is no outcome
  * dimension worth slicing by. Useful mainly to confirm the job is still running at all.

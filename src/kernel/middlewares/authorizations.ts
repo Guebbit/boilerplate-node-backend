@@ -61,7 +61,8 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                     imageUrl: user.imageUrl,
                     authTime: user.authTime,
                     amr: user.amr,
-                    analyticsConsent: user.analyticsConsent
+                    analyticsConsent: user.analyticsConsent,
+                    verified: user.verified
                 };
             }
         })
@@ -191,7 +192,8 @@ export const isAdminViaCookie = (request: Request, response: Response, next: Nex
                 imageUrl: user.imageUrl,
                 authTime: user.authTime,
                 amr: user.amr,
-                analyticsConsent: user.analyticsConsent
+                analyticsConsent: user.analyticsConsent,
+                verified: user.verified
             };
             next();
         })
@@ -295,3 +297,34 @@ export const requireFreshAuthWhen =
         }
         requireFreshAuth(maxAgeSeconds)(request, response, next);
     };
+
+/**
+ * Reject with 403 unless the caller's email is verified. MUST run after `isAuth`.
+ *
+ * Mounted only where an unverified account is a risk worth refusing over, not on every route — a
+ * boilerplate that shipped a verify flow and enforced it nowhere would teach the wrong default,
+ * but a browsing, cart-filling, unverified account is a legitimate state. `cart`'s checkout and
+ * `payments`' intent/confirm are the two mount points: where this app's money moves, which are
+ * also the two `requireFreshAuth(REAUTH_TIME_CRITICAL)` already gates.
+ *
+ * 403, not 401: the caller IS who their token says, same distinction `isAdmin` draws — this is a
+ * permission gap, not an identity one, and `EMAIL_NOT_VERIFIED` is what lets a client route to
+ * "check your inbox" instead of a generic denial.
+ *
+ * @param request - must already carry `authContext`, set upstream by `getAuth`/`isAuth`
+ * @param response - answered 401 with no caller at all, 403 for an unverified one
+ * @param next - called only once a verified caller is confirmed
+ */
+export const requireVerified = (request: Request, response: Response, next: NextFunction) => {
+    if (!request.authContext) {
+        rejectResponse(response, 401);
+        return;
+    }
+    if (!request.authContext.verified) {
+        rejectResponse(response, 403, [
+            { code: 'EMAIL_NOT_VERIFIED', message: t('generic.error-email-not-verified') }
+        ]);
+        return;
+    }
+    next();
+};

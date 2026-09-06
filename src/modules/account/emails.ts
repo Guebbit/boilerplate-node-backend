@@ -20,8 +20,19 @@ import { translator } from '@infrastructure/i18n';
 const accountLink = (route: string, token: string): string =>
     `${process.env.NODE_URL ?? ''}account/${route}/${token}`;
 
-/** Email verification: the email carrying the one-time confirmation link. */
-export const verifyRequestEmail = (locale: string, name: string, token: string): EmailContent => {
+/**
+ * Email verification: the email carrying the one-time confirmation link. Shared by both
+ * verification tokens (`account/services/verification.ts`) — only `route` differs, so a
+ * signup/re-send link lands on `/account/verify/:token` and an email-change link on
+ * `/account/email-change/:token`; the copy makes no claim about which address it is.
+ * @param route - `'verify'` or `'email-change'`, matching the frontend route the token confirms
+ */
+export const verifyRequestEmail = (
+    locale: string,
+    name: string,
+    token: string,
+    route: 'verify' | 'email-change' = 'verify'
+): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.verify-request',
@@ -33,8 +44,34 @@ export const verifyRequestEmail = (locale: string, name: string, token: string):
             greeting: t('account.email.verify-request.greeting', { name }),
             intro: t('account.email.verify-request.intro'),
             linkLabel: t('account.email.verify-request.link-label'),
-            linkUrl: accountLink('verify', token),
+            linkUrl: accountLink(route, token),
             ignore: t('account.email.verify-request.ignore'),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * Email-change notice: sent to the OLD address the moment a change is REQUESTED, not when it
+ * completes — a warning that arrives before a takeover is a warning, one that arrives after is a
+ * receipt. Carries no token and no link that acts: "this wasn't me" is a password change and a
+ * logout-everywhere, both of which already exist (see `EMAIL_VERIFICATION_PLAN.md`).
+ */
+export const emailChangeNoticeEmail = (
+    locale: string,
+    name: string,
+    newEmail: string
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.email-change-notice',
+        subject: t('account.email.email-change-notice.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.email-change-notice.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('account.email.email-change-notice.greeting', { name }),
+            body: t('account.email.email-change-notice.body', { newEmail }),
             footer: t('email.footer')
         }
     };

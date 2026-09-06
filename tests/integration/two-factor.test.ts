@@ -63,11 +63,26 @@ const mailedCode = (): string => {
 
 /**
  * A signed-in account whose address is VERIFIED, which is what the email factor requires.
- * `authenticateAs` leaves `verified` at the schema default, deliberately, so this suite asks for
- * the state it needs rather than changing the default for everyone.
+ * `authenticateAs` defaults to a verified account (most callers want one usable end to end,
+ * `PUT /account`'s `EMAIL_VERIFICATION_PLAN.md` among the reasons), so this suite states the
+ * requirement explicitly rather than depending on that default.
  */
 const authenticateVerified = async () => {
     const user = await createUser({ verified: true, email: 'ada@example.com' });
+    const login = await api()
+        .post('/account/login')
+        .send({ email: user.email, password: PLAIN_PASSWORD });
+
+    return { user, bearer: `Bearer ${login.body.data.token as string}` as const };
+};
+
+/**
+ * A signed-in account whose address is NOT verified — the counterpart to
+ * {@link authenticateVerified}, for the two cases in this suite that specifically exercise that
+ * state. `authenticateAs` no longer leaves it there by default.
+ */
+const authenticateUnverified = async () => {
+    const user = await createUser({ verified: false, email: 'unverified@example.com' });
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
@@ -145,7 +160,7 @@ describe('status', () => {
     });
 
     it('offers email as un-enrollable, with a reason, until the address is verified', async () => {
-        const { bearer } = await authenticateAs();
+        const { bearer } = await authenticateUnverified();
 
         const response = await api().get('/account/2fa').set('Authorization', bearer).send();
 
@@ -248,7 +263,7 @@ describe('enrolling the device factor', () => {
 
 describe('enrolling the email factor', () => {
     it('refuses an account whose address is not verified', async () => {
-        const { bearer } = await authenticateAs();
+        const { bearer } = await authenticateUnverified();
 
         const response = await api()
             .post('/account/2fa/methods/email/setup')
