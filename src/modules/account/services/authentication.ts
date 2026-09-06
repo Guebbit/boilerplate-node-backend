@@ -401,7 +401,22 @@ export const signup = (
         ? // Rung 2 of the anti-automation ladder — off by default, see `adapters/antibot`.
           checkEmailPolicy(email).then((verdict) =>
               verdict === 'refused'
-                  ? generateReject(422, [t('account.signup.email-domain-refused')])
+                  ? // Answer exactly like a genuine signup, from a document this call never
+                    // persists — a script gets nothing to iterate on. `signup`'s own `outcome.then`
+                    // and `post-signup.ts` both read `isNew` to keep the audit trail and the
+                    // upload cleanup honest.
+                    Promise.resolve(
+                        generateSuccess<UserDocument>(
+                            userRepository.build({
+                                email,
+                                username,
+                                imageUrl: imageUrl ?? '',
+                                thumbnailUrl,
+                                analyticsConsent,
+                                termsAccepted
+                            })
+                        )
+                    )
                   : userRepository
                         .findOne({ email })
                         .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
@@ -436,7 +451,10 @@ export const signup = (
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return outcome.then((result) => {
-        if (!result.success) {
+        // `isNew` on a `success` result means rung 2 refused this address and the ruse above
+        // built a document that was never saved — the audit trail must not name that account, or
+        // record it as anything other than the refusal it was.
+        if (!result.success || result.data?.isNew) {
             emitAuditEvent(
                 buildAuditEvent(callerContext, {
                     action: accountAuditActions.AUTH_SIGNED_UP,

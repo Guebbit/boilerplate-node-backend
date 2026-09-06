@@ -6,7 +6,8 @@
  * `docs/modules/antibot.md` for the alternatives and what each costs.
  */
 
-import type { HumanChallengeProvider, HumanVerdict } from './index';
+import type { HumanChallengeProvider } from './index';
+import type { RungVerdict } from '../antibot-verdict';
 
 /** Where a token is exchanged for a verdict. */
 const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -32,7 +33,7 @@ const secretKey = (): string => {
  * A non-200, a timeout or a malformed body all read as `refused` — never as a pass.
  * https://developers.cloudflare.com/turnstile/get-started/server-side-validation/
  */
-const siteverify = (token: string, remoteAddress?: string): Promise<HumanVerdict> =>
+const siteverify = (token: string, remoteAddress?: string): Promise<RungVerdict> =>
     fetch(VERIFY_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -46,7 +47,7 @@ const siteverify = (token: string, remoteAddress?: string): Promise<HumanVerdict
     })
         .then((response) => (response.ok ? response.json() : undefined))
         .then((body) =>
-            (body as { success?: boolean } | undefined)?.success === true ? 'human' : 'refused'
+            (body as { success?: boolean } | undefined)?.success === true ? 'ok' : 'refused'
         );
 
 /** Turnstile behind the port: public site key out, token verified against Cloudflare. */
@@ -57,5 +58,5 @@ export const turnstileProvider: HumanChallengeProvider = {
         scriptUrl: 'https://challenges.cloudflare.com/turnstile/v0/api.js'
     }),
     verify: (token, remoteAddress) =>
-        siteverify(token, remoteAddress).catch(() => 'refused' as HumanVerdict)
+        siteverify(token, remoteAddress).catch(() => 'refused' as RungVerdict)
 };

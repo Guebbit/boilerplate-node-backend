@@ -11,5 +11,5 @@ import type { HumanChallengeProvider } from './index';
 export const noneProvider: HumanChallengeProvider = {
     name: 'none',
     publicParameters: () => ({}),
-    verify: () => Promise.resolve('human')
+    verify: () => Promise.resolve('ok')
 };

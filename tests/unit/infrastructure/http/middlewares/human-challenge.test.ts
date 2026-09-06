@@ -1,6 +1,6 @@
 /**
  * `infrastructure/http/middlewares/human-challenge.ts` — the gate `signup`/`reset`/`contact`
- * mount for rung 4.
+ * mount for rung 3.
  *
  * Provider selection itself is `antibot-providers/index.test.ts`'s job; this suite owns the HTTP
  * shape around it — which header is read, what a refusal answers with, and the one property the

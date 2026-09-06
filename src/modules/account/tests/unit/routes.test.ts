@@ -230,7 +230,7 @@ describe('account routes — signup and reset rate limiting', () => {
     });
 });
 
-describe('account routes — human-challenge gate (rung 4)', () => {
+describe('account routes — human-challenge gate (rung 3)', () => {
     it.each([
         ['POST /signup', 'signupLimiters'],
         ['POST /reset', 'resetRequestLimiters']

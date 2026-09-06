@@ -129,7 +129,7 @@ describe('feedback routes — submission rate limiting', () => {
     });
 });
 
-describe('feedback routes — human-challenge gate (rung 4)', () => {
+describe('feedback routes — human-challenge gate (rung 3)', () => {
     it('carries humanChallengeGate on POST /contact, after contactLimiters', () => {
         const chain = chainOf('POST /contact');
 

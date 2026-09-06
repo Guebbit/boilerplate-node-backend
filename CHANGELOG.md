@@ -214,5 +214,17 @@ were removed and are kept out by a test.
   cart is one — naming a method for a purchase that never ships is a client error, not a lookup
   that might resolve. A cart mixing digital and physical lines is unaffected. Non-breaking:
   additive and defaulted, so an existing client sending nothing still gets today's behaviour.
+- **Anti-automation ladder**, three rungs guarding `POST /account/signup`, `POST /account/login`,
+  `POST /account/reset` and `POST /feedback/contact` — all but the first off by default. Rung 1
+  (identity, address and address-block rate budgets) is always on. Rung 2
+  (`NODE_ANTIBOT_EMAIL_POLICY` — `off`/`disposable`/`mx`) refuses a known-disposable or unregistered
+  email domain; a refused signup now answers `201` from a document that is never persisted, the
+  same "file it, tell the bot nothing" shape `POST /feedback/contact` already used, rather than a
+  `422` a script could read as a per-domain signal telling it to try the next one. Rung 3
+  (`NODE_ANTIBOT_PROVIDER` — `none`/`altcha`/`turnstile`) gates a route behind a human-challenge
+  token; on login it only engages once the per-account failure budget is at least half spent, never
+  on an honest first attempt. `GET /antibot/config` now reports every rung's status
+  (`rungs.identityBudgets`, `rungs.emailPolicy`) alongside rung 3's provider, which it already
+  published — additive, so an existing client reading only `provider`/`parameters` is unaffected.
 
 [3.0.0]: https://github.com/Guebbit/boilerplate-node-backend/releases/tag/v3.0.0

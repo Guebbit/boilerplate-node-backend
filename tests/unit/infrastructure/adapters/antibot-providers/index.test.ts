@@ -45,6 +45,6 @@ describe('the `none` provider', () => {
         const provider = resolveHumanChallengeProvider();
 
         expect(provider.publicParameters()).toEqual({});
-        await expect(provider.verify('anything')).resolves.toBe('human');
+        await expect(provider.verify('anything')).resolves.toBe('ok');
     });
 });

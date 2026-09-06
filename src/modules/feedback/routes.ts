@@ -30,7 +30,7 @@ export const router = Router();
  * them skipping success: this form's abuse is a successful post repeated, not a failed one.
  * See docs/tools/security.md#the-rate-limit-budgets.
  *
- * `humanChallengeGate` next — rung 4, off by default (`NODE_ANTIBOT_PROVIDER`) — before the write it
+ * `humanChallengeGate` next — rung 3, off by default (`NODE_ANTIBOT_PROVIDER`) — before the write it
  * would otherwise refuse just as cheaply after.
  */
 router.post(

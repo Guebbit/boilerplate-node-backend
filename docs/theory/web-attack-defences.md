@@ -353,9 +353,10 @@ ships as the worked example; a deployment that wants no third party at all plugs
 proof-of-work implementation into the same registry — see
 [antibot](../modules/antibot.md#choosing-a-provider).
 
-Login is the one endpoint still unguarded here. It should challenge only AFTER a budget is partly
-spent, not on every attempt — an honest first try should never see one — and that conditional gate
-is not built.
+Login carries a conditional form of rung 3 rather than the unconditional one signup/reset/contact
+use: `loginChallengeGate` delegates to `humanChallengeGate` only once `credentialLimiters`' identity
+budget is at least half spent, so an honest first try never sees a challenge but a credential-
+stuffing run does before it exhausts the budget rung 1 already bounds.
 
 ## Supply chain — §14, re-walked
 

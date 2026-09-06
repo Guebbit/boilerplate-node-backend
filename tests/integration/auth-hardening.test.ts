@@ -136,6 +136,81 @@ describe('credential endpoints are rate limited separately', () => {
     });
 });
 
+describe('loginChallengeGate — rung 3 only once the identity budget is mostly spent', () => {
+    const ORIGINAL_PROVIDER = process.env.NODE_ANTIBOT_PROVIDER;
+
+    afterEach(() => {
+        jest.resetModules();
+        if (ORIGINAL_PROVIDER === undefined) delete process.env.NODE_ANTIBOT_PROVIDER;
+        else process.env.NODE_ANTIBOT_PROVIDER = ORIGINAL_PROVIDER;
+    });
+
+    /**
+     * Same `jest.resetModules()` recipe `limitersWithBudget` uses: `credentialLimiters` and
+     * `loginChallengeGate` must come from the SAME module instance, since the gate reads the
+     * property name the identity limiter was configured with.
+     */
+    const appWithBudget = async (identityLimit: number) => {
+        const original = process.env.NODE_AUTH_RATE_LIMIT_MAX;
+        process.env.NODE_AUTH_RATE_LIMIT_MAX = String(identityLimit);
+        jest.resetModules();
+
+        const { credentialLimiters, loginChallengeGate } =
+            await import('@infrastructure/http/middlewares/rate-limit');
+
+        if (original === undefined) delete process.env.NODE_AUTH_RATE_LIMIT_MAX;
+        else process.env.NODE_AUTH_RATE_LIMIT_MAX = original;
+
+        const app = express();
+        app.use(express.json());
+        app.post(
+            '/login',
+            ...credentialLimiters,
+            loginChallengeGate,
+            (_request, response: express.Response) => {
+                response.status(401).json({ success: false });
+            }
+        );
+        return app;
+    };
+
+    it('never engages while no provider is selected, budget spent or not', async () => {
+        delete process.env.NODE_ANTIBOT_PROVIDER;
+        const app = await appWithBudget(4);
+        const attempt = () => supertest(app).post('/login').send({ email: 'ada@example.com' });
+
+        for (let index = 0; index < 3; index++) {
+            const response = await attempt();
+            expect(response.status).toBe(401);
+        }
+    });
+
+    it('passes an honest first attempt through untouched once a provider is selected', async () => {
+        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        const app = await appWithBudget(4);
+
+        const response = await supertest(app).post('/login').send({ email: 'ada@example.com' });
+
+        // The credential check itself still answers — no 401 from the challenge gate demanding
+        // a token nobody was asked to send yet.
+        expect(response.status).toBe(401);
+        expect(response.body).toEqual({ success: false });
+    });
+
+    it('challenges once the identity budget is at least half spent', async () => {
+        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+        const app = await appWithBudget(4);
+        const attempt = () => supertest(app).post('/login').send({ email: 'ada@example.com' });
+
+        await attempt(); // first failure of four: well under half, stays honest
+
+        const response = await attempt(); // second failure: exactly half of four
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');
+    });
+});
+
 describe('the 500 handler', () => {
     /**
      * An unexpected error is precisely the case where nobody chose the wording: a driver error

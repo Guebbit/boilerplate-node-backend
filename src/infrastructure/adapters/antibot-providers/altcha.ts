@@ -9,7 +9,8 @@
 import { createChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { verify } from 'altcha-lib/frameworks/shared';
-import type { HumanChallengeProvider, HumanVerdict } from './index';
+import type { HumanChallengeProvider } from './index';
+import type { RungVerdict } from '../antibot-verdict';
 import { altchaStore } from './altcha-store';
 import type { AntibotChallenge } from '@types';
 
@@ -66,13 +67,13 @@ const issue = (): Promise<AntibotChallenge> =>
  * single-use via the store. `verified` is only true when every one of those passed.
  * https://github.com/altcha-org/altcha-lib#verifysolution
  */
-const check = (payload: string): Promise<HumanVerdict> =>
+const check = (payload: string): Promise<RungVerdict> =>
     // `signatureSecret`'s throw has to happen INSIDE the chain: raised while evaluating an
     // argument it would escape synchronously, past the `.catch` that makes a broken deployment
     // refuse callers rather than 500 at them.
     Promise.resolve()
         .then(() => verify(payload, deriveKey, signatureSecret(), undefined, altchaStore))
-        .then((result) => (result.verification?.verified === true ? 'human' : 'refused'));
+        .then((result) => (result.verification?.verified === true ? 'ok' : 'refused'));
 
 /** ALTCHA behind the port: this server issues the challenge and verifies the solution. */
 export const altchaProvider: HumanChallengeProvider = {
@@ -80,5 +81,5 @@ export const altchaProvider: HumanChallengeProvider = {
     // The widget needs no key — it is told where to fetch a challenge, and that route is ours.
     publicParameters: () => ({ challengeUrl: '/antibot/challenge' }),
     issueChallenge: issue,
-    verify: (token) => check(token).catch(() => 'refused' as HumanVerdict)
+    verify: (token) => check(token).catch(() => 'refused' as RungVerdict)
 };

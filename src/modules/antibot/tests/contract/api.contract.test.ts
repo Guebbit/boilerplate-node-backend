@@ -13,20 +13,28 @@ import { api } from '@tests/http';
 setupTestDb();
 
 const ORIGINAL_PROVIDER = process.env.NODE_ANTIBOT_PROVIDER;
+const ORIGINAL_EMAIL_POLICY = process.env.NODE_ANTIBOT_EMAIL_POLICY;
 
 afterEach(() => {
     if (ORIGINAL_PROVIDER === undefined) delete process.env.NODE_ANTIBOT_PROVIDER;
     else process.env.NODE_ANTIBOT_PROVIDER = ORIGINAL_PROVIDER;
+    if (ORIGINAL_EMAIL_POLICY === undefined) delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+    else process.env.NODE_ANTIBOT_EMAIL_POLICY = ORIGINAL_EMAIL_POLICY;
 });
 
 describe('GET /antibot/config', () => {
-    it('matches the contract while the rung is off — the default', async () => {
+    it('matches the contract while every rung is off — the default', async () => {
         delete process.env.NODE_ANTIBOT_PROVIDER;
+        delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
 
         const response = await api().get('/antibot/config');
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual({ provider: 'none', parameters: {} });
+        expect(response.body.data).toEqual({
+            provider: 'none',
+            parameters: {},
+            rungs: { identityBudgets: true, emailPolicy: 'off' }
+        });
         expect(response).toSatisfyApiSpec();
     });
 
@@ -42,8 +50,27 @@ describe('GET /antibot/config', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it("publishes rung 2's active posture alongside rung 3's provider", async () => {
+        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'mx';
+
+        const response = await api().get('/antibot/config');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.rungs).toEqual({ identityBudgets: true, emailPolicy: 'mx' });
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('answers 500 rather than falling back when the provider name is unknown', async () => {
         process.env.NODE_ANTIBOT_PROVIDER = 'not-a-provider';
+
+        const response = await api().get('/antibot/config');
+
+        expect(response.status).toBe(500);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 500 rather than falling back when the email policy is unknown', async () => {
+        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'not-a-policy';
 
         const response = await api().get('/antibot/config');
 

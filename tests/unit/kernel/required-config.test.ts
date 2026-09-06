@@ -22,6 +22,7 @@ const TOUCHED = [
     'NODE_ANTIBOT_ALTCHA_SECRET',
     'NODE_ANTIBOT_TURNSTILE_SITE_KEY',
     'NODE_ANTIBOT_TURNSTILE_SECRET',
+    'NODE_ANTIBOT_EMAIL_POLICY',
     'SECRET'
 ] as const;
 
@@ -34,6 +35,7 @@ const configure = (): void => {
     delete process.env.NODE_DEMO;
     delete process.env.NODE_SMTP_HOST;
     delete process.env.NODE_ANTIBOT_PROVIDER;
+    delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
 };
 
 afterEach(() => {
@@ -173,5 +175,27 @@ describe('the antibot provider group', () => {
         process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'an-altcha-signing-secret-value';
 
         expect(() => assertRequiredConfig([])).not.toThrow();
+    });
+});
+
+describe('the antibot email-policy group', () => {
+    it('asks for nothing while the policy is off — the default', () => {
+        configure();
+
+        expect(() => assertRequiredConfig([])).not.toThrow();
+    });
+
+    it.each(['disposable', 'mx'])('accepts a recognized policy (%s)', (policy) => {
+        configure();
+        process.env.NODE_ANTIBOT_EMAIL_POLICY = policy;
+
+        expect(() => assertRequiredConfig([])).not.toThrow();
+    });
+
+    it('refuses to boot on an unrecognized policy, rather than throwing at the first signup', () => {
+        configure();
+        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'not-a-policy';
+
+        expect(() => assertRequiredConfig([])).toThrow(/NODE_ANTIBOT_EMAIL_POLICY/);
     });
 });

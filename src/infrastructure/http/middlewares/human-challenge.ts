@@ -7,9 +7,8 @@
  */
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { rejectResponse } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
+import { refuseAntibot } from '@infrastructure/http/middlewares/antibot-log';
 import {
     isHumanChallengeEnabled,
     resolveHumanChallengeProvider
@@ -18,13 +17,9 @@ import {
 /** The header a provider token travels in — a header, so one gate fits any request shape. */
 const TOKEN_HEADER = 'x-antibot-challenge-token';
 
-/**
- * Answer the shared error envelope and say so in the log, since nothing downstream will — the
- * same reasoning `rate-limit.ts` refuses under.
- */
-const refuse = (request: Request, response: Response, provider: string): void => {
-    logger.warn(`Antibot refused ${request.method} ${request.path}`, { provider });
-    rejectResponse(response, 401, [
+/** Answers the shared error envelope and logs it — see `antibot-log.ts`. */
+const refuse = (request: Request, response: Response): void => {
+    refuseAntibot('human-challenge', request, response, 401, [
         {
             code: 'ANTIBOT_VERIFICATION_FAILED',
             message: t('generic.error-antibot-verification-failed')
@@ -50,19 +45,19 @@ export const humanChallengeGate: RequestHandler = (
     const provider = resolveHumanChallengeProvider();
     const token = request.header(TOKEN_HEADER);
     if (!token) {
-        refuse(request, response, provider.name);
+        refuse(request, response);
         return;
     }
 
     provider
         .verify(token, request.ip)
         .then((verdict) => {
-            if (verdict === 'human') {
+            if (verdict === 'ok') {
                 next();
                 return;
             }
-            refuse(request, response, provider.name);
+            refuse(request, response);
         })
         // A provider that throws rather than answering is a refusal, never a pass.
-        .catch(() => refuse(request, response, provider.name));
+        .catch(() => refuse(request, response));
 };

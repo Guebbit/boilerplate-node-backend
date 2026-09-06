@@ -168,10 +168,10 @@ describe('signup', () => {
             expect(response.data.email).toBe('someone@mailinator.com');
         });
 
-        it('rejects a disposable domain with 422 when the policy is on', async () => {
+        it('answers success for a disposable domain when the policy is on, but never persists it', async () => {
             process.env.NODE_ANTIBOT_EMAIL_POLICY = 'disposable';
 
-            const response = asReject(
+            const response = asSuccess(
                 await accountService.signup(
                     {
                         email: 'someone@mailinator.com',
@@ -188,7 +188,11 @@ describe('signup', () => {
                 )
             );
 
-            expect(response.status).toBe(422);
+            // The ruse: an envelope indistinguishable from a genuine signup, built from a
+            // document `isNew` marks as never saved — `post-signup.ts` reads that flag to keep
+            // the audit trail and the upload cleanup honest.
+            expect(response.data.email).toBe('someone@mailinator.com');
+            expect(response.data.isNew).toBe(true);
 
             // Not persisted — the refused address never became an account.
             const stored = await userRepository.findOne({ email: 'someone@mailinator.com' });

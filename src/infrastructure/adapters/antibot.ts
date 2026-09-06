@@ -9,25 +9,27 @@
 
 import { resolveMx } from 'node:dns/promises';
 import { isDisposableEmailDomain } from 'disposable-email-domains-js';
+import type { RungVerdict } from './antibot-verdict';
 
 /** The three postures a deployment can pick via `NODE_ANTIBOT_EMAIL_POLICY`. */
 export type EmailPolicy = 'off' | 'disposable' | 'mx';
 
-/** What {@link checkEmailPolicy} answers: whether the caller may proceed with this address. */
-export type EmailPolicyVerdict = 'ok' | 'refused';
-
-/** Narrows a raw env string onto {@link EmailPolicy}, so `resolveEmailPolicy` needs no cast. */
-const isEmailPolicy = (value: string): value is EmailPolicy =>
+/**
+ * Narrows a raw env string onto {@link EmailPolicy}, so `resolveEmailPolicy` needs no cast.
+ * Exported so `kernel/required-config.ts` can refuse an unrecognized value at boot without
+ * needing `resolveEmailPolicy`'s throw.
+ */
+export const isEmailPolicy = (value: string): value is EmailPolicy =>
     value === 'off' || value === 'disposable' || value === 'mx';
 
 /**
  * The active policy, read fresh per call — same arrangement as `payments/config.ts`'s
- * `defaultCurrency`.
+ * `defaultCurrency`. Exported so `GET /antibot/config` can publish it alongside rung 3's provider.
  *
  * @throws {Error} when the variable names something outside the closed set; silently falling
  *   back to `off` would turn a deployment's typo into an unnoticed loss of protection.
  */
-const resolveEmailPolicy = (): EmailPolicy => {
+export const resolveEmailPolicy = (): EmailPolicy => {
     const raw = process.env.NODE_ANTIBOT_EMAIL_POLICY ?? 'off';
     if (!isEmailPolicy(raw)) throw new Error(`Unknown NODE_ANTIBOT_EMAIL_POLICY: "${raw}"`);
     return raw;
@@ -95,7 +97,7 @@ const hasMxRecord = (domain: string): Promise<boolean> =>
  * @param email - the submitted address; any shape validation already happened upstream
  * @returns `ok` (always, when the policy is `off`) or `refused`
  */
-export const checkEmailPolicy = (email: string): Promise<EmailPolicyVerdict> =>
+export const checkEmailPolicy = (email: string): Promise<RungVerdict> =>
     Promise.resolve().then(() => {
         const policy = resolveEmailPolicy();
         if (policy === 'off') return 'ok';

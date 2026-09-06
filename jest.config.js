@@ -100,9 +100,14 @@ module.exports = {
         '/node_modules/',
         '<rootDir>/.stryker-tmp/',
         '<rootDir>/.tmp/',
+        '<rootDir>/.claude/worktrees/',
         '<rootDir>/tests/cluster/'
     ],
-    modulePathIgnorePatterns: ['<rootDir>/.stryker-tmp/', '<rootDir>/.tmp/'],
+    modulePathIgnorePatterns: [
+        '<rootDir>/.stryker-tmp/',
+        '<rootDir>/.tmp/',
+        '<rootDir>/.claude/worktrees/'
+    ],
     collectCoverageFrom: [
         'src/**/*.ts',
         '!src/types/**',

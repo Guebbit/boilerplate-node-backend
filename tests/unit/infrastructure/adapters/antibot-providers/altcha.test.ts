@@ -41,13 +41,13 @@ describe('the altcha provider', () => {
     });
 
     it('accepts a genuinely solved challenge', async () => {
-        await expect(altchaProvider.verify(await solvedPayload())).resolves.toBe('human');
+        await expect(altchaProvider.verify(await solvedPayload())).resolves.toBe('ok');
     });
 
     it('refuses the same solution a second time', async () => {
         const payload = await solvedPayload();
 
-        await expect(altchaProvider.verify(payload)).resolves.toBe('human');
+        await expect(altchaProvider.verify(payload)).resolves.toBe('ok');
         await expect(altchaProvider.verify(payload)).resolves.toBe('refused');
     });
 

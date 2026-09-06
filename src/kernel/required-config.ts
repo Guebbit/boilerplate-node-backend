@@ -8,6 +8,7 @@
  */
 
 import { isDemoMode } from '@infrastructure/adapters/demo-outbox';
+import { isEmailPolicy } from '@infrastructure/adapters/antibot';
 import type { AppModule, RequiredConfig } from '@kernel/registry';
 
 /**
@@ -76,6 +77,18 @@ const missingAntibotProviderSecrets = (): string[] =>
     );
 
 /**
+ * Rung 2's own boot check, same reasoning as {@link missingAntibotProviderSecrets}: an unrecognized
+ * `NODE_ANTIBOT_EMAIL_POLICY` would otherwise only throw on the first signup, in the middle of a
+ * request, rather than at boot.
+ *
+ * @returns `['NODE_ANTIBOT_EMAIL_POLICY']` when the value is set and unrecognized, otherwise `[]`
+ */
+const invalidEmailPolicy = (): string[] => {
+    const raw = process.env.NODE_ANTIBOT_EMAIL_POLICY;
+    return raw !== undefined && !isEmailPolicy(raw) ? ['NODE_ANTIBOT_EMAIL_POLICY'] : [];
+};
+
+/**
  * Refuse to boot on a missing, truncated or still-placeholder required variable.
  *
  * Skipped under `NODE_ENV=test` and in the demo profile: a demo deployment that developers
@@ -97,7 +110,8 @@ export const assertRequiredConfig = (appModules: AppModule[]): void => {
     const offending = [
         ...declared.filter((entry) => applies(entry) && fails(entry)).map(({ key }) => key),
         ...missingSmtpCompanions(),
-        ...missingAntibotProviderSecrets()
+        ...missingAntibotProviderSecrets(),
+        ...invalidEmailPolicy()
     ];
 
     if (offending.length > 0)

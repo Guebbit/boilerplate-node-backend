@@ -11,7 +11,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { isIPv4 } from 'node:net';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { rateLimit, ipKeyGenerator, type Store } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator, type Store, type RateLimitInfo } from 'express-rate-limit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
@@ -23,6 +23,8 @@ import {
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { callerContextOf } from '@infrastructure/http/request';
+import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
+import { refuseAntibot } from '@infrastructure/http/middlewares/antibot-log';
 
 /**
  * Default window, in ms, used when `NODE_RATE_LIMIT_WINDOW_MS` is unset: one minute.
@@ -139,17 +141,11 @@ const refuse =
             );
 
         /*
-         * Every refusal, audited or not. `installSecurity` mounts these limiters before
+         * Every refusal, audited or not — `installSecurity` mounts these limiters before
          * `installRequestContext` mounts the request logger, so a 429 short-circuits before
-         * anything else would record it — leaving the global brake with no trace at all.
+         * anything else would record it, leaving the global brake with no trace at all.
          */
-        logger.warn(`Rate limit refused ${request.method} ${request.path}`, {
-            method: request.method,
-            route: request.path,
-            status_code: 429
-        });
-
-        return rejectResponse(response, 429, [
+        return refuseAntibot('rate-limit', request, response, 429, [
             { code: 'RATE_LIMITED', message: t('generic.error-rate-limited') }
         ]);
     };
@@ -254,6 +250,14 @@ const rateLimitOn = (
     });
 
 /**
+ * Where express-rate-limit stores the identity limiter's counter on `request` — a distinct name
+ * because `credentialLimiters` chains three limiters and, by default, each one's info overwrites
+ * the last. `loginChallengeGate` is the only reader.
+ * https://express-rate-limit.mintlify.app/reference/configuration#requestpropertyname
+ */
+const IDENTITY_RATE_LIMIT_PROPERTY = 'credentialIdentityRateLimit';
+
+/**
  * The credential budgets, for the routes that accept a password or mint a token.
  *
  * THREE independent limiters: one bounds failed attempts against ONE account (defeats a botnet
@@ -273,7 +277,8 @@ export const credentialLimiters: RequestHandler[] = [
         ...limiterOptions(rateLimitStore('credentials-identity'), true),
         limit: environmentNumber('NODE_AUTH_RATE_LIMIT_MAX', DEFAULT_AUTH_RATE_LIMIT_MAX, 1),
         skipSuccessfulRequests: true,
-        keyGenerator: identityOf
+        keyGenerator: identityOf,
+        requestPropertyName: IDENTITY_RATE_LIMIT_PROPERTY
     }),
     rateLimit({
         ...limiterOptions(rateLimitStore('credentials-address'), true),
@@ -291,6 +296,36 @@ export const credentialLimiters: RequestHandler[] = [
         { keyGenerator: addressBlockOf, skipSuccessfulRequests: true }
     )
 ];
+
+/**
+ * Fraction of the per-account failure budget that must already be spent before an otherwise
+ * honest login attempt starts carrying rung 3's challenge. Never on a first, or even second,
+ * mistyped password — but before a script gets to spend the rest of the budget unchallenged.
+ */
+const CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT = 0.5;
+
+/**
+ * Whether this login attempt has already burned enough of its account's failure budget that
+ * rung 3's challenge should apply. Missing rate-limit info (the identity limiter didn't run, or a
+ * store error let the request through) reads as "not yet": this gate must never be the reason a
+ * login fails when the budget it reads already failed open.
+ */
+const identityBudgetMostlySpent = (request: Request): boolean => {
+    const info = (request as Request & Record<string, RateLimitInfo | undefined>)[
+        IDENTITY_RATE_LIMIT_PROPERTY
+    ];
+    if (!info) return false;
+    return info.remaining <= info.limit * (1 - CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT);
+};
+
+/**
+ * Mounted between `credentialLimiters` and the login handler: passes through while the account's
+ * failure budget is mostly unspent, delegates to `humanChallengeGate` once it is not. Keeps rung 3
+ * off an honest first attempt while still gating a credential-stuffing run before it exhausts the
+ * budget rung 1 already bounds.
+ */
+export const loginChallengeGate: RequestHandler = (request, response, next) =>
+    identityBudgetMostlySpent(request) ? humanChallengeGate(request, response, next) : next();
 
 /**
  * The budget for public submissions that cause an outbound email.

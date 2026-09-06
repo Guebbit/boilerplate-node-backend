@@ -1,7 +1,7 @@
 # antibot
 
 ::: tip At a glance
-**Owns** — rung 4 of the anti-automation ladder: the human-challenge port, and the endpoint that
+**Owns** — rung 3 of the anti-automation ladder: the human-challenge port, and the endpoint that
 tells a frontend which provider is active.
 **Depends on** — nothing, and nothing depends on it. `account` and `feedback` reach
 `infrastructure/adapters/antibot-providers` directly, through `humanChallengeGate` — a
@@ -23,18 +23,23 @@ _Nothing reaches `antibot` and it reaches nothing — no imports either way, no 
 **Off by default, and the switch is a name rather than a boolean.** `NODE_ANTIBOT_PROVIDER`
 selects an implementation from the registry in `infrastructure/adapters/antibot-providers`; the
 default `none` passes every caller and publishes nothing to render. The same selection answers two
-questions: what `GET /antibot/config` reports, and whether `humanChallengeGate` — mounted in
-`account/routes.ts` on `/signup`/`/reset` and in `feedback/routes.ts` on `/contact` — demands a
-token. Neither route imports this module; both import the adapter and the middleware directly,
-which is why the neighbourhood diagram above shows no edges at all.
+questions: what `GET /antibot/config` reports, and whether `humanChallengeGate` demands a token.
+It is mounted unconditionally in `account/routes.ts` on `/signup`/`/reset` and in
+`feedback/routes.ts` on `/contact`; on `/login` it sits behind `loginChallengeGate` instead, which
+only delegates to it once the per-account failure budget rung 1 tracks is at least half spent —
+never on an honest first attempt. Neither route imports this module; all of them import the adapter
+and the middleware directly, which is why the neighbourhood diagram above shows no edges at all.
 
 **A typo refuses to boot the rung rather than silently disabling it.** An unknown provider name
 throws instead of falling back to `none`, on the same reasoning as `NODE_ANTIBOT_EMAIL_POLICY`: a
 deployment's misspelling must not read as "protection off".
 
-**The endpoint always answers, on or off.** `GET /antibot/config` reports `provider: "none"` with
-an empty parameter map rather than 404 or an empty body, so the frontend can call it
-unconditionally and decide what to render from the response alone.
+**The endpoint always answers, on or off, and reports every rung, not just this one.**
+`GET /antibot/config` reports `provider: "none"` with an empty parameter map rather than 404 or an
+empty body, so the frontend can call it unconditionally and decide what to render from the response
+alone. Its `rungs` object adds rung 1's status (`identityBudgets`, always `true`) and rung 2's
+active posture (`emailPolicy` — `off`/`disposable`/`mx`), so "what is active on this deployment" has
+one answer instead of three.
 
 **A provider that cannot answer is a refusal, never a pass.** A non-200, a timeout or a malformed
 body from the vendor all resolve to `refused`. The alternative — failing open when the vendor is

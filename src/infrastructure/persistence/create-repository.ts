@@ -205,6 +205,12 @@ export interface Repository<TDocument extends Document> {
     create: (data: Partial<TDocument>, options?: SaveOptions) => Promise<TDocument>;
     /** Persist in-memory changes to an already-fetched document. */
     save: (document: TDocument) => Promise<TDocument>;
+    /**
+     * Construct a document WITHOUT persisting it — `isNew` stays `true` until something calls
+     * `save()`. For a caller that needs the real hydrated shape (defaults included) to hand back
+     * without ever writing to the collection.
+     */
+    build: (data: Partial<TDocument>) => TDocument;
     /** Remove a single document. */
     deleteOne: (document: TDocument) => Promise<void>;
     /** Filter → count → page → normalize, per the declared search spec. */
@@ -295,6 +301,9 @@ export function createRepository<TDocument extends Document>(
     /** Persist in-memory changes to an already-fetched document. */
     const save = (document: TDocument): Promise<TDocument> => document.save();
 
+    /** Never touches the database — schema defaults still apply, `.save()` just isn't called. */
+    const build = (data: Partial<TDocument>): TDocument => new mongooseModel(data);
+
     /** Remove a single document. */
     const deleteOne = (document: TDocument): Promise<void> =>
         // mongoose types `Document#deleteOne` as `any`; the cast restores the promise it returns
@@ -341,6 +350,9 @@ export function createRepository<TDocument extends Document>(
         count: trackDatabaseQuery(count),
         create: trackDatabaseQuery(create),
         save: trackDatabaseQuery(save),
+        // Not wrapped: it never queries the database, so there is nothing for `db_queries_total`
+        // to count.
+        build,
         deleteOne: trackDatabaseQuery(deleteOne),
         search: trackDatabaseQuery(search),
         normalize,

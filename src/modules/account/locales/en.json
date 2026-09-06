@@ -7,7 +7,6 @@
         },
         "signup": {
             "email-already-used": "Email was already used.",
-            "email-domain-refused": "This email address cannot be used to register.",
             "password-dont-match": "Confirmation password must be the same of password.",
             "terms-not-accepted": "You must accept the Terms of Service and Privacy Policy to register."
         },

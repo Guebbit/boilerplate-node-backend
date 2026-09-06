@@ -1,6 +1,6 @@
 /**
  * @module
- * Rung 4 of the anti-automation ladder: the human-challenge port. Which implementation answers is
+ * Rung 3 of the anti-automation ladder: the human-challenge port. Which implementation answers is
  * a deployment decision (`NODE_ANTIBOT_PROVIDER`), not a code path — the boilerplate ships `none`
  * and a live project adds one file plus one line to the registry below. The vendor shortlist and
  * what each costs a deployment live in `docs/modules/antibot.md`.
@@ -10,9 +10,7 @@ import { noneProvider } from './none';
 import { turnstileProvider } from './turnstile';
 import { altchaProvider } from './altcha';
 import type { AntibotChallenge } from '@types';
-
-/** What a verification can come back as. Everything else an implementation can say is a throw. */
-export type HumanVerdict = 'human' | 'refused';
+import type { RungVerdict } from '../antibot-verdict';
 
 /**
  * What an implementation must provide — and, for a REAL one, what it must additionally defend.
@@ -53,7 +51,7 @@ export interface HumanChallengeProvider {
      * @param remoteAddress - the caller's address, which some vendors score against
      * @returns the verdict; a refusal is an answer, not an error — only transport failures throw
      */
-    verify(token: string, remoteAddress?: string): Promise<HumanVerdict>;
+    verify(token: string, remoteAddress?: string): Promise<RungVerdict>;
 }
 
 /**
@@ -84,6 +82,6 @@ export const resolveHumanChallengeProvider = (): HumanChallengeProvider => {
     return provider;
 };
 
-/** Whether this deployment has switched rung 4 on — i.e. picked anything but the no-op. */
+/** Whether this deployment has switched rung 3 on — i.e. picked anything but the no-op. */
 export const isHumanChallengeEnabled = (): boolean =>
     resolveHumanChallengeProvider().name !== 'none';

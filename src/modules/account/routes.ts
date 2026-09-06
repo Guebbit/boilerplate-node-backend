@@ -15,7 +15,8 @@ import {
     resetRequestLimiters,
     uploadLimiter,
     mfaChallengeLimiter,
-    mfaSendLimiter
+    mfaSendLimiter,
+    loginChallengeGate
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import {
@@ -119,12 +120,14 @@ router.delete('/', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), deleteAccount
 // DELETE /account/delete-confirm — confirm account deletion with token
 router.delete('/delete-confirm', invalidateCache(['users', 'account']), deleteAccountConfirm);
 
-// POST /account/login — authenticate and get tokens
-router.post('/login', credentialLimiters, postLogin);
+// POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
+// default) only engages once `credentialLimiters`' identity budget is mostly spent — never on an
+// honest first attempt, see rate-limit.ts.
+router.post('/login', credentialLimiters, loginChallengeGate, postLogin);
 
 // POST /account/signup — register new user. `signupLimiters`, not `credentialLimiters`: the
 // abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
-// would spend nothing on — see rate-limit.ts. `humanChallengeGate` (rung 4, off by default) sits
+// would spend nothing on — see rate-limit.ts. `humanChallengeGate` (rung 3, off by default) sits
 // ahead of the upload parse, so a request that fails it never pays for a file read.
 router.post(
     '/signup',
