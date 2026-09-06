@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 
+/** The repo root — the working directory every spawned jest inherits. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /** Where jest's in-memory Mongo data directories live. Outside the sandbox, deliberately. */

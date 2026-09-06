@@ -154,6 +154,7 @@ const fillerProductRows = FILLER_PRODUCTS.map((product, index) => {
     });
 });
 
+/** Every demo product: the hand-written catalogue first, then the generated filler rows. */
 export const productFixtures = [...namedProducts, ...fillerProductRows];
 
 /**

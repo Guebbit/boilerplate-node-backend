@@ -13,6 +13,7 @@ import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 
 jest.mock('node:dns/promises', () => ({ resolveMx: jest.fn() }));
 
+/** The DNS lookup rung 2's `mx` policy makes — mocked, so no case reaches a real resolver. */
 const mockedResolveMx = jest.mocked(resolveMx);
 
 /** Sets an env var back to its original value, or deletes it if there wasn't one. */

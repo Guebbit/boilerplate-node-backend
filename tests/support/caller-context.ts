@@ -6,4 +6,5 @@
  */
 import type { CallerContext } from '@infrastructure/http/request';
 
+/** The fixture itself: no caller, no consent — the quietest context a service will accept. */
 export const testCallerContext: CallerContext = { caller: {}, analyticsConsent: false };

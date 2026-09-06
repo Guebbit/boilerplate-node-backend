@@ -27,6 +27,7 @@ interface AnimalLine {
     slug: string;
 }
 
+/** The six species the grid is built over — one axis of the generated catalogue. */
 const ANIMALS: AnimalLine[] = [
     { name: 'Dog', slug: 'dogs' },
     { name: 'Cat', slug: 'cats' },
@@ -46,6 +47,7 @@ interface ProductType {
     basePrice: number;
 }
 
+/** The product lines every species gets — the second axis of the grid. */
 const PRODUCT_TYPES: ProductType[] = [
     {
         name: 'Bed',
@@ -100,6 +102,7 @@ interface Tier {
     qualifier: string;
 }
 
+/** The quality tiers each species/type pair is offered at — the third axis, and the price dial. */
 const TIERS: Tier[] = [
     {
         name: 'Standard',

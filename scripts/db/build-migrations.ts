@@ -16,8 +16,13 @@ import type { IndexDefinition, IndexOptions } from 'mongoose';
 import { format, resolveConfig } from 'prettier';
 import { collectModuleMigrations } from './module-migrations';
 
+/** The repo root, two levels up from `scripts/db/`. */
 const ROOT = path.join(__dirname, '..', '..');
+
+/** Where the module walk looks for `migrations/` folders. */
 const MODULES_ROOT = path.join(ROOT, 'src', 'modules');
+
+/** Where `migrate-mongo` reads from, and where the baseline is written. */
 const MIGRATIONS_DIR = path.join(ROOT, 'db', 'migrations');
 
 /**
@@ -28,6 +33,7 @@ const MIGRATIONS_DIR = path.join(ROOT, 'db', 'migrations');
  */
 const MIGRATION_FILE = '20260905000000-baseline.js';
 
+/** The baseline's full path — what this script overwrites on every run. */
 const MIGRATION_PATH = path.join(MIGRATIONS_DIR, MIGRATION_FILE);
 
 /**
@@ -283,6 +289,7 @@ const resetMigrationsDirectory = (): void => {
     fs.mkdirSync(MIGRATIONS_DIR, { recursive: true });
 };
 
+/** Register every model, collect their indexes, and write the baseline — or refuse if empty. */
 const main = async () => {
     const owners = await registerModels();
     const entries = collectIndexes(owners);

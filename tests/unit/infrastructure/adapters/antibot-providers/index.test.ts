@@ -10,6 +10,7 @@ import {
     resolveHumanChallengeProvider
 } from '@infrastructure/adapters/antibot-providers';
 
+/** Saved so the provider each case selects is restored for every other suite. */
 const ORIGINAL = process.env.NODE_ANTIBOT_PROVIDER;
 
 afterEach(() => {

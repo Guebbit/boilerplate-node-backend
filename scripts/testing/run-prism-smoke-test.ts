@@ -12,9 +12,16 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 
+/** The repo root — prism is spawned from here so it resolves `openapi.yaml`. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
+
+/** Where the mock server listens. Overridable so a busy port doesn't fail the gate. */
 const PORT = Number(process.env.PRISM_PORT ?? 4010);
+
+/** The one route the smoke test asks for — any 2xx proves prism parsed the spec and served it. */
 const PROBE = process.env.PRISM_PROBE ?? '/products';
+
+/** How long prism gets to become answerable before the run is called a failure. */
 const BOOT_TIMEOUT_MS = 30_000;
 
 const prism = spawn(

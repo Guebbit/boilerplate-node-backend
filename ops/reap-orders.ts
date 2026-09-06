@@ -21,6 +21,7 @@ import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { orderService } from '@modules/orders';
 import { runScript } from '../db/run-script';
 
+/** Connect, anonymize every order past its retention window, and resolve nothing. */
 const main = (): Promise<void> =>
     start()
         .then(() => orderService.anonymizeDueOrders())

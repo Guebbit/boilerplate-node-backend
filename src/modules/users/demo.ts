@@ -110,6 +110,7 @@ export const SEED_CUSTOMER_EMAILS = Object.fromEntries(
     CUSTOMER_NAMES.map(([key, username]) => [key, `${username}@example.com`])
 ) as Record<keyof typeof SEED_CUSTOMER_IDS, string>;
 
+/** The generated customer base — verified accounts, alternating consent and avatar. */
 const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
     makeUser({
         id: SEED_CUSTOMER_IDS[key],
@@ -124,6 +125,7 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
     })
 );
 
+/** Every demo account: the named ones the e2e suite logs in as, then the customer base. */
 export const userFixtures = [...namedUsers, ...customerUsers];
 
 /** Seed this module's collection. Declared in `module.ts`; called by `db/demo/index.ts`. */

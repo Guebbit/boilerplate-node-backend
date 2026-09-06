@@ -8,13 +8,17 @@
 import { sign } from 'jsonwebtoken';
 import { googleOAuthProvider, googleConfigured } from '../../oauth/providers/google';
 
+/** The client id, which doubles as the `aud` claim every accepted ID token must carry. */
 const CLIENT_ID = 'test-google-client-id';
+
+/** Where Google is told to send the user back — asserted verbatim, not parsed. */
 const REDIRECT_URI = 'https://api.test/account/oauth/google/callback';
 
 /** A decodable-but-unverified ID token, shaped like Google's — `exchangeCode` never checks the signature. */
 const idToken = (claims: Record<string, unknown>): string =>
     sign(claims, 'irrelevant-signing-key', { algorithm: 'HS256', noTimestamp: true });
 
+/** The real credentials, saved so `afterAll` can put back whatever the developer had set. */
 const originalEnvironment = {
     id: process.env.NODE_OAUTH_GOOGLE_CLIENT_ID,
     secret: process.env.NODE_OAUTH_GOOGLE_CLIENT_SECRET

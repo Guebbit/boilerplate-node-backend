@@ -44,6 +44,10 @@ const githubApiGet = <T>(path: string, accessToken: string): Promise<T> =>
         return response.json() as Promise<T>;
     });
 
+/**
+ * GitHub behind the OAuth port. Its identity comes from two calls, not one token: GitHub's
+ * `/user` omits a private address, so `/user/emails` supplies the verified primary.
+ */
 export const githubOAuthProvider: OAuthProvider = {
     name: PROVIDER_NAME,
 

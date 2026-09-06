@@ -228,6 +228,7 @@ const MEDIUM_ORDERS: MediumOrderSeed[] = [
     }
 ];
 
+/** The multi-line orders, ids from 10 up, each spending against the filler catalogue. */
 const mediumCustomerOrders = MEDIUM_ORDERS.map(({ customer, lines }, index) =>
     makeOrder({
         id: demoOrderId(10 + index),
@@ -239,6 +240,7 @@ const mediumCustomerOrders = MEDIUM_ORDERS.map(({ customer, lines }, index) =>
     })
 );
 
+/** Every demo order, in id order. The seeder and the exported dataset both read this. */
 export const orderFixtures = [
     ...namedOrders,
     ...ginoOrders,

@@ -45,6 +45,10 @@ const assertValidClaims = (claims: GoogleIdTokenClaims): void => {
     if (claims.exp * 1000 < Date.now()) throw new Error('Google ID token: expired');
 };
 
+/**
+ * Google behind the OAuth port. Identity comes from the ID token's claims, verified locally
+ * against issuer, audience and expiry — no second round trip for a profile.
+ */
 export const googleOAuthProvider: OAuthProvider = {
     name: PROVIDER_NAME,
 

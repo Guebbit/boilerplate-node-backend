@@ -8,6 +8,7 @@ import { solveChallenge } from 'altcha-lib';
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { altchaProvider } from '@infrastructure/adapters/antibot-providers/altcha';
 
+/** The whole environment, saved: these cases set several ALTCHA vars and must leave none behind. */
 const ORIGINAL = { ...process.env };
 
 beforeEach(() => {

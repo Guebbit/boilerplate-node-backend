@@ -32,6 +32,7 @@ jest.mock('@infrastructure/observability/analytics', () => ({
 setupTestDb();
 afterEach(() => jest.restoreAllMocks());
 
+/** A provider identity, verified by default — the shape `exchangeCode` hands the service. */
 const identity = (overrides: Partial<OAuthIdentity> = {}): OAuthIdentity => ({
     providerId: 'subject-1',
     email: 'oauth-user@example.com',

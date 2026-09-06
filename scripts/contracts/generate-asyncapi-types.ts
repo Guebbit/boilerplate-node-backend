@@ -60,7 +60,10 @@ interface AsyncApiDocument {
     };
 }
 
+/** The repo root. `import.meta.url` rather than `__dirname`: this script runs as ESM. */
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** The bundled root contract this generator reads — never a module fragment. */
 const INPUT = path.resolve(ROOT, 'asyncapi.yaml');
 
 /*

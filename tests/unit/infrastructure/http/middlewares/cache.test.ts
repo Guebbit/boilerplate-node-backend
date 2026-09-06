@@ -34,6 +34,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 }));
 
 const mockedCache = jest.mocked(cache);
+/** The logger, mocked: several cases assert a miss or a corrupt entry is reported, not swallowed. */
 const mockedLogger = jest.mocked(logger);
 
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;

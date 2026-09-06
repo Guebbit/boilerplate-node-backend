@@ -12,7 +12,10 @@ import { api } from '@tests/http';
 
 setupTestDb();
 
+/** Saved so the rungs these cases turn on are restored for every other suite. */
 const ORIGINAL_PROVIDER = process.env.NODE_ANTIBOT_PROVIDER;
+
+/** Likewise for rung 2 — `GET /antibot/config` reports both, so both are steered here. */
 const ORIGINAL_EMAIL_POLICY = process.env.NODE_ANTIBOT_EMAIL_POLICY;
 
 afterEach(() => {

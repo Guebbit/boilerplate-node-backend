@@ -6,12 +6,17 @@
 
 import { githubOAuthProvider, githubConfigured } from '../../oauth/providers/github';
 
+/** The client id every case below asserts reaches GitHub, in the URL or the token exchange. */
 const CLIENT_ID = 'test-github-client-id';
+
+/** Where GitHub is told to send the user back — asserted verbatim, not parsed. */
 const REDIRECT_URI = 'https://api.test/account/oauth/github/callback';
 
+/** One mocked `fetch` result. `ok = false` is how a case makes GitHub answer a 400. */
 const jsonResponse = (body: unknown, ok = true): Response =>
     ({ ok, status: ok ? 200 : 400, json: () => Promise.resolve(body) }) as Response;
 
+/** The real credentials, saved so `afterAll` can put back whatever the developer had set. */
 const originalEnvironment = {
     id: process.env.NODE_OAUTH_GITHUB_CLIENT_ID,
     secret: process.env.NODE_OAUTH_GITHUB_CLIENT_SECRET

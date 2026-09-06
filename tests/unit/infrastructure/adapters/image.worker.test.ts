@@ -65,6 +65,7 @@ const mockedThumbnailImage = thumbnailImage as jest.Mock;
 const mockedIdentifyImage = identifyImage as jest.Mock;
 const mockedIsQueueEnabled = isQueueEnabled as jest.Mock;
 const mockedPublishToQueue = publishToQueue as jest.Mock;
+/** The cache sweep a finished digest triggers — asserted, so a silent writeback is a failure. */
 const mockedInvalidateCacheTagsLogged = invalidateCacheTagsLogged as jest.Mock;
 
 /** Wires the mocks to a happy-path digest: identifies as PNG, digests, thumbnails, promotes both. */

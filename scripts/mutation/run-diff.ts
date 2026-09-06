@@ -42,6 +42,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
+/** The repo root — every spawn below runs from here, not from the caller's cwd. */
 const REPO_ROOT = path.join(__dirname, '..', '..');
 
 /** What a changed file must look like to be worth mutating: production TypeScript, not a spec. */
@@ -103,6 +104,7 @@ if (stryker.error) {
     process.exit(2);
 }
 
+/** Grade the run that just finished: `--deep` compares against the integration-inclusive floor. */
 const check = spawnSync('npx', ['tsx', 'scripts/mutation/check-baseline.ts', '--deep'], {
     cwd: REPO_ROOT,
     stdio: 'inherit'

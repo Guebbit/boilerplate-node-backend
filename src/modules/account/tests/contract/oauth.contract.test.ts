@@ -13,6 +13,7 @@ import { userRepository } from '@modules/users';
 
 setupTestDb();
 
+/** Saved so the fake provider these cases need is switched off again for every other suite. */
 const originalDemo = process.env.NODE_DEMO;
 beforeAll(() => {
     process.env.NODE_DEMO = 'true';

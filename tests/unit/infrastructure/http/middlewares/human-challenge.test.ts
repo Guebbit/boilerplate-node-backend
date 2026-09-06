@@ -12,6 +12,7 @@ import type { Request } from 'express';
 import { makeResponseStub } from '@tests/express';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 
+/** Saved so the provider each case selects is restored for every other suite. */
 const ORIGINAL = process.env.NODE_ANTIBOT_PROVIDER;
 
 afterEach(() => {

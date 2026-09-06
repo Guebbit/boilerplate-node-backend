@@ -11,6 +11,7 @@ import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '../../domai
 /** One seed for the file, and one place to change it. */
 const RUN = { seed: 20_260_902, numRuns: 300, endOnFailure: true } as const;
 
+/** Any basket value a rate could be asked for — finite and non-negative, nothing else assumed. */
 const itemsTotal = () => fc.double({ noNaN: true, noDefaultInfinity: true, min: 0, max: 1e6 });
 
 describe('priceShipping — totality', () => {

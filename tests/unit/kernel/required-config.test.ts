@@ -26,6 +26,7 @@ const TOUCHED = [
     'SECRET'
 ] as const;
 
+/** Every var in `TOUCHED` as it was found, so `afterEach` can restore an unset one as unset. */
 const original = new Map(TOUCHED.map((key) => [key, process.env[key]]));
 
 /** A deployment that satisfies every unconditional check, for a case to break one thing in. */
