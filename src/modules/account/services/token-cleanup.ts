@@ -68,10 +68,9 @@ export const adminTokenCleanup = (
         })
         .catch((error: unknown) => {
             /*
-             * Status decided HERE, not two layers down — `tokenRemoveExpired` used to resolve
-             * `{ status: 500 }` on failure, a Mongoose model choosing an HTTP status. The sweep
-             * now reports a count or throws; what a failed sweep means to a client is this
-             * layer's call.
+             * Status decided HERE, not two layers down: `tokenRemoveExpired` reports a count or
+             * throws, and what a failed sweep means to a client is this layer's call. A Mongoose
+             * model has no business choosing an HTTP status.
              */
             logger.error({
                 message: 'Admin token cleanup failed',

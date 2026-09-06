@@ -67,10 +67,9 @@ const notifyMailbox = (): string =>
  * Record a contact request and tell the support mailbox about it — unless the honeypot caught it.
  *
  * Both halves are here because "a customer asked us something" is one event, not a write plus a
- * thing the HTTP layer remembers to do afterwards: the notification used to live in
- * `post-feedback-contact.ts`, which meant a second caller of `create` filed a ticket nobody was
- * told about, and made this module the one that published its queue job from a controller while
- * its sibling `delivery` published from the service.
+ * thing the HTTP layer remembers to do afterwards. In a controller instead, a second caller of
+ * `create` would file a ticket nobody was told about — and this module would publish its queue
+ * job from a controller while its sibling `delivery` publishes from the service.
  *
  * `payload.website` is the honeypot: a field a real browser always submits empty and a bot
  * reliably fills, declared in the contract but never persisted (see `FeedbackRequestDocument`) or

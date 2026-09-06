@@ -1,9 +1,9 @@
 /**
  * @module
- * `DELETE /cart/all` controller — thin HTTP adapter over `cartService.cartRemove`. Bodyless and
- * on its own URL: `DELETE /cart` used to fall back to clearing everything when its body was
- * absent, which meant a body stripped in transit destroyed the whole cart instead of failing.
- * The destructive spelling now has to be asked for by name.
+ * `DELETE /cart/all` controller — thin HTTP adapter over `cartService.cartRemove`. Bodyless and on
+ * its own URL so the destructive spelling has to be asked for by name: were it `DELETE /cart`
+ * falling back to "clear everything" on an absent body, a body stripped in transit would destroy
+ * the whole cart instead of failing.
  */
 
 import type { Request, Response } from 'express';

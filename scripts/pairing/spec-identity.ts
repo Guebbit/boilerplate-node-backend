@@ -58,12 +58,11 @@ export const siblingRole = (role: RepoRole): RepoRole =>
  * frontend's `asyncapi.yaml`, because the shared subset is the whole of the async contract as far
  * as that repo is concerned.
  *
- * That is the whole membership rule, and it is narrower than it once was. Files the two repos keep
- * identical FOR CONVENIENCE used to be here under an `owner: 'mirror'` flag — the Spectral ruleset
- * and three shared scripts — hand-maintained on both sides, so a fork was a question no script
- * could answer and the gate could only report it. Convenience is not necessity: nothing silently
- * breaks when two repos lint under rulesets that have drifted apart, or when one holds a newer test
- * reporter. They were removed rather than kept as a flag with one member, and the flag with them.
+ * That is the whole membership rule: NECESSITY only. Files the two repos merely keep identical for
+ * CONVENIENCE — the Spectral ruleset, three shared scripts — are deliberately not members. They
+ * are hand-maintained on both sides, so a fork is a question no script can answer, and nothing
+ * silently breaks when two repos lint under rulesets that have drifted apart or one holds a newer
+ * test reporter.
  *
  * Also deliberately absent, for the same reason: `public/favicon/*`, `.prettierrc`,
  * `.dockerignore`, `.husky/*`, `.docker/nginx.docs.conf` and `docs/.vitepress/theme/*`. Identical

@@ -337,17 +337,17 @@ describe('userRepository', () => {
             } as never);
 
             /*
-             * It used to resolve `{ status: 500, success: false }` — a Mongoose static choosing an
-             * HTTP status code. Rejecting is what lets `adminTokenCleanup` decide that, and what
-             * stops a caller mistaking a failed sweep for an empty one.
+             * Rejecting, not resolving `{ status: 500, success: false }` — a Mongoose static has
+             * no business choosing an HTTP status. The throw is what lets `adminTokenCleanup`
+             * decide that, and what stops a caller mistaking a failed sweep for an empty one.
              */
             await expect(userRepository.tokenRemoveExpired(10_000)).rejects.toThrow('db failure');
             updateManySpy.mockRestore();
         });
 
         // These are the two lookups the session layer runs, asserted here because that's a
-        // persistence fact — `account/session/jwt.ts` used to issue them itself and assert
-        // their shape against a mock's call log instead of a real document.
+        // persistence fact — proving them against a real document, not against a mock's call log
+        // in `account/session/jwt.ts`.
         it('findByTokenValue finds the holder whatever kind the token is', async () => {
             const user = await createUser({
                 tokens: [

@@ -624,10 +624,9 @@ describe('requestAccountDeletion', () => {
 /**
  * What makes a one-time token LIVE, asserted where the rule now lives.
  *
- * Three controllers used to carry a copy of this check and answer 422 from it; those copies are
- * gone, so this is the only place the rule is stated and the only place it can be proven. The
- * cases below are exactly the four a caller must not be able to tell apart — see the note on
- * refusals in `services/tokens.ts`.
+ * `findLiveToken` is the single statement of the rule — no controller carries a copy — so this is
+ * the only place it can be proven. The cases below are exactly the four a caller must not be able
+ * to tell apart; see the note on refusals in `services/tokens.ts`.
  */
 describe('findLiveToken', () => {
     it('finds the holder of a live token of the right type', async () => {

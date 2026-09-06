@@ -49,8 +49,8 @@ const userDouble = () => {
 };
 
 /**
- * `userRepository.findByIdWithCredentials(id)` — one call now, where it used to be a
- * `findById(...).select('+tokens')` chain this file had to walk itself.
+ * `userRepository.findByIdWithCredentials(id)` — one call to stub, so this file never has to walk
+ * a `findById(...).select('+tokens')` chain of its own.
  */
 const findByIdReturning = (user: unknown) => {
     mockedUsers.findByIdWithCredentials.mockResolvedValue(user);

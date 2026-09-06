@@ -206,10 +206,10 @@ export const update = (
      * No stock write here, and the contract no longer offers one: `UpdateProductRequest` and its
      * siblings carry no counter field.
      *
-     * This used to be an absolute stock write, which is what made it wrong: setting a count to 40
-     * says nothing about what happened, so the ledger had to guess by subtracting the old value —
-     * two concurrent edits could each overwrite the other's sale. Counters now move only through
-     * signed, conditional transitions in `@modules/inventory` (`POST /inventory/receipts`,
+     * An absolute write would be wrong here: setting a count to 40 says nothing about what
+     * happened, so the ledger would have to guess by subtracting the old value, and two concurrent
+     * edits could each overwrite the other's sale. Counters move only through signed, conditional
+     * transitions in `@modules/inventory` (`POST /inventory/receipts`,
      * `POST /inventory/adjustments`), each of which says what happened and can't lose a sale.
      */
     if (data.description !== undefined) product.description = data.description;

@@ -35,7 +35,6 @@ describe('checkOrderLines', () => {
     });
 });
 
-// The soft-delete toggle and the read scope used to live here as `nextDeletionState` and
-// `readScope`. Both were one-line expressions with one caller each, so they moved back into
-// `service.ts`; `service-crud.test.ts` covers the toggle and `service-scope.test.ts` the scope,
-// including the fail-closed cases.
+// Not here: the soft-delete toggle and the read scope. Both are one-line expressions with one
+// caller each, so they live in `service.ts` rather than the domain layer — `service-crud.test.ts`
+// covers the toggle and `service-scope.test.ts` the scope, including the fail-closed cases.

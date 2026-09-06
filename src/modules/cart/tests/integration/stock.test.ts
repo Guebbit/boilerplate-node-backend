@@ -273,8 +273,8 @@ describe('a rollback that itself fails', () => {
 
         expect(result.success).toBe(false);
         expect(!result.success && result.errors[0]?.code).toBe('CART_CHANGED');
-        // The guard's whole point: a failed release used to abort the delete that followed it,
-        // leaving the loser holding an order the customer never bought.
+        // The guard's whole point: a failed release must not abort the delete that follows it, or
+        // the loser is left holding an order the customer never bought.
         expect(deleted).toHaveBeenCalledTimes(1);
     });
 

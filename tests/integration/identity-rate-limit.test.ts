@@ -7,8 +7,8 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 /**
  * Anti-automation Rung 1 (see `docs/tools/security.md#identity--and-block-keyed-budgets--signup-password-reset-the-contact-form`):
  * `signupLimiters`, `resetRequestLimiters` and `contactLimiters` each add an identity (submitted
- * email) and an address-BLOCK (IPv4 /24, IPv6 /64) dimension to what used to be a single
- * per-address budget. Built against trivial handlers, like `submissionLimiter`'s own tests — the
+ * email) and an address-BLOCK (IPv4 /24, IPv6 /64) dimension on top of the per-address budget —
+ * three keys, not one. Built against trivial handlers, like `submissionLimiter`'s own tests — the
  * property under test belongs to the limiter, not to `postSignup`/`postResetRequest`.
  */
 

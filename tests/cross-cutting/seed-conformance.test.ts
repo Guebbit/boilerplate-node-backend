@@ -14,15 +14,14 @@
  * it, and nothing in either repo ever compared the result to the contract. That is the gap this
  * file closes, and it is the direction a contract-first project actually drifts in.
  *
- * WHAT CHANGED WHEN THE DATASET STARTED BEING EXPORTED. This used to parse `seed-identities.ts`, a
- * file of hand-written FACTS, which meant every schema here needed surgery before it could be used:
- * the user schema was `.extend()`ed with a `password` and a `cart` the API never returns, and the
- * order schema was `.pick()`ed down to four fields because a fixture had no business stating a
- * total or a status.
+ * WHY IT READS THE EXPORTED DATASET. `demo-data.json` holds what the API actually answered, so
+ * the generated schemas are used AS GENERATED — no surgery. Reading hand-written fixtures instead
+ * would need it: the user schema `.extend()`ed with a `password` and a `cart` the API never
+ * returns, the order schema `.pick()`ed down to four fields because a fixture has no business
+ * stating a total or a status.
  *
- * `demo-data.json` holds what the API actually answered, so the schemas are used AS GENERATED. The
- * totals and the status are in there now — derived by `applyOrderTransform`, and therefore worth
- * checking, where a seeded guess at them would only have tested the guess.
+ * The totals and the status are in the export, derived by `applyOrderTransform` and therefore
+ * worth checking, where a seeded guess at them would only test the guess.
  *
  * `.strict()` is what makes these catch a RENAME in both directions. Orval emits a plain
  * `zod.object()` even though `openapi.yaml` says `additionalProperties: false`, and almost every

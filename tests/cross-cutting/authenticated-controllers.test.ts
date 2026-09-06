@@ -40,11 +40,11 @@ import { router as wishlistRouter } from '@modules/wishlist/routes';
  * controller that starts reading the caller and is mounted on a public route fails here rather
  * than answering `undefined.id` at runtime.
  *
- * The second half of that question — which routes are unauthenticated — used to be answered by
- * reading `routes.ts` as text and regexing it line by line. That answered a weaker question than
- * this one does: a guard written through a variable, a spread, or a multi-line `router.use` read
- * as unguarded to the regex and does not to {@link effectiveRouteTable}, because by the time this
- * runs Express has already resolved every spelling of a guard to the same stack.
+ * The second half of that question — which routes are unauthenticated — is answered from
+ * {@link effectiveRouteTable}, not by reading `routes.ts` as text. Regexing the source answers a
+ * weaker question: a guard written through a variable, a spread, or a multi-line `router.use`
+ * reads as unguarded. By the time this runs, Express has already resolved every spelling of a
+ * guard to the same stack.
  */
 
 /** Every module directory under `src/modules/`, router or not. */
