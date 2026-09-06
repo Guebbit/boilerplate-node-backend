@@ -102,21 +102,27 @@ describe('feedback routes — caching', () => {
 describe('feedback routes — submission rate limiting', () => {
     it('rate-limits the contact form before it can invalidate the cache or write anything', () => {
         // The whole point is that a spent budget costs no cache invalidation and no database
-        // write — see `submissionLimiter`'s own docs for why this is a DIFFERENT limiter from
-        // `credentialLimiters`.
+        // write — see `contactLimiters`' own docs for why this is a DIFFERENT set of limiters
+        // from `credentialLimiters`. All THREE dimensions — address, identity, address-block.
         const chain = chainOf('POST /contact');
+        const limiters = chain.filter((entry) => entry.startsWith('contactLimiters'));
 
-        expect(chain).toContain('submissionLimiter');
-        expect(chain.indexOf('submissionLimiter')).toBeLessThan(
+        expect(limiters).toEqual([
+            'contactLimiters[0]',
+            'contactLimiters[1]',
+            'contactLimiters[2]'
+        ]);
+        expect(chain.indexOf('contactLimiters[0]')).toBeLessThan(
             chain.indexOf('invalidateCache([feedback])')
         );
     });
 
-    it('leaves every other route unbudgeted by the submission limiter', () => {
+    it('leaves every other route unbudgeted by the contact-form limiters', () => {
         // Only the public write needs this budget — the admin routes sit behind their own gate.
         const unexpected = routeSignatures(router).filter(
             (signature) =>
-                signature !== 'POST /contact' && chainOf(signature).includes('submissionLimiter')
+                signature !== 'POST /contact' &&
+                chainOf(signature).some((entry) => entry.startsWith('contactLimiters'))
         );
 
         expect(unexpected).toEqual([]);

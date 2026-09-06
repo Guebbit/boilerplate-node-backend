@@ -56,7 +56,7 @@ fills — declared in the contract (so an undeclared field wouldn't 422 real bro
 persisted or returned. A non-empty value writes the row straight to `status: spam` and skips the
 operator notification; the caller still gets the same `201` a real submission gets, so a bot learns
 nothing from the response. That trades an email amplifier for a storage amplifier, which
-`submissionLimiter` bounds and the TTL index below expires.
+`contactLimiters` bounds and the TTL index below expires.
 
 **Retention.** A `createdAt` TTL index (`NODE_FEEDBACK_RETENTION_DAYS`, default 730 — 24 months)
 deletes tickets on its own; changing the window on a live database needs a `collMod` migration, the
@@ -75,7 +75,7 @@ The status enum _is_ the triage workflow, so drawing one draws the other.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    V["anyone<br/><i>POST /feedback/contact — the only unauthenticated write in the app</i>"] --> L["submissionLimiter<br/><i>a SUCCESSFUL post spends this budget</i>"]
+    V["anyone<br/><i>POST /feedback/contact — the only unauthenticated write in the app</i>"] --> L["contactLimiters<br/><i>address + email + block — a SUCCESSFUL post spends every budget</i>"]
     L --> H{"honeypot<br/>filled?"}
     H -->|no| N["new"]
     H -->|yes| S["spam<br/><i>no notification — the exit that is neither</i>"]
@@ -100,6 +100,6 @@ flowchart LR
 
 - [Modules overview](./index.md) — the whole context map
 - [Email & PDF Rendering](../tools/email-and-rendering.md) — the acknowledgement and the triage notification
-- [Security](../tools/security.md) — the three rate-limit budgets, including this module's own
+- [Security](../tools/security.md) — the rate-limit budgets, including this module's own
 - [Winston & Audit Logs](../tools/winston.md) — what a triage action records
 - [Ops & Assets](../reference/ops.md) — the retention window and why changing it needs a migration

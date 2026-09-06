@@ -34,11 +34,13 @@ const TOKEN_BEARING = [
     'POST /logout'
 ];
 
-/** Routes that must carry both credential budgets. */
+/**
+ * Routes that must carry all three `credentialLimiters` budgets. `POST /signup` and `POST /reset`
+ * are deliberately NOT here — see `account routes — signup and reset rate limiting` below for why
+ * they carry `signupLimiters`/`resetRequestLimiters` instead.
+ */
 const RATE_LIMITED = [
     'POST /login',
-    'POST /signup',
-    'POST /reset',
     'POST /reset-confirm',
     'POST /password',
     'POST /reauth',
@@ -165,14 +167,18 @@ describe('account routes — authorization', () => {
 });
 
 describe('account routes — credential rate limiting', () => {
-    it.each(RATE_LIMITED)('%s carries BOTH credential budgets', (signature) => {
+    it.each(RATE_LIMITED)('%s carries ALL THREE credential budgets', (signature) => {
         const limiters = chainOf(signature).filter((entry) =>
             entry.startsWith('credentialLimiters')
         );
 
-        // Both, not one: the budgets are keyed differently — identity and address — and each
-        // defends an attack the other misses. Half the pair reads as protected and is not.
-        expect(limiters).toEqual(['credentialLimiters[0]', 'credentialLimiters[1]']);
+        // Identity, address AND address-block: each is keyed differently and defends an attack
+        // the other two miss. Any one missing reads as protected and is not.
+        expect(limiters).toEqual([
+            'credentialLimiters[0]',
+            'credentialLimiters[1]',
+            'credentialLimiters[2]'
+        ]);
     });
 
     it('rate-limits before authenticating, so a spent budget costs no lookup', () => {
@@ -196,6 +202,28 @@ describe('account routes — credential rate limiting', () => {
         );
 
         expect(unexpected).toEqual([]);
+    });
+});
+
+describe('account routes — signup and reset rate limiting', () => {
+    /**
+     * `credentialLimiters`' `skipSuccessfulRequests` spends nothing on the 201/200 these two
+     * routes answer with on their OWN abuse (a Sybil signup, a mail-bombing reset request) — see
+     * `signupLimiters`'/`resetRequestLimiters`' own docs in `rate-limit.ts`. Each carries its own
+     * three-dimension budget instead, and neither may carry `credentialLimiters` at all.
+     */
+    it.each([
+        ['POST /signup', 'signupLimiters'],
+        ['POST /reset', 'resetRequestLimiters']
+    ])('%s carries ALL THREE %s budgets, and no credentialLimiters', (signature, name) => {
+        const chain = chainOf(signature);
+
+        expect(chain.filter((entry) => entry.startsWith(name))).toEqual([
+            `${name}[0]`,
+            `${name}[1]`,
+            `${name}[2]`
+        ]);
+        expect(chain.some((entry) => entry.startsWith('credentialLimiters'))).toBe(false);
     });
 });
 

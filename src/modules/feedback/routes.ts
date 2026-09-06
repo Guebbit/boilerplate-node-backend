@@ -15,7 +15,7 @@ import { getFeedback, searchFeedbackKeyParameters } from './controllers/get-feed
 import { putFeedbackStatus } from './controllers/put-feedback-status';
 import { deleteFeedback } from './controllers/delete-feedback';
 import { invalidateCache, searchCache } from '@infrastructure/http/middlewares/cache';
-import { submissionLimiter } from '@infrastructure/http/middlewares/rate-limit';
+import { contactLimiters } from '@infrastructure/http/middlewares/rate-limit';
 
 /** Express router for feedback/contact endpoints (public contact form; admin read/update). */
 export const router = Router();
@@ -24,11 +24,12 @@ export const router = Router();
  * PUBLIC, and it is the only one. The contact form is the whole reason this module exists for a
  * visitor, so it is mounted ABOVE the guard below rather than carrying an exemption.
  *
- * `submissionLimiter` first, same reasoning as the credential budgets: a spent budget should not
- * cost a database write. It is a DIFFERENT limiter from `credentialLimiters` — this form's abuse
- * is a successful post repeated, not a failed one. See docs/tools/security.md#the-rate-limit-budgets.
+ * `contactLimiters` first, same reasoning as the credential budgets: a spent budget should not
+ * cost a database write. Three dimensions — address, submitted email, address block — none of
+ * them skipping success: this form's abuse is a successful post repeated, not a failed one.
+ * See docs/tools/security.md#the-rate-limit-budgets.
  */
-router.post('/contact', submissionLimiter, invalidateCache(['feedback']), postFeedbackContact);
+router.post('/contact', contactLimiters, invalidateCache(['feedback']), postFeedbackContact);
 
 /*
  * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why

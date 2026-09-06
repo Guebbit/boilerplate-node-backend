@@ -204,6 +204,29 @@ if a miss is WRITTEN: every path that checks a code — the login challenge, the
 and both removal routes — persists the spent attempt before answering, or the ceiling silently
 becomes no ceiling at all.
 
+### Identity- and block-keyed budgets — signup, password reset, the contact form
+
+A residential-proxy pool costs about $20 for millions of addresses, and a single IPv6 customer is
+allocated 18 quintillion of them. A budget keyed on one address bounds almost nothing against
+either — which mattered nowhere more than the three routes above whose abuse is a well-formed
+request repeated, not a failed one.
+
+**`signupLimiters` and `resetRequestLimiters` replace `credentialLimiters` on their routes**, not
+add to it. `credentialLimiters`' `skipSuccessfulRequests` spends nothing on a successful signup
+(a Sybil account) or a successful reset request (`postResetRequest` always answers 200, to avoid
+revealing whether an account exists) — exactly the requests these routes exist to bound. Both are
+shaped like `submissionLimiter` instead: every request spends the budget, success or failure.
+
+**Every one of these budgets is now three, not one**: identity (the submitted email, normalised
+and hashed like `identityOf`), single address, and address BLOCK — an IPv4 /24, an IPv6 /64.
+`contactLimiters` adds the same two dimensions on top of the pre-existing `submissionLimiter`. The
+block dimension also extends `credentialLimiters` itself, so login gets the same third bucket.
+
+Three independent buckets, not one key built from all three fields: varying any single one of
+identity, address or block gets a caller a fresh budget on the other two dimensions, but never on
+all three at once — which is the property that makes a proxy pool, or a pool of freshly-registered
+mailboxes, cost something rather than nothing.
+
 ## Why the metrics endpoint has its own credential
 
 `/observability/metrics` cannot use the admin JWT the other observability routes use: it is scraped

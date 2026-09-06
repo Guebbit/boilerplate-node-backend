@@ -27,7 +27,17 @@ import {
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_RATE_LIMIT_WINDOW_MS,
     DEFAULT_AUTH_RATE_LIMIT_MAX,
+    DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX,
+    DEFAULT_AUTH_RATE_LIMIT_BLOCK_MAX,
+    DEFAULT_SIGNUP_RATE_LIMIT_MAX,
+    DEFAULT_SIGNUP_RATE_LIMIT_ADDRESS_MAX,
+    DEFAULT_SIGNUP_RATE_LIMIT_BLOCK_MAX,
+    DEFAULT_RESET_RATE_LIMIT_MAX,
+    DEFAULT_RESET_RATE_LIMIT_ADDRESS_MAX,
+    DEFAULT_RESET_RATE_LIMIT_BLOCK_MAX,
     DEFAULT_SUBMISSION_RATE_LIMIT_MAX,
+    DEFAULT_SUBMISSION_RATE_LIMIT_EMAIL_MAX,
+    DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX,
     isMetricsScraper
 } from '@infrastructure/http/middlewares/rate-limit';
 import { makeResponseStub } from '@tests/express';
@@ -66,6 +76,33 @@ describe('rate limit defaults', () => {
         // Same reasoning as the credential budget: a contact form filed once by a person must not
         // share a bucket with ordinary browsing.
         expect(DEFAULT_SUBMISSION_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
+    });
+
+    /*
+     * The Rung-1 property that matters is the ORDERING within each triple, not any one value:
+     * identity ≤ address ≤ block, since a block is shared by many honest callers and a single
+     * account or address is not. A block budget set below its own address budget would defeat
+     * the point of adding it.
+     */
+    it('sizes each address-block budget above its own address budget', () => {
+        expect(DEFAULT_AUTH_RATE_LIMIT_BLOCK_MAX).toBeGreaterThan(
+            DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX
+        );
+        expect(DEFAULT_SIGNUP_RATE_LIMIT_BLOCK_MAX).toBeGreaterThan(
+            DEFAULT_SIGNUP_RATE_LIMIT_ADDRESS_MAX
+        );
+        expect(DEFAULT_RESET_RATE_LIMIT_BLOCK_MAX).toBeGreaterThan(
+            DEFAULT_RESET_RATE_LIMIT_ADDRESS_MAX
+        );
+        expect(DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX).toBeGreaterThan(
+            DEFAULT_SUBMISSION_RATE_LIMIT_MAX
+        );
+    });
+
+    it('keeps the signup and reset identity budgets a small fraction of the browsing budget', () => {
+        expect(DEFAULT_SIGNUP_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
+        expect(DEFAULT_RESET_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
+        expect(DEFAULT_SUBMISSION_RATE_LIMIT_EMAIL_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
     });
 });
 

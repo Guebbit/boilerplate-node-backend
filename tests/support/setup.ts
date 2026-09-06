@@ -57,15 +57,33 @@ process.env.NODE_RATE_LIMIT_MAX ??= '2000';
  */
 process.env.NODE_AUTH_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX ??= '1000';
+process.env.NODE_AUTH_RATE_LIMIT_BLOCK_MAX ??= '1000';
 
 /**
  * `submissionLimiter` (`POST /feedback/contact`) needs the same treatment, for a sharper reason
  * than the credential budgets above: it spends its budget on a SUCCESSFUL request, so — unlike
  * `credentialLimiters`, which only a failing suite run trips — every green contract and fuzz run
  * that posts a contact request more than `DEFAULT_SUBMISSION_RATE_LIMIT_MAX` (5) times from one
- * address would trip it too.
+ * address would trip it too. Its two Rung-1 siblings (identity, address block — `contactLimiters`)
+ * spend on success the same way, so they need the same raise.
  */
 process.env.NODE_SUBMISSION_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX ??= '1000';
+process.env.NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX ??= '1000';
+
+/**
+ * `signupLimiters` and `resetRequestLimiters` (`POST /account/signup`, `POST /account/reset`)
+ * spend on success for the same reason `submissionLimiter` does — a Sybil signup and a
+ * mail-bombing reset request both get a 2xx — so every one of their six budgets needs the same
+ * raise, or a suite that signs up or requests a reset more than a handful of times from one
+ * address trips a 429 that has nothing to do with what it's testing.
+ */
+process.env.NODE_SIGNUP_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX ??= '1000';
+process.env.NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX ??= '1000';
+process.env.NODE_RESET_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_RESET_RATE_LIMIT_ADDRESS_MAX ??= '1000';
+process.env.NODE_RESET_RATE_LIMIT_BLOCK_MAX ??= '1000';
 
 /**
  * `uploadLimiter` needs the same treatment, for the same reason `submissionLimiter` does: it

@@ -174,31 +174,37 @@ export const cacheMock = () => ({
 });
 
 /**
- * Replacement for `@infrastructure/http/middlewares/rate-limit`'s `credentialLimiters`.
+ * Replacement for `@infrastructure/http/middlewares/rate-limit`'s exported limiter arrays.
  *
- * The pair of rate limiters in front of every credential route arrives as two anonymous
- * `express-rate-limit` closures, indistinguishable in a route table from any other unnamed
- * middleware — so "is login rate-limited" is not a question the stack can answer as it stands.
+ * Every budget arrives as one or more anonymous `express-rate-limit` closures, indistinguishable
+ * in a route table from any other unnamed middleware — so "is login rate-limited" is not a
+ * question the stack can answer as it stands.
  *
- * The real array is mapped rather than replaced, so its LENGTH is preserved: the two budgets are
- * one identity-keyed and one address-keyed, they defend different attacks, and the module's own
- * comment says a route "cannot apply half of the pair". Labelling each by index makes dropping one
- * of them visible, which replacing the array with a single marker would not.
+ * Each array is mapped rather than replaced, so its LENGTH is preserved: `credentialLimiters` is
+ * identity + address + address-block, `signupLimiters`/`resetRequestLimiters` the same three keyed
+ * differently, and `contactLimiters` is `submissionLimiter` plus the identity and block dimensions
+ * Rung 1 adds — each one bounds a different attack, and the modules' own comments say a route
+ * "cannot apply half of the pair". Labelling each by index makes dropping one of them visible,
+ * which replacing the array with a single marker would not.
  */
 export const securityMock = () => {
     const actual = jest.requireActual<typeof import('@infrastructure/http/middlewares/rate-limit')>(
         '@infrastructure/http/middlewares/rate-limit'
     );
 
+    const labelledArray = (name: string, limiters: readonly unknown[]) =>
+        limiters.map((_limiter, index) => labelled(`${name}[${index}]`));
+
     return {
         ...actual,
         __esModule: true,
-        credentialLimiters: actual.credentialLimiters.map((_limiter, index) =>
-            labelled(`credentialLimiters[${index}]`)
-        ),
-        // Same reasoning, singular: `submissionLimiter` (`feedback` `POST /contact`) is a single
-        // `express-rate-limit` closure rather than a pair, so it gets one label instead of an
-        // indexed one.
+        credentialLimiters: labelledArray('credentialLimiters', actual.credentialLimiters),
+        signupLimiters: labelledArray('signupLimiters', actual.signupLimiters),
+        resetRequestLimiters: labelledArray('resetRequestLimiters', actual.resetRequestLimiters),
+        contactLimiters: labelledArray('contactLimiters', actual.contactLimiters),
+        // Same reasoning, singular: `submissionLimiter` on its own (only reachable directly by a
+        // future route, not by `feedback`'s — that one reads it back through `contactLimiters`
+        // above) is a single closure rather than an array, so it gets one label, not an indexed one.
         submissionLimiter: labelled('submissionLimiter')
     };
 };

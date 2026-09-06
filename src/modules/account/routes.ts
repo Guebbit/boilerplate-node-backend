@@ -11,6 +11,8 @@ import type { Request } from 'express';
 import { Router } from 'express';
 import {
     credentialLimiters,
+    signupLimiters,
+    resetRequestLimiters,
     uploadLimiter,
     mfaChallengeLimiter,
     mfaSendLimiter
@@ -118,18 +120,21 @@ router.delete('/delete-confirm', invalidateCache(['users', 'account']), deleteAc
 // POST /account/login — authenticate and get tokens
 router.post('/login', credentialLimiters, postLogin);
 
-// POST /account/signup — register new user
+// POST /account/signup — register new user. `signupLimiters`, not `credentialLimiters`: the
+// abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
+// would spend nothing on — see rate-limit.ts.
 router.post(
     '/signup',
-    credentialLimiters,
+    signupLimiters,
     uploadLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
     postSignup
 );
 
-// POST /account/reset — request password reset email
-router.post('/reset', credentialLimiters, postResetRequest);
+// POST /account/reset — request password reset email. `resetRequestLimiters`, same reasoning as
+// signup: this route always answers 200, so only a budget spent by success bounds anything.
+router.post('/reset', resetRequestLimiters, postResetRequest);
 
 // POST /account/reset-confirm — complete password reset with token
 router.post(

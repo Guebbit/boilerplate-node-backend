@@ -1,15 +1,17 @@
 /**
  * @module
- * Rate limiting: a global burst brake across the whole surface, a pair of tighter budgets for
- * routes that accept a credential, and one each for the public submission that emails an operator
- * and for routes that accept an image upload. Every limiter shares one Redis-or-memory store (see
- * `rate-limit-store.ts`), fails open on a store error, and answers through the shared error
- * envelope rather than express-rate-limit's own plain-text body.
+ * Rate limiting: a global burst brake across the whole surface, budgets for the routes that accept
+ * a credential, an email address (signup, password reset, the contact form) or an image upload —
+ * each keyed on identity AND address AND address BLOCK (an IPv4 /24, an IPv6 /64), since a proxy
+ * pool or a single IPv6 customer defeats a single-address budget alone. Every limiter shares one
+ * Redis-or-memory store (see `rate-limit-store.ts`), fails open on a store error, and answers
+ * through the shared error envelope rather than express-rate-limit's own plain-text body.
  */
 
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { isIPv4 } from 'node:net';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
-import { rateLimit, type Store } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator, type Store } from 'express-rate-limit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
@@ -53,6 +55,43 @@ export const DEFAULT_AUTH_RATE_LIMIT_MAX = 10;
 export const DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX = 30;
 
 /**
+ * Failed credential attempts allowed per window, per ADDRESS BLOCK (an IPv4 /24, an IPv6 /64).
+ *
+ * The largest and coarsest of the three credential budgets — see `credentialLimiters`. Sized above
+ * {@link DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX} because a block is shared by many honest callers (an
+ * office, a CGNAT pool, one IPv6 customer's whole allocation), not by one.
+ */
+export const DEFAULT_AUTH_RATE_LIMIT_BLOCK_MAX = 100;
+
+/**
+ * Signups allowed per window, per submitted EMAIL ADDRESS, normalised like `identityOf`.
+ *
+ * Signup has no account yet to key a failure budget on, so this — spent by SUCCESS, like
+ * `DEFAULT_SUBMISSION_RATE_LIMIT_MAX` — is the whole of its identity budget. See `signupLimiters`.
+ */
+export const DEFAULT_SIGNUP_RATE_LIMIT_MAX = 5;
+
+/** Signups allowed per window, per single caller ADDRESS. Spent by success, like the email budget. */
+export const DEFAULT_SIGNUP_RATE_LIMIT_ADDRESS_MAX = 15;
+
+/** Signups allowed per window, per caller ADDRESS BLOCK — see `DEFAULT_AUTH_RATE_LIMIT_BLOCK_MAX`. */
+export const DEFAULT_SIGNUP_RATE_LIMIT_BLOCK_MAX = 40;
+
+/**
+ * Password-reset requests allowed per window, per submitted EMAIL ADDRESS.
+ *
+ * `postResetRequest` always answers 200, to prevent account enumeration — so, like signup, only a
+ * budget spent by SUCCESS bounds anything here. See `resetRequestLimiters`.
+ */
+export const DEFAULT_RESET_RATE_LIMIT_MAX = 5;
+
+/** Password-reset requests allowed per window, per single caller ADDRESS. */
+export const DEFAULT_RESET_RATE_LIMIT_ADDRESS_MAX = 15;
+
+/** Password-reset requests allowed per window, per caller ADDRESS BLOCK. */
+export const DEFAULT_RESET_RATE_LIMIT_BLOCK_MAX = 40;
+
+/**
  * Contact-form submissions allowed per window, per ADDRESS.
  *
  * A person files a contact request once; five a minute from one address is already generous,
@@ -60,6 +99,12 @@ export const DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX = 30;
  * budget is spent by success rather than failure.
  */
 export const DEFAULT_SUBMISSION_RATE_LIMIT_MAX = 5;
+
+/** Contact-form submissions allowed per window, per submitted EMAIL ADDRESS. See `contactLimiters`. */
+export const DEFAULT_SUBMISSION_RATE_LIMIT_EMAIL_MAX = 5;
+
+/** Contact-form submissions allowed per window, per caller ADDRESS BLOCK. */
+export const DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX = 20;
 
 /**
  * Image uploads allowed per window, per ADDRESS.
@@ -164,15 +209,62 @@ const identityOf = (request: Request): string => {
 };
 
 /**
+ * The caller's address, WIDENED to the block it belongs to: an IPv4 /24, an IPv6 /64. A
+ * residential-proxy pool costs about $20 for millions of addresses, and one IPv6 customer is
+ * allocated 18 quintillion of them — bucketing on the single address lets either look like an
+ * unbounded number of callers. IPv6 grouping reuses `express-rate-limit`'s own subnet helper,
+ * `ipKeyGenerator` (the same one its default per-address keying calls internally, at a coarser
+ * /56); IPv4 has no library equivalent to reuse, so the /24 mask is hand-rolled.
+ *
+ * See: docs/tools/security.md#the-rate-limit-budgets
+ */
+const addressBlockOf = (request: Request): string => {
+    const { ip } = request;
+    if (!ip) return 'unknown';
+    return isIPv4(ip) ? `${ip.split('.').slice(0, 3).join('.')}.0/24` : ipKeyGenerator(ip, 64);
+};
+
+/**
+ * One rate-limit dimension built on this file's shared store/window/audit conventions — only the
+ * namespace, budget, key and skip choice vary between callers. `credentialLimiters`' first two
+ * entries and `submissionLimiter` predate this and stay hand-written; every other limiter below
+ * composes it, so a new dimension on an existing budget, or a whole new budget, is one call rather
+ * than a copy of the `rateLimit()` block.
+ *
+ * @param namespace - this dimension's Redis key prefix — see `rateLimitStore`
+ * @param environmentVariable - the environment variable that overrides `defaultMax`
+ * @param defaultMax - the budget when `environmentVariable` is unset
+ * @param options.keyGenerator - what a request is bucketed by; omitted means the caller's single address
+ * @param options.skipSuccessfulRequests - true bounds only FAILURES, like `credentialLimiters`
+ */
+const rateLimitOn = (
+    namespace: string,
+    environmentVariable: string,
+    defaultMax: number,
+    options: {
+        keyGenerator?: (request: Request) => string;
+        skipSuccessfulRequests?: boolean;
+    } = {}
+): RequestHandler =>
+    rateLimit({
+        ...limiterOptions(rateLimitStore(namespace), true),
+        limit: environmentNumber(environmentVariable, defaultMax, 1),
+        skipSuccessfulRequests: options.skipSuccessfulRequests ?? false,
+        ...(options.keyGenerator ? { keyGenerator: options.keyGenerator } : {})
+    });
+
+/**
  * The credential budgets, for the routes that accept a password or mint a token.
  *
- * TWO independent limiters: one bounds failed attempts against ONE account (defeats a botnet
- * spreading guesses), the other bounds attempts from ONE host (defeats spraying a user list).
- * Keying on the PAIR instead is the weakest of the three — either half varied gets a fresh bucket.
+ * THREE independent limiters: one bounds failed attempts against ONE account (defeats a botnet
+ * spreading guesses), one bounds attempts from ONE host (defeats spraying a user list), and one
+ * bounds attempts from ONE address BLOCK (defeats a proxy pool or an IPv6 allocation spreading
+ * across addresses within it). Keying on any pair instead is weaker still — a bucket refreshes
+ * the moment any one key of the tuple changes.
  *
- * `skipSuccessfulRequests` on both: only FAILURES spend the budget, so a shared address (an
+ * `skipSuccessfulRequests` on all three: only FAILURES spend the budget, so a shared address (an
  * office, CI, the e2e suite) is never locked out by people getting it right. Exported as an array
- * because Express flattens one, so a route cannot apply half of the pair.
+ * because Express flattens one, so a route cannot apply part of the set.
  *
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
@@ -191,7 +283,13 @@ export const credentialLimiters: RequestHandler[] = [
             1
         ),
         skipSuccessfulRequests: true
-    })
+    }),
+    rateLimitOn(
+        'credentials-block',
+        'NODE_AUTH_RATE_LIMIT_BLOCK_MAX',
+        DEFAULT_AUTH_RATE_LIMIT_BLOCK_MAX,
+        { keyGenerator: addressBlockOf, skipSuccessfulRequests: true }
+    )
 ];
 
 /**
@@ -209,6 +307,83 @@ export const submissionLimiter: RequestHandler = rateLimit({
     ...limiterOptions(rateLimitStore('submissions'), true),
     limit: environmentNumber('NODE_SUBMISSION_RATE_LIMIT_MAX', DEFAULT_SUBMISSION_RATE_LIMIT_MAX, 1)
 });
+
+/**
+ * The signup budgets — identity, address and address-block, none of them skipping success.
+ *
+ * `credentialLimiters` is the wrong shape for `POST /account/signup`: `skipSuccessfulRequests`
+ * spends nothing on the 201s that ARE the abuse (Sybil accounts), so a determined caller spent
+ * this route's whole budget on requests that never counted. Shaped like `submissionLimiter`
+ * instead — every request counts — with `identityOf` added as a second dimension, since a
+ * proxy pool cannot vary the mailbox it is registering.
+ *
+ * See: docs/tools/security.md#the-rate-limit-budgets
+ */
+export const signupLimiters: RequestHandler[] = [
+    rateLimitOn('signup-identity', 'NODE_SIGNUP_RATE_LIMIT_MAX', DEFAULT_SIGNUP_RATE_LIMIT_MAX, {
+        keyGenerator: identityOf
+    }),
+    rateLimitOn(
+        'signup-address',
+        'NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX',
+        DEFAULT_SIGNUP_RATE_LIMIT_ADDRESS_MAX
+    ),
+    rateLimitOn(
+        'signup-block',
+        'NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX',
+        DEFAULT_SIGNUP_RATE_LIMIT_BLOCK_MAX,
+        { keyGenerator: addressBlockOf }
+    )
+];
+
+/**
+ * The password-reset-request budgets — same three dimensions and the same reasoning as
+ * `signupLimiters`. `postResetRequest` always answers 200 to avoid revealing whether an account
+ * exists, which makes it, like signup, a route whose abuse is entirely on the success path.
+ *
+ * See: docs/tools/security.md#the-rate-limit-budgets
+ */
+export const resetRequestLimiters: RequestHandler[] = [
+    rateLimitOn('reset-identity', 'NODE_RESET_RATE_LIMIT_MAX', DEFAULT_RESET_RATE_LIMIT_MAX, {
+        keyGenerator: identityOf
+    }),
+    rateLimitOn(
+        'reset-address',
+        'NODE_RESET_RATE_LIMIT_ADDRESS_MAX',
+        DEFAULT_RESET_RATE_LIMIT_ADDRESS_MAX
+    ),
+    rateLimitOn(
+        'reset-block',
+        'NODE_RESET_RATE_LIMIT_BLOCK_MAX',
+        DEFAULT_RESET_RATE_LIMIT_BLOCK_MAX,
+        {
+            keyGenerator: addressBlockOf
+        }
+    )
+];
+
+/**
+ * The contact-form budgets: `submissionLimiter` (address) plus the two dimensions Rung 1 adds —
+ * identity and address-block. The form carries no identity beyond free text EXCEPT the sender's
+ * own email, which `identityOf` reads exactly like the credential and signup budgets do.
+ *
+ * See: docs/tools/security.md#the-rate-limit-budgets
+ */
+export const contactLimiters: RequestHandler[] = [
+    submissionLimiter,
+    rateLimitOn(
+        'submission-identity',
+        'NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX',
+        DEFAULT_SUBMISSION_RATE_LIMIT_EMAIL_MAX,
+        { keyGenerator: identityOf }
+    ),
+    rateLimitOn(
+        'submission-block',
+        'NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX',
+        DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX,
+        { keyGenerator: addressBlockOf }
+    )
+];
 
 /**
  * Default attempts allowed against ONE login MFA challenge, used when `NODE_MFA_CHALLENGE_MAX`
