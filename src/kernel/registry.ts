@@ -159,6 +159,16 @@ export type AppModule = {
     imageTargets?: Readonly<Record<string, ImageTarget>>;
 
     /**
+     * Paths whose callers SIGN the request body, so the JSON parser must keep the bytes verbatim.
+     * Relative to `basePath`, the same way `routes` is.
+     *
+     * Declared here rather than in `app/security.ts` because the body is consumed once, by the
+     * parser the app tier installs — long before this module's own router runs. Every entry costs
+     * one buffer copy per matching request, so a module should list as few as it can.
+     */
+    rawBodyPaths?: readonly string[];
+
+    /**
      * Env vars this module cannot run without — see {@link RequiredConfig}. Most modules have
      * none; `account` and `observability` each hold a secret that must not boot on a placeholder.
      */

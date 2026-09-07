@@ -22,6 +22,9 @@ export default {
     name: 'payments',
     basePath: '/payments',
     routes: router,
+    // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the
+    // app tier, so the mount point is stated once and the two cannot drift.
+    rawBodyPaths: ['/webhook'],
     // `productionOnly`: `tests/support/setup.ts` supplies a dev value, and the `fake` provider
     // needs none locally — booting without it there is not the failure this guards against.
     requiredConfig: [

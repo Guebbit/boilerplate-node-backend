@@ -17,6 +17,7 @@ import cookieParser from 'cookie-parser';
 import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { logger } from '@infrastructure/adapters/logger';
+import { enabledModules } from '../modules';
 
 /**
  * `express.json()`/`express.urlencoded()`'s own default (`100kb`) is already a bound, but an
@@ -26,13 +27,23 @@ import { logger } from '@infrastructure/adapters/logger';
 const JSON_BODY_LIMIT = process.env.NODE_JSON_BODY_LIMIT ?? '100kb';
 
 /**
- * The paths whose callers SIGN their request body, and which therefore need it kept verbatim.
+ * Every path whose body must survive parsing verbatim, composed from each module's own declaration.
  *
- * Listed here rather than in the module that reads it because the body is consumed once, by the
- * parser installed below — a module's own router runs long after the stream is gone. Every entry
- * costs one buffer copy per matching request, so this list stays short.
+ * Built once at import: the list is fixed by the module registry, and rebuilding it per request
+ * would cost a map and a flat on every JSON body the API receives.
  */
-const RAW_BODY_PATHS = ['/payments/webhook'];
+const RAW_BODY_PATHS = enabledModules.flatMap((appModule) =>
+    (appModule.rawBodyPaths ?? []).map((path) => `${appModule.basePath ?? ''}${path}`)
+);
+
+/**
+ * Whether this url is one of them — matched at a segment boundary, never as a bare prefix, so
+ * `/payments/webhook-test` is not mistaken for `/payments/webhook`.
+ */
+const isRawBodyPath = (url: string): boolean =>
+    RAW_BODY_PATHS.some(
+        (path) => url === path || url.startsWith(`${path}?`) || url.startsWith(`${path}/`)
+    );
 
 /**
  * Origins allowed to call this API with credentials, from `NODE_CORS_ORIGIN`.
@@ -172,8 +183,11 @@ export const installSecurity = (app: Express): void => {
         express.json({
             limit: JSON_BODY_LIMIT,
             verify: (request, _response, buffer) => {
-                if (RAW_BODY_PATHS.some((prefix) => (request as Request).url.startsWith(prefix)))
-                    (request as Request).rawBody = Buffer.from(buffer);
+                // One cast, with a reason: `express.json` types its `verify` hook against the bare
+                // `http.IncomingMessage` the parser sees. It is the same object express has
+                // already decorated — `rawBody` is declared on it in `globals.d.ts`.
+                const decorated = request as Request;
+                if (isRawBodyPath(decorated.url)) decorated.rawBody = Buffer.from(buffer);
             }
         })
     );
