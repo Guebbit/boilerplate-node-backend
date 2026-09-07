@@ -14,6 +14,9 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import { FAKE_DECLINE_METHOD, FAKE_SUCCESS_METHOD } from '@modules/payments/providers/fake';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { paymentRepository } from '@modules/payments/repository';
+import { inventoryService } from '@modules/inventory';
+import { onDomainEvent } from '@kernel/events';
+import { ORDER_STATUS_CHANGED } from '@modules/orders';
 
 setupTestDb();
 
@@ -267,19 +270,32 @@ describe('POST /payments/webhook', () => {
     });
 
     it('applies a repeated delivery once', async () => {
-        const { paymentId, providerRef } = await preparedPayment();
+        const { paymentId, providerRef, order } = await preparedPayment();
         const event = {
             id: `evt_replay_${paymentId}`,
             providerRef,
             status: 'succeeded' as const
         };
 
-        await deliver(event);
+        // What the ledger actually protects: `first`/`replay` alone answer 200 on both branches
+        // (dedup vs. fresh apply), so a status-only assertion can never fail on a broken ledger.
+        const commitSpy = jest.spyOn(inventoryService, 'commitForOrder');
+        const statusChanges: unknown[] = [];
+        onDomainEvent(ORDER_STATUS_CHANGED, (payload) => {
+            if (payload.orderId === String(order._id)) statusChanges.push(payload);
+        });
+
+        const first = await deliver(event);
         const replay = await deliver(event);
 
         // 200 either way — a provider reads anything else as a failed delivery and retries harder.
+        expect(first.status).toBe(200);
         expect(replay.status).toBe(200);
         expect(replay).toSatisfyApiSpec();
+
+        expect(commitSpy).toHaveBeenCalledTimes(1);
+        expect(statusChanges).toHaveLength(1);
+        commitSpy.mockRestore();
     });
 
     it('accepts an event about an intent it does not know, rather than making the provider retry', async () => {

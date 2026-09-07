@@ -20,6 +20,7 @@ import {
     createIntent,
     confirmPayment,
     syncPayment,
+    applyWebhookDelivery,
     applyWebhookSettlement,
     getForOrder,
     refundByOrder
@@ -534,6 +535,40 @@ describe('applyWebhookSettlement', () => {
         await expect(
             applyWebhookSettlement('fake_pi_nobody', { status: 'succeeded' })
         ).resolves.toBeUndefined();
+    });
+});
+
+/**
+ * The ledger that makes a redelivery idempotent must not also make a FAILED delivery permanent —
+ * the money bug this fix closes.
+ */
+describe('applyWebhookDelivery', () => {
+    it('lets a delivery that failed to settle be redelivered, rather than swallowing it as a dupe', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const providerRef = String(
+            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
+        );
+        const event = {
+            id: 'evt_redelivery_test',
+            providerRef,
+            state: { status: 'succeeded' as const, cardLast4: '4242' }
+        };
+
+        // The settlement fails transiently on its first attempt — a DB blip, not a bad event.
+        const updateSpy = jest
+            .spyOn(paymentRepository, 'updateStatusIfIn')
+            .mockRejectedValueOnce(new Error('transient failure'));
+
+        await expect(applyWebhookDelivery(event)).rejects.toThrow('transient failure');
+        updateSpy.mockRestore();
+
+        // The provider's redelivery of the SAME event id is what settles it for real.
+        await applyWebhookDelivery(event);
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('succeeded');
+        expect((await orderRepository.findById(String(order._id)))!.status).toBe('paid');
     });
 });
 

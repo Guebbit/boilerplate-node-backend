@@ -183,3 +183,18 @@ export const claimWebhookEvent = (eventId: string): Promise<boolean> =>
             if (error.code === 11_000) return false;
             throw error;
         });
+
+/**
+ * Give a claimed event id back, so the provider's next delivery of it is acted on.
+ *
+ * The compensating half of {@link claimWebhookEvent}. A settlement that failed has NOT been
+ * applied, and a claim left standing over it turns every future redelivery into a silent no-op —
+ * which is the one outcome the ledger exists to prevent.
+ *
+ * @param eventId - the provider's event id
+ */
+export const releaseWebhookEvent = (eventId: string): Promise<void> =>
+    paymentWebhookEventModel
+        .deleteOne({ eventId })
+        .exec()
+        .then(() => undefined);

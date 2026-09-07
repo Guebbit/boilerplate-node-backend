@@ -45,7 +45,7 @@ import {
     type ProviderPaymentState,
     type ProviderWebhookEvent
 } from './providers';
-import { claimWebhookEvent, paymentRepository } from './repository';
+import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from './repository';
 import type { PaymentDocument } from './model';
 
 /**
@@ -198,8 +198,11 @@ interface Settlement {
  * only one.
  *
  * Every write is conditional, so a delivery that arrives twice, or races the browser's own call,
- * settles once: `SETTLEABLE_PAYMENT_STATUSES` excludes the terminal states, and the order's
- * `pending → paid` move is what makes the inventory commit and the domain event at-most-once.
+ * settles once. The PAYMENT write is what gates it — `SETTLEABLE_PAYMENT_STATUSES` excludes the
+ * terminal states, so exactly one caller ever sees its own write succeed — not the order's own
+ * `pending → paid` move: a webhook retried after {@link applyWebhookDelivery} released its claim
+ * re-enters here and can legitimately lose that race (the order already got there on the failed
+ * first attempt) while still being the one call that must finish the job.
  *
  * @param payment - the payment the provider named
  * @param state - what the provider reported
@@ -240,7 +243,20 @@ export const settlePayment = (
                 extra
             );
 
-            if (!paidOrder) {
+            // Neither write moved anything: an earlier call already settled this payment (both
+            // writes are terminal-once-applied), or this delivery lost every race there was —
+            // either way, whoever won already did (or is doing) the rest, or there is nothing to
+            // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
+            if (!succeeded) return { payment, orderLost: false };
+
+            // `paidOrder` is null in TWO different cases a redelivered event can now reach: this
+            // order was raced to `paid` by another settlement of the same charge (nothing lost —
+            // just not this call's doing), or it genuinely can no longer get there (cancelled). A
+            // stale `paidOrder` is not enough to tell them apart; the order's CURRENT status is.
+            const orderNow = paidOrder ?? (await orderRepository.findById(orderId));
+            const orderIsPaid = orderNow?.status === OrderStatus.paid;
+
+            if (!orderIsPaid) {
                 /*
                  * The money moved but the order was gone (cancelled, or a racing tab won). Put it
                  * straight back — the invariant is the module docblock's rule 2. `performRefund`
@@ -248,16 +264,18 @@ export const settlePayment = (
                  * and the at-most-once guard is the same one every other refund goes through.
                  */
                 const refunded = await performRefund(orderId);
-                return { payment: refunded ?? succeeded ?? payment, orderLost: true };
+                return { payment: refunded ?? succeeded, orderLost: true };
             }
 
             /*
              * The units finally leave — held since checkout, recoverable until now.
              *
-             * The conditional `pending → paid` move (rule 2) is what makes this at-most-once. The
-             * result is not checked: `false` means an expiry sweep beat the payment to the hold,
-             * which this module cannot fix and `inventory` logs — the customer has a paid order
-             * either way.
+             * Reached at most once per order: `succeeded` above is itself an at-most-once write
+             * (terminal once applied), and this is the only call whose `succeeded` write can ever
+             * be truthy — `paidOrder`'s own race no longer gates this, since a redelivered event
+             * can legitimately lose it while still being the one true settlement. The result is
+             * not checked: `false` means an expiry sweep beat the payment to the hold, which this
+             * module cannot fix and `inventory` logs — the customer has a paid order either way.
              */
             await inventoryService.commitForOrder(orderId);
 
@@ -267,7 +285,7 @@ export const settlePayment = (
                 to: 'paid'
             });
 
-            return { payment: succeeded ?? payment, orderLost: false };
+            return { payment: succeeded, orderLost: false };
         });
 };
 
@@ -423,7 +441,10 @@ export const syncPayment = (
  *
  * Claims the event id first, and stops if somebody already has it: the status writes below are
  * at-most-once by themselves, but committing inventory and emitting `ORDER_STATUS_CHANGED` are
- * not, and a provider retries a delivery for days.
+ * not, and a provider retries a delivery for days. A settlement that then fails releases the claim
+ * before the rejection leaves — the provider WILL redeliver, and that redelivery is the only thing
+ * that can still pay this order. The residual: a process crash between the claim and the release
+ * still strands the row, unreleased and unreachable by any future retry.
  *
  * Deliberately quiet — it answers nothing to anyone, so an event this application cannot act on is
  * logged and dropped rather than raised. A provider reads any non-2xx as a failed delivery and
@@ -445,7 +466,14 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
             return;
         }
 
-        return applyWebhookSettlement(event.providerRef, event.state);
+        return applyWebhookSettlement(event.providerRef, event.state).catch((error: Error) =>
+            // The claim is what makes a retry a no-op, so a settlement that failed has to give it
+            // back before the rejection leaves: the provider WILL redeliver, and that redelivery
+            // is the only thing that can still pay this order.
+            releaseWebhookEvent(event.id).then(() => {
+                throw error;
+            })
+        );
     });
 
 /**
