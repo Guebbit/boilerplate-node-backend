@@ -1,17 +1,17 @@
 /**
  * @module
- * Order service: all business logic for the Order entity. Delegates raw database access to the
- * order repository, and stays the one place a controller may call into.
+ * Reading and writing an order: search, fetch, create, amend, delete — plus the compensation a
+ * refused create runs. Cancellation is not here; it is a sequence with consequences of its own
+ * and lives in `./cancel`.
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
-import { orderConfirmEmail } from './emails';
+import { orderConfirmEmail } from '../emails';
 import { OrderStatus } from '@types';
-import type { SearchOrdersRequest, CartItem, Caller, UpdateOrderByIdRequest, Order } from '@types';
-import type { OrderDocument, OrderDocumentItem } from './model';
+import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest } from '@types';
+import type { OrderDocument, OrderDocumentItem } from '../model';
 import {
     generateReject,
     generateSuccess,
@@ -21,22 +21,14 @@ import {
 import { productRepository } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import { emitDomainEvent } from '@kernel/events';
-import { createOwnerScope } from '@kernel/authorization';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import { ordersAnalyticsEvents } from './analytics';
-import { ordersAuditActions } from './audit';
-import { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
-import { orderRepository } from './repository';
-import {
-    canTransition,
-    checkOrderLines,
-    orderActionsFor,
-    statusesLeadingTo,
-    statusesReachableFrom
-} from './domain';
-import type { OrderActor } from './domain';
+import { ordersAnalyticsEvents } from '../analytics';
+import { ordersAuditActions } from '../audit';
+import { ORDER_STATUS_CHANGED } from '../events';
+import { orderRepository } from '../repository';
+import { canTransition, checkOrderLines, statusesReachableFrom } from '../domain';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -406,179 +398,3 @@ export const removeById = (
         .then((order) =>
             order ? remove(order, hardDelete) : generateReject(404, [t('orders.not-found')])
         );
-
-/**
- * `USER_DELETED`'s listener. Unsets `userId` on every order this account
- * placed and marks them for `ops/reap-orders.ts` to scrub after
- * `NODE_ORDER_PII_RETENTION_DAYS` (default 3650, ~10 years — the outer edge of common commercial
- * record-keeping periods). The orders themselves are never touched here: they are invoices,
- * kept under Art. 17(3)(b)/(e) regardless of what happens to the account that placed them.
- *
- * @param userId - the erased account's id
- */
-export const detachUserId = (userId: string): Promise<void> => {
-    const retentionDays = environmentNumber('NODE_ORDER_PII_RETENTION_DAYS', 3650, 1);
-    const anonymizeAfter = new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
-
-    return orderRepository.detachUserId(userId, anonymizeAfter).then((detached) => {
-        if (detached > 0)
-            logger.info({ message: 'Detached orders from an erased account.', userId, detached });
-    });
-};
-
-/**
- * `ops/reap-orders.ts`'s sweep. Scrubs the remaining PII on every order
- * whose retention window (stamped by {@link detachUserId}) has elapsed.
- *
- * @returns how many orders were scrubbed
- */
-export const anonymizeDueOrders = (): Promise<number> =>
-    orderRepository.scrubDueForAnonymization(new Date()).then((scrubbed) => {
-        if (scrubbed > 0) logger.info({ message: 'Anonymized orders past retention.', scrubbed });
-        return scrubbed;
-    });
-
-/**
- * Which orders a caller is allowed to read — the authorization boundary for order reads: own
- * orders vs everyone's, and a soft-deleted order visible or not. `visibleScope` makes it BOTH;
- * `ownerScope` alone would leave soft-deleted rows visible to their owner. Returns `undefined`
- * for admins ("no restriction"), so callers must spread it, not treat it as a filter — see
- * `createOwnerScope` for why the scope rides in the read.
- */
-export const callerScope = createOwnerScope(orderRepository.visibleScope);
-
-/**
- * Which column of the lifecycle table a caller reads. Two actors reach the HTTP surface;
- * `system` names moves that follow a fact from outside the application, and no request may
- * claim it.
- * @returns the actor whose permissions apply
- */
-const actorOf = (authContext?: Caller): OrderActor => (authContext?.admin ? 'admin' : 'customer');
-
-/**
- * The single-order response body: the order as it serializes, plus what this caller may do to
- * it — explicit because the two read branches return different shapes, and `actions` must ride
- * on the wire shape or the schema's transform drops it.
- * @returns the serialized order carrying its `actions`
- */
-const withActions = (order: OrderDocument, authContext?: Caller): Order => {
-    // `unknown` first, then one assertion: the scoped branch already hands back a normalized plain
-    // object typed as a document, so neither shape can be spread without saying so once. The
-    // second assertion states what the merge actually produces — the contract's wire shape — which
-    // structural typing can't verify past the first `unknown` step.
-    const serialized: unknown = typeof order.toJSON === 'function' ? order.toJSON() : order;
-
-    return {
-        ...(serialized as Record<string, unknown>),
-        actions: orderActionsFor(order.status, actorOf(authContext))
-    } as Order;
-};
-
-/**
- * Cancel an order — the one write a customer may make, or the system makes when a reservation
- * times out unpaid. A conditional status move, not read-check-write: the filter carries the
- * caller's scope AND the `pending` requirement, so a racing admin "shipped" (or a double-click)
- * resolves at the storage layer — exactly one write matches. The follow-up read on `null` only
- * tells 404 from 409; the decision is already made.
- * @param context - omitted by the reservation-sweep expiry, which is not a request; still
- *   audited as a system actor and reported under its own analytics name
- */
-export const cancelById = (
-    id: string,
-    authContext?: Caller,
-    options: { refund?: boolean } = {},
-    context?: CallerContext
-): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
-    /*
-     * A customer is always refunded — that is the promise `paid` is cancellable on, and it is not
-     * theirs to waive. Only an operator chooses, because only an operator has a reason to cancel
-     * without returning the money: a replacement going out, a correction, a refund handled apart.
-     */
-    const refund = authContext?.admin ? (options.refund ?? true) : true;
-
-    /*
-     * The statuses a cancel may move from are read off the lifecycle table, not declared, and the
-     * table answers per actor: a customer may cancel from `pending` and `paid`, an operator also
-     * from `processing`.
-     */
-    return orderRepository
-        .updateStatusIfIn(
-            id,
-            statusesLeadingTo(OrderStatus.cancelled, actorOf(authContext)),
-            OrderStatus.cancelled,
-            callerScope(authContext)
-        )
-        .then(async (order) => {
-            if (order) {
-                /*
-                 * The hold is given back after the status write, deliberately: the conditional
-                 * move guarantees this runs at most once per order — a second cancel loses the
-                 * `$in: ['pending']` match. Belt AND braces, since `releaseForOrder` claims the
-                 * reservation's status conditionally too — both guards exist because the two
-                 * callers (a customer cancelling, the sweep's deadline) can race, and exactly
-                 * one moves the counters. Unchecked here: a hold already expired is an ordinary
-                 * sequence, the units are already back.
-                 */
-                await inventoryService.releaseForOrder(String(order._id));
-
-                // Whoever has to compensate hears it from here; `refund` says whether the money
-                // is part of that. The fact is announced either way.
-                await emitDomainEvent(ORDER_CANCELLED, { orderId: String(order._id), refund });
-
-                // No context: the reservation-sweep expiry, not a request. Audited as a system
-                // actor rather than skipped — see the docblock above — and reported under its own
-                // analytics name so a timeout is never counted as a customer's choice to cancel.
-                const isSystemExpiry = !context;
-                const emitContext = context ?? { caller: {}, analyticsConsent: false };
-
-                emitAuditEvent(
-                    buildAuditEvent(emitContext, {
-                        action: ordersAuditActions.ORDER_CANCELLED,
-                        outcome: 'success',
-                        target_type: 'order',
-                        target_id: String(order._id),
-                        ...(isSystemExpiry ? { actor_role: 'admin', actor_user_id: 'system' } : {})
-                    })
-                );
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(emitContext),
-                    event: isSystemExpiry
-                        ? ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED
-                        : ordersAnalyticsEvents.ORDER_CANCELLED,
-                    properties: { order_id: String(order._id) }
-                });
-
-                return generateSuccess(order, 200, t('orders.cancel.success'));
-            }
-
-            // Which refusal was it? This read only informs the message — the write above
-            // already decided nothing changes.
-            return getById(id, callerScope(authContext)).then((existing) =>
-                existing
-                    ? generateReject(409, [
-                          {
-                              code: 'ORDER_NOT_CANCELLABLE',
-                              message: t('orders.cancel.not-cancellable')
-                          }
-                      ])
-                    : generateReject(404, [t('orders.not-found')])
-            );
-        });
-};
-
-/** The service's public surface — every controller and cross-module caller goes through this. */
-export const orderService = {
-    search,
-    getById,
-    callerScope,
-    create,
-    recordCreated,
-    update,
-    updateById,
-    remove,
-    removeById,
-    detachUserId,
-    anonymizeDueOrders,
-    cancelById,
-    withActions
-};

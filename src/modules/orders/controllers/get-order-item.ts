@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { orderService } from '../service';
+import { orderService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';

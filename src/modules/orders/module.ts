@@ -19,7 +19,7 @@ import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { seedOrdersCollection, exportSeededOrders } from './demo';
-import { cancelById, detachUserId } from './service';
+import { cancelById, detachUserId } from './services';
 // Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import './events';
 

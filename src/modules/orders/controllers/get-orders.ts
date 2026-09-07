@@ -5,7 +5,7 @@
  */
 
 import { SearchOrdersBody } from '@api/schemas.zod';
-import { orderService } from '../service';
+import { orderService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';

@@ -11,7 +11,7 @@ import { createUser } from '@modules/users/tests/fixtures';
 import { createProduct } from '@modules/products/tests/fixtures';
 import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import { orderRepository } from '@modules/orders';
-import { orderService } from '@modules/orders/service';
+import { orderService } from '@modules/orders/services';
 import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';

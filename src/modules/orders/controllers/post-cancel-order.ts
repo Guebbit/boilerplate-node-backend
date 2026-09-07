@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { orderService } from '../service';
+import { orderService } from '../services';
 import type { CancelOrderRequest, Order } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';

@@ -24,7 +24,7 @@ import {
     search,
     callerScope,
     orderService
-} from '@modules/orders/service';
+} from '@modules/orders/services';
 import { orderRepository } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { productRepository } from '@modules/products';

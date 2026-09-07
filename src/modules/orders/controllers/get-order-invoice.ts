@@ -7,7 +7,7 @@
 import path from 'node:path';
 import type { Request, Response } from 'express';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { orderService } from '../service';
+import { orderService } from '../services';
 import { invoiceDocument } from '../emails';
 import { rejectResponse } from '@infrastructure/http/response';
 import ejs from 'ejs';

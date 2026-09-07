@@ -5,7 +5,7 @@
  */
 
 import { createDeleteController } from '@infrastructure/surfaces/create-delete-controller';
-import { orderService } from '../service';
+import { orderService } from '../services';
 import { ordersAuditActions } from '../audit';
 
 /**

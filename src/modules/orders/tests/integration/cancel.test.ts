@@ -11,7 +11,7 @@ import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/fixtures';
 import { createProduct } from '@modules/products/tests/fixtures';
 import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
-import { orderService } from '@modules/orders/service';
+import { orderService } from '@modules/orders/services';
 import { orderRepository, ORDER_CANCELLED } from '@modules/orders';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import * as auditPort from '@infrastructure/observability/audit';

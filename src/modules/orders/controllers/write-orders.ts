@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';
 import { CreateOrderBody, UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
-import { orderService } from '../service';
+import { orderService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest, Order } from '@types';
