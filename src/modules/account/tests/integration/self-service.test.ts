@@ -309,7 +309,7 @@ describe('sessionRemove', () => {
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-b');
 
         const tokens = await readTokens(user.id);
-        // `token.token` is a digest at rest (wave 3.1) — `tokenAdd` hashed 'refresh-a' before storing.
+        // `token.token` is a digest at rest — `tokenAdd` hashed 'refresh-a' before storing.
         const target = tokens.find((token) => token.token === hashToken('refresh-a'));
 
         const result = await userRepository.sessionRemove(user.id, String(target?._id));

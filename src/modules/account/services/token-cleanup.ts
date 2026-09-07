@@ -22,7 +22,7 @@ import { getRotationGraceMilliseconds } from '../session/config';
 
 /**
  * Run one cleanup cycle: remove every expired token, plus every rotated-away one whose grace
- * window (wave 3.2) has long since passed, from every user document.
+ * window has long since passed, from every user document.
  */
 export const runTokenCleanup = (): Promise<void> => {
     logger.info('Token cleanup: starting expired-token removal');
