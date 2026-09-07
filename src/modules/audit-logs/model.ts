@@ -18,16 +18,16 @@ import type { AuditEntry } from '@infrastructure/observability/audit';
 /**
  * A stored audit entry — `AuditEntry` from `@infrastructure/observability/audit`, as a document.
  *
- * DERIVED from that type rather than restated beside it, because the two are the same shape by
- * design: the sink persists what it is handed and the controller returns what it reads, so no
- * translation exists in either direction. Restated, they were the same fields written twice and a
- * field added to one of them would have compiled fine against the other.
- *
- * `action` is the one field this widens, and it is widened on purpose. `AuditAction` is the set of
- * actions THIS BUILD emits; a row already in the collection was written by whatever build was
- * deployed when it happened, and may name an action since renamed or retired. `string` is what is
- * actually in the database, and typing a read as the narrower union would be a claim about history
- * that nothing enforces.
+ * Derived:  DERIVED from that type rather than restated beside it, because the two are the same
+ *           shape by design: the sink persists what it is handed and the controller returns what
+ *           it reads, so no translation exists in either direction. Restated, they were the same
+ *           fields written twice and a field added to one of them would have compiled fine
+ *           against the other.
+ * `action`: the one field this widens, on purpose. `AuditAction` is the set of actions THIS BUILD
+ *           emits; a row already in the collection was written by whatever build was deployed when
+ *           it happened, and may name an action since renamed or retired. `string` is what is
+ *           actually in the database, and typing a read as the narrower union would be a claim
+ *           about history that nothing enforces.
  *
  * The import is type-only, so nothing here depends on the sink at runtime.
  */

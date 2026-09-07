@@ -265,18 +265,19 @@ export const userRepository: Repository<UserDocument> & {
             .exec(),
 
     /**
-     * Claim a refresh token for rotation. Atomically stamps
-     * `supersededAt` on the matched entry, but ONLY if it doesn't already carry one: `$elemMatch`
-     * requires both conditions on the SAME array element, so of two concurrent callers presenting
-     * the identical token, exactly one sees `modifiedCount: 1` — mongod serializes the two writes
-     * against one document, and the loser's filter no longer matches once the winner's write has
-     * landed. That race is `accountService.rotateRefreshToken`'s whole reason for existing; this
-     * method is only the primitive that makes it possible to tell winner from loser at all.
+     * Claim a refresh token for rotation. Atomically stamps `supersededAt` on the matched entry,
+     * but ONLY if it doesn't already carry one.
      *
-     * Deliberately does NOT `$pull` the old entry — the entry stays, timestamped, so a
-     * short-grace-window re-presentation of it (the loser's race, or a retried request) can still
-     * be told apart from genuine reuse of a long-dead token. See `findByTokenValue` for reading
-     * it back.
+     * Race:    `$elemMatch` requires both conditions on the SAME array element, so of two
+     *          concurrent callers presenting the identical token, exactly one sees
+     *          `modifiedCount: 1` — mongod serializes the two writes against one document, and the
+     *          loser's filter no longer matches once the winner's write has landed. That race is
+     *          `accountService.rotateRefreshToken`'s whole reason for existing; this method is
+     *          only the primitive that makes it possible to tell winner from loser at all.
+     * No pull: deliberately does NOT `$pull` the old entry — it stays, timestamped, so a
+     *          short-grace-window re-presentation of it (the loser's race, or a retried request)
+     *          can still be told apart from genuine reuse of a long-dead token. See
+     *          `findByTokenValue` for reading it back.
      *
      * @returns whether THIS call is the one that superseded the token
      */

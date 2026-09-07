@@ -186,20 +186,21 @@ const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
 const ANONYMIZED_TEXT = 'Anonymized';
 
 /**
- * `ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has
- * elapsed gets its remaining PII scrubbed: `email` and the required `shippingAddress` fields
- * (`fullName`, `street`) are REPLACED, since the schema requires them; the optional
- * `shippingAddress.phone` is unset outright. City, country, zip, amounts, line items and dates
- * survive — they are no longer personal data once the name and street are gone.
+ * `ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has elapsed gets its remaining
+ * PII scrubbed.
  *
- * Two writes, not one: an order placed by an account that kept no address book (pickup, or a
- * guest with none) has no `shippingAddress` at all, and a single `$set` on its sub-fields would
- * CREATE a partial one — present but missing the required `city`/`zip`/`country` no validator
- * runs on a bulk update to catch. The second write is scoped to orders that actually have one.
- *
- * `anonymizeAfter` is unset in the same write, which is what stops a later run rescrubbing an
- * already-scrubbed row: the sparse index this field carries no longer holds it, so the next
- * sweep's `$lte` filter cannot match it again.
+ * Scrub:      `email` and the required `shippingAddress` fields (`fullName`, `street`) are
+ *             REPLACED, since the schema requires them; the optional `shippingAddress.phone` is
+ *             unset outright. City, country, zip, amounts, line items and dates survive — none of
+ *             it is personal data once the name and street are gone.
+ * Two writes: an order placed by an account that kept no address book (pickup, or a guest with
+ *             none) has no `shippingAddress` at all, and a single `$set` on its sub-fields would
+ *             CREATE a partial one — present but missing the required `city`/`zip`/`country`,
+ *             which no validator runs on a bulk update to catch. The second write is scoped to
+ *             orders that actually have one.
+ * Idempotent: `anonymizeAfter` is unset in the same write, so a later run cannot rescrub an
+ *             already-scrubbed row — the sparse index this field carries no longer holds it, so
+ *             the next sweep's `$lte` filter cannot match it again.
  *
  * @param cutoff - orders whose `anonymizeAfter` is at or before this instant are due
  * @returns how many orders were scrubbed

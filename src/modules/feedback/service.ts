@@ -66,19 +66,20 @@ const notifyMailbox = (): string =>
 /**
  * Record a contact request and tell the support mailbox about it — unless the honeypot caught it.
  *
- * Both halves are here because "a customer asked us something" is one event, not a write plus a
- * thing the HTTP layer remembers to do afterwards. In a controller instead, a second caller of
- * `create` would file a ticket nobody was told about — and this module would publish its queue
- * job from a controller while its sibling `delivery` publishes from the service.
+ * Both halves live here because "a customer asked us something" is one event, not a write plus a
+ * thing the HTTP layer remembers to do afterwards.
  *
- * `payload.website` is the honeypot: a field a real browser always submits empty and a bot
- * reliably fills, declared in the contract but never persisted (see `FeedbackRequestDocument`) or
- * read back. A non-empty value writes the row as `spam` and skips the notification — the bot still
- * gets its `201`, so it learns nothing, but nobody's inbox hears about it.
- *
- * A disposable-inbox domain (`checkEmailPolicy`, off by default) is treated the same way: filed
- * as `spam`, notification skipped, still a `201` — a visible refusal would tell a spam script
- * exactly which signal caught it.
+ * Why here:   in a controller instead, a second caller of `create` would file a ticket nobody was
+ *             told about — and this module would publish its queue job from a controller while
+ *             its sibling `delivery` publishes from the service.
+ * Honeypot:   `payload.website` is a field a real browser always submits empty and a bot reliably
+ *             fills, declared in the contract but never persisted (see `FeedbackRequestDocument`)
+ *             or read back. A non-empty value writes the row as `spam` and skips the notification
+ *             — the bot still gets its `201`, so it learns nothing, but nobody's inbox hears
+ *             about it.
+ * Disposable: a disposable-inbox domain (`checkEmailPolicy`, off by default) is treated the same
+ *             way — filed as `spam`, notification skipped, still a `201`. A visible refusal would
+ *             tell a spam script exactly which signal caught it.
  */
 export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestDocument> => {
     const email = payload.email.trim().toLowerCase();

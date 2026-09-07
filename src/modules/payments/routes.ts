@@ -2,16 +2,17 @@
  * @module
  * The payments route table. Everything below the auth wall is authenticated at the router level —
  * money is somebody's. The ONE route in front of it is the provider's webhook: its caller is a
- * machine with no account, which authenticates by signing the raw body instead. Adding session
- * auth on top of that would not make it safer, it would only stop the deliveries arriving.
+ * machine with no account, authenticating by signing the raw body instead — session auth on top
+ * would only stop deliveries arriving, not make it safer.
  *
- * Exactly one route is additionally admin-only: the refund, a self-service withdrawal if
- * left open to any caller, versus an intent or confirm locked to admins being a checkout nobody
- * can complete. Every route that moves money also requires a FRESH session
- * (`requireFreshAuth(REAUTH_TIME_CRITICAL)`) — a stolen access token
- * proves nothing about how recently the account holder actually typed their password — and, on
- * the two the customer themselves drives, a VERIFIED one (`requireVerified`): an unproven address
- * must not be able to pay and start receiving payment mail at an inbox nobody confirmed.
+ * Admin-only:    the refund alone — a self-service withdrawal if left open to any caller, versus
+ *                an intent or confirm locked to admins being a checkout nobody can complete.
+ * Fresh session: every route that moves money requires `requireFreshAuth(REAUTH_TIME_CRITICAL)` —
+ *                a stolen access token proves nothing about how recently the holder typed their
+ *                password.
+ * Verified:      the two routes the customer drives directly also require `requireVerified` — an
+ *                unproven address must not be able to pay and start receiving payment mail at an
+ *                inbox nobody confirmed.
  */
 
 import { Router } from 'express';

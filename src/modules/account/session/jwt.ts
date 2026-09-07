@@ -234,24 +234,11 @@ const reissueRotated = (
 
 /**
  * Exchange a refresh token for a NEW refresh token and a fresh access token, ROTATING the
- * refresh token's value. Unlike `createAccessToken`, which re-signs
- * an access token off a refresh token that stays valid indefinitely, this REPLACES it on every
- * exchange: a stolen cookie becomes detectable (a later presentation of the spent value) rather
- * than silently reusable for as long as it has left to live.
- *
- * The new token's absolute expiry is COPIED from the old one's `exp` claim, not reset to a fresh
- * full window — rotation changes the token's VALUE for theft detection, it does not extend how
- * long the session may live past what it was granted at login. See docs/modules/account-sessions.md.
- *
- * Concurrency: exactly one of two requests racing with the identical token WINS the atomic
- * `tokenSupersede` claim (see that method's doc) and rotates normally. The loser re-reads the
- * entry: if it was superseded moments ago (within `getRotationGraceMilliseconds()`), that is the
- * race, not theft, and the loser is reissued its own sibling token rather than rejected. A token
- * absent ENTIRELY is an ordinary dead credential (logout, password change, deactivation) and is
- * rejected same as ever — not reuse, and there is nothing to revoke that isn't already gone. Only
- * a token this account demonstrably rotated away, replayed well outside its grace window, is
- * treated as reuse — and that revokes the account's ENTIRE refresh set, not just the one token,
- * since the value itself is what leaked.
+ * refresh token's value on every exchange — unlike `createAccessToken`, which re-signs off a
+ * refresh token that stays valid indefinitely. The full mechanism (why rotation detects theft, the
+ * concurrency handling for two requests racing the same token, and what counts as reuse versus an
+ * ordinary dead credential) is documented in full at
+ * docs/modules/account-sessions.md#refresh-rotation.
  *
  * @param oldToken - the refresh JWT the caller presented
  * @returns the new access/refresh tokens and the refresh cookie's new `maxAge`
@@ -274,9 +261,9 @@ export const rotateRefreshToken = (
         // verified with almost no time left still signs rather than producing `expiresIn: 0`,
         // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
         const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
-        // Copied forward through rotation too, same rule `createAccessToken` follows. A
-        // pre-wave-4 token with no `auth_time`/`amr` at all falls back the same way `resolve()`
-        // does elsewhere — infinitely old, `pwd` as the only method it could possibly have used.
+        // Copied forward through rotation too, same rule `createAccessToken` follows. A token
+        // carrying no `auth_time`/`amr` at all falls back the same way `resolve()` does elsewhere
+        // — infinitely old, `pwd` as the only method it could possibly have used.
         const authTime = rawAuthTime ?? 0;
         const carriedAmr = amr ?? ['pwd'];
 

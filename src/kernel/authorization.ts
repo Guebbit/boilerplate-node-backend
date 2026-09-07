@@ -28,15 +28,15 @@ const restrictNonAdmin =
 /**
  * Build a module's `callerScope` from its repository's OWNER scope — "yours, or you are staff".
  *
- * The restriction has to ride IN the read. Fetching a row and then checking its owner is what
- * `orders/repository.ts` names as the way a scoped find turns into a leak: it opens a window
- * between the check and whatever uses the document, and it lets "not yours" and "does not exist"
- * answer differently.
- *
- * The `?? ''` is deliberate and load-bearing. A caller with no id yields an empty string, which is
- * not a valid ObjectId, so `ownerScopeOf` throws. That is the safe direction — the alternative is
- * omitting the owner clause, which does not fail anything and quietly widens the query to every
- * user's data. A bug here becomes a 500, never a disclosure.
+ * In the read: the restriction has to ride IN the read. Fetching a row and then checking its
+ *              owner is what `orders/repository.ts` names as the way a scoped find turns into a
+ *              leak: it opens a window between the check and whatever uses the document, and it
+ *              lets "not yours" and "does not exist" answer differently.
+ * `?? ''`:     deliberate and load-bearing. A caller with no id yields an empty string, which is
+ *              not a valid ObjectId, so `ownerScopeOf` throws. That is the safe direction — the
+ *              alternative is omitting the owner clause, which does not fail anything and quietly
+ *              widens the query to every user's data. A bug here becomes a 500, never a
+ *              disclosure.
  *
  * @param ownerScopeOf - the repository's owner scope, e.g. `orderRepository.visibleScope`. Must
  *   throw on an empty id rather than return an empty fragment, or the fail-closed property above
