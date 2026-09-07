@@ -299,12 +299,11 @@ instance starts its own server) and racy. A WiredTiger file removed mid-copy fai
 with an `ENOENT` naming a filename nothing in the project mentions. `run-mutation-tests.ts` clears
 `.tmp` before it starts, which hid this until two runs overlapped.
 
-`ignorePatterns` also lists `.claude/**`, `.2repo/**` and `.codeboarding/**` — untracked agent
-tooling that only exists on a developer's machine, which is why CI never hit either problem it
-causes. `.claude/commands/audit` is an optional SYMLINK to `tests/audit/` (see
-[AI Auditing](./ai-auditing.md)), and Stryker's sandbox copy is a plain `copyfile`, so it aborts the
-whole run with `EISDIR` before a single mutant is instrumented. The other two are 42 MB of generated
-wiki text copied into every sandbox for nothing.
+`ignorePatterns` also lists `.claude/**` — untracked agent tooling that only exists on a
+developer's machine, which is why CI never hit the problem it causes. `.claude/commands/audit` is
+an optional SYMLINK to `tests/audit/` (see [AI Auditing](./ai-auditing.md)), and Stryker's sandbox
+copy is a plain `copyfile`, so it aborts the whole run with `EISDIR` before a single mutant is
+instrumented.
 
 The rule the three share: a directory that is gitignored, absent in CI and not read by the suite
 belongs here — the sandbox needs what the TESTS read, not what the repository happens to contain.

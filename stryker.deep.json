@@ -42,9 +42,7 @@
         ".tmp/**",
         ".tmp-*/**",
         ".stryker-tmp*/**",
-        ".claude/**",
-        ".2repo/**",
-        ".codeboarding/**"
+        ".claude/**"
     ],
     "thresholds": {
         "high": 80,
