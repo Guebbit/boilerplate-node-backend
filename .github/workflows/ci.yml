@@ -343,6 +343,10 @@ jobs:
         # module graph, generated from the same dependency-cruiser output the job above uses, so a
         # new cross-module import that nobody regenerated the page for fails here rather than
         # leaving a diagram that quietly describes last month's architecture.
+        #
+        # `check:docs-references` answers the third question neither of those can: a dead LINK
+        # fails the build, a stale GRAPH fails the check, but a page naming a source file that no
+        # longer exists reads as current to everyone who has not opened the tree.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -358,6 +362,9 @@ jobs:
 
             - name: Check the module graph is current
               run: npm run check:docs-graph
+
+            - name: Check every path the docs cite still exists
+              run: npm run check:docs-references
 
             - name: Build the documentation site
               run: npm run docs:build

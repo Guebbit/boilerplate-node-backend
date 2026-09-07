@@ -56,9 +56,9 @@ describe('emitDomainEvent', () => {
         });
         onDomainEvent('test.thing-happened', second);
 
-        await expect(
-            emitDomainEvent('test.thing-happened', { id: 'abc' })
-        ).resolves.toBeUndefined();
+        // `false`, not a rejection: the emit still succeeded, and the caller decides what an
+        // unsettled handler means to it. `orders` reads this to keep a refund marker standing.
+        await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(false);
         expect(second).toHaveBeenCalledTimes(1);
         expect(logger.error).toHaveBeenCalledWith(
             expect.stringContaining('test.thing-happened'),
@@ -69,16 +69,23 @@ describe('emitDomainEvent', () => {
     it('does not reject when an async handler rejects', async () => {
         onDomainEvent('test.thing-happened', () => Promise.reject(new Error('async boom')));
 
-        await expect(
-            emitDomainEvent('test.thing-happened', { id: 'abc' })
-        ).resolves.toBeUndefined();
+        await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(false);
         expect(logger.error).toHaveBeenCalled();
     });
 
+    it('reports true when every handler resolves', async () => {
+        // The other half of the signal, asserted on its own: a `false` that was never `true` for
+        // a clean emit would keep every marker standing forever.
+        onDomainEvent('test.thing-happened', jest.fn());
+        onDomainEvent('test.thing-happened', () => Promise.resolve());
+
+        await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(true);
+        expect(logger.error).not.toHaveBeenCalled();
+    });
+
     it('is a no-op when nothing subscribes', async () => {
-        await expect(
-            emitDomainEvent('test.thing-happened', { id: 'abc' })
-        ).resolves.toBeUndefined();
+        // Vacuously settled — nothing threw, so nothing is owed.
+        await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(true);
     });
 });
 

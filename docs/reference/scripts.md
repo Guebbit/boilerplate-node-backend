@@ -133,11 +133,12 @@ it alongside `src/` and `db/`), because these are meant to run against a live da
 container rather than from a developer's terminal. Each one takes the `db/run-script.ts` wrapper,
 which gives it an exit code, cleanup on the failure path, and a readable error.
 
-| File                            | What it is                                                                                                                         | Read next                                        |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `ops/reap-quarantine.ts`        | Deletes quarantined uploads past the retention window — `npm run reap:quarantine`. Filesystem-only and safe to repeat.             | [Image processing](../tools/image-processing.md) |
-| `ops/reap-inactive-accounts.ts` | The three-stage inactivity reaper — warn, soft delete, hard delete. Disabled by default; enabling it is the controller's decision. | [Ops](./ops.md)                                  |
-| `ops/reap-orders.ts`            | Scrubs order PII once `anonymizeAfter` arrives — `npm run reap:orders`. Never deletes a row: an order is an invoice.               | [Ops](./ops.md)                                  |
+| File                            | What it is                                                                                                                                                 | Read next                                        |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `ops/reap-quarantine.ts`        | Deletes quarantined uploads past the retention window — `npm run reap:quarantine`. Filesystem-only and safe to repeat.                                     | [Image processing](../tools/image-processing.md) |
+| `ops/reap-inactive-accounts.ts` | The three-stage inactivity reaper — warn, soft delete, hard delete. Disabled by default; enabling it is the controller's decision.                         | [Ops](./ops.md)                                  |
+| `ops/reap-orders.ts`            | Scrubs order PII once `anonymizeAfter` arrives — `npm run reap:orders`. Never deletes a row: an order is an invoice.                                       | [Ops](./ops.md)                                  |
+| `ops/sweep-order-effects.ts`    | Retries the refund a cancel announced but could not guarantee — `npm run sweep:order-effects`. Registers the modules first, since it works by re-emitting. | [Ops](./ops.md)                                  |
 
 ## The repo's own lint rules
 

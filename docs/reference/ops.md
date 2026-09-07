@@ -96,6 +96,17 @@ own header.
 hard-deletes an account after `NODE_INACTIVE_ACCOUNT_DAYS` of no login, **disabled by default**
 (`0`). See the script's own header for the three-stage design.
 
+`npm run sweep:order-effects` is a different kind of periodic job: not retention, but the retry
+behind a cancel's consequences. A cancel announces `ORDER_CANCELLED` and `payments` refunds off
+that announcement, and the domain event bus has no retry — so a provider unreachable for the length
+of one call would leave the order cancelled and the refund lost. `cancelById` writes the intent to
+refund in the same document write that decides the cancel, and this sweep re-announces for whatever
+is still owed past `NODE_ORDER_EFFECT_RETRY_MINUTES` (default 5). Run it on the same schedule as the
+`reap:*` jobs; it is safe to repeat, since a second pass over a settled order refunds nothing.
+
+The stock half of a cancel is deliberately NOT covered here — a hold keeps its `expiresAt` and the
+reservation sweep reclaims it, so it heals on its own.
+
 Log lines are Loki's retention, not Mongo's: `docker/observability/loki.config.yaml` sets
 `retention_period: 168h` (7 days) for the local stack. A production deployment tunes this
 independently — it is the one retention window this repo does not read from `.env`.
