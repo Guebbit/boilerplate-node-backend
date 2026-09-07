@@ -320,9 +320,7 @@ describe('refund on cancel', () => {
         await orderService.cancelById(String(order._id), auth(user));
 
         // The setup this test actually cares about: cancelling really did refund it already.
-        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-            'refunded'
-        );
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe('refunded');
 
         // The webhook arrives unbidden and late — the browser-driven confirm already settled and
         // the cancel already refunded it by the time the provider's own callback catches up.
