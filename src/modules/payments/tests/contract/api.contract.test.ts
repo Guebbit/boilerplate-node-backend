@@ -175,6 +175,23 @@ describe('POST /payments/{id}/confirm', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it.each([
+        ['too short', 'ab'],
+        ['too long', 'a'.repeat(256)]
+    ])('matches the error contract for a %s method reference', async (_label, paymentMethodRef) => {
+        // The contract states minLength: 3 and maxLength: 255 — only the `pattern` half (spaces,
+        // above) was ever exercised, so a length regression on either bound had nothing to fail it.
+        const { bearer, paymentId } = await authenticateWithIntent();
+
+        const response = await api()
+            .post(`/payments/${paymentId}/confirm`)
+            .set('Authorization', bearer)
+            .send({ paymentMethodRef });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('answers 200 with the payment still in flight when the bank wants a challenge', async () => {
         const { bearer, paymentId } = await authenticateWithIntent();
 
@@ -271,6 +288,23 @@ describe('POST /payments/webhook', () => {
         expect(response).toSatisfyApiSpec();
         const settled = await paymentRepository.findById(paymentId);
         expect(settled!.status).toBe('succeeded');
+    });
+
+    it('answers a MessageResponse, not the PaymentEnvelope every other route answers', async () => {
+        // A deliberate shape difference: the caller is a machine with no use for the payment back,
+        // and `toSatisfyApiSpec()` alone would pass a `PaymentEnvelope` here too, since the two
+        // schemas overlap on `success`/`status`. This is the one assertion that would catch a
+        // controller change that started leaking the payment into the webhook's own response.
+        const { providerRef } = await preparedPayment();
+
+        const response = await deliver({
+            id: 'evt_envelope_shape',
+            providerRef,
+            status: 'succeeded'
+        });
+
+        expect(response.body).not.toHaveProperty('data');
+        expect(Object.keys(response.body).toSorted()).toEqual(['message', 'status', 'success']);
     });
 
     it('refuses a delivery nobody signed', async () => {
