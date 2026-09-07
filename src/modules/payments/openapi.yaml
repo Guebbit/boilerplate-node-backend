@@ -265,7 +265,9 @@ components:
                     type: number
                     format: double
                     minimum: 0
-                    description: The order's total as the intent froze it.
+                    description: >-
+                        The order's total as the intent froze it. Always two decimal places,
+                        rounded half-up at the point of calculation.
                 currency:
                     type: string
                     description: ISO-4217 currency code (e.g. EUR)
@@ -291,7 +293,9 @@ components:
                         browser. Absent from every other response.
                 cardLast4:
                     type: string
-                    description: The only card digits a payment system may remember.
+                    description: >-
+                        The only card digits a payment system may remember. Survives a refund —
+                        refunding does not clear it.
                 # Computed per CALLER, not stored — the same idea as `Order.actions`, for the half
                 # of the question this module owns.
                 actions:
