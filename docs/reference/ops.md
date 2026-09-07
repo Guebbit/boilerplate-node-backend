@@ -87,10 +87,18 @@ is the longest on purpose: a contact request can be evidence in a commercial dis
 sits inside the common limitation periods. `carts` ties to `updatedAt`, so any edit restarts the
 clock — only a genuinely abandoned cart is ever removed.
 
-Two collections that must NOT be removed on a timer — `orders` and `payments` are invoices, kept
-for tax and commercial-law reasons — instead have their PII scrubbed in place by
-`npm run reap:orders` past `NODE_ORDER_PII_RETENTION_DAYS` (default 3650 days). See the script's
-own header.
+`orders` and a SETTLED `payments` row must NOT be removed on a timer — both are invoices, kept for
+tax and commercial-law reasons. `orders` carries PII (shipping name/address, email) that survives
+an account's erasure, so `npm run reap:orders` scrubs it in place past
+`NODE_ORDER_PII_RETENTION_DAYS` (default 3650 days) — see the script's own header. `payments`
+carries none: `cardLast4` is not a PAN, and `amount`/`currency`/`provider` were never personal
+data, so a settled payment is never touched by any timer.
+
+A payment that never settled is a different case, not a PII one: `npm run reap:payments` DELETES
+an attempt (never `succeeded`/`refunded`) once it has sat untouched for
+`NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30 days) — an abandoned checkout is not an
+invoice, so there is nothing there worth keeping. See the script's own header, and
+[payments](../modules/payments.md)'s retention section for the full reasoning.
 
 `users` has no TTL either — `npm run reap:inactive-accounts` warns, then soft-deletes, then
 hard-deletes an account after `NODE_INACTIVE_ACCOUNT_DAYS` of no login, **disabled by default**

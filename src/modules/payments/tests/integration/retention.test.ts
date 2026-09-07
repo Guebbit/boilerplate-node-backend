@@ -14,9 +14,11 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { orderRepository } from '@modules/orders';
-import { createIntent } from '@modules/payments/service';
+import { createIntent, confirmPayment, reapAbandonedPayments } from '@modules/payments/service';
 import { paymentRepository } from '@modules/payments/repository';
+import { paymentModel } from '@modules/payments/model';
 import { userService } from '@modules/users';
+import { testCallerContext } from '@tests/caller-context';
 import paymentsModule from '@modules/payments/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
@@ -83,5 +85,84 @@ describe('payments — detach on account erasure', () => {
 
         const payment = (intent as ResponseSuccess<Payment>).data!;
         expect(payment.userId).toBeUndefined();
+    });
+});
+
+/** Backdates a payment's `updatedAt` without disturbing anything else — `timestamps: false` is
+ *  what keeps Mongoose from immediately overwriting it back to "now". */
+const touch = (paymentId: string, updatedAt: Date): Promise<unknown> =>
+    paymentModel
+        .updateOne({ _id: paymentId }, { $set: { updatedAt } }, { timestamps: false })
+        .exec();
+
+describe('payments — reapAbandonedPayments (reap-payments sweep)', () => {
+    const originalRetention = process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
+
+    beforeEach(() => {
+        registerModules([
+            accountModule,
+            deliveryModule,
+            productsModule,
+            usersModule,
+            inventoryModule,
+            ordersModule,
+            paymentsModule,
+            cartModule
+        ]);
+    });
+
+    afterEach(() => {
+        resetDomainEvents();
+        if (originalRetention === undefined)
+            delete process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
+        else process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS = originalRetention;
+    });
+
+    it('deletes an attempt that never settled, once it is past the window', async () => {
+        process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS = '7';
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const intent = await createIntent(String(order._id), { admin: false, id: user.id });
+        const payment = (intent as ResponseSuccess<Payment>).data!;
+        await touch(payment.id, new Date(Date.now() - 8 * 24 * 60 * 60 * 1000));
+
+        await expect(reapAbandonedPayments()).resolves.toBe(1);
+
+        await expect(paymentRepository.findById(payment.id)).resolves.toBeNull();
+    });
+
+    it('leaves an attempt alone while it is still within the window', async () => {
+        process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS = '7';
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const intent = await createIntent(String(order._id), { admin: false, id: user.id });
+        const payment = (intent as ResponseSuccess<Payment>).data!;
+        await touch(payment.id, new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
+
+        await expect(reapAbandonedPayments()).resolves.toBe(0);
+
+        await expect(paymentRepository.findById(payment.id)).resolves.not.toBeNull();
+    });
+
+    it('never deletes a payment that succeeded, no matter how old', async () => {
+        process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS = '7';
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        const intent = await createIntent(String(order._id), { admin: false, id: user.id });
+        const paymentId = (intent as ResponseSuccess<Payment>).data!.id;
+        await confirmPayment(
+            paymentId,
+            'pm_card_visa',
+            { admin: false, id: user.id },
+            testCallerContext
+        );
+        await touch(paymentId, new Date(Date.now() - 365 * 24 * 60 * 60 * 1000));
+
+        await expect(reapAbandonedPayments()).resolves.toBe(0);
+
+        await expect(paymentRepository.findById(paymentId)).resolves.not.toBeNull();
     });
 });

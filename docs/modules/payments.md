@@ -168,11 +168,12 @@ flowchart LR
 
 ## Configuration
 
-| Variable                      | Default | Meaning                                                                                                                                                                               |
-| ----------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`       | `fake`  | Which implementation under `providers/` answers. A name this build does not carry throws at boot rather than silently taking no payments                                              |
-| `NODE_PAYMENT_WEBHOOK_SECRET` | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid |
-| `NODE_DEFAULT_CURRENCY`       | `EUR`   | ISO-4217, stamped on every payment document at creation                                                                                                                               |
+| Variable                                | Default | Meaning                                                                                                                                                                               |
+| --------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`                 | `fake`  | Which implementation under `providers/` answers. A name this build does not carry throws at boot rather than silently taking no payments                                              |
+| `NODE_PAYMENT_WEBHOOK_SECRET`           | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid |
+| `NODE_DEFAULT_CURRENCY`                 | `EUR`   | ISO-4217, stamped on every payment document at creation                                                                                                                               |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                  |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves
 existing ones reading in the currency they were actually taken in. There is no conversion
@@ -187,6 +188,38 @@ either file:
 | ------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `TOLERANCE_SECONDS`            | 300   | How far a delivery's `t=` may drift from the server's clock before it is rejected as stale.                                                                                               |
 | `WEBHOOK_EVENT_RETENTION_DAYS` | 30    | How long a processed event id is remembered before its ledger row expires — chosen to sit past any provider's retry window, a claim about a third party this deployment does not control. |
+
+## Retention
+
+Two questions came up here, and both have a real answer worth writing down rather than leaving
+implicit in the code.
+
+**Is anything on a payment personal data (PII) that must eventually be scrubbed, the way
+[`orders`](./orders.md) scrubs a shipping name and address?** No. `cardLast4` is four digits out
+of a card number — not a PAN, and not enough to identify anyone or charge anything on its own,
+the same reasoning that lets it appear on any receipt or bank statement. `amount`, `currency` and
+`provider` were never personal data either. The only personal link on a payment is `userId`, and
+that is already removed the moment an account is erased (`detachUserId`, immediate — no delay, no
+timer). So once a payment settles, there is nothing left for a retention job to do.
+
+**Does a settled payment ever get deleted?** No — same as `orders`, a `succeeded` or `refunded`
+payment is an invoice, kept indefinitely for tax and commercial-law reasons. Neither status is
+ever a candidate for `reap:payments`, `reap:orders`, or any other timer in this codebase.
+
+**What about a payment that never settles at all** — a declined card nobody retried, a 3-D Secure
+challenge nobody answered? That row was never a transaction: no money moved, so there is no
+invoice to keep. `npm run reap:payments` deletes it once it has sat untouched (`updatedAt`) for
+`NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30 days) — an abandoned checkout, not a financial
+record. Retrying resets the clock, the same way editing a cart resets `carts`' own TTL.
+
+| Payment state                            | Kept forever? | Mechanism                                      |
+| ---------------------------------------- | :-----------: | ---------------------------------------------- |
+| `succeeded` / `refunded`                 |      Yes      | Never touched by any timer — it is the invoice |
+| Anything else, untouched past the window |      No       | `npm run reap:payments` deletes the row        |
+
+This is a genuinely different shape from `orders`' retention: `orders` keeps every row forever and
+scrubs PII in place; `payments` keeps a settled row forever and deletes an unsettled one outright.
+Neither scrubs a settled payment, because there is nothing on it left to scrub.
 
 ## Related pages
 

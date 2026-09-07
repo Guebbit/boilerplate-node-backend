@@ -13,6 +13,7 @@
 
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 import {
     generateSuccess,
     generateReject,
@@ -681,6 +682,25 @@ export const findOwnPayments = (userId: string): Promise<PaymentDocument[]> =>
     // page of it.
     paymentRepository.findAll(paymentRepository.ownerScope(userId), { limit: 100_000 });
 
+/**
+ * `ops/reap-payments.ts`'s sweep. Deletes payment attempts that never reached `succeeded` or
+ * `refunded` and have not been touched in `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30) —
+ * an open checkout the customer walked away from (a declined card nobody retried, a challenge
+ * nobody answered), not a financial record. A settled payment is never a candidate here or on
+ * any other timer; see `docs/modules/payments.md`'s retention section.
+ *
+ * @returns how many abandoned payment attempts were deleted
+ */
+export const reapAbandonedPayments = (): Promise<number> => {
+    const retentionDays = environmentNumber('NODE_PAYMENT_ABANDONED_RETENTION_DAYS', 30, 1);
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+    return paymentRepository.deleteAbandonedBefore(cutoff).then((deleted) => {
+        if (deleted > 0) logger.info({ message: 'Deleted abandoned payment attempts.', deleted });
+        return deleted;
+    });
+};
+
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
     createIntent,
@@ -692,5 +712,6 @@ export const paymentService = {
     refundForOrder,
     refundByOrder,
     detachUserId,
-    findOwnPayments
+    findOwnPayments,
+    reapAbandonedPayments
 };

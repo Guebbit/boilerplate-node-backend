@@ -64,6 +64,7 @@
         "reap:quarantine": "tsx ops/reap-quarantine.ts",
         "reap:inactive-accounts": "tsx ops/reap-inactive-accounts.ts",
         "reap:orders": "tsx ops/reap-orders.ts",
+        "reap:payments": "tsx ops/reap-payments.ts",
         "sweep:order-effects": "tsx ops/sweep-order-effects.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",

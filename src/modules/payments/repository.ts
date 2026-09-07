@@ -7,7 +7,7 @@
  */
 
 import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
-import type { PaymentStatus } from '@types';
+import { PaymentStatus } from '@types';
 import type { PaymentDocument } from './model';
 import {
     createRepository,
@@ -34,6 +34,7 @@ export const paymentRepository: Repository<PaymentDocument> & {
         data: { amount: number; currency: string; provider: string }
     ) => Promise<PaymentDocument | null>;
     detachUserId: (userId: string) => Promise<number>;
+    deleteAbandonedBefore: (cutoff: Date) => Promise<number>;
     updateStatusIfIn: (
         orderId: string,
         from: readonly PaymentStatus[],
@@ -148,8 +149,10 @@ export const paymentRepository: Repository<PaymentDocument> & {
             .exec(),
 
     /**
-     * Unset `userId` on every payment this account made. No `anonymizeAfter`
-     * scheduling needed, unlike `orders`: nothing else on a payment is personal data.
+     * Unset `userId` on every payment this account made. No `anonymizeAfter` scheduling needed,
+     * unlike `orders`: nothing else on a SETTLED payment is personal data. {@link
+     * deleteAbandonedBefore} runs on its own timer below, but for a different reason entirely —
+     * it deletes attempts that never settled, not PII on ones that did.
      *
      * @param userId - the erased account's id
      * @returns how many payments were detached
@@ -162,7 +165,25 @@ export const paymentRepository: Repository<PaymentDocument> & {
                 { timestamps: false }
             )
             .exec()
-            .then(({ modifiedCount }) => modifiedCount)
+            .then(({ modifiedCount }) => modifiedCount),
+
+    /**
+     * Delete every payment attempt that never became money and has sat untouched since before
+     * `cutoff` — `ops/reap-payments.ts`'s sweep. `succeeded` and `refunded` are excluded no
+     * matter how old: those are invoices, kept forever like `orders`' own records, not attempts.
+     * See `docs/modules/payments.md`'s retention section for the reasoning.
+     *
+     * @param cutoff - payments last touched at or before this instant are due
+     * @returns how many were deleted
+     */
+    deleteAbandonedBefore: (cutoff: Date) =>
+        paymentModel
+            .deleteMany({
+                status: { $nin: [PaymentStatus.succeeded, PaymentStatus.refunded] },
+                updatedAt: { $lte: cutoff }
+            })
+            .exec()
+            .then(({ deletedCount }) => deletedCount)
 };
 
 /**
