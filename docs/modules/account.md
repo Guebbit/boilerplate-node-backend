@@ -43,8 +43,8 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class delivery,payments,wishlist supporting;
-    class audit_logs,feedback,users generic;
+    class delivery,payments,users,wishlist supporting;
+    class audit_logs,feedback generic;
     class account centre;
 ```
 

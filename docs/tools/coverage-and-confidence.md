@@ -94,8 +94,8 @@ The interesting cases are the ones people delete by mistake.
   on inputs nobody thought to write down, which is by definition not covered by the tests someone
   wrote.
 - **ESLint vs dependency-cruiser.** ESLint sees one file's imports; dependency-cruiser sees the
-  graph. "May not import" and "may not REACH, through any number of hops" are different rules —
-  see `REINVENTING_THE_WHEEL.md`.
+  graph. "May not import" and "may not REACH, through any number of hops" are different rules, and
+  the second is the one that catches a domain file reaching storage through a helper.
 
 ### The rule
 

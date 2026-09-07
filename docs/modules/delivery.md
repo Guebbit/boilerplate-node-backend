@@ -33,7 +33,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class account,users generic;
+    class account,users supporting;
     class delivery centre;
 ```
 

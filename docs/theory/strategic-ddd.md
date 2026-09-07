@@ -102,7 +102,11 @@ someone is tempted to add back:
   transitively. A module with no barrel cannot be imported by a sibling at all. Those are the rules
   with teeth; `dependsOn` was a description sitting beside them.
 
-See `OVERENGINEERED.md` §1 and §5 for the full argument and what came out with it.
+The twin makes the opposite call, and correctly: `boilerplate-php-laravel-backend` keeps its
+`dependsOn` edges because `ModuleRegistry::inDependencyOrder()` sorts the seeders with them —
+an `orders` row has foreign keys to a product and a user, so the graph decides who is written
+first. Mongo has no foreign keys and this repo seeds every module concurrently, which is why the
+same field is documentation here and load-bearing there.
 
 ### Reading the map
 
@@ -138,11 +142,11 @@ prose moved to the glossary page; the constraints belong on the symbols.
 DDD's own advice is the part most often skipped: tactical patterns belong in the **core** domain, and
 everything else should use the simplest thing that works.
 
-| Subdomain    | Meaning                                                         | Here                                                                     |
-| ------------ | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                             |
-| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`                          |
-| `generic`    | a solved problem, interchangeable with something bought         | `users`, `account`, `audit-logs`, `locales`, `observability`, `feedback` |
+| Subdomain    | Meaning                                                         | Here                                                                |
+| ------------ | --------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                        |
+| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `users`, `account` |
+| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`     |
 
 The rule of thumb that follows: **a `generic` module should not carry a `domain/` folder.** A
 pure-rules layer inside authentication or i18n is effort spent on the part of the system that should
@@ -189,8 +193,7 @@ the case by refusing:
 Both of these used to be tests — one failing any export no sibling imported, one demanding a written
 justification per published repository and asserting the justification was a sentence. The
 decisions they encoded are still the decisions; what they cost was 369 lines re-litigating them on
-every run, and an unused export is dead weight rather than a defect. See
-`OVERENGINEERED.md` §8.
+every run, and an unused export is dead weight rather than a defect.
 
 The narrowest surface in the repo is `delivery`: two pure functions. The widest is `users`, and it
 is wide because it is the `users` end of the one shared-kernel relationship in the repo — `account`

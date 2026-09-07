@@ -41,8 +41,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders,products core;
-    class delivery,inventory,wishlist supporting;
-    class account,users generic;
+    class account,delivery,inventory,users,wishlist supporting;
     class cart centre;
 ```
 

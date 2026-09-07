@@ -88,8 +88,8 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class delivery,inventory,payments,wishlist supporting;
-    class account,audit_logs,feedback,observability,users generic;
+    class account,delivery,inventory,payments,users,wishlist supporting;
+    class audit_logs,feedback,observability generic;
     class antibot,locales isolated;
 ```
 
@@ -137,8 +137,7 @@ the top of the relevant `module.ts` because nothing mechanical can find them:
 
 This is the reason those couplings are recorded as **prose next to the imports** rather than as a
 typed field. A manifest field reconciled against the import graph — which is what this repo used to
-have — could not express any of the three: an edge no import backed was rejected as stale. See
-`OVERENGINEERED.md` §5.
+have — could not express any of the three: an edge no import backed was rejected as stale.
 :::
 
 ## Every module

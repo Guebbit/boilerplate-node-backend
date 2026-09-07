@@ -201,14 +201,20 @@ which is not what it says.
 Returning money on its own is a separate route, `POST /payments/order/{orderId}/refund`, because it
 is a separate act: a goodwill refund leaves the order where it is. It lives in `payments` rather
 than `orders` for a structural reason — `payments` already depends on `orders`, so an order module
-reaching back for a refund would close a cycle the registry rejects at boot.
+reaching back for a refund would close a cycle `check:dependencies` refuses.
 
 ### What is still NOT modelled
 
-Cancelling is two calls a client may make together, not one operation with one set of consequences.
-An aggregate would make it the latter, with `Order.cancel()` owning the release, the refund policy
-and the status move as one indivisible thing. That is priced in `TACTICAL_DDD_PLAN.md`; what exists
-today is the honest decomposition rather than the modelled whole.
+The three effects have one owner: `cancelById` moves the status, releases the hold and announces the
+refund policy, and no caller can reach the state while skipping the consequences — `update` refuses a
+plain move to `cancelled` for exactly that reason. What the conditional write buys is that **at most
+one caller runs the sequence**; a double-click and the reservation sweep cannot both proceed.
+
+What it does not buy is atomicity. The three steps run in order, not together, so a crash between the
+status write and `releaseForOrder` leaves a cancelled order holding stock until the sweep reclaims
+it. An aggregate would close that window by making the three one act; so would a transaction, which
+is what the SQL twin has. It is a real gap and a small one, and `TACTICAL_DDD_PLAN.md` prices the
+aggregate-shaped answer to it.
 
 ---
 
@@ -363,10 +369,15 @@ currently takes `{ amount, currency }`, which is the shape that lets two currenc
 | Invariants at construction           | no — schema validators, plus the lifecycle table on the writes |
 | Read model separate from write model | no — one model, one search spec                                |
 
-One tell that the pressure is real: the `__v` conditional write in `cart/repository.ts`
-(`clearLinesIfUnchanged`) and `updateStatusIfIn` in `orders/repository.ts` are **aggregate
-versioning**, hand-rolled twice because there is no aggregate to hang it on. The need exists; only
-the vocabulary is missing.
+One tell that the pressure is real: `clearLinesIfUnchanged` in `cart/repository.ts` writes
+conditionally on the `__v` it read the cart at. That is **aggregate versioning** with no aggregate to
+hang it on — the need exists, only the vocabulary is missing.
+
+It is the only one. `updateStatusIfIn` here and `claimStatus` in `inventory/repository.ts` look
+similar and are a different pattern: they key on `status`, naming the state a move comes _from_ so
+that exactly one of N concurrent callers wins. That is an exactly-once primitive, correct as it
+stands, and an aggregate would not simplify it. The distinction decides an entry condition in
+`TACTICAL_DDD_PLAN.md` §2 — count `__v`, not `status` — so it is worth keeping straight.
 
 The line this repo draws: a value type or a rules table where the rule is real and already
 duplicated, and no aggregate until something needs state a pure function cannot see.

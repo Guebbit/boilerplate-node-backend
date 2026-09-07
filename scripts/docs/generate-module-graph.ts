@@ -67,12 +67,12 @@ const SUBDOMAIN: Readonly<Record<string, 'core' | 'supporting' | 'generic'>> = {
     inventory: 'supporting',
     payments: 'supporting',
     wishlist: 'supporting',
-    account: 'generic',
+    account: 'supporting',
+    users: 'supporting',
     antibot: 'generic',
     'audit-logs': 'generic',
     locales: 'generic',
     observability: 'generic',
-    users: 'generic',
     feedback: 'generic'
 };
 
