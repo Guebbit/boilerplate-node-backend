@@ -1,0 +1,418 @@
+# Shared compliance rule registry. Read by tests/audit/compliance-backend.md and
+# tests/audit/compliance-frontend.md, which each filter by `responsibility` and evaluate only
+# their own `evidence.<side>` hints. Byte-identical with the sibling repo — see
+# docs/tools/ai-auditing.md. `rules:` is what either prompt evaluates; `suggested_rules:` is a
+# staging area for candidates pending human approval and MUST NOT be read by either prompt.
+#
+# A rule is never mandatory on its face — `applies_when` is prose the auditing model evaluates
+# against this app's actual shape at run time, not a boolean flag. Promote a rule out of
+# `suggested_rules:` by moving the entry under `rules:` and deleting `suggested_reason`.
+version: 1
+
+rules:
+    - id: legal-pages-published
+      title: Privacy policy, cookie policy, and terms/marketing disclosures must exist as reachable pages
+      category: consumer-protection
+      responsibility: both
+      severity: high
+      rule: >
+          The app must publish a privacy policy, a cookie policy (or a combined policy that
+          separately addresses cookies), and terms/marketing disclosures, each reachable via a
+          stable, discoverable URL (e.g. footer links) before any personal data is collected.
+      applies_when: >
+          Always applicable — any app collecting personal data or setting cookies needs these pages
+          published, regardless of jurisdiction.
+      evidence:
+          backend:
+              - a static/CMS-served legal-page route, if one exists
+              - openapi.yaml (a /legal or /policies path)
+          frontend:
+              - routed pages/components for /privacy-policy, /cookie-policy, /terms
+              - footer navigation links
+      references:
+          - GDPR Art. 12-14 (transparent information)
+          - ePrivacy Directive Art. 5(3)
+      notes: >
+          Not found in this backend as of this registry's writing, and no dedicated module owns it —
+          this is most likely a frontend-owned static route. Confirm current status in the frontend
+          audit rather than assuming absence carries over.
+
+    - id: signup-mandatory-consent-checkbox
+      title: Signup requires an un-ticked, mandatory acceptance of privacy/cookie/terms policies
+      category: consumer-protection
+      responsibility: both
+      severity: high
+      rule: >
+          A user completing signup must affirmatively and separately accept the privacy policy,
+          cookie policy, and terms/marketing disclosures via a checkbox that is NOT pre-checked, and
+          the acceptance must be durably recorded (who, when, which policy version) before the
+          account is usable.
+      applies_when: >
+          Always applicable to any signup flow that creates a persistent account tied to personal
+          data.
+      evidence:
+          backend:
+              - src/modules/account/*.ts (signup/register handler and its Zod schema)
+              - src/modules/users/model.ts (a consent/acceptedAt/policyVersion-shaped field, or its absence)
+              - openapi.yaml (the signup request schema — is acceptance a required field at all?)
+          frontend:
+              - signup/register view component (checkbox default v-model value must be false)
+              - routed pages for /privacy-policy, /cookie-policy, /terms
+      references:
+          - GDPR Art. 4(11), Art. 7(2) (consent must be freely given, specific, unambiguous — no
+            pre-ticked boxes)
+          - ePrivacy Directive Art. 5(3) (cookie consent)
+      notes: >
+          A single "I agree to everything" checkbox is a known-weak pattern under Art. 7(2) if it
+          bundles cookie consent with contract acceptance — flag this even where a checkbox exists,
+          if it does not separate cookie consent from ToS acceptance.
+
+    - id: dmca-agent-published
+      title: No published DMCA/copyright takedown agent contact
+      category: ip
+      responsibility: both
+      severity: medium
+      rule: >
+          A platform that hosts user-generated or third-party content must publish a designated
+          copyright agent's contact (name/email or form) and a takedown process, per DMCA safe-harbor
+          requirements (US) or an equivalent notice-and-action process (EU DSA Art. 16).
+      applies_when: >
+          Only if the app allows users to upload or publish content visible to other users or the
+          public — e.g. product reviews, images, or other UGC. Unverified: check
+          src/modules/feedback/** and src/modules/products/** for any user-submitted content that is
+          actually surfaced publicly before concluding either way.
+      evidence:
+          backend:
+              - src/modules/feedback/**
+              - src/modules/products/** (review/UGC fields)
+              - any content-moderation or takedown route
+          frontend:
+              - a /dmca or /copyright page
+              - review/UGC submission UI
+      references:
+          - DMCA, 17 U.S.C. §512(c)(2)
+          - EU Digital Services Act Art. 16
+      notes: null
+
+    - id: sensitive-data-plaintext-storage
+      title: Passwords, tokens, payment data, and biometric data must never be stored or transmitted in plaintext
+      category: data-security
+      responsibility: backend
+      severity: critical
+      rule: >
+          Passwords, session/refresh/reset/2FA tokens, full payment card numbers, and any biometric
+          template must be hashed, signed, or tokenised at rest and in transit — never persisted or
+          logged as recoverable plaintext.
+      applies_when: >
+          Always applicable — this is a baseline, not context-dependent.
+      evidence:
+          backend:
+              - src/modules/users/model.ts (password hashing call site)
+              - docs/tools/security.md (single-use token entropy + sha256-digest-at-rest section)
+              - src/modules/payments/** (must show cardLast4 only, never a full PAN field)
+              - docs/theory/data-protection.md ("no full PAN ever stored")
+              - src/infrastructure/adapters/logger.ts + NODE_LOG_PERSONAL_FIELDS
+          frontend: []
+      references:
+          - GDPR Art. 32 (security of processing)
+          - PCI-DSS Requirement 3 (protect stored cardholder data)
+      notes: >
+          Known-good baseline today: bcrypt-style password hashing, sha256 digest for single-use
+          tokens, cardLast4-only payment storage. Expected to audit SATISFIED; a new field storing a
+          secret/PAN/biometric value in cleartext is the regression this rule exists to catch.
+
+    - id: ai-usage-policy-disclosure
+      title: No AI usage policy/disclosure for AI-driven features
+      category: ai-governance
+      responsibility: both
+      severity: medium
+      rule: >
+          Where the app uses AI/LLM-driven features (recommendations, generated content, chat,
+          automated moderation), it must publish an AI usage policy disclosing what is AI-driven, and
+          disclose AI-generated content/decisions to the user at the point of interaction.
+      applies_when: >
+          Only if the app has AI-driven runtime features. NOT-APPLICABLE as of this registry's
+          writing — no AI/LLM runtime feature exists anywhere in src/ (the only AI usage in this repo
+          is the human-run tests/audit/*.md prompts themselves, which are tooling, not a product
+          feature). Re-evaluate the moment a runtime AI feature is added.
+      evidence:
+          backend:
+              - src/modules/** (grep for llm/openai/anthropic/ai- prefixed modules or env vars)
+          frontend:
+              - any AI-labelled UI component or chat widget
+      references:
+          - EU AI Act Art. 50 (transparency obligations)
+          - FTC guidance on AI-generated content
+      notes: >
+          Currently a clean NOT-APPLICABLE. The rule exists so it fires automatically the day an AI
+          feature lands, rather than being forgotten.
+
+    - id: biometric-consent-required
+      title: Biometric authentication used without explicit, revocable consent
+      category: data-security
+      responsibility: both
+      severity: critical
+      rule: >
+          Biometric authentication (FaceID/TouchID/fingerprint) must only be offered with explicit,
+          separately revocable consent, and any biometric template must stay device-local unless a
+          distinct, explicit consent covers sending it to a server — raw biometric data must never be
+          stored server-side.
+      applies_when: >
+          Only if the app offers biometric login. NOT-APPLICABLE as of this registry's writing — no
+          biometric/FaceID code exists in this backend. Re-evaluate the moment biometric auth is
+          added, e.g. a WebAuthn platform-authenticator flow.
+      evidence:
+          backend:
+              - src/modules/account/** (any WebAuthn/passkey registration endpoint, and what it stores)
+          frontend:
+              - any biometric-prompt UI
+              - navigator.credentials / WebAuthn calls
+      references:
+          - GDPR Art. 9 (special category data)
+          - BIPA (Illinois) as a stricter US precedent
+      notes: >
+          WebAuthn passkeys typically keep the biometric template device-local by design — only a
+          public key reaches the server. If/when this is added, confirm the server-side storage is a
+          public key, not a template, before concluding this rule is satisfied by construction.
+
+    - id: tracking-pixel-before-consent
+      title: Third-party tracking pixels firing before cookie/tracking consent
+      category: e-privacy
+      responsibility: frontend
+      severity: high
+      rule: >
+          A third-party tracking or advertising pixel (Meta Pixel, Google Analytics, TikTok Pixel,
+          etc.) must not load or fire before the user has given cookie/tracking consent.
+      applies_when: >
+          Only if the app embeds a third-party tracking/marketing pixel. The backend's own analytics
+          is consent-gated (analyticsConsent field, NODE_ANALYTICS_REQUIRE_CONSENT) and self-hostable
+          (Umami by default) — a genuinely different mechanism from a client-side ad pixel, so it does
+          not itself satisfy or violate this rule. Check the frontend's <head>/analytics bootstrap for
+          any pixel script before concluding either way.
+      evidence:
+          backend: []
+          frontend:
+              - index.html / app-shell <head> scripts
+              - analytics bootstrap code
+              - any consent-manager integration
+      references:
+          - ePrivacy Directive Art. 5(3)
+          - GDPR Art. 6/7
+      notes: >
+          The backend's existing analyticsConsent gate
+          (src/infrastructure/observability/analytics/index.ts) is a working example of the pattern
+          this rule wants applied to any pixel on the frontend.
+
+    - id: image-alt-text
+      title: User-facing images without meaningful alt text
+      category: accessibility
+      responsibility: frontend
+      severity: medium
+      rule: >
+          Every meaningful user-facing image carries a non-empty, descriptive alt attribute; purely
+          decorative images use an explicit empty alt (alt=""), never an omitted alt attribute.
+      applies_when: >
+          Always applicable to any page rendering images.
+      evidence:
+          backend: []
+          frontend:
+              - product/gallery/avatar image components
+              - CMS-driven image rendering
+      references:
+          - WCAG 2.1 SC 1.1.1 (Non-text Content)
+      notes: null
+
+    - id: age-gate-or-parental-consent
+      title: No age-gate for restricted content, or no parental-consent path for a child-directed service
+      category: child-protection
+      responsibility: both
+      severity: high
+      rule: >
+          Where the product or a content category requires a minimum age (alcohol, gambling, mature
+          content), an age-gate/verification step must exist before access. Where the service is
+          knowingly directed at or likely used by children under 13 (or the local equivalent
+          threshold), a verifiable parental-consent path must exist before collecting their data.
+      applies_when: >
+          Only if the app sells/displays age-restricted product categories, or is directed at
+          children. Unverified: check src/modules/products/** category taxonomy for any
+          age-restricted category before concluding either way.
+      evidence:
+          backend:
+              - src/modules/products/** (category/tag taxonomy)
+              - src/modules/account/** (any dateOfBirth/age field, and what gates on it)
+          frontend:
+              - an age-gate modal/component
+              - product category pages
+      references:
+          - COPPA, 15 U.S.C. §6501-6506
+          - GDPR Art. 8 (child's consent, age 13-16 depending on member state)
+      notes: null
+
+    - id: marketing-email-unsubscribe
+      title: Marketing/bulk email must offer a working unsubscribe mechanism
+      category: e-privacy
+      responsibility: backend
+      severity: high
+      rule: >
+          Any marketing or bulk email (as opposed to transactional/service email) must carry a
+          working, one-click unsubscribe mechanism (link and/or List-Unsubscribe header), and
+          honouring it must stop future sends to that address without further action from the
+          recipient.
+      applies_when: >
+          The app sends, or is being extended to send, any email classified as marketing/bulk rather
+          than purely transactional. Currently NOT applicable: all 12 templates under
+          shared/views/templates-emails/*.ejs are transactional (signup, reset, 2FA, order, shipment,
+          contact) and none carry an unsubscribe link or List-Unsubscribe header — confirmed by grep,
+          zero hits, which is correct for transactional mail. Re-evaluate the moment a template such
+          as a newsletter, promo, or re-engagement email is added.
+      evidence:
+          backend:
+              - shared/views/templates-emails/*.ejs
+              - src/infrastructure/adapters/mailer.ts
+              - 'grep -in "unsubscribe\|list-unsubscribe" across src/ and shared/'
+          frontend: []
+      references:
+          - CAN-SPAM Act, 15 U.S.C. §7704(a)(3)
+          - GDPR Art. 21(2) (right to object to direct marketing)
+          - ePrivacy Directive Art. 13
+      notes: >
+          Transactional email is exempt as long as its primary purpose is not advertising. If a
+          template's purpose becomes primarily promotional, treat it as marketing even if it rides
+          the existing transactional pipeline.
+
+    - id: security-txt-responsible-disclosure
+      title: No published security.txt / responsible-disclosure policy
+      category: consumer-protection
+      responsibility: backend
+      severity: medium
+      rule: >
+          A security researcher who finds a vulnerability must have a published, non-legal-threat
+          channel to report it — a security.txt file at /.well-known/security.txt (RFC 9116) and/or a
+          documented disclosure policy.
+      applies_when: >
+          Applicable to any deployment reachable from the public internet — always, for this app.
+      evidence:
+          backend:
+              - public/.well-known/security.txt (existence)
+              - a route serving it, if not a static file
+          frontend: []
+      references:
+          - RFC 9116 (A File Format to Aid in Security Vulnerability Disclosure)
+      notes: >
+          Cheap to satisfy (one static file); currently absent.
+
+    - id: ccpa-do-not-sell-link
+      title: No CCPA "Do Not Sell or Share My Personal Information" link
+      category: consumer-protection
+      responsibility: both
+      severity: medium
+      rule: >
+          A business that sells or shares personal information for cross-context behavioural
+          advertising must provide a clear "Do Not Sell or Share My Personal Information" link, and
+          honour opt-outs including the Global Privacy Control signal.
+      applies_when: >
+          Only if personal data is sold/shared with a third party for advertising purposes, AND the
+          service is reachable by California residents. Likely NOT-APPLICABLE today: analytics is
+          opt-in (analyticsConsent) and self-hostable (Umami) — re-check if a hosted PostHog or any ad
+          pixel is added, or if any sub-processor relationship changes from processor to independent
+          controller.
+      evidence:
+          backend:
+              - docs/theory/data-protection.md (sub-processor list)
+              - NODE_ANALYTICS_PROVIDER / NODE_POSTHOG_HOST config
+          frontend:
+              - footer / privacy-settings page for a "Do Not Sell" link
+      references:
+          - CCPA/CPRA, Cal. Civ. Code §1798.135
+      notes: >
+          This app does not sell data today — promoted anyway as insurance, since it should audit
+          SATISFIED/NOT-APPLICABLE cleanly and catch the day that stops being true (a hosted
+          analytics/ad integration, a data-sharing partnership).
+
+    - id: marketing-list-double-opt-in
+      title: No double opt-in for a marketing email list
+      category: e-privacy
+      responsibility: backend
+      severity: medium
+      rule: >
+          Adding an address to a marketing/newsletter list must be confirmed by the recipient (double
+          opt-in) before bulk sends begin, not merely inferred from an unrelated action like checkout.
+      applies_when: >
+          Only once a marketing/newsletter email feature exists. NOT-APPLICABLE today — no such
+          feature exists (12 templates, all transactional). Pairs with marketing-email-unsubscribe:
+          both trigger on the same future feature and should be re-checked together.
+      evidence:
+          backend:
+              - shared/views/templates-emails/*.ejs
+              - src/modules/account/**, src/modules/users/** (any list-subscription field)
+          frontend: []
+      references:
+          - GDPR Art. 7 (consent)
+          - CAN-SPAM Act (implicit best practice, not a strict US requirement)
+      notes: >
+          Pairs directly with marketing-email-unsubscribe — same trigger condition, same evidence
+          location. Both are expected to audit NOT-APPLICABLE together until a marketing/newsletter
+          feature is added.
+
+    - id: automated-decision-human-review
+      title: No right to human review of a fully automated significant decision
+      category: ai-governance
+      responsibility: backend
+      severity: high
+      rule: >
+          A decision with a legal or similarly significant effect (e.g. an automatic account
+          suspension, order rejection, or fraud block) made without human involvement must offer the
+          subject a path to obtain human review, express their view, and contest the decision.
+      applies_when: >
+          Only if some flow auto-rejects/auto-suspends without a human in the loop. Checked and
+          currently NOT-APPLICABLE: antibot (src/infrastructure/http/middlewares/human-challenge.ts,
+          rate-limit.ts, adapters/antibot.ts) is a per-request throttle/challenge that never sets a
+          ban/suspend flag on the user record and is always retryable next window — no persistent
+          adverse status to review. payments/service.ts settlePayment/applyWebhookSettlement only
+          record whatever status the provider (Stripe/PayPal) reports; there is no local fraud
+          scoring or business-rule decline, and a decline is retryable with another payment method
+          (service.ts withActions exposes pay: true on a declined order). The account inactivity
+          reaper (ops/reap-inactive-accounts.ts, disabled by default via NODE_INACTIVE_ACCOUNT_DAYS)
+          has a built-in self-service opt-out — logging in before soft-delete resets the clock — and
+          once soft-deleted, restoration goes through an admin, which is itself a human-review path,
+          not an absence of one. Re-evaluate if a local fraud-scoring/risk-model feature is ever
+          added to payments or antibot.
+      evidence:
+          backend:
+              - src/modules/antibot/**, src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts
+              - src/modules/payments/service.ts (settlePayment, applyWebhookSettlement, applyWebhookDelivery)
+              - ops/reap-inactive-accounts.ts, src/modules/users/service.ts
+          frontend: []
+      references:
+          - GDPR Art. 22
+      notes: >
+          Confirmed NOT-APPLICABLE by design, not by absence of a check: every automated refusal in
+          this app is either transient/retryable (antibot, payment decline) or has a human-reachable
+          recovery path (account reaper). Promoted anyway, since a future fraud-scoring or risk-model
+          feature is exactly the kind of change that would flip this rule silently otherwise.
+
+suggested_rules:
+    - id: policy-material-change-reconsent
+      title: No re-consent prompt when privacy/cookie/terms policies change materially
+      category: consumer-protection
+      responsibility: both
+      severity: medium
+      rule: >
+          A material change to the privacy policy, cookie policy, or terms must be surfaced to
+          existing users and, where the change affects the lawful basis for processing, re-consent
+          must be obtained rather than assumed from the original acceptance.
+      applies_when: >
+          Only once policy documents are versioned. Depends directly on
+          signup-mandatory-consent-checkbox existing first (its policyVersion field is the mechanism
+          this rule needs) — audit that rule before this one.
+      evidence:
+          backend:
+              - src/modules/users/model.ts (a policyVersion / acceptedPolicyVersion field)
+              - src/modules/account/*.ts (a re-consent-required check on login)
+          frontend:
+              - a re-consent modal/banner component
+      references:
+          - GDPR Art. 7(3) (as easy to withdraw as to give)
+      suggested_reason: >
+          Natural follow-on to the mandatory-checkbox rule — without it, that checkbox is a one-time
+          formality rather than a living consent record.
