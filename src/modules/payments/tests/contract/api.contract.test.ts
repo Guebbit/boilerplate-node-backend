@@ -11,7 +11,6 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/fixtures';
 import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
-import { FAKE_DECLINE_METHOD, FAKE_SUCCESS_METHOD } from '@modules/payments/providers/fake';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
@@ -23,7 +22,12 @@ setupTestDb();
 /** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
 const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
-const GOOD_METHOD = FAKE_SUCCESS_METHOD;
+// Literals, not imported from `providers/fake` — a contract test's inputs come from what the
+// contract itself publishes (openapi.yaml: "recognises `pm_card_visa` (succeeds),
+// `pm_card_declined`, …"), not from the code the contract describes. Importing the module under
+// test would make a rename of either value pass silently while the contract quietly became a lie.
+const GOOD_METHOD = 'pm_card_visa';
+const DECLINE_METHOD = 'pm_card_declined';
 
 /** Logs a customer in with one pending order, returning both. */
 const authenticateWithOrder = async () => {
@@ -142,7 +146,7 @@ describe('POST /payments/{id}/confirm', () => {
         const response = await api()
             .post(`/payments/${paymentId}/confirm`)
             .set('Authorization', bearer)
-            .send({ paymentMethodRef: FAKE_DECLINE_METHOD });
+            .send({ paymentMethodRef: DECLINE_METHOD });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('PAYMENT_DECLINED');
@@ -225,7 +229,11 @@ describe('POST /payments/{id}/sync', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('is idempotent — a second call answers the settled payment unchanged', async () => {
+    it('answers an already-succeeded payment as it stands, without asking the provider again', async () => {
+        // Not the idempotency test its old name claimed — this calls sync exactly ONCE, against a
+        // payment the confirm above already settled. What it actually pins is the terminal
+        // early-return branch: a payment outside SETTLEABLE_PAYMENT_STATUSES is answered from the
+        // row alone, spending no call to be told what it already knows.
         const { bearer, paymentId } = await authenticateWithIntent();
         await api()
             .post(`/payments/${paymentId}/confirm`)
