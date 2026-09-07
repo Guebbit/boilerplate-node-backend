@@ -6,9 +6,8 @@ re-encoded through [sharp](https://sharp.pixelplumb.com/) — which is also the 
 `validateUploadedImages`'s magic-byte read cannot be. A WebP thumbnail is produced alongside it.
 Nothing reaches `public/` until both exist.
 
-Full design rationale, rejected alternatives and the failure-mode table live in
-`IMAGE_PIPELINE_PLAN.md` at the repo root. This page is the pointer to the code and the operational
-knobs.
+This page is the pointer to the code and the operational knobs: what the pipeline does, where each
+stage lives, and which environment variables move it.
 
 ## Why quarantine
 

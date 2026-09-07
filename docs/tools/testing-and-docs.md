@@ -152,9 +152,9 @@ as a regression rather than as "tests feel slow lately" — treat them as an ord
 promise. The paired frontend keeps the same table; its numbers are an order of magnitude larger,
 because Cypress drives a real browser and this suite does not.
 
-The suite/test counts below moved on 2026-08-27, when `NODE_MUTATION_MONGOD.md`'s split moved every
-module's `setupTestDb()`-calling unit spec into that module's own `tests/integration/` — down in
-`test:unit`, up in `test:integration` by the same 36 files, plus the top-level `db/` specs.
+The suite/test counts below reflect the placement rule every module follows: a `setupTestDb()`-calling
+spec lives in that module's own `tests/integration/`, never its `tests/unit/`, which is why
+`test:integration` carries 36 module files plus the top-level `db/` specs.
 Timings are not re-measured here — this machine was under concurrent load — so `test:unit` getting
 lighter and `test:integration` getting heavier is the structural fact worth recording; the absolute
 seconds still want a clean re-measurement on the reference machine.
@@ -340,4 +340,4 @@ requests rather than nightly. Both make the trade worth re-examining; neither is
 - [AI Auditing](./ai-auditing.md) — the prose↔code gap no deterministic tool can reach
 - [Theory](../theory/)
 - [API](../api/)
-- Root file `AI_README.md` for agent-focused repo context
+- Root file `AI_README.md` for agent-focused repo context <!-- doc-paths:ignore -->

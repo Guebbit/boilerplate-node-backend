@@ -5,7 +5,7 @@ context mapping, ubiquitous language and subdomain distillation. All four are in
 folders, imports, identifiers and barrels, which is where they can be seen rather than asserted.
 
 The other half — entities, aggregates, domain repositories — is **not** here, on purpose.
-`TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices adopting it — the cost, the order
+`TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices adopting it — the cost, the order <!-- doc-paths:ignore -->
 of work, and what would have to be true first. The two cheapest patterns did land, because they
 fixed live bugs rather than imposing a shape — see [Tactical DDD](./tactical-ddd.md). This page is
 about what _is_ adopted at the strategic level.
@@ -212,4 +212,4 @@ stopped agreeing with itself: `Money` and the order lifecycle table. Neither nee
 neither is a step toward one — [Tactical DDD](./tactical-ddd.md) has both.
 
 See [Domain layer](./domain-layer.md) for the `domain/` folder as it stands, and
-`TACTICAL_DDD_PLAN.md` for what going further would cost.
+`TACTICAL_DDD_PLAN.md` for what going further would cost. <!-- doc-paths:ignore -->

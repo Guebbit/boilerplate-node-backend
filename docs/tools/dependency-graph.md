@@ -55,7 +55,7 @@ checking nothing. They are worth knowing before editing the config.
 
 `tsPreCompilationDeps` is deliberately **off**, so the graph is the one that exists at runtime.
 Turned on it also carries `import type` edges, which TypeScript erases: it reported eight "cycles"
-across `cache.ts`, `queue.ts`, `dependency-health.ts` and `payments/fake.ts`, every one closed by a
+across `cache.ts`, `queue.ts`, `dependency-health.ts` and `src/modules/payments/providers/fake.ts`, every one closed by a
 type-only import. None can produce the boot-order failure the rule is for, and none can be fixed
 except by deleting a type import that is doing its job. Nothing is lost — a direct
 `import mongoose` from the domain layer, type-only or not, is already refused by

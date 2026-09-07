@@ -56,7 +56,7 @@ The worker queues are shared rather than owned by a module because the email and
 substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` — enqueued by whichever
 domain needs a mail sent. It is the async twin of filing `GET /` under `system` in the REST contract.
 
-This replaced a three-fragment layout (`channels.yaml`, `messages.yaml`, `schemas.yaml` per section)
+This replaced a three-fragment layout (`channels.yaml`, `messages.yaml`, `schemas.yaml` per section) <!-- doc-paths:ignore -->
 whose pieces were half-objects that parsed as nothing until concatenated in the right order at the
 right indentation. A whole document can be linted and opened in Studio on its own:
 

@@ -28,7 +28,7 @@ flowchart LR
     class Both c;
 ```
 
-This repo learned the value the expensive way, before adopting the technique. `plugins/http/responseSchemaMap.ts` in the paired frontend is a 52-row lookup table that was tested by sampling a handful of rows. It scored 55% on mutation with 182 survivors in that one file. Replacing the sample with exhaustive generation took the file to ~96% and the whole suite from 55% to 81%.
+This repo learned the value the expensive way, before adopting the technique. `boilerplate-vue-frontend/src/infrastructure/http/response-schema-map.ts` is a 52-row lookup table that was tested by sampling a handful of rows. It scored 55% on mutation with 182 survivors in that one file. Replacing the sample with exhaustive generation took the file to ~96% and the whole suite from 55% to 81%.
 
 **Sampling a space you could have generated is the failure mode to watch for.** Property testing is the general form of that fix.
 
@@ -36,11 +36,11 @@ This repo learned the value the expensive way, before adopting the technique. `p
 
 Pure, total, and rich in invariants:
 
-| Target                     | Invariants worth stating                                                                                                              |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `infrastructure/totals.ts` | order-independent, non-negative, zero for empty, additive over concatenation, never `NaN`                                             |
-| `models/serialize.ts`      | `_id` → `id` always, `__v` always gone, omitted keys always gone, never mutates its input, idempotent                                 |
-| `repositories/search.ts`   | `escapeRegex` never produces an uncompilable pattern, always matches its own input literally, strips every metacharacter of its power |
+| Target                                        | Invariants worth stating                                                                                                              |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/orders/domain/totals.ts`         | order-independent, non-negative, zero for empty, additive over concatenation, never `NaN`                                             |
+| `src/infrastructure/persistence/serialize.ts` | `_id` → `id` always, `__v` always gone, omitted keys always gone, never mutates its input, idempotent                                 |
+| `src/infrastructure/persistence/search.ts`    | `escapeRegex` never produces an uncompilable pattern, always matches its own input literally, strips every metacharacter of its power |
 
 A function whose only "invariant" is its exact return value for one input is not a property target — write an example.
 
@@ -85,7 +85,7 @@ That second one is worth internalising: a property that fails on your own assert
 | `tests/cross-cutting/search.property.test.ts`           | `escapeRegex` as a denial-of-service control; pagination totality |
 | `tests/cross-cutting/search-regex.test.ts`              | The example-based half — timing, named metacharacters, negatives  |
 
-The same technique and the same two rules apply in the paired frontend, over `utils/formatters.ts` and `utils/uploads.ts`.
+The same technique and the same two rules apply in the paired frontend, over `boilerplate-vue-frontend/src/infrastructure/utils/formatters.ts` and `boilerplate-vue-frontend/src/infrastructure/utils/uploads.ts`.
 
 ## Related pages
 

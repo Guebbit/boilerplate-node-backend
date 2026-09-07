@@ -206,12 +206,12 @@ All of them drive a real (or real-HTTP) app against an in-memory Mongo — runni
 - **`outbox-names.test.ts`** reads `emails.ts`' source text and regex-matches `template: '...'` as a plain string literal. Stryker's mutator rewrites every string literal in the files it mutates to `stryMutAct_9fa48(id) ? '' : (stryCov_9fa48(id), '...')`, which the regex no longer matches — so the dry run fails a check about mail naming before a single mutant runs, even though nothing about mail naming is actually broken. The sandboxed source just doesn't look like source any more.
 - **`contract-bundles.test.ts`** asserts each committed contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: `ts-jest` runs with diagnostics on, so a type-breaking mutant would fail to _compile_, count as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
 
-**The exclusion used to do less than its name suggested.** Until the split described in
-`NODE_MUTATION_MONGOD.md`, 36 files under `src/modules/*/tests/unit/` called `setupTestDb()`, which
-starts a real `mongod` and connects mongoose to it — and were excluded by neither pattern, because
-they were named `unit`. A mutation run started and stopped a database thousands of times, paying the
-exact cost the ignore patterns exist to avoid, just from a different directory. That gap is closed:
-those 36 files now live in each module's `tests/integration/`, covered by the pattern above, and
+**The exclusion depends on a naming rule, and that is the fragile part.** A file under
+`src/modules/*/tests/unit/` that calls `setupTestDb()` starts a real `mongod` and connects mongoose
+to it, and is excluded by neither pattern — because it is named `unit`. A mutation run would start
+and stop a database thousands of times, paying the exact cost the ignore patterns exist to avoid,
+just from a different directory. So a database-touching spec lives in its module's
+`tests/integration/`, covered by the pattern above, and
 `unit-layer-stays-database-free` in `.dependency-cruiser.cjs` is what keeps a new one from drifting
 back in. It replaced a text sweep that looked for three strings in each spec, and it is stronger for
 the reason the config's header gives: it asks whether a spec can REACH a database, so a helper that
@@ -296,7 +296,7 @@ Related, and found the same way: `ignorePatterns` now lists `.tmp/**` and `.stry
 hold the in-memory mongod data directories, which are live files being written by a running jest
 while Stryker copies the project into its sandbox — so copying them is both pointless (every jest
 instance starts its own server) and racy. A WiredTiger file removed mid-copy fails the entire run
-with an `ENOENT` naming a filename nothing in the project mentions. `run-mutation-tests.ts` clears
+with an `ENOENT` naming a filename nothing in the project mentions. `run-tests.ts` clears
 `.tmp` before it starts, which hid this until two runs overlapped.
 
 `ignorePatterns` also lists `.claude/**` — untracked agent tooling that only exists on a
@@ -457,7 +457,7 @@ megabyte-sized binary buffers, which look exactly like network I/O and were not.
 variable actually holding it — DevTools computes true dominators, which answers "who is holding
 these" the summary view cannot.
 
-This repo used to carry two purpose-built scripts (`report-heap-summary.ts`, `report-heap-retainers.ts`)
+This repo used to carry two purpose-built scripts (`report-heap-summary.ts`, `report-heap-retainers.ts`) <!-- doc-paths:ignore -->
 for this — removed once the buffer leak below was diagnosed and fixed, since DevTools does the same
 job without a bespoke tool to maintain. Worth writing again if a future investigation needs it.
 
@@ -624,7 +624,7 @@ reads edges — named the owner immediately:
 
 78 buffers, 95% of all buffer bytes, **17.0 MB each**, held by a variable named `buffer` in a module
 scope. That is `node_modules/bson/lib/bson.cjs`, compiled from upstream
-[`src/bson.ts`](https://github.com/mongodb/js-bson/blob/main/src/bson.ts):
+[`src/bson.ts`](https://github.com/mongodb/js-bson/blob/main/src/bson.ts): <!-- doc-paths:ignore -->
 
 ```js
 const MAXSIZE = 1024 * 1024 * 17;
@@ -986,7 +986,7 @@ whatever the diff happens to contain: one survivor is 50% of two mutants and 10%
 size of a diff is not a fact about the code.
 
 The run never records. `--update` is not forwarded, because a partial report written as the baseline
-would erase every file it did not measure — `check-mutation-baseline.ts` refuses that explicitly.
+would erase every file it did not measure — `check-baseline.ts` refuses that explicitly.
 The nightly owns the baseline.
 
 ```bash
@@ -1040,7 +1040,7 @@ far more product code than this — but that code is written once, by whoever fo
 fork inherits _unchanged_ is the core: the cache adapter, the queue adapter, the upload pipeline,
 the auth service, the error interpreter. A bug there ships to every project that ever started here.
 
-So the order is by **blast radius**, not by percentage. `services/auth.ts` at 53% mattered more
+So the order is by **blast radius**, not by percentage. `src/modules/account/services/authentication.ts` at 53% mattered more
 than a lower-scoring model of an order line, because every application has logins and only this one
 has orders.
 

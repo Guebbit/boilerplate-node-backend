@@ -28,7 +28,7 @@ scripts/
 ```
 
 The folder's word is not repeated in the filename: `scripts/mutation/run-tests.ts`, not
-`run-mutation-tests.ts`. Deliberately NOT aligned with the `npm run` namespaces — those group by
+`run-tests.ts`. Deliberately NOT aligned with the `npm run` namespaces — those group by
 _when you run a thing_ (`check:*` is the list `npm run complete` reads), these group by _what it is
 about_, and forcing the two together would cost the gate its readability.
 

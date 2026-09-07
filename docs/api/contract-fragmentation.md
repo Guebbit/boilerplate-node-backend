@@ -52,7 +52,7 @@ npm run check:contracts-bundle        # fail if any committed bundle is stale
 `tests/cross-cutting/contract-bundles.test.ts` asserts every bundle equals its committed file on
 every run, so a fragment edited without re-bundling fails the build rather than drifting.
 
-Nothing else is shared. `shared/contracts/spectral.yaml`, `check-mutation-baseline.ts`, `report-test-results.ts` and
+Nothing else is shared. `shared/contracts/spectral.yaml`, `check-baseline.ts`, `report-results.ts` and
 `generate-asyncapi-types.ts` were on the list once, hand-maintained on both sides and compared but never
 written — a fork in one of those was a question (which copy is right?) that no script could answer.
 They came off it: the two repos still keep them identical because it is convenient, and convenience
@@ -312,8 +312,8 @@ What is already true and does not change:
 ### `asyncapi.yaml` — one whole document per section, merged
 
 A domain appears three times in this document (`channels:`, `components.messages:`,
-`components.schemas:`), and it used to contribute a fragment for each — `channels.yaml`,
-`messages.yaml`, `schemas.yaml`, with the key lines between them being fragments of their own.
+`components.schemas:`), and it used to contribute a fragment for each — `channels.yaml`, <!-- doc-paths:ignore -->
+`messages.yaml`, `schemas.yaml`, with the key lines between them being fragments of their own. <!-- doc-paths:ignore -->
 That is gone. **A section is now one complete AsyncAPI document**: `src/modules/<name>/asyncapi.yaml`
 for a domain, exactly as it carries one `openapi.yaml`, and
 `shared/contracts/asyncapi.workers.yaml` for the `worker.*` queues that belong to no domain — the
@@ -329,7 +329,7 @@ shared because the email and PDF workers are substrate, enqueued by whichever do
 sent.
 
 What that bought is the property a fragment could never have: **each section is valid on its own** —
-lintable by `npm run lint:asyncapi:modules`, and openable in AsyncAPI Studio. `channels.yaml` and
+lintable by `npm run lint:asyncapi:modules`, and openable in AsyncAPI Studio. `channels.yaml` and <!-- doc-paths:ignore -->
 its two siblings were half-objects that parsed as nothing until concatenated in the right order at
 the right indentation.
 
@@ -358,8 +358,8 @@ them, both repos held it, and both fired most of it. One add-to-cart wrote two i
 rows into Umami, and every count built on those names read twice reality.
 
 The first answer was a published half. Names only a browser could produce were declared in
-`shared/contracts/analytics.frontend.ts`, bundled into
-`src/infrastructure/observability/analytics-events.frontend.ts` and carried to the frontend, which
+`shared/contracts/analytics.frontend.ts`, bundled into <!-- doc-paths:ignore -->
+`src/infrastructure/observability/analytics-events.frontend.ts` and carried to the frontend, which <!-- doc-paths:ignore -->
 imported them; a module's own names were never published, because its controllers import them
 directly and a copy would have no reader on either side. A cross-cutting test walked both scopes and
 rejected a name declared twice anywhere.
@@ -391,7 +391,7 @@ the whole document could go.
 ### The demo dataset — not a bundle at all, any more
 
 It used to be one. `db/seeds/seed-identities.ts` was assembled from a <!-- doc-paths:ignore -->
-`seed-identities.fragment.ts` in every module, for the same reason as everything else on this page:
+`seed-identities.fragment.ts` in every module, for the same reason as everything else on this page: <!-- doc-paths:ignore -->
 the frontend needed the same records, one file had to hold them, and no module should own a file
 that lists every domain.
 

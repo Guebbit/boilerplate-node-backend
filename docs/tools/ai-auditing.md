@@ -70,7 +70,7 @@ The argument decides the filename, one way only:
 | a path   | slugged, `src/` dropped — `infrastructure-http` |
 | `--diff` | the current branch name, slugged                |
 
-`orders.findings.md` tells the next reader what it covers. A batch number does not — never invent
+`orders.findings.md` tells the next reader what it covers. A batch number does not — never invent <!-- doc-paths:ignore -->
 one.
 
 ### The reports are disposable

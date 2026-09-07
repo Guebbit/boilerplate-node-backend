@@ -31,7 +31,7 @@ npx autocannon -c 10 -d 20 -H 'Authorization: Bearer <token>' http://localhost:3
 ## The two scripts are deliberately different paths
 
 `bench` hits `GET /products`, which is cached (`setCache(3600, { tags: ['products'] })` in
-`routes/products.ts`). After the first request nearly every response is a Redis hit, so it
+`src/modules/products/routes.ts`). After the first request nearly every response is a Redis hit, so it
 measures the cache and the HTTP stack. Watch `x-cache: HIT` and expect low, flat latency.
 
 `bench:search` hits `POST /products/search`, which is **not** cached and runs a regex query

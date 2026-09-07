@@ -425,7 +425,7 @@ pick a different set. An earlier run of this check reported "zero files in `src/
 still at zero\*\*, and that is the number this exercise is actually defending.
 
 **Correct — the section lists and the co-located specs that assert a deleted domain.** Six of the
-errors were the section lists and `generate-collections.ts` naming `products`/`cart`/`orders`, which
+errors were the section lists and `client-collections-bundle.ts` naming `products`/`cart`/`orders`, which
 is step 3 of the removal procedure announcing itself rather than residue. Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
 go with their modules.
 
@@ -459,7 +459,7 @@ ones a sweep cannot express:
   modules' `emails.ts` to render every template. Every one of those imports is through a legitimate
   public surface, so no import rule can distinguish it from a correct one. What makes it fragile is
   the _reason_ for the import, and that is a judgement call.
-- **A named export from a generated file.** ~~`generate-collections.ts` imports `seedProducts` and
+- **A named export from a generated file.** ~~`client-collections-bundle.ts` imports `seedProducts` and
   `seedOrders` by name~~ — fixed when the dataset stopped being a bundle. It reads
   `db/demo/demo-data.json` now and indexes into `collections.products` / `collections.orders`, which
   is _whatever the seeders produced_ rather than two domain-shaped identifiers. Kept here as the

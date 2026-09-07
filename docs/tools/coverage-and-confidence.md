@@ -124,7 +124,7 @@ Consequences worth stating:
 - **A surviving mutant is a real finding**, even at 100% coverage. It is usually a missing
   assertion, occasionally a mutant that cannot be killed because the code has no observable effect —
   in which case the code, not the test, is the thing to look at.
-- **The baseline is a ratchet**, like the coverage floors: `check-mutation-baseline.ts` compares
+- **The baseline is a ratchet**, like the coverage floors: `check-baseline.ts` compares
   each file against its recorded score with a 1-point tolerance, so the gate is "do not get worse"
   rather than an absolute grade.
 
@@ -221,8 +221,8 @@ it measures, and the two shapes fail differently:
 - A key that is a **glob** (a wildcard segment, or a recursive `.ts` wildcard) is applied to each
   matching file separately, and Jest prints one failure per file, naming it.
 
-Only the second is a gate. Under the pooled form this repo passed a 70% floor on `src/middlewares/`
-while `auth-jwt.ts`, `locale.ts` and `security.ts` each sat at 0% — and `security.ts` holds
+Only the second is a gate. Under the pooled form this repo passed a 70% floor on `src/middlewares/` <!-- doc-paths:ignore -->
+while `auth-jwt.ts`, `locale.ts` and `security.ts` each sat at 0% — and `security.ts` holds <!-- doc-paths:ignore -->
 `isMetricsScraper`, the credential check on the Prometheus endpoint.
 
 ### The three tiers a floor takes

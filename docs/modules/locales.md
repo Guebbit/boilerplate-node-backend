@@ -42,7 +42,7 @@ files decide what exists; the rows decide what it says.**
 ::: warning A language in the database does not mean the API can answer in it
 `GET /locales` reports `scopes` per language rather than a bare list of tags, so "may I send
 `Accept-Language: es`" and "may I download a Spanish dictionary" stay two questions. The demo
-dataset registers `es` with no `src/locales/es.json` behind it precisely so the answers really are
+dataset registers `es` with no `src/locales/es.json` behind it precisely so the answers really are <!-- doc-paths:ignore -->
 _no_ and _yes_.
 :::
 

@@ -98,7 +98,7 @@ Inside a module, the layer files are `routes.ts`, `controllers/*`, `service.ts`,
 
 A module's service starts as one file and stays one file for as long as reading it top to bottom is
 practical. Past roughly **300 lines** it stops being practical, and the sanctioned move is a
-`services/` folder with an `index.ts` — not a second module, and not a `helpers.ts` on the side.
+`services/` folder with an `index.ts` — not a second module, and not a `helpers.ts` on the side. <!-- doc-paths:ignore -->
 
 This is a size rule, not an architectural one, and nothing above the layer changes: controllers
 still import `../services`, the module barrel still exports one `<domain>Service`, and the tier
@@ -144,7 +144,7 @@ have nowhere below `services/` to go. `keys.ts` is where they live instead — t
 
 | File                   | Why it is over                                                        |
 | ---------------------- | --------------------------------------------------------------------- |
-| `orders/service.ts`    | the lifecycle writes, the cancel sequence and the read scopes         |
+| `orders/services/`     | the lifecycle writes, the cancel sequence and the read scopes         |
 | `inventory/service.ts` | reserve, commit, release, the sweep, and the operator's own writes    |
 | `payments/service.ts`  | intent, confirm, refund, and the ownership scope around them          |
 | `products/service.ts`  | the CRUD writes, the visibility scope, and the catalogue's own facets |
@@ -193,8 +193,8 @@ trail, while the endpoint that reads it, `GET /observability/audit`, belongs to 
 renders it. The `never` typing means a router without a mount point (or the reverse) is a type error
 at the manifest, not a route that silently never registers.
 
-There are no layer directories. `src/controllers`, `src/services`, `src/repositories` and
-`src/models` existed while the domains were being migrated and were deleted with the last of them;
+There are no layer directories. `src/controllers`, `src/services`, `src/repositories` and <!-- doc-paths:ignore -->
+`src/models` existed while the domains were being migrated and were deleted with the last of them; <!-- doc-paths:ignore -->
 their path aliases are gone from `tsconfig.json` too, and lint rejects them from inside a module so
 a re-created folder cannot quietly become a second home for domain code.
 
@@ -246,7 +246,7 @@ var choosing between them. The tier is not part of the pattern. **A module may o
 own, in `providers/`**, when the thing behind it is its business rather than the application's.
 
 `payments/providers/` is the one in the tree. It declares what a payment provider must do, ships
-`fake.ts`, and selects on `NODE_PAYMENT_PROVIDER` — so a project going live writes `stripe.ts`
+`fake.ts`, and selects on `NODE_PAYMENT_PROVIDER` — so a project going live writes `stripe.ts` <!-- doc-paths:ignore -->
 beside it and changes an env var, while the service, the contract and the frontend hear nothing. It
 is not `infrastructure` for the reason the table above gives: a substrate that knew what a charge
 was would be holding a business rule.

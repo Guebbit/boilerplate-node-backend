@@ -69,7 +69,7 @@ Middleware tests build minimal hand-rolled Express `Request`/`Response` doubles 
 Two deviations, both load-bearing:
 
 - `module`/`moduleResolution: "node16"` — the app imports subpath exports (`@opentelemetry/semantic-conventions/incubating`), which only `node16` resolution understands. Without it, `src/app.ts` can't be imported by a test at all — which is exactly what [Integration Testing](./integration-testing.md) and [Contract Testing](./contract-testing.md) need to do.
-- `isolatedModules` is deliberately **not** set, despite ts-jest's own warning asking for it. Setting it stops ts-jest downlevelling `await import(...)` to `require()`, and a dynamic import in `src/modules/products/tests/unit/service.test.ts` would fail under Jest's CJS VM. The warning is noise; fixing it would not be.
+- `isolatedModules` is deliberately **not** set, despite ts-jest's own warning asking for it. Setting it stops ts-jest downlevelling `await import(...)` to `require()`, and a dynamic import in `src/modules/products/tests/integration/service.test.ts` would fail under Jest's CJS VM. The warning is noise; fixing it would not be.
 
 This second point is also why `@faker-js/faker` (ESM-only from v10) can't be imported directly anywhere in this suite — see [Contract-Derived Request Data](./contract-request-data.md) for where that was tried and what was used instead.
 

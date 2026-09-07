@@ -62,7 +62,7 @@ It also may not hold a **business rule**, even one that two modules share. That 
 tier invites, because "two modules need it" feels like a reason to push something down. It is not:
 the substrate is what the application runs ON, and none of it knows what an order or a price is. A
 shared rule belongs to whichever domain OWNS it, exported through that module's barrel — see
-`modules/orders/totals.ts`, which sat here until the rename made the leak obvious.
+`src/modules/orders/domain/totals.ts`, which sat here until the rename made the leak obvious.
 
 So `kernel` is small on purpose. It is the module system, and nothing else:
 
@@ -89,7 +89,7 @@ domain-free is `infrastructure`, no matter where it sits in the request lifecycl
 | ------------------------------ | --------------------------------------------------- | --------------------------------------------- |
 | response cache, `noStore`      | `infrastructure/http/middlewares/cache.ts`          | Express caching; no module needed             |
 | locale negotiation             | `infrastructure/http/middlewares/locale.ts`         | wraps `infrastructure/i18n`; no module needed |
-| observability context          | `infrastructure/http/middlewares/observability.ts`  | seeds a request context                       |
+| observability context          | `infrastructure/http/request.ts`                    | built per request, not seeded by a middleware |
 | access logging                 | `infrastructure/http/middlewares/request-logger.ts` | reads tracer + metrics labels                 |
 | rate limiting, metrics scraper | `infrastructure/http/middlewares/rate-limit.ts`     | generic HTTP hardening                        |
 | conditional handler toggle     | `infrastructure/http/middlewares/route-flag.ts`     | imports nothing but Express                   |
@@ -130,7 +130,7 @@ is silent, and it is the expensive one.
 are what the word means in hexagonal architecture — the tradition this dependency rule already
 comes from. `common` and `base` were the other candidates and were rejected for the opposite
 reason: they describe nothing, and a folder that describes nothing accepts anything, which is
-exactly how the old `src/utils/` became a dumping ground.
+exactly how the old `src/utils/` became a dumping ground. <!-- doc-paths:ignore -->
 
 **`platform` → `kernel` is the less obvious half, so here is the case against it first.** VS Code
 is a real precedent, and an earlier version of this page leaned on it to keep the name. Two things
@@ -287,10 +287,10 @@ rule, and `account` is the module that forced it to be written down:
 Under it, `account`'s eight loose root files sorted into three piles: `jwt.ts`, `cookies.ts` and
 `tokens.ts` were the token surface and became `session/` (with `tokens.ts` renamed `config.ts`, since
 it holds no token — it reads how long they live); `verification.ts`, `token-cleanup.ts` and
-`addresses-service.ts` were behaviour and joined `services/`, where `service.ts` had already been
-split into `authentication.ts` and `profile.ts`; and `addresses-model.ts` / `addresses-repository.ts`
+`addresses-service.ts` were behaviour and joined `services/`, where `service.ts` had already been <!-- doc-paths:ignore -->
+split into `authentication.ts` and `profile.ts`; and `addresses-model.ts` / `addresses-repository.ts` <!-- doc-paths:ignore -->
 were simply this module's `model.ts` and `repository.ts` under a prefix that dated from when it had
-no collection at all. `users/validation.ts` merged into `users/model.ts` for the same reason. The
+no collection at all. `users/validation.ts` merged into `users/model.ts` for the same reason. The <!-- doc-paths:ignore -->
 rule is what makes the table above readable as a shape rather than a suggestion: a file at the root
 is a layer, and a folder is a subject.
 
@@ -310,7 +310,7 @@ the build rather than shipping a short collection. See
 `providers/` is a **module-tier port**: the same inversion as `IAuditSink` and `IImageStore`, owned
 by a domain instead of by the substrate. `payments/providers/` declares what a payment provider must
 do, ships a `fake` implementation, and picks between them on `NODE_PAYMENT_PROVIDER` — so going live
-means writing `stripe.ts` beside it and changing an env var, while the contract, the service and the
+means writing `stripe.ts` beside it and changing an env var, while the contract, the service and the <!-- doc-paths:ignore -->
 frontend hear nothing. It belongs to `payments` and not to `infrastructure` for the reason the
 `infrastructure` / `kernel` line already gives: charging a card is this domain's business, and a
 substrate that knew what a charge was would be holding a business rule. The pattern is already being

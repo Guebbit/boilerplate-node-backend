@@ -203,7 +203,7 @@ language rather than a handle on this module's storage, which is the distinction
 one table saying which status may follow which, and who may make each move. The _set_ of statuses is
 not its business — `OrderStatus` is generated from `openapi.yaml`, so the values stay contract-first
 — but the edges between them were previously spelled out three times: a `CANCELLABLE_ORDER_STATUSES`
-literal in `orders/service.ts`, a bare `status !== 'pending'` in `payments/service.ts`, and, on the
+literal in `orders/services/cancel.ts`, a bare `status !== 'pending'` in `payments/service.ts`, and, on the
 admin write, nothing at all. All three now read the table, which is the whole point of a domain
 folder: the rule exists once and the callers ask it.
 
@@ -369,7 +369,7 @@ DDD's own doctrine: spend the modelling effort on the **core domain**, keep supp
 subdomains simple. A boilerplate cannot know which is which, so it ships the cheap option and leaves
 the expensive one one folder away.
 
-`TACTICAL_DDD_PLAN.md` (workspace root, beside this repo) prices the expensive option in full — what
+`TACTICAL_DDD_PLAN.md` (workspace root, beside this repo) prices the expensive option in full — what <!-- doc-paths:ignore -->
 an aggregate slice would take, what it breaks, and the conditions that would make it the right call.
 
 ## Related pages

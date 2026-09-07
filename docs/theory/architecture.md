@@ -6,8 +6,8 @@ If you want the exact folder order, jump to [Layers](./layers.md).
 ::: warning This page describes one axis of two
 The blocks below are **layers** — what a file does on the way from a request to the database. They
 are real, but none of them is a directory. The repo is divided first by **domain**: thirteen module
-folders, each containing all of these blocks top to bottom, and `src/controllers`, `src/services`
-and `src/models` were deleted with the last domain that was migrated out of them. Read
+folders, each containing all of these blocks top to bottom, and `src/controllers`, `src/services` <!-- doc-paths:ignore -->
+and `src/models` were deleted with the last domain that was migrated out of them. Read <!-- doc-paths:ignore -->
 [Modules](./modules.md) for the axis that actually decides where a file lives, and
 [Layers](./layers.md) for how the two compose.
 :::

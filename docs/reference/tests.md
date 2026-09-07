@@ -88,16 +88,17 @@ So the honest framing of this repository's tooling:
 ### Why the unit coverage numbers look so low
 
 `test:unit:coverage` runs `tests/unit`, `tests/cross-cutting` and each module's own `tests/unit` —
-and deliberately not the integration or contract suites. Thirty-six module specs were moved to
-`tests/integration/` because Stryker re-executes the unit suite once per mutant, so a spec that
-starts a database pays that startup thousands of times over (`NODE_MUTATION_MONGOD.md`).
+and deliberately not the integration or contract suites. A module spec that calls `setupTestDb()`
+belongs in that module's `tests/integration/`, not its `tests/unit/`, because Stryker re-executes
+the unit suite once per mutant — so a spec that starts a database pays that startup thousands of
+times over.
 
 Moving them was right. What was missed is that the code they cover stopped being _counted_ by the
 unit coverage job while the floors stayed put, so that job failed on 89 thresholds until
 2026-08-29 — and a gate that is red for months is a gate nobody reads. The floors were re-fitted
 then, downward, and `jest.config.js` records what that does and does not buy.
 
-`orders/service.ts` reporting **37% statements on the unit run** therefore means: not 63% failing,
+`orders/services/crud.ts` reporting **37% statements on the unit run** therefore means: not 63% failing,
 not 63% untested — 63% covered by a suite this particular run does not execute.
 
 ::: warning The same blind spot applies to Stryker today
@@ -213,7 +214,7 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 | `tests/unit/infrastructure/adapters/storage.test.ts`                  | The upload callbacks: where a file lands, what it is renamed to, which types are refused.                                                                        | [Security](../tools/security.md)                         |
 | `tests/unit/infrastructure/adapters/image-signatures.test.ts`         | An image is identified by its bytes, and only as many bytes as needed are read.                                                                                  | [Security](../tools/security.md)                         |
 | `tests/unit/infrastructure/adapters/image-store.test.ts`              | The filesystem image store's put, resolve and delete.                                                                                                            | [Security](../tools/security.md)                         |
-| `tests/unit/infrastructure/adapters/store-uploaded-images.test.ts`    | The step between "multer wrote a file" and "the API has an image".                                                                                               | [Security](../tools/security.md)                         |
+| `tests/unit/infrastructure/adapters/image-store.test.ts`              | The step between "multer wrote a file" and "the API has an image".                                                                                               | [Security](../tools/security.md)                         |
 | `tests/unit/infrastructure/adapters/filesystem.test.ts`               | The one filesystem operation an upload cannot survive getting wrong.                                                                                             | —                                                        |
 | `tests/unit/infrastructure/http/middlewares/rate-limit-store.test.ts` | One connection needs one `connect()` — the shared limiter store.                                                                                                 | [Security](../tools/security.md)                         |
 

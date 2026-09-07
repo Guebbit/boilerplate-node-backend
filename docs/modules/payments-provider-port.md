@@ -110,7 +110,7 @@ and never more, the same rule the payment document follows.
 
 ## Going live is one file and one variable
 
-1. Write `stripe.ts` beside `fake.ts`, implementing `PaymentProvider`. Its `parseWebhook` calls the
+1. Write `stripe.ts` beside `fake.ts`, implementing `PaymentProvider`. Its `parseWebhook` calls the <!-- doc-paths:ignore -->
    vendor's own verifier (`stripe.webhooks.constructEvent`) and maps `payment_intent.succeeded` /
    `.payment_failed` onto this module's state shape.
 2. Add one line to the `PROVIDERS` registry.

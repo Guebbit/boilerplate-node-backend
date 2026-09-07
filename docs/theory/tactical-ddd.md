@@ -8,7 +8,7 @@ data with functions in front of them, and both were taken for the same reason: a
 written down in more than one place, and the copies had stopped agreeing.
 
 Everything else — aggregates, domain repositories, mappers, a read model — is deliberately absent.
-`TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices that decision.
+`TACTICAL_DDD_PLAN.md`, beside this repo in the workspace, prices that decision. <!-- doc-paths:ignore -->
 
 ## Why these two and not the rest
 
@@ -89,9 +89,9 @@ Lifecycle knowledge used to live in three places that did not agree.
 
 | Where                            | What it encoded                                    | The problem                                          |
 | -------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
-| `orders/service.ts`              | `CANCELLABLE_ORDER_STATUSES = ['pending', 'paid']` | correct, but local                                   |
+| `orders/services/cancel.ts`      | `CANCELLABLE_ORDER_STATUSES = ['pending', 'paid']` | correct, but local                                   |
 | `payments/service.ts`            | `if (order.status !== 'pending')`                  | a second module asserting the lifecycle from outside |
-| `orders/service.ts`, admin write | `order.status = data.status`                       | **no guard at all**                                  |
+| `orders/services/crud.ts`, admin | `order.status = data.status`                       | **no guard at all**                                  |
 
 That third row was a live bug rather than an untidiness:
 
@@ -121,12 +121,12 @@ was `succeeded`, so the guard passed.
 
 Four call sites, all reading the same rows:
 
-| Call site                               | Question asked                                  |
-| --------------------------------------- | ----------------------------------------------- |
-| `orders/service.ts` — `update`          | `canTransition(from, to, 'admin')`              |
-| `orders/service.ts` — `cancelById`      | `statusesLeadingTo(cancelled, actorOf(caller))` |
-| `payments/service.ts` — `createIntent`  | `canTransition(from, paid, 'system')`           |
-| `payments/service.ts` — `settlePayment` | `statusesLeadingTo(paid, 'system')`             |
+| Call site                                  | Question asked                                  |
+| ------------------------------------------ | ----------------------------------------------- |
+| `orders/services/crud.ts` — `update`       | `canTransition(from, to, 'admin')`              |
+| `orders/services/cancel.ts` — `cancelById` | `statusesLeadingTo(cancelled, actorOf(caller))` |
+| `payments/service.ts` — `createIntent`     | `canTransition(from, paid, 'system')`           |
+| `payments/service.ts` — `settlePayment`    | `statusesLeadingTo(paid, 'system')`             |
 
 `cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
@@ -213,7 +213,7 @@ one caller runs the sequence**; a double-click and the reservation sweep cannot 
 What it does not buy is atomicity. The three steps run in order, not together, so a crash between the
 status write and `releaseForOrder` leaves a cancelled order holding stock until the sweep reclaims
 it. An aggregate would close that window by making the three one act; so would a transaction, which
-is what the SQL twin has. It is a real gap and a small one, and `TACTICAL_DDD_PLAN.md` prices the
+is what the SQL twin has. It is a real gap and a small one, and `TACTICAL_DDD_PLAN.md` prices the <!-- doc-paths:ignore -->
 aggregate-shaped answer to it.
 
 ---
@@ -377,7 +377,7 @@ It is the only one. `updateStatusIfIn` here and `claimStatus` in `inventory/repo
 similar and are a different pattern: they key on `status`, naming the state a move comes _from_ so
 that exactly one of N concurrent callers wins. That is an exactly-once primitive, correct as it
 stands, and an aggregate would not simplify it. The distinction decides an entry condition in
-`TACTICAL_DDD_PLAN.md` §2 — count `__v`, not `status` — so it is worth keeping straight.
+`TACTICAL_DDD_PLAN.md` §2 — count `__v`, not `status` — so it is worth keeping straight. <!-- doc-paths:ignore -->
 
 The line this repo draws: a value type or a rules table where the rule is real and already
 duplicated, and no aggregate until something needs state a pure function cannot see.
@@ -386,5 +386,5 @@ duplicated, and no aggregate until something needs state a pure function cannot 
 
 - [Domain layer](./domain-layer.md) — what earns a place in `domain/`, and the lint rule
 - [Strategic DDD](./strategic-ddd.md) — the half adopted wholesale
-- `TACTICAL_DDD_PLAN.md` (workspace root) — what an aggregate slice would cost, and the conditions
+- `TACTICAL_DDD_PLAN.md` (workspace root) — what an aggregate slice would cost, and the conditions <!-- doc-paths:ignore -->
   that would make it the right call
