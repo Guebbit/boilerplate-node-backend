@@ -23,6 +23,7 @@ import {
     requireVerified,
     REAUTH_TIME_CRITICAL
 } from '@kernel/middlewares/authorizations';
+import { webhookLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { postPaymentIntent } from './controllers/post-payment-intent';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { postPaymentSync } from './controllers/post-payment-sync';
@@ -34,7 +35,8 @@ import { postPaymentRefund } from './controllers/post-payment-refund';
 export const router = Router();
 
 // POST /payments/webhook — the provider's own callback. MUST stay above the auth wall below.
-router.post('/webhook', postPaymentWebhook);
+// `webhookLimiter`, not `credentialLimiters`: there is no session here to skip a success on.
+router.post('/webhook', webhookLimiter, postPaymentWebhook);
 
 // Every route from here down requires authentication — money is somebody's.
 router.use(getAuth, isAuth);

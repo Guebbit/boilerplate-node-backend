@@ -187,6 +187,14 @@ configured, and one at a time per worker (`prefetch: 1`) when one is. Like `subm
 Default `NODE_UPLOAD_RATE_LIMIT_MAX=20` — generous enough for someone editing several product
 images in a row, well under the global brake.
 
+**A fifth, on the one unauthenticated WRITE.** `webhookLimiter` guards `POST /payments/webhook`.
+The signature check is the actual defence — an unsigned flood costs one HMAC each, then a `400` —
+so this budget is not bounding an attack, it is closing the gap that every other route already had
+a stated ceiling and this one didn't. Shaped like `submissionLimiter`: `skipSuccessfulRequests` off,
+keyed on the caller's address, since a genuine delivery is the traffic being bounded here too.
+Default `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX=60` — sized for a burst of real deliveries (several
+events per order, a sale driving many orders at once), not the one-per-order steady state.
+
 **The last two are keyed on a credential, not an address.** `mfaChallengeLimiter`
 (`POST /account/login/2fa`) and `mfaSendLimiter` (`POST /account/login/2fa/send`) both bucket on a
 sha256 of the challenge token rather than the caller's IP. That is the only key that bounds guesses

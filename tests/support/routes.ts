@@ -205,7 +205,8 @@ export const securityMock = () => {
         // Same reasoning, singular: `submissionLimiter` on its own (only reachable directly by a
         // future route, not by `feedback`'s — that one reads it back through `contactLimiters`
         // above) is a single closure rather than an array, so it gets one label, not an indexed one.
-        submissionLimiter: labelled('submissionLimiter')
+        submissionLimiter: labelled('submissionLimiter'),
+        webhookLimiter: labelled('webhookLimiter')
     };
 };
 

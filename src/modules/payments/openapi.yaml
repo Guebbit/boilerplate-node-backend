@@ -238,6 +238,9 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/MessageResponse'
                 # The signature did not verify, is stale, or the body is not an event.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
+                # Keyed on the caller's address, not a signed identity — see
+                # docs/tools/security.md#the-rate-limit-budgets.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:

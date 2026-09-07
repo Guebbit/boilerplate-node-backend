@@ -94,6 +94,12 @@ process.env.NODE_RESET_RATE_LIMIT_BLOCK_MAX ??= '1000';
 process.env.NODE_UPLOAD_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * `webhookLimiter` needs the same treatment: the payments contract suite delivers well past
+ * `DEFAULT_PAYMENT_WEBHOOK_RATE_LIMIT_MAX` (60) from one address inside a window.
+ */
+process.env.NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * The limiters count IN MEMORY here, never in Redis.
  *
  * Not a preference — a requirement. `src/app.ts` imports `dotenv/config`, so `.env` reaches the

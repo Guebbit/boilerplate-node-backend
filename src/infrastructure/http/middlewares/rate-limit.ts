@@ -116,6 +116,16 @@ export const DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX = 20;
  */
 export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = 20;
 
+/**
+ * Payment webhook deliveries allowed per window, per ADDRESS.
+ *
+ * The provider is one caller, but its address is not this application's to size a global budget
+ * around — see `webhookLimiter`. Sized for a burst of genuine deliveries (several events per order,
+ * a sale driving many orders at once) well below the global brake, not for the one-per-order steady
+ * state.
+ */
+export const DEFAULT_PAYMENT_WEBHOOK_RATE_LIMIT_MAX = 60;
+
 /** The configured window, in ms — falls back to {@link DEFAULT_RATE_LIMIT_WINDOW_MS}. */
 const windowMs = () =>
     environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1);
@@ -513,6 +523,28 @@ export const mfaSendLimiter: RequestHandler = rateLimit({
 export const uploadLimiter: RequestHandler = rateLimit({
     ...limiterOptions(rateLimitStore('uploads'), true),
     limit: environmentNumber('NODE_UPLOAD_RATE_LIMIT_MAX', DEFAULT_UPLOAD_RATE_LIMIT_MAX, 1)
+});
+
+/**
+ * The budget for `POST /payments/webhook` — the only unauthenticated WRITE surface this API has.
+ *
+ * A signature check is what actually authenticates a delivery, and an unsigned flood is cheap
+ * (one HMAC each, then a 400) — this budget is not the defence against that. It exists because the
+ * route is otherwise unbounded: the global brake covers routes it does not know are here for a
+ * machine, not a browser, and every route this application answers deserves a stated ceiling rather
+ * than a silent one. Shaped like `submissionLimiter`: `skipSuccessfulRequests` off, keyed on the
+ * caller's address, because a genuine delivery (a `200`) is the traffic being bounded, not a
+ * rejected one.
+ *
+ * See: docs/tools/security.md#the-rate-limit-budgets
+ */
+export const webhookLimiter: RequestHandler = rateLimit({
+    ...limiterOptions(rateLimitStore('payment-webhook'), true),
+    limit: environmentNumber(
+        'NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX',
+        DEFAULT_PAYMENT_WEBHOOK_RATE_LIMIT_MAX,
+        1
+    )
 });
 
 /**
