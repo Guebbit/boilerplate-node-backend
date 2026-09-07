@@ -2,7 +2,7 @@
 /**
  * Publish the demo dataset as the API actually serves it — `npm run seed:export`.
  *
- * It seeds a throwaway database with the real seeders, hands it to `db/demo/assemble.ts`, and
+ * It seeds a throwaway database with the real seeders, hands it to `./assemble.ts`, and
  * writes what that returns. Schema defaults, derived totals and serializer omissions are in the
  * file because the API produced them, not because a fixture claimed them.
  *
@@ -17,7 +17,7 @@ import 'dotenv/config';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { assembleDemoDataset, DEMO_DATA_PATH } from '../../db/demo/assemble';
+import { assembleDemoDataset, DEMO_DATA_PATH } from './assemble';
 import { enabledModules } from '../../src/modules';
 
 const checkOnly = process.argv.includes('--check');

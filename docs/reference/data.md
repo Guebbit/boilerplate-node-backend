@@ -21,7 +21,7 @@ flowchart LR
     Sync --> Mongo[("MongoDB")]
     Seeds["per-module demo.ts<br/><i>fixtures</i>"] --> Index["db/demo/index.ts<br/><i>the seeder</i>"]
     Index --> Mongo
-    Mongo --> Assemble["db/demo/assemble.ts"]
+    Mongo --> Assemble["scripts/demo/assemble.ts"]
     Assemble --> Data["db/demo/demo-data.json<br/><i>published dataset</i>"]
 
     classDef schema fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -169,11 +169,11 @@ after when it needs an index to be fast.
 
 ## The demo dataset
 
-| File                     | What it is                                                                                                                                                                                                                                                                                            | Read next                                                              |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `db/demo/index.ts`       | The seeder that `npm run db:seed` runs. Walks every enabled module's seed file and upserts its fixtures through the shared seeding primitive — so seeding is idempotent, and a module that is disabled seeds nothing. A reset flag empties first.                                                     | [Modules](./src-modules.md) · [Demo profile](../tools/demo-profile.md) |
-| `db/demo/assemble.ts`    | Reads the seeded rows back out **through the real serializers** and checks the result is what the API would actually answer. That is what makes the published dataset a record of the API's behaviour rather than of its storage.                                                                     | [Contract Testing (Response)](../tools/contract-testing.md)            |
-| `db/demo/demo-data.json` | **Generated** by `npm run seed:export`. The demo dataset exactly as the API serves it, published for the paired frontend to mock against. `npm run check:seed-export` fails when the committed bytes differ from a fresh run, and Prettier is told to leave it alone so the two writers cannot fight. | [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) |
+| File                       | What it is                                                                                                                                                                                                                                                                                                                                                                               | Read next                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `db/demo/index.ts`         | The seeder that `npm run db:seed` runs. Walks every enabled module's seed file and upserts its fixtures through the shared seeding primitive — so seeding is idempotent, and a module that is disabled seeds nothing. A reset flag empties first.                                                                                                                                        | [Modules](./src-modules.md) · [Demo profile](../tools/demo-profile.md) |
+| `scripts/demo/assemble.ts` | Reads the seeded rows back out **through the real serializers** and checks the result is what the API would actually answer. That is what makes the published dataset a record of the API's behaviour rather than of its storage.                                                                                                                                                        | [Contract Testing (Response)](../tools/contract-testing.md)            |
+| `db/demo/demo-data.json`   | **Generated** by `npm run seed:export`. The demo dataset exactly as the API serves it. Published here and nowhere else: it is not in `SHARED_FILES`, so the paired frontend keeps no copy and reads this repo's API instead. `npm run check:seed-export` fails when the committed bytes differ from a fresh run, and Prettier is told to leave it alone so the two writers cannot fight. | [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) |
 
 The fixtures themselves are not here — each module owns its own slice, and the two demo accounts
 are declared in `src/kernel/seed-accounts.ts`.

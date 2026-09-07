@@ -19,8 +19,8 @@
  *
  * ## Determinism is a hard requirement
  *
- * The output is committed and hash-compared against the paired frontend, so two runs must produce
- * identical bytes. Three things buy that: fixtures pin their own `createdAt` (see
+ * The output is committed and `npm run check:seed-export` re-derives it in the gate, so two runs
+ * must produce identical bytes. Three things buy that: fixtures pin their own `createdAt` (see
  * `@infrastructure/persistence/factory`), seed writes pass `{ timestamps: false }` so Mongoose does
  * not overwrite them, and this file sorts both the rows and every object key on the way out. If a
  * value ever enters the dataset that cannot be pinned, it does not belong in the export.
@@ -31,9 +31,12 @@ import type { DemoShape } from '../../src/kernel/registry';
 import { seedCredentials } from '../../src/kernel/seed-accounts';
 import { enabledModules } from '../../src/modules';
 
-/* `__dirname`, not `import.meta.dirname` — tsx and ts-jest both load this as CommonJS, where the
+/* The dataset sits beside the seeder that produces the rows, not beside this file: `db/` is where
+ * the demo data lives, and this is only the tool that renders it.
+ *
+ * `__dirname`, not `import.meta.dirname` — tsx and ts-jest both load this as CommonJS, where the
  * latter is undefined. `scripts/contracts/bundle-kinds.ts` resolves its own root the same way. */
-export const DEMO_DATA_PATH = path.join(__dirname, 'demo-data.json');
+export const DEMO_DATA_PATH = path.join(__dirname, '../../db/demo/demo-data.json');
 
 /**
  * Flatten to plain JSON before anything walks the structure.

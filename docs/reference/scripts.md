@@ -95,11 +95,12 @@ This backend and its frontend share a set of files byte-for-byte. These four kee
 
 ## Demo and data — `scripts/demo/`
 
-| File                                   | What it is                                                                                                                                                                     | Read next                                        |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| `scripts/demo/run-server.ts`           | The demo profile — the real API against an in-memory MongoDB, self-contained and disposable. What `npm run demo` boots, and what the paired frontend's e2e suite runs against. | [Demo profile](../tools/demo-profile.md)         |
-| `scripts/demo/export-dataset.ts`       | Publishes the demo dataset as the API actually serves it — `npm run seed:export`, with a check mode as the gate.                                                               | [Data](./data.md)                                |
-| `scripts/demo/generate-seed-images.ts` | Downloads one photo per catalogue role and runs it through the real upload pipeline — `npm run seed:images`. Network-using and one-off, deliberately outside `regenerate`.     | [Image processing](../tools/image-processing.md) |
+| File                                   | What it is                                                                                                                                                                           | Read next                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| `scripts/demo/run-server.ts`           | The demo profile — the real API against an in-memory MongoDB, self-contained and disposable. What `npm run demo` boots, and what the paired frontend's e2e suite runs against.       | [Demo profile](../tools/demo-profile.md)         |
+| `scripts/demo/export-dataset.ts`       | Publishes the demo dataset as the API actually serves it — `npm run seed:export`, with a check mode as the gate.                                                                     | [Data](./data.md)                                |
+| `scripts/demo/generate-seed-images.ts` | Downloads one photo per catalogue role and runs it through the real upload pipeline — `npm run seed:images`. Network-using and one-off, deliberately outside `regenerate`.           | [Image processing](../tools/image-processing.md) |
+| `scripts/demo/assemble.ts`             | The library behind both of `export-dataset.ts`'s modes: reads the seeded rows back through the real serializers and renders the bytes `db/demo/demo-data.json` holds. Never invoked. | [Data](./data.md)                                |
 
 ## Mutation testing — `scripts/mutation/`
 
