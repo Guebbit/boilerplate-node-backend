@@ -89,7 +89,7 @@ const declaredIndexes = (
  *
  * Stated as a SET in tests rather than field by field: "these and no others" is the assertion that
  * fails when a `required` is added as well as when one is removed, and adding one is the change
- * that starts rejecting writes a client used to be allowed to make.
+ * that turns an existing client's write into a rejection.
  */
 export const requiredPaths = (schema: IntrospectableSchema): string[] =>
     pathNames(schema).filter((name) => (schema.path(name) as SchemaPath | undefined)?.isRequired);

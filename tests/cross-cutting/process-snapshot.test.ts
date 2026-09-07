@@ -1,20 +1,21 @@
 /**
  * The process is read in exactly one place, and published in exactly one shape.
  *
- * Three payloads describe this process — the SSE frame and the two observability REST endpoints —
- * and each used to read `process.memoryUsage()` and `process.uptime()` for itself. That is not a
- * tidiness problem: the three readings were taken at three instants, two converted to megabytes
- * and one did not, and the roundings differed (`Math.round` against `Math.floor`), so the health
- * endpoint and the live stream reported uptimes a second apart with nothing wrong anywhere.
+ * Three payloads describe this process — the SSE frame and the two observability REST endpoints.
+ * If each read `process.memoryUsage()` and `process.uptime()` independently, that would not be a
+ * tidiness problem: three readings taken at three instants, some converted to megabytes and some
+ * not, some rounded with `Math.round` and some with `Math.floor`, would report uptimes a second
+ * apart with nothing wrong anywhere — the exact failure the shared reader below exists to close.
  *
- * The refactor that removed the three copies cannot, by itself, stop a fourth. This can. Two
- * properties, both of which failed silently before:
+ * Centralising today's three copies cannot, by itself, stop a fourth from opening the same gap
+ * again. This test can. Two properties, both silent without it:
  *
  *   1. **One reader.** A new payload that wants uptime reaches for `process.uptime()` because that
- *      is what every other file appeared to do. Nothing failed when it did.
+ *      is what every other file appears to do. Nothing fails when it does.
  *   2. **One shape, across two documents.** The bytes block is declared in `openapi.yaml` AND in
- *      `asyncapi.yaml`, because the two documents cannot `$ref` each other. Nothing compared them,
- *      so the REST and SSE views of the same four numbers were free to drift apart field by field.
+ *      `asyncapi.yaml`, because the two documents cannot `$ref` each other. Nothing compares them
+ *      on its own, so the REST and SSE views of the same four numbers are free to drift apart
+ *      field by field.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';

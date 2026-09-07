@@ -58,7 +58,7 @@ export const catchAs =
         // `.catch()` types its parameter `unknown` because JS does not guarantee a throw is an
         // Error — but everything that reaches this app-wide boundary is thrown by this codebase
         // or by Mongoose, both Error-shaped. One cast here, with the reason, instead of one at
-        // each of the (many) call sites that used to reach for `as Error` themselves.
+        // each of the many call sites that would otherwise each reach for `as Error` themselves.
         rejectDatabaseError(response, context, error as CastError | Error);
     };
 

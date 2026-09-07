@@ -116,9 +116,11 @@ describe('GET /orders/{id}', () => {
     });
 
     /*
-     * One case per role: the two roles used different queries and used to answer differently for
-     * a malformed id — admin's `findById` raised a Mongoose `CastError` mapped to 404, the scoped
-     * aggregate's own coercion raised a `BSONError` that reached the interpreter as 422.
+     * One case per role: the two roles run different queries, and a malformed id can easily answer
+     * differently between them — admin's `findById` raises a Mongoose `CastError` mapped to 404,
+     * while the scoped aggregate's own coercion raises a `BSONError`, which the interpreter maps to
+     * 422 unless something upstream of it already turned the id away. Both need their own case, or
+     * a regression on either path alone has nothing to catch it.
      */
     it.each([['admin'], ['user']] as const)(
         '404s on a malformed id for a %s caller',

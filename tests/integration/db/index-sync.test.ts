@@ -8,15 +8,16 @@
  * schema and is still sitting in the collection. This file constructs both and asserts the
  * reconciliation resolves them.
  *
- * What it no longer needs to test: that two authors of an index agree. There is one author.
- * `model.ts` declares an index and `syncIndexes` makes it so — the class of bug where a
- * hand-written migration created the same key under a different name, and broke every boot on an
- * already-migrated database, cannot be expressed in this design.
+ * There is exactly one author of an index: `model.ts` declares it and `syncIndexes` makes it so.
+ * The class of bug where a hand-written migration creates the same key under a different name, and
+ * breaks every boot on an already-migrated database, cannot be expressed in this design — so this
+ * file does not test two authors agreeing with each other.
  *
- * The one case worth keeping from that era is the exact-agreement assertion: Mongoose copies an
- * EMBEDDED schema's indexes onto whatever embeds it, so indexing the catalogue can silently index
- * a frozen product snapshot inside every order too. That is a schema-authoring mistake rather
- * than a migration one, and it still shows up here as an index nobody meant to declare.
+ * The one case still worth its own assertion is exact agreement between an EMBEDDED schema and
+ * whatever embeds it: Mongoose copies the embedded schema's indexes onto the parent too, so
+ * indexing the catalogue can silently index a frozen product snapshot inside every order as well.
+ * That is a schema-authoring mistake rather than a migration one, and it still shows up here as an
+ * index nobody meant to declare.
  *
  * See: docs/reference/data.md
  */

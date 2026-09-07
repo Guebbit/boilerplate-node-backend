@@ -82,10 +82,10 @@ describe('getFormFiles', () => {
     /**
      * The same normalization, through the OTHER multer shape — and the pair is the point.
      *
-     * This branch used to return `[]` unchanged while `.fields()` returned `undefined`, so
-     * `if (getFormFiles(req))` answered differently depending on which multer variant a route
-     * mounted — the exact distinction this function exists to hide. It was harmless only by
-     * accident: both callers happen to test `length === 0` as well as falsiness.
+     * Without this normalization, `if (getFormFiles(req))` would answer differently depending on
+     * which multer variant a route mounted — `[]` here against `undefined` from `.fields()` — the
+     * exact distinction this function exists to hide. Harmless only by accident: both callers
+     * happen to test `length === 0` as well as falsiness.
      *
      * Asserted next to the `.fields()` case above rather than merged into it: what has to hold
      * is that the two agree, and two assertions that can disagree are the only way to keep

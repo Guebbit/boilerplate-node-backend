@@ -1,10 +1,10 @@
 /**
  * The lifecycle both optional dependencies now run on.
  *
- * Redis and RabbitMQ used to state these rules separately, and drifted: `cacheState()` read
- * `connecting` off the client's socket flag while `queueState()` read it off whether a connect was
- * in flight, so one health payload answered the same question two ways. The rules live here now,
- * which means they can be tested once — against a fake handle, with no Redis and no broker.
+ * Stating these rules separately per dependency invites drift: a `cacheState()` reading
+ * `connecting` off the client's socket flag and a `queueState()` reading it off whether a connect
+ * is in flight would answer the same health question two different ways. The rules live here
+ * instead, which means they are tested once — against a fake handle, with no Redis and no broker.
  *
  * Four properties are load-bearing and each has its own block below: never rejecting, never
  * opening a second connection while one is in flight, warning exactly once per outage, and

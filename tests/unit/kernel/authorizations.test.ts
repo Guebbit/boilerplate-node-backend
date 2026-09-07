@@ -38,7 +38,7 @@ jest.mock('@infrastructure/observability/audit', () => ({
 }));
 
 /*
- * The guards no longer look a user up themselves — they ask `kernel/authentication` for one, and
+ * The guards do not look a user up themselves — they ask `kernel/authentication` for one, and
  * `account` supplies the implementation at boot. So the fake here is the RESOLVER, which is also
  * the whole contract these guards depend on:
  *
