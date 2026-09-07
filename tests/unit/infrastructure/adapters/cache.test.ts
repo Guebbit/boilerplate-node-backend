@@ -14,7 +14,7 @@
  * fail-open cases: `db:cache:clear` has to tell "nothing to clear" from "could not clear" so it
  * can exit non-zero instead of announcing a success it did not achieve.
  *
- * What this file no longer tests, because the adapter no longer decides it: the TTL clamp, the
+ * What this file does not test, because the adapter does not decide it: the TTL clamp, the
  * per-entry byte limit and the response envelope live with their only consumer, in
  * `tests/unit/infrastructure/http/middlewares/cache.test.ts`.
  *

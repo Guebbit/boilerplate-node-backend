@@ -79,7 +79,7 @@ const authenticateVerified = async () => {
 /**
  * A signed-in account whose address is NOT verified — the counterpart to
  * {@link authenticateVerified}, for the two cases in this suite that specifically exercise that
- * state. `authenticateAs` no longer leaves it there by default.
+ * state. `authenticateAs` verifies by default, so this is the one place that opts out.
  */
 const authenticateUnverified = async () => {
     const user = await createUser({ verified: false, email: 'unverified@example.com' });

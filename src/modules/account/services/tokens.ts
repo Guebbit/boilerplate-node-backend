@@ -34,8 +34,8 @@ export const findLiveToken = (
     userRepository.findByToken(token, type).then((user) => {
         if (!user) return undefined;
 
-        // `tokens[].token` is hashed at rest (wave 3.1) — hash `token` the same way to re-find it
-        // on the just-loaded document.
+        // `tokens[].token` is hashed at rest — hash `token` the same way to re-find it on the
+        // just-loaded document.
         const digest = hashToken(token);
         const entry = user.tokens.find((tk) => tk.token === digest && tk.type === type);
         if (!entry) return undefined;
@@ -61,7 +61,7 @@ export const spendLiveToken = (user: UserDocument, token: string): Promise<boole
  * function — a live refresh token is as good as a password — so the subdocument id is the
  * handle; `current` compares against the caller's own refresh cookie (bearer-only callers have
  * none, so every entry there is honestly `current: false`). `cookieToken` is hashed before the
- * comparison, since `token.token` is a digest at rest (wave 3.1).
+ * comparison, since `token.token` is a digest at rest.
  */
 const toSession = (token: Token, cookieToken?: string): Session => ({
     id: String(token._id),
@@ -89,7 +89,7 @@ export const sessionsList = (
         if (!user) return generateReject(404, [t('users.not-found')]);
 
         const sessions = user.tokens
-            // `!token.supersededAt` — a rotated-away entry (wave 3.2) is kept around only for its
+            // `!token.supersededAt` — a rotated-away entry is kept around only for its
             // short reuse-detection grace window, not a session the account holder should see or
             // be able to revoke by itself; its successor already is one.
             .filter((token) => token.type === (TokenType.REFRESH as string) && !token.supersededAt)

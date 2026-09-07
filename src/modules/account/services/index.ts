@@ -2,8 +2,8 @@
  * @module
  * Account service — authentication, the profile a person manages, and their address book. A
  * folder rather than one file because it passed ~300 lines (see `docs/theory/layers.md`), split
- * by what each operation does; the address book joined for the same reason `addresses-service.ts`
- * was retired. `../session/` sits below this layer (JWT signing, the refresh cookie, shared
+ * by what each operation does; the address book lives here rather than its own file for the same
+ * size reason. `../session/` sits below this layer (JWT signing, the refresh cookie, shared
  * expiry) and nothing outside this module imports it directly; see `../index`.
  */
 

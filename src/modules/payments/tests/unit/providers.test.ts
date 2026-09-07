@@ -14,7 +14,7 @@ import {
 import {
     signWebhookPayload,
     verifyWebhookSignature,
-    WebhookSignatureError
+    WebhookRejected
 } from '../../providers/webhook-signature';
 
 const charge = { amount: 1000, currency: 'eur' };
@@ -126,7 +126,7 @@ describe('webhook signatures', () => {
 
         expect(() =>
             verifyWebhookSignature(Buffer.from(JSON.stringify({ id: 'evt_2' })), signature)
-        ).toThrow(WebhookSignatureError);
+        ).toThrow(WebhookRejected);
     });
 
     it('refuses a signature signed with another secret', () => {
@@ -135,24 +135,22 @@ describe('webhook signatures', () => {
         const forged = signWebhookPayload(body);
         process.env.NODE_PAYMENT_WEBHOOK_SECRET = original;
 
-        expect(() => verifyWebhookSignature(body, forged)).toThrow(WebhookSignatureError);
+        expect(() => verifyWebhookSignature(body, forged)).toThrow(WebhookRejected);
     });
 
     it('refuses a replay from outside the tolerance window, signature or not', () => {
         const stale = signWebhookPayload(body, Math.floor(Date.now() / 1000) - 3600);
 
-        expect(() => verifyWebhookSignature(body, stale)).toThrow(WebhookSignatureError);
+        expect(() => verifyWebhookSignature(body, stale)).toThrow(WebhookRejected);
     });
 
     it('refuses a malformed header', () => {
-        expect(() => verifyWebhookSignature(body, 'not-a-signature')).toThrow(
-            WebhookSignatureError
-        );
-        expect(() => verifyWebhookSignature(body, undefined)).toThrow(WebhookSignatureError);
+        expect(() => verifyWebhookSignature(body, 'not-a-signature')).toThrow(WebhookRejected);
+        expect(() => verifyWebhookSignature(body, undefined)).toThrow(WebhookRejected);
     });
 
     it('refuses a signature of the wrong length without throwing something else', () => {
-        expect(() => verifyWebhookSignature(body, 't=1,v1=ab')).toThrow(WebhookSignatureError);
+        expect(() => verifyWebhookSignature(body, 't=1,v1=ab')).toThrow(WebhookRejected);
     });
 });
 
@@ -179,7 +177,7 @@ describe('fakePaymentProvider.parseWebhook', () => {
 
         await expect(
             fakePaymentProvider.parseWebhook(body, `t=${now},v1=${'0'.repeat(64)}`)
-        ).rejects.toThrow(WebhookSignatureError);
+        ).rejects.toThrow(WebhookRejected);
     });
 
     it('refuses a signed body carrying no event id', async () => {
@@ -187,7 +185,7 @@ describe('fakePaymentProvider.parseWebhook', () => {
 
         await expect(
             fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
-        ).rejects.toThrow(WebhookSignatureError);
+        ).rejects.toThrow(WebhookRejected);
     });
 });
 

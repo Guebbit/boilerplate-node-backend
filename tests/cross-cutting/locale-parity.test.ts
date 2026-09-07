@@ -17,9 +17,9 @@
  * translation.
  *
  * ── Why the languages are read rather than named ─────────────────────────────────────────────
- * This file used to compare `en` and `it` by name, while a third language sat in `src/locales/`
- * and in every module's locale directory with its completeness checked by nothing — a key could go
- * missing there and the suite stayed green.
+ * Naming `en` and `it` explicitly would leave any THIRD language — sitting in `src/locales/` and
+ * in every module's own locale directory — with its completeness checked by nothing: a key could
+ * go missing there and the suite would stay green.
  *
  * Iterating `listSupportedLocales()` means a language added tomorrow is covered by existing, a
  * language REMOVED tomorrow stops being asserted about without a test to edit, and the answer

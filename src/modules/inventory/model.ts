@@ -198,8 +198,10 @@ export const reservationSchema = new Schema<ReservationDocument>(
 /* The sweep's only query: holds still held, oldest deadline first. */
 reservationSchema.index({ status: 1, expiresAt: 1 }, { name: 'reservations_status_expiresAt' });
 
+/** `_id` → `id`, dates to ISO strings — the shape every reservation read answers in. */
 export const applyReservationTransform = applySerialization(reservationSchema);
 
+/** Mongoose model for reservation CRUD operations. */
 export const reservationModel = model<ReservationDocument, ReservationModel>(
     'Reservation',
     reservationSchema

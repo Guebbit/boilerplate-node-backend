@@ -20,6 +20,7 @@ import {
     createIntent,
     confirmPayment,
     syncPayment,
+    applyWebhookDelivery,
     applyWebhookSettlement,
     getForOrder,
     refundByOrder
@@ -307,6 +308,29 @@ describe('refund on cancel', () => {
         // The intent survives untouched — no money moved, so there is nothing to move back.
         expect(payment!.status).toBe('requires_confirmation');
     });
+
+    it('pins refunded as terminal against a webhook that arrives after the cancel refund', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const providerRef = String(
+            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
+        );
+        const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
+        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await orderService.cancelById(String(order._id), auth(user));
+
+        // The setup this test actually cares about: cancelling really did refund it already.
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe('refunded');
+
+        // The webhook arrives unbidden and late — the browser-driven confirm already settled and
+        // the cancel already refunded it by the time the provider's own callback catches up.
+        await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '4242' });
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('refunded');
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored!.status).not.toBe('paid');
+    });
 });
 
 /**
@@ -492,6 +516,54 @@ describe('in-flight settlement', () => {
 });
 
 /**
+ * `syncPayment`'s own two refusal branches — the provider saying no, and there being no provider
+ * to ask at all.
+ */
+describe('syncPayment', () => {
+    it('answers a provider decline as 409, leaving the order pending and the hold held', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        const intent = await createIntent(String(order._id), auth(user));
+        const paymentId = String(intent.success && intent.data?.id);
+        // In flight: the bank hasn't answered yet, so nothing has touched the order or the hold.
+        await confirmPayment(paymentId, 'pm_card_processing', auth(user), testCallerContext);
+
+        // The provider's own eventual answer, forced rather than awaited — this is the outcome a
+        // real async method CAN settle to, not one `pm_card_processing`'s own fixture produces.
+        const retrieveSpy = jest
+            .spyOn(fakePaymentProvider, 'retrieve')
+            .mockResolvedValueOnce({ status: 'declined' });
+
+        const result = await syncPayment(paymentId, auth(user), testCallerContext);
+        retrieveSpy.mockRestore();
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_DECLINED');
+        expect((await orderRepository.findById(String(order._id)))!.status).toBe('pending');
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3 });
+    });
+
+    it('refuses to sync a row the provider was never asked to open', async () => {
+        // Built straight off the repository, skipping createIntent — so there is no providerRef,
+        // which is the one thing this branch exists to catch before it ever reaches the provider.
+        const { user, order } = await orderFor();
+        const payment = await paymentRepository.upsertIntent(String(order._id), user.id, {
+            amount: 10,
+            currency: 'EUR',
+            provider: 'fake'
+        });
+        expect(payment!.providerRef).toBeUndefined();
+
+        const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
+        const result = await syncPayment(String(payment!._id), auth(user), testCallerContext);
+        retrieveSpy.mockRestore();
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_NOT_CONFIRMABLE');
+        expect(retrieveSpy).not.toHaveBeenCalled();
+    });
+});
+
+/**
  * The provider's own callback — the authority for whether money moved. It reaches the same
  * settlement the browser-driven paths do, and it has no caller to answer, so what these pin is
  * the state it leaves behind.
@@ -534,6 +606,40 @@ describe('applyWebhookSettlement', () => {
         await expect(
             applyWebhookSettlement('fake_pi_nobody', { status: 'succeeded' })
         ).resolves.toBeUndefined();
+    });
+});
+
+/**
+ * The ledger that makes a redelivery idempotent must not also make a FAILED delivery permanent —
+ * the money bug this fix closes.
+ */
+describe('applyWebhookDelivery', () => {
+    it('lets a delivery that failed to settle be redelivered, rather than swallowing it as a dupe', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const providerRef = String(
+            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
+        );
+        const event = {
+            id: 'evt_redelivery_test',
+            providerRef,
+            state: { status: 'succeeded' as const, cardLast4: '4242' }
+        };
+
+        // The settlement fails transiently on its first attempt — a DB blip, not a bad event.
+        const updateSpy = jest
+            .spyOn(paymentRepository, 'updateStatusIfIn')
+            .mockRejectedValueOnce(new Error('transient failure'));
+
+        await expect(applyWebhookDelivery(event)).rejects.toThrow('transient failure');
+        updateSpy.mockRestore();
+
+        // The provider's redelivery of the SAME event id is what settles it for real.
+        await applyWebhookDelivery(event);
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('succeeded');
+        expect((await orderRepository.findById(String(order._id)))!.status).toBe('paid');
     });
 });
 

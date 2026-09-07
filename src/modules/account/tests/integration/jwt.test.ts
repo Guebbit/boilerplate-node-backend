@@ -150,7 +150,7 @@ describe('createRefreshToken', () => {
         const issued = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
 
         // `tokens` is select:false, so it has to be re-read explicitly — the same way the
-        // revocation lookup does. Stored as a digest (wave 3.1), never the plaintext `issued`.
+        // revocation lookup does. Stored as a digest, never the plaintext `issued`.
         const reloaded = await userRepository.findByIdWithCredentials(String(user._id));
         const stored = reloaded!.tokens.find((entry) => entry.token === hashToken(issued));
 

@@ -12,7 +12,7 @@
 
 import { createHmac } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
-import { verifyWebhookSignature, WebhookSignatureError } from './webhook-signature';
+import { verifyWebhookSignature, WebhookRejected } from './webhook-signature';
 import type { PaymentProvider, ProviderPaymentState, ProviderPaymentStatus } from './index';
 
 /** The webhook body as it arrives — the contract's `PaymentWebhookEvent`, flat. */
@@ -139,11 +139,11 @@ export const fakePaymentProvider: PaymentProvider = {
             // letting it read as a fault of ours.
             .then((text) => JSON.parse(text) as PaymentWebhookEventBody)
             .catch((error: unknown) => {
-                if (error instanceof WebhookSignatureError) throw error;
-                throw new WebhookSignatureError('Body is not valid JSON');
+                if (error instanceof WebhookRejected) throw error;
+                throw new WebhookRejected('Body is not valid JSON');
             })
             .then((event) => {
-                if (!event.id) throw new WebhookSignatureError('Event carries no id');
+                if (!event.id) throw new WebhookRejected('Event carries no id');
                 // The wire shape is flat; `ProviderPaymentState` is the shape the SERVICE reads.
                 // Assembling it here is the whole job of an adapter — a real provider builds the
                 // same object out of its own nested event instead.

@@ -51,18 +51,17 @@ export const wishlistRepository: Repository<WishlistDocument> & {
      *
      * Two races, and neither needs the retry budget `../cart/repository`'s `upsertLine` carries.
      *
-     * The LINE: `$addToSet` settles it outright — a set cannot hold the same member twice, so no
-     * interleaving of saves puts one product on two lines, and saving what is already saved is
-     * the state the caller asked for rather than an error.
-     *
-     * The DOCUMENT: the filter is an exact equality on `userId`, which is the unique index's own
-     * key, and that is the shape mongod resolves atomically — the upsert cannot lose to itself
-     * and no E11000 reaches here. The cart's second step filters on
-     * `{ userId, 'items.productId': { $ne } }`, which is NOT an exact match on its unique key, so
-     * two of them can both conclude "absent" and one loses; that difference is the whole reason
-     * one write retries and this one does not. Measured at 25-way contention:
-     * `tests/integration/concurrency/wishlist-races.test.ts` is the case that would go red if the
-     * filter ever stopped being an equality.
+     * Line:     `$addToSet` settles it outright — a set cannot hold the same member twice, so no
+     *           interleaving of saves puts one product on two lines, and saving what is already
+     *           saved is the state the caller asked for rather than an error.
+     * Document: the filter is an exact equality on `userId`, the unique index's own key, and that
+     *           is the shape mongod resolves atomically — the upsert cannot lose to itself and no
+     *           E11000 reaches here. The cart's second step filters on
+     *           `{ userId, 'items.productId': { $ne } }`, NOT an exact match on its unique key, so
+     *           two of them can both conclude "absent" and one loses; that is the whole reason one
+     *           write retries and this one does not. Measured at 25-way contention in
+     *           `tests/integration/concurrency/wishlist-races.test.ts`, the case that would go red
+     *           if the filter ever stopped being an equality.
      */
     addLine: async (userId: string, productId: string) =>
         wishlistModel

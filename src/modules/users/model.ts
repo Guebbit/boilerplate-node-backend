@@ -594,7 +594,7 @@ userSchema.pre('save', function (this: UserDocument) {
 /**
  * Add a token to this user document and persist it.
  * Returns the PLAINTEXT token string so callers can use it — the cookie, the emailed link — but
- * only its {@link hashToken} digest is ever written to the document. See wave 3.1 above `hashToken`.
+ * only its {@link hashToken} digest is ever written to the document.
  */
 userSchema.methods.tokenAdd = function (
     this: UserDocument,

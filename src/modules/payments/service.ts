@@ -45,7 +45,7 @@ import {
     type ProviderPaymentState,
     type ProviderWebhookEvent
 } from './providers';
-import { claimWebhookEvent, paymentRepository } from './repository';
+import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from './repository';
 import type { PaymentDocument } from './model';
 
 /**
@@ -198,8 +198,11 @@ interface Settlement {
  * only one.
  *
  * Every write is conditional, so a delivery that arrives twice, or races the browser's own call,
- * settles once: `SETTLEABLE_PAYMENT_STATUSES` excludes the terminal states, and the order's
- * `pending → paid` move is what makes the inventory commit and the domain event at-most-once.
+ * settles once. The PAYMENT write is what gates it — `SETTLEABLE_PAYMENT_STATUSES` excludes the
+ * terminal states, so exactly one caller ever sees its own write succeed — not the order's own
+ * `pending → paid` move: a webhook retried after {@link applyWebhookDelivery} released its claim
+ * re-enters here and can legitimately lose that race (the order already got there on the failed
+ * first attempt) while still being the one call that must finish the job.
  *
  * @param payment - the payment the provider named
  * @param state - what the provider reported
@@ -240,7 +243,20 @@ export const settlePayment = (
                 extra
             );
 
-            if (!paidOrder) {
+            // Neither write moved anything: an earlier call already settled this payment (both
+            // writes are terminal-once-applied), or this delivery lost every race there was —
+            // either way, whoever won already did (or is doing) the rest, or there is nothing to
+            // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
+            if (!succeeded) return { payment, orderLost: false };
+
+            // `paidOrder` is null in TWO different cases a redelivered event can now reach: this
+            // order was raced to `paid` by another settlement of the same charge (nothing lost —
+            // just not this call's doing), or it genuinely can no longer get there (cancelled). A
+            // stale `paidOrder` is not enough to tell them apart; the order's CURRENT status is.
+            const orderNow = paidOrder ?? (await orderRepository.findById(orderId));
+            const orderIsPaid = orderNow?.status === OrderStatus.paid;
+
+            if (!orderIsPaid) {
                 /*
                  * The money moved but the order was gone (cancelled, or a racing tab won). Put it
                  * straight back — the invariant is the module docblock's rule 2. `performRefund`
@@ -248,16 +264,18 @@ export const settlePayment = (
                  * and the at-most-once guard is the same one every other refund goes through.
                  */
                 const refunded = await performRefund(orderId);
-                return { payment: refunded ?? succeeded ?? payment, orderLost: true };
+                return { payment: refunded ?? succeeded, orderLost: true };
             }
 
             /*
              * The units finally leave — held since checkout, recoverable until now.
              *
-             * The conditional `pending → paid` move (rule 2) is what makes this at-most-once. The
-             * result is not checked: `false` means an expiry sweep beat the payment to the hold,
-             * which this module cannot fix and `inventory` logs — the customer has a paid order
-             * either way.
+             * Reached at most once per order: `succeeded` above is itself an at-most-once write
+             * (terminal once applied), and this is the only call whose `succeeded` write can ever
+             * be truthy — `paidOrder`'s own race no longer gates this, since a redelivered event
+             * can legitimately lose it while still being the one true settlement. The result is
+             * not checked: `false` means an expiry sweep beat the payment to the hold, which this
+             * module cannot fix and `inventory` logs — the customer has a paid order either way.
              */
             await inventoryService.commitForOrder(orderId);
 
@@ -267,7 +285,7 @@ export const settlePayment = (
                 to: 'paid'
             });
 
-            return { payment: succeeded ?? payment, orderLost: false };
+            return { payment: succeeded, orderLost: false };
         });
 };
 
@@ -335,25 +353,28 @@ const reportAttempt = (
 };
 
 /**
- * Read a payment the caller owns and that is in one of the given states, or say which refusal it
- * was — the opening both browser-driven endpoints share.
+ * Whether an already-fetched payment is in one of the given states, or say which refusal it was —
+ * the check both browser-driven endpoints share, over a document each has already read for its own
+ * reasons (a fresh read for the confirm, one the sync needed anyway to know it isn't terminal).
+ *
+ * @returns the payment, narrowed to prove it carries a `providerRef` — nothing here reaches a
+ *   confirmable or settleable status before the provider was asked for an intent — or the refusal
  */
 const findConfirmable = (
-    paymentId: string,
-    allowed: readonly PaymentStatus[],
-    authContext: Caller | undefined
-): Promise<PaymentDocument | ResponseReject> =>
-    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
-        if (!payment) return generateReject(404, [t('payments.not-found')]);
-        // No reference means the provider was never asked for an intent, so there is nothing at
-        // the far end to confirm or re-read. Same refusal as a wrong status: the client's move is
-        // to create the intent again either way.
-        if (!payment.providerRef || !allowed.includes(payment.status))
-            return generateReject(409, [
-                { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
-            ]);
-        return payment;
-    });
+    payment: PaymentDocument,
+    allowed: readonly PaymentStatus[]
+): (PaymentDocument & { providerRef: string }) | ResponseReject => {
+    // No reference means the provider was never asked for an intent, so there is nothing at
+    // the far end to confirm or re-read. Same refusal as a wrong status: the client's move is
+    // to create the intent again either way.
+    if (!payment.providerRef || !allowed.includes(payment.status))
+        return generateReject(409, [
+            { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
+        ]);
+    // The guard above proves `providerRef` is present, but narrowing a property does not narrow
+    // the object it lives on — TS has no way to fold that back into `payment`'s own type here.
+    return payment as PaymentDocument & { providerRef: string };
+};
 
 /**
  * Confirm a payment — the browser handing over the method its provider widget tokenised.
@@ -372,11 +393,14 @@ export const confirmPayment = (
     authContext: Caller | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    findConfirmable(paymentId, CONFIRMABLE_PAYMENT_STATUSES, authContext)
-        .then((found) => {
+    paymentRepository
+        .findByIdScoped(paymentId, callerScope(authContext))
+        .then((payment) => {
+            if (!payment) return generateReject(404, [t('payments.not-found')]);
+            const found = findConfirmable(payment, CONFIRMABLE_PAYMENT_STATUSES);
             if ('success' in found) return found;
             return resolvePaymentProvider()
-                .confirm(found.providerRef!, paymentMethodRef)
+                .confirm(found.providerRef, paymentMethodRef)
                 .then((state) => settlePayment(found, state))
                 .then(settlementResponse);
         })
@@ -406,15 +430,12 @@ export const syncPayment = (
             if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
                 return generateSuccess(payment, 200);
 
-            return findConfirmable(paymentId, SETTLEABLE_PAYMENT_STATUSES, authContext).then(
-                (found) => {
-                    if ('success' in found) return found;
-                    return resolvePaymentProvider()
-                        .retrieve(found.providerRef!)
-                        .then((state) => settlePayment(found, state))
-                        .then(settlementResponse);
-                }
-            );
+            const found = findConfirmable(payment, SETTLEABLE_PAYMENT_STATUSES);
+            if ('success' in found) return found;
+            return resolvePaymentProvider()
+                .retrieve(found.providerRef)
+                .then((state) => settlePayment(found, state))
+                .then(settlementResponse);
         })
         .then((result) => reportAttempt(result, paymentId, context));
 
@@ -423,7 +444,10 @@ export const syncPayment = (
  *
  * Claims the event id first, and stops if somebody already has it: the status writes below are
  * at-most-once by themselves, but committing inventory and emitting `ORDER_STATUS_CHANGED` are
- * not, and a provider retries a delivery for days.
+ * not, and a provider retries a delivery for days. A settlement that then fails releases the claim
+ * before the rejection leaves — the provider WILL redeliver, and that redelivery is the only thing
+ * that can still pay this order. The residual: a process crash between the claim and the release
+ * still strands the row, unreleased and unreachable by any future retry.
  *
  * Deliberately quiet — it answers nothing to anyone, so an event this application cannot act on is
  * logged and dropped rather than raised. A provider reads any non-2xx as a failed delivery and
@@ -445,7 +469,14 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
             return;
         }
 
-        return applyWebhookSettlement(event.providerRef, event.state);
+        return applyWebhookSettlement(event.providerRef, event.state).catch((error: Error) =>
+            // The claim is what makes a retry a no-op, so a settlement that failed has to give it
+            // back before the rejection leaves: the provider WILL redeliver, and that redelivery
+            // is the only thing that can still pay this order.
+            releaseWebhookEvent(event.id).then(() => {
+                throw error;
+            })
+        );
     });
 
 /**
@@ -623,7 +654,6 @@ export const refundByOrder = (
 export const refundForOrder = (orderId: string): Promise<void> =>
     performRefund(orderId).then(() => undefined);
 
-/** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 /**
  * `USER_DELETED`'s listener. Unsets `userId` on every payment this account
  * made; the payment row itself is never touched, same as `orders`' detach.
@@ -651,6 +681,7 @@ export const findOwnPayments = (userId: string): Promise<PaymentDocument[]> =>
     // page of it.
     paymentRepository.findAll(paymentRepository.ownerScope(userId), { limit: 100_000 });
 
+/** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
     createIntent,
     confirmPayment,

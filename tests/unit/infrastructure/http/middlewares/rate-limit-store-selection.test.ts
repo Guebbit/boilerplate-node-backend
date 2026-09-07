@@ -240,11 +240,12 @@ describe('rateLimitStore — URL resolution priority', () => {
 
 describe('rateLimitStore — an init failure fails open instead of crashing (regression)', () => {
     /*
-     * The bug this guards: `lazyRedisStore` used to fire `inner.init(options)` with no `.catch()`.
-     * `RedisStore.init()` awaits two Lua-script loads, so any failure there — Redis unreachable, or
-     * a reply `rate-limit-redis` does not recognise — rejected a promise nothing was holding. An
-     * unhandled rejection is fatal by default since Node 15: the whole process would go down on a
-     * Redis hiccup, which is exactly the outage `send()` is written to fail open from instead.
+     * The bug this guards: firing `inner.init(options)` from `lazyRedisStore` with no `.catch()`
+     * would leave a rejection nothing is holding. `RedisStore.init()` awaits two Lua-script loads,
+     * so any failure there — Redis unreachable, or a reply `rate-limit-redis` does not recognise —
+     * rejects. An unhandled rejection is fatal by default since Node 15: the whole process would go
+     * down on a Redis hiccup, which is exactly the outage `send()` is written to fail open from
+     * instead.
      */
     it('logs the failure and lets the request proceed rather than throwing', async () => {
         process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';

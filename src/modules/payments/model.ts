@@ -49,6 +49,7 @@ export interface PaymentDocument extends Document {
 /** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
 export type PaymentModel = Model<PaymentDocument>;
 
+/** Mongoose schema for persisted payment documents. */
 export const paymentSchema = new Schema<PaymentDocument>(
     {
         orderId: {
@@ -136,6 +137,7 @@ export interface PaymentWebhookEventDocument extends Document {
 /** The ledger's model type. Its one query lives in `./repository`. */
 export type PaymentWebhookEventModel = Model<PaymentWebhookEventDocument>;
 
+/** Mongoose schema for the webhook ledger — see {@link PaymentWebhookEventDocument}. */
 export const paymentWebhookEventSchema = new Schema<PaymentWebhookEventDocument>({
     // `unique` is the whole mechanism: one insert either wins or is refused, where a read followed
     // by a write is a race two concurrent deliveries could both pass.
@@ -154,6 +156,7 @@ export const paymentWebhookEventSchema = new Schema<PaymentWebhookEventDocument>
     }
 });
 
+/** Mongoose model for the webhook ledger — claimed and released by `./repository`. */
 export const paymentWebhookEventModel = model<
     PaymentWebhookEventDocument,
     PaymentWebhookEventModel

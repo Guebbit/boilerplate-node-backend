@@ -38,7 +38,7 @@ jest.mock('@infrastructure/observability/audit', () => ({
 }));
 
 /*
- * The guards no longer look a user up themselves — they ask `kernel/authentication` for one, and
+ * The guards do not look a user up themselves — they ask `kernel/authentication` for one, and
  * `account` supplies the implementation at boot. So the fake here is the RESOLVER, which is also
  * the whole contract these guards depend on:
  *
@@ -610,8 +610,9 @@ describe('requireFreshAuth', () => {
     });
 
     it('treats a token with no auth_time at all as infinitely old — fails closed', () => {
-        // A token minted before wave 4 shipped. `resolve()` in account/module.ts normalizes an
-        // absent claim to `0`; this is what that `0` has to mean once it reaches the guard.
+        // A token minted before `requireFreshAuth` existed carries no `auth_time` claim at all.
+        // `resolve()` in account/module.ts normalizes an absent claim to `0`; this is what that
+        // `0` has to mean once it reaches the guard.
         const next = jest.fn();
         const response = makeStepUpResponseStub();
 

@@ -3,8 +3,8 @@
  * Express guards built on `kernel/authentication.ts`'s resolver: `getAuth` populates
  * `request.authContext` when a token is present, `isAuth`/`isAdmin` reject when it is missing or
  * insufficient, `isAdminViaCookie` is the SSE-only variant that authenticates by refresh cookie
- * instead of an `Authorization` header, and `requireFreshAuth`/`requireFreshAuthWhen` (wave 4)
- * gate an already-authenticated caller on HOW RECENTLY they proved it. Every rejection from the
+ * instead of an `Authorization` header, and `requireFreshAuth`/`requireFreshAuthWhen` gate an
+ * already-authenticated caller on HOW RECENTLY they proved it. Every rejection from the
  * identity guards is audited before the response is sent, so a denied request always leaves a
  * trail.
  *

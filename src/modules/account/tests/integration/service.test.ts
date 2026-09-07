@@ -455,7 +455,7 @@ describe('tokenAdd', () => {
             email: 'tokenadd@example.com'
         });
         expect(stored?.tokens).toHaveLength(1);
-        // Hashed at rest (wave 3.1) — the returned `token` is the plaintext, storage holds its digest.
+        // Hashed at rest — the returned `token` is the plaintext, storage holds its digest.
         expect(stored?.tokens[0]?.token).toBe(hashToken(token));
         expect(stored?.tokens[0]?.type).toBe(TokenType.PASSWORD_RESET);
     });

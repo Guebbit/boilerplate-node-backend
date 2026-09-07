@@ -112,10 +112,10 @@ describe('GET /feedback', () => {
 });
 
 /*
- * The DTO form of the list above. It exists because `GET /feedback` used to declare a JSON body
- * and read filters from it — a body no browser will send, and one `setCache` cannot key on, so
- * two different searches shared a cached page. These assert the sibling carries what the body was
- * claiming to.
+ * The DTO form of the list above. `GET /feedback` cannot read filters from a body — one no browser
+ * sends on a GET, and one `setCache` cannot key on, so two different searches would share one
+ * cached page. `POST /feedback/search` is the sibling that carries what a body would; these assert
+ * it does.
  */
 describe('POST /feedback/search', () => {
     it('matches the contract', async () => {

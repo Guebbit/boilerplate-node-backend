@@ -206,10 +206,10 @@ const SHARED_DECLARATION_FILES: Record<string, string> = {
  * The sources a controller module declares.
  *
  * A controller names a SURFACE — `surface: 'delete'` — and the table above maps that to the
- * sources it reads. This used to scan for `sources: ['params', ...]`, the spelling that predates
- * the surface refactor; when the last of those disappeared the regex kept matching nothing and
- * this check passed for every controller in the repo without reading a single declaration. Hence
- * the tripwire test below, which asserts the scanner still finds declarations at all.
+ * sources it reads, matched by regex against that literal spelling. If nothing in the repo spells
+ * it that way any more, the regex matches nothing and this check silently passes for every
+ * controller without reading a single declaration. Hence the tripwire test below, which asserts
+ * the scanner still finds declarations at all.
  *
  * `extractAndValidateId` is folded in because it is `readInput` with the same surface parameter
  * that happens to also respond — a controller calling it reads those sources just as surely as if
@@ -295,11 +295,11 @@ const readAllowedSources = (
     ];
 
     for (const parameter of parameters) {
-        // Resolved, not guessed from the name. This used to read `$ref.includes('Path')` on the
-        // claim that "every shared parameter in this spec is a path parameter" — which was never
-        // true (`PageParam`, `TextParam` and `IdParam` are all `in: query`) and survived only
-        // because every route using them also had an inline query parameter to be found instead.
-        // The bundle inlines every component, so the reference resolves here with no I/O.
+        // Resolved, not guessed from the name. A check for `$ref.includes('Path')` reads like it
+        // should work — "every shared parameter here is a path parameter" — but is false
+        // (`PageParam`, `TextParam` and `IdParam` are all `in: query`), and would pass only
+        // because every route using one of those also has an inline query parameter to be found
+        // instead. The bundle inlines every component, so the reference resolves here with no I/O.
         const location = parameter.in ?? resolveParameter(spec, parameter.$ref)?.in;
         if (location === 'path') allowed.add('params');
         if (location === 'query') allowed.add('query');

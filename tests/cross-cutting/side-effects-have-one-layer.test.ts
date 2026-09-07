@@ -104,8 +104,8 @@ const EXPECTED_LAYER: Readonly<Record<string, Layer>> = {
  * Keyed `<marker> @ <module>/<path>` so one file cannot inherit another's excuse, and so an
  * exception for `emitAuditEvent` does not silently also permit `enqueueEmail`.
  *
- * `session/login-observability.ts` carries the argument a controller alone used to make, now
- * shared by two of them (`post-login.ts` and `post-login-2fa.ts`): a failed attempt has no user
+ * `session/login-observability.ts` carries the argument shared by two controllers
+ * (`post-login.ts` and `post-login-2fa.ts`): a failed attempt has no user
  * document to hand a service, and a SUCCESS emit has to wait until cookies and an access token
  * actually exist — a controller-layer fact neither `login()` nor `verifyLoginChallenge()` (proof
  * checks only) can know on their own. Extracted rather than duplicated in both controllers once a

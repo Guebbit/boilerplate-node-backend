@@ -1,8 +1,8 @@
 /**
  * @module
  * Integration coverage for `auditLogRepository`, against the in-memory Mongo `setupTestDb` wires up.
- * Covers append/search behaviour, filter combinations, and the deep-paging case that a capped read
- * used to fail (see the `deep paging` describe block).
+ * Covers append/search behaviour, filter combinations, and the deep-paging case a capped read
+ * fails without the fix in the `deep paging` describe block below.
  */
 
 import { asStub } from '@tests/stub';

@@ -304,8 +304,8 @@ describe('update', () => {
     });
 
     it('refuses an admin echo-writing `paid` onto an order already paid', async () => {
-        // The bug `canTransition`'s identity short-circuit used to hide: writing the SAME
-        // status back is normally a no-op, but `paid` belongs to `system` alone, even as an echo.
+        // What `canTransition`'s identity short-circuit could hide: writing the SAME status back
+        // is normally a no-op, but `paid` belongs to `system` alone, even as an echo.
         const { order } = await seedOrder();
         order.status = 'paid';
         await order.save();

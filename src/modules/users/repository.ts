@@ -141,8 +141,8 @@ export const userRepository: Repository<UserDocument> & {
      * matches both conditions on the SAME array entry — a plain two-path filter would also match
      * a reset-token holder via an unrelated delete token from the same account-deletion flow.
      *
-     * `token` is hashed before the query — wave 3.1, the stored value is `hashToken(token)`, never
-     * the plaintext.
+     * `token` is hashed before the query — the stored value is `hashToken(token)`, never the
+     * plaintext.
      *
      * @param token - the token value from the link the user followed
      * @param type - which kind of token it must be
@@ -171,8 +171,7 @@ export const userRepository: Repository<UserDocument> & {
      * two simultaneous confirms both loaded version V and the second `save()` raised a
      * `VersionError` — a 500 on a request that had already succeeded. Idempotent: pulling an
      * already-spent token matches nothing and reports `modifiedCount: 0`. `timestamps: false`
-     * since spending a token isn't a change to the account. `token` is hashed before the filter —
-     * wave 3.1.
+     * since spending a token isn't a change to the account. `token` is hashed before the filter.
      */
     tokenRemove: (id: string, token: string) =>
         userModel
@@ -191,7 +190,7 @@ export const userRepository: Repository<UserDocument> & {
      * is itself the proof of ownership. Idempotent like `tokenRemove`: a value no document holds
      * matches nothing and reports `modifiedCount: 0`, which logout doesn't distinguish from
      * success. `timestamps: false` — ending a session is not a change to the account. `token` is
-     * hashed before both the filter and the `$pull` — wave 3.1.
+     * hashed before both the filter and the `$pull`.
      */
     tokenRemoveByValue: (token: string) => {
         const digest = hashToken(token);
@@ -205,8 +204,8 @@ export const userRepository: Repository<UserDocument> & {
     },
 
     /**
-     * Drop every expired token from every document, PLUS every token superseded (wave 3.2's
-     * rotation) further back than `supersededGraceMs` — a rotated-away entry is only kept for its
+     * Drop every expired token from every document, PLUS every token superseded by a rotation
+     * further back than `supersededGraceMs` — a rotated-away entry is only kept for its
      * short reuse-detection window, and without this sweep it would sit in `tokens` until its
      * original `expiration`, which for a `remember: long` session is up to a year away. A user
      * who refreshes routinely would otherwise accumulate one dead entry per exchange.
@@ -240,9 +239,9 @@ export const userRepository: Repository<UserDocument> & {
      * credential still exists — narrowing by type would depend on a field the JWT itself doesn't
      * carry. Carries `AUTHENTICATABLE_FILTER` too, so a refresh cookie that survives a
      * deactivation or soft delete stops working on its very next exchange, same clause as `login`.
-     * `token` is hashed before the query — wave 3.1. Selects `tokens` (`select: false` on the
-     * schema) so wave 3.2's rotation can read the matched entry's `supersededAt` back off it,
-     * not just this method's original callers, who only ever cared that a document came back.
+     * `token` is hashed before the query. Selects `tokens` (`select: false` on the schema) so the
+     * rotation can read the matched entry's `supersededAt` back off it, not just this method's
+     * original callers, who only ever cared that a document came back.
      */
     findByTokenValue: (token: string) =>
         userModel
@@ -254,7 +253,7 @@ export const userRepository: Repository<UserDocument> & {
      * Stamp a token as used, so `GET /account/sessions` can show which device is idle. A
      * POSITIONAL update (`tokens.$`): mongod evaluates it at write time, so two devices
      * refreshing at once cannot overwrite each other's array. `timestamps: false` — using a
-     * session is not a change to the account. `token` is hashed before the filter — wave 3.1.
+     * session is not a change to the account. `token` is hashed before the filter.
      */
     tokenTouch: (token: string) =>
         userModel
@@ -266,18 +265,19 @@ export const userRepository: Repository<UserDocument> & {
             .exec(),
 
     /**
-     * Claim a refresh token for rotation. Atomically stamps
-     * `supersededAt` on the matched entry, but ONLY if it doesn't already carry one: `$elemMatch`
-     * requires both conditions on the SAME array element, so of two concurrent callers presenting
-     * the identical token, exactly one sees `modifiedCount: 1` — mongod serializes the two writes
-     * against one document, and the loser's filter no longer matches once the winner's write has
-     * landed. That race is `accountService.rotateRefreshToken`'s whole reason for existing; this
-     * method is only the primitive that makes it possible to tell winner from loser at all.
+     * Claim a refresh token for rotation. Atomically stamps `supersededAt` on the matched entry,
+     * but ONLY if it doesn't already carry one.
      *
-     * Deliberately does NOT `$pull` the old entry — the entry stays, timestamped, so a
-     * short-grace-window re-presentation of it (the loser's race, or a retried request) can still
-     * be told apart from genuine reuse of a long-dead token. See `findByTokenValue` for reading
-     * it back.
+     * Race:    `$elemMatch` requires both conditions on the SAME array element, so of two
+     *          concurrent callers presenting the identical token, exactly one sees
+     *          `modifiedCount: 1` — mongod serializes the two writes against one document, and the
+     *          loser's filter no longer matches once the winner's write has landed. That race is
+     *          `accountService.rotateRefreshToken`'s whole reason for existing; this method is
+     *          only the primitive that makes it possible to tell winner from loser at all.
+     * No pull: deliberately does NOT `$pull` the old entry — it stays, timestamped, so a
+     *          short-grace-window re-presentation of it (the loser's race, or a retried request)
+     *          can still be told apart from genuine reuse of a long-dead token. See
+     *          `findByTokenValue` for reading it back.
      *
      * @returns whether THIS call is the one that superseded the token
      */

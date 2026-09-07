@@ -10,9 +10,9 @@ import { sign, decode } from 'jsonwebtoken';
 import { asStub } from '@tests/stub';
 
 /*
- * The REPOSITORY, not the model: `session/jwt.ts` used to run three raw `Users` queries itself;
- * they are now `userRepository.findByTokenValue`, `.findByIdWithCredentials` and `.tokenTouch`,
- * so this suite doubles those instead. What the QUERIES look like is asserted in
+ * The REPOSITORY, not the model: `session/jwt.ts` reaches `userRepository.findByTokenValue`,
+ * `.findByIdWithCredentials` and `.tokenTouch` rather than running raw `Users` queries itself, so
+ * this suite doubles those instead. What the QUERIES look like is asserted in
  * `users/tests/integration/repository.test.ts`, against a real store.
  */
 jest.mock('@modules/users', () => ({

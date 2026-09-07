@@ -40,8 +40,8 @@ const FALSY = new Set(['0', 'false', 'no', 'off']);
 /**
  * A switch from the environment, or `fallback` when the variable says nothing recognisable.
  *
- * Both vocabularies are accepted because both were already in use: kill switches were written
- * `!== '0'` while opt-ins used `=== '1'`/`'true'`, which used to invert flags like `NODE_DEMO`.
+ * Both vocabularies are accepted because both are in use: kill switches are written `!== '0'`
+ * while opt-ins use `=== '1'`/`'true'`.
  *
  * @param key - the variable's name
  * @param fallback - the value a deployment gets when it did not usably set one

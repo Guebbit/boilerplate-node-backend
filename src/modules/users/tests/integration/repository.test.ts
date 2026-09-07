@@ -10,8 +10,9 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { userRepository, hashToken } from '@modules/users';
 import { TokenType, type UserDocument } from '@modules/users';
-// The model directly: it is no longer on the barrel, because no sibling MODULE needs it. A spec
-// reaching its own module's internals is correct — `eslint-plugin-boundaries` allows exactly that.
+// The model directly: not exported from the barrel, since no sibling MODULE needs it there. A
+// spec reaching its own module's internals is correct — `eslint-plugin-boundaries` allows exactly
+// that.
 import { userModel as Users } from '@modules/users/model';
 
 setupTestDb();

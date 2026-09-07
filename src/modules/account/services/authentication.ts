@@ -583,21 +583,20 @@ export const tokenRemoveAll = (
 
 /**
  * Re-authenticate an already-signed-in caller by password — the verification half of
- * `POST /account/reauth`. Re-minting the session (a fresh `auth_time`) is
- * the CONTROLLER's job via `issueSession`, mirroring how `passwordChange` itself stays separate
- * from `postPasswordChange`'s re-mint — this function only proves the password and audits the
- * attempt.
+ * `POST /account/reauth`. Proves the password and audits the attempt; re-minting the session (a
+ * fresh `auth_time`) is the CONTROLLER's job via `issueSession`, the same split `passwordChange`
+ * keeps from `postPasswordChange`'s own re-mint.
  *
- * Proves identity the way `passwordChangeWithCurrent` does — bcrypt against the caller's own
- * stored hash, 422 on a mismatch rather than 401. NOT `login`'s path, deliberately: `login`'s 401
- * and its 3.3b dummy-compare exist to stop an ANONYMOUS caller from telling "no such account"
- * apart from "wrong password" by timing, and there is no such caller here — the access token
- * already names exactly who is asking, so there is nothing left to protect by hiding the failure
- * behind the same status code login uses. A 401 here would actively hurt: it reads as "session
- * expired" to a client interceptor and would log out a session that is, in fact, still perfectly
- * valid — the opposite of what a re-authentication endpoint exists to do. The active/deletedAt
- * gate `isAuth` already ran for this very request is not re-checked either, for the same reason
- * `passwordChangeWithCurrent` and `updateProfile` don't re-check it.
+ * Verify:       bcrypt against the caller's own stored hash, same as `passwordChangeWithCurrent` —
+ *               422 on a mismatch, not 401.
+ * Not `login`'s path: `login`'s 401 and its dummy-compare exist to stop an ANONYMOUS caller telling
+ *               "no such account" apart from "wrong password" by timing. There is no such caller
+ *               here — the access token already names exactly who is asking.
+ * Why not 401:  it reads as "session expired" to a client interceptor and would log out a session
+ *               that is, in fact, still perfectly valid — the opposite of what a re-authentication
+ *               endpoint exists to do.
+ * Not re-checked: the active/deletedAt gate `isAuth` already ran for this request, same reason
+ *               `passwordChangeWithCurrent` and `updateProfile` skip it too.
  *
  * @param userId - the caller's own id, from their already-verified access token
  * @param password - the password to confirm against the stored hash

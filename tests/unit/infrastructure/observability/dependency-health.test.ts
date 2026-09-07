@@ -98,8 +98,8 @@ describe('overallStatus', () => {
     it.each([['unavailable'], ['connecting']] as const)(
         'is degraded when the cache is %s',
         (state) => {
-            /* The bug this whole finding was about: `status` used to read the database and nothing
-             * else, so Mongo up + Redis down reported `ok` while every cache lookup missed. */
+            /* The risk this whole invariant guards: a `status` that reads only the database would
+             * report `ok` for Mongo up + Redis down, while every cache lookup misses. */
             expect(overallStatus(health({ cache: state }))).toBe('degraded');
         }
     );

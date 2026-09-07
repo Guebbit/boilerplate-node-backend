@@ -11,16 +11,23 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/fixtures';
 import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
-import { FAKE_DECLINE_METHOD, FAKE_SUCCESS_METHOD } from '@modules/payments/providers/fake';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { paymentRepository } from '@modules/payments/repository';
+import { inventoryService } from '@modules/inventory';
+import { onDomainEvent } from '@kernel/events';
+import { ORDER_STATUS_CHANGED } from '@modules/orders';
 
 setupTestDb();
 
 /** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
 const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
-const GOOD_METHOD = FAKE_SUCCESS_METHOD;
+// Literals, not imported from `providers/fake` — a contract test's inputs come from what the
+// contract itself publishes (openapi.yaml: "recognises `pm_card_visa` (succeeds),
+// `pm_card_declined`, …"), not from the code the contract describes. Importing the module under
+// test would make a rename of either value pass silently while the contract quietly became a lie.
+const GOOD_METHOD = 'pm_card_visa';
+const DECLINE_METHOD = 'pm_card_declined';
 
 /** Logs a customer in with one pending order, returning both. */
 const authenticateWithOrder = async () => {
@@ -44,6 +51,22 @@ const authenticateWithIntent = async () => {
         );
 
     return { bearer, order, paymentId: String(response.body.data.id) };
+};
+
+/** A customer who paid in full, over HTTP — the fixture the refund tests start from. */
+const paidOrder = async () => {
+    const { bearer, order, paymentId } = await authenticateWithIntent();
+    const confirmed = await api()
+        .post(`/payments/${paymentId}/confirm`)
+        .set('Authorization', bearer)
+        .send({ paymentMethodRef: GOOD_METHOD });
+
+    if (confirmed.status !== 200 || confirmed.body.data?.status !== 'succeeded')
+        throw new Error(
+            `payments setup failed: POST /payments/${paymentId}/confirm returned ${confirmed.status} — ${JSON.stringify(confirmed.body)}`
+        );
+
+    return { bearer, order, paymentId };
 };
 
 describe('POST /payments/intent', () => {
@@ -123,7 +146,7 @@ describe('POST /payments/{id}/confirm', () => {
         const response = await api()
             .post(`/payments/${paymentId}/confirm`)
             .set('Authorization', bearer)
-            .send({ paymentMethodRef: FAKE_DECLINE_METHOD });
+            .send({ paymentMethodRef: DECLINE_METHOD });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('PAYMENT_DECLINED');
@@ -151,6 +174,23 @@ describe('POST /payments/{id}/confirm', () => {
             // Spaces are exactly what a card number typed into a form carries — and the contract
             // now refuses that shape, which is the point of the field being a provider handle.
             .send({ paymentMethodRef: '4242 4242 4242 4242' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it.each([
+        ['too short', 'ab'],
+        ['too long', 'a'.repeat(256)]
+    ])('matches the error contract for a %s method reference', async (_label, paymentMethodRef) => {
+        // The contract states minLength: 3 and maxLength: 255 — only the `pattern` half (spaces,
+        // above) was ever exercised, so a length regression on either bound had nothing to fail it.
+        const { bearer, paymentId } = await authenticateWithIntent();
+
+        const response = await api()
+            .post(`/payments/${paymentId}/confirm`)
+            .set('Authorization', bearer)
+            .send({ paymentMethodRef });
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
@@ -189,7 +229,11 @@ describe('POST /payments/{id}/sync', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('is idempotent — a second call answers the settled payment unchanged', async () => {
+    it('answers an already-succeeded payment as it stands, without asking the provider again', async () => {
+        // Not the idempotency test its old name claimed — this calls sync exactly ONCE, against a
+        // payment the confirm above already settled. What it actually pins is the terminal
+        // early-return branch: a payment outside SETTLEABLE_PAYMENT_STATUSES is answered from the
+        // row alone, spending no call to be told what it already knows.
         const { bearer, paymentId } = await authenticateWithIntent();
         await api()
             .post(`/payments/${paymentId}/confirm`)
@@ -254,6 +298,23 @@ describe('POST /payments/webhook', () => {
         expect(settled!.status).toBe('succeeded');
     });
 
+    it('answers a MessageResponse, not the PaymentEnvelope every other route answers', async () => {
+        // A deliberate shape difference: the caller is a machine with no use for the payment back,
+        // and `toSatisfyApiSpec()` alone would pass a `PaymentEnvelope` here too, since the two
+        // schemas overlap on `success`/`status`. This is the one assertion that would catch a
+        // controller change that started leaking the payment into the webhook's own response.
+        const { providerRef } = await preparedPayment();
+
+        const response = await deliver({
+            id: 'evt_envelope_shape',
+            providerRef,
+            status: 'succeeded'
+        });
+
+        expect(response.body).not.toHaveProperty('data');
+        expect(Object.keys(response.body).toSorted()).toEqual(['message', 'status', 'success']);
+    });
+
     it('refuses a delivery nobody signed', async () => {
         const { providerRef } = await preparedPayment();
 
@@ -267,19 +328,32 @@ describe('POST /payments/webhook', () => {
     });
 
     it('applies a repeated delivery once', async () => {
-        const { paymentId, providerRef } = await preparedPayment();
+        const { paymentId, providerRef, order } = await preparedPayment();
         const event = {
             id: `evt_replay_${paymentId}`,
             providerRef,
             status: 'succeeded' as const
         };
 
-        await deliver(event);
+        // What the ledger actually protects: `first`/`replay` alone answer 200 on both branches
+        // (dedup vs. fresh apply), so a status-only assertion can never fail on a broken ledger.
+        const commitSpy = jest.spyOn(inventoryService, 'commitForOrder');
+        const statusChanges: unknown[] = [];
+        onDomainEvent(ORDER_STATUS_CHANGED, (payload) => {
+            if (payload.orderId === String(order._id)) statusChanges.push(payload);
+        });
+
+        const first = await deliver(event);
         const replay = await deliver(event);
 
         // 200 either way — a provider reads anything else as a failed delivery and retries harder.
+        expect(first.status).toBe(200);
         expect(replay.status).toBe(200);
         expect(replay).toSatisfyApiSpec();
+
+        expect(commitSpy).toHaveBeenCalledTimes(1);
+        expect(statusChanges).toHaveLength(1);
+        commitSpy.mockRestore();
     });
 
     it('accepts an event about an intent it does not know, rather than making the provider retry', async () => {
@@ -316,5 +390,23 @@ describe('GET /payments/order/{orderId}', () => {
 
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /payments/order/{orderId}/refund', () => {
+    it('refuses the order`s own owner — the refund is admin-only', async () => {
+        // "Own order" matters here specifically: a mis-ordered guard that checked ownership before
+        // admin status would let exactly this caller through, and a stranger's order would not
+        // have caught it.
+        const { bearer, order, paymentId } = await paidOrder();
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.status).toBe('succeeded');
     });
 });

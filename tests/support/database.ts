@@ -41,11 +41,11 @@ export const connect = async () => {
      * Wait for every registered model's indexes to exist before the first case runs.
      *
      * Mongoose builds indexes in the background, so `connect()` resolving does not mean a unique
-     * index is enforcing anything yet. That race was previously hidden by accident: starting a
-     * `MongoMemoryServer` per file took a second or two, which was long enough for the build to
-     * finish first. Connecting to an already-running server is immediate, so the race became
-     * visible — `enforces email uniqueness at the database level` inserted a duplicate and it
-     * succeeded, intermittently and only under parallel workers.
+     * index is enforcing anything yet. Connecting to an already-running server is immediate, with
+     * none of the second or two a per-file `MongoMemoryServer` would cost — and that gap is exactly
+     * long enough to hide the race by accident. Without this wait, `enforces email uniqueness at
+     * the database level` inserts a duplicate that succeeds, intermittently and only under parallel
+     * workers.
      *
      * `Model.init()` resolves when that model's indexes are built. Models are registered when the
      * test file imports them, which happens before `beforeAll` runs, so this sees all of them.

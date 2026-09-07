@@ -74,7 +74,10 @@ paths:
                 Returns the money without touching the order's status — the operator action for a
                 goodwill refund, and the second half of "cancel and refund" when a client sends both.
                 Admin only. The write is conditional on the payment still being `succeeded`, so a
-                double submit refunds once and answers 409 the second time.
+                double submit refunds once and answers 409 the second time. Requires a session that
+                has re-proved itself within the last few minutes — a valid-but-stale token answers
+                401 with `errors[].code` `REAUTH_REQUIRED`, and the caller re-authenticates and
+                retries the same request.
             operationId: refundPaymentByOrder
             security:
                 - bearerAuth: []
@@ -113,7 +116,10 @@ paths:
                 `POST /payments/{id}/sync`. Only `succeeded` moves the order to `paid`, and the
                 webhook remains the authority for that even when this endpoint saw it first. A
                 decline answers 409 with `errors[].code` `PAYMENT_DECLINED` and is retryable —
-                submit the same payment again with another method.
+                submit the same payment again with another method. Requires a session that has
+                re-proved itself within the last few minutes — a valid-but-stale token answers 401
+                with `errors[].code` `REAUTH_REQUIRED`, and the caller re-authenticates and retries
+                the same request.
             operationId: confirmPayment
             security:
                 - bearerAuth: []
@@ -169,7 +175,9 @@ paths:
                 synchronous while the webhook stays the source of truth. Idempotent and safe to
                 call repeatedly: a payment already settled answers itself unchanged. Answers 409
                 `PAYMENT_DECLINED` when the provider's answer is a refusal, exactly as the confirm
-                does.
+                does. Requires a session that has re-proved itself within the last few minutes — a
+                valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
+                caller re-authenticates and retries the same request.
             operationId: syncPayment
             security:
                 - bearerAuth: []
@@ -211,7 +219,10 @@ paths:
                   required: true
                   schema:
                       type: string
-                  description: '`t=<unix seconds>,v1=<hex hmac-sha256 of "<t>.<raw body>">`'
+                  description: >-
+                      `t=<unix seconds>,v1=<hex hmac-sha256 of "<t>.<raw body>">`. `t` must be
+                      within 300 seconds of the server's clock or the delivery is rejected as
+                      stale, replay protection against a captured signature being resent later.
             requestBody:
                 required: true
                 content:
@@ -227,6 +238,9 @@ paths:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/MessageResponse'
                 # The signature did not verify, is stale, or the body is not an event.
                 '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
+                # Keyed on the caller's address, not a signed identity — see
+                # docs/tools/security.md#the-rate-limit-budgets.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
@@ -264,7 +278,8 @@ components:
                         provider has taken the payment but not settled it — both are in flight, and
                         `POST /payments/{id}/sync` is what resolves them without waiting for the
                         webhook. `declined` is retryable: the confirm endpoint accepts the same
-                        payment again with another method. `refunded` is terminal.
+                        payment again with another method. `refunded` is terminal. Full transition
+                        table: docs/modules/payments.md#status-transitions
                 provider:
                     type: string
                     description: Which provider implementation handled it (`fake` in the demo).

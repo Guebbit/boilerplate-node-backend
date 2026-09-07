@@ -286,7 +286,7 @@ export const findByEmail = (email: string): Promise<UserDocument | undefined | n
  */
 export const consumeToken = (user: UserDocument, token: string): Promise<boolean> =>
     userRepository.tokenRemove(user.id, token).then(({ modifiedCount }) => {
-        // `tokens[].token` is hashed at rest (wave 3.1) — hash `token` the same way to resync
+        // `tokens[].token` is hashed at rest — hash `token` the same way to resync
         // the loaded document's local copy after the DB `$pull`.
         const digest = hashToken(token);
         user.tokens = user.tokens.filter((tk) => tk.token !== digest);

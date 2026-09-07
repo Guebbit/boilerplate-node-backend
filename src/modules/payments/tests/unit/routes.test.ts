@@ -8,6 +8,11 @@
  */
 
 import { routeSignatures, guardsOn } from '@tests/routes';
+
+jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
+);
+
 import { router } from '@modules/payments/routes';
 
 /** The one route in front of the auth wall — see this suite's docblock. */
@@ -41,6 +46,10 @@ describe('payment routes', () => {
         // A session guard added on top of it would silently stop every delivery arriving.
         expect(guardsOn(router, WEBHOOK)).not.toContain('isAuth');
         expect(guardsOn(router, WEBHOOK)).not.toContain('getAuth');
+    });
+
+    it('carries a rate limit — the one budget this route has, since a signature is not one', () => {
+        expect(guardsOn(router, WEBHOOK)).toContain('webhookLimiter');
     });
 
     it('declares the webhook before the auth wall', () => {

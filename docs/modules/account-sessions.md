@@ -99,9 +99,13 @@ the concrete reason the `account → users` edge is `shared-kernel`: this module
 ## Refresh rotation
 
 `GET /account/refresh` doesn't just re-sign an access token — it REPLACES the refresh token too,
-every time. A stolen cookie used to stay valid, silently, for as long as it had left to live (up to
-a year, `remember: long`); rotation turns "a value that never changes" into "a value that changes on
-every use", so a copy presented after the original has moved is detectable.
+every time. Without that, a stolen cookie would stay valid, silently, for as long as it had left to
+live (up to a year, `remember: long`); rotation turns "a value that never changes" into "a value
+that changes on every use", so a copy presented after the original has moved is detectable.
+
+The new token's absolute expiry is COPIED from the old one's own claim, never reset to a fresh full
+window — rotation changes the token's VALUE for theft detection, it does not extend how long the
+session may live past what it was granted at login.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 46}}}%%
