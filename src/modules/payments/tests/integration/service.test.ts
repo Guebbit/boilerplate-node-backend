@@ -308,6 +308,31 @@ describe('refund on cancel', () => {
         // The intent survives untouched — no money moved, so there is nothing to move back.
         expect(payment!.status).toBe('requires_confirmation');
     });
+
+    it('pins refunded as terminal against a webhook that arrives after the cancel refund', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const providerRef = String(
+            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
+        );
+        const paymentId = String((await paymentRepository.findByOrderId(String(order._id)))!._id);
+        await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
+        await orderService.cancelById(String(order._id), auth(user));
+
+        // The setup this test actually cares about: cancelling really did refund it already.
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+            'refunded'
+        );
+
+        // The webhook arrives unbidden and late — the browser-driven confirm already settled and
+        // the cancel already refunded it by the time the provider's own callback catches up.
+        await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '4242' });
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('refunded');
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored!.status).not.toBe('paid');
+    });
 });
 
 /**
