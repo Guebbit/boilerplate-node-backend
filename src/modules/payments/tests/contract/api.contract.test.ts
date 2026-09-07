@@ -49,6 +49,22 @@ const authenticateWithIntent = async () => {
     return { bearer, order, paymentId: String(response.body.data.id) };
 };
 
+/** A customer who paid in full, over HTTP — the fixture the refund tests start from. */
+const paidOrder = async () => {
+    const { bearer, order, paymentId } = await authenticateWithIntent();
+    const confirmed = await api()
+        .post(`/payments/${paymentId}/confirm`)
+        .set('Authorization', bearer)
+        .send({ paymentMethodRef: GOOD_METHOD });
+
+    if (confirmed.status !== 200 || confirmed.body.data?.status !== 'succeeded')
+        throw new Error(
+            `payments setup failed: POST /payments/${paymentId}/confirm returned ${confirmed.status} — ${JSON.stringify(confirmed.body)}`
+        );
+
+    return { bearer, order, paymentId };
+};
+
 describe('POST /payments/intent', () => {
     it('matches the contract for a fresh intent', async () => {
         const { bearer, order } = await authenticateWithOrder();
@@ -332,5 +348,23 @@ describe('GET /payments/order/{orderId}', () => {
 
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /payments/order/{orderId}/refund', () => {
+    it('refuses the order`s own owner — the refund is admin-only', async () => {
+        // "Own order" matters here specifically: a mis-ordered guard that checked ownership before
+        // admin status would let exactly this caller through, and a stranger's order would not
+        // have caught it.
+        const { bearer, order, paymentId } = await paidOrder();
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.status).toBe('succeeded');
     });
 });
