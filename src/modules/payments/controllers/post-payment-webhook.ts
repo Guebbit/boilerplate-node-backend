@@ -63,6 +63,6 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
             }
             // Anything else is ours, and a 500 is the right answer: the provider retries, and a
             // transient database failure is exactly what a retry fixes.
-            catchAs(response, 'postPaymentWebhook')(error as Error);
+            catchAs(response, 'postPaymentWebhook')(error);
         });
 };
