@@ -434,6 +434,32 @@ describe('the confirm commits the order’s held units', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
     });
+
+    it('commits once when the browser settles before the webhook — the reverse race', async () => {
+        // Same choreography as the test above, arriving in the other order: the browser polls
+        // `syncPayment` and wins the race, then the webhook's own delivery of the same outcome
+        // arrives after. `settlePayment`'s idempotence must hold from either direction, not just
+        // the one the test above happens to cover.
+        const { user, product, order } = await placedOrder(10, 3);
+        const intent = await createIntent(String(order._id), auth(user));
+        const paymentId = String(intent.success && intent.data?.id);
+        const providerRef = String(
+            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
+        );
+        await confirmPayment(
+            paymentId,
+            'pm_card_authentication_required',
+            auth(user),
+            testCallerContext
+        );
+
+        await syncPayment(paymentId, auth(user), testCallerContext);
+        await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '3155' });
+
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('succeeded');
+    });
 });
 
 /**
