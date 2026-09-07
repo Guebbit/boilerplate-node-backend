@@ -272,7 +272,8 @@ components:
                         provider has taken the payment but not settled it — both are in flight, and
                         `POST /payments/{id}/sync` is what resolves them without waiting for the
                         webhook. `declined` is retryable: the confirm endpoint accepts the same
-                        payment again with another method. `refunded` is terminal.
+                        payment again with another method. `refunded` is terminal. Full transition
+                        table: docs/modules/payments.md#status-transitions
                 provider:
                     type: string
                     description: Which provider implementation handled it (`fake` in the demo).

@@ -101,6 +101,42 @@ database fact, not a check somebody has to remember.
 Delete this module and cancelling an order still releases its stock but returns no money — which is
 exactly the sentence `CANCELLABLE_ORDER_STATUSES` documents.
 
+## Status transitions
+
+`requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a
+provider reports is ever that value. From there, every non-terminal status can settle to any other
+non-terminal status: `CONFIRMABLE_PAYMENT_STATUSES` (`service.ts`) gates which ones `POST
+/payments/{id}/confirm` accepts as a starting point (`requires_confirmation`, `declined` — a
+decline is retryable with another method), and `SETTLEABLE_PAYMENT_STATUSES` gates which ones
+`settlePayment` will still write over (everything except the two terminal states below). `succeeded`
+moves to `refunded` and nowhere else; `refunded` moves nowhere.
+
+```mermaid
+stateDiagram-v2
+    [*] --> requires_confirmation: POST /payments/intent
+    requires_confirmation --> requires_action: confirm
+    requires_confirmation --> processing: confirm
+    requires_confirmation --> succeeded: confirm
+    requires_confirmation --> declined: confirm
+    requires_action --> requires_action: sync — still waiting
+    requires_action --> processing: sync
+    requires_action --> succeeded: sync
+    requires_action --> declined: sync
+    processing --> processing: sync — still waiting
+    processing --> succeeded: sync
+    processing --> declined: sync
+    declined --> requires_action: confirm, retried
+    declined --> processing: confirm, retried
+    declined --> succeeded: confirm, retried
+    declined --> declined: confirm, refused again
+    succeeded --> refunded: admin refund, or order cancelled
+    refunded --> [*]
+```
+
+The webhook is not on this diagram because it does not add an edge the diagram doesn't already
+have — it reaches the exact same `settlePayment` a sync does, with `succeeded` or `declined` as the
+only two states it ever reports.
+
 ## The pipeline
 
 Three entry points, one settlement. What differs between them is only how the provider was asked.
