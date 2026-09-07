@@ -35,6 +35,16 @@ export interface OrderDocumentItem {
 }
 
 /**
+ * A consequence of a cancel that the cancel itself could not guarantee.
+ *
+ * One member, deliberately. The stock half of a cancel heals on its own — the hold keeps its
+ * `expiresAt` and the reservation sweep releases it — so it is not written down. The money half
+ * does not heal: the domain event bus has no retry, so a refund that throws is lost unless the
+ * intent to make it survives the failure.
+ */
+export type OrderPendingEffect = 'refund';
+
+/**
  * Order Document interface: overrides the generated `Order`'s `userId`/`items`/`status`, and
  * redeclares `deletedAt` as `Date` (the contract types it as an ISO string). `totalItems`,
  * `totalQuantity` and `totalPrice` are omitted rather than inherited — required on the wire but
@@ -73,6 +83,13 @@ export interface OrderDocument
      * street) once this elapses; the order row itself is never deleted.
      */
     anonymizeAfter?: Date;
+    /**
+     * What the cancel decided but has not yet seen through. Written in the same conditional write
+     * that moves the status, so the intent and the decision cannot come apart; emptied once the
+     * listener has actually returned. Non-empty means `retryPendingEffects` still owes this order
+     * something — absent and empty both mean settled.
+     */
+    pendingEffects?: OrderPendingEffect[];
     deletedAt?: Date;
 }
 
@@ -169,6 +186,16 @@ export const orderSchema = new Schema<OrderDocument>(
         },
         anonymizeAfter: {
             type: Date
+        },
+        /*
+         * `default: undefined` overrides Mongoose's implicit `[]` for an array path, so an order
+         * that never cancelled carries no key at all — the difference between "owes nothing" and
+         * "was never asked". Only the cancel's own write creates it.
+         */
+        pendingEffects: {
+            type: [String],
+            enum: ['refund'],
+            default: undefined
         }
     },
     {
@@ -194,6 +221,15 @@ orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt'
  * gets scrubbed, so nothing here may carry `expireAfterSeconds`.
  */
 orderSchema.index({ anonymizeAfter: 1 }, { name: 'orders_anonymizeAfter', sparse: true });
+/*
+ * `retryPendingEffects`'s query — orders still owing an effect, oldest first. Sparse, so it holds
+ * only the handful of orders between a cancel and its consequences rather than every order ever
+ * placed. An empty array indexes no key, which is why draining the field is enough to leave it.
+ */
+orderSchema.index(
+    { pendingEffects: 1, updatedAt: 1 },
+    { name: 'orders_pendingEffects', sparse: true }
+);
 
 /**
  * Strips any leftover `_id` on embedded items (pre-existing documents saved before
@@ -234,9 +270,10 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
  * through the same logic — see `normalize` in @infrastructure/persistence/create-repository.
  */
 export const applyOrderTransform = applySerialization(orderSchema, {
-    // `anonymizeAfter` is the reaper's own bookkeeping, never part of the `Order` contract —
-    // same reasoning as `users`' `pendingImageKey`/`inactivityWarnedAt`.
-    omit: ['anonymizeAfter'],
+    // `anonymizeAfter` is the reaper's own bookkeeping and `pendingEffects` the cancel sweep's,
+    // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
+    // `inactivityWarnedAt`.
+    omit: ['anonymizeAfter', 'pendingEffects'],
     after: (serialized) => {
         applyOrderItems(serialized);
         applyOrderTotals(serialized);

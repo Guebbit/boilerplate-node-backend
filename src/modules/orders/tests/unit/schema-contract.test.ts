@@ -103,26 +103,28 @@ describe('orderSchema — the embedded snapshots', () => {
 });
 
 describe('orderSchema — indexes', () => {
-    it('declares exactly the four documented indexes, named and directed', () => {
+    it('declares exactly the five documented indexes, named and directed', () => {
         // Names are given rather than derived, since Mongo identifies an index by name — a rename
         // leaves the old index in production. The `createdAt` DIRECTION serves "newest first"
         // from the index rather than an in-memory sort; getting it wrong is a latency incident.
         expect(indexSpecs(orderSchema)).toEqual([
             'orders_anonymizeAfter: anonymizeAfter+1',
             'orders_email: email+1',
+            'orders_pendingEffects: pendingEffects+1, updatedAt+1',
             'orders_userId_createdAt: userId+1, createdAt-1',
             'orders_userId_deletedAt: userId+1, deletedAt+1'
         ]);
     });
 
-    it('declares none of them unique, and only the reaper sweep sparse', () => {
+    it('declares none of them unique, and only the two sweeps sparse', () => {
         // A unique index here would reject a customer's second order. Stated explicitly because
         // "no options" is the kind of fact that is never written down and quietly acquires one.
-        // `orders_anonymizeAfter` IS sparse on purpose: most orders never carry the field at
-        // all, and a dense index would hold every row's absence forever.
+        // Both sweep indexes ARE sparse on purpose: most orders never carry either field, and a
+        // dense index would hold every row's absence forever.
         expect(indexOptionSpecs(orderSchema)).toEqual([
             'orders_anonymizeAfter: sparse=true',
             'orders_email: (none)',
+            'orders_pendingEffects: sparse=true',
             'orders_userId_createdAt: (none)',
             'orders_userId_deletedAt: (none)'
         ]);

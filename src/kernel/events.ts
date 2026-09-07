@@ -60,21 +60,32 @@ export const onDomainEvent = <TEventName extends DomainEventName>(
  * that fails must not roll back an operation that has already been authorised — the emitting module
  * decides what its own failure modes are, and it cannot do that for code it has never heard of.
  *
+ * The return says whether they all got through, which is a different question from whether the
+ * emit was allowed to proceed. An emitter that has written down an intention to retry — `orders`'
+ * `pendingEffects` — needs it to know whether the intention is discharged; every other caller
+ * ignores it and keeps the old fire-and-continue behaviour.
+ *
  * @param name - the event name
  * @param payload - the event payload
+ * @returns `true` when every handler resolved, `false` when at least one threw
  */
 export const emitDomainEvent = async <TEventName extends DomainEventName>(
     name: TEventName,
     payload: DomainEventMap[TEventName]
-): Promise<void> => {
+): Promise<boolean> => {
+    let settled = true;
+
     // Caught per handler, so one subscriber's failure cannot stop the ones queued behind it.
     for (const handler of handlers.get(name) ?? [])
         // eslint-disable-next-line no-restricted-syntax -- caught per handler: one subscriber's failure must not stop the ones queued behind it
         try {
             await (handler as DomainEventHandler<TEventName>)(payload);
         } catch (error) {
+            settled = false;
             logger.error(`Domain event handler failed for "${name}"`, error);
         }
+
+    return settled;
 };
 
 /**

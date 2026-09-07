@@ -7,7 +7,7 @@
  */
 
 import { orderModel, applyOrderTransform } from './model';
-import type { OrderDocument } from './model';
+import type { OrderDocument, OrderPendingEffect } from './model';
 import type { PipelineStage, QueryFilter } from 'mongoose';
 import {
     createRepository,
@@ -138,12 +138,18 @@ const visibleScope = (userId: string): Record<string, unknown> => ({
  * and a follow-up read only informs the error message. The scope composes the same way:
  * `visibleScope` rides in the same filter, so there's no window between an ownership check and
  * the write.
+ *
+ * @param effects - consequences the mover cannot guarantee, stored in the SAME write as the
+ *   status. Single-document atomicity is what makes them exactly as durable as the move that
+ *   decided them; a second write could be the one that is lost. Only the cancel passes any —
+ *   `delivery`'s shipped move has nothing that needs retrying.
  */
 const updateStatusIfIn = (
     id: string,
     from: readonly string[],
     to: string,
-    scope?: Record<string, unknown>
+    scope?: Record<string, unknown>,
+    effects?: readonly OrderPendingEffect[]
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
@@ -155,10 +161,51 @@ const updateStatusIfIn = (
                 ...scope,
                 status: { $in: [...from] }
             } as QueryFilter<OrderDocument>,
-            { $set: { status: to } },
+            { $set: { status: to, ...(effects?.length ? { pendingEffects: [...effects] } : {}) } },
             { returnDocument: 'after' }
         )
         .exec();
+
+/**
+ * Orders whose consequences are still owed, oldest first — `retryPendingEffects`'s only query.
+ *
+ * `pendingEffects.0` rather than `$exists`, so a drained order (empty array) is settled without a
+ * second write to unset the field. The grace window rides in the caller's `cutoff`: the happy
+ * path clears the marker milliseconds after writing it, so anything still standing after it has
+ * genuinely been dropped.
+ *
+ * @param cutoff - orders untouched at or before this instant are due for a retry
+ * @param limit - how many to return at most, so one pass cannot fan out unboundedly
+ * @returns the orders still owing an effect
+ */
+const findWithPendingEffects = (cutoff: Date, limit: number): Promise<OrderDocument[]> =>
+    orderModel
+        .find({ 'pendingEffects.0': { $exists: true }, updatedAt: { $lte: cutoff } })
+        .sort({ updatedAt: 1 })
+        .limit(limit)
+        .exec();
+
+/**
+ * Discharge one effect, once its listener has actually returned.
+ *
+ * Conditional on the effect still being there, so a retry racing the original drain resolves at
+ * the storage layer rather than double-counting. `timestamps: false` — draining is bookkeeping,
+ * and bumping `updatedAt` would push every *other* pending effect on the order out past the
+ * sweep's cutoff.
+ *
+ * @param orderId - the order that owed it
+ * @param effect - the consequence now settled
+ * @returns whether this call was the one that cleared it
+ */
+const clearPendingEffect = (orderId: string, effect: OrderPendingEffect): Promise<boolean> =>
+    orderModel
+        .updateOne(
+            { _id: toObjectId(orderId), pendingEffects: effect },
+            { $pull: { pendingEffects: effect } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount > 0);
 
 /**
  * Unset `userId` on every order this account placed, and mark them for `ops/reap-orders.ts`
@@ -258,8 +305,11 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
         id: string,
         from: readonly string[],
         to: string,
-        scope?: Record<string, unknown>
+        scope?: Record<string, unknown>,
+        effects?: readonly OrderPendingEffect[]
     ) => Promise<OrderDocument | null>;
+    findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
+    clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     detachUserId: (userId: string, anonymizeAfter: Date) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
 } = {
@@ -270,6 +320,8 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     ownerScope,
     visibleScope,
     updateStatusIfIn,
+    findWithPendingEffects,
+    clearPendingEffect,
     detachUserId,
     scrubDueForAnonymization
 };
