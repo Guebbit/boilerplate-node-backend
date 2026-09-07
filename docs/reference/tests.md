@@ -308,11 +308,13 @@ The one directory here Jest never runs. These are markdown prompts driven by han
 covering the question no deterministic tool can reach: does the code do what the **docs** promise?
 They write reports to `reports/audit/` and never touch source.
 
-| File                         | What it is                                                                                          | Read next                              |
-| ---------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `tests/audit/spec-drift.md`  | The two-pass audit: freeze spec-derived expectations, then hunt tests that assert the code instead. | [AI Auditing](../tools/ai-auditing.md) |
-| `tests/audit/spec-gaps.md`   | Business rules and security boundaries with zero coverage.                                          | [AI Auditing](../tools/ai-auditing.md) |
-| `tests/audit/suite-bloat.md` | Near-duplicate tests that cost CI time and discriminate nothing.                                    | [AI Auditing](../tools/ai-auditing.md) |
+| File                                 | What it is                                                                                               | Read next                              |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `tests/audit/spec-drift.md`          | The two-pass audit: freeze spec-derived expectations, then hunt tests that assert the code instead.      | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/spec-gaps.md`           | Business rules and security boundaries with zero coverage.                                               | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/suite-bloat.md`         | Near-duplicate tests that cost CI time and discriminate nothing.                                         | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/compliance-backend.md`  | This backend against `compliance-rules.yaml`'s backend-responsibility rules (consent, data security, …). | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/compliance-frontend.md` | The paired frontend against the same registry's frontend-responsibility rules.                           | [AI Auditing](../tools/ai-auditing.md) |
 
 ## Co-located module tests
 

@@ -8,7 +8,7 @@ notice that the docs promise a rule the contract never encodes.
 **Prose ↔ code is the gap**, and it is the one place a language model beats a program rather than
 approximating one. This repo has ~56 files under `docs/` stating rules no schema enforces.
 
-`tests/audit/` holds three prompts that live in exactly that gap. They are plain markdown, run by
+`tests/audit/` holds five prompts that live in exactly that gap. They are plain markdown, run by
 hand against an LLM, and they write reports — never code.
 
 ## The one rule
@@ -40,22 +40,29 @@ Two consequences, both non-negotiable:
 - **A finding without a citation is not a finding.** Either a `file:line` in the spec, or nothing.
   Prose confidence is not evidence.
 
-## The three prompts
+## The five prompts
 
-| File                         | Asks                                                                          | Writes to                    |
-| ---------------------------- | ----------------------------------------------------------------------------- | ---------------------------- |
-| `tests/audit/spec-drift.md`  | Which tests assert what the **code** does rather than what the **spec** says? | `reports/audit/spec-drift/`  |
-| `tests/audit/spec-gaps.md`   | Which business rules and security boundaries have **zero** coverage?          | `reports/audit/spec-gaps/`   |
-| `tests/audit/suite-bloat.md` | Which tests cost CI time and discriminate nothing?                            | `reports/audit/suite-bloat/` |
+| File                                 | Asks                                                                                                                                                           | Writes to                            |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `tests/audit/spec-drift.md`          | Which tests assert what the **code** does rather than what the **spec** says?                                                                                  | `reports/audit/spec-drift/`          |
+| `tests/audit/spec-gaps.md`           | Which business rules and security boundaries have **zero** coverage?                                                                                           | `reports/audit/spec-gaps/`           |
+| `tests/audit/suite-bloat.md`         | Which tests cost CI time and discriminate nothing?                                                                                                             | `reports/audit/suite-bloat/`         |
+| `tests/audit/compliance-backend.md`  | Which rules in the shared compliance registry (consent, privacy pages, data security, accessibility, …) does this backend violate, and which don't apply here? | `reports/audit/compliance-backend/`  |
+| `tests/audit/compliance-frontend.md` | The same registry, filtered to the paired frontend's half of responsibility.                                                                                   | `reports/audit/compliance-frontend/` |
 
-All three take one argument — a module (`orders`), a path, or `--diff` for whatever the working
-tree touched.
+All five take one argument — a module (`orders`), a path, or `--diff` for whatever the working
+tree touched. The two compliance prompts default an empty argument to the **whole repo** rather
+than the touched modules — a compliance gap is rarely introduced by the change that happens to
+surface it.
 
-The three prompt files are the only part of this kept byte-identical with the sibling repo
-(`boilerplate-vue-frontend`) — they are repo-agnostic by design, so a change worth making to one is
-worth copying to the other. Nothing enforces it: they are not in `SHARED_FILES`, whose rule is that
-a shared file must be owned by one side, and these are co-authored. Copy by hand, and check with
-`diff` when in doubt.
+The five prompt files, plus `tests/audit/compliance-rules.yaml`, are the parts of this kept
+byte-identical with the sibling repo (`boilerplate-vue-frontend`) — the prompts are repo-agnostic
+by design, and the compliance registry is deliberately one shared source of truth: a rule like the
+mandatory signup-consent checkbox spans both repos' responsibility, and a backend-only copy of
+that rule drifting from a frontend-only copy is exactly the failure a shared registry exists to
+prevent. Nothing enforces it: none of these six files are in `SHARED_FILES`, whose rule is that a
+shared file must be owned by one side and regenerated — these are hand-authored on whichever side
+a change originates, and copied to the other. Copy by hand, and check with `diff` when in doubt.
 
 This page is the opposite: deliberately per-repo. It names this repo's own tools, its own `docs/`
 count and its own findings, so the two copies are _expected_ to differ and must not be reconciled.
@@ -128,7 +135,8 @@ mkdir -p .claude/commands
 ln -s ../../tests/audit .claude/commands/audit
 ```
 
-That gives `/audit:spec-drift orders`, `/audit:spec-gaps inventory`, `/audit:suite-bloat --diff`.
+That gives `/audit:spec-drift orders`, `/audit:spec-gaps inventory`, `/audit:suite-bloat --diff`,
+`/audit:compliance-backend`, `/audit:compliance-frontend`.
 The symlink is local, gitignored and regenerable — the files under `tests/audit/` remain the only
 copy.
 
@@ -154,6 +162,8 @@ Ollama model handles it.
 
 ## Reading the output
 
+### `spec-drift`'s verdicts
+
 A findings table uses four verdicts, and only one of them is a bug:
 
 | Verdict           | Means                                                                              |
@@ -166,6 +176,22 @@ A findings table uses four verdicts, and only one of them is a bug:
 `TAUTOLOGY` is the quiet one. `expect(f(x)).toEqual(g(x))` where `g` is a sibling export, or a
 `Record<Enum, …>` whose totality TypeScript already enforces, is a test that cannot fail and
 therefore proves nothing. Stryker finds some of these; the audit finds the rest.
+
+### `compliance`'s verdicts
+
+`compliance-backend.md` and `compliance-frontend.md` share one registry
+(`tests/audit/compliance-rules.yaml`) but use a different four verdicts, since a compliance rule
+either applies here or it doesn't — there is no code/test pair to compare:
+
+| Verdict              | Means                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **VIOLATION**        | The rule applies and this side's evidence fails it — including a `both`-responsibility rule broken on this side alone.                                              |
+| **SATISFIED**        | The rule applies and this side's evidence meets it in full.                                                                                                         |
+| **NOT-APPLICABLE**   | The rule's `applies_when` condition is false for this app today, with the reason cited.                                                                             |
+| **NEEDS-BOTH-SIDES** | A `both`-responsibility rule whose own-side half is fine but whose closure depends on the paired prompt's report — see the other side by rule `id`, never restated. |
+
+Every rule in scope gets exactly one row, `NOT-APPLICABLE` included — an audit that only reports
+violations can't be told apart from one that silently skipped half the registry.
 
 ## Does it work?
 
@@ -212,3 +238,6 @@ Two notes worth keeping, because they outlived the tools:
 - [Mutation Testing](./mutation-testing.md) — the deterministic instrument this one complements
 - [Coverage & Confidence](./coverage-and-confidence.md) — what a score does and does not mean
 - [Testing & Docs](./testing-and-docs.md) — every layer, and which question each answers
+- [Data Protection](../theory/data-protection.md) — the GDPR record `compliance-backend.md` cites
+  as evidence for this app's data-handling rules; the compliance registry is broader than GDPR
+  alone and does not replace it
