@@ -22,6 +22,16 @@ export default {
     name: 'payments',
     basePath: '/payments',
     routes: router,
+    // `productionOnly`: `tests/support/setup.ts` supplies a dev value, and the `fake` provider
+    // needs none locally — booting without it there is not the failure this guards against.
+    requiredConfig: [
+        {
+            key: 'NODE_PAYMENT_WEBHOOK_SECRET',
+            minLength: 16,
+            placeholder: 'your-payment-webhook-secret-here',
+            productionOnly: true
+        }
+    ],
     subscribe: () => {
         onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
             refund ? refundForOrder(orderId) : undefined
