@@ -46,16 +46,49 @@ A payment is _about_ an order: the intent freezes its total, the confirm moves i
 `paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.cancelled` and this
 module answers with the refund.
 
-**The confirm is the one place where the money and the goods agree.** It commits the order's held
-units itself rather than announcing and hoping, because that instant is the only moment a hold
+**`settlePayment` is the one place where the money and the goods agree.** It commits the order's
+held units itself rather than announcing and hoping, because that instant is the only moment a hold
 becomes a sale. Without this module nothing would ever commit a hold, and every order would sit
 reserved until its window expired.
 
+It is reached three ways — the confirm, the sync, and the provider's webhook — and there is exactly
+one of it because two would drift, and drifted copies commit the hold twice. Every write inside it
+is conditional on the payment still being settleable, and the two terminal statuses are deliberately
+outside that set: that absence is what makes a provider retrying a delivery for three days find
+nothing left to move.
+
 ::: tip The provider is a port, and the implementation is fake on purpose
 Nothing above `providers/` knows which processor is wired in. The fake is what lets the whole
-checkout-to-paid path run in tests and in the demo profile without a sandbox account. Swapping in a
-real processor is one file behind an interface that already exists.
+checkout-to-paid path run in tests and in the demo profile without a sandbox account — including
+the 3-D Secure challenge and the webhook, which it imposes exactly as a real provider would.
+Swapping in a real processor is one file behind an interface that already exists.
 :::
+
+::: warning The card never reaches this server
+`POST /payments/{id}/confirm` takes an opaque method reference the browser's provider widget
+produced, never a card number. That is what keeps the deployment in the light PCI DSS bracket
+rather than the heavy one, and it is why the request schema refuses a value shaped like a PAN.
+:::
+
+## The answer is not always immediate
+
+Two statuses sit between submitted and settled, and a lifecycle without them loses every European
+card payment the bank decides to challenge:
+
+| Status            | What it means                                                                |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `requires_action` | The bank wants a 3-D Secure challenge answered in the browser.               |
+| `processing`      | The provider has the payment but has not settled it. Some methods take days. |
+
+Both answer **200**, not an error: the browser has a next step, and a 4xx would tell it to stop.
+`POST /payments/{id}/sync` re-reads the provider and settles, which is what makes the happy path
+feel synchronous.
+
+**`POST /payments/webhook` is the authority**, and the browser never is. It arrives whether or not
+the customer kept the tab open, and it is the one route in the module mounted above the auth wall:
+its caller is a machine with no account, authenticating by signing the raw body — a stronger proof
+of origin than any cookie this API could ask it for. Deliveries are deduplicated by event id,
+because a provider retries for days and the inventory commit is not conditional on anything else.
 
 The dependency on [`users`](./users.md) is groundwork rather than a current feature. The order
 already carries a `userId`; resolving it against the account record is what makes the id on a
@@ -70,17 +103,20 @@ exactly the sentence `CANCELLABLE_ORDER_STATUSES` documents.
 
 ## The pipeline
 
-The confirm is the whole module: one step that moves the order and commits the hold, because that
-instant is the only moment a hold becomes a sale.
+Three entry points, one settlement. What differs between them is only how the provider was asked.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     A["create intent"] --> B["total frozen<br/><i>unique on orderId — one payment per order</i>"]
-    B --> C["confirm"]
+    B --> C["confirm<br/><i>method reference, never a card</i>"]
     C --> D{"the provider port<br/><i>fake · stripe</i>"}
-    D -.->|declined| E["order stays pending<br/><i>units still held</i>"]
-    D -->|approved| F["order → paid<br/><i>orders</i>"]
+    D -.->|"requires_action<br/>processing"| S["browser finishes<br/><i>POST /:id/sync</i>"]
+    W["provider webhook<br/><i>the authority</i>"] --> ST
+    S --> ST["settlePayment<br/><i>the only place money is reconciled</i>"]
+    D -->|"succeeded / declined"| ST
+    ST -.->|declined| E["order stays pending<br/><i>units still held</i>"]
+    ST -->|succeeded| F["order → paid<br/><i>orders</i>"]
     F --> G["commit the hold<br/><i>inventory</i>"]
     OC["orders"] -. "order.cancelled" .-> R["refund<br/><i>if one was due</i>"]
 
@@ -88,18 +124,19 @@ flowchart LR
     classDef port fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
-    class A,B,C,OC step;
-    class D port;
+    class A,B,C,OC,S,W step;
+    class D,ST port;
     class F,G,R done;
     class E bad;
 ```
 
 ## Configuration
 
-| Variable                | Default | Meaning                                                                                                                                  |
-| ----------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER` | `fake`  | Which implementation under `providers/` answers. A name this build does not carry throws at boot rather than silently taking no payments |
-| `NODE_DEFAULT_CURRENCY` | `EUR`   | ISO-4217, stamped on every payment document at creation                                                                                  |
+| Variable                      | Default | Meaning                                                                                                                                                                               |
+| ----------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`       | `fake`  | Which implementation under `providers/` answers. A name this build does not carry throws at boot rather than silently taking no payments                                              |
+| `NODE_PAYMENT_WEBHOOK_SECRET` | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid |
+| `NODE_DEFAULT_CURRENCY`       | `EUR`   | ISO-4217, stamped on every payment document at creation                                                                                                                               |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves
 existing ones reading in the currency they were actually taken in. There is no conversion

@@ -1412,7 +1412,7 @@ components:
                     type: string
                 status:
                     type: string
-                    enum: [requires_confirmation, succeeded, declined, refunded]
+                    enum: [requires_confirmation, requires_action, processing, succeeded, declined, refunded]
                 provider:
                     type: string
                 cardLast4:

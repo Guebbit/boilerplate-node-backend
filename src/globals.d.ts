@@ -28,6 +28,12 @@ declare module 'express-serve-static-core' {
          * (`imageStore.quarantine()`'s return value). Read through `resolvePendingImageKey`.
          */
         quarantinedImageKeys?: string[];
+        /**
+         * The body exactly as it arrived, kept for the routes whose callers SIGN it — a signature
+         * covers bytes, and `JSON.stringify(request.body)` is not those bytes. Set by the JSON
+         * parser's `verify` hook in `app/security.ts`, and only for the paths listed there.
+         */
+        rawBody?: Buffer;
         /** Locale negotiated from `Accept-Language` (set by the locale middleware). */
         locale?: string;
         /**

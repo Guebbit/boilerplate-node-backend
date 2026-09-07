@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
     title: payments — module contract
-    version: '2.0.0'
+    version: '3.0.0'
 
 paths:
     /payments/intent:
@@ -105,7 +105,15 @@ paths:
         post:
             tags: [Payments]
             summary: Confirm a payment
-            description: The card dialog's submit. The provider charges first (that is how PSPs work — the money moves before your database hears about it), then the order is moved `pending → paid` by a conditional write; if the order slipped away in between, the charge is refunded on the spot. A decline answers 409 with `errors[].code` `PAYMENT_DECLINED` and is retryable — submit the same payment again with another card. The fake provider declines exactly one number, documented on `ConfirmPaymentRequest.cardNumber`.
+            description: >-
+                Attaches a payment method the browser tokenised and asks the provider to take the
+                money. The answer is not always final: a card that needs a 3-D Secure challenge
+                comes back `requires_action` and one that settles asynchronously `processing`, both
+                as a 200 — the browser finishes the challenge against the provider and then calls
+                `POST /payments/{id}/sync`. Only `succeeded` moves the order to `paid`, and the
+                webhook remains the authority for that even when this endpoint saw it first. A
+                decline answers 409 with `errors[].code` `PAYMENT_DECLINED` and is retryable —
+                submit the same payment again with another method.
             operationId: confirmPayment
             security:
                 - bearerAuth: []
@@ -119,12 +127,19 @@ paths:
                             $ref: '#/components/schemas/ConfirmPaymentRequest'
             responses:
                 '200':
-                    description: The payment, `succeeded`; the order is `paid`
+                    description: >-
+                        The payment as it now stands — `succeeded` with the order `paid`, or
+                        `requires_action`/`processing` with the browser's next step still to come.
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/PaymentEnvelope'
                     links:
+                        SyncPayment:
+                            operationId: syncPayment
+                            parameters:
+                                id: '$response.body#/data/id'
+                            description: An in-flight payment is resolved by re-reading the provider here.
                         RefundPayment:
                             operationId: refundPaymentByOrder
                             parameters:
@@ -142,6 +157,76 @@ paths:
                 # write (`PAYMENT_ORDER_NOT_PAYABLE` — the charge was refunded on the spot).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/{id}/sync:
+        post:
+            tags: [Payments]
+            summary: Re-read a payment from the provider and settle it
+            description: >-
+                The browser saying "I have finished at the provider". Re-reads the provider's own
+                record and applies whatever it says, which is what makes the happy path feel
+                synchronous while the webhook stays the source of truth. Idempotent and safe to
+                call repeatedly: a payment already settled answers itself unchanged. Answers 409
+                `PAYMENT_DECLINED` when the provider's answer is a refusal, exactly as the confirm
+                does.
+            operationId: syncPayment
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The payment as the provider now reports it
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Declined (`PAYMENT_DECLINED`), or the payment never reached the provider
+                # (`PAYMENT_NOT_CONFIRMABLE`).
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/webhook:
+        post:
+            tags: [Payments]
+            summary: Provider webhook
+            description: >-
+                Where the provider reports what actually happened to a payment, and the authority
+                for it — the browser's word never is. **Not session-authenticated**: the caller is
+                a machine with no account, and it authenticates by signing the raw body instead,
+                which is stronger than any cookie this API could ask it for. Deliveries are
+                deduplicated by event id, so a provider retrying for days settles once.
+
+                Answers 200 to anything it has authenticated, including events it does not act on:
+                a provider reads a non-2xx as a failure and retries harder.
+            operationId: receivePaymentWebhook
+            security: []
+            parameters:
+                - name: x-payment-signature
+                  in: header
+                  required: true
+                  schema:
+                      type: string
+                  description: '`t=<unix seconds>,v1=<hex hmac-sha256 of "<t>.<raw body>">`'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PaymentWebhookEvent'
+            responses:
+                '200':
+                    description: Accepted — acted on, or knowingly ignored
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/MessageResponse'
+                # The signature did not verify, is stale, or the body is not an event.
+                '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
@@ -172,11 +257,23 @@ components:
                     description: ISO-4217 currency code (e.g. EUR)
                 status:
                     type: string
-                    enum: [requires_confirmation, succeeded, declined, refunded]
-                    description: The provider-facing lifecycle. `declined` is retryable — the confirm endpoint accepts the same payment again; `refunded` is terminal.
+                    enum: [requires_confirmation, requires_action, processing, succeeded, declined, refunded]
+                    description: >-
+                        The provider-facing lifecycle. `requires_action` means the bank wants a
+                        challenge answered in the browser (3-D Secure) and `processing` that the
+                        provider has taken the payment but not settled it — both are in flight, and
+                        `POST /payments/{id}/sync` is what resolves them without waiting for the
+                        webhook. `declined` is retryable: the confirm endpoint accepts the same
+                        payment again with another method. `refunded` is terminal.
                 provider:
                     type: string
                     description: Which provider implementation handled it (`fake` in the demo).
+                clientSecret:
+                    type: string
+                    description: >-
+                        Returned by `POST /payments/intent` alone, never stored and never read
+                        back: it authorises completing this payment against the provider from the
+                        browser. Absent from every other response.
                 cardLast4:
                     type: string
                     description: The only card digits a payment system may remember.
@@ -213,6 +310,35 @@ components:
                         once refunded, which is what greys the control out rather than letting the
                         operator discover it by clicking.
 
+        PaymentWebhookEvent:
+            type: object
+            additionalProperties: false
+            required: [id]
+            description: >-
+                One delivery, in this module's normalised shape. A real provider sends its OWN
+                event shape and its implementation of the provider port translates it into this —
+                the endpoint is documented in the terms the module acts on, not in any one
+                vendor's vocabulary.
+
+                FLAT on purpose. The provider's report could have been nested under a `state`
+                object, mirroring how most vendors wrap theirs, but the adapter is where a vendor's
+                shape is absorbed and nothing downstream reads these fields as a unit — so the
+                nesting would have bought a second level for no reader.
+            properties:
+                id:
+                    type: string
+                    description: The provider's event id. Deduplicated, so a retry settles nothing twice.
+                providerRef:
+                    type: string
+                    description: Which intent the event is about. Absent for an event this API ignores.
+                status:
+                    type: string
+                    enum: [requires_action, processing, succeeded, declined]
+                    description: The provider's own vocabulary — `refunded` is not here, because a refund is a later act of ours. Absent for an event this API ignores.
+                cardLast4:
+                    type: string
+                    description: The only card digits a payment system may remember, as the provider reports them.
+
         PaymentEnvelope:
             type: object
             additionalProperties: false
@@ -238,11 +364,18 @@ components:
         ConfirmPaymentRequest:
             type: object
             additionalProperties: false
-            required: [cardNumber]
+            required: [paymentMethodRef]
             properties:
-                cardNumber:
+                paymentMethodRef:
                     type: string
-                    minLength: 12
-                    maxLength: 23
-                    pattern: '^[\d ]+$'
-                    description: The card number, digits and optional spaces. The fake provider declines `4000000000000002` and accepts everything else; `4242424242424242` is the conventional success card.
+                    minLength: 3
+                    maxLength: 255
+                    pattern: '^[\w-]+$'
+                    description: >-
+                        The provider's opaque handle for the payment method, produced in the
+                        BROWSER by the provider's own widget. Never a card number — a card number
+                        reaching this API would put the whole deployment in the heavyweight PCI
+                        bracket, which is the reason this field is shaped the way it is. The fake
+                        provider recognises `pm_card_visa` (succeeds), `pm_card_declined`,
+                        `pm_card_authentication_required` and `pm_card_processing`; anything else
+                        succeeds.

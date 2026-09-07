@@ -6,7 +6,7 @@
  * because Mongoose's generics are too large for TypeScript to infer at an export boundary (TS7056).
  */
 
-import { paymentModel, applyPaymentTransform } from './model';
+import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
 import type { PaymentStatus } from '@types';
 import type { PaymentDocument } from './model';
 import {
@@ -26,6 +26,8 @@ export const paymentRepository: Repository<PaymentDocument> & {
         orderId: string,
         scope?: Record<string, unknown>
     ) => Promise<PaymentDocument | null>;
+    findByProviderRef: (providerRef: string) => Promise<PaymentDocument | null>;
+    attachProviderRef: (paymentId: string, providerRef: string) => Promise<PaymentDocument | null>;
     upsertIntent: (
         orderId: string,
         userId: string | undefined,
@@ -73,6 +75,34 @@ export const paymentRepository: Repository<PaymentDocument> & {
      */
     findByOrderId: (orderId: string, scope?: Record<string, unknown>) =>
         paymentModel.findOne({ orderId: toObjectId(orderId), ...scope }).exec(),
+
+    /**
+     * The payment a webhook delivery names. UNSCOPED, and the only read here that is: a provider
+     * is not a logged-in caller and has no user whose rows to restrict this to. What authenticates
+     * it is the signature over the delivery, checked before this is ever reached.
+     *
+     * @param providerRef - the provider's own intent id
+     */
+    findByProviderRef: (providerRef: string) => paymentModel.findOne({ providerRef }).exec(),
+
+    /**
+     * Record the provider's intent id on a payment that has just been prepared.
+     *
+     * Conditional on the field still being absent, which is what makes re-preparing safe: a second
+     * request that raced the first finds nothing to write and reads back the reference already
+     * there, rather than pointing the payment at a second intent the customer could also pay.
+     *
+     * @returns the payment as it now stands, whichever of the two references won
+     */
+    attachProviderRef: (paymentId, providerRef) =>
+        paymentModel
+            .findOneAndUpdate(
+                { _id: toObjectId(paymentId), providerRef: { $exists: false } },
+                { $set: { providerRef } },
+                { returnDocument: 'after' }
+            )
+            .exec()
+            .then((updated) => updated ?? paymentModel.findById(toObjectId(paymentId)).exec()),
 
     /**
      * Create or refresh the intent for an order. Re-asking (the double-click case) re-freezes the
@@ -134,3 +164,22 @@ export const paymentRepository: Repository<PaymentDocument> & {
             .exec()
             .then(({ modifiedCount }) => modifiedCount)
 };
+
+/**
+ * Claim a webhook event id for processing.
+ *
+ * The INSERT is the check. A read followed by a write is a race two concurrent deliveries can both
+ * pass; the unique index refuses exactly one of them, whichever arrives second.
+ *
+ * @param eventId - the provider's event id
+ * @returns `true` when this delivery is the first to claim it, `false` when it is a retry of one
+ *   already acted on — in which case the caller must answer 2xx and do nothing else
+ */
+export const claimWebhookEvent = (eventId: string): Promise<boolean> =>
+    paymentWebhookEventModel
+        .create({ eventId })
+        .then(() => true)
+        .catch((error: { code?: number }) => {
+            if (error.code === 11_000) return false;
+            throw error;
+        });

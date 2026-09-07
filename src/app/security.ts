@@ -9,7 +9,7 @@
  */
 
 import express from 'express';
-import type { Express } from 'express';
+import type { Express, Request } from 'express';
 import type { Server } from 'node:http';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -24,6 +24,15 @@ import { logger } from '@infrastructure/adapters/logger';
  * configurable, same shape as `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
  */
 const JSON_BODY_LIMIT = process.env.NODE_JSON_BODY_LIMIT ?? '100kb';
+
+/**
+ * The paths whose callers SIGN their request body, and which therefore need it kept verbatim.
+ *
+ * Listed here rather than in the module that reads it because the body is consumed once, by the
+ * parser installed below — a module's own router runs long after the stream is gone. Every entry
+ * costs one buffer copy per matching request, so this list stays short.
+ */
+const RAW_BODY_PATHS = ['/payments/webhook'];
 
 /**
  * Origins allowed to call this API with credentials, from `NODE_CORS_ORIGIN`.
@@ -150,7 +159,24 @@ export const installSecurity = (app: Express): void => {
         })
     );
 
-    app.use(express.json({ limit: JSON_BODY_LIMIT }));
+    /*
+     * The JSON parser, plus the one exception every webhook-receiving application needs.
+     *
+     * A signed callback is authenticated by an HMAC over the EXACT bytes the sender transmitted,
+     * and `JSON.stringify(request.body)` is not those bytes — key order, number formatting and
+     * whitespace all move. `verify` runs with the buffer still intact, so the route that needs it
+     * gets it; every other route does not, which is why this is a prefix test rather than an
+     * unconditional copy of every body the API receives.
+     */
+    app.use(
+        express.json({
+            limit: JSON_BODY_LIMIT,
+            verify: (request, _response, buffer) => {
+                if (RAW_BODY_PATHS.some((prefix) => (request as Request).url.startsWith(prefix)))
+                    (request as Request).rawBody = Buffer.from(buffer);
+            }
+        })
+    );
 
     app.use(cookieParser());
 

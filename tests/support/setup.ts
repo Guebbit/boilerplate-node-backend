@@ -128,6 +128,12 @@ process.env.NODE_TOKEN_REFRESH ??= 'test-refresh-secret';
 process.env.NODE_TOTP_ENCRYPTION_KEY ??= 'test-totp-encryption-key';
 
 /**
+ * Same again for the payment webhook: signing and verifying both refuse an absent secret, which is
+ * the right production behaviour and would otherwise fail every webhook suite in CI.
+ */
+process.env.NODE_PAYMENT_WEBHOOK_SECRET ??= 'test-payment-webhook-secret';
+
+/**
  * Declares this environment mail-capable, which is what gates the `email` second factor
  * (`account/two-factor/methods/email.ts`). Nothing is actually delivered — nodemailer runs on
  * `jsonTransport` under `NODE_ENV=test` — but a suite that could not enroll the method would be

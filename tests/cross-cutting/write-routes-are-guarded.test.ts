@@ -246,6 +246,14 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     'payments POST /:id/confirm': {
         requiresAuth: true,
         reason: "confirming the caller's own payment"
+    },
+    'payments POST /:id/sync': {
+        requiresAuth: true,
+        reason: "re-reading the caller's own payment from the provider after a challenge"
+    },
+    'payments POST /webhook': {
+        requiresAuth: false,
+        reason: 'the payment provider reporting an outcome — a machine with no account, which authenticates by signing the raw body instead'
     }
 };
 

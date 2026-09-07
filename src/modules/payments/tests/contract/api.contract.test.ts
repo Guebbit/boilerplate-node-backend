@@ -11,14 +11,16 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/fixtures';
 import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
-import { FAKE_DECLINE_CARD } from '@modules/payments/providers/fake';
+import { FAKE_DECLINE_METHOD, FAKE_SUCCESS_METHOD } from '@modules/payments/providers/fake';
+import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
+import { paymentRepository } from '@modules/payments/repository';
 
 setupTestDb();
 
 /** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
 const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
-const GOOD_CARD = '4242424242424242';
+const GOOD_METHOD = FAKE_SUCCESS_METHOD;
 
 /** Logs a customer in with one pending order, returning both. */
 const authenticateWithOrder = async () => {
@@ -59,6 +61,26 @@ describe('POST /payments/intent', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    it('never publishes the provider reference, and returns the client secret only here', async () => {
+        // Two opposite rules on one response. `providerRef` operates on real money at the provider
+        // and no client has an operation that needs it. `clientSecret` authorises COMPLETING this
+        // payment, so it must reach the browser exactly once and be stored nowhere.
+        const { bearer, order } = await authenticateWithOrder();
+
+        const intent = await api()
+            .post('/payments/intent')
+            .set('Authorization', bearer)
+            .send({ orderId: String(order._id) });
+        const readBack = await api()
+            .get(`/payments/order/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        expect(intent.body.data).not.toHaveProperty('providerRef');
+        expect(intent.body.data.clientSecret).toEqual(expect.any(String));
+        expect(readBack.body.data).not.toHaveProperty('providerRef');
+        expect(readBack.body.data).not.toHaveProperty('clientSecret');
+    });
+
     it('matches the error contract for an order that does not exist', async () => {
         const { bearer } = await authenticateAs('user');
 
@@ -88,7 +110,7 @@ describe('POST /payments/{id}/confirm', () => {
         const response = await api()
             .post(`/payments/${paymentId}/confirm`)
             .set('Authorization', bearer)
-            .send({ cardNumber: GOOD_CARD });
+            .send({ paymentMethodRef: GOOD_METHOD });
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('succeeded');
@@ -101,7 +123,7 @@ describe('POST /payments/{id}/confirm', () => {
         const response = await api()
             .post(`/payments/${paymentId}/confirm`)
             .set('Authorization', bearer)
-            .send({ cardNumber: FAKE_DECLINE_CARD });
+            .send({ paymentMethodRef: FAKE_DECLINE_METHOD });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('PAYMENT_DECLINED');
@@ -114,21 +136,160 @@ describe('POST /payments/{id}/confirm', () => {
         const response = await api()
             .post(`/payments/${MISSING_ID}/confirm`)
             .set('Authorization', bearer)
-            .send({ cardNumber: GOOD_CARD });
+            .send({ paymentMethodRef: GOOD_METHOD });
 
         expect(response.status).toBe(404);
         expect(response).toSatisfyApiSpec();
     });
 
-    it('matches the error contract for an invalid card number', async () => {
+    it('matches the error contract for a method reference the contract does not allow', async () => {
         const { bearer, paymentId } = await authenticateWithIntent();
 
         const response = await api()
             .post(`/payments/${paymentId}/confirm`)
             .set('Authorization', bearer)
-            .send({ cardNumber: 'not-a-card' });
+            // Spaces are exactly what a card number typed into a form carries — and the contract
+            // now refuses that shape, which is the point of the field being a provider handle.
+            .send({ paymentMethodRef: '4242 4242 4242 4242' });
 
         expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 200 with the payment still in flight when the bank wants a challenge', async () => {
+        const { bearer, paymentId } = await authenticateWithIntent();
+
+        const response = await api()
+            .post(`/payments/${paymentId}/confirm`)
+            .set('Authorization', bearer)
+            .send({ paymentMethodRef: 'pm_card_authentication_required' });
+
+        // A 4xx here would tell the browser to stop, and the browser is the only thing that can
+        // answer the challenge.
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('requires_action');
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /payments/{id}/sync', () => {
+    it('settles a payment the browser finished at the provider', async () => {
+        const { bearer, paymentId } = await authenticateWithIntent();
+        await api()
+            .post(`/payments/${paymentId}/confirm`)
+            .set('Authorization', bearer)
+            .send({ paymentMethodRef: 'pm_card_authentication_required' });
+
+        const response = await api()
+            .post(`/payments/${paymentId}/sync`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('succeeded');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('is idempotent — a second call answers the settled payment unchanged', async () => {
+        const { bearer, paymentId } = await authenticateWithIntent();
+        await api()
+            .post(`/payments/${paymentId}/confirm`)
+            .set('Authorization', bearer)
+            .send({ paymentMethodRef: GOOD_METHOD });
+
+        const response = await api()
+            .post(`/payments/${paymentId}/sync`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('succeeded');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a payment that does not exist', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .post(`/payments/${MISSING_ID}/sync`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+/** Posts a body with the signature a provider would have sent over those exact bytes. */
+const deliver = (event: unknown, signature?: string) => {
+    const body = JSON.stringify(event);
+    return api()
+        .post('/payments/webhook')
+        .set('Content-Type', 'application/json')
+        .set(WEBHOOK_SIGNATURE_HEADER, signature ?? signWebhookPayload(body))
+        .send(body);
+};
+
+/**
+ * An intent nobody has confirmed — the state a webhook normally arrives into. The reference is read
+ * from the ROW, because it is deliberately not published.
+ */
+const preparedPayment = async () => {
+    const { bearer, order, paymentId } = await authenticateWithIntent();
+    const payment = await paymentRepository.findById(paymentId);
+    return { bearer, order, paymentId, providerRef: String(payment!.providerRef) };
+};
+
+describe('POST /payments/webhook', () => {
+    it('settles a payment on a signed delivery, with no session of any kind', async () => {
+        const { paymentId, providerRef } = await preparedPayment();
+
+        const response = await deliver({
+            id: `evt_${paymentId}`,
+            providerRef,
+            status: 'succeeded',
+            cardLast4: '4242'
+        });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const settled = await paymentRepository.findById(paymentId);
+        expect(settled!.status).toBe('succeeded');
+    });
+
+    it('refuses a delivery nobody signed', async () => {
+        const { providerRef } = await preparedPayment();
+
+        const response = await deliver(
+            { id: 'evt_forged', providerRef, status: 'succeeded' },
+            `t=${Math.floor(Date.now() / 1000)},v1=${'0'.repeat(64)}`
+        );
+
+        expect(response.status).toBe(400);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('applies a repeated delivery once', async () => {
+        const { paymentId, providerRef } = await preparedPayment();
+        const event = {
+            id: `evt_replay_${paymentId}`,
+            providerRef,
+            status: 'succeeded' as const
+        };
+
+        await deliver(event);
+        const replay = await deliver(event);
+
+        // 200 either way — a provider reads anything else as a failed delivery and retries harder.
+        expect(replay.status).toBe(200);
+        expect(replay).toSatisfyApiSpec();
+    });
+
+    it('accepts an event about an intent it does not know, rather than making the provider retry', async () => {
+        const response = await deliver({
+            id: 'evt_unknown',
+            providerRef: 'fake_pi_nobody',
+            status: 'succeeded' as const
+        });
+
+        expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
     });
 });

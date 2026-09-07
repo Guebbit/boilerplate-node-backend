@@ -45,6 +45,9 @@ const STEP_UP_ROUTES: Record<string, string> = {
     'cart POST /checkout': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'payments POST /intent': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'payments POST /:id/confirm': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    // The sync settles money just as the confirm does, from the provider's answer rather than
+    // from a method the caller supplied — so it sits at the same tier, not a lower one.
+    'payments POST /:id/sync': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'payments POST /order/:orderId/refund': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'account DELETE /': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'account PUT /': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,

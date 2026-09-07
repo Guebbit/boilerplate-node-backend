@@ -121,12 +121,12 @@ was `succeeded`, so the guard passed.
 
 Four call sites, all reading the same rows:
 
-| Call site                                | Question asked                                  |
-| ---------------------------------------- | ----------------------------------------------- |
-| `orders/service.ts` — `update`           | `canTransition(from, to, 'admin')`              |
-| `orders/service.ts` — `cancelById`       | `statusesLeadingTo(cancelled, actorOf(caller))` |
-| `payments/service.ts` — `createIntent`   | `canTransition(from, paid, 'system')`           |
-| `payments/service.ts` — `confirmPayment` | `statusesLeadingTo(paid, 'system')`             |
+| Call site                               | Question asked                                  |
+| --------------------------------------- | ----------------------------------------------- |
+| `orders/service.ts` — `update`          | `canTransition(from, to, 'admin')`              |
+| `orders/service.ts` — `cancelById`      | `statusesLeadingTo(cancelled, actorOf(caller))` |
+| `payments/service.ts` — `createIntent`  | `canTransition(from, paid, 'system')`           |
+| `payments/service.ts` — `settlePayment` | `statusesLeadingTo(paid, 'system')`             |
 
 `cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.

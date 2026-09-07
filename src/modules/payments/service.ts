@@ -1,10 +1,14 @@
 /**
  * @module
- * Payments — how an order's money moves, behind the provider port. Three rules: only a `pending`
- * order's owner can start paying; the order's move to `paid` is the gate, not the charge — charge
- * first, and a slipped-away order is refunded on the spot, so money moved iff the order says
- * `paid`; a refund is the `ORDER_CANCELLED` listener, made at-most-once by the conditional
- * `succeeded → refunded` move.
+ * Payments — how an order's money moves, behind the provider port. Four rules: only a `pending`
+ * order's owner can start paying; the order's move to `paid` is the gate, not the charge — the
+ * provider answers first, and a slipped-away order is refunded on the spot, so money moved iff the
+ * order says `paid`; a refund is the `ORDER_CANCELLED` listener, made at-most-once by the
+ * conditional `succeeded → refunded` move; and the provider's own word, arriving by webhook, is
+ * the authority — the browser's is a hint that lets the happy path feel synchronous.
+ *
+ * {@link settlePayment} is the whole choreography, and BOTH the webhook and the browser-driven
+ * paths go through it. Two copies would drift, and drifted copies commit inventory twice.
  */
 
 import { t } from '@infrastructure/i18n';
@@ -36,13 +40,19 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { paymentsAnalyticsEvents } from './analytics';
 import { paymentsAuditActions } from './audit';
 import { defaultCurrency } from './config';
-import { resolvePaymentProvider, cardLastFour, type CardDetails } from './providers';
-import { paymentRepository } from './repository';
+import {
+    resolvePaymentProvider,
+    type ProviderPaymentState,
+    type ProviderWebhookEvent
+} from './providers';
+import { claimWebhookEvent, paymentRepository } from './repository';
 import type { PaymentDocument } from './model';
 
 /**
  * The payment statuses the confirm endpoint accepts. `declined` is here because a decline is
- * retryable with another card — the one place this lifecycle goes backwards.
+ * retryable with another method — the one place this lifecycle goes backwards. `requires_action`
+ * and `processing` are NOT: a payment already in flight at the provider is resolved by re-reading
+ * it ({@link syncPayment}), never by attaching a second method to it.
  *
  * An ARRAY, not a `Set`: this rule is read both as a membership test and as the `$in` of the
  * conditional writes that re-assert it while mongod holds the document, and a `Set` would need
@@ -50,6 +60,18 @@ import type { PaymentDocument } from './model';
  */
 const CONFIRMABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
     'requires_confirmation',
+    'declined'
+];
+
+/**
+ * The statuses a settlement may move a payment away from — every non-terminal one. `succeeded` and
+ * `refunded` are absent, which is what makes {@link settlePayment} at-most-once: a webhook retried
+ * for three days finds nothing to move on its second delivery.
+ */
+const SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
+    'requires_confirmation',
+    'requires_action',
+    'processing',
     'declined'
 ];
 
@@ -100,13 +122,18 @@ const callerScope = createOwnerScope(paymentRepository.ownerScope);
  * contract counts it in `totalPrice`. Re-asking is the double-click case and answers the same
  * intent; an order whose money already moved answers 409.
  *
+ * The provider is asked for an intent only when this payment does not already have one — a second
+ * intent for the same order is a second thing the customer could pay.
+ *
  * @param orderId - the order to pay
  * @param authContext - the caller; the order must be theirs (admins pass, as everywhere)
+ * @returns the payment on the wire, carrying the `clientSecret` the browser finishes against —
+ *   the one response that does, since it is never stored and never read back
  */
 export const createIntent = (
     orderId: string,
     authContext?: Caller
-): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+): Promise<ResponseSuccess<Payment> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('payments.order-not-found')]);
         // Payable means "can still reach `paid`" — asked of the order lifecycle rather than
@@ -116,95 +143,113 @@ export const createIntent = (
                 { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
             ]);
 
+        const provider = resolvePaymentProvider();
+
         return resolvePayerId(order.userId ? String(order.userId) : undefined)
             .then((payerId) =>
                 paymentRepository.upsertIntent(orderId, payerId, {
                     amount: orderTotal(order),
                     currency: defaultCurrency(),
-                    provider: resolvePaymentProvider().name
+                    provider: provider.name
                 })
             )
-            .then((payment) =>
-                payment
-                    ? generateSuccess(payment, 201)
-                    : generateReject(409, [
-                          {
-                              code: 'PAYMENT_ORDER_NOT_PAYABLE',
-                              message: t('payments.order-not-payable')
-                          }
-                      ])
-            );
+            .then((payment) => {
+                if (!payment)
+                    return generateReject(409, [
+                        {
+                            code: 'PAYMENT_ORDER_NOT_PAYABLE',
+                            message: t('payments.order-not-payable')
+                        }
+                    ]);
+
+                return provider
+                    .prepare(
+                        { amount: payment.amount, currency: payment.currency },
+                        { orderId, paymentId: String(payment._id) }
+                    )
+                    .then(({ providerRef, clientSecret }) =>
+                        paymentRepository
+                            .attachProviderRef(String(payment._id), providerRef)
+                            .then((stored) => ({
+                                // `.toJSON()` applies the model's `_id` → `id` / date transform.
+                                ...((stored ?? payment).toJSON() as Payment),
+                                clientSecret
+                            }))
+                    )
+                    .then((prepared) => generateSuccess(prepared, 201));
+            });
     });
 
+/** What a settlement did, for a caller that has to turn it into an HTTP answer. */
+interface Settlement {
+    /** The payment as it now stands. */
+    payment: PaymentDocument;
+    /**
+     * Whether the money arrived at a moment when the order could no longer be paid. It was put
+     * straight back, and the payment reads `refunded` — but the caller owes its client a refusal
+     * rather than a success, which is the one thing the status alone does not say.
+     */
+    orderLost: boolean;
+}
+
 /**
- * Confirm a payment — the fake card dialog's submit.
+ * Apply what the provider says about a payment. **The one place money is reconciled**, reached
+ * from the webhook, from the confirm, and from the sync — see the module docblock for why there is
+ * only one.
  *
- * See the module docblock for the ordering: charge, then the conditional order move, then the
- * payment row; a charge whose order slipped away is refunded immediately. A decline updates the
- * row (so the order page can show it) and answers 409 with `PAYMENT_DECLINED` — a refusal, not
- * an error in the request.
+ * Every write is conditional, so a delivery that arrives twice, or races the browser's own call,
+ * settles once: `SETTLEABLE_PAYMENT_STATUSES` excludes the terminal states, and the order's
+ * `pending → paid` move is what makes the inventory commit and the domain event at-most-once.
  *
- * @param paymentId - the intent being confirmed
- * @param card - what the customer typed
- * @param authContext - the caller; the payment must be theirs
+ * @param payment - the payment the provider named
+ * @param state - what the provider reported
  */
-export const confirmPayment = (
-    paymentId: string,
-    card: CardDetails,
-    authContext: Caller | undefined,
-    context: CallerContext
-): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository
-        .findByIdScoped(paymentId, callerScope(authContext))
-        .then(async (payment) => {
-            if (!payment) return generateReject(404, [t('payments.not-found')]);
-            if (!CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status))
-                return generateReject(409, [
-                    { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
-                ]);
+export const settlePayment = (
+    payment: PaymentDocument,
+    state: ProviderPaymentState
+): Promise<Settlement> => {
+    const orderId = String(payment.orderId);
+    const extra = state.cardLast4 ? { cardLast4: state.cardLast4 } : {};
 
-            const provider = resolvePaymentProvider();
-            const charge = { amount: payment.amount, currency: payment.currency };
-            const cardLast4 = cardLastFour(card.cardNumber);
+    // Nothing has landed yet: record where the payment got to and stop. Both of these are states
+    // the browser has more work to do in, and neither may touch the order.
+    if (state.status !== 'succeeded' && state.status !== 'declined')
+        return paymentRepository
+            .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, state.status, extra)
+            .then((updated) => ({ payment: updated ?? payment, orderLost: false }));
 
-            const outcome = await provider.charge(charge, card);
-            if (outcome === 'declined') {
-                // The precondition above, re-asserted in the filter: the read that passed it is
-                // already stale by the time the provider answers, and a racing tab must not be
-                // able to land a decline on a payment that has since succeeded.
-                await paymentRepository.updateStatusIfIn(
-                    String(payment.orderId),
-                    CONFIRMABLE_PAYMENT_STATUSES,
-                    'declined',
-                    { cardLast4 }
-                );
-                return generateReject(409, [
-                    { code: 'PAYMENT_DECLINED', message: t('payments.declined') }
-                ]);
-            }
+    if (state.status === 'declined')
+        return paymentRepository
+            .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, 'declined', extra)
+            .then((updated) => ({ payment: updated ?? payment, orderLost: false }));
 
-            const paidOrder = await orderRepository.updateStatusIfIn(
-                String(payment.orderId),
-                // Same row as the precondition above, read the other way round.
-                statusesLeadingTo(OrderStatus.paid, 'system'),
-                OrderStatus.paid,
-                {}
-            );
-            if (!paidOrder) {
-                // The money moved but the order was gone (cancelled, or a racing tab won). Put it
-                // straight back — the invariant is the module docblock's rule 2.
-                await provider.refund(charge);
-                return generateReject(409, [
-                    { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
-                ]);
-            }
-
-            const confirmed = await paymentRepository.updateStatusIfIn(
-                String(payment.orderId),
-                CONFIRMABLE_PAYMENT_STATUSES,
+    // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
+    // racing settlements gets past it.
+    return orderRepository
+        .updateStatusIfIn(
+            orderId,
+            statusesLeadingTo(OrderStatus.paid, 'system'),
+            OrderStatus.paid,
+            {}
+        )
+        .then(async (paidOrder) => {
+            const succeeded = await paymentRepository.updateStatusIfIn(
+                orderId,
+                SETTLEABLE_PAYMENT_STATUSES,
                 'succeeded',
-                { cardLast4 }
+                extra
             );
+
+            if (!paidOrder) {
+                /*
+                 * The money moved but the order was gone (cancelled, or a racing tab won). Put it
+                 * straight back — the invariant is the module docblock's rule 2. `performRefund`
+                 * rather than a bare `provider.refund`, so the payment ends up saying `refunded`
+                 * and the at-most-once guard is the same one every other refund goes through.
+                 */
+                const refunded = await performRefund(orderId);
+                return { payment: refunded ?? succeeded ?? payment, orderLost: true };
+            }
 
             /*
              * The units finally leave — held since checkout, recoverable until now.
@@ -214,43 +259,231 @@ export const confirmPayment = (
              * which this module cannot fix and `inventory` logs — the customer has a paid order
              * either way.
              */
-            await inventoryService.commitForOrder(String(payment.orderId));
+            await inventoryService.commitForOrder(orderId);
 
             await emitDomainEvent(ORDER_STATUS_CHANGED, {
-                orderId: String(payment.orderId),
+                orderId,
                 from: 'pending',
                 to: 'paid'
             });
 
-            return generateSuccess(confirmed ?? payment, 200, t('payments.confirm-success'));
-        })
-        .then((result) => {
-            // Only these two outcomes are events: `PAYMENT_DECLINED` is a card the provider refused,
-            // reportable like any other confirm attempt. The other rejections (payment not found, not
-            // in a confirmable state, the order gone) are request-shape or race problems, not a fact
-            // about the money — nothing here to attribute to a card.
-            const declined =
-                !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
-            if (result.success || declined) {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: result.success
-                            ? paymentsAuditActions.PAYMENT_CONFIRMED
-                            : paymentsAuditActions.PAYMENT_FAILED,
-                        outcome: result.success ? 'success' : 'failure',
-                        metadata: { payment_id: paymentId }
-                    })
-                );
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(context),
-                    event: result.success
-                        ? paymentsAnalyticsEvents.PAYMENT_SUCCEEDED
-                        : paymentsAnalyticsEvents.PAYMENT_DECLINED,
-                    properties: { payment_id: paymentId }
-                });
-            }
-            return result;
+            return { payment: succeeded ?? payment, orderLost: false };
         });
+};
+
+/**
+ * Turn a settled payment into the answer its HTTP caller is owed.
+ *
+ * Shared by the confirm and the sync, which differ in how they reach the provider and in nothing
+ * after it.
+ */
+const settlementResponse = ({
+    payment,
+    orderLost
+}: Settlement): ResponseSuccess<PaymentDocument> | ResponseReject => {
+    if (orderLost)
+        return generateReject(409, [
+            { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
+        ]);
+
+    if (payment.status === 'declined')
+        return generateReject(409, [{ code: 'PAYMENT_DECLINED', message: t('payments.declined') }]);
+
+    // In flight is a success on the wire, not a refusal: the browser has a next step to take and
+    // a 4xx would tell it to stop. The message says which of the two it is looking at.
+    if (payment.status !== 'succeeded')
+        return generateSuccess(payment, 200, t(`payments.${payment.status}`));
+
+    return generateSuccess(payment, 200, t('payments.confirm-success'));
+};
+
+/**
+ * Report a confirm or sync attempt, once its answer is known.
+ *
+ * Only these two outcomes are events: `PAYMENT_DECLINED` is a method the provider refused,
+ * reportable like any other attempt. The other rejections (payment not found, not in a confirmable
+ * state, the order gone) are request-shape or race problems, not a fact about the money — nothing
+ * there to attribute to a card. An in-flight answer is not an outcome yet, so it is not one either.
+ */
+const reportAttempt = (
+    result: ResponseSuccess<PaymentDocument> | ResponseReject,
+    paymentId: string,
+    context: CallerContext
+): ResponseSuccess<PaymentDocument> | ResponseReject => {
+    const declined =
+        !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
+    const settled = result.success && result.data?.status === 'succeeded';
+    if (!settled && !declined) return result;
+
+    emitAuditEvent(
+        buildAuditEvent(context, {
+            action: settled
+                ? paymentsAuditActions.PAYMENT_CONFIRMED
+                : paymentsAuditActions.PAYMENT_FAILED,
+            outcome: settled ? 'success' : 'failure',
+            metadata: { payment_id: paymentId }
+        })
+    );
+    emitAnalyticsEvent({
+        ...buildAnalyticsBase(context),
+        event: settled
+            ? paymentsAnalyticsEvents.PAYMENT_SUCCEEDED
+            : paymentsAnalyticsEvents.PAYMENT_DECLINED,
+        properties: { payment_id: paymentId }
+    });
+    return result;
+};
+
+/**
+ * Read a payment the caller owns and that is in one of the given states, or say which refusal it
+ * was — the opening both browser-driven endpoints share.
+ */
+const findConfirmable = (
+    paymentId: string,
+    allowed: readonly PaymentStatus[],
+    authContext: Caller | undefined
+): Promise<PaymentDocument | ResponseReject> =>
+    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
+        if (!payment) return generateReject(404, [t('payments.not-found')]);
+        // No reference means the provider was never asked for an intent, so there is nothing at
+        // the far end to confirm or re-read. Same refusal as a wrong status: the client's move is
+        // to create the intent again either way.
+        if (!payment.providerRef || !allowed.includes(payment.status))
+            return generateReject(409, [
+                { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
+            ]);
+        return payment;
+    });
+
+/**
+ * Confirm a payment — the browser handing over the method its provider widget tokenised.
+ *
+ * The answer is not always final. A card the bank wants a challenge for comes back
+ * `requires_action` and one that settles over days `processing`; both are successes on the wire,
+ * and {@link syncPayment} is what resolves them once the browser is done.
+ *
+ * @param paymentId - the intent being confirmed
+ * @param paymentMethodRef - the provider's opaque handle for the method. NOT a card number
+ * @param authContext - the caller; the payment must be theirs
+ */
+export const confirmPayment = (
+    paymentId: string,
+    paymentMethodRef: string,
+    authContext: Caller | undefined,
+    context: CallerContext
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+    findConfirmable(paymentId, CONFIRMABLE_PAYMENT_STATUSES, authContext)
+        .then((found) => {
+            if ('success' in found) return found;
+            return resolvePaymentProvider()
+                .confirm(found.providerRef!, paymentMethodRef)
+                .then((state) => settlePayment(found, state))
+                .then(settlementResponse);
+        })
+        .then((result) => reportAttempt(result, paymentId, context));
+
+/**
+ * Re-read a payment from the provider and apply whatever it says — the browser reporting that it
+ * has finished a challenge, and the reconciliation path for anything the webhook never delivered.
+ *
+ * Idempotent by construction: a payment already settled is answered as it stands, without asking
+ * the provider anything.
+ *
+ * @param paymentId - the payment to re-read
+ * @param authContext - the caller; the payment must be theirs
+ */
+export const syncPayment = (
+    paymentId: string,
+    authContext: Caller | undefined,
+    context: CallerContext
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+    paymentRepository
+        .findByIdScoped(paymentId, callerScope(authContext))
+        .then((payment) => {
+            if (!payment) return generateReject(404, [t('payments.not-found')]);
+            // Terminal already: there is nothing the provider could say that this module would
+            // act on, and asking would spend a call to be told so.
+            if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
+                return generateSuccess(payment, 200);
+
+            return findConfirmable(paymentId, SETTLEABLE_PAYMENT_STATUSES, authContext).then(
+                (found) => {
+                    if ('success' in found) return found;
+                    return resolvePaymentProvider()
+                        .retrieve(found.providerRef!)
+                        .then((state) => settlePayment(found, state))
+                        .then(settlementResponse);
+                }
+            );
+        })
+        .then((result) => reportAttempt(result, paymentId, context));
+
+/**
+ * Apply a webhook delivery the provider has already been authenticated for.
+ *
+ * Claims the event id first, and stops if somebody already has it: the status writes below are
+ * at-most-once by themselves, but committing inventory and emitting `ORDER_STATUS_CHANGED` are
+ * not, and a provider retries a delivery for days.
+ *
+ * Deliberately quiet — it answers nothing to anyone, so an event this application cannot act on is
+ * logged and dropped rather than raised. A provider reads any non-2xx as a failed delivery and
+ * comes back harder, and there is nothing here a retry would fix.
+ *
+ * @param event - the delivery, already verified and normalised by the provider
+ */
+export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void> =>
+    claimWebhookEvent(event.id).then((claimed) => {
+        // A retry of something already applied. Silent by design: a provider retrying is normal
+        // traffic, not an incident.
+        if (!claimed) return;
+
+        if (!event.providerRef || !event.state) {
+            logger.info({
+                message: 'Payment webhook carried no state to apply.',
+                eventId: event.id
+            });
+            return;
+        }
+
+        return applyWebhookSettlement(event.providerRef, event.state);
+    });
+
+/**
+ * Settle one payment from what the provider reported about it.
+ *
+ * Separate from {@link applyWebhookDelivery} because the tests that pin the SETTLEMENT should not
+ * have to mint an event id to reach it, and because the reconciliation job that will eventually
+ * sweep unsettled intents has an outcome but no delivery.
+ *
+ * Unattended, so outcomes are logged rather than audited — the same rule the cancel listener and
+ * the token-cleanup job follow.
+ *
+ * @param providerRef - the intent the event named
+ * @param state - what the provider reported about it
+ */
+export const applyWebhookSettlement = (
+    providerRef: string,
+    state: ProviderPaymentState
+): Promise<void> =>
+    paymentRepository.findByProviderRef(providerRef).then((payment) => {
+        if (!payment) {
+            logger.warn({
+                message: 'Payment webhook named an intent this application does not know.',
+                providerRef
+            });
+            return;
+        }
+
+        return settlePayment(payment, state).then(({ payment: settled, orderLost }) => {
+            logger.info({
+                message: 'Payment webhook applied.',
+                providerRef,
+                reported: state.status,
+                status: settled.status,
+                orderLost
+            });
+        });
+    });
 
 /**
  * The payment behind an order, for the order page's payment panel.
@@ -288,6 +521,8 @@ const withActions = (
     actions: {
         // Confirmable, and the order can still get to `paid`. Both halves, because a retryable
         // decline on an order that has since been cancelled is not a payment anyone may complete.
+        // An in-flight payment is deliberately NOT payable: its next step is `sync`, not a second
+        // method, and offering the form again is how a customer pays twice.
         pay:
             CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
             Boolean(order) &&
@@ -314,8 +549,20 @@ const performRefund = (orderId: string, context?: CallerContext): Promise<Paymen
         .updateStatusIfIn(orderId, [REFUNDABLE_PAYMENT_STATUS], 'refunded')
         .then((payment) => {
             if (!payment) return null;
+            if (!payment.providerRef) {
+                // Only a `succeeded` payment reaches here, and nothing can succeed before the
+                // provider has been asked for an intent — so this is a corrupted row, not a
+                // reachable state. Loud, and the status still moves: leaving it `succeeded` would
+                // invite a second attempt at the same impossible refund.
+                logger.error({
+                    message:
+                        'Refunded a payment carrying no provider reference — money was NOT returned.',
+                    orderId
+                });
+                return payment;
+            }
             return resolvePaymentProvider()
-                .refund({ amount: payment.amount, currency: payment.currency })
+                .refund(payment.providerRef, { amount: payment.amount, currency: payment.currency })
                 .then(() => {
                     logger.info(
                         `Payment for order ${orderId} refunded (${payment.amount} ${payment.currency})`
@@ -407,6 +654,9 @@ export const findOwnPayments = (userId: string): Promise<PaymentDocument[]> =>
 export const paymentService = {
     createIntent,
     confirmPayment,
+    syncPayment,
+    applyWebhookDelivery,
+    applyWebhookSettlement,
     getForOrder,
     refundForOrder,
     refundByOrder,

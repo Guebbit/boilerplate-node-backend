@@ -26,7 +26,7 @@ import accountModule from '@modules/account/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
 import type { ResponseSuccess } from '@infrastructure/http/response';
-import type { PaymentDocument } from '@modules/payments/model';
+import type { Payment } from '@types';
 
 setupTestDb();
 
@@ -53,11 +53,11 @@ describe('payments — detach on account erasure', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const intent = await createIntent(String(order._id), { admin: false, id: user.id });
-        const payment = (intent as ResponseSuccess<PaymentDocument>).data!;
+        const payment = (intent as ResponseSuccess<Payment>).data!;
 
         await userService.remove(user, true);
 
-        const reloaded = await paymentRepository.findById(String(payment._id));
+        const reloaded = await paymentRepository.findById(payment.id);
         expect(reloaded!.userId).toBeUndefined();
     });
 
@@ -66,11 +66,11 @@ describe('payments — detach on account erasure', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         const intent = await createIntent(String(order._id), { admin: false, id: user.id });
-        const payment = (intent as ResponseSuccess<PaymentDocument>).data!;
+        const payment = (intent as ResponseSuccess<Payment>).data!;
 
         await userService.remove(user, true);
 
-        await expect(paymentRepository.findById(String(payment._id))).resolves.not.toBeNull();
+        await expect(paymentRepository.findById(payment.id)).resolves.not.toBeNull();
     });
 
     it('an admin intent against an already-detached order records no payer, not the string "undefined"', async () => {
@@ -81,7 +81,7 @@ describe('payments — detach on account erasure', () => {
 
         const intent = await createIntent(String(order._id), { admin: true, id: 'admin-caller' });
 
-        const payment = (intent as ResponseSuccess<PaymentDocument>).data!;
+        const payment = (intent as ResponseSuccess<Payment>).data!;
         expect(payment.userId).toBeUndefined();
     });
 });

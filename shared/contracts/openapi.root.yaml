@@ -155,6 +155,16 @@ components:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/MessageResponse'
+        BadRequest:
+            description: >-
+                The request could not be understood or authenticated as what it claims to be —
+                distinct from `ValidationError`, which is a well-formed request whose FIELDS are
+                wrong. Used where a caller is a machine rather than a form: an unverifiable webhook
+                signature is the case that needs it.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
         Unauthorized:
             description: Unauthorized
             content:
@@ -953,6 +963,10 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1refund'
     /payments/{id}/confirm:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
+    /payments/{id}/sync:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1sync'
+    /payments/webhook:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1webhook'
 
     # ---------- delivery ----------
     /delivery/methods:
