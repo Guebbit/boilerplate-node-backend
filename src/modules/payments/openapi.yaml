@@ -219,7 +219,10 @@ paths:
                   required: true
                   schema:
                       type: string
-                  description: '`t=<unix seconds>,v1=<hex hmac-sha256 of "<t>.<raw body>">`'
+                  description: >-
+                      `t=<unix seconds>,v1=<hex hmac-sha256 of "<t>.<raw body>">`. `t` must be
+                      within 300 seconds of the server's clock or the delivery is rejected as
+                      stale, replay protection against a captured signature being resent later.
             requestBody:
                 required: true
                 content:

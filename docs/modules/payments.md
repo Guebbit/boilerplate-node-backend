@@ -179,6 +179,15 @@ existing ones reading in the currency they were actually taken in. There is no c
 anywhere in this module: a deployment that needs several currencies needs a price per currency
 on the product, not a rate here.
 
+Two more, not environment variables — code constants in `providers/webhook-signature.ts` and
+`model.ts`, called out here because an operator debugging a webhook has no other reason to open
+either file:
+
+| Constant                       | Value | Meaning                                                                                                                                                                                   |
+| ------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TOLERANCE_SECONDS`            | 300   | How far a delivery's `t=` may drift from the server's clock before it is rejected as stale.                                                                                               |
+| `WEBHOOK_EVENT_RETENTION_DAYS` | 30    | How long a processed event id is remembered before its ledger row expires — chosen to sit past any provider's retry window, a claim about a third party this deployment does not control. |
+
 ## Related pages
 
 - [The provider port](./payments-provider-port.md) — the interface and the fake behind it
