@@ -353,25 +353,28 @@ const reportAttempt = (
 };
 
 /**
- * Read a payment the caller owns and that is in one of the given states, or say which refusal it
- * was — the opening both browser-driven endpoints share.
+ * Whether an already-fetched payment is in one of the given states, or say which refusal it was —
+ * the check both browser-driven endpoints share, over a document each has already read for its own
+ * reasons (a fresh read for the confirm, one the sync needed anyway to know it isn't terminal).
+ *
+ * @returns the payment, narrowed to prove it carries a `providerRef` — nothing here reaches a
+ *   confirmable or settleable status before the provider was asked for an intent — or the refusal
  */
 const findConfirmable = (
-    paymentId: string,
-    allowed: readonly PaymentStatus[],
-    authContext: Caller | undefined
-): Promise<PaymentDocument | ResponseReject> =>
-    paymentRepository.findByIdScoped(paymentId, callerScope(authContext)).then((payment) => {
-        if (!payment) return generateReject(404, [t('payments.not-found')]);
-        // No reference means the provider was never asked for an intent, so there is nothing at
-        // the far end to confirm or re-read. Same refusal as a wrong status: the client's move is
-        // to create the intent again either way.
-        if (!payment.providerRef || !allowed.includes(payment.status))
-            return generateReject(409, [
-                { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
-            ]);
-        return payment;
-    });
+    payment: PaymentDocument,
+    allowed: readonly PaymentStatus[]
+): (PaymentDocument & { providerRef: string }) | ResponseReject => {
+    // No reference means the provider was never asked for an intent, so there is nothing at
+    // the far end to confirm or re-read. Same refusal as a wrong status: the client's move is
+    // to create the intent again either way.
+    if (!payment.providerRef || !allowed.includes(payment.status))
+        return generateReject(409, [
+            { code: 'PAYMENT_NOT_CONFIRMABLE', message: t('payments.not-confirmable') }
+        ]);
+    // The guard above proves `providerRef` is present, but narrowing a property does not narrow
+    // the object it lives on — TS has no way to fold that back into `payment`'s own type here.
+    return payment as PaymentDocument & { providerRef: string };
+};
 
 /**
  * Confirm a payment — the browser handing over the method its provider widget tokenised.
@@ -390,11 +393,14 @@ export const confirmPayment = (
     authContext: Caller | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    findConfirmable(paymentId, CONFIRMABLE_PAYMENT_STATUSES, authContext)
-        .then((found) => {
+    paymentRepository
+        .findByIdScoped(paymentId, callerScope(authContext))
+        .then((payment) => {
+            if (!payment) return generateReject(404, [t('payments.not-found')]);
+            const found = findConfirmable(payment, CONFIRMABLE_PAYMENT_STATUSES);
             if ('success' in found) return found;
             return resolvePaymentProvider()
-                .confirm(found.providerRef!, paymentMethodRef)
+                .confirm(found.providerRef, paymentMethodRef)
                 .then((state) => settlePayment(found, state))
                 .then(settlementResponse);
         })
@@ -424,15 +430,12 @@ export const syncPayment = (
             if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
                 return generateSuccess(payment, 200);
 
-            return findConfirmable(paymentId, SETTLEABLE_PAYMENT_STATUSES, authContext).then(
-                (found) => {
-                    if ('success' in found) return found;
-                    return resolvePaymentProvider()
-                        .retrieve(found.providerRef!)
-                        .then((state) => settlePayment(found, state))
-                        .then(settlementResponse);
-                }
-            );
+            const found = findConfirmable(payment, SETTLEABLE_PAYMENT_STATUSES);
+            if ('success' in found) return found;
+            return resolvePaymentProvider()
+                .retrieve(found.providerRef)
+                .then((state) => settlePayment(found, state))
+                .then(settlementResponse);
         })
         .then((result) => reportAttempt(result, paymentId, context));
 
