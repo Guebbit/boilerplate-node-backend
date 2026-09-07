@@ -49,6 +49,7 @@ export interface PaymentDocument extends Document {
 /** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
 export type PaymentModel = Model<PaymentDocument>;
 
+/** Mongoose schema for persisted payment documents. */
 export const paymentSchema = new Schema<PaymentDocument>(
     {
         orderId: {

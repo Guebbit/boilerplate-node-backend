@@ -654,7 +654,6 @@ export const refundByOrder = (
 export const refundForOrder = (orderId: string): Promise<void> =>
     performRefund(orderId).then(() => undefined);
 
-/** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 /**
  * `USER_DELETED`'s listener. Unsets `userId` on every payment this account
  * made; the payment row itself is never touched, same as `orders`' detach.
@@ -682,6 +681,7 @@ export const findOwnPayments = (userId: string): Promise<PaymentDocument[]> =>
     // page of it.
     paymentRepository.findAll(paymentRepository.ownerScope(userId), { limit: 100_000 });
 
+/** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
     createIntent,
     confirmPayment,
