@@ -113,7 +113,7 @@ npm run bench:k6:checkout  # the write path — login, cart, checkout under cont
 because it carries thresholds. Neither is in the gate: load results depend on the machine, and a
 noisy gate is a disabled gate.
 
-**The thresholds in `k6/*.js` are placeholders.** Seed real ones by measuring first — start the
+**The thresholds in `tests/load/*.js` are placeholders.** Seed real ones by measuring first — start the
 app, run `npm run bench`, read the p95, and set the threshold to roughly 1.4× it. The job of a
 threshold is to catch a regression, not to express an ambition; leave headroom or it fires on an
 unlucky afternoon and everyone learns to ignore it.
