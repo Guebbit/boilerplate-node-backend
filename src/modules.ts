@@ -24,6 +24,7 @@ import products from './modules/products/module';
 import users from './modules/users/module';
 import wishlist from './modules/wishlist/module';
 
+/** Every module this build serves, in the one list the app tier, docs and scripts all walk. */
 export const enabledModules: AppModule[] = [
     account,
     antibot,
