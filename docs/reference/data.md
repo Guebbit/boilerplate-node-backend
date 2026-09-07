@@ -1,11 +1,14 @@
 # Data
 
-`db/` holds everything that puts rows in a database, and the split inside it is the point:
-**`migrate-mongo` owns schema, `db:seed` owns data.** A migration changes the shape of a
-collection; a seed fills one. Neither does the other's job.
+`db/` holds everything that shapes or fills a database, and the split inside it is the point:
+**`db:sync` owns SCHEMA, `db:seed` owns DATA.** `db:sync` makes a collection's indexes match the
+schemas that declare them; `db:seed` fills a collection. Neither does the other's job.
 
-Neither half is authored here. A module owns its migrations and its fixtures the same way it owns
-its `openapi.yaml` fragment; `db/` is where the assembled result lands.
+Neither half is authored here. A module owns its indexes and its fixtures the same way it owns its
+`openapi.yaml` fragment; `db/` is only where the runners live.
+
+There is no migration tool, no changelog collection and no timestamped files. What replaced them,
+and why, is the whole of the next section.
 
 ---
 
@@ -14,12 +17,9 @@ its `openapi.yaml` fragment; `db/` is where the assembled result lands.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart LR
-    Cfg["migrate-mongo-config.js"] --> Mig["db/migrations<br/><i>assembled bundle</i>"]
-    Own["per-module migrations<br/><i>schema</i>"] --> Build["gen:migrations"]
-    Models["per-module model.ts<br/><i>indexes</i>"] --> Build
-    Build --> Mig
-    Mig --> Mongo[("MongoDB")]
-    Seeds["per-module seeds<br/><i>fixtures</i>"] --> Index["db/demo/index.ts<br/><i>the seeder</i>"]
+    Models["per-module model.ts<br/><i>the only author</i>"] --> Sync["db/sync-indexes.ts<br/><i>npm run db:sync</i>"]
+    Sync --> Mongo[("MongoDB")]
+    Seeds["per-module demo.ts<br/><i>fixtures</i>"] --> Index["db/demo/index.ts<br/><i>the seeder</i>"]
     Index --> Mongo
     Mongo --> Assemble["db/demo/assemble.ts"]
     Assemble --> Data["db/demo/demo-data.json<br/><i>published dataset</i>"]
@@ -27,47 +27,145 @@ flowchart LR
     classDef schema fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef data fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef store fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class Cfg,Mig,Own,Models,Build schema;
+    class Models,Sync schema;
     class Seeds,Index,Assemble,Data data;
     class Mongo store;
 ```
 
-## Migrations
+## Schema: `db:sync`
 
-| Pattern                           | What it is                                                                                                                                                                                                                                                                                                                                                                                                             | Read next                                                                        |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `src/modules/<m>/migrations/*.js` | A data migration the module owns, named with a leading timestamp, exporting an `up` and a `down`. Written by hand — a rename or a backfill cannot be derived from a schema. Declared on the module's manifest as `migrations: path.join(__dirname, 'migrations')`, the same shape as `locales`. Plain JavaScript because `migrate-mongo` loads them through its own CommonJS resolver with no TypeScript in the chain. | [Modules](./src-modules.md) · [MongoDB & Mongoose](../tools/mongodb-mongoose.md) |
-| `db/migrations/*.js`              | **Generated** by `npm run gen:migrations`, and gitignored. The index baseline plus a copy of every enabled module's migrations, applied in timestamp order and recorded in a changelog collection so each runs exactly once per database. This is the only directory `migrate-mongo` reads — run them with `npm run db:migrate:up`.                                                                                    | [Repository Root](./root.md)                                                     |
+An index is declared in one place — `schema.index(...)` in a module's `model.ts` — and nowhere
+else. `npm run db:sync` reconciles the database with those declarations: it creates what is
+missing and drops what no schema claims.
 
-Both halves have ONE author. The baseline's indexes come from the schemas that declare them; a data
-migration comes from the module whose collection it touches. `gen:migrations` assembles the two into
-`db/migrations/`, exactly as `contracts:bundle` assembles `openapi.yaml` from per-module fragments —
-and, like `api/`, the result is gitignored because `postinstall` rebuilds it, so there is no
-committed copy left to go stale.
+| File                 | What it is                                                                                                                                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `db/index-sync.ts`   | The reconciliation itself, importable so tests can drive it: the duplicate pre-flight, `planIndexSync()` (a dry run) and `applyIndexSync()`. |
+| `db/sync-indexes.ts` | The entry point `npm run db:sync` runs — connection, argument handling, and the report.                                                      |
 
-Timestamps are what sequence one module's migration against another's, so the assembler refuses a
-filename without a 14-digit one, and refuses two modules claiming the same filename — the changelog
-records by name, so a collision would mark one module's work as already applied.
+```bash
+npm run db:sync              # apply
+npm run db:sync -- --check   # print the plan, change nothing, exit 1 if it is not empty
+```
 
-**Regenerating only reaches databases that have never run it.** `migrate-mongo` records the
-baseline as applied by FILENAME, so rewriting its contents does not make it run again — a database
-that already holds the old set never sees the new index. Adding an index to a live deployment is
-therefore a new migration file of its own, alongside the regenerated baseline.
+**Adding an index is one edit.** Declare it on the schema. The next `db:sync` builds it — and
+`db:bootstrap` runs on every container boot, so in development there is nothing else to do.
+
+### Why a reconciliation and not a migration
+
+An index is **derivable from the domain model**. It is an invariant the aggregate owns, not an
+event in the database's history, so it has no business carrying a version or a filename.
+
+A migration tool models the opposite thing. `migrate-mongo` records what it has applied **by
+filename**, which is correct for a backfill that must happen exactly once and wrong for a desired
+state that must hold after every deploy. This repo previously generated a `…-baseline.js` from the
+schemas and fed it to that runner, and the mismatch cost a file every time: regenerating the
+baseline never re-ran it, so each newly declared index needed a second, hand-written migration
+creating the same key under the same name. Two authors for one index, kept in sync by hand.
+
+`syncIndexes()` has no such gap — there is one author, and convergence is re-applied rather than
+recorded.
 
 ```mermaid
 flowchart LR
-    Schema["a module's model.ts<br/><i>the only author</i>"] --> Gen["gen:migrations"]
-    Gen --> Baseline["…-baseline.js"]
-    Baseline -->|"never migrated"| Fresh["new database<br/><b>gets every index</b>"]
-    Baseline -.->|"already applied"| Live["live database<br/><b>unchanged</b>"]
-    Schema --> Extra["a new module migration"]
-    Extra --> Live
+    Schema["a module's model.ts"] --> Sync["db:sync"]
+    Sync --> Diff{"diff vs.<br/>what is stored"}
+    Diff -->|"declared, absent"| Create["create"]
+    Diff -->|"stored, declared by nobody"| Drop["drop"]
+    Diff -->|"agrees"| Nothing["no-op"]
 ```
 
-Two tests guard the set: `tests/integration/db/migration-model-indexes.test.ts` runs the migrations
-against a real database and checks the indexes that land against the ones the models declare, and
-`tests/integration/db/migration-demo-data.test.ts` checks a migration against the dataset it has to
-keep loadable.
+### It drops
+
+An index no schema declares is drift, and `db:sync` removes it. That is the point — drift that
+only ever accumulates is how a collection ends up carrying indexes whose purpose nobody can
+reconstruct — but it is also why `--check` exists. Run that first against a database you cannot
+rebuild.
+
+`--check` is genuinely read-only, and that takes one deliberate line: the script turns `autoIndex`
+OFF before connecting. It is on everywhere else, which is what gives the app and the test suite
+their indexes for free — but here it would have Mongoose build every declared index during
+`connect()`, so an inspection would silently write.
+
+### It refuses to build a constraint the data violates
+
+A unique index over a collection that already holds duplicates cannot be created. `createIndex`
+reports the **first** colliding value and nothing about the rest, so `db:sync` pre-flights every
+unique index and reports every offending group at once, then stops. Which of two documents survives
+a merge is a product decision, not one a script gets to make.
+
+### TTL windows
+
+`auditlogs`, `carts` and `feedbackrequests` expire rows with a TTL index whose `expireAfterSeconds`
+comes from an environment variable. Mongo will not modify an existing index's window in place, so:
+
+| Action after changing e.g. `NODE_AUDIT_RETENTION_DAYS` | Result                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Restart the app                                        | **Fails to boot.** `autoIndex` asks for the new window; Mongo refuses it. |
+| `npm run db:sync`                                      | Drops the index and rebuilds it with the new window.                      |
+
+So `db:bootstrap` — which syncs before the server starts — is what makes a window change a
+restart-safe operation.
+
+## Data: a one-off script under `ops/`
+
+MongoDB is schemaless, so most schema changes need no data work at all. Adding a field, giving one
+a default, removing one, making one optional, adding or dropping an index: all free. Old documents
+simply lack the new key, and Mongoose applies a `default` when it reads them.
+
+What is **not** derivable from a schema is a change to the shape of a value that already exists:
+
+| Change                                                   | Needs a script? |
+| -------------------------------------------------------- | --------------- |
+| Add a field, with or without a default                   | No              |
+| Remove a field, or make one optional                     | No              |
+| Add, change or drop an index                             | No — `db:sync`  |
+| Rename a field                                           | **Yes**         |
+| Change a value's type (string → `Date`, cents → decimal) | **Yes**         |
+| Split or merge fields                                    | **Yes**         |
+| Derive a value for existing rows (a slug from a title)   | **Yes**         |
+| De-duplicate before a unique index can be built          | **Yes**         |
+
+Roughly: **the shape of the container is free; the shape of the value costs a script.**
+
+Those are rare, and each one is a single run against a single database — so they are ordinary
+one-shot scripts under `ops/`, alongside the `reap:*` jobs, not entries in a framework:
+
+```ts
+#!/usr/bin/env tsx
+/**
+ * @module
+ * Split `name` into `firstName` / `lastName` on rows written before the split — run once.
+ */
+import 'dotenv/config';
+import { start, connection } from '@infrastructure/runtime/database';
+import { logger } from '@infrastructure/adapters/logger';
+import { runScript } from '../db/run-script';
+
+void runScript(
+    async () => {
+        await start();
+        // …driver-level writes over the affected rows, idempotent, reporting what it touched
+    },
+    () => connection.close()
+);
+```
+
+Three rules, and they are the same ones a migration tool would have imposed:
+
+- **Idempotent.** Nothing records that it ran, so it must be safe to run twice — filter on the rows
+  that still need the change, not on all of them.
+- **Driver-level, never through a model.** The point of the script is that stored rows do not match
+  today's schema; running today's hooks, defaults and validators over them is what corrupts them.
+- **Deleted once it has run everywhere.** It describes one moment, and keeping it implies it is
+  still part of the setup.
+
+Run it before `db:sync` when it is clearing the way for a new constraint (a de-duplication), and
+after when it needs an index to be fast.
+
+> **When this stops being enough.** Many environments, or a change that must provably run exactly
+> once before the app boots. Then a runner with a changelog earns its keep — it is one folder, not
+> a redesign, and nothing above has to change to accommodate it.
 
 ## The demo dataset
 
@@ -80,9 +178,13 @@ keep loadable.
 The fixtures themselves are not here — each module owns its own slice, and the two demo accounts
 are declared in `src/kernel/seed-accounts.ts`.
 
+Two tests guard the schema half: `tests/integration/db/index-sync.test.ts` runs the reconciliation
+against a real database — from nothing, against drift, and twice over — and
+`tests/unit/db/host-scripts.test.ts` pins the URI resolution `npm run host -- db:sync` depends on.
+
 ## Tools
 
-| File                | What it is                                                                                                                                                                                                                                                                         | Read next                                      |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `db/cache-clear.ts` | Drops every cached response belonging to this app — `npm run db:cache:clear`. The API invalidates its own cache on every write it handles, so this is for the writes it did **not** handle: a migration, a manual edit, a restored dump.                                           | [Redis Cache](../tools/redis-cache.md)         |
-| `db/run-script.ts`  | The entry-point wrapper the one-shot scripts in `db/` run through. Gives them the three things a bare promise chain does not: a connection opened and closed around the work, a non-zero exit on failure, and the failure printed rather than swallowed as an unhandled rejection. | [Package Scripts](../tools/package-scripts.md) |
+| File                | What it is                                                                                                                                                                                                                                                                                    | Read next                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `db/cache-clear.ts` | Drops every cached response belonging to this app — `npm run db:cache:clear`. The API invalidates its own cache on every write it handles, so this is for the writes it did **not** handle: an `ops/` script, a manual edit, a restored dump.                                                 | [Redis Cache](../tools/redis-cache.md)         |
+| `db/run-script.ts`  | The entry-point wrapper the one-shot scripts in `db/` and `ops/` run through. Gives them the three things a bare promise chain does not: a connection opened and closed around the work, a non-zero exit on failure, and the failure printed rather than swallowed as an unhandled rejection. | [Package Scripts](../tools/package-scripts.md) |

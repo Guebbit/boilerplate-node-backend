@@ -62,8 +62,8 @@ interface SchemaPath {
  * An index declared with `schema.index(keys, { name })` states its own; one declared as
  * `unique: true` on a PATH states none, and Mongoose derives `field_direction`, joined by `_`, at
  * build time. Deriving the same name here rather than reporting it as unnamed keeps a test
- * asserting the name the database will actually use — which is the name a migration or a
- * `dropIndex` has to say, and the whole reason declared names are worth pinning.
+ * asserting the name the database will actually use — which is the name `db:sync` and a manual
+ * `dropIndex` both have to say, and the whole reason declared names are worth pinning.
  */
 const indexName = (keys: Record<string, number | string>, options: unknown): string => {
     const declared = (options as { name?: string } | undefined)?.name;
@@ -99,9 +99,9 @@ export const requiredPaths = (schema: IntrospectableSchema): string[] =>
  *
  * The direction is kept because it is load-bearing on a compound index — `{ userId: 1, createdAt:
  * -1 }` serves "this user's orders, newest first" from the index, and the same index with
- * `createdAt: 1` makes that query sort in memory. The NAME is kept because it is what a migration
- * and a `dropIndex` refer to; renaming one silently leaves the old index in place in production
- * and builds a second copy of it.
+ * `createdAt: 1` makes that query sort in memory. The NAME is kept because it is what `db:sync`
+ * and a manual `dropIndex` refer to; renaming one leaves the old index in place until the next
+ * sync drops it, and until then production carries two copies.
  */
 export const indexSpecs = (schema: IntrospectableSchema): string[] =>
     declaredIndexes(schema)

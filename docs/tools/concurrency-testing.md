@@ -69,7 +69,7 @@ The last row is the interesting one. Correct code with no tests is one refactor 
 
 Closing a race can make things worse if done in the wrong order. Adding a unique index **before** the error interpreter knows what a duplicate-key error means converts a data bug into an availability bug — a 500 on an ordinary signup, and an alert at three in the morning.
 
-So: teach the error layer first, add the constraint second, migrate third. The migration itself refuses to run against a database that already holds duplicates, rather than failing halfway through with a driver error naming one of them.
+So: teach the error layer first, declare the constraint second, sync third. `npm run db:sync` refuses to build a unique index against a database that already holds duplicates — reporting every colliding group at once, rather than failing halfway through with a driver error naming one of them.
 
 ## Not every read-modify-write is a lost update
 
@@ -118,6 +118,6 @@ Run with `npm run test:integration` — they are part of the ordinary integratio
 ## Related pages
 
 - [Integration Testing](./integration-testing.md) — the harness these are built on
-- [MongoDB & Mongoose](./mongodb-mongoose.md) — indexes, the migration rule, atomic update operators
+- [MongoDB & Mongoose](./mongodb-mongoose.md) — indexes, the one-author rule, atomic update operators
 - [Mutation Testing](./mutation-testing.md) — the layer that structurally cannot answer this question
 - [Testing & Docs](./testing-and-docs.md) — the map

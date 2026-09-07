@@ -59,8 +59,9 @@ nothing from the response. That trades an email amplifier for a storage amplifie
 `contactLimiters` bounds and the TTL index below expires.
 
 **Retention.** A `createdAt` TTL index (`NODE_FEEDBACK_RETENTION_DAYS`, default 730 — 24 months)
-deletes tickets on its own; changing the window on a live database needs a `collMod` migration, the
-same caveat [`audit-logs`](./audit-logs.md) carries for the identical reason. Erasing a specific
+deletes tickets on its own; changing the window on a live database needs `npm run db:sync` — a
+restart alone fails the boot — the same caveat [`audit-logs`](./audit-logs.md) carries for the
+identical reason. Erasing a specific
 person's data goes through the existing admin search (`GET /feedback?email=` or
 `POST /feedback/search`) plus `DELETE /feedback/{id}` — a GDPR request names an address, not an id,
 so the operator finds the rows first and deletes them; a dedicated erase-by-email endpoint would be
@@ -102,4 +103,4 @@ flowchart LR
 - [Email & PDF Rendering](../tools/email-and-rendering.md) — the acknowledgement and the triage notification
 - [Security](../tools/security.md) — the rate-limit budgets, including this module's own
 - [Winston & Audit Logs](../tools/winston.md) — what a triage action records
-- [Ops & Assets](../reference/ops.md) — the retention window and why changing it needs a migration
+- [Ops & Assets](../reference/ops.md) — the retention window and why changing it needs `db:sync`

@@ -3,8 +3,8 @@
  *
  * Tested for both directions that matter: inside a scope the ambient `t` must be the scope's, and
  * outside one it must silently be the global instance's. The second is what keeps jobs, workers
- * and migrations working, so a regression there is invisible until something out-of-band starts
- * answering in a raw key.
+ * and one-off scripts working, so a regression there is invisible until something out-of-band
+ * starts answering in a raw key.
  *
  * The interleaving cases are the reason this code is its own file: the bug it exists to prevent —
  * one request answered in another's language — only appears under concurrency, so never in a test

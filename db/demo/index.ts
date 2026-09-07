@@ -1,7 +1,7 @@
 /*
  * Demo data seeder.
  *
- * `db:seed` owns DATA; `migrate-mongo` owns SCHEMA. Each module owns its own slice of the demo
+ * `db:seed` owns DATA; `db:sync` owns SCHEMA. Each module owns its own slice of the demo
  * dataset in `src/modules/<name>/demo.ts`; this file is the RUNNER — connection, production gate
  * and the walk over `enabledModules`, nothing else. The upsert policy lives in
  * `@infrastructure/persistence/seed`. What the API then serves is published by

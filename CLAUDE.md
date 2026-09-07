@@ -236,9 +236,9 @@ All of it ADHD-friendly: short lines, one idea per line, plain language, the "wh
 When two readings of a request would produce materially different work, ask — do not pick the
 likelier one and build it.
 
-- MUST ask before: adding a dependency, changing a contract or a schema, writing a migration,
-  touching auth / security / payments / money, deleting anything, or choosing between two designs
-  that are genuinely close.
+- MUST ask before: adding a dependency, changing a contract or a schema, writing a one-off data
+  script under `ops/`, touching auth / security / payments / money, deleting anything, or choosing
+  between two designs that are genuinely close.
 - Ask **early** and **batched** — one message with the open questions, before the code is written,
   not a drip-feed and not a post-mortem.
 - Decide alone on the mechanical half: naming, where a helper goes, test placement, formatting,

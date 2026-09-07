@@ -72,7 +72,7 @@ describe('locale discovery', () => {
     });
 
     // The shared file is resolved from the module's own location rather than from `process.cwd()`,
-    // so a jest worker, a migration and `src/cluster.ts` all read the same directory.
+    // so a jest worker, a one-off script and `src/cluster.ts` all read the same directory.
     it('finds the shared dictionaries whatever the working directory is', () => {
         const originalCwd = process.cwd();
         process.chdir('/');

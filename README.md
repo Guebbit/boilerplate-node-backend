@@ -34,7 +34,7 @@ npm run compose:restart   # docker or podman, auto-detected
 ```
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting, so the
-database is migrated and seeded on first boot — you get demo products, users and orders rather
+database is indexed and seeded on first boot — you get demo products, users and orders rather
 than empty lists.
 
 ```bash
@@ -99,7 +99,7 @@ Four ideas carry the whole repository:
 | `src/app`            | assembly: routes, security, error handling, telemetry, workers |
 | `api/`               | generated types and Zod schemas — never edited by hand         |
 | `shared/`            | contract fragments and EJS email templates                     |
-| `db/`                | migrations and seeds                                           |
+| `db/`                | index sync and seeds                                           |
 
 ---
 

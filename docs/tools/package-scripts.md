@@ -102,7 +102,6 @@ Change](../api/regenerating.md).
 | `lint:asyncapi:modules`  | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                            | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
 | `seed:export`            | generate | seed a throwaway database with the real seeders and publish what the API answers to `db/demo/demo-data.json`             | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `check:seed-export`      | verify   | fail if `demo-data.json` is stale against a fresh seeding run — the dataset's twin of `check:contracts-bundle`           | [Regenerating](../api/regenerating.md)                     |
-| `gen:migrations`         | generate | assemble `db/migrations/` — the index baseline read off each module's schema, plus every module's own migrations         | [Data](../reference/data.md)                               |
 | `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `regenerate`             | generate | every generator above, in dependency order, then the sync — the one command to run after changing a generator input      | [Regenerating After a Change](../api/regenerating.md)      |
 
@@ -135,19 +134,17 @@ for exactly which is which.
 
 ## Database & seed scripts
 
-Migrations own **schema** (indexes, collection options); the seeder owns **demo data**. Both are
-idempotent, and `db:bootstrap` chains them — it is what the compose `app` service runs before
-starting the server.
+`db:sync` owns **schema** (the indexes, reconciled against the schemas that declare them); the
+seeder owns **demo data**. Both are idempotent, and `db:bootstrap` chains them — it is what the
+compose `app` service runs before starting the server.
 
-| Script              | Job                                                | Read more                       |
-| ------------------- | -------------------------------------------------- | ------------------------------- |
-| `db:migrate:up`     | apply pending Mongo migrations (indexes/schema)    | direct CLI wrapper              |
-| `db:migrate:down`   | roll back the last migration                       | direct CLI wrapper              |
-| `db:migrate:status` | inspect migration state                            | direct CLI wrapper              |
-| `db:seed`           | upsert the demo dataset (no-op if already present) | direct CLI wrapper              |
-| `db:seed:reset`     | drop the database, then reseed                     | direct CLI wrapper              |
-| `db:cache:clear`    | drop every cached response under the app's prefix  | [Redis cache](./redis-cache.md) |
-| `db:bootstrap`      | `db:migrate:up` followed by `db:seed`              | runs on container boot          |
+| Script           | Job                                                         | Read more                       |
+| ---------------- | ----------------------------------------------------------- | ------------------------------- |
+| `db:sync`        | make every index match the schemas; `-- --check` plans only | [Data](../reference/data.md)    |
+| `db:seed`        | upsert the demo dataset (no-op if already present)          | direct CLI wrapper              |
+| `db:seed:reset`  | drop the database, then reseed                              | direct CLI wrapper              |
+| `db:cache:clear` | drop every cached response under the app's prefix           | [Redis cache](./redis-cache.md) |
+| `db:bootstrap`   | `db:sync` followed by `db:seed`                             | runs on container boot          |
 
 `db:seed` calls `db:cache:clear`'s logic itself whenever it created something. Run the script by
 hand after editing the database another way (`mongosh`, a GUI) — those writes never reach the

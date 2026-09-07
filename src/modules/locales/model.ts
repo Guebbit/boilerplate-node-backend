@@ -16,8 +16,8 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 /**
  * The ISO 639-1 primary subtag of a BCP 47 tag: `pt-BR` → `pt`, `es` → `es`.
  *
- * Lowercased here as well as by the schema, because the seeds and the migration call it directly
- * and neither goes through a Mongoose setter.
+ * Lowercased here as well as by the schema, because the seeds call it directly and do not go
+ * through a Mongoose setter.
  */
 export const deriveBaseLanguage = (tag: string): string =>
     // `split` always yields at least one element, so index 0 needs no fallback arm.
@@ -111,7 +111,7 @@ export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
 
 /*
  * Derived on every save so the column cannot drift from `tag` — a hook rather than an assignment
- * in `createLanguage`, since every write path (including tests and migrations) must derive it.
+ * in `createLanguage`, since every write path (tests and one-off scripts included) must derive it.
  * `pre('validate')`, not `pre('save')`, because `required: true` is checked at validation time.
  */
 localeSchema.pre('validate', function derivesBaseLanguage() {
@@ -119,9 +119,8 @@ localeSchema.pre('validate', function derivesBaseLanguage() {
 });
 
 /*
- * Named explicitly, not derived: `db/migrations/20260905000000-baseline.js` creates this same
- * index under this same name, and a derived name would conflict at boot on migrated databases
- * (see `users/model.ts`).
+ * Named explicitly, not derived: Mongo identifies an index by name as much as by key, so a derived
+ * name is one refactor away from leaving the old index in place and building a second copy of it.
  *
  * UNIQUE on tag: a language is created by check-then-insert, so only the database can refuse two
  * concurrent creations of `es`.

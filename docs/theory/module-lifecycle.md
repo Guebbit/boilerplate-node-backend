@@ -474,8 +474,8 @@ ones a sweep cannot express:
     compiler is holding for you.
 
 - **A whole-word scan for domain names.** Tried and rejected: `observability` and `locales` are
-  module names _and_ infrastructure folder names, and `db/migrations/**` names collections forever
-  by design. The false-positive rate makes it unusable.
+  module names _and_ infrastructure folder names, and a module's `demo.ts` names collections
+  forever by design. The false-positive rate makes it unusable.
 
 What the suite does cover is the neighbouring ground: `eslint-plugin-boundaries` holds a
 co-located spec to its sibling's barrel, and `request-sources.test.ts` keeps every mounted route in

@@ -36,8 +36,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * database from the host — it blanks the URI and overrides only `NODE_MONGODB_HOST`, so the
  * database name still comes from `.env` instead of drifting in `package.json`.
  *
- * `migrate-mongo-config.js` reimplements these lines (it's CommonJS and can't import this file);
- * `tests/unit/db/host-scripts.test.ts` asserts the two never disagree.
+ * `tests/unit/db/host-scripts.test.ts` pins the behaviour the `host` script depends on.
  */
 export const getDatabaseUri = () => {
     // A full URI wins outright — it may carry credentials or options the fragments cannot express.

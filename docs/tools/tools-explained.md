@@ -21,7 +21,6 @@ flowchart TD
         MONGO[("MongoDB")]
         REDIS[("Redis")]
         RMQ[("RabbitMQ")]
-        MIGRATE["migrate-mongo"]
     end
 
     subgraph SEC["Request edge"]
@@ -323,7 +322,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** If the app exports traces directly to Tempo, switching to Jaeger or a cloud vendor requires changing app code and redeploying. The collector breaks that coupling — swap backends in the collector config without touching the app. The collector can also batch, filter, and sample spans before export.
 
-**In this repo.** Listens on `:4318` (OTLP/HTTP) and `:4317` (OTLP/gRPC). Batches spans and exports to Tempo via internal gRPC. Config lives at `.docker/observability/otel-collector.config.yaml`.
+**In this repo.** Listens on `:4318` (OTLP/HTTP) and `:4317` (OTLP/gRPC). Batches spans and exports to Tempo via internal gRPC. Config lives at `docker/observability/otel-collector.config.yaml`.
 
 → [OpenTelemetry](./opentelemetry.md) · [Observability Reference](./observability-reference.md)
 
@@ -359,7 +358,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** Loki does not pull logs — something must push them. Promtail sits on the host, knows where each container writes its log file, and handles the Docker vs Podman format differences without changes to the app itself.
 
-**In this repo.** Two configs ship with the repo: one for Docker (`json-file` log driver) and one for Podman (`k8s-file` / CRI format). `PROMTAIL_CONFIG` in `.env` selects which one is mounted (docker's is the default), and on Podman `CONTAINER_LOG_DRIVER=k8s-file` is what makes the log files exist at all — its own default, `journald`, writes none. Config lives at `.docker/observability/promtail*.config.yaml`.
+**In this repo.** Two configs ship with the repo: one for Docker (`json-file` log driver) and one for Podman (`k8s-file` / CRI format). `PROMTAIL_CONFIG` in `.env` selects which one is mounted (docker's is the default), and on Podman `CONTAINER_LOG_DRIVER=k8s-file` is what makes the log files exist at all — its own default, `journald`, writes none. Config lives at `docker/observability/promtail*.config.yaml`.
 
 → [Loki](./loki.md) · [Docker & Podman](./docker-and-podman.md)
 
@@ -379,15 +378,23 @@ Observability is the ability to understand what a running system is doing from i
 
 ## Project workflow tools
 
-### migrate-mongo (migrations)
+### `db:sync` (schema reconciliation)
 
-**What it is.** migrate-mongo is a database migration runner for MongoDB. It stores each migration as a plain JavaScript file and tracks which have been applied in a `migrations_changelog` collection.
+**What it is.** Not a tool but a script — `db/sync-indexes.ts`, over Mongoose's own
+`connection.syncIndexes()`. It compares the indexes a database holds against the ones the schemas
+declare, creates the missing and drops the rest.
 
-**Problem it solves.** Schema and data changes need to be reproducible across environments (dev, staging, production). Without a migration tool, every developer applies changes manually and environments drift apart. migrate-mongo gives you versioned, ordered, undoable change scripts.
+**Problem it solves.** Index changes have to be reproducible across environments (dev, staging,
+production). A migration runner does that by recording applied files by name — right for a one-off
+backfill, wrong for an index, which is derivable from the model and must simply be true after every
+deploy. Reconciling removes the second author, and with it the whole class of "the schema says one
+thing and the migration says another" boot failures.
 
-**In this repo.** Migrations live in `db/migrations/`. `npm run db:migrate:up` applies pending ones; `npm run db:migrate:down` rolls back the last one. Config reads `NODE_DB_URI` from env.
+**In this repo.** `npm run db:sync` applies; `npm run db:sync -- --check` prints the plan and
+changes nothing. `db:bootstrap` runs it before the server starts. Data changes that cannot be
+derived from a schema — a rename, a backfill — are one-off scripts under `ops/` instead.
 
-→ [MongoDB & Mongoose](./mongodb-mongoose.md)
+→ [MongoDB & Mongoose](./mongodb-mongoose.md) · [Data](../reference/data.md)
 
 ---
 

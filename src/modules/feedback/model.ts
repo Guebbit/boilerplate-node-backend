@@ -86,11 +86,11 @@ feedbackRequestSchema.index({ status: 1, createdAt: -1 });
  * ASCENDING index, and `{ status: 1, createdAt: -1 }` is both compound and descending —
  * attaching the option there would produce an index that silently never deletes anything.
  *
- * Caveat worth knowing: Mongo will not modify an existing TTL index's `expireAfterSeconds` when
- * the value changes. Raising or lowering `NODE_FEEDBACK_RETENTION_DAYS` on a database that
- * already has this index does nothing until the index is dropped and recreated — use a migration
- * under `db/migrations/` (`collMod`) rather than expecting a restart to apply it. See
- * `audit-logs/model.ts` for the identical caveat on that module's own TTL index.
+ * Caveat worth knowing: Mongo will not modify an existing TTL index's `expireAfterSeconds` in
+ * place. Raising or lowering `NODE_FEEDBACK_RETENTION_DAYS` and restarting FAILS THE BOOT —
+ * `autoIndex` asks for the new window and Mongo refuses the conflicting options. `npm run db:sync`
+ * is what applies it, by dropping the index and rebuilding it. See `audit-logs/model.ts` for the
+ * identical caveat on that module's own TTL index.
  */
 feedbackRequestSchema.index({ createdAt: 1 }, { expireAfterSeconds: retentionDays * 24 * 60 * 60 });
 

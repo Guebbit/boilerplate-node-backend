@@ -1,5 +1,5 @@
 /**
- * The `host` npm script, and the two URI resolvers it depends on.
+ * The `host` npm script, and the URI resolver it depends on.
  *
  * `npm run host -- <script>` exists so a developer can run anything against the containerised
  * database WITHOUT being in a container. That means overriding one thing — the hostname — and
@@ -17,14 +17,11 @@
  *   2. It stays the ONLY script that redirects a hostname — the per-script `:host` twins it
  *      replaced were seven copies of one env prefix, and seven chances to copy it wrong.
  *   3. An EMPTY URI falls through to the fragments (a `!== undefined` check would not).
- *   4. `migrate-mongo-config.js` resolves the same URI as the application, despite having to
- *      reimplement the logic — it is CommonJS loaded by migrate-mongo's own resolver, and it
- *      cannot import a TypeScript module.
- *   5. The redirect target is the LITERAL loopback address, not the name `localhost`.
+ *   4. The redirect target is the LITERAL loopback address, not the name `localhost`.
  *
  * (3) is the load-bearing one and the easiest to break by "tidying" a truthiness check.
  *
- * (5) is the one that looks like a style choice and is not. `localhost` is a name, and on a
+ * (4) is the one that looks like a style choice and is not. `localhost` is a name, and on a
  * dual-stack machine it resolves to BOTH `::1` and `127.0.0.1` — with the order decided by the
  * resolver, not by this repo. Node returns addresses verbatim, so whichever the resolver puts
  * first is the one the driver dials. Docker and podman publish a port to `0.0.0.0` by default,
@@ -38,13 +35,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { getDatabaseUri } from '@infrastructure/runtime/database';
 
-/**
- * `migrate-mongo-config.js` calls `dotenv.config()` at load. That would let this machine's `.env`
- * leak into the matrix below and make the results unreproducible, so it is stubbed out — these
- * tests are about URI resolution, not about dotenv.
- */
-jest.mock('dotenv', () => ({ config: () => ({ parsed: {} }) }));
-
 const ROOT = path.join(__dirname, '../../..');
 
 const packageScripts: Record<string, string> = JSON.parse(
@@ -52,24 +42,6 @@ const packageScripts: Record<string, string> = JSON.parse(
 ).scripts;
 
 const hostScript = packageScripts.host;
-
-/**
- * Re-evaluate the migrate-mongo config against the CURRENT env — it resolves the URI at load, so
- * a plain top-level import would freeze one answer and the matrix below would test nothing.
- *
- * `require` inside `isolateModules` is the only thing that re-runs a CommonJS module: `import()`
- * would hand back the same cached namespace. The lint rule is disabled rather than worked around
- * because loading this file the way migrate-mongo loads it is the entire point of the test.
- */
-const migrateMongoUri = (): string => {
-    let url = '';
-    jest.isolateModules(() => {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.isolateModules needs a synchronous require to re-read the env
-        url = (require(path.join(ROOT, 'migrate-mongo-config.js')) as { mongodb: { url: string } })
-            .mongodb.url;
-    });
-    return url;
-};
 
 const MONGO_VARS = [
     'NODE_DB_URI',
@@ -183,64 +155,5 @@ describe('database URI resolution', () => {
 
     it('defaults host, port and name when nothing is configured', () => {
         expect(getDatabaseUri()).toBe('mongodb://127.0.0.1:27017/boilerplate-node-backend');
-    });
-});
-
-/**
- * `migrate-mongo-config.js` duplicates `getDatabaseUri()` because it cannot import it. The
- * duplication is allowed to exist ONLY because this block proves the two agree — without it,
- * `npm run host -- db:migrate:up` drifting away from `npm run host -- db:seed` is exactly the
- * silent wrong-database failure the change was meant to end, just relocated.
- */
-describe('migrate-mongo agrees with the application', () => {
-    const saved = new Map<string, string | undefined>();
-
-    beforeEach(() => {
-        for (const key of MONGO_VARS) {
-            saved.set(key, process.env[key]);
-            delete process.env[key];
-        }
-    });
-
-    afterEach(() => {
-        for (const [key, value] of saved)
-            if (value === undefined) delete process.env[key];
-            else process.env[key] = value;
-    });
-
-    const matrix: [name: string, env: Partial<Record<(typeof MONGO_VARS)[number], string>>][] = [
-        ['nothing configured', {}],
-        ['explicit URI', { NODE_DB_URI: 'mongodb://db.example:27017/prod' }],
-        [
-            'the :host shape',
-            { NODE_DB_URI: '', NODE_MONGODB_HOST: 'localhost', NODE_MONGODB_NAME: 'renamed-db' }
-        ],
-        [
-            'the :host shape on a non-default port',
-            {
-                NODE_DB_URI: '',
-                NODE_MONGODB_HOST: 'localhost',
-                NODE_MONGODB_PORT: '27018',
-                NODE_MONGODB_NAME: 'renamed-db'
-            }
-        ],
-        ['fragments only', { NODE_MONGODB_HOST: 'database', NODE_MONGODB_NAME: 'compose-db' }],
-        ['an empty URI and no fragments at all', { NODE_DB_URI: '' }]
-    ];
-
-    it.each(matrix)('resolves the same URI with %s', (_name, env) => {
-        Object.assign(process.env, env);
-
-        expect(migrateMongoUri()).toBe(getDatabaseUri());
-    });
-
-    it('targets the configured database name, not the hardcoded one', () => {
-        // Stated separately from the equality check: the two implementations agreeing on a WRONG
-        // answer would satisfy the assertion above and still seed the wrong database.
-        process.env.NODE_DB_URI = '';
-        process.env.NODE_MONGODB_HOST = 'localhost';
-        process.env.NODE_MONGODB_NAME = 'my-actual-data';
-
-        expect(migrateMongoUri()).toBe('mongodb://localhost:27017/my-actual-data');
     });
 });

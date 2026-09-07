@@ -5,8 +5,7 @@
  * one-way arrow. Authentication lives in `account`, which reaches this module's barrel for the
  * record it authenticates.
  *
- * Not in the import graph: `account` writes this same document — the shared kernel. Six migrations
- *   touch this collection, more than any other.
+ * Not in the import graph: `account` writes this same document — the shared kernel.
  *
  * See: docs/modules/users.md
  */
@@ -28,8 +27,6 @@ export default {
     /* `GET /users/:id` answers the serialized document as it stands. */
     demoShapes: { users: 'response' },
     locales: path.join(__dirname, 'locales'),
-    /* The `users_pending_email` index, for a database that already ran the old baseline. */
-    migrations: path.join(__dirname, 'migrations'),
     /*
      * `account`'s signup and profile-update flows write through this same `userRepository` —
      * there is no separate `users` collection for them to register their own target under.

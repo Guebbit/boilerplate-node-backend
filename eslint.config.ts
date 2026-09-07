@@ -35,9 +35,9 @@ export default tseslint.config(
      * Excluded files — GENERATED OR FOREIGN ONLY.
      *
      * The bar for an entry here: linting it is impossible or meaningless, not merely
-     * inconvenient. Tool configs, migrations and CLI scripts fall outside the `tsconfig` project
-     * but still belong to us, so they are linted through the scoped blocks near the bottom, which
-     * switch off the type-aware program instead of the whole linter.
+     * inconvenient. Tool configs and CLI scripts fall outside the `tsconfig` project but still
+     * belong to us, so they are linted through the scoped blocks near the bottom, which switch
+     * off the type-aware program instead of the whole linter.
      */
     globalIgnores([
         /*
@@ -46,13 +46,13 @@ export default tseslint.config(
          * only there. Linting them means resolving imports that cannot resolve and enforcing
          * rules written for the app on a file the app never loads.
          */
-        'k6/**',
+        'tests/load/**',
         /*
          * Mongo's own init convention: a script mongosh runs directly against `db`, a global
          * that mongosh injects and this project never defines. Same shape as the k6 scripts
          * above — foreign runtime, not this project's JavaScript.
          */
-        '.docker/mongo-init.js',
+        'docker/mongo-init.js',
         '**/node_modules/**',
         '**/dist/**',
         '**/coverage/**',
@@ -77,16 +77,14 @@ export default tseslint.config(
         '.prism/**',
         '.dev/**',
         /*
-         * Working directories that belong to tooling rather than to this codebase — `.claude/`
+         * A working directory that belongs to tooling rather than to this codebase — `.claude/`
          * holds git WORKTREES, whole copies of this project sitting outside the `tsconfig`
-         * project `parserOptions.project` resolves against, and `.2repo/` holds a generated
-         * index of it. Same failure as `.stryker-tmp/**` above and the same fix: without it every
-         * typed rule throws the moment one exists, and `npm run lint` fails on a copy of code
-         * that is already linted where it lives. `.prettierignore` carries the matching list.
+         * project `parserOptions.project` resolves against. Same failure as `.stryker-tmp/**`
+         * above and the same fix: without it every typed rule throws the moment one exists, and
+         * `npm run lint` fails on a copy of code that is already linted where it lives.
+         * `.prettierignore` carries the matching list.
          */
-        '.claude/**',
-        '.2repo/**',
-        '.codeboarding/**'
+        '.claude/**'
     ]),
 
     /**
@@ -389,43 +387,6 @@ export default tseslint.config(
 
             // A bare `eslint-disable` is an unexplained hole in every rule above.
             '@eslint-community/eslint-comments/require-description': 'error'
-        }
-    },
-
-    /**
-     * A migration talks to the DRIVER, never to this application.
-     *
-     * `migrate-mongo` replays these files against databases of every age, including ones written
-     * before the model they would import existed. A migration that reaches a mongoose model runs
-     * today's schema — hooks, defaults, validators and all — against yesterday's documents, which
-     * is how a migration stops being replayable.
-     *
-     * Migrations are CommonJS `.js`, so the guard is `no-restricted-syntax` over `require()`
-     * calls: `no-restricted-imports` only matches `import` declarations, which a `.js` migration
-     * never contains. (Its predecessor matched `db/migrations/**\/*.ts` — a glob with zero
-     * matching files, so the rule it carried never fired.) The path aliases are unresolvable at
-     * migrate-mongo runtime anyway; `../../src/` is the spelling a mistake would actually use.
-     *
-     * A module authors its migrations next to the `model.ts` they must not touch, which is where
-     * the temptation actually lives — so the authored copies are linted, not just the assembled
-     * `db/migrations/` bundle they are copied into.
-     */
-    {
-        files: ['db/migrations/**/*.js', 'src/modules/*/migrations/*.js'],
-        rules: {
-            'no-restricted-syntax': [
-                'error',
-                {
-                    selector: String.raw`CallExpression[callee.name="require"] > Literal[value=/^(@app|@infrastructure|@modules|@kernel)\u002F/]`,
-                    message:
-                        'A migration talks to the driver, never to this application — replaying it against an old database must not run today’s schema. Use the `db` handle migrate-mongo passes in.'
-                },
-                {
-                    selector: String.raw`CallExpression[callee.name="require"] > Literal[value=/\u002Fsrc\u002F/]`,
-                    message:
-                        'A migration talks to the driver, never to this application — replaying it against an old database must not run today’s schema. Use the `db` handle migrate-mongo passes in.'
-                }
-            ]
         }
     },
 
@@ -1167,19 +1128,12 @@ export default tseslint.config(
 
     /**
      * Plain CommonJS tooling: jest's configs (a `.js` because the per-file coverage thresholds
-     * inside need an explanation attached, and JSON cannot carry a comment), commitlint,
-     * migrate-mongo's config and the migrations it replays. Outside the `tsconfig` project, so
-     * the type-aware program is off; CommonJS, so the ESM-preference rules yield.
+     * inside need an explanation attached, and JSON cannot carry a comment) and commitlint.
+     * Outside the `tsconfig` project, so the type-aware program is off; CommonJS, so the
+     * ESM-preference rules yield.
      */
     {
-        files: [
-            'jest.config.js',
-            'jest.config.mutation.js',
-            'commitlint.config.cjs',
-            'migrate-mongo-config.js',
-            'db/migrations/**/*.js',
-            'src/modules/*/migrations/*.js'
-        ],
+        files: ['jest.config.js', 'jest.config.mutation.js', 'commitlint.config.cjs'],
         extends: [tseslint.configs.disableTypeChecked],
         languageOptions: {
             sourceType: 'commonjs',
@@ -1190,8 +1144,7 @@ export default tseslint.config(
         rules: {
             'no-console': 'off',
             '@typescript-eslint/no-require-imports': 'off',
-            // `up(db, client)` is migrate-mongo's signature and `moduleNameMapper` is jest's key:
-            // these files spell what their tools spell.
+            // `moduleNameMapper` is jest's own key: these files spell what their tools spell.
             'unicorn/prevent-abbreviations': 'off'
         }
     },

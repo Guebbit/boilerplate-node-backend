@@ -50,7 +50,7 @@
  * WHY the docblock still matters: this map holds the PAIR. What is reached across an edge, and why
  * it is that kind of relationship, is prose at the top of each `module.ts` — beside the imports it
  * describes, where a reader meets both at once, and where a coupling the import graph cannot see
- * (a shared document, a metric read by string, a migration touching another domain's collection)
+ * (a shared document, a metric read by string, a TTL window another domain depends on)
  * can also be written down. A rule reconciled against imports could never hold one of those.
  */
 const MODULE_EDGES = {

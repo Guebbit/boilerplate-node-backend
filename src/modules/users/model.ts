@@ -33,8 +33,8 @@ export enum TokenType {
  * `randomBytes(16)` or a signed JWT — there is no low-entropy secret to stretch, and bcrypt would
  * only slow the refresh path every authenticated client hits on a timer. Exported so callers that
  * compare an in-memory token against an already-loaded document (`account/services/tokens.ts`,
- * `users/service.ts` `consumeToken`) hash the same way storage does, and so
- * `db/migrations/*-hash-user-tokens.js` hashes existing rows with the identical function.
+ * `users/service.ts` `consumeToken`) hash the same way storage does — a one-off script that ever
+ * rewrites stored rows must reuse it rather than reimplement the digest.
  */
 export const hashToken = (token: string): string =>
     createHash('sha256').update(token).digest('hex');
@@ -328,7 +328,8 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
          * but `true`, so every self-signup that reaches this default already validated it.
          * `default: true` is for every OTHER creation path — OAuth linking, the admin `/users`
          * route, test fixtures — none of which shows the checkbox, so none should have to restate
-         * it. Existing rows backfilled by `db/migrations/*-user-terms-accepted-column.js`.
+         * it. A row written before the field existed simply reads as `undefined`, which every
+         * consumer treats as not accepted.
          */
         termsAccepted: {
             type: Boolean,
@@ -510,10 +511,9 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
  * Login and signup both look up by email. UNIQUE is a correctness constraint, not a performance
  * one: signup is check-then-insert, so two concurrent signups for one address can both read absent
  * and both insert — only the database can refuse the second write. Paired with the E11000 branch
- * in `@infrastructure/http/errors` (409, not 500) and `db/migrations/20260905000000-baseline.js`,
- * which refuses to build the index on a database already holding duplicates. Mongo won't silently
- * upgrade an existing non-unique `users_email`; a database that skipped the migration fails loudly
- * at startup instead.
+ * in `@infrastructure/http/errors` (409, not 500), and with `npm run db:sync`, which refuses to
+ * build the index at all while the collection still holds duplicates. Mongo won't silently upgrade
+ * an existing non-unique `users_email`: a database that never synced fails loudly at startup.
  */
 userSchema.index({ email: 1 }, { name: 'users_email', unique: true });
 /* Refresh-token verification and the reset/delete flows query by token value. */
@@ -548,9 +548,7 @@ userSchema.index(
  * apart, so this index, not the request-time read, is what actually stops two accounts racing to
  * claim one address. `partialFilterExpression` restricts it to documents that HOLD one — most
  * users never have `pendingEmail` set, and an unfiltered unique index would index every absent
- * value as an equal `null`, colliding on the second such account. See
- * `src/modules/users/migrations/20260906000000-pending-email-index.js`: this index shipped after
- * the baseline, so a database that already migrated needs that file to pick it up.
+ * value as an equal `null`, colliding on the second such account.
  */
 userSchema.index(
     { pendingEmail: 1 },

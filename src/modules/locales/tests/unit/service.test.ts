@@ -79,7 +79,7 @@ describe('buildMessageTree', () => {
     /*
      * A stored `__proto__` segment must become an ordinary property rather than reassign a
      * prototype. Write-time validation refuses such keys (see `findUnsafeKeySegment`), and this is
-     * the second half: a row that reached the collection some other way — a migration, a mongosh
+     * the second half: a row that reached the collection some other way — an `ops/` script, a mongosh
      * session, an import written before the check existed — still cannot pollute anything.
      */
     it('cannot be made to pollute a prototype by a stored key', () => {

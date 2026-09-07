@@ -87,7 +87,7 @@ describe('entry serialization', () => {
 
 /**
  * `baseLanguage` — the ISO 639-1 code at the front of the tag. Derived by a schema hook, not by
- * the creating service, because every write path (seeds, migrations) must get it for free; pinning
+ * the creating service, because every write path (seeds, one-off scripts) must get it for free; pinning
  * it here confirms the SCHEMA does it, which is what survives a new caller.
  */
 describe('baseLanguage', () => {

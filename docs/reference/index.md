@@ -22,11 +22,11 @@ of it fast.
 flowchart TD
     Root["Repository root<br/><i>configs, specs, manifests</i>"] --> Src["src/"]
     Root --> Contracts["Contracts<br/><i>openapi · asyncapi · api/</i>"]
-    Root --> Ops["Ops<br/><i>.docker · .github · public</i>"]
+    Root --> Ops["Ops<br/><i>docker · .github · public</i>"]
     Root --> Dev["Dev tooling<br/><i>scripts · eslint · .husky</i>"]
     Root --> Jobs["Scheduled jobs<br/><i>ops/</i>"]
-    Root --> Data["Data<br/><i>db/ · seeds · migrations</i>"]
-    Root --> Tests["tests/ · k6/"]
+    Root --> Data["Data<br/><i>db/ · index sync · seeds</i>"]
+    Root --> Tests["tests/"]
 
     Src --> Infra["infrastructure/<br/><i>substrate</i>"]
     Src --> Kernel["kernel/<br/><i>the module system</i>"]
@@ -48,10 +48,10 @@ flowchart TD
 | [Infrastructure](./src-infrastructure.md) | `src/infrastructure/` — adapters, http, observability, persistence, runtime                                   |
 | [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                            |
 | [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api/`, collection exports, Spectral rulesets |
-| [Data](./data.md)                         | `db/` — migrations, the demo dataset, cache tools                                                             |
+| [Data](./data.md)                         | `db/` — the index sync, the demo dataset, cache tools                                                         |
 | [Scripts & Hooks](./scripts.md)           | `scripts/`, `ops/`, `eslint/rules/`, `.husky/`                                                                |
-| [Tests](./tests.md)                       | `tests/`, the co-located module suites, `k6/`                                                                 |
-| [Ops & Assets](./ops.md)                  | `.docker/`, `.github/`, compose files, `public/`                                                              |
+| [Tests](./tests.md)                       | `tests/`, the co-located module suites, `tests/load/`                                                         |
+| [Ops & Assets](./ops.md)                  | `docker/`, `.github/`, compose files, `public/`                                                               |
 
 ---
 
@@ -91,7 +91,7 @@ flowchart LR
     class Excluded exc;
 ```
 
-**Named.** The file is one of a kind — `migrate-mongo-config.js`, `src/app.ts`,
+**Named.** The file is one of a kind — `orval.config.ts`, `src/app.ts`,
 `tests/cross-cutting/mail-copy.test.ts`. It gets its own row.
 
 **Pattern.** The file is one instance of a shape that repeats. The shape gets the row and the
@@ -109,7 +109,7 @@ Anything git does not track is out by definition: `dist/`, `coverage/`, `node_mo
 
 A number in prose goes stale without anyone editing the line, and nothing distinguishes a stale
 count from a current one. So the glossary states **shapes** — "one per module", "one per
-migration" — and leaves the counting to `git ls-files`, which is always right and always to hand:
+channel" — and leaves the counting to `git ls-files`, which is always right and always to hand:
 
 ```bash
 git ls-files | awk -F/ '{if (NF==1) print "ROOT"; else print $1}' | sort | uniq -c | sort -rn

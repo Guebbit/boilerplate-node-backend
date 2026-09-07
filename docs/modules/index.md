@@ -133,7 +133,7 @@ the top of the relevant `module.ts` because nothing mechanical can find them:
   metrics registry, deliberately, so it can report on domains it may not import. Rename a counter
   and this compiles, lints and passes — and the dashboard goes flat.
 - **Schema in the database.** `audit-logs` enforces its retention window with a TTL index, not with
-  code. The baseline migration creates indexes on collections five other modules own.
+  code. Its window is an env var, so changing it is a `db:sync` away — never a restart.
 
 This is the reason those couplings are recorded as **prose next to the imports** rather than as a
 typed field. A manifest field reconciled against the import graph — which is what this repo used to

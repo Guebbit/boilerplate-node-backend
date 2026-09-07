@@ -120,8 +120,9 @@ const cartRetentionDays = environmentNumber('NODE_CART_RETENTION_DAYS', 365, 1);
  * (a quantity bump, an added line) restarts the clock, which is what "abandoned" means.
  *
  * Same caveat as every other TTL index here: Mongo will not modify an existing index's
- * `expireAfterSeconds` when `NODE_CART_RETENTION_DAYS` changes — a migration (`collMod`) is
- * needed, not a restart.
+ * `expireAfterSeconds` in place, so changing `NODE_CART_RETENTION_DAYS` and RESTARTING fails the
+ * boot outright — `autoIndex` asks for the new window and Mongo refuses. `npm run db:sync` is
+ * what applies it: it drops the index and rebuilds it with the new value.
  */
 cartSchema.index(
     { updatedAt: 1 },

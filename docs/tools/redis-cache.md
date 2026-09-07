@@ -120,7 +120,7 @@ This is **cache-aside**: reads fill the cache, and whoever writes the data is re
 invalidating it. `invalidateCache` (in `src/infrastructure/http/middlewares/cache.ts`) does that for every write the
 API handles.
 
-Nothing does it for writes that never reach Express — `npm run db:seed`, `migrate-mongo`, a
+Nothing does it for writes that never reach Express — `npm run db:seed`, a one-off `ops/` script, a
 `mongosh` session, a GUI. Those change Mongo while Redis keeps serving the answer it computed
 beforehand, which is how a freshly-seeded database can still render as an empty product list.
 

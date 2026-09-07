@@ -3,6 +3,33 @@
 All notable changes to this API's contract are recorded here. The contract is `openapi.yaml`;
 a breaking change is one a generated client cannot absorb without being regenerated.
 
+## [Unreleased]
+
+### Breaking — deployment
+
+**Migrations are gone. `npm run db:sync` replaces them.** The contract is untouched, so no
+generated client is affected — but every deployment pipeline that ran `db:migrate:up` must change.
+
+| Before                                     | After                                                |
+| ------------------------------------------ | ---------------------------------------------------- |
+| `db:migrate:up` / `:down` / `:status`      | `db:sync` (`-- --check` to plan only)                |
+| `gen:migrations`, `db/migrations/`         | nothing — indexes come straight from `model.ts`      |
+| `src/modules/<m>/migrations/*.js`          | a one-off script under `ops/`, deleted after it runs |
+| `migrations:` on the module manifest       | removed                                              |
+| `migrate-mongo`, `migrate-mongo-config.js` | removed                                              |
+
+An index is derivable from the domain model, so it is declared once — on the schema — and
+reconciled on every deploy rather than recorded as applied by filename. That gap is what forced a
+newly declared index to also be written by hand as a migration; there is now one author and no
+second copy. Data changes that are NOT derivable (a rename, a backfill, a de-duplication) are
+ordinary one-shot scripts under `ops/`.
+
+Two behaviours improve as a side effect: `db:sync` drops indexes no schema declares, and it applies
+a changed TTL `expireAfterSeconds` by rebuilding the index — which previously required a manual
+`collMod` and, on a restart, failed the boot outright.
+
+See [Data](docs/reference/data.md).
+
 ## [3.0.0] - 2026-08-23
 
 The release that made this API a **modular monolith with a domain layer**, and made its contract

@@ -97,9 +97,10 @@ cluster worker, and empty after a restart.
 Only the queryable copy expires — log retention is [Loki](./loki.md)'s business.
 
 ::: warning Changing the retention window
-Mongo will not alter an existing TTL index's `expireAfterSeconds`. On a database that already has
-the index, changing `NODE_AUDIT_RETENTION_DAYS` does nothing until a `collMod` migration under
-`db/migrations/` runs. A restart will not apply it.
+Mongo will not alter an existing TTL index's `expireAfterSeconds` in place. After changing
+`NODE_AUDIT_RETENTION_DAYS`, a restart **fails the boot** — `autoIndex` asks for the new window and
+Mongo refuses the conflicting options. `npm run db:sync` drops the index and rebuilds it, which is
+why `db:bootstrap` syncs before the server starts.
 :::
 
 ## Configuration

@@ -11,8 +11,7 @@
  * Two callers need the same answer from the same rows:
  *
  *   - `scripts/demo/export-dataset.ts` publishes it, against a database it seeded from scratch;
- *   - `tests/integration/db/migration-demo-data.test.ts` re-derives it, against a database that has also
- *     run every migration, and compares the two.
+ *   - `npm run check:seed-export` re-derives it and compares against the committed bytes.
  *
  * A second implementation of this walk would let those two disagree about what the dataset even
  * is, which is the class of bug the published-output design exists to remove. So there is one

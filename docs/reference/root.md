@@ -1,6 +1,6 @@
 # Repository Root
 
-Files with no directory above them. This is where the "what on earth is `migrate-mongo-config.js`"
+Files with no directory above them. This is where the "what on earth is `orval.config.ts`"
 questions live — every one of them is a tool's entry point, sitting at the root because the tool
 looks for it there by name.
 
@@ -55,10 +55,9 @@ own documentation is the thing the third-party-comment convention asks for.
 
 ## Code generation and data
 
-| File                      | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Read next                                                                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `orval.config.ts`         | Tells Orval to read `openapi.yaml` and write `api/models/` plus `api/schemas.zod.ts`. Only the `zod` client is generated: nothing in a backend consumes a generated HTTP caller, and that mode still emits the model interfaces.                                                                                                                                                                                                                                                                      | [Regenerating After a Change](../api/regenerating.md) · [Contracts](./contracts.md) |
-| `migrate-mongo-config.js` | What the `migrate-mongo` CLI reads by name: the Mongo URI, `db/migrations` as the migrations directory (assembled by `npm run gen:migrations`, never authored), and the changelog collection it records applied migrations in. CommonJS because the tool loads it through its own resolver with no TypeScript in the chain — which is why it re-implements the app's URI resolution instead of importing it, and why `tests/unit/db/host-scripts.test.ts` runs both over the same environment matrix. | [MongoDB & Mongoose](../tools/mongodb-mongoose.md) · [Data](./data.md)              |
+| File              | What it is                                                                                                                                                                                                                       | Read next                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `orval.config.ts` | Tells Orval to read `openapi.yaml` and write `api/models/` plus `api/schemas.zod.ts`. Only the `zod` client is generated: nothing in a backend consumes a generated HTTP caller, and that mode still emits the model interfaces. | [Regenerating After a Change](../api/regenerating.md) · [Contracts](./contracts.md) |
 
 ## Git
 

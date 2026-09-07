@@ -7,11 +7,11 @@ That means the persistence example is document-oriented, not SQL-oriented.
 
 ## What each piece does
 
-| Tool                                                             | Job                             |
-| ---------------------------------------------------------------- | ------------------------------- |
-| [MongoDB](https://www.mongodb.com/docs/manual/)                  | document database               |
-| [Mongoose](https://mongoosejs.com/docs/)                         | schema, model, and query layer  |
-| [migrate-mongo](https://github.com/seppevs/migrate-mongo#readme) | migrations for database changes |
+| Tool                                                                                                           | Job                                        |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| [MongoDB](https://www.mongodb.com/docs/manual/)                                                                | document database                          |
+| [Mongoose](https://mongoosejs.com/docs/)                                                                       | schema, model, and query layer             |
+| [Mongoose `syncIndexes`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>) | reconciles stored indexes with the schemas |
 
 ## Persistence visual
 
@@ -30,90 +30,70 @@ flowchart LR
 
 That separation is what makes it easier to swap this flavor for something like Sequelize later.
 
-## Migrations
+## Schema changes
 
-Migrations handle **schema and data changes** across environments in a reproducible way.
-This repo uses [migrate-mongo](https://github.com/seppevs/migrate-mongo#readme), which stores each migration as a plain JS file and tracks applied runs in a `migrations_changelog` collection.
+There is no migration tool here. An index is **derivable from the domain model**, so it is
+declared once — on the schema — and a reconciliation makes the database agree. A change to data
+that already exists is not derivable, so it is a one-off script. The two are covered in full in
+[Data](../reference/data.md); this section is the Mongoose-specific half.
 
-### Config
+### `db:sync`
 
-`migrate-mongo-config.js` at the project root points at `db/migrations/` and uses the `NODE_DB_URI` env var. That directory is **assembled, not authored** — see [Writing a migration](#writing-a-migration).
-
-```js
-module.exports = {
-    mongodb: { url: process.env.NODE_DB_URI },
-    migrationsDir: 'db/migrations',
-    changelogCollectionName: 'migrations_changelog',
-    migrationFileExtension: '.js',
-    useFileHash: false,
-    moduleSystem: 'commonjs'
-};
+```bash
+npm run db:sync              # create what is missing, drop what no schema declares
+npm run db:sync -- --check   # print the plan, change nothing
 ```
 
-### Commands
+`db/index-sync.ts` imports the module registry — which registers every enabled module's models —
+and calls [`connection.syncIndexes()`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>).
+Collections whose model is not registered are left alone, so disabling a module does not strip its
+indexes.
 
-| Script                      | What it does                            |
-| --------------------------- | --------------------------------------- |
-| `npm run db:migrate:up`     | Apply all pending migrations            |
-| `npm run db:migrate:down`   | Roll back the last applied migration    |
-| `npm run db:migrate:status` | Show which migrations have been applied |
-
-### Writing a migration
-
-A migration belongs to the module whose collection it touches — `src/modules/<name>/migrations/`, next to the `model.ts` it must never import. The module points at the directory from its manifest, exactly as it does for `locales`:
-
-```ts
-export default {
-    name: 'orders',
-    migrations: path.join(__dirname, 'migrations')
-    // …
-} satisfies AppModule;
-```
-
-`npm run gen:migrations` then copies every enabled module's files into `db/migrations/`, alongside the generated index baseline, and that assembled directory is the only one `migrate-mongo` reads. It is gitignored; `postinstall` and `db:bootstrap` both rebuild it.
-
-Each file exports an `up` and a `down` function that receive the raw MongoDB `db` driver:
-
-```js
-module.exports = {
-    async up(db) {
-        await db.collection('users').createIndex({ email: 1 }, { unique: true });
-    },
-    async down(db) {
-        await db.collection('users').dropIndex('email_1');
-    }
-};
-```
-
-Name files `<14-digit timestamp>-kebab-name.js`, e.g. `20261110120000-detach-user.js`. The timestamp is what sequences one module's migration against another's, so the assembler refuses a name without one — and refuses two modules claiming the same name, since the changelog records by name and a collision would mark one module's work as already applied.
-
-A migration talks to the **driver**, never to this application: it is replayed against databases written before today's schema existed, so reaching for a Mongoose model would run today's hooks, defaults and validators over yesterday's documents. ESLint enforces this on both the authored copies and the assembled bundle.
+Before it builds anything it scans every declared unique index for values already held by more than
+one document, and refuses the whole run if it finds any — `createIndex` would report only the first
+collision, and merging duplicates is a product decision.
 
 ### The index rule
 
-Two places can create an index, and both are legitimate:
+There is exactly **one author**: `schema.index(keys, options)` in a module's `model.ts`. Nothing
+else creates an index, so nothing can disagree with it.
 
-- **the schema** — `unique: true`, `index: true`, or `schema.index(...)`. Mongoose builds these at boot, because `autoIndex` is on. This is what gives the test suite its constraints for free: `mongodb-memory-server` never runs a migration.
-- **a migration** — explicit DDL, applied by `migrate-mongo`, independent of whether the app has started.
+That is worth stating because Mongo makes disagreement expensive. It treats an index's NAME as part
+of its identity, so `createIndex` is a no-op only when the name _and_ the key spec _and_ the options
+all match what is stored. The same key under a different name is `IndexKeySpecsConflict`, which
+Mongoose reports at startup as `Index already exists with a different name`. With a second author —
+a hand-written DDL file, say — that failure lands on every long-lived database and on none of the
+fresh ones the tests use.
 
-They collide on **names**. Mongo treats an index's name as part of its identity, so `createIndex` is a no-op only when the name _and_ the key spec match what is already stored. The same key under a different name is `IndexKeySpecsConflict`, which Mongoose reports at startup as `Index already exists with a different name` — on every migrated database, and on none of the fresh ones the tests use.
+**Name indexes explicitly.** Mongoose derives `field_direction` for an index declared without a
+name, and a derived name changes when the key does — which leaves the old index in place until the
+next sync drops it.
 
-> **The rule: an index may be declared on the schema, in a migration, or in both — but if in both, they must give it the same name.**
+**`autoIndex` is still on**, and that is what gives the test suite its constraints for free:
+`mongodb-memory-server` starts empty and Mongoose builds every declared index on connect. It is not
+what production relies on — `db:bootstrap` syncs before the server starts, so the index set is in
+place even on a deployment that runs with `autoIndex` off.
 
-**Declare indexes on the schema.** That is where an index is authored — one author, so nothing can disagree. A migration is still the only way to _drop_ an index: a schema says what should exist, not what should stop existing.
+`tests/integration/db/index-sync.test.ts` is what holds this. It runs the reconciliation against a
+real database from nothing, against deliberately constructed drift, and twice over, and asserts
+each collection ends up holding **exactly** what its schema declares — the state no other suite can
+reach, since every other test runs against a database that has never disagreed with the code.
 
-The generated `20260905000000-baseline.js` then mirrors that declaration, so `db:migrate:up` alone is enough to put the whole index set in place — including the ten unique constraints that are correctness, not speed. Without it those would exist only because `autoIndex` is on, and would silently vanish the day it is turned off.
+### TTL windows
 
-| Index                                          | Where it is built                                                                                                                                                                                                                                     |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Everything except TTL                          | Schema **and** the baseline, same key spec and same name. The baseline is grouped by owning module, which is who decides an entry belongs there.                                                                                                      |
-| TTL — `auditlogs`, `carts`, `feedbackrequests` | Schema only. `expireAfterSeconds` comes from an env var, and a second copy of that arithmetic in a migration could disagree with the schema's and make every boot a conflict. Changing a live window is a `collMod` — see [Ops](../reference/ops.md). |
+`auditlogs`, `carts` and `feedbackrequests` expire rows with a TTL index whose `expireAfterSeconds`
+is computed from an env var. Mongo will not modify an existing window in place: after changing one,
+a **restart fails to boot** (`autoIndex` asks for the new value and Mongo refuses the conflicting
+options), while `npm run db:sync` drops the index and rebuilds it. See
+[Ops](../reference/ops.md).
 
-Adding an index is therefore one edit — the schema. `npm run gen:migrations` rewrites the baseline's table from it, and `postinstall`, `db:bootstrap` and `regenerate` all run it, so there is no committed copy that can be left stale.
+### Changing data, not shape
 
-Options count too: same key and name but a different `unique`, `expireAfterSeconds` or partial filter fails the same way.
-
-`tests/integration/db/migration-model-indexes.test.ts` enforces this. It runs every migration and every model's index build against one database in both orders, and fails on a conflict or on two indexes sharing a key — the state no other suite can reach, since every other test runs on a database that has never been migrated.
+A rename, a type change, a backfill or a de-duplication cannot be derived from a schema. Those are
+one-shot scripts under `ops/`, written against the **driver** rather than a Mongoose model —
+running today's hooks, defaults and validators over rows that predate them is what corrupts them —
+idempotent, and deleted once they have run everywhere. See
+[Data](../reference/data.md#data-a-one-off-script-under-ops).
 
 ---
 
@@ -230,7 +210,7 @@ each record can date itself, since an ObjectId's leading bytes are a timestamp.
 ## External references
 
 - [Mongoose plugins](https://mongoosejs.com/docs/plugins.html) — used in `src/infrastructure/runtime/database.ts` for query metrics
-- [migrate-mongo usage](https://github.com/seppevs/migrate-mongo#usage)
+- [Mongoose: `syncIndexes()`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>)
 
 ## Related pages
 

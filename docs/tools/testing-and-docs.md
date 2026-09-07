@@ -158,7 +158,7 @@ because Cypress drives a real browser and this suite does not.
 
 The suite/test counts below moved on 2026-08-27, when `NODE_MUTATION_MONGOD.md`'s split moved every
 module's `setupTestDb()`-calling unit spec into that module's own `tests/integration/` — down in
-`test:unit`, up in `test:integration` by the same 36 files, plus the two top-level migration specs.
+`test:unit`, up in `test:integration` by the same 36 files, plus the top-level `db/` specs.
 Timings are not re-measured here — this machine was under concurrent load — so `test:unit` getting
 lighter and `test:integration` getting heavier is the structural fact worth recording; the absolute
 seconds still want a clean re-measurement on the reference machine.

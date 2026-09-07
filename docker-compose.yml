@@ -24,7 +24,7 @@ services:
         build:
             context: .
             # Better to keep the "Dockerfile" name and use folders to group files per container/service
-            dockerfile: .docker/Dockerfile
+            dockerfile: docker/Dockerfile
 
         # no (default): Don't restart the container automatically
         # always: Always restart the container if it stops for any reason (even manual stop)
@@ -112,10 +112,10 @@ services:
 
         # Commands to be executed at RUNTIME when the container starts. Replaces Dockerfile commands (if any)
         #
-        # `db:bootstrap` runs migrate-mongo (schema/indexes) then the seeder (demo data) before the
-        # server starts, so a fresh `compose up` yields a populated, browsable stack instead of empty
-        # lists that read as "not wired". Both halves are idempotent, so every later boot is a no-op,
-        # and the seeder refuses to run when NODE_ENV=production.
+        # `db:bootstrap` runs `db:sync` (indexes, reconciled against the schemas) then the seeder
+        # (demo data) before the server starts, so a fresh `compose up` yields a populated, browsable
+        # stack instead of empty lists that read as "not wired". Both halves are idempotent, so every
+        # later boot is a no-op, and the seeder refuses to run when NODE_ENV=production.
         command:
             [
                 'sh',
@@ -240,7 +240,7 @@ services:
         restart: unless-stopped
         command: ['-config.file=/etc/tempo/tempo.yaml']
         volumes:
-            - ./.docker/observability/tempo.config.yaml:/etc/tempo/tempo.yaml:Z
+            - ./docker/observability/tempo.config.yaml:/etc/tempo/tempo.yaml:Z
             - tempo_volume:/var/tempo
         # Port 4318 is no longer exposed to the host — the collector talks to Tempo internally.
 
@@ -252,7 +252,7 @@ services:
         restart: unless-stopped
         command: ['--config=/etc/otel-collector-config.yaml']
         volumes:
-            - ./.docker/observability/otel-collector.config.yaml:/etc/otel-collector-config.yaml:Z
+            - ./docker/observability/otel-collector.config.yaml:/etc/otel-collector-config.yaml:Z
         ports:
             - '${OTEL_OTLP_HTTP_PORT:-4318}:4318' # OTLP/HTTP (used by the app)
             - '${OTEL_OTLP_GRPC_PORT:-4317}:4317' # OTLP/gRPC (optional direct use)
@@ -268,8 +268,8 @@ services:
             - '--config.file=/etc/prometheus/prometheus.yml'
             - '--storage.tsdb.retention.time=7d'
         volumes:
-            - ./.docker/observability/prometheus.config.yaml:/etc/prometheus/prometheus.yml:Z
-            - ./.docker/observability/prometheus.alert-rules.yaml:/etc/prometheus/rules/alerts.yml:Z
+            - ./docker/observability/prometheus.config.yaml:/etc/prometheus/prometheus.yml:Z
+            - ./docker/observability/prometheus.alert-rules.yaml:/etc/prometheus/rules/alerts.yml:Z
             - prometheus_volume:/prometheus
         ports:
             - '${PROMETHEUS_PORT:-9090}:9090'
@@ -283,7 +283,7 @@ services:
         restart: unless-stopped
         command: ['--config.file=/etc/alertmanager/alertmanager.yml']
         volumes:
-            - ./.docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:Z
+            - ./docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:Z
         ports:
             - '${ALERTMANAGER_PORT:-9093}:9093'
 
@@ -294,7 +294,7 @@ services:
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
         volumes:
-            - ./.docker/observability/loki.config.yaml:/etc/loki/loki-config.yaml:Z
+            - ./docker/observability/loki.config.yaml:/etc/loki/loki-config.yaml:Z
             - loki_volume:/var/loki
         ports:
             - '${LOKI_PORT:-3100}:3100'
@@ -314,7 +314,7 @@ services:
         # The host path is mounted at one fixed location whichever engine you run, which is why
         # both configs below can hardcode their `__path__` under it.
         volumes:
-            - ./.docker/observability/${PROMTAIL_CONFIG:-promtail.config.yaml}:/etc/promtail/promtail-config.yaml:Z
+            - ./docker/observability/${PROMTAIL_CONFIG:-promtail.config.yaml}:/etc/promtail/promtail-config.yaml:Z
             - ${CONTAINER_LOGS_PATH:-/var/lib/docker/containers}:/var/log/host-containers:ro
         depends_on:
             - loki
@@ -329,9 +329,9 @@ services:
             GF_AUTH_ANONYMOUS_ORG_ROLE: 'Admin'
             GF_AUTH_DISABLE_LOGIN_FORM: 'true'
         volumes:
-            - ./.docker/observability/grafana.datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:Z
-            - ./.docker/observability/grafana.dashboard-providers.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:Z
-            - ./.docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:Z
+            - ./docker/observability/grafana.datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:Z
+            - ./docker/observability/grafana.dashboard-providers.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:Z
+            - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:Z
         ports:
             - '${GRAFANA_PORT:-3001}:3000'
         depends_on:
@@ -352,7 +352,7 @@ services:
             - '--storage.path=/tmp/alloy'
             - '/etc/alloy/config.alloy'
         volumes:
-            - ./.docker/observability/alloy.config.alloy:/etc/alloy/config.alloy:Z
+            - ./docker/observability/alloy.config.alloy:/etc/alloy/config.alloy:Z
         ports:
             - '${ALLOY_FARO_PORT:-12347}:12347' # Faro receiver — the frontend posts telemetry here
             - '${ALLOY_UI_PORT:-12345}:12345' # Alloy UI — inspect the ingest pipeline while debugging
@@ -412,7 +412,7 @@ services:
             UMAMI_WEBSITE_NAME: '${UMAMI_WEBSITE_NAME:-Frontend}'
             UMAMI_WEBSITE_DOMAIN: '${UMAMI_WEBSITE_DOMAIN:-localhost}'
         volumes:
-            - ./.docker/observability/umami-init.sh:/umami-init.sh:ro,Z
+            - ./docker/observability/umami-init.sh:/umami-init.sh:ro,Z
         depends_on:
             umami-db:
                 condition: service_healthy
@@ -424,7 +424,7 @@ services:
         logging: *container-logging
         build:
             context: .
-            dockerfile: .docker/Dockerfile.docs
+            dockerfile: docker/Dockerfile.docs
         restart: unless-stopped
         ports:
             # 3090 sits in this repo's 3000-3099 block. It used to be 4173, which the paired

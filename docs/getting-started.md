@@ -20,7 +20,7 @@ On Podman, also set `CONTAINER_LOGS_PATH`, `PROMTAIL_CONFIG` and `CONTAINER_LOG_
 (see `.env-example` → _Promtail Log Collection_). Nothing to set on Docker.
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting the server,
-so the database is migrated and seeded on first boot — you get demo products, users and orders
+so the database is indexed and seeded on first boot — you get demo products, users and orders
 rather than empty lists. Both halves are idempotent, so later boots are a no-op.
 
 ::: warning Use the scripts, not a bare `compose up`
