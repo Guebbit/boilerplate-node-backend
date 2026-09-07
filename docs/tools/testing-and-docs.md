@@ -91,34 +91,30 @@ Reading it as a shape: **one** hand-maintained dataset, **one** mapper over it �
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart TB
-    subgraph one["One dataset, one shape"]
+    subgraph one["One dataset, published not mapped"]
         direction TB
         Seed["src/modules/*/demo.ts<br/>the records, per module"]
-        Seed --> Export["seed:export<br/>→ demo-data.json<br/>byte-identical in both repos"]
-        Export --> FEMap["FE mockDataset.ts<br/>loads it as-is"]
+        Seed --> Export["seed:export<br/>real seeders + real serializers"]
+        Export --> Dataset["db/demo/demo-data.json<br/>this repo's gated snapshot"]
     end
 
-    subgraph three["Three generators, three questions"]
+    subgraph two["Two generators, two questions"]
         direction TB
-        Factories["tests/support/factories/*<br/><i>give me A product</i>"]
+        Factories["src/modules/*/fixtures.ts<br/><i>give me A product</i>"]
         ContractData["tests/support/contract-data.ts<br/><i>give me an ILLEGAL one</i>"]
-        Random["FE mockProfilesRandom.ts<br/><i>give me a whole random world</i>"]
-        Generated["FE generated.ts<br/><i>orval output, never edited</i>"]
     end
-
-    Generated -.raw material.-> Random
 
     classDef source fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef mapper fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef gen fill:#dcfce7,stroke:#16a34a,color:#111827;
     class Seed source;
-    class BEMap,FEMap mapper;
-    class Factories,ContractData,Random,Generated gen;
+    class Export,Dataset mapper;
+    class Factories,ContractData gen;
 ```
 
 ### The three questions, and why none absorbs another
 
-- **"Give me _the_ demo data."** → `demo-data.json`, edited through the `demo.ts` of the module that owns the records and republished with `npm run seed:export`. Fixed, and the one a human sees on screen. The frontend's `cy.loginAs('user')` types its credentials into a real form served by this repo's demo profile, so it cannot be randomised or generated.
+- **"Give me _the_ demo data."** → `demo-data.json`, edited through the `demo.ts` of the module that owns the records and republished with `npm run seed:export`. Published here and nowhere else — it is not in `SHARED_FILES`, so the paired frontend keeps no copy and reads this repo's API instead. Fixed, and the one a human sees on screen. The frontend's `cy.loginAs('user')` types its credentials into a real form served by this repo's demo profile, so it cannot be randomised or generated.
 - **"Give me _a_ product, I do not care which."** → the module's `fixtures.ts`. The opposite need: fresh, isolated, overridable per test, and never the demo data — 25 test files would interfere with each other if they shared rows. It is the same builder the demo records go through, so "a product" and "the demo product" cannot disagree about what a product is.
 - **"Give me one the API must _reject_."** → `contract-data.ts`. Derived from the zod schemas so each payload violates exactly one declared constraint. Nothing else here can produce something deliberately illegal, which is the difference between a contract test and a fixture.
   Merging any two would mean one of those questions stops being asked. The merge that _was_ worth doing — the demo dataset, previously written out by hand on both sides — is the one already done.

@@ -222,9 +222,9 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
 };
 
 /**
- * Read both collections back as stored — `module.ts` declares this, `export-demo-dataset.ts`
- * calls it. These are stored rows, not endpoint responses: the frontend's mocks do the
- * same tier-merge assembly the API does, rather than replaying a published answer.
+ * Read both collections back as stored — `module.ts` declares this, `npm run seed:export` calls
+ * it. These are stored rows, not endpoint responses: the frontend's mocks do the same tier-merge
+ * assembly the API does, rather than replaying a published answer.
  * Sorted so the exported file is byte-stable regardless of Mongo's natural order.
  */
 export const exportSeededLocales = async (): Promise<Record<string, unknown[]>> => ({

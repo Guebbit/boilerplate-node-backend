@@ -54,8 +54,7 @@ const run = async (): Promise<number> => {
             console.error(
                 `[seed-export] STALE — db/demo/demo-data.json does not match what the seeders produce.\n` +
                     `  A fixture changed without the dataset being re-exported, or the file was hand-edited.\n` +
-                    `  Fix with: npm run seed:export\n` +
-                    `  Then copy the result to the paired frontend — check:spec-identity compares them.`
+                    `  Fix with: npm run seed:export`
             );
             return 1;
         }

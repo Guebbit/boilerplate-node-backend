@@ -1,11 +1,10 @@
 /**
  * Does the demo dataset still match the contract it is supposed to be a specimen of?
  *
- * MIRROR of `tests/cross-cutting/seedConformance.spec.ts` in the paired frontend. Same assertions,
- * different import paths — `db/demo/demo-data.json` is byte-identical to the copy over there, so a
- * check living in only one repo would let the other's copy rot until the next
- * `check:spec-identity`. That job compares the two copies to each other; nothing compared either of
- * them to `openapi.yaml`.
+ * The dataset is published here and nowhere else: it is not in `SHARED_FILES`, so nothing copies
+ * it to the paired frontend and `check:spec-identity` never sees it. `check:seed-export` proves the
+ * committed bytes match a fresh seeding run; nothing compared those bytes to `openapi.yaml`. That
+ * is what this does.
  *
  * WHICH DIRECTION OF DRIFT THIS CATCHES, because only one of the two was ever covered. Renaming a
  * field in the SEED is already loud: the fixtures are typed against the mongoose documents, so a
