@@ -20,11 +20,7 @@ import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { catchAs } from '@infrastructure/http/controller';
-import {
-    resolvePaymentProvider,
-    WebhookSignatureError,
-    WEBHOOK_SIGNATURE_HEADER
-} from '../providers';
+import { resolvePaymentProvider, WebhookRejected, WEBHOOK_SIGNATURE_HEADER } from '../providers';
 import { paymentService } from '../service';
 
 /** Handles `POST /payments/webhook`. */
@@ -53,11 +49,12 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
             successResponse(response, undefined, 200, t('payments.webhook-accepted'));
         })
         .catch((error: unknown) => {
-            if (error instanceof WebhookSignatureError) {
-                logger.warn({
-                    message: 'Payment webhook rejected: signature did not verify.',
-                    reason: error.message
-                });
+            if (error instanceof WebhookRejected) {
+                // `error.message` IS the reason — 'Malformed signature header', 'Signature
+                // timestamp outside tolerance', 'Signature does not match', 'Body is not valid
+                // JSON', or 'Event carries no id'. A fixed headline here would be right for one of
+                // those and a guess for the other four.
+                logger.warn({ message: `Payment webhook rejected: ${error.message}` });
                 rejectResponse(response, 400, [t('payments.webhook-unverified')]);
                 return;
             }

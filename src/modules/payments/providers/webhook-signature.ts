@@ -20,11 +20,17 @@ export const WEBHOOK_SIGNATURE_HEADER = 'x-payment-signature';
  */
 const TOLERANCE_SECONDS = 300;
 
-/** A delivery that could not be authenticated. Answered 400, never 500 — see the controller. */
-export class WebhookSignatureError extends Error {
+/**
+ * A delivery this application refuses to act on — an unverifiable signature, but also (thrown
+ * elsewhere, by `providers/fake.ts`) an unparseable body or an event carrying no id. Answered 400,
+ * never 500 — see the controller. Named for what it IS, not for the one case this file itself
+ * throws it for: the controller logs `error.message` as the headline, and a class named after only
+ * the signature case would make that message look like a lie for the other two.
+ */
+export class WebhookRejected extends Error {
     constructor(message: string) {
         super(message);
-        this.name = 'WebhookSignatureError';
+        this.name = 'WebhookRejected';
     }
 }
 
@@ -63,7 +69,7 @@ export const signWebhookPayload = (
  *
  * @param rawBody - the body exactly as received, never a re-serialised object
  * @param header - the header value, verbatim
- * @throws {WebhookSignatureError} when the header is malformed, stale, or does not match
+ * @throws {WebhookRejected} when the header is malformed, stale, or does not match
  */
 export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefined): void => {
     const parts = new Map(
@@ -76,15 +82,15 @@ export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefin
     const timestamp = Number(parts.get('t'));
     const provided = parts.get('v1') ?? '';
     if (!Number.isFinite(timestamp) || !provided)
-        throw new WebhookSignatureError('Malformed signature header');
+        throw new WebhookRejected('Malformed signature header');
 
     if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > TOLERANCE_SECONDS)
-        throw new WebhookSignatureError('Signature timestamp outside tolerance');
+        throw new WebhookRejected('Signature timestamp outside tolerance');
 
     const expected = Buffer.from(digest(timestamp, rawBody), 'hex');
     const actual = Buffer.from(provided, 'hex');
     // Length is checked first because `timingSafeEqual` throws on a mismatch rather than
     // answering false — and a wrong length is already a wrong signature.
     if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
-        throw new WebhookSignatureError('Signature does not match');
+        throw new WebhookRejected('Signature does not match');
 };

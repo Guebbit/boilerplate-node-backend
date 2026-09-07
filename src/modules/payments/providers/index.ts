@@ -15,7 +15,7 @@ export {
     signWebhookPayload,
     verifyWebhookSignature,
     WEBHOOK_SIGNATURE_HEADER,
-    WebhookSignatureError
+    WebhookRejected
 } from './webhook-signature';
 
 /** What the money is doing at the provider. `refunded` is ours, not theirs — it is a later act. */
@@ -112,8 +112,9 @@ export interface PaymentProvider {
      *
      * @param rawBody - the request body as received
      * @param signature - the provider's signature header, verbatim
-     * @throws {WebhookSignatureError} when the signature does not verify — the caller answers 400,
-     *   because a body nobody can authenticate is not an event
+     * @throws {WebhookRejected} when the signature does not verify, the body is not valid JSON, or
+     *   the parsed event carries no id — the caller answers 400 in all three cases, because a
+     *   delivery this application cannot authenticate or make sense of is not an event
      */
     parseWebhook(rawBody: Buffer, signature: string): Promise<ProviderWebhookEvent>;
 }
