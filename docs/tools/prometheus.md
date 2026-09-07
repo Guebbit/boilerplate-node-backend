@@ -37,7 +37,7 @@ derived from the URL grows the registry for the life of the process.
 
 ## Alert rules
 
-Baseline alert rules live in `.docker/observability/prometheus.alert-rules.yaml`:
+Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`:
 
 | Alert                  | Condition                           | Severity |
 | ---------------------- | ----------------------------------- | -------- |
@@ -49,7 +49,7 @@ Baseline alert rules live in `.docker/observability/prometheus.alert-rules.yaml`
 
 ## Alertmanager
 
-Alertmanager config lives at `.docker/observability/alertmanager.config.yaml`.
+Alertmanager config lives at `docker/observability/alertmanager.config.yaml`.
 In local dev it uses a `null` receiver (logs only). Replace it with Slack, PagerDuty, or email for production.
 
 ## Observability endpoints
@@ -76,7 +76,7 @@ Use this for live widgets in a custom UI. For historical charts, query your back
 ## Works with
 
 - **[Grafana](./grafana.md)** — Grafana is the primary consumer of Prometheus data. Every metric chart and KPI panel in the dashboard reads from Prometheus. You rarely need to query Prometheus directly; Grafana's Explore view is the normal entry point. → [Works with Prometheus](./grafana.md#works-with)
-- **Alertmanager** — Prometheus evaluates the rules in `.docker/observability/prometheus.alert-rules.yaml` and pushes firing alerts to Alertmanager, which groups and routes them to notification receivers. In local dev the receiver is `null` (no actual notifications). Swap it for Slack, PagerDuty, or email in production. Both share the same [Observability Reference](./observability-reference.md) config tables.
+- **Alertmanager** — Prometheus evaluates the rules in `docker/observability/prometheus.alert-rules.yaml` and pushes firing alerts to Alertmanager, which groups and routes them to notification receivers. In local dev the receiver is `null` (no actual notifications). Swap it for Slack, PagerDuty, or email in production. Both share the same [Observability Reference](./observability-reference.md) config tables.
 
 ## External references
 

@@ -110,7 +110,7 @@ stays stable across `down`/`up`, across machines, and across teammates.
 
 ### Umami comes up ready to use
 
-The `umami-init` job (see [`/.docker/observability/umami-init.sh`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/.docker/observability/umami-init.sh))
+The `umami-init` job (see [`/docker/observability/umami-init.sh`](https://github.com/Guebbit/boilerplate-node-backend/blob/main/docker/observability/umami-init.sh))
 runs once after the DB is healthy and stamps two things from the environment:
 
 | What            | Env var(s)                                                       | Behaviour                                                                                                 |

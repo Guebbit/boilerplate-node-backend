@@ -12,5 +12,5 @@ providers:
       disableDeletion: false
       editable: true
       options:
-          # This path is mounted from .docker/observability/grafana/dashboards.
+          # This path is mounted from docker/observability/grafana/dashboards.
           path: /var/lib/grafana/dashboards

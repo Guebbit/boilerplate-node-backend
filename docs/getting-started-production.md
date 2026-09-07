@@ -7,7 +7,7 @@ the API port to loopback only, and stops at the four services the application ca
 
 ::: warning Read this alongside the file, not instead of it
 Every decision below — why the port is loopback-only, why clustering is off, why observability is
-absent — is explained inline in `docker-compose.production.yml` and `.docker/Dockerfile.production`
+absent — is explained inline in `docker-compose.production.yml` and `docker/Dockerfile.production`
 themselves. This page is the short version; the compose file is the source of truth.
 :::
 
@@ -25,13 +25,13 @@ Then edit `.env`. Three groups of values need real ones before the first deploy:
 | `NODE_METRICS_TOKEN`                                                               | Bearer credential a scraper needs to read `/observability/metrics`.                                                                                       |
 | `MONGO_ROOT_PASSWORD`, `MONGO_APP_PASSWORD`, `RABBITMQ_PASSWORD`, `REDIS_PASSWORD` | Not in `.env-example` at all — dev runs every one of these unauthenticated. Add all four yourself; the compose file refuses to start without any of them. |
 
-`MONGO_ROOT_USER` defaults to `root`, `MONGO_APP_USER` and `MONGO_DB` default to `api`, `RABBITMQ_USER` defaults to `guest`. `MONGO_ROOT_USER`/`MONGO_ROOT_PASSWORD` are maintenance-only — the app itself authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to `MONGO_DB` and created by `.docker/mongo-init.js` the first time the volume is empty.
+`MONGO_ROOT_USER` defaults to `root`, `MONGO_APP_USER` and `MONGO_DB` default to `api`, `RABBITMQ_USER` defaults to `guest`. `MONGO_ROOT_USER`/`MONGO_ROOT_PASSWORD` are maintenance-only — the app itself authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to `MONGO_DB` and created by `docker/mongo-init.js` the first time the volume is empty.
 
 ```bash
 docker compose -f docker-compose.production.yml up -d --build
 ```
 
-That builds `.docker/Dockerfile.production` (multi-stage: type-checks and lints in a build stage,
+That builds `docker/Dockerfile.production` (multi-stage: type-checks and lints in a build stage,
 ships only production dependencies in the runtime stage) and starts the API plus `database`,
 `cache` and `queue` — the production names for Mongo, Redis and RabbitMQ. No bind mount, no hot
 reload: what's running is exactly what was built.
@@ -93,10 +93,10 @@ See [Docker & Podman](./tools/docker-and-podman.md) for what each of those conta
 
 ## Where to go next
 
-| You want to                                       | Read                                            |
-| ------------------------------------------------- | ----------------------------------------------- |
-| Run the dev stack instead                         | [Getting Started](./getting-started.md)         |
-| Understand every container, dev or production     | [Docker & Podman](./tools/docker-and-podman.md) |
-| See every host port and its env var               | [Pairing & Ports](./tools/pairing-and-ports.md) |
-| Understand graceful shutdown under SIGTERM        | [Clustering & Shutdown](./theory/clustering.md) |
-| Look up a file in `.docker/` or the compose files | [Ops & Assets](./reference/ops.md)              |
+| You want to                                      | Read                                            |
+| ------------------------------------------------ | ----------------------------------------------- |
+| Run the dev stack instead                        | [Getting Started](./getting-started.md)         |
+| Understand every container, dev or production    | [Docker & Podman](./tools/docker-and-podman.md) |
+| See every host port and its env var              | [Pairing & Ports](./tools/pairing-and-ports.md) |
+| Understand graceful shutdown under SIGTERM       | [Clustering & Shutdown](./theory/clustering.md) |
+| Look up a file in `docker/` or the compose files | [Ops & Assets](./reference/ops.md)              |

@@ -146,7 +146,7 @@ rather than as raw bytes. See the frontend's `docs/reference/contracts.md#keepin
 for the full mechanism.
 
 Deliberately **not** on it: `public/favicon/*`, `.prettierrc`, `.dockerignore`, `.husky/*`,
-`.docker/nginx.docs.conf`, `docs/.vitepress/theme/*`. They are identical by convention, not by
+`docker/nginx.docs.conf`, `docs/.vitepress/theme/*`. They are identical by convention, not by
 requirement — either repo may legitimately change its own icon or formatting width, and a gate that
 fails on that trains people to ignore it.
 

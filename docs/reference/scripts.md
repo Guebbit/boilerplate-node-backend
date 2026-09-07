@@ -127,7 +127,7 @@ Everything else that runs or reads a test suite. Neither is in the pre-commit ga
 
 ## Scheduled jobs — `ops/`
 
-The one folder here that **ships in the production image** (`.docker/Dockerfile.production` copies
+The one folder here that **ships in the production image** (`docker/Dockerfile.production` copies
 it alongside `src/` and `db/`), because these are meant to run against a live database from a cron
 container rather than from a developer's terminal. Each one takes the `db/run-script.ts` wrapper,
 which gives it an exit code, cleanup on the failure path, and a readable error.

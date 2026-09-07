@@ -30,7 +30,7 @@ RUN rm -rf /usr/share/nginx/html/*
 COPY --from=builder /app/docs/.vitepress/dist /usr/share/nginx/html
 
 # Custom nginx config (optional: SPA-like fallback, caching headers)
-COPY .docker/nginx.docs.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx.docs.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 

@@ -4,7 +4,7 @@
 # server with hot reload, and brings up the full observability estate (Prometheus, Loki, Tempo,
 # Grafana, Alloy, Umami) because being able to see everything is the point of a development box.
 #
-# This file is the deployment. It runs the image built by `.docker/Dockerfile.production`, mounts
+# This file is the deployment. It runs the image built by `docker/Dockerfile.production`, mounts
 # no source, exposes no database port to the host, and stops at the four services the application
 # cannot run without. Telemetry is exported over OTLP to a collector that is deliberately NOT
 # defined here — see the note at the bottom.
@@ -27,7 +27,7 @@ services:
     app:
         build:
             context: .
-            dockerfile: .docker/Dockerfile.production
+            dockerfile: docker/Dockerfile.production
             args:
                 # ~200 MB of Chromium, needed only by the PDF invoice endpoint. See the Dockerfile.
                 INSTALL_CHROMIUM: '${INSTALL_CHROMIUM:-false}'
@@ -50,7 +50,7 @@ services:
             # because `.env` is written for a developer running the API on the host against
             # localhost ports, and inside the network the names are the addresses.
             # No `?authSource=admin`: this user is created ON `MONGO_DB` itself (see
-            # `.docker/mongo-init.js`), so the database already in the path is its auth source.
+            # `docker/mongo-init.js`), so the database already in the path is its auth source.
             NODE_DB_URI: 'mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}@database:27017/${MONGO_DB:-api}'
             NODE_REDIS_URL: 'redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@cache:6379'
             NODE_RABBITMQ_URL: 'amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@queue:5672'
@@ -87,7 +87,7 @@ services:
         restart: unless-stopped
         environment:
             # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
-            # (see `NODE_DB_URI` above and `.docker/mongo-init.js`), so a leaked connection
+            # (see `NODE_DB_URI` above and `docker/mongo-init.js`), so a leaked connection
             # string can never `dropDatabase` on another database or read `admin.system.users`.
             MONGO_INITDB_ROOT_USERNAME: '${MONGO_ROOT_USER:-root}'
             MONGO_INITDB_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}'
@@ -98,7 +98,7 @@ services:
             - mongo-data:/data/db
             # First-run only, same as the Umami init script: creates MONGO_APP_USER against an
             # empty data directory and never runs again on that volume.
-            - ./.docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+            - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
         # No `ports:` entry, deliberately. The database is reachable from the compose network and
         # from nowhere else. Reach it for maintenance with
         # `docker compose -f docker-compose.production.yml exec database mongosh -u "$MONGO_ROOT_USER" -p`.
@@ -171,7 +171,7 @@ volumes:
 # at all, which is what an empty value means and is a valid choice.
 #
 # To run the estate here anyway, the definitions are already written: the observability services in
-# `docker-compose.yml` and their configuration under `.docker/observability/` work unchanged.
+# `docker-compose.yml` and their configuration under `docker/observability/` work unchanged.
 # Compose merges files left to right, so
 #   docker compose -f docker-compose.production.yml -f docker-compose.yml up -d
 # is the wrong way to do it — it drags the bind-mounts and dev commands back in. Copy the services

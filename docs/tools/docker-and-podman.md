@@ -62,7 +62,7 @@ flowchart LR
 
 | Area                | Current implementation                                                                                                                        |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| App image           | `.docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                                    |
+| App image           | `docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                                     |
 | Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                                  |
 | Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands         |
 | Podman support      | `compose:restart`, `compose:rebuild` and `compose:kill` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch |
@@ -71,9 +71,9 @@ flowchart LR
 
 ### App runtime
 
-| Container | Image                                            | Port(s)                      | Role                                                                                                                         | Read next               |
-| --------- | ------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `app`     | `.docker/Dockerfile` (node:25-alpine + Chromium) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `redis`, `rabbitmq`, `otel-collector`. | [Runtime](./runtime.md) |
+| Container | Image                                           | Port(s)                      | Role                                                                                                                         | Read next               |
+| --------- | ----------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `app`     | `docker/Dockerfile` (node:25-alpine + Chromium) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `redis`, `rabbitmq`, `otel-collector`. | [Runtime](./runtime.md) |
 
 ### Core data
 
