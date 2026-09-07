@@ -8,7 +8,7 @@
 import type { Request, Response } from 'express';
 import { LoginTwoFactorBody } from '@api/schemas.zod';
 import type { LoginTwoFactorRequest, AuthTokens } from '@types';
-import { accountService } from '../services';
+import { twoFactorService } from '../services';
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
 import { authTwoFactorChallengeTotal } from '../metrics';
@@ -36,7 +36,7 @@ export const postLoginTwoFactor = (
     }
     const { challenge, code } = parseResult.data;
 
-    return accountService
+    return twoFactorService
         .verifyLoginChallenge(challenge, code, callerContextOf(request))
         .then((result) => {
             if (!result.success) {

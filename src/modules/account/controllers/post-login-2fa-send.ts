@@ -1,7 +1,7 @@
 /**
  * @module
  * `POST /account/login/2fa/send` controller — thin HTTP adapter over
- * `accountService.sendLoginCode`.
+ * `twoFactorService.sendLoginCode`.
  */
 
 import type { Request, Response } from 'express';
@@ -12,7 +12,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
-import { accountService } from '../services';
+import { twoFactorService } from '../services';
 import { authTwoFactorCodeSentTotal } from '../metrics';
 
 /**
@@ -30,7 +30,7 @@ export const postLoginTwoFactorSend = (
     }
     const { challenge, method } = parseResult.data;
 
-    return accountService
+    return twoFactorService
         .sendLoginCode(challenge, method, callerContextOf(request))
         .then((result) => {
             if (!result.success) {

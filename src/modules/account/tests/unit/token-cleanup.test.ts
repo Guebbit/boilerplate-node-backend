@@ -25,6 +25,9 @@ jest.mock('@modules/account/services', () => ({
     accountService: {
         login: jest.fn(),
         refreshAccessToken: jest.fn()
+    },
+    twoFactorService: {
+        buildLoginChallenge: jest.fn()
     }
 }));
 

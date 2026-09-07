@@ -101,10 +101,11 @@ practical. Past roughly **300 lines** it stops being practical, and the sanction
 `services/` folder with an `index.ts` — not a second module, and not a `helpers.ts` on the side. <!-- doc-paths:ignore -->
 
 This is a size rule, not an architectural one, and nothing above the layer changes: controllers
-still import `../services`, the module barrel still exports one `<domain>Service`, and the tier
+still import `../services`, the module barrel usually exports one `<domain>Service`, and the tier
 rules are untouched. It is written down because the alternative is worse in both directions — a
 1,200-line `service.ts` nobody wants to open, or a split that feels like breaking the convention
-and so gets done furtively.
+and so gets done furtively. `account` is the one exception to "one `<domain>Service`" — see below
+for why.
 
 Split by **what the operations do**, never by size alone. `cart` is the worked example:
 
@@ -119,9 +120,14 @@ Split by **what the operations do**, never by size alone. `cart` is the worked e
 One of those files is usually internal — here `view.ts`, whose helpers the others share and no
 caller asks for by name. Export its **types** from the barrel, not its helpers.
 
-`account` took the same step: `services/` holds `authentication.ts`, `profile.ts`, `addresses.ts`,
-`verification.ts`, `tokens.ts` and `token-cleanup.ts` behind one `index.ts` exporting
-`accountService`. `tokens.ts` is the one worth reading for the reason a split like this pays off:
+`account` took the same step, and then a second one: `services/` splits into `authentication.ts`,
+`profile.ts`, `verification.ts`, `tokens.ts`, `token-cleanup.ts`, `export.ts` and `oauth.ts`
+(`accountService`), `two-factor.ts` (`twoFactorService`) and `addresses.ts` (`addressService`) —
+three namespaces behind one `index.ts`, not one. At 44 functions, a single object meant every
+caller of `accountService.login` was, to TypeScript, also coupled to 2FA and the address book;
+splitting along the same file boundaries removes that coupling without adding new ones, since
+none of the three groups calls another. `tokens.ts` is the one worth reading for the reason a
+split like this pays off in the first place:
 what makes a one-time token live — right type, not expired — used to be re-derived in three
 controllers, and a fourth flow that forgot the expiry comparison would have shipped a link that
 worked forever. It is one function now, and `local/no-persistence-imports` is what stops a

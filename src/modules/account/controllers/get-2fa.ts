@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /account/2fa` controller — thin HTTP adapter over `accountService.twoFactorStatus`.
+ * `GET /account/2fa` controller — thin HTTP adapter over `twoFactorService.twoFactorStatus`.
  */
 
 import type { Request, Response } from 'express';
@@ -9,7 +9,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { TwoFactorStatus } from '@types';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authContextOf } from '@infrastructure/http/request';
-import { accountService } from '../services';
+import { twoFactorService } from '../services';
 
 /**
  * GET /account/2fa — the caller's own second factors, and what they could still add. Only
@@ -18,7 +18,7 @@ import { accountService } from '../services';
 export const get2fa = (request: Request, response: Response) => {
     const { id } = authContextOf(request);
 
-    return accountService
+    return twoFactorService
         .twoFactorStatus(id)
         .then((result) => {
             if (!result.success) {

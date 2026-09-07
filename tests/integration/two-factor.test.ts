@@ -14,7 +14,7 @@ import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { userRepository, TokenType, hashToken } from '@modules/users';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
-import { accountService } from '@modules/account/services';
+import { twoFactorService } from '@modules/account/services';
 import { DELIVERED_CODE_MAX_ATTEMPTS } from '@modules/account/two-factor';
 import { testCallerContext } from '@tests/caller-context';
 
@@ -130,7 +130,7 @@ const startLogin = (email: string) =>
 const mintChallenge = (userId: string): Promise<string> =>
     userRepository
         .findByIdWithCredentials(userId)
-        .then((user) => accountService.buildLoginChallenge(user!))
+        .then((user) => twoFactorService.buildLoginChallenge(user!))
         .then(({ challenge }) => challenge);
 
 describe('status', () => {
@@ -589,7 +589,11 @@ describe('logging in with the email factor', () => {
         await enrollEmail(bearer);
         mockOutbox.length = 0;
         const userId = user._id.toString();
-        await accountService.sendLoginCode(await mintChallenge(userId), 'email', testCallerContext);
+        await twoFactorService.sendLoginCode(
+            await mintChallenge(userId),
+            'email',
+            testCallerContext
+        );
         const code = mailedCode();
 
         /*
@@ -609,13 +613,13 @@ describe('logging in with the email factor', () => {
          * would race each other's read-modify-write instead of testing it.
          */
         for (let attempt = 0; attempt < DELIVERED_CODE_MAX_ATTEMPTS; attempt++)
-            await accountService.verifyLoginChallenge(
+            await twoFactorService.verifyLoginChallenge(
                 await mintChallenge(userId),
                 '000000',
                 testCallerContext
             );
 
-        const result = await accountService.verifyLoginChallenge(
+        const result = await twoFactorService.verifyLoginChallenge(
             await mintChallenge(userId),
             code,
             testCallerContext

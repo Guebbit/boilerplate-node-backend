@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 import { AddAddressBody, UpdateAddressBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AddressInput, UpdateAddressRequest, AddressesResponse } from '@types';
-import { accountService } from '../services';
+import { addressService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { authContextOf } from '@infrastructure/http/request';
 
@@ -31,7 +31,7 @@ export const postAddress = (
     const body = parseBody(AddAddressBody, request.body, response);
     if (!body) return;
 
-    return accountService
+    return addressService
         .addressAdd(id, body)
         .then((result) => {
             if (refused(response, result)) return;
@@ -63,7 +63,7 @@ export const putAddress = (
     const body = parseBody(UpdateAddressBody, request.body, response);
     if (!body) return;
 
-    return accountService
+    return addressService
         .addressUpdate(id, addressId, body)
         .then((result) => {
             if (refused(response, result)) return;

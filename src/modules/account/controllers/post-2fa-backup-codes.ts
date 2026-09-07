@@ -1,7 +1,7 @@
 /**
  * @module
  * `POST /account/2fa/backup-codes` controller — thin HTTP adapter over
- * `accountService.regenerateBackupCodes`.
+ * `twoFactorService.regenerateBackupCodes`.
  */
 
 import type { Request, Response } from 'express';
@@ -13,7 +13,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
-import { accountService } from '../services';
+import { twoFactorService } from '../services';
 import { authTwoFactorBackupCodesRegenerateTotal } from '../metrics';
 
 /**
@@ -32,7 +32,7 @@ export const post2faBackupCodes = (
         return rejectValidation(response, body.error);
     }
 
-    return accountService
+    return twoFactorService
         .regenerateBackupCodes(id, body.data.code, callerContextOf(request))
         .then((result) => {
             if (!result.success) {

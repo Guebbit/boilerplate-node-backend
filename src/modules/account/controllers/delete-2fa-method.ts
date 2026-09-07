@@ -1,7 +1,7 @@
 /**
  * @module
  * `DELETE /account/2fa/methods/{method}` controller — thin HTTP adapter over
- * `accountService.removeTwoFactorMethod`.
+ * `twoFactorService.removeTwoFactorMethod`.
  */
 
 import type { Request, Response } from 'express';
@@ -13,7 +13,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
-import { accountService } from '../services';
+import { twoFactorService } from '../services';
 import { authTwoFactorDisableTotal } from '../metrics';
 
 /**
@@ -37,7 +37,7 @@ export const delete2faMethod = (
     }
     const { method } = pathParameters.data;
 
-    return accountService
+    return twoFactorService
         .removeTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
         .then((result) => {
             if (!result.success) {

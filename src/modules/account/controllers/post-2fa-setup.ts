@@ -1,7 +1,7 @@
 /**
  * @module
  * `POST /account/2fa/methods/{method}/setup` controller — thin HTTP adapter over
- * `accountService.setupTwoFactorMethod`.
+ * `twoFactorService.setupTwoFactorMethod`.
  */
 
 import type { Request, Response } from 'express';
@@ -12,7 +12,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
-import { accountService } from '../services';
+import { twoFactorService } from '../services';
 
 /**
  * POST /account/2fa/methods/{method}/setup — starts (or restarts) enrollment of one method.
@@ -25,7 +25,7 @@ export const post2faSetup = (request: Request<{ method: string }>, response: Res
     const parseResult = SetupTwoFactorMethodParams.safeParse(request.params);
     if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
-    return accountService
+    return twoFactorService
         .setupTwoFactorMethod(id, parseResult.data.method, callerContextOf(request))
         .then((result) => {
             if (!result.success) {

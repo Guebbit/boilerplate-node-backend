@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /account/2fa` controller — thin HTTP adapter over `accountService.disableTwoFactor`.
+ * `DELETE /account/2fa` controller — thin HTTP adapter over `twoFactorService.disableTwoFactor`.
  */
 
 import type { Request, Response } from 'express';
@@ -10,7 +10,7 @@ import type { TwoFactorCodeRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
-import { accountService } from '../services';
+import { twoFactorService } from '../services';
 import { authTwoFactorDisableTotal } from '../metrics';
 import { t } from '@infrastructure/i18n';
 import { authContextOf, callerContextOf } from '@infrastructure/http/request';
@@ -32,7 +32,7 @@ export const delete2fa = (
         return rejectValidation(response, parseResult.error);
     }
 
-    return accountService
+    return twoFactorService
         .disableTwoFactor(id, parseResult.data.code, callerContextOf(request))
         .then((result) => {
             if (!result.success) {

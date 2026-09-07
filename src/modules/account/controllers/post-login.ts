@@ -7,7 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { accountService, runTokenCleanup } from '../services';
+import { accountService, twoFactorService, runTokenCleanup } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { issueSession } from '../session/session';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
@@ -73,7 +73,7 @@ export const postLogin = (
              * `postLoginTwoFactor` is what finishes it.
              */
             if (data.twoFactorEnabledAt) {
-                return accountService.buildLoginChallenge(data).then((challenge) => {
+                return twoFactorService.buildLoginChallenge(data).then((challenge) => {
                     successResponse<LoginOutcome>(
                         response,
                         challenge,

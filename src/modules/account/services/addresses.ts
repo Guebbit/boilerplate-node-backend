@@ -96,7 +96,6 @@ export const addressesDeleteByUserId = (userId: string): Promise<void> =>
     addressBookRepository.deleteByUserId(userId);
 
 /*
- * No namespace object here. These six are members of `accountService` in `./index`, which is the
- * module's one service handle — see the note there on why `authService`/`addressesService` became
- * a single name.
+ * No namespace object here. These six are members of `addressService` in `./index` instead —
+ * see the note there on why the module's service is split into three namespaces rather than one.
  */
