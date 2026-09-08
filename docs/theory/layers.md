@@ -51,7 +51,9 @@ Two things hold that beyond what a per-file rule can see:
 - **`npm run check:dependencies`** ([dependency-cruiser](../tools/dependency-graph.md)) asks the
   transitive form of the same questions: not "does this file import mongoose" but "can this tier
   reach it at all", plus cycle detection, which no per-file rule can perform because no file in a
-  cycle is doing anything wrong on its own.
+  cycle is doing anything wrong on its own. It is a structural check, not a behavioural one, so it
+  runs beside `lint` and the other `check:*` steps in `npm run complete` — never inside `npm run
+  test`, which is Jest suites only.
 
 Two modules that each need the other are not a dependency pair. Either they are one module, or the
 reverse edge becomes a domain event — see `src/kernel/events.ts`, and the catalogue/cart pair for
