@@ -65,6 +65,35 @@ export interface ImageTarget {
 }
 
 /**
+ * A module's declaration that one of its collections carries user-authored content a translation
+ * write needs to validate against and invalidate the cache of.
+ *
+ * `infrastructure/i18n`'s translation resolver cannot import `src/modules/*` either (same wall as
+ * {@link ImageTarget}: `translation.ts` cannot be an import from `products` into `locales`, per
+ * docs/theory/modules.md and `boundaries/dependencies` in `eslint.config.ts`). A module registers
+ * this instead, keyed under `translatables` on its manifest by the `entityType` string a
+ * translation row and the `/translations/{entityType}/{id}` route both use.
+ */
+export interface TranslatableTarget {
+    /** The mongo collection a translation write updates a derived, sortable/indexable copy on. */
+    collection: string;
+
+    /**
+     * Field names on this collection a translation row may carry. Validated against at write
+     * time — a translation naming a field this list does not declare is a 422, not a silently
+     * accepted key nothing ever reads.
+     */
+    fields: readonly string[];
+
+    /**
+     * The cache tag `invalidateCache` must clear when a translation write lands. The precedent is
+     * `infrastructure/adapters/image.worker.ts`, which already clears the `products` tag from
+     * outside the module that owns it.
+     */
+    cacheTag: string;
+}
+
+/**
  * Everything a module declares about itself.
  *
  * Keep this small: a field only one module ever fills belongs behind that module's own barrel, and
@@ -126,6 +155,13 @@ export interface AppModule {
     imageTargets?: Readonly<Record<string, ImageTarget>>;
 
     /**
+     * This module's {@link TranslatableTarget}s, keyed by the `entityType` string a translation
+     * row and the `/translations/{entityType}/{id}` route both use. Most modules have none; a
+     * module whose documents carry user-authored content registers one entry per such collection.
+     */
+    translatables?: Readonly<Record<string, TranslatableTarget>>;
+
+    /**
      * Paths whose callers SIGN the request body, so the JSON parser must keep the bytes verbatim.
      * Relative to `basePath`, the same way `routes` is.
      *
@@ -160,6 +196,26 @@ export const resolveImageTargets = (
 ): Readonly<Record<string, ImageTarget | undefined>> =>
     Object.fromEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.imageTargets ?? {}))
+    );
+
+/**
+ * Every registered module's {@link TranslatableTarget}s, flattened into one lookup keyed by
+ * `entityType`.
+ *
+ * Built from the passed-in list for the same reason {@link resolveImageTargets} is: this file
+ * must stay free of any `src/modules/*` import, so the translation resolver — which needs exactly
+ * this lookup and may not import a module directly — can depend on `kernel/registry` without a
+ * cycle. The `app` tier builds the lookup once, the way `app/workers.ts` builds `imageTargets`.
+ *
+ * @param appModules - the enabled module list
+ */
+export const resolveTranslatables = (
+    appModules: AppModule[]
+    // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
+    // this a lookup by an unregistered `entityType` string would type-check as always present.
+): Readonly<Record<string, TranslatableTarget | undefined>> =>
+    Object.fromEntries(
+        appModules.flatMap((appModule) => Object.entries(appModule.translatables ?? {}))
     );
 
 /**

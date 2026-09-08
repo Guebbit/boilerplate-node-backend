@@ -1031,3 +1031,149 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/LocaleImportResult'
+
+        # ---------- translations — user-authored content, resolved by entity + locale. ----------
+        #
+        # A `Translation` is a side row, never the entity itself: `entityType`/`entityId` name what
+        # is being translated, `fields` carries only the words. The entity's own contract (Product,
+        # in V1) is untouched by this feature — a public read resolves to plain strings server-side,
+        # so a client never sees this shape at all. Only the admin door in this module does.
+        #
+        # See TRANSLATION_UPGRADE.md for the full design: why a side collection rather than an
+        # embedded map, why every locale — including the source — gets a row, and why the write
+        # path lives here (generic) rather than on `products` (entity-specific).
+        TranslationOrigin:
+            type: string
+            enum: [machine, human]
+            description: >-
+                What produced this row's current `fields` — what a reviewer needs to prioritise.
+                There is no workflow gate behind it: a `human` write is live immediately, same as
+                a `machine` one.
+            example: human
+
+        TranslatableEntityType:
+            type: string
+            minLength: 1
+            description: >-
+                A `translatables` registry key — `product` in V1. Not an enum: the set grows as
+                more of the kernel registry declares translatable collections, and this contract
+                does not enumerate a kernel manifest. An unregistered value is refused at write
+                time with a 422, not by this schema.
+            example: product
+
+        Translation:
+            type: object
+            additionalProperties: false
+            required: [id, entityType, entityId, locale, fields, origin, createdAt, updatedAt]
+            description: >-
+                One entity's words in one language. Unique on (entityType, entityId, locale) — the
+                fallback-locale row is not a special case, it is simply the row whose `locale`
+                equals this deployment's `NODE_FALLBACK_LOCALE`.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                entityType:
+                    $ref: '#/components/schemas/TranslatableEntityType'
+                entityId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                fields:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: >-
+                        Field name to translated value — `{ title, description }` for a product.
+                        Keys are validated against the `translatables` registry entry for
+                        `entityType`, never against this contract, since the field set differs per
+                        entity and this schema stays generic on purpose.
+                    example:
+                        title: Cuccia ortopedica in memory foam
+                        description: Un supporto extra per le articolazioni durante il riposo.
+                sourceDigest:
+                    type: string
+                    description: >-
+                        Hash of the fallback-locale row's `fields` at the moment this row was
+                        translated. A mismatch means the source has changed since — stale, not
+                        wrong. Absent on the fallback-locale row itself, which is never stale
+                        relative to its own content.
+                    example: 3f1a9c2b7e4d5f60
+                origin:
+                    $ref: '#/components/schemas/TranslationOrigin'
+                translatedBy:
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: The `translator` who last wrote this row, for the audit trail.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        TranslationEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Translation'
+
+        EntityTranslations:
+            type: object
+            additionalProperties: false
+            required: [entityType, entityId, translations]
+            description: >-
+                Every locale one entity has a row for, in one response — the shape the admin
+                translation screen for that entity reads and writes as a whole.
+            properties:
+                entityType:
+                    $ref: '#/components/schemas/TranslatableEntityType'
+                entityId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                translations:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Translation'
+
+        EntityTranslationsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/EntityTranslations'
+
+        UpsertTranslationRequest:
+            type: object
+            additionalProperties: false
+            required: [fields]
+            description: >-
+                One locale's words for one entity. `origin` defaults to `human` — the door this
+                write shape is exposed on is the `translator`'s, and a machine-produced draft is
+                the exception, not the rule.
+            properties:
+                fields:
+                    type: object
+                    minProperties: 1
+                    additionalProperties:
+                        type: string
+                    description: >-
+                        Every key MUST be one the `translatables` registry declares for this
+                        `entityType`; an unknown key is a 422, not a silently dropped one.
+                origin:
+                    allOf:
+                        - $ref: '#/components/schemas/TranslationOrigin'
+                    default: human

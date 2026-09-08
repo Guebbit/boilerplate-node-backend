@@ -17,7 +17,7 @@ import { router } from './routes';
 import { productRepository } from './repository';
 import './events';
 
-/** This module's manifest entry: routes, locales, and the inventory image target. */
+/** This module's manifest entry: routes, locales, the image target and the translatable fields. */
 export default {
     name: 'products',
     basePath: '/products',
@@ -35,5 +35,13 @@ export default {
     ],
     routes: router,
     locales: path.join(__dirname, 'locales'),
-    imageTargets: { products: { writeback: productRepository.writebackImage } }
+    imageTargets: { products: { writeback: productRepository.writebackImage } },
+    /*
+     * `title`/`description` are a translated product's DERIVED index column, not its own data —
+     * kept only so Mongo has something to sort and index on. `products` is both the collection a
+     * translation write updates and the cache tag it must clear.
+     */
+    translatables: {
+        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+    }
 } satisfies AppModule;

@@ -6,7 +6,7 @@
  * unknown-dependency or cycle check to assert: they validated a `dependsOn` field nothing read at
  * runtime, so the field and its checks are both gone.
  */
-import { registerModules, type AppModule } from '@kernel/registry';
+import { registerModules, resolveTranslatables, type AppModule } from '@kernel/registry';
 
 it('calls subscribe on every module that declares one', () => {
     const first = jest.fn();
@@ -31,4 +31,37 @@ it('skips a module with no subscribe, rather than treating it as a mistake', () 
         registerModules([{ name: 'headless' }, { name: 'listener', subscribe }])
     ).not.toThrow();
     expect(subscribe).toHaveBeenCalledTimes(1);
+});
+
+/**
+ * `resolveTranslatables` — the same flattening `resolveImageTargets` does, one lookup keyed by
+ * `entityType` instead of one keyed by `collection`. Nothing else validates it here: whether an
+ * entry names a REAL collection and REAL fields is `tests/cross-cutting/translatable-targets.test.ts`.
+ */
+describe('resolveTranslatables', () => {
+    it('flattens every module into one lookup keyed by entityType', () => {
+        const modules: AppModule[] = [
+            {
+                name: 'products',
+                translatables: {
+                    product: { collection: 'products', fields: ['title'], cacheTag: 'products' }
+                }
+            },
+            {
+                name: 'pages',
+                translatables: {
+                    page: { collection: 'pages', fields: ['body'], cacheTag: 'pages' }
+                }
+            }
+        ];
+
+        expect(resolveTranslatables(modules)).toEqual({
+            product: { collection: 'products', fields: ['title'], cacheTag: 'products' },
+            page: { collection: 'pages', fields: ['body'], cacheTag: 'pages' }
+        });
+    });
+
+    it('is an empty lookup when no module declares one', () => {
+        expect(resolveTranslatables([{ name: 'headless' }])).toEqual({});
+    });
 });
