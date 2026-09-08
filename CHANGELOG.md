@@ -5,6 +5,22 @@ a breaking change is one a generated client cannot absorb without being regenera
 
 ## [Unreleased]
 
+### Breaking — contract
+
+- **`User.admin` is `User.role`.** The boolean became a role NAME, because a boolean could only
+  ever say "unrestricted or not" and the model now separates the shop from the installation: a
+  person holds one role inside the tenant and, rarely, a second over the platform. The seeded
+  `root` is `owner`; every other account defaults to `customer`. A client reading `user.admin`
+  must read `user.role` and compare against the names in `shared/authorization-roles.yaml`, or —
+  better — read `GET /account/abilities`, which answers what the server's own rules permit rather
+  than asking the client to infer it from a name.
+- **The `admin` query filter on `GET /users` is `role`.** `?admin=true` becomes
+  `?role=owner`, and the parameter is a string matched exactly rather than a boolean.
+- **`GET /account/abilities` omits `tenantId` in platform scope** instead of sending `null`. The
+  field was declared `nullable`, which the PHP twin's type generator refuses rather than guesses;
+  a client reads `scope` to know which world the rules are about, and `tenantId` only when there
+  is a shop to name.
+
 ### Breaking — deployment
 
 **Migrations are gone. `npm run db:sync` replaces them.** The contract is untouched, so no

@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /me/abilities` — the rules the server enforces, packed for a client to evaluate.
+ * `GET /account/abilities` — the rules the server enforces, packed for a client to evaluate.
  *
  * The point is that there is ONE rule set. A client that decides what to grey out from its own
  * copy of the policy keeps a duplicate, and the duplicate drifts: the drift is silent until
@@ -42,7 +42,8 @@ export const getMyAbilities = (request: Request, response: Response) => {
         : anonymousCaller();
 
     successResponse(response, {
-        tenantId: caller.tenantId ?? null,
+        // Absent rather than null in platform scope: the contract has no nullable field.
+        ...(caller.tenantId ? { tenantId: caller.tenantId } : {}),
         scope: caller.scope,
         /*
          * `packRules` is CASL's own wire format and exists for exactly this: a tuple per rule with
