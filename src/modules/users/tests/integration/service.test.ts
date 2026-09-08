@@ -8,12 +8,15 @@ import { asStub } from '@tests/stub';
 import { observePort } from '@tests/ports';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
+import { callerContextAs } from '@tests/callers';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
 import * as userService from '@modules/users/service';
 import { userRepository, USER_SETUP_REQUESTED } from '@modules/users';
 import { usersAuditActions } from '@modules/users/audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { assignRole, resolveDeploymentTenantId } from '@kernel/access/store';
+import { DEMO_TENANT_SLUG, seedPresetRoles } from '@kernel/access/seed';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { UserDocument } from '@modules/users';
 
@@ -293,7 +296,7 @@ describe('userService.create', () => {
                 password: PLAIN_PASSWORD,
                 role: 'owner'
             },
-            testCallerContext
+            callerContextAs('owner')
         );
 
         expect(user.role).toBe('owner');
@@ -385,7 +388,7 @@ describe('userService.updateById', () => {
                 username: 'new-name',
                 role: 'owner'
             },
-            testCallerContext
+            callerContextAs('owner')
         );
 
         expect(result.success).toBe(true);
@@ -509,7 +512,11 @@ describe('userService.update', () => {
     it('updates an existing user document directly', async () => {
         const user = await createUser();
 
-        const result = await userService.update(user, { username: 'direct-update' });
+        const result = await userService.update(
+            user,
+            { username: 'direct-update' },
+            testCallerContext
+        );
 
         expect(result.success).toBe(true);
         expect((result as ResponseSuccess<UserDocument>).data!.username).toBe('direct-update');
@@ -574,5 +581,23 @@ describe('userService.remove', () => {
         await userService.remove(user, true);
 
         expect(await userRepository.findById(id)).toBeNull();
+    });
+
+    it("refuses to hard-delete a shop's last owner, with 409", async () => {
+        // Only reachable with a real MEMBERSHIP row — `revokeRole` no-ops for a role that lives
+        // only on the `.role` column (nothing seeded a membership when this fixture was made
+        // customer/other roles above) — and `assertNotLastAdministrator` counts administrators
+        // through the stored ROLE rows, so those need seeding too, not just the membership.
+        await seedPresetRoles();
+        const user = await createUser({ role: 'owner' });
+        const tenantId = await resolveDeploymentTenantId(DEMO_TENANT_SLUG);
+        await assignRole(user.id, tenantId, 'tenant', 'owner');
+
+        const result = await userService.remove(user, true);
+
+        expect(result.success).toBe(false);
+        expect((result as ResponseReject).status).toBe(409);
+        // Refused BEFORE the write: the account and its cascades must survive a refused erasure.
+        expect(await userRepository.findById(user.id)).not.toBeNull();
     });
 });

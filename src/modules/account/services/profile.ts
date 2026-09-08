@@ -340,7 +340,7 @@ const writeProfile = (
     if (emailOutcome.conflict)
         return Promise.resolve(generateReject(409, [t('account.update.email-already-used')]));
 
-    return userService.update(user, { ...fields, email: undefined }).then((result) => {
+    return userService.update(user, { ...fields, email: undefined }, context).then((result) => {
         if (!result.success || !result.data || !emailOutcome.requested) return result;
         return notifyEmailChangeRequested(result.data, context).then(() => result);
     });
@@ -418,7 +418,7 @@ export const passwordChangeWithCurrent = (
                       // `openapi.yaml` never declares here.
                       if (!user) return generateReject(401, []);
 
-                      // An OAuth-only account (`account/oauth/link.ts`) holds no password to prove
+                      // An OAuth-only account (`account/services/oauth.ts`) holds no password to prove
                       // against — same 422 as a wrong one, since this flow has no other way in.
                       if (!user.password)
                           return generateReject(422, [t('account.password-change.wrong-current')]);

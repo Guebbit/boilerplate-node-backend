@@ -97,5 +97,15 @@ export const testCallerContext: CallerContext = {
 export const callerAs = (role: string, id?: string): Caller =>
     callerInScope(asRole(role, id), 'tenant');
 
+/**
+ * A `CallerContext` for a service test that needs a specific caller ROLE rather than the
+ * anonymous default `testCallerContext` carries — the granter behind an `assignRole` call, for
+ * one, since anonymous holds no key an elevated role could ever be a subset of.
+ */
+export const callerContextAs = (role: string, id?: string): CallerContext => ({
+    caller: callerAs(role, id),
+    analyticsConsent: false
+});
+
 /** A stranger, as the evaluator sees them: the `guest` role, in the shop. */
 export const strangerCaller = (): Caller => anonymousCaller();

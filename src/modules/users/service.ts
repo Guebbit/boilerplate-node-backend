@@ -30,7 +30,12 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import { assignRole, resolveDeploymentTenantId } from '@kernel/access/store';
+import {
+    assignRole,
+    revokeRole,
+    resolveDeploymentTenantId,
+    AccessInvariantError
+} from '@kernel/access/store';
 import { DEMO_TENANT_SLUG } from '@kernel/access/seed';
 
 /**
@@ -109,36 +114,77 @@ export const create = (
             ? data.password
             : randomBytes(32).toString('hex');
 
-    return userRepository.create({ verified: true, ...data, password }).then((user) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: usersAuditActions.ADMIN_USER_CREATED,
-                outcome: 'success',
-                target_type: 'user',
-                target_id: String(user._id),
-                // Recorded here, not by `account`'s domain-event handler: that handler has no
-                // request to build a `CallerContext` from, only a `userId`, so the admin's action
-                // is the only point in the flow with someone to attribute it to.
-                ...(passwordProvided
-                    ? {}
-                    : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
-            })
-        );
-        emitAnalyticsEvent({
-            ...buildAnalyticsBase(context),
-            // The new user, not the admin who created it — the funnel counts who came into
-            // existence, not who did the typing.
-            distinctId: String(user._id),
-            event: usersAnalyticsEvents.USER_CREATED,
-            properties: { admin_created: true }
+    return userRepository
+        .create({ verified: true, ...data, password })
+        .then((user) => {
+            /*
+             * The membership, not just the column — same reasoning as `update()`'s dual write below.
+             * Without it a brand-new staff account is a role that LOOKS granted and grants nothing,
+             * because `rolesOf`'s membership lookup finds no row and the fallback only reads on the
+             * scope this account is later resolved in. Awaited before the audit event: a rejected
+             * escalation must fail the whole create, not just the column that already saved.
+             */
+            const membership =
+                data.role === undefined
+                    ? Promise.resolve()
+                    : resolveDeploymentTenantId(DEMO_TENANT_SLUG).then((tenantId) =>
+                          assignRole(
+                              String(user._id),
+                              tenantId,
+                              'tenant',
+                              data.role!,
+                              context.caller.permissions
+                          ).then(() => undefined)
+                      );
+
+            return membership.then(() => user);
+        })
+        .then((user) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: usersAuditActions.ADMIN_USER_CREATED,
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: String(user._id),
+                    // Recorded here, not by `account`'s domain-event handler: that handler has no
+                    // request to build a `CallerContext` from, only a `userId`, so the admin's action
+                    // is the only point in the flow with someone to attribute it to.
+                    ...(passwordProvided
+                        ? {}
+                        : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
+                })
+            );
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                // The new user, not the admin who created it — the funnel counts who came into
+                // existence, not who did the typing.
+                distinctId: String(user._id),
+                event: usersAnalyticsEvents.USER_CREATED,
+                properties: { admin_created: true }
+            });
+
+            enqueueIfPending(user);
+
+            if (passwordProvided || !data.sendSetupEmail) return user;
+
+            return emitDomainEvent(USER_SETUP_REQUESTED, { userId: String(user._id) }).then(
+                () => user
+            );
         });
+};
 
-        enqueueIfPending(user);
-
-        if (passwordProvided || !data.sendSetupEmail) return user;
-
-        return emitDomainEvent(USER_SETUP_REQUESTED, { userId: String(user._id) }).then(() => user);
-    });
+/**
+ * Turns an `AccessInvariantError` into the 409 envelope every function in this file that promises
+ * "envelope, not throw" owes its caller. `@infrastructure/http/errors`' `databaseErrorInterpreter`
+ * carries the SAME mapping for `create()`, which throws by contract instead — this is that other
+ * half, for the functions here that do not.
+ *
+ * @throws Error re-thrown unchanged for anything that is not an `AccessInvariantError` — a
+ *   database failure here is still the caller's to handle, not this function's to hide.
+ */
+const rejectAccessInvariant = (error: Error): ResponseReject => {
+    if (error instanceof AccessInvariantError) return generateReject(409, [error.message]);
+    throw error;
 };
 
 /**
@@ -162,7 +208,14 @@ export const update = (
          * `updateProfile`) that actually has one to pass.
          */
         analyticsConsent?: boolean;
-    }
+    },
+    /**
+     * The caller MAKING the change, passed on to `assignRole` as its `granter` — the keys behind
+     * `data.role` must be a subset of the keys behind this. Without it a role editor is a
+     * privilege-escalation endpoint: any caller who can reach this function at all could grant
+     * any role, including their own promotion to `owner`.
+     */
+    context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
     if (data.username !== undefined) user.username = data.username;
@@ -206,23 +259,30 @@ export const update = (
                 : Promise.resolve();
 
         /*
-         * NOT caught, unlike the revoke above: a role that did not reach the membership is a
-         * permission change that silently did not happen, and the caller has to hear about it.
-         * `assignRole` is also where the invariants live — an undeclared role, or a key no module
-         * owns, is refused here rather than discovered by the member who cannot work.
+         * NOT swallowed, unlike the revoke above: a role that did not reach the membership is a
+         * permission change that silently did not happen, and the caller has to hear about it —
+         * `rejectAccessInvariant` below is that, turned into the envelope this function promises
+         * rather than a throw. `assignRole` is also where the invariants live — an undeclared
+         * role, a privilege escalation, or a key no module owns, is refused here rather than
+         * discovered by the member who cannot work.
          */
         const membership =
             data.role === undefined
                 ? Promise.resolve()
                 : resolveDeploymentTenantId(DEMO_TENANT_SLUG).then((tenantId) =>
-                      assignRole(String(savedUser._id), tenantId, 'tenant', data.role!).then(
-                          () => undefined
-                      )
+                      assignRole(
+                          String(savedUser._id),
+                          tenantId,
+                          'tenant',
+                          data.role!,
+                          context.caller.permissions
+                      ).then(() => undefined)
                   );
 
         return revoke
             .then(() => membership)
-            .then(() => generateSuccess(enqueueIfPending(savedUser)));
+            .then(() => generateSuccess(enqueueIfPending(savedUser)))
+            .catch(rejectAccessInvariant);
     });
 };
 
@@ -254,7 +314,7 @@ export const updateById = (
         // Read before `update()` mutates `user.active` in place — the flip is the whole signal.
         const wasActive = user.active;
 
-        return update(user, data).then((result) => {
+        return update(user, data, context).then((result) => {
             if (result.success) {
                 emitAuditEvent(
                     buildAuditEvent(context, {
@@ -279,19 +339,26 @@ export const updateById = (
 
 /**
  * Remove a user document (soft or hard delete). Soft delete toggles `deletedAt` (restores if
- * already soft-deleted). A hard delete emits `user.deleted`, awaited before the write, so cart
- * cleanup happens without this module knowing the cart exists — keeping the dependency arrow
- * pointing cart → users. Only the hard path emits, since a soft delete is a restore waiting to
- * happen.
+ * already soft-deleted). A hard delete first revokes the account's tenant membership — the
+ * authorization store's own half of the cascade, and the one place `revokeRole`'s
+ * `assertNotLastAdministrator` can refuse the whole delete with 409 BEFORE `user.deleted` fires,
+ * rather than leaving a shop with nobody who can administer it — `rejectAccessInvariant` is what
+ * turns that refusal into the envelope this function promises. Only past that does it emit
+ * `user.deleted`, awaited before the write, so cart cleanup happens without this module knowing
+ * the cart exists — keeping the dependency arrow pointing cart → users. Only the hard path
+ * touches either, since a soft delete is a restore waiting to happen.
  */
 export const remove = (
     user: UserDocument,
     hardDelete = false
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete)
-        return emitDomainEvent(USER_DELETED, { userId: user.id })
+        return resolveDeploymentTenantId(DEMO_TENANT_SLUG)
+            .then((tenantId) => revokeRole(user.id, tenantId, 'tenant'))
+            .then(() => emitDomainEvent(USER_DELETED, { userId: user.id }))
             .then(() => userRepository.deleteOne(user))
-            .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
+            .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')))
+            .catch(rejectAccessInvariant);
 
     // A FLIP, not an assignment: run against an already soft-deleted user this restores it,
     // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
