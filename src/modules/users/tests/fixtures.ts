@@ -10,6 +10,7 @@
 
 import type { UserDocument } from '@modules/users';
 import { userRepository } from '@modules/users';
+import { assignRole } from '@kernel/access/store';
 import { makeUser } from '../fixtures';
 import type { UserOverrides } from '../fixtures';
 
@@ -45,13 +46,16 @@ export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument>
  * TWO ROLES, because that is what the seeded `root` holds and because the two scopes are two
  * jobs: unrestricted inside the shop, and operator over the installation. A fixture carrying only
  * the first would pass every shop test and fail every observability one, which is a fixture that
- * disagrees with the deployment it is standing in for.
+ * disagrees with the deployment it is standing in for. The shop role rides the account's own
+ * `role` column, same as every other role fixture; the platform one has no column to ride at all
+ * — `memberships` is its sole authority — so it is written the same way `seedAccessModel` writes
+ * `root`'s: through `assignRole`, tenant-less (`tenantId: null`, matching `platform`'s own
+ * tenant-less-by-definition rule).
  */
 export const createAdminUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
     createUser({
         role: 'owner',
-        platformRole: 'operator',
         email: 'admin@example.com',
         username: 'adminuser',
         ...overrides
-    } as UserOverrides);
+    }).then((user) => assignRole(user.id, null, 'platform', 'operator').then(() => user));

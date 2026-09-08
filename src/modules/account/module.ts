@@ -62,9 +62,11 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       rolesOf(user.id, tenantId, {
                           // What the account itself says, for the account no membership names —
                           // an unseeded deployment, or a fixture written straight to the
-                          // collection. A stored membership always wins over it.
+                          // collection. A stored membership always wins over it. Platform has no
+                          // such column of its own: `memberships` is the sole authority for that
+                          // scope, so an account with none there simply holds no platform role.
                           tenant: user.role ?? 'customer',
-                          platform: user.platformRole ?? null
+                          platform: null
                       }).then((roles) => ({ tenantId, roles }))
                   )
                 : Promise.resolve({ tenantId: null, roles: { tenant: 'customer', platform: null } })
@@ -78,10 +80,12 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       email: user.email,
                       username: user.username,
                       /*
-                       * Both roles come off the account. `customer` is the default for a row
-                       * written before the field existed, which is the least-privileged answer
-                       * and therefore the safe one; `platform` is `null` for everyone who does
-                       * not operate the installation, which is almost everyone.
+                       * `rolesOf`'s membership lookup wins over both fallbacks. `tenant` falls
+                       * back to the account's own `role` column — `customer` is the default for a
+                       * row written before the field existed, the least-privileged answer and
+                       * therefore the safe one. `platform` has no column to fall back to at all:
+                       * `memberships` is the sole authority for that scope, so no row there means
+                       * no platform role, which is correct for almost everyone.
                        *
                        * A stranger never reaches here at all — they are `guest`, via
                        * `anonymousCaller()`.

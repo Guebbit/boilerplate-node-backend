@@ -106,8 +106,9 @@ describe('user credential exposure', () => {
                 // The user's preferred language. Public rather than stripped: the client shows
                 // it in the profile and writes it back, and it is in the `User` contract.
                 'locale',
-                // The role held inside the shop. `platformRole` is NOT here and must not be:
-                // who operates the installation is not a fact about a shop.
+                // The role held inside the shop. Who operates the INSTALLATION is not a fact
+                // about a shop, and is not a column on this document at all — `memberships` is
+                // the sole authority for that scope.
                 'role',
                 // Defaulted `true` like `active`/`role`, always present — enforced at signup,
                 // informational everywhere else (see `users/model.ts`).

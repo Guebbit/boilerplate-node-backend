@@ -93,7 +93,7 @@ export interface UserRecord extends Omit<
 > {
     /**
      * Hashed by the pre-save hook below before it ever reaches Mongo. Absent for an OAuth-only
-     * account (`account/oauth/link.ts`'s signup branch) — sign-in then works only through a
+     * account (`account/services/oauth.ts`'s signup branch) — sign-in then works only through a
      * linked provider, until a future "add a password" flow gives it one.
      */
     password?: string;
@@ -107,17 +107,6 @@ export interface UserRecord extends Omit<
      * deciding what is safe to hard-delete next, since `deletedAt` alone doesn't say who set it.
      */
     inactivityWarnedAt?: Date;
-
-    /**
-     * The role held over the INSTALLATION rather than inside the shop — `operator`, or absent for
-     * the overwhelming majority.
-     *
-     * Document-only, deliberately: `role` is on the wire because a shop's staff list has to show
-     * and edit it, while who operates the installation is not a fact about a shop and no
-     * shop-facing screen has any business rendering it. Read by the auth resolver, and by nothing
-     * else.
-     */
-    platformRole?: string | null;
 
     /** Every second factor this account has enrolled or half-enrolled — see {@link TwoFactorMethodRecord}. */
     twoFactorMethods: TwoFactorMethodRecord[];
@@ -189,7 +178,7 @@ export interface TwoFactorMethodRecord {
 }
 
 /**
- * One linked OAuth/OIDC identity — `account/oauth/link.ts` is the only writer. A user document
+ * One linked OAuth/OIDC identity — `account/services/oauth.ts` is the only writer. A user document
  * may hold several (Google AND GitHub on the same account), and `providerId` rather than `email`
  * is the identity key, since a provider's email can change while its subject id never does.
  */
@@ -292,7 +281,7 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         // `select: false` — never loaded unless a query explicitly asks for it, so even a
         // .lean() read that bypasses applyUserTransform still cannot leak the hash. Use the
         // repository's *WithCredentials helpers to re-select it (see `./repository`).
-        // NOT `required`: an OAuth-only signup (`account/oauth/link.ts`) creates a user with none.
+        // NOT `required`: an OAuth-only signup (`account/services/oauth.ts`) creates a user with none.
         // The pre-save hash hook below already skips absent/unmodified passwords, unaffected.
         password: {
             type: String,
@@ -370,16 +359,6 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         role: {
             type: String,
             default: 'customer'
-        },
-        /*
-         * The role held over the INSTALLATION rather than inside the shop — `operator`, or absent
-         * for the overwhelming majority. Separate from `role` because they are different jobs
-         * with different keys: a platform operator is explicitly not a super-owner, and one field
-         * could not say which of the two a request is acting as.
-         */
-        platformRole: {
-            type: String,
-            default: null
         },
         /*
          * Whether the account is enabled — independent of `deletedAt`, matching `products`:
@@ -687,9 +666,7 @@ userSchema.methods.tokenRemoveAll = function (this: UserDocument, type: Token['t
 export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
-    // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment. `platformRole` is
-    // document-only for a different reason than secrecy: who operates the INSTALLATION is not a
-    // fact about a shop, and no shop-facing screen has any business rendering it.
+    // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment.
     // `twoFactorMethods`/`twoFactorBackupCodes` are 2FA credential material —
     // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
     // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
@@ -698,7 +675,6 @@ export const applyUserTransform = applySerialization(userSchema, {
         'password',
         'tokens',
         'pendingImageKey',
-        'platformRole',
         'inactivityWarnedAt',
         'twoFactorMethods',
         'twoFactorBackupCodes',
