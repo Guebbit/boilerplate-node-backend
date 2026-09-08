@@ -9,7 +9,7 @@ import { TokenType } from '@modules/users';
 import { destroyLoggedCookie, destroyRefreshCookie } from '../session/cookies';
 import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/logout-all
@@ -18,7 +18,7 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
  */
 export const postLogoutEverywhere = (request: Request, response: Response) => {
     return accountService
-        .tokenRemoveAll(authContextOf(request).id, TokenType.REFRESH, callerContextOf(request))
+        .tokenRemoveAll(request.authContext!.id, TokenType.REFRESH, callerContextOf(request))
         .then(() => {
             destroyRefreshCookie(response);
             destroyLoggedCookie(response);

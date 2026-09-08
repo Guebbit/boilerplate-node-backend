@@ -27,7 +27,6 @@ export {
     buildOtpauthUri,
     decryptTotpSecret,
     encryptTotpSecret,
-    generateTotpSecret,
     verifyTotpCode,
     type TotpVerification
 } from './totp';

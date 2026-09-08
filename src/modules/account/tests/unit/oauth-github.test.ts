@@ -4,7 +4,8 @@
  * emails). `fetch` is mocked throughout, once per call in the order the provider makes them.
  */
 
-import { githubOAuthProvider, githubConfigured } from '../../oauth/providers/github';
+import { isOAuthProviderConfigured } from '../../oauth/config';
+import { githubOAuthProvider } from '../../oauth/providers/github';
 
 /** The client id every case below asserts reaches GitHub, in the URL or the token exchange. */
 const CLIENT_ID = 'test-github-client-id';
@@ -36,14 +37,14 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-describe('githubConfigured', () => {
+describe('github provider configuration', () => {
     it('is true once both env vars are set', () => {
-        expect(githubConfigured()).toBe(true);
+        expect(isOAuthProviderConfigured('github')).toBe(true);
     });
 
     it('is false when either half is missing', () => {
         delete process.env.NODE_OAUTH_GITHUB_CLIENT_ID;
-        expect(githubConfigured()).toBe(false);
+        expect(isOAuthProviderConfigured('github')).toBe(false);
     });
 });
 

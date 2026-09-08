@@ -23,12 +23,13 @@ import {
     type PaginationInput
 } from './search';
 import { trackDatabaseQuery } from './metrics';
+import type { SerializeTransform } from './serialize';
 
 /**
  * The ceiling `findAll` applies when a caller names no limit. A backstop against an unbounded
  * collection scan, not a page size — paging goes through `search`.
  */
-export const FIND_ALL_LIMIT = 1000;
+const FIND_ALL_LIMIT = 1000;
 
 /** Pagination/sort options shared across all repository `findAll` calls. */
 export interface FindAllOptions {
@@ -71,23 +72,6 @@ export interface SearchSpec {
     ranges?: Record<string, { min: string; max: string }>;
 }
 
-/**
- * Raw, unvalidated filter bag from the request layer.
- *
- * `object` and not `Record<string, unknown>`: the generated request DTOs are interfaces, which
- * TypeScript denies an implicit index signature, so the stricter type would force every caller
- * to cast. The one cast that makes keys readable lives in `buildWhere` instead.
- */
-export type SearchFilters = object;
-
-/**
- * A model's wire-shape serializer — `applySerialization`'s return value, exported by each model.
- *
- * `.lean()`/`.aggregate()` bypass the schema's `toJSON`, so plain objects still carry `_id`/`__v`;
- * this is what lets the factory return already-serialized results.
- */
-export type Transform = (serialized: Record<string, unknown>) => Record<string, unknown>;
-
 /** Treat empty/blank/nullish as "the caller did not filter on this". */
 const isPresent = (value: unknown): boolean =>
     value !== undefined && value !== null && (typeof value !== 'string' || value.trim() !== '');
@@ -107,8 +91,12 @@ export const toObjectId = (value: unknown): Types.ObjectId => new Types.ObjectId
  * Reached through the bound `buildWhere` on the factory result — the order repository uses it
  * to build an aggregation `$match` from the same rules.
  */
-const buildWhere = (filters: SearchFilters, spec: SearchSpec): Record<string, unknown> => {
-    // The one cast, confined here — see `SearchFilters`.
+const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> => {
+    /*
+     * `object` and not `Record<string, unknown>` for the filter bag: the generated request DTOs
+     * are interfaces, which TypeScript denies an implicit index signature, so the stricter type
+     * would force every caller to cast. The one cast that makes keys readable is confined here.
+     */
     const bag = filters as Record<string, unknown>;
     const where: Record<string, unknown> = {};
 
@@ -159,8 +147,12 @@ export interface PaginatedResult<TDocument> {
 
 /** Configuration passed to {@link createRepository}: the model's transform and its optional search spec. */
 export interface RepositoryOptions {
-    /** The model's wire-shape serializer, applied by `normalize` — and so by `search`. */
-    transform: Transform;
+    /**
+     * The model's wire-shape serializer, applied by `normalize` — and so by `search`.
+     * `.lean()`/`.aggregate()` bypass the schema's `toJSON`, so plain objects still carry
+     * `_id`/`__v`; this is what lets the factory return already-serialized results.
+     */
+    transform: SerializeTransform;
     /** What `search()` accepts. Omit for collections that are never searched. */
     searchable?: SearchSpec;
 }
@@ -215,14 +207,14 @@ export interface Repository<TDocument extends Document> {
     deleteOne: (document: TDocument) => Promise<void>;
     /** Filter → count → page → normalize, per the declared search spec. */
     search: (
-        filters?: SearchFilters,
+        filters?: object,
         scope?: Record<string, unknown>,
         sort?: Record<string, 1 | -1>
     ) => Promise<PaginatedResult<TDocument>>;
     /** Apply the model's transform to lean/aggregate output. */
     normalize: (items: unknown[]) => TDocument[];
     /** Build a Mongo filter from a filter bag, per the declared search spec. */
-    buildWhere: (filters: SearchFilters) => Record<string, unknown>;
+    buildWhere: (filters: object) => Record<string, unknown>;
 }
 
 /**
@@ -323,7 +315,7 @@ export function createRepository<TDocument extends Document>(
      * `tests/fuzz/endpoints.fuzz.test.ts`).
      */
     const search = async (
-        filters: SearchFilters = {},
+        filters: object = {},
         scope: Record<string, unknown> = {},
         // Total sort by default: `count` and `findAll` are separate queries, so a tie can put
         // one document on two pages — see `DEFAULT_SORT`.
@@ -361,6 +353,6 @@ export function createRepository<TDocument extends Document>(
         search: trackDatabaseQuery(search),
         normalize,
         // Bound to this collection's spec, so callers pass filters only.
-        buildWhere: (filters: SearchFilters) => buildWhere(filters, searchable)
+        buildWhere: (filters: object) => buildWhere(filters, searchable)
     };
 }

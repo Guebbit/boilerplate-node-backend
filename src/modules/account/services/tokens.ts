@@ -9,8 +9,8 @@
 import type { Session } from '@types';
 import {
     userRepository,
-    TokenType,
     hashToken,
+    isLiveRefreshSession,
     type Token,
     type UserDocument
 } from '@modules/users';
@@ -89,10 +89,7 @@ export const sessionsList = (
         if (!user) return generateReject(404, [t('users.not-found')]);
 
         const sessions = user.tokens
-            // `!token.supersededAt` — a rotated-away entry is kept around only for its
-            // short reuse-detection grace window, not a session the account holder should see or
-            // be able to revoke by itself; its successor already is one.
-            .filter((token) => token.type === (TokenType.REFRESH as string) && !token.supersededAt)
+            .filter((token) => isLiveRefreshSession(token))
             .map((token) => toSession(token, cookieToken));
 
         return generateSuccess({ sessions });

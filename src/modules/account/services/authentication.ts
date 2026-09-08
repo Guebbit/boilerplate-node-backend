@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { getCurrentLocale, getDefaultLocale, t } from '@infrastructure/i18n';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -108,8 +109,19 @@ const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12)
  */
 export const PASSWORD_RESET_TOKEN_TYPE = 'password';
 
-/** How long a reset link works: an hour, in milliseconds — how long a stolen mailbox stays useful. */
-export const PASSWORD_RESET_TOKEN_TTL_MS = 3_600_000;
+/** Fallback for `NODE_PASSWORD_RESET_TTL_MS`: an hour, in milliseconds. */
+const DEFAULT_PASSWORD_RESET_TTL_MS = 3_600_000;
+
+/**
+ * How long a reset link works — how long a stolen mailbox stays useful. Tunable because the safe
+ * direction is SHORTER, and that trade against a user who reads mail on a delay is a
+ * deployment's call, not this file's.
+ */
+const PASSWORD_RESET_TOKEN_TTL_MS = environmentNumber(
+    'NODE_PASSWORD_RESET_TTL_MS',
+    DEFAULT_PASSWORD_RESET_TTL_MS,
+    1
+);
 
 /**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
@@ -345,18 +357,6 @@ export interface SignupInput {
 }
 
 /**
- * Whether a `success` from {@link signup} is rung 2's ruse rather than a registration.
- *
- * Mongoose's `Document#isNew` is the signal: it stays `true` until `.save()` is called, and the
- * refusal path is the only one that returns a document never saved. Named, because `isNew` reads
- * backwards here — true means NO account was created.
- * https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
- *
- * @param user - the document from a successful `signup` result
- */
-export const wasRefusedByEmailPolicy = (user: UserDocument): boolean => user.isNew;
-
-/**
  * Register new user.
  *
  * @param input - the submitted fields and the server-derived image paths
@@ -414,7 +414,7 @@ export const signup = (
           checkEmailPolicy(email).then((verdict) =>
               verdict === 'refused'
                   ? // Answer exactly like a genuine signup, from a document this call never
-                    // persists — a script gets nothing to iterate on. {@link wasRefusedByEmailPolicy}
+                    // persists — a script gets nothing to iterate on. The unsaved-document check
                     // is how the audit trail and the upload cleanup still tell the two apart.
                     Promise.resolve(
                         generateSuccess<UserDocument>(
@@ -464,7 +464,10 @@ export const signup = (
     return outcome.then((result) => {
         // The audit trail must not name an account rung 2 refused, or record it as anything other
         // than the refusal it was.
-        if (!result.success || (result.data && wasRefusedByEmailPolicy(result.data))) {
+        // `Document#isNew` stays true until `.save()`, and the rung-2 refusal path is the only
+        // one that returns a document never saved — so it reads backwards here: true means NO
+        // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+        if (!result.success || result.data?.isNew) {
             emitAuditEvent(
                 buildAuditEvent(callerContext, {
                     action: accountAuditActions.AUTH_SIGNED_UP,

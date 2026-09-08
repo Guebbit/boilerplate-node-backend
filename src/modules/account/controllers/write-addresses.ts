@@ -13,7 +13,6 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AddressInput, UpdateAddressRequest, AddressesResponse } from '@types';
 import { addressService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/addresses — add an entry.
@@ -26,7 +25,7 @@ export const postAddress = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     const body = parseBody(AddAddressBody, request.body, response);
     if (!body) return;
@@ -57,7 +56,7 @@ export const putAddress = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
     const { addressId } = request.params;
 
     const body = parseBody(UpdateAddressBody, request.body, response);

@@ -48,16 +48,11 @@ export interface ProductDocument extends ProductSnapshot, Document {
 }
 
 /**
- * Product Document instance methods
- */
-export type ProductMethods = unknown;
-
-/**
  * Product Document model type.
  * Business logic (search, remove, validate) lives in the service (`./service`); queries live in
  * the repository (`./repository`).
  */
-export type ProductModel = Model<ProductDocument, Record<string, never>, ProductMethods>;
+export type ProductModel = Model<ProductDocument, Record<string, never>, unknown>;
 
 /**
  * Zod schema for product data, built on the generated `CreateProductBody` — only fields needing
@@ -82,7 +77,7 @@ export const zodProductSchema = CreateProductBody.extend({
 /**
  * Mongoose Schema for the Product model
  */
-export const productSchema = new Schema<ProductDocument, ProductModel, ProductMethods>(
+export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
     {
         title: {
             type: String,

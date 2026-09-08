@@ -30,15 +30,14 @@ import { router as usersRouter } from '@modules/users/routes';
 import { router as wishlistRouter } from '@modules/wishlist/routes';
 
 /**
- * Guard: a controller that reads `authContextOf` is mounted behind `isAuth`.
+ * Guard: a controller that reads `request.authContext!` is mounted behind `isAuth`.
  *
  * `Request.authContext` is optional, correctly — it is absent until the auth middleware resolves
- * it. `authContextOf` asserts it is there, once, with the argument written down; this is the half
+ * it. A controller asserting it with `!` is claiming its route is authenticated; this is the half
  * no type can carry, because whether the ROUTE is authenticated lives in `routes.ts`.
  *
- * Without it the assertion is just a nicer-looking version of the `!` it replaced. With it, a
- * controller that starts reading the caller and is mounted on a public route fails here rather
- * than answering `undefined.id` at runtime.
+ * That claim is what this file checks. A controller that starts reading the caller and is mounted
+ * on a public route fails here rather than answering `undefined.id` at runtime.
  *
  * The second half of that question — which routes are unauthenticated — is answered from
  * {@link effectiveRouteTable}, not by reading `routes.ts` as text. Regexing the source answers a
@@ -71,7 +70,7 @@ const ROUTED_MODULES: Record<string, Router> = {
     wishlist: wishlistRouter
 };
 
-/** Controllers that read the caller through the accessor, by exported handler name. */
+/** Controllers that assert an auth context, by exported handler name. */
 const handlersReadingAuthContext = (moduleRoot: string): Set<string> => {
     const controllers = path.join(moduleRoot, 'controllers');
     if (!existsSync(controllers)) return new Set();
@@ -79,7 +78,7 @@ const handlersReadingAuthContext = (moduleRoot: string): Set<string> => {
     const names = new Set<string>();
     for (const file of readdirSync(controllers).filter((f) => f.endsWith('.ts'))) {
         const source = readFileSync(path.join(controllers, file), 'utf8');
-        if (!source.includes('authContextOf(')) continue;
+        if (!source.includes('request.authContext!')) continue;
         for (const [, name] of source.matchAll(/export const (\w+) = /g)) names.add(name);
     }
     return names;

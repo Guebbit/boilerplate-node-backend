@@ -80,10 +80,6 @@ export const clearDeliveredCode = (entry: TwoFactorMethodRecord): void => {
     entry.codeAttempts = undefined;
 };
 
-/** Constant-time digest comparison — `timingSafeEqual` throws on a length mismatch, which cannot happen between two hex digests of the same algorithm. */
-const digestsMatch = (a: string, b: string): boolean =>
-    a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
-
 /**
  * Check a typed code against the one in flight, and advance the entry accordingly: a match
  * clears the code (one use, always), a miss counts an attempt and clears it at the ceiling.
@@ -105,7 +101,13 @@ export const consumeDeliveredCode = (
         return false;
     }
 
-    if (digestsMatch(entry.codeHash, hashDeliveredCode(code))) {
+    // Constant-time compare. `timingSafeEqual` throws on a length mismatch, which cannot happen
+    // between two hex digests of the same algorithm — the length guard makes that explicit.
+    const typed = hashDeliveredCode(code);
+    if (
+        entry.codeHash.length === typed.length &&
+        timingSafeEqual(Buffer.from(entry.codeHash), Buffer.from(typed))
+    ) {
         clearDeliveredCode(entry);
         return true;
     }

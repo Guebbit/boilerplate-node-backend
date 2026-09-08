@@ -9,7 +9,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/export — the caller's own data, assembled from every collection that holds some.
@@ -23,7 +23,7 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
  */
 export const postAccountExport = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     return accountService
         .exportOwnData(id, callerContextOf(request))

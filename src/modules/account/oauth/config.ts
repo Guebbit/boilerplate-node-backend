@@ -41,10 +41,11 @@ export const isOAuthProviderConfigured = (name: string): boolean => {
 export const oauthRedirectUri = (provider: string): string =>
     `${process.env.NODE_URL ?? ''}account/oauth/${provider}/callback`;
 
-/** The paired frontend's origin — where a finished (or failed) login lands the browser back. */
-export const getFrontendUrl = (): string =>
-    process.env.NODE_FRONTEND_URL ?? 'http://localhost:8080';
-
-/** Where `GET /account/oauth/:provider/callback` sends the browser once it is done. */
+/**
+ * Where `GET /account/oauth/:provider/callback` sends the browser once it is done — the paired
+ * frontend's origin, which is the only thing `NODE_FRONTEND_URL` is read for.
+ */
 export const oauthFrontendCallbackUrl = (errorCode?: string): string =>
-    `${getFrontendUrl()}/oauth/callback${errorCode ? `?error=${errorCode}` : ''}`;
+    `${process.env.NODE_FRONTEND_URL ?? 'http://localhost:8080'}/oauth/callback${
+        errorCode ? `?error=${errorCode}` : ''
+    }`;

@@ -261,13 +261,13 @@ rules:
       applies_when: >
           The app sends, or is being extended to send, any email classified as marketing/bulk rather
           than purely transactional. Currently NOT applicable: all 12 templates under
-          shared/views/templates-emails/*.ejs are transactional (signup, reset, 2FA, order, shipment,
+          shared/templates/emails/*.ejs are transactional (signup, reset, 2FA, order, shipment,
           contact) and none carry an unsubscribe link or List-Unsubscribe header — confirmed by grep,
           zero hits, which is correct for transactional mail. Re-evaluate the moment a template such
           as a newsletter, promo, or re-engagement email is added.
       evidence:
           backend:
-              - shared/views/templates-emails/*.ejs
+              - shared/templates/emails/*.ejs
               - src/infrastructure/adapters/mailer.ts
               - 'grep -in "unsubscribe\|list-unsubscribe" across src/ and shared/'
           frontend: []
@@ -343,7 +343,7 @@ rules:
           both trigger on the same future feature and should be re-checked together.
       evidence:
           backend:
-              - shared/views/templates-emails/*.ejs
+              - shared/templates/emails/*.ejs
               - src/modules/account/**, src/modules/users/** (any list-subscription field)
           frontend: []
       references:

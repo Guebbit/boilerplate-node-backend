@@ -72,6 +72,17 @@ export interface Token {
 }
 
 /**
+ * A refresh token that still represents a session someone is holding.
+ *
+ * `supersededAt` marks a rotated-away entry, kept only for its reuse-detection grace window — its
+ * successor is the session, so listing both would show one login twice.
+ */
+export const isLiveRefreshSession = (token: Token): boolean =>
+    // `Token['type']` stays `string` (see `UserMethods.tokenAdd`'s comment below), so the enum
+    // member is cast to compare — TS refuses a bare `string === TokenType` for a string enum.
+    token.type === (TokenType.REFRESH as string) && !token.supersededAt;
+
+/**
  * The full user record shape backing Mongoose documents. `createdAt`, `updatedAt` and `deletedAt`
  * are omitted from the wire `User` contract and redeclared as `Date` below — the contract carries
  * ISO strings, the document carries real dates.

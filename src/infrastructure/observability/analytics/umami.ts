@@ -19,9 +19,6 @@ import type { AnalyticsEvent, AnalyticsProvider } from './index';
  */
 const SERVER_USER_AGENT = 'boilerplate-node-api/server (analytics; no browser)';
 
-/** The `data` map Umami stores as queryable `event_data` rows, one per key. */
-type UmamiEventData = Record<string, unknown>;
-
 /**
  * Strip the port from a `Host` header.
  * Umami validates `hostname` as a bare host and 400s on anything carrying a port — and `Host`
@@ -64,7 +61,7 @@ let warnedAboutConfiguration = false;
  * `trace_id`, so both are filterable in Umami's event-data view. Umami keys visitors on an IP +
  * user-agent hash, so this is the only place a user id can live.
  */
-const buildEventData = (event: AnalyticsEvent): UmamiEventData => ({
+const buildEventData = (event: AnalyticsEvent): Record<string, unknown> => ({
     // Caller-supplied context first, so the fields below cannot be overwritten by a property
     // that happens to share their name.
     ...event.properties,

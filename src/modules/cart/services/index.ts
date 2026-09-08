@@ -6,20 +6,10 @@
  * from an old order, and `cleanup.ts` tears down carts on user/product deletion.
  */
 
-import {
-    cartGet,
-    cartGetForBadge,
-    cartGetForView,
-    cartItemSetById,
-    cartItemAdd,
-    cartItemUpdateQuantity,
-    cartItemAddById,
-    cartItemRemoveById,
-    cartRemove
-} from './items';
-import { orderConfirm } from './checkout';
-import { reorderIntoCart } from './reorder';
-import { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
+import * as items from './items';
+import * as checkout from './checkout';
+import * as reorder from './reorder';
+import * as cleanup from './cleanup';
 
 /*
  * Published by name as well as through the namespace: `module.ts` wires the two cleanup calls into
@@ -43,17 +33,17 @@ export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
 
 /** The module's barrel export — controllers and siblings call through this, never the bare functions. */
 export const cartService = {
-    cartGet,
-    cartGetForBadge,
-    cartGetForView,
-    cartItemSetById,
-    cartItemAdd,
-    cartItemUpdateQuantity,
-    cartItemAddById,
-    cartItemRemoveById,
-    cartRemove,
-    cartDeleteByUserId,
-    orderConfirm,
-    reorderIntoCart,
-    productRemoveFromCartsById
+    cartGet: items.cartGet,
+    cartGetForBadge: items.cartGetForBadge,
+    cartGetForView: items.cartGetForView,
+    cartItemSetById: items.cartItemSetById,
+    cartItemAdd: items.cartItemAdd,
+    cartItemUpdateQuantity: items.cartItemUpdateQuantity,
+    cartItemAddById: items.cartItemAddById,
+    cartItemRemoveById: items.cartItemRemoveById,
+    cartRemove: items.cartRemove,
+    cartDeleteByUserId: cleanup.cartDeleteByUserId,
+    orderConfirm: checkout.orderConfirm,
+    reorderIntoCart: reorder.reorderIntoCart,
+    productRemoveFromCartsById: cleanup.productRemoveFromCartsById
 };

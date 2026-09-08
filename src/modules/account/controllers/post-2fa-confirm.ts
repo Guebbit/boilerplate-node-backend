@@ -11,7 +11,7 @@ import type { TwoFactorConfirmed, TwoFactorConfirmRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { authTwoFactorEnrollTotal } from '../metrics';
@@ -24,7 +24,7 @@ export const post2faConfirm = (
     request: Request<{ method: string }, unknown, TwoFactorConfirmRequest>,
     response: Response
 ) => {
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     const pathParameters = ConfirmTwoFactorMethodParams.safeParse(request.params);
     if (!pathParameters.success) return rejectValidation(response, pathParameters.error);

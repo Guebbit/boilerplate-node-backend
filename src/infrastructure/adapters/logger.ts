@@ -79,23 +79,19 @@ const resolvePersonalFieldMode = (): PersonalFieldMode => {
 };
 
 /**
- * A short, stable digest of a personal-data value — correlatable, not readable.
+ * Applies the resolved {@link PersonalFieldMode} to one personal-data value.
  *
- * Truncated to 12 hex characters (48 bits): this is a LOG CORRELATION aid, not a security
- * boundary the way a password hash is — nobody needs 256 bits of collision resistance to notice
- * "this is the same user across three log lines", and a shorter digest keeps log lines scannable.
- * `sha256:` prefixed so a reader (or a downstream parser) can tell a digest from a value that
- * merely happens to look like one.
+ * The `hash` mode's digest is truncated to 12 hex characters (48 bits): a LOG CORRELATION aid,
+ * not a security boundary the way a password hash is — nobody needs 256 bits of collision
+ * resistance to notice "this is the same user across three log lines", and a shorter digest keeps
+ * log lines scannable. `sha256:` prefixed so a reader (or a downstream parser) can tell a digest
+ * from a value that merely happens to look like one.
  */
-const hashPersonalValue = (value: string): string =>
-    `sha256:${createHash('sha256').update(value).digest('hex').slice(0, 12)}`;
-
-/** Applies the resolved {@link PersonalFieldMode} to one personal-data value. */
 const applyPersonalFieldMode = (value: string): string => {
     const mode = resolvePersonalFieldMode();
     if (mode === 'plain') return value;
     if (mode === 'redact') return REDACTED;
-    return hashPersonalValue(value);
+    return `sha256:${createHash('sha256').update(value).digest('hex').slice(0, 12)}`;
 };
 
 /**

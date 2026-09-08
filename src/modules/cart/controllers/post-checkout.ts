@@ -10,7 +10,7 @@ import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { cartCheckoutTotal } from '../metrics';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import type { OrderDocument } from '@modules/orders';
 import type { CheckoutResponse, Order } from '@types';
 
@@ -31,7 +31,7 @@ const toOrderResponse = (order: OrderDocument): Order => {
  * a failed checkout is still a result the business metric must record.
  */
 export const postCheckout = (request: Request, response: Response) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
     // `?? {}` because a checkout without a body is legal and Express 5 leaves `body` undefined.
     const { addressId, shippingMethodId } = (request.body ?? {}) as {
         addressId?: string;

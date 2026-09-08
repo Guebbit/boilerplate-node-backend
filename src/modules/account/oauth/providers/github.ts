@@ -5,7 +5,7 @@
  * never appears on `/user` at all.
  */
 
-import { getOAuthCredentials, isOAuthProviderConfigured } from '../config';
+import { getOAuthCredentials } from '../config';
 import type { OAuthIdentity, OAuthProvider } from './port';
 
 /** This registry's key — lands on `OAuthAccount.provider`. */
@@ -25,9 +25,6 @@ interface GithubEmail {
     primary: boolean;
     verified: boolean;
 }
-
-/** Whether both `NODE_OAUTH_GITHUB_CLIENT_ID`/`_CLIENT_SECRET` are set. */
-export const githubConfigured = (): boolean => isOAuthProviderConfigured(PROVIDER_NAME);
 
 /**
  * GitHub's REST API: a bearer call, versioned by the `Accept` header rather than a URL segment.

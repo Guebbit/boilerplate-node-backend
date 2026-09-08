@@ -1,4 +1,4 @@
-import type { EmailRequest } from '@infrastructure/adapters/mailer';
+import type { EmailJobPayload } from '@types';
 import { runWithLocale } from '@infrastructure/i18n';
 import enAccount from '@modules/account/locales/en.json';
 import itAccount from '@modules/account/locales/it.json';
@@ -34,7 +34,7 @@ jest.mock('@infrastructure/adapters/queue', () => ({
 
 import { resetConfirmEmail } from '@modules/account/emails';
 
-const REQUEST: EmailRequest = { to: 'ada@example.com', subject: 'ignored' };
+const REQUEST: EmailJobPayload['request'] = { to: 'ada@example.com', subject: 'ignored' };
 
 /** The English and Italian spellings of the one line asserted throughout. */
 const BODY = {
@@ -73,7 +73,7 @@ describe('the producer resolves the copy before publishing', () => {
 
         expect(publishToQueueMock).toHaveBeenCalledTimes(1);
         const { payload } = publishToQueueMock.mock.calls[0][0] as {
-            payload: { data: Record<string, unknown>; request: EmailRequest };
+            payload: { data: Record<string, unknown>; request: EmailJobPayload['request'] };
         };
         // The copy itself, not a key and not a locale to look one up with.
         expect(payload.data.body).toBe(BODY.it);

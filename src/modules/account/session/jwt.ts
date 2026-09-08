@@ -14,7 +14,6 @@ import type { CastError } from 'mongoose';
 import {
     getAccessTokenSecret,
     getRefreshTokenSecret,
-    getAccessTokenTTL,
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getRotationGraceMilliseconds
@@ -168,7 +167,7 @@ export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id, auth_time: authTime, amr }) =>
         sign({ id, auth_time: authTime, amr } as TokenData, getAccessTokenSecret(), {
             // Seconds, not ms — this app's own TTL config, not a jsonwebtoken magic number.
-            expiresIn: getAccessTokenTTL(),
+            expiresIn: getExpiryTime(),
             algorithm: 'HS256'
         })
     );
@@ -224,7 +223,7 @@ const reissueRotated = (
             .then((refreshToken) => recordRefreshTokenUse(refreshToken).then(() => refreshToken))
             .then((refreshToken) => ({
                 accessToken: sign(claims, getAccessTokenSecret(), {
-                    expiresIn: getAccessTokenTTL(),
+                    expiresIn: getExpiryTime(),
                     algorithm: 'HS256'
                 }),
                 refreshToken,

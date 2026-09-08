@@ -8,7 +8,7 @@ import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { TwoFactorStatus } from '@types';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { authContextOf } from '@infrastructure/http/request';
+
 import { twoFactorService } from '../services';
 
 /**
@@ -16,7 +16,7 @@ import { twoFactorService } from '../services';
  * `isAuth`: reading your own 2FA status reveals nothing a step-up would protect.
  */
 export const get2fa = (request: Request, response: Response) => {
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     return twoFactorService
         .twoFactorStatus(id)

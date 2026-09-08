@@ -210,9 +210,9 @@ prevent.
 
 **What it is.** Nodemailer is the standard SMTP client for Node.js. EJS (Embedded JavaScript) is a template engine that renders HTML strings from data.
 
-**Problem it solves.** Sending a formatted HTML email requires connecting to an SMTP relay, rendering a template, handling attachments, and dealing with SMTP errors. Nodemailer abstracts the transport; EJS handles the HTML so email markup stays in `shared/views/` files, not in code strings.
+**Problem it solves.** Sending a formatted HTML email requires connecting to an SMTP relay, rendering a template, handling attachments, and dealing with SMTP errors. Nodemailer abstracts the transport; EJS handles the HTML so email markup stays in `shared/templates/` files, not in code strings.
 
-**In this repo.** Used for password-reset emails, order confirmations, and contact-form notifications. Templates live in `shared/views/**/*.ejs`. Calls go through `enqueueEmail()` which either publishes to RabbitMQ (if configured) or calls Nodemailer directly.
+**In this repo.** Used for password-reset emails, order confirmations, and contact-form notifications. Templates live in `shared/templates/**/*.ejs`. Calls go through `enqueueEmail()` which either publishes to RabbitMQ (if configured) or calls Nodemailer directly.
 
 → [Email & PDF Rendering](./email-and-rendering.md)
 

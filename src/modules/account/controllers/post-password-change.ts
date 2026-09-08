@@ -16,7 +16,7 @@ import { accountService } from '../services';
 import { issueSession } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
 import { rejectValidation } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * The contract's field list with its content rules dropped, for the shape check below.
@@ -43,7 +43,7 @@ export const postPasswordChange = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     // Shape first: absent fields are a malformed request, not a wrong password. Content rules
     // are the service's, which answers in the caller's language.

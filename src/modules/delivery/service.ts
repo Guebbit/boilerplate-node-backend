@@ -28,13 +28,6 @@ import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
 import type { ShipmentDocument } from './model';
 
-/**
- * The tracking code an order's parcel travels under. Deterministic from the order id — the fake
- * courier has no counter to collide, and re-shipping the same order re-mints the same code,
- * which is exactly what the upsert wants.
- */
-const trackingCodeFor = (orderId: string): string => `TRK-${orderId.slice(-8).toUpperCase()}`;
-
 /** The methods list, for the checkout page's selector. Static, so always a success. */
 const listMethods = (): ResponseSuccess<ShippingMethodsResponse> =>
     // `SHIPPING_METHODS` is `readonly` (frozen table); the response owns a fresh, mutable copy.
@@ -80,7 +73,12 @@ export const shipOrder = async (orderId: string): Promise<void> => {
     if (!order) return;
 
     const existing = await shipmentRepository.findByOrderId(orderId);
-    const shipment = await shipmentRepository.upsertForOrder(orderId, trackingCodeFor(orderId));
+    // The tracking code is deterministic from the order id — the fake courier has no counter to
+    // collide, and re-shipping the same order re-mints the same code, which is what the upsert wants.
+    const shipment = await shipmentRepository.upsertForOrder(
+        orderId,
+        `TRK-${orderId.slice(-8).toUpperCase()}`
+    );
     if (existing) return;
 
     // `order.userId` is absent once a detach has erased the account — nothing to

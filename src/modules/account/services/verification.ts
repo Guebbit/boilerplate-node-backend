@@ -10,6 +10,7 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userRepository, TokenType, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
@@ -39,8 +40,19 @@ export const EMAIL_VERIFY_TOKEN_TYPE = 'verify';
  */
 export const EMAIL_CHANGE_TOKEN_TYPE = 'email-change';
 
-/** How long a verification link works: 24 hours, in milliseconds. Shared by both token kinds. */
-export const EMAIL_VERIFY_TOKEN_TTL_MS = 86_400_000;
+/** Fallback for `NODE_EMAIL_VERIFY_TTL_MS`: 24 hours, in milliseconds. */
+const DEFAULT_EMAIL_VERIFY_TTL_MS = 86_400_000;
+
+/**
+ * How long a verification link works, shared by both token kinds. Tunable because the safe
+ * direction is SHORTER, and how long an unclaimed mailbox stays trustworthy is a deployment's
+ * call, not this file's.
+ */
+const EMAIL_VERIFY_TOKEN_TTL_MS = environmentNumber(
+    'NODE_EMAIL_VERIFY_TTL_MS',
+    DEFAULT_EMAIL_VERIFY_TTL_MS,
+    1
+);
 
 /** The two kinds a token may be. A union of the constants, so a third one cannot be passed. */
 type VerificationTokenType = typeof EMAIL_VERIFY_TOKEN_TYPE | typeof EMAIL_CHANGE_TOKEN_TYPE;

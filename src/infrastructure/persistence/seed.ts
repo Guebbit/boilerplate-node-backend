@@ -38,7 +38,7 @@ export interface OwnedSeedRepository<TFixture> {
  * would overwrite it with "whenever the seeder ran" — making `db/demo/demo-data.json` differ on
  * every export and its staleness check never pass.
  */
-export const SEED_SAVE_OPTIONS = { timestamps: false } as const;
+const SEED_SAVE_OPTIONS = { timestamps: false } as const;
 
 /**
  * Upsert one fixture by its fixed `_id`.

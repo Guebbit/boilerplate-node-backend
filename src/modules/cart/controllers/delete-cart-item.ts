@@ -11,12 +11,7 @@ import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { CartResponse, RemoveCartItemRequest } from '@types';
-import {
-    authContextOf,
-    isValidObjectId,
-    readInput,
-    callerContextOf
-} from '@infrastructure/http/request';
+import { isValidObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -29,7 +24,7 @@ export const deleteCartItem = (
     request: Request<{ productId?: string }, unknown, RemoveCartItemRequest>,
     response: Response
 ) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
     // `write` reads params before body, no query — neither route declares one. The path segment
     // wins on the canonical route; the alias has no path segment, so the body is the only source
     // that can ever supply one.

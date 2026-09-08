@@ -13,7 +13,7 @@ import { rejectValidation } from '@infrastructure/http/controller';
 import { twoFactorService } from '../services';
 import { authTwoFactorDisableTotal } from '../metrics';
 import { t } from '@infrastructure/i18n';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/2fa — drops every armed factor and the backup codes with them. Requires fresh
@@ -24,7 +24,7 @@ export const delete2fa = (
     request: Request<unknown, unknown, TwoFactorCodeRequest>,
     response: Response
 ) => {
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     const parseResult = DisableTwoFactorBody.safeParse(request.body);
     if (!parseResult.success) {

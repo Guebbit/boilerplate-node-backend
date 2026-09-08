@@ -15,7 +15,7 @@ import type { CastError } from 'mongoose';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
-import { sendVerificationEmail, wasRefusedByEmailPolicy } from '../services';
+import { sendVerificationEmail } from '../services';
 import { toUser } from '@modules/users';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
 
@@ -74,7 +74,9 @@ export const postSignup = (
                 });
             }
 
-            if (wasRefusedByEmailPolicy(data)) {
+            // `Document#isNew` stays true until `.save()`: true means rung 2 refused and NO
+            // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+            if (data.isNew) {
                 // Rung 2 refused this address — `signup` still hands back an unsaved document so
                 // this answers exactly like a real signup. No verification email, and the upload
                 // is discarded same as any other refusal.

@@ -13,7 +13,7 @@ import { localeRepository, localeEntryRepository } from './repository';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
-export const SEED_LOCALE_TAGS = {
+const SEED_LOCALE_TAGS = {
     /** A language that exists ONLY as rows — no deployed file — downloadable from the API. */
     downloadable: 'es',
     /** A language deployed as files AND registered here, so its API copy can be overridden. */
@@ -25,7 +25,7 @@ export const SEED_LOCALE_TAGS = {
 } as const;
 
 /** The seeded languages themselves — see `SEED_LOCALE_TAGS` for what each one demonstrates. */
-export const localeFixtures = [
+const localeFixtures = [
     makeLocale({
         id: '65e01f3c9a7d4b2e1c0f0001',
         tag: SEED_LOCALE_TAGS.downloadable,

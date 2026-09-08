@@ -135,11 +135,11 @@ sit on top of them, are in [Data Protection](../theory/data-protection.md).
 
 ## Rendered templates
 
-| Pattern                               | What it is                                                                                                                                                     | Read next                                                                              |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `shared/views/templates-emails/*.ejs` | One template per email the app sends, named for the module and the event that sends it — so an orphaned template is visible at a glance.                       | [Email & PDF Rendering](../tools/email-and-rendering.md) · [Modules](./src-modules.md) |
-| `shared/views/templates-files/*.ejs`  | The same for documents rendered to PDF rather than sent — today, the order invoice.                                                                            | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
-| `shared/views/layouts/*.ejs`          | The shared wrappers those templates include: the email head, the PDF head, and the common footer. Styling lives here so a template holds only its own content. | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
+| Pattern                            | What it is                                                                                                                                                     | Read next                                                                              |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `shared/templates/emails/*.ejs`    | One template per email the app sends, named for the module and the event that sends it — so an orphaned template is visible at a glance.                       | [Email & PDF Rendering](../tools/email-and-rendering.md) · [Modules](./src-modules.md) |
+| `shared/templates/documents/*.ejs` | The same for documents rendered to PDF rather than sent — today, the order invoice.                                                                            | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
+| `shared/templates/layouts/*.ejs`   | The shared wrappers those templates include: the email head, the PDF head, and the common footer. Styling lives here so a template holds only its own content. | [Email & PDF Rendering](../tools/email-and-rendering.md)                               |
 
 ## Served assets
 
@@ -148,7 +148,6 @@ sit on top of them, are in [Data Protection](../theory/data-protection.md).
 
 | Pattern                        | What it is                                                                                                                                                                                                             | Read next         |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
-| `public/css/*.css`             | Stylesheets for the server-rendered pages, one per screen.                                                                                                                                                             | —                 |
 | `public/favicon/*`             | The favicon set and its manifests — every size and format a browser or mobile launcher asks for.                                                                                                                       | —                 |
 | `public/images/seed/*.jpg`     | The demo product images, named by content hash and referenced from the seed fixtures. Committed on purpose, unlike the rest of the images directory, because they are repository content rather than someone's upload. | [Data](./data.md) |
 | `public/images/seed/README.md` | What those hashed filenames are and where they came from.                                                                                                                                                              | [Data](./data.md) |

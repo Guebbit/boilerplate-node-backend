@@ -50,13 +50,6 @@ const writeEvent = (
 };
 
 /**
- * Returns the current number of open SSE connections (used by observability payload itself).
- * Slightly self-referential on purpose: a leak in `sseClients` (connections added but never
- * removed) shows up as a climbing number on the dashboard those very connections feed.
- */
-export const getActiveSseClients = (): number => sseClients.size;
-
-/**
  * Builds a snapshot of current process/runtime metrics matching the asyncapi.yaml schema.
  * Merges Node.js memory stats with HTTP counters and realtime connection counts.
  */
@@ -78,7 +71,9 @@ export const buildObservabilityPayload = (): Promise<ObservabilityMetricsPayload
             totalErrors: counters.totalErrors
         },
         realtime: {
-            sseClients: getActiveSseClients()
+            // Self-referential on purpose: a leak in `sseClients` (connections added but never
+            // removed) shows up as a climbing number on the dashboard those connections feed.
+            sseClients: sseClients.size
         }
     }));
 };

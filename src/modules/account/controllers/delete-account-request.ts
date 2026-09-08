@@ -10,7 +10,7 @@ import { userService } from '@modules/users';
 import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { authAccountDeleteTotal } from '../metrics';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * Sends the account-deletion confirmation email; the token is minted and delivered by the
@@ -20,7 +20,7 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
  */
 export const deleteAccountRequest = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { email } = authContextOf(request);
+    const { email } = request.authContext!;
 
     return userService
         .findByEmail(email)

@@ -11,7 +11,7 @@ import type { TwoFactorBackupCodesRegenerated, TwoFactorCodeRequest } from '@typ
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { authTwoFactorBackupCodesRegenerateTotal } from '../metrics';
@@ -24,7 +24,7 @@ export const post2faBackupCodes = (
     request: Request<unknown, unknown, TwoFactorCodeRequest>,
     response: Response
 ) => {
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     const body = RegenerateBackupCodesBody.safeParse(request.body);
     if (!body.success) {

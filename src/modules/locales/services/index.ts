@@ -27,9 +27,9 @@ import {
     mergeCapabilities,
     readDynamicTier,
     callerScope,
-    listCapabilities,
-    listTenants
+    listCapabilities
 } from './capabilities';
+import { listTenants } from '../tenants';
 import { createLanguage, updateLanguage, deleteLanguage } from './languages';
 import { searchEntries, createEntry, updateEntry, deleteEntry, importEntries } from './entries';
 import { readMessages, readApiOverrides } from './messages';

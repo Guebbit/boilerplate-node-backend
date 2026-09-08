@@ -1,7 +1,7 @@
 /**
  * @module
  * The paged-list controller, written once: `readInput(surface:'list')` → validate against the
- * query schema → run the service → answer its `data` → `catchAs`. Sibling of
+ * query schema → run the service → answer its result → `catchAs`. Sibling of
  * `createSearchController`, kept separate because a search reads the body FIRST (letting one
  * controller serve `GET /x` and `POST /x/search`), while a list has no body to read — folding
  * the two would mean a `surface` knob on a factory whose whole subject is where input comes from.
@@ -14,7 +14,7 @@ import { readInput, type RequestInputDeclaration } from '@infrastructure/http/re
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /** What makes one entity's list different from another's. */
-export interface ListControllerSpec<TSchema extends ZodType> {
+export interface ListControllerSpec<TSchema extends ZodType, TResult> {
     /**
      * The entity, plural and camel-cased — `'inventoryLevels'`. Names the operation
      * (`getInventoryLevels`), so the log line, a stack trace and the generated tables in
@@ -33,11 +33,11 @@ export interface ListControllerSpec<TSchema extends ZodType> {
      */
     input?: Omit<RequestInputDeclaration<string>, 'surface'>;
     /**
-     * Run the module's own query, given the validated input. It answers the service envelope —
-     * `data` is what reaches the client, and it is optional there for the failure shapes this
-     * route cannot produce.
+     * Run the module's own query, given the validated input. Answers the bare payload — same
+     * convention as {@link createSearchController}'s `runSearch` — since `successResponse` is what
+     * builds the wire envelope; a service pre-wrapping its own would be building it twice.
      */
-    runList: (parsed: TSchema['_output'], request: Request) => Promise<{ data?: unknown }>;
+    runList: (parsed: TSchema['_output'], request: Request) => Promise<TResult>;
 }
 
 /**
@@ -46,12 +46,12 @@ export interface ListControllerSpec<TSchema extends ZodType> {
  * @param spec - the things that differ per entity
  * @returns the express handler, named for the entity it lists
  */
-export const createListController = <TSchema extends ZodType>({
+export const createListController = <TSchema extends ZodType, TResult>({
     entity,
     schema,
     input,
     runList
-}: ListControllerSpec<TSchema>) => {
+}: ListControllerSpec<TSchema, TResult>) => {
     // The name printed in stack traces, the request log line and `docs/modules/` — e.g. `getInventoryLevels`.
     const operation = `get${entity.charAt(0).toUpperCase()}${entity.slice(1)}`;
 
@@ -72,7 +72,7 @@ export const createListController = <TSchema extends ZodType>({
             // runList: the module's own query, given the validated input.
             return runList(parsed, request)
                 .then((result) => {
-                    successResponse(response, result.data);
+                    successResponse(response, result);
                 })
                 .catch(catchAs(response, operation)); // logs the failure under `operation`, then 500s
         }

@@ -48,36 +48,6 @@ const domainSetFrom = (value: string | undefined): Set<string> =>
     );
 
 /**
- * Domains this deployment exempts even when they would otherwise be refused — a forwarding or
- * aliasing service the upstream list is too broad about, or a customer's own domain flagged by
- * mistake.
- */
-const allowlist = (): Set<string> => domainSetFrom(process.env.NODE_ANTIBOT_EMAIL_ALLOWLIST);
-
-/**
- * Domains this deployment refuses in addition to the upstream list — one it is already seeing
- * abuse from that has not been added there yet.
- */
-const extraDenylist = (): Set<string> =>
-    domainSetFrom(process.env.NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA);
-
-/** The domain half of an address, lower-cased for case-insensitive list membership. */
-const domainOf = (email: string): string => email.slice(email.lastIndexOf('@') + 1).toLowerCase();
-
-/**
- * disposable-email-domains-js: wraps the community-maintained `disposable-email-domains` list
- * (~3,500 domains; every addition requires a merged PR proving it generates throwaway inboxes).
- * Freshness is upstream's job, not this deployment's.
- *
- * A commercial verification API (Kickbox, ZeroBounce, ...) catches a brand-new disposable service
- * faster, via a live per-signup lookup against a continuously-crawled database — at the cost of a
- * paid third-party call this rung deliberately does not make.
- * https://github.com/disposable-email-domains/disposable-email-domains
- */
-const isKnownDisposable = (domain: string): boolean =>
-    extraDenylist().has(domain) || isDisposableEmailDomain(domain);
-
-/**
  * Node: MX lookup, used only by the `mx` policy. Resolves `false` — never rejects — for NXDOMAIN,
  * a timeout, or a domain with no mail exchanger: all three mean "refuse", not "unknown".
  * https://nodejs.org/api/dns.html#dnspromisesresolvemxhostname
@@ -102,9 +72,29 @@ export const checkEmailPolicy = (email: string): Promise<RungVerdict> =>
         const policy = resolveEmailPolicy();
         if (policy === 'off') return 'ok';
 
-        const domain = domainOf(email);
-        if (allowlist().has(domain)) return 'ok';
-        if (isKnownDisposable(domain)) return 'refused';
+        // The domain half of the address, lower-cased for case-insensitive list membership.
+        const domain = email.slice(email.lastIndexOf('@') + 1).toLowerCase();
+        // Domains this deployment exempts even when they would otherwise be refused — a
+        // forwarding or aliasing service the upstream list is too broad about, or a customer's
+        // own domain flagged by mistake.
+        if (domainSetFrom(process.env.NODE_ANTIBOT_EMAIL_ALLOWLIST).has(domain)) return 'ok';
+
+        /*
+         * disposable-email-domains-js: wraps the community-maintained `disposable-email-domains`
+         * list (~3,500 domains; every addition requires a merged PR proving it generates throwaway
+         * inboxes). Freshness is upstream's job, not this deployment's. `NODE_..._DENYLIST_EXTRA`
+         * is this deployment's own additions — abuse it is already seeing, not yet upstream.
+         *
+         * A commercial verification API (Kickbox, ZeroBounce, ...) catches a brand-new disposable
+         * service faster, via a live per-signup lookup against a continuously-crawled database —
+         * at the cost of a paid third-party call this rung deliberately does not make.
+         * https://github.com/disposable-email-domains/disposable-email-domains
+         */
+        if (
+            domainSetFrom(process.env.NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA).has(domain) ||
+            isDisposableEmailDomain(domain)
+        )
+            return 'refused';
         if (policy === 'disposable') return 'ok';
 
         return hasMxRecord(domain).then((found) => (found ? 'ok' : 'refused'));

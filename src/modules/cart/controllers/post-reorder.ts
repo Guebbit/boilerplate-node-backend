@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { cartService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import type { CartResponse } from '@types';
 
 /**
@@ -17,7 +17,7 @@ import type { CartResponse } from '@types';
  * an order with nothing left to add answers 409 rather than a hollow 200.
  */
 export const postReorder = (request: Request<{ orderId: string }>, response: Response) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
     const { orderId } = request.params;
 
     return cartService

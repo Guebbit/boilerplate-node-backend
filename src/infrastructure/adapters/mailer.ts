@@ -53,7 +53,7 @@ import {
 export const emailTemplatesDirectory = (): string =>
     process.env.NODE_EMAIL_TEMPLATES_DIR
         ? path.resolve(process.env.NODE_EMAIL_TEMPLATES_DIR)
-        : path.resolve(process.cwd(), 'shared/views/templates-emails');
+        : path.resolve(process.cwd(), 'shared/templates/emails');
 
 /**
  * The file an outbox name renders from.
@@ -79,9 +79,6 @@ export const resetTransporter = (): void => {
     transport = undefined;
 };
 
-/** The port the SMTP client dials, and the one fact `secure` is derived from. */
-const smtpPort = (): number => environmentNumber('NODE_SMTP_PORT', 587, 1);
-
 /**
  * The SMTP transport, built on first use and reused: nodemailer pools connections, so a
  * per-email transport would pay the TCP + TLS + AUTH handshake every time. LAZY rather than
@@ -93,6 +90,9 @@ const smtpPort = (): number => environmentNumber('NODE_SMTP_PORT', 587, 1);
  */
 const getTransporter = (): Transporter => {
     if (transport) return transport;
+
+    /** The port the SMTP client dials, and the one fact `secure` is derived from. */
+    const port = environmentNumber('NODE_SMTP_PORT', 587, 1);
 
     transport =
         // Two calls rather than one with a ternary argument: `createTransport` is overloaded per
@@ -107,12 +107,12 @@ const getTransporter = (): Transporter => {
                   host: process.env.NODE_SMTP_HOST ?? '',
                   // 587 = submission with STARTTLS (the modern default); 465 = implicit TLS;
                   // 25 = relay.
-                  port: smtpPort(),
+                  port,
                   // `secure: true` means TLS from the first byte, which is only correct on 465.
                   // On 587 it must be false — the connection starts plaintext and is upgraded via
                   // STARTTLS. Compared as a NUMBER, so a zero-padded `0465` cannot read as "not
                   // 465" and open a plaintext connection to a port expecting TLS immediately.
-                  secure: smtpPort() === 465,
+                  secure: port === 465,
                   // SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
                   // attempts an unauthenticated send and the server rejects it — the failure
                   // surfaces at send time, not at boot, because email is not a hard startup
@@ -201,26 +201,6 @@ export const nodemailer = (
 };
 
 /**
- * The envelope an email job carries — the AsyncAPI contract's shape, not Nodemailer's.
- *
- * Every field here survives `JSON.stringify`, which is what makes the queued and inline paths the
- * same call. Nodemailer's full `SendMailOptions` does not: `attachments: [{ content: Buffer }]`
- * arrives as `{"type":"Buffer","data":[…]}`, so a wider type would work in dev (broker off) and
- * silently corrupt in production. A project needing attachments should send a storage key instead.
- */
-export type EmailRequest = EmailJobPayload['request'];
-
-/**
- * What one email job carries on the queue — the second thing a producer and its consumer must
- * agree on exactly. It lives here, with the producer, for the same reason `EMAIL_QUEUE` lives
- * with the queue adapter; the worker re-exports this type rather than declaring its own, so
- * there's one definition to change. It IS the generated contract type — `asyncapi.workers.yaml`
- * declares `request` with `additionalProperties: false`, so a local widening would permit a field
- * the contract forbids.
- */
-export type EmailJob = EmailJobPayload;
-
-/**
  * One email's finished content: which template, and every string it prints.
  *
  * What a module's `emails.ts` returns and a controller hands to `enqueueEmail` — naming it keeps
@@ -249,13 +229,18 @@ export interface EmailContent {
  * side. Adds nothing to `data`: every string the template prints was already produced by the
  * `emails.ts` builder that knows the template.
  *
+ * @param request - the envelope, typed as the AsyncAPI contract's shape rather than Nodemailer's.
+ *   Every field in it survives `JSON.stringify`, which is what makes the queued and inline paths
+ *   the same call. Nodemailer's full `SendMailOptions` does not: `attachments: [{ content: Buffer }]`
+ *   arrives as `{"type":"Buffer","data":[…]}`, so a wider type would work in dev (broker off) and
+ *   silently corrupt in production. A project needing attachments should send a storage key instead.
  * @param priority - `'high'` for a mail someone is actively blocked on (a token-bearing link with
  *   a TTL); left at the `'normal'` default for everything informational. See `queue.ts`'s
  *   `JobPriority` for why there are only two levels. Meaningless on the inline fallback — priority
  *   only affects ordering among messages waiting on the broker.
  */
 export const enqueueEmail = (
-    request: EmailRequest,
+    request: EmailJobPayload['request'],
     templateName: string,
     data: Data,
     priority: JobPriority = 'normal'
@@ -265,8 +250,10 @@ export const enqueueEmail = (
     if (!isQueueEnabled()) return nodemailer(request, templateName, data).then(() => undefined);
 
     // The type argument is the point: this literal is checked against the very type the worker
-    // declares, so producer and consumer cannot drift apart silently.
-    return publishToQueue<EmailJob>({
+    // declares, so producer and consumer cannot drift apart silently. It is the GENERATED contract
+    // type — `asyncapi.workers.yaml` declares `request` with `additionalProperties: false`, so a
+    // local widening would permit a field the contract forbids.
+    return publishToQueue<EmailJobPayload>({
         queue: EMAIL_QUEUE,
         // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
         // (streams, Buffers, functions) in `request` would not survive the round trip.

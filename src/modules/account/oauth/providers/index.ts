@@ -8,8 +8,9 @@
  */
 
 import { isDemoMode } from '@infrastructure/adapters/demo-outbox';
-import { googleConfigured, googleOAuthProvider } from './google';
-import { githubConfigured, githubOAuthProvider } from './github';
+import { googleOAuthProvider } from './google';
+import { isOAuthProviderConfigured } from '../config';
+import { githubOAuthProvider } from './github';
 import { fakeOAuthProvider } from './fake';
 import type { OAuthProvider } from './port';
 
@@ -19,8 +20,8 @@ import type { OAuthProvider } from './port';
  * a provider never built) must resolve to `undefined` rather than call a hole in the map.
  */
 const PROVIDERS: Partial<Record<string, () => OAuthProvider | undefined>> = {
-    google: () => (googleConfigured() ? googleOAuthProvider : undefined),
-    github: () => (githubConfigured() ? githubOAuthProvider : undefined),
+    google: () => (isOAuthProviderConfigured('google') ? googleOAuthProvider : undefined),
+    github: () => (isOAuthProviderConfigured('github') ? githubOAuthProvider : undefined),
     // The demo profile's stand-in — see `./fake`'s doc for why it needs no credentials of its own.
     fake: () => (isDemoMode() ? fakeOAuthProvider : undefined)
 };

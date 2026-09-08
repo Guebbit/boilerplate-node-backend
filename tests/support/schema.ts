@@ -28,7 +28,7 @@
 /**
  * ── WHY THESE TAKE A STRUCTURAL TYPE RATHER THAN `Schema` ───────────────────────────────────────
  * `Schema` carries eleven generic parameters, and a concretely-typed one — `new
- * Schema<ProductDocument, ProductModel, ProductMethods>` — is not assignable to a `Schema` written
+ * Schema<ProductDocument, ProductModel, unknown>` — is not assignable to a `Schema` written
  * with different arguments: TypeScript compares the inferred `obj` property structurally and walks
  * into `ObjectId`'s own members looking for an index signature. It is the same class of problem
  * that made `Repository` a hand-written type (TS7056), reached from the other side.

@@ -16,8 +16,8 @@
  * fixture happens to construct.
  *
  * ── Scope ─────────────────────────────────────────────────────────────────────────────────────
- * `shared/views/templates-emails/*.ejs` and the `EmailContent`-returning builders in each module's
- * `emails.ts` — mail only. `shared/views/templates-files/orders.invoice.ejs` is the same mechanism
+ * `shared/templates/emails/*.ejs` and the `EmailContent`-returning builders in each module's
+ * `emails.ts` — mail only. `shared/templates/documents/orders.invoice.ejs` is the same mechanism
  * (EJS, `orders/emails.ts`'s `invoiceDocument`) rendering a PDF rather than a mail,
  * found on the way and deliberately left out: it is not an `EmailContent`, so it does not fit this
  * file's builder-matching without a second shape, and it is one template. Worth its own pass, not
@@ -35,7 +35,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const REPO_ROOT = path.join(__dirname, '../..');
-const TEMPLATES_DIR = path.join(REPO_ROOT, 'shared/views/templates-emails');
+const TEMPLATES_DIR = path.join(REPO_ROOT, 'shared/templates/emails');
 const MODULES_ROOT = path.join(REPO_ROOT, 'src/modules');
 
 const OUTPUT_TAG = /<%[=-]([\S\s]*?)%>/g;

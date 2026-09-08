@@ -23,7 +23,12 @@ import {
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
-import { userRepository, TokenType, type UserDocument, type Token } from '@modules/users';
+import {
+    userRepository,
+    isLiveRefreshSession,
+    type UserDocument,
+    type Token
+} from '@modules/users';
 import { orderRepository } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { findShipmentsForOrders } from '@modules/delivery';
@@ -130,13 +135,13 @@ export interface AccountExportPayload {
 const EVERYTHING = 100_000;
 
 /**
- * This caller's own live refresh sessions, metadata only — mirrors `tokens.ts`'s `sessionsList`
- * filter, but keeps `type` (that file's `Session` doesn't carry it, since its one filter already
- * fixes it; an export naming every field is worth the one extra key).
+ * This caller's own live refresh sessions, metadata only — keeps `type` (`tokens.ts`'s `Session`
+ * doesn't carry it, since its one filter already fixes it; an export naming every field is worth
+ * the one extra key).
  */
 const ownSessions = (tokens: Token[]): ExportSession[] =>
     tokens
-        .filter((token) => token.type === (TokenType.REFRESH as string) && !token.supersededAt)
+        .filter((token) => isLiveRefreshSession(token))
         .map((token) => ({
             id: String(token._id),
             type: 'refresh' as const,

@@ -27,6 +27,7 @@
  */
 
 import { AbilityBuilder, createMongoAbility, type MongoAbility } from '@casl/ability';
+import type { Caller } from '@types';
 import {
     findKey,
     PERMISSION_KEYS,
@@ -35,20 +36,6 @@ import {
     type AuthorizationScope,
     type PermissionKey
 } from '@kernel/permissions';
-
-/**
- * What an authorization decision is allowed to know about the caller.
- *
- * Narrower than the resolved session on purpose: `email`, `username` and `imageUrl` are identity,
- * not permission, and a rule that reads them is one nobody can audit by its type.
- */
-export interface Caller {
-    id?: string | null;
-    /** The shop this request acts in. `null` in platform scope, and only there. */
-    tenantId?: string | null;
-    scope: AuthorizationScope;
-    permissions: readonly string[];
-}
 
 /** A caller's rules, in the form every authorization question is asked of. */
 export type Ability = MongoAbility;

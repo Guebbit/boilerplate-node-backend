@@ -77,6 +77,7 @@ const build = (url: string): RedisClientType => {
  */
 let redisConnection: ManagedConnection<RedisClientType> | undefined;
 
+/** Builds {@link redisConnection} on first call, from `url`, and memoises it thereafter. */
 const connectionFor = (url: string): ManagedConnection<RedisClientType> => {
     if (redisConnection) return redisConnection;
 

@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
+
 import type { CartSummaryResponse } from '@types';
 
 /**
@@ -16,7 +16,7 @@ import type { CartSummaryResponse } from '@types';
  */
 export const getCartSummary = (request: Request, response: Response) => {
     return cartService
-        .cartGetForBadge(authContextOf(request).id)
+        .cartGetForBadge(request.authContext!.id)
         .then((cart) => {
             successResponse<CartSummaryResponse>(response, cart.summary);
         })

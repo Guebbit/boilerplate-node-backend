@@ -16,9 +16,17 @@ import { environmentFlag, environmentNumber } from '@infrastructure/runtime/envi
  * https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
  */
 const CLUSTER_ENABLED = environmentFlag('NODE_ENABLE_CLUSTERING', false);
+
+/** Fallback for `NODE_CLUSTER_CRASH_WINDOW_MS`: window a worker's crashes are counted over. */
 const DEFAULT_CRASH_WINDOW_MS = 60_000;
+
+/** Fallback for `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS`: delay before the first respawn after a crash. */
 const DEFAULT_CRASH_BACKOFF_BASE_MS = 500;
+
+/** Fallback for `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`: ceiling the respawn backoff doubles up to. */
 const DEFAULT_CRASH_BACKOFF_MAX_MS = 30_000;
+
+/** Fallback for `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`: grace period before the primary kills a worker. */
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
 
 /**

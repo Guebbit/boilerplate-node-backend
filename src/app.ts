@@ -49,14 +49,15 @@ import { installDemo, isDemoMode } from '@app/demo';
  * Server start
  */
 export const app = express();
-const DEFAULT_PORT = 3000;
-let activeServer: Server | undefined;
-let shutdownPromise: Promise<void> | undefined;
 
-/*
- * Parse port from env with fallback to default
- */
-const getPort = () => environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
+/** Fallback port when `NODE_PORT` is unset. */
+const DEFAULT_PORT = 3000;
+
+/** The server this process is currently listening on, if any. */
+let activeServer: Server | undefined;
+
+/** In-flight shutdown, so a second call joins it instead of closing twice. */
+let shutdownPromise: Promise<void> | undefined;
 
 /**
  * Boot sequence: connect infra, mount i18n, then listen. Idempotent — a second call while the
@@ -109,7 +110,7 @@ export const startServer = () => {
             .then(
                 () =>
                     new Promise<Server>((resolve) => {
-                        const port = getPort();
+                        const port = environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
                         logger.info('------------- SERVER START -------------');
                         const server = app.listen(port, () => {
                             logger.info(`Server listening on port ${port}`);

@@ -185,7 +185,11 @@ export const stopQueue = (): Promise<void> => queueConnection.stop();
  * See: docs/api/asyncapi-workflow.md#rabbitmq-queue-channels
  */
 export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
+
+/** Same sourcing as {@link EMAIL_QUEUE} — the PDF-generation queue. */
 export const PDF_QUEUE = WORKER_CHANNELS.PDF_GENERATE;
+
+/** Same sourcing as {@link EMAIL_QUEUE} — the image-digest queue. */
 export const IMAGE_QUEUE = WORKER_CHANNELS.IMAGE_DIGEST;
 
 // ─── Dead letters ─────────────────────────────────────────────────────────────
@@ -276,7 +280,7 @@ export interface PublishOptions<TPayload = unknown> {
  *
  * Publishes to the *default exchange* (empty name), where the routing key IS the queue name — the
  * simplest AMQP topology there is. `TPayload` is the job envelope: naming it explicitly
- * (`publishToQueue<EmailJob>(…)`) checks this call against the same type its consumer declares, so
+ * (`publishToQueue<EmailJobPayload>(…)`) checks this call against the same type its consumer declares, so
  * a field added on one side and forgotten on the other is a compile error, not a 3am silent drop.
  *
  * @returns `true` when the broker accepted the message, `false` when the queue is unavailable —

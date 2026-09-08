@@ -29,7 +29,6 @@ jest.mock('@infrastructure/observability/metrics-http', () => ({
 
 import {
     buildObservabilityPayload,
-    getActiveSseClients,
     streamObservabilityMetrics
 } from '@infrastructure/observability/stream';
 
@@ -103,6 +102,10 @@ const parseFrame = (frame: string) => {
     };
 };
 
+/** Asserted through the payload, which is the only thing that publishes the count. */
+const reportedClients = (): Promise<number> =>
+    buildObservabilityPayload().then((payload) => payload.realtime.sseClients);
+
 describe('the SSE metrics stream', () => {
     /** Responses opened by a test, disconnected afterwards so the module-level Set starts empty. */
     let opened: FakeResponse[] = [];
@@ -163,19 +166,19 @@ describe('the SSE metrics stream', () => {
         });
     });
 
-    describe('getActiveSseClients', () => {
-        it('counts one entry per open stream and releases it on disconnect', () => {
-            expect(getActiveSseClients()).toBe(0);
+    describe('the open-connection count', () => {
+        it('counts one entry per open stream and releases it on disconnect', async () => {
+            await expect(reportedClients()).resolves.toBe(0);
 
             const first = open();
             const second = open();
-            expect(getActiveSseClients()).toBe(2);
+            await expect(reportedClients()).resolves.toBe(2);
 
             first.disconnect();
-            expect(getActiveSseClients()).toBe(1);
+            await expect(reportedClients()).resolves.toBe(1);
 
             second.disconnect();
-            expect(getActiveSseClients()).toBe(0);
+            await expect(reportedClients()).resolves.toBe(0);
         });
 
         it('is reported inside the payload the connections themselves feed', async () => {
@@ -296,7 +299,7 @@ describe('the SSE metrics stream', () => {
 
             expect(first.frames).toHaveLength(1);
             expect(second.frames).toHaveLength(2);
-            expect(getActiveSseClients()).toBe(1);
+            await expect(reportedClients()).resolves.toBe(1);
         });
     });
 

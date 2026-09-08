@@ -10,7 +10,7 @@ import type { Request, Response } from 'express';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import type { CartResponse } from '@types';
 
 /**
@@ -18,7 +18,7 @@ import type { CartResponse } from '@types';
  * Remove ALL items in the user cart.
  */
 export const clearCart = (request: Request, response: Response) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
 
     return cartService
         .cartRemove(userId, callerContextOf(request))

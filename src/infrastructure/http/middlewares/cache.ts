@@ -33,6 +33,7 @@ interface CachedResponse {
  */
 const DEFAULT_DEV_TTL_MAX_SECONDS = 30;
 
+/** Reads `NODE_REDIS_CACHE_DEV_TTL_MAX`, falling back to {@link DEFAULT_DEV_TTL_MAX_SECONDS}. */
 const getDevelopmentTtlMax = (): number => {
     const raw = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
     if (raw === undefined || raw.trim() === '') return DEFAULT_DEV_TTL_MAX_SECONDS;
@@ -71,9 +72,6 @@ export const resolveCacheTtl = (seconds: number): number => {
  */
 const DEFAULT_MAX_CACHED_BYTES = 256 * 1024;
 
-const getMaxCachedBytes = (): number =>
-    environmentNumber('NODE_REDIS_CACHE_MAX_BYTES', DEFAULT_MAX_CACHED_BYTES, 1);
-
 /**
  * Serialize a response for storage, or refuse it for being too large.
  *
@@ -87,7 +85,11 @@ const getMaxCachedBytes = (): number =>
  */
 const serializeCachedResponse = (key: string, value: CachedResponse): string | undefined => {
     const payload = JSON.stringify(value);
-    const maxCachedBytes = getMaxCachedBytes();
+    const maxCachedBytes = environmentNumber(
+        'NODE_REDIS_CACHE_MAX_BYTES',
+        DEFAULT_MAX_CACHED_BYTES,
+        1
+    );
     if (Buffer.byteLength(payload) <= maxCachedBytes) return payload;
 
     // Logged rather than silent: an endpoint that never caches is worth noticing, and the
@@ -165,16 +167,6 @@ const getCacheScope = (request: Request) => {
 };
 
 /**
- * One spelling of a value, whichever transport carried it.
- *
- * A query string has no types (`?page=1` is the string `'1'`) while a JSON body keeps its own, so
- * stringifying scalars is what lets `{page: 1}` and `?page=1` share one cache entry. Not
- * validation — an unrecognisable value just keys on its own spelling and reaches the controller.
- */
-const normalizeKeyValue = (value: unknown): unknown =>
-    Array.isArray(value) ? value.map(String) : String(value);
-
-/**
  * Build one cache key from method + path + the declared query parameters + user scope + language.
  *
  * Locale is in the key because it changes the body (translated copy) — same reasoning as the
@@ -201,7 +193,10 @@ const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], k
         .filter((name) => Object.hasOwn(body, name) || Object.hasOwn(request.query, name))
         .map((name) => {
             const raw = Object.hasOwn(body, name) ? body[name] : request.query[name];
-            return `${name}=${JSON.stringify(normalizeKeyValue(raw))}`;
+            // One spelling of a value, whichever transport carried it: a query string has no
+            // types (`?page=1` is the string `'1'`) while a JSON body keeps its own, so
+            // stringifying scalars lets `{page: 1}` and `?page=1` share one cache entry.
+            return `${name}=${JSON.stringify(Array.isArray(raw) ? raw.map(String) : String(raw))}`;
         })
         .join('&');
 

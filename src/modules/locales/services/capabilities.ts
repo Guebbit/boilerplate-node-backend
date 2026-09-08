@@ -9,15 +9,14 @@ import {
     LocaleDirection,
     LocaleSource,
     type LocaleCapabilities,
-    type LocaleCapability,
-    type LocaleTenantDescriptor
+    type LocaleCapability
 } from '@types';
 import { getDefaultLocale, getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { createVisibilityScope } from '@kernel/authorization';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
-import { backendTenant, frontendTenant, listTenants as configuredTenants } from '../tenants';
+import { backendTenant, frontendTenant } from '../tenants';
 
 /**
  * Base languages written right to left, consulted only for STATIC languages — a registered
@@ -174,11 +173,3 @@ export const listCapabilities = async (
         fallback: getFallbackLocale()
     };
 };
-
-/**
- * Every tenant this deployment holds words for — the keyspaces an entry can belong to.
- *
- * A deliberate passthrough over `../tenants`, keeping "where the list comes from" a service
- * question rather than one the controller answers directly.
- */
-export const listTenants = (): LocaleTenantDescriptor[] => configuredTenants();

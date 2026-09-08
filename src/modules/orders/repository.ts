@@ -12,7 +12,6 @@ import type { PipelineStage, QueryFilter } from 'mongoose';
 import {
     createRepository,
     toObjectId,
-    type SearchFilters,
     type Repository
 } from '@infrastructure/persistence/create-repository';
 import {
@@ -53,7 +52,7 @@ const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =
  * `.catch()`.
  */
 const search = async (
-    filters: SearchFilters = {},
+    filters: object = {},
     scope: Record<string, unknown> = {}
 ): Promise<{ items: OrderDocument[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
@@ -293,7 +292,7 @@ const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
 export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     aggregate: <T = OrderDocument>(pipeline: PipelineStage[]) => Promise<T[]>;
     search: (
-        filters?: SearchFilters,
+        filters?: object,
         scope?: Record<string, unknown>
     ) => Promise<{ items: OrderDocument[]; meta: PaginatedMeta }>;
     findByIdScoped: (

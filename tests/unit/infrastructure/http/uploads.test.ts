@@ -6,21 +6,16 @@
  * whole value of the function is that all three collapse to one type, so each shape is asserted
  * separately here — a regression that handles only two of them would still look fine on the
  * route that happens to use the third.
- *
- * `resolveImageUrl()` reads back the url the image store recorded when it committed the upload —
- * it neither derives that url from multer's path nor hands the path back. The store constructs the
- * url and owns the delete, so no filesystem path leaves the upload pipeline and none can reach a
- * database row.
  */
 
 import type { Request } from 'express';
-import { getFormFiles, resolveImageUrl, toPosixPath } from '@infrastructure/http/uploads';
-
-/** Only `file` / `files` are read, so a partial Request is enough and keeps intent visible. */
-const requestWith = (parts: Partial<Request>): Request => parts as Request;
+import { getFormFiles, toPosixPath } from '@infrastructure/http/uploads';
 
 /** A multer file stub — `path` is the only field these helpers touch. */
 const uploaded = (path: string) => ({ path }) as Express.Multer.File;
+
+/** Only `file` / `files` are read, so a partial Request is enough and keeps intent visible. */
+const requestWith = (parts: Partial<Request>): Request => parts as Request;
 
 describe('getFormFiles', () => {
     it('wraps a single-file upload (multer.single) in an array', () => {
@@ -93,56 +88,6 @@ describe('getFormFiles', () => {
      */
     it('normalizes an empty array upload to undefined, exactly as a fields upload', () => {
         expect(getFormFiles(requestWith({ files: [] }))).toBeUndefined();
-    });
-});
-
-describe('resolveImageUrl', () => {
-    /**
-     * Reads back what the image store committed, and nothing else. The store CONSTRUCTS the url
-     * (`@infrastructure/adapters/image-store`), so there is no path to normalise here and no way for a
-     * filesystem separator to reach a stored value — `image-store.test.ts` asserts that property.
-     */
-    it('returns the url the store recorded for the upload', () => {
-        expect(resolveImageUrl(requestWith({ storedImageUrls: ['/images/a.png'] }))).toBe(
-            '/images/a.png'
-        );
-    });
-
-    /* A remote store answers absolute urls, and controllers must not be able to tell. */
-    it('returns an absolute url unchanged', () => {
-        expect(
-            resolveImageUrl(
-                requestWith({ storedImageUrls: ['https://cdn.example.com/images/a.png'] })
-            )
-        ).toBe('https://cdn.example.com/images/a.png');
-    });
-
-    it('takes only the first url when several images were committed', () => {
-        // These endpoints accept a single image; extras are ignored rather than silently
-        // overwriting each other downstream.
-        expect(
-            resolveImageUrl(
-                requestWith({ storedImageUrls: ['/images/first.png', '/images/second.png'] })
-            )
-        ).toBe('/images/first.png');
-    });
-
-    it('returns undefined when the request uploaded nothing', () => {
-        // Callers distinguish "no image supplied" from "image supplied" on this being undefined,
-        // so an empty string here would read as "an image at the site root" — and, worse, would
-        // make the failure-path cleanup try to delete it.
-        expect(resolveImageUrl(requestWith({}))).toBeUndefined();
-    });
-
-    /**
-     * The staged path is deliberately NOT a fallback. A request whose upload never reached the
-     * store has no stored image, and answering with the temp path would persist a filesystem path
-     * into `imageUrl` — the exact bug the store exists to make impossible.
-     */
-    it('ignores a staged file the store never committed', () => {
-        expect(
-            resolveImageUrl(requestWith({ file: uploaded('/tmp/staging/a.png') }))
-        ).toBeUndefined();
     });
 });
 

@@ -14,7 +14,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readUploadedImage } from '@infrastructure/adapters/image-store';
 import type { UpdateAccountRequest, UpdateAccountRequestMultipart, User } from '@types';
 import { accountService } from '../services';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import { toUser } from '@modules/users';
 
 /**
@@ -28,7 +28,7 @@ export const putAccount = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     // No `= ''` default here, unlike the create paths: `updateProfile` treats an absent
     // `imageUrl` as "not sent" and leaves the stored one alone, where `''` would clear it.

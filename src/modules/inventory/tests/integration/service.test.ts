@@ -82,7 +82,7 @@ describe('reserveForOrder', () => {
         // unreconcilable: "nothing happened" and "two things cancelled out" are different facts,
         // and only the second explains a gap in a stock take.
         const rows = await listMovements({ productId: String(plenty._id) });
-        expect(rows.data?.items.map((row) => row.reason)).toEqual([
+        expect(rows.items.map((row) => row.reason)).toEqual([
             StockMovementReason.release,
             StockMovementReason.reserve
         ]);
@@ -205,7 +205,7 @@ describe('releaseForOrder', () => {
         // Same arithmetic, different reasons — "changed their mind" and "never came back" are
         // different facts about the shop, and only one of them is a conversion problem.
         const ledger = await listMovements({ productId: String(product._id) });
-        const reasons = ledger.data?.items.map((row) => row.reason);
+        const reasons = ledger.items.map((row) => row.reason);
         expect(reasons).toContain(StockMovementReason.release);
         expect(reasons).toContain(StockMovementReason.expire);
     });
@@ -361,17 +361,13 @@ describe('listLevels', () => {
 
         // The two zero-availability rows sort ahead of the plentiful one, and they are
         // distinguishable — which is the whole reason the board shows three numbers.
-        expect(result.data?.items.map((level) => level.title)).toEqual([
-            'All held',
-            'Empty',
-            'Plenty'
-        ]);
-        expect(result.data?.items).toEqual([
+        expect(result.items.map((level) => level.title)).toEqual(['All held', 'Empty', 'Plenty']);
+        expect(result.items).toEqual([
             expect.objectContaining({ onHand: 30, reserved: 30, available: 0 }),
             expect.objectContaining({ onHand: 0, reserved: 0, available: 0 }),
             expect.objectContaining({ onHand: 100, reserved: 0, available: 100 })
         ]);
-        expect(result.data?.meta).toMatchObject({ totalItems: 3, totalPages: 1 });
+        expect(result.meta).toMatchObject({ totalItems: 3, totalPages: 1 });
     });
 
     it('narrows to what needs ordering when asked', async () => {
@@ -381,10 +377,10 @@ describe('listLevels', () => {
 
         const result = await listLevels({ lowOnly: true });
 
-        expect(result.data?.items.map((level) => level.title)).toEqual(['Low']);
+        expect(result.items.map((level) => level.title)).toEqual(['Low']);
         // The total follows the filter, not the collection — otherwise the board would report
         // two pages of scarce products and render one row.
-        expect(result.data?.meta.totalItems).toBe(1);
+        expect(result.meta.totalItems).toBe(1);
         delete process.env.NODE_LOW_STOCK_THRESHOLD;
     });
 
@@ -402,9 +398,9 @@ describe('listLevels', () => {
         const board = await listLevels({ lowOnly: true });
         const gauge = await productRepository.countLowAvailability(5);
 
-        expect(board.data?.meta.totalItems).toBe(3);
+        expect(board.meta.totalItems).toBe(3);
         expect(gauge).toBe(2);
-        expect(board.data?.items.map((level) => level.productId)).toContain(String(hidden._id));
+        expect(board.items.map((level) => level.productId)).toContain(String(hidden._id));
         delete process.env.NODE_LOW_STOCK_THRESHOLD;
     });
 
@@ -414,8 +410,8 @@ describe('listLevels', () => {
 
         const result = await listLevels({ page: 2, pageSize: 2 });
 
-        expect(result.data?.items.map((level) => level.available)).toEqual([2, 3]);
-        expect(result.data?.meta).toMatchObject({
+        expect(result.items.map((level) => level.available)).toEqual([2, 3]);
+        expect(result.meta).toMatchObject({
             page: 2,
             pageSize: 2,
             totalItems: 5,

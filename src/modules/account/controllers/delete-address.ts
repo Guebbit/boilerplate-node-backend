@@ -9,7 +9,6 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AddressesResponse } from '@types';
 import { addressService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/addresses/:addressId — remove one entry, never the whole book.
@@ -18,7 +17,7 @@ import { authContextOf } from '@infrastructure/http/request';
  */
 export const deleteAddress = (request: Request<{ addressId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
     const { addressId } = request.params;
 
     return addressService

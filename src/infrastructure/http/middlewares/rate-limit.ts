@@ -126,10 +126,6 @@ export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = 20;
  */
 export const DEFAULT_PAYMENT_WEBHOOK_RATE_LIMIT_MAX = 60;
 
-/** The configured window, in ms — falls back to {@link DEFAULT_RATE_LIMIT_WINDOW_MS}. */
-const windowMs = () =>
-    environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1);
-
 /**
  * What a caller sees when a budget is spent: the shared error envelope, never express-rate-limit's
  * own plain-text body.
@@ -169,7 +165,7 @@ const refuse =
  */
 const limiterOptions = (store: Store, audit: boolean) => ({
     store,
-    windowMs: windowMs(),
+    windowMs: environmentNumber('NODE_RATE_LIMIT_WINDOW_MS', DEFAULT_RATE_LIMIT_WINDOW_MS, 1),
     // draft-7 rate-limit headers (RateLimit-*), not the deprecated X-RateLimit-* set.
     standardHeaders: 'draft-7' as const,
     legacyHeaders: false,
@@ -437,7 +433,7 @@ export const contactLimiters: RequestHandler[] = [
  * is unset. Six digits is a million guesses; this is what stops a single challenge from being the
  * thing an attacker gets to try them against.
  */
-export const DEFAULT_MFA_CHALLENGE_MAX = 5;
+const DEFAULT_MFA_CHALLENGE_MAX = 5;
 
 /**
  * The bucket key both challenge limiters use: the challenge string itself, hashed so a credential
@@ -483,7 +479,7 @@ export const mfaChallengeLimiter: RequestHandler = rateLimit({
  * Default deliveries allowed against ONE login challenge, used when `NODE_MFA_SEND_MAX` is unset.
  * Three is a first code plus two resends — enough for a slow mailbox, short of a useful cannon.
  */
-export const DEFAULT_MFA_SEND_MAX = 3;
+const DEFAULT_MFA_SEND_MAX = 3;
 
 /**
  * The budget for delivering login codes (`POST /account/login/2fa/send`) — keyed on the challenge

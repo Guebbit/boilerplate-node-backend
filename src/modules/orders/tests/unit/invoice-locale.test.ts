@@ -40,7 +40,7 @@ const renderedHtml = () => renderHtmlToPdfMock.mock.calls[0][0] as string;
  * envelope — the only trace of the language is the `<html lang>` value inside the copy.
  */
 const invoiceJob = (locale = 'en') => ({
-    templatePath: 'shared/views/templates-files/orders.invoice.ejs',
+    templatePath: 'shared/templates/documents/orders.invoice.ejs',
     outputPath: '/tmp/invoice-test.pdf',
     templateData: invoiceDocument(locale, {
         id: 'an-order-id',

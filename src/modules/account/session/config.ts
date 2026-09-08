@@ -56,14 +56,6 @@ export const getAccessTokenSecret = () => process.env.NODE_TOKEN_ACCESS ?? '';
 export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
 
 /**
- * Access token TTL in seconds. The named entry point for the tierless case {@link getExpiryTime}
- * already covers, so the variable and its default are declared once.
- *
- * @returns seconds as integer, 600 if `NODE_TOKEN_ACCESS_TIME` is unset
- */
-export const getAccessTokenTTL = () => getExpiryTime();
-
-/**
  * The key every second factor's stored material is protected with — see `two-factor/`. It
  * encrypts a device secret and keys the HMAC of a delivered code.
  *

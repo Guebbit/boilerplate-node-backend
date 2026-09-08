@@ -28,11 +28,10 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
+import type { RequestInputSource } from '@infrastructure/http/request';
 
 const ROOT = path.resolve(__dirname, '../..');
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch']);
-
-type Source = 'params' | 'body' | 'query';
 
 interface MountedRoute {
     method: string;
@@ -174,15 +173,15 @@ const readMountedRoutes = (): MountedRoute[] => {
  * last time (see `readDeclaredSources`), and a table that parsed to `{}` would make every
  * declaration below read as "declares nothing" and every assertion pass vacuously.
  */
-const readSurfaceSources = (): Record<string, Source[]> => {
+const readSurfaceSources = (): Record<string, RequestInputSource[]> => {
     const block = /SURFACE_SOURCES[^=]*=\s*{([^}]*)}/.exec(
         read('src/infrastructure/http/request.ts')
     )?.[1];
-    const table: Record<string, Source[]> = {};
+    const table: Record<string, RequestInputSource[]> = {};
 
     for (const [, surface, list] of (block ?? '').matchAll(/(\w+):\s*\[([^\]]*)]/g))
         table[surface] = [...list.matchAll(/'(params|body|query)'/g)].map(
-            ([, name]) => name as Source
+            ([, name]) => name as RequestInputSource
         );
 
     return table;
@@ -215,13 +214,16 @@ const SHARED_DECLARATION_FILES: Record<string, string> = {
  * that happens to also respond — a controller calling it reads those sources just as surely as if
  * it had written them out. Its surface is the optional third argument, defaulting to `'write'`.
  */
-const readDeclaredSources = (controllerFile: string, seen = new Set<string>()): Set<Source> => {
+const readDeclaredSources = (
+    controllerFile: string,
+    seen = new Set<string>()
+): Set<RequestInputSource> => {
     // A shared factory is followed once; the guard is for a cycle, not for performance.
     if (seen.has(controllerFile)) return new Set();
     seen.add(controllerFile);
 
     const source = read(controllerFile);
-    const declared = new Set<Source>();
+    const declared = new Set<RequestInputSource>();
 
     const add = (surface: string) => {
         for (const name of SURFACE_SOURCES[surface] ?? []) declared.add(name);
@@ -283,12 +285,12 @@ const readAllowedSources = (
     spec: Spec,
     specPath: string,
     method: string
-): Set<Source> | undefined => {
+): Set<RequestInputSource> | undefined => {
     const pathItem = spec.paths[specPath];
     const operation = pathItem?.[method];
     if (!operation) return undefined;
 
-    const allowed = new Set<Source>();
+    const allowed = new Set<RequestInputSource>();
     const parameters: SpecParameter[] = [
         ...(pathItem.parameters ?? []),
         ...(operation.parameters ?? [])
@@ -404,7 +406,7 @@ describe('request sources agree with openapi.yaml', () => {
         const violations: string[] = [];
 
         for (const [controllerFile, routes] of byController) {
-            const allowed = new Set<Source>();
+            const allowed = new Set<RequestInputSource>();
             for (const route of routes)
                 for (const source of readAllowedSources(spec, route.specPath, route.method) ?? [])
                     allowed.add(source);

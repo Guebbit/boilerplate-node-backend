@@ -12,8 +12,7 @@ import {
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getAccessTokenSecret,
-    getRefreshTokenSecret,
-    getAccessTokenTTL
+    getRefreshTokenSecret
 } from '@modules/account/session/config';
 
 /**
@@ -127,17 +126,17 @@ describe('token secrets', () => {
     });
 });
 
-describe('getAccessTokenTTL', () => {
+describe('the access-token TTL', () => {
     it('reads NODE_TOKEN_ACCESS_TIME', () => {
         process.env.NODE_TOKEN_ACCESS_TIME = '900';
 
-        expect(getAccessTokenTTL()).toBe(900);
+        expect(getExpiryTime()).toBe(900);
     });
 
     it('falls back to ten minutes when unset', () => {
         // Not 0: a zero TTL signs tokens that are already expired, and an operator who never set
         // the variable gets a working login rather than a session that ends on arrival.
-        expect(getAccessTokenTTL()).toBe(600);
+        expect(getExpiryTime()).toBe(600);
     });
 
     it('does not read any refresh tier variable', () => {
@@ -145,6 +144,6 @@ describe('getAccessTokenTTL', () => {
         // exactly the mistake this separation exists to prevent.
         process.env.NODE_TOKEN_REFRESH_TIME_LONG = '2592000';
 
-        expect(getAccessTokenTTL()).toBe(600);
+        expect(getExpiryTime()).toBe(600);
     });
 });

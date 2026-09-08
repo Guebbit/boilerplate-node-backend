@@ -5,8 +5,9 @@
  * owns, not a live call to Google.
  */
 
+import { isOAuthProviderConfigured } from '../../oauth/config';
 import { sign } from 'jsonwebtoken';
-import { googleOAuthProvider, googleConfigured } from '../../oauth/providers/google';
+import { googleOAuthProvider } from '../../oauth/providers/google';
 
 /** The client id, which doubles as the `aud` claim every accepted ID token must carry. */
 const CLIENT_ID = 'test-google-client-id';
@@ -38,14 +39,14 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-describe('googleConfigured', () => {
+describe('google provider configuration', () => {
     it('is true once both env vars are set', () => {
-        expect(googleConfigured()).toBe(true);
+        expect(isOAuthProviderConfigured('google')).toBe(true);
     });
 
     it('is false when either half is missing', () => {
         delete process.env.NODE_OAUTH_GOOGLE_CLIENT_SECRET;
-        expect(googleConfigured()).toBe(false);
+        expect(isOAuthProviderConfigured('google')).toBe(false);
     });
 });
 

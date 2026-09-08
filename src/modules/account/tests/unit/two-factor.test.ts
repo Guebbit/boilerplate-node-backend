@@ -7,7 +7,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { generate } from 'otplib';
+import { generate, generateSecret } from 'otplib';
 import type { TwoFactorMethodRecord } from '@modules/users';
 import {
     armDeliveredCode,
@@ -20,7 +20,6 @@ import {
     DELIVERED_CODE_TTL_MS,
     encryptTotpSecret,
     decryptTotpSecret,
-    generateTotpSecret,
     buildOtpauthUri,
     verifyTotpCode,
     generateBackupCodes,
@@ -30,7 +29,7 @@ import {
 
 describe('TOTP secret encryption', () => {
     it('round-trips a secret through encrypt then decrypt', () => {
-        const secret = generateTotpSecret();
+        const secret = generateSecret();
 
         expect(decryptTotpSecret(encryptTotpSecret(secret))).toBe(secret);
     });
@@ -38,17 +37,17 @@ describe('TOTP secret encryption', () => {
     it('produces a different ciphertext each time, even for the same secret', () => {
         // A fresh random IV per call — two enrollments minting the identical secret (unlikely,
         // but not impossible) must not be distinguishable from their stored ciphertext alone.
-        const secret = generateTotpSecret();
+        const secret = generateSecret();
 
         expect(encryptTotpSecret(secret)).not.toBe(encryptTotpSecret(secret));
     });
 
     it('carries the key version as a prefix', () => {
-        expect(encryptTotpSecret(generateTotpSecret())).toMatch(/^v1:/);
+        expect(encryptTotpSecret(generateSecret())).toMatch(/^v1:/);
     });
 
     it('rejects a tampered ciphertext', () => {
-        const tampered = encryptTotpSecret(generateTotpSecret()).replace(/.$/, (c) =>
+        const tampered = encryptTotpSecret(generateSecret()).replace(/.$/, (c) =>
             c === '0' ? '1' : '0'
         );
 
@@ -70,7 +69,7 @@ describe('verifyTotpCode — fixed-clock vectors, never wall time', () => {
     const FIXED_EPOCH_SECONDS = 1_893_456_000; // 2030-01-01T00:00:00Z, arbitrary and stable
 
     it('accepts a code generated for the current step', async () => {
-        const secret = generateTotpSecret();
+        const secret = generateSecret();
         // The code an authenticator app would show at this exact instant — generated
         // independently of `verifyTotpCode`, the same way a real device would.
         const code = await generate({ secret, epoch: FIXED_EPOCH_SECONDS });
@@ -84,7 +83,7 @@ describe('verifyTotpCode — fixed-clock vectors, never wall time', () => {
     });
 
     it('rejects a wrong code', async () => {
-        const secret = generateTotpSecret();
+        const secret = generateSecret();
         const wrong = await generate({ secret, epoch: FIXED_EPOCH_SECONDS + 3600 }); // an hour away
 
         jest.useFakeTimers().setSystemTime(FIXED_EPOCH_SECONDS * 1000);
@@ -96,7 +95,7 @@ describe('verifyTotpCode — fixed-clock vectors, never wall time', () => {
     });
 
     it('rejects a code at or before the given time step — replay protection', async () => {
-        const secret = generateTotpSecret();
+        const secret = generateSecret();
         const code = await generate({ secret, epoch: FIXED_EPOCH_SECONDS });
 
         jest.useFakeTimers().setSystemTime(FIXED_EPOCH_SECONDS * 1000);

@@ -5,7 +5,7 @@
  */
 
 import { decode } from 'jsonwebtoken';
-import { getOAuthCredentials, isOAuthProviderConfigured } from '../config';
+import { getOAuthCredentials } from '../config';
 import type { OAuthIdentity, OAuthProvider } from './port';
 
 /** This registry's key — also the value Google's docs use, and what lands on `OAuthAccount.provider`. */
@@ -25,9 +25,6 @@ interface GoogleIdTokenClaims {
     name?: string;
     picture?: string;
 }
-
-/** Whether both `NODE_OAUTH_GOOGLE_CLIENT_ID`/`_CLIENT_SECRET` are set. */
-export const googleConfigured = (): boolean => isOAuthProviderConfigured(PROVIDER_NAME);
 
 /**
  * Verify the claims this app actually depends on. Signature verification is deliberately skipped:

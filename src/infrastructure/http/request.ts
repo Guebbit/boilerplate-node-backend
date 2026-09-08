@@ -10,7 +10,7 @@
  */
 
 import type { Request, Response } from 'express';
-import type { AuthContext, Caller } from '@types';
+import type { Caller } from '@types';
 // `ParamsDictionary` is Express' default type for `request.params` (a `Record<string, string>`).
 // Naming it explicitly in generics keeps `request.params.id` typed instead of `any`.
 // i18next translation function — messages are resolved against the request's locale, which the
@@ -20,24 +20,6 @@ import { Types } from 'mongoose';
 import { coerceStringArray } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { stripUndefined } from '@infrastructure/persistence/fixtures';
-
-/**
- * Read `request.body` as a plain object.
- *
- * Express 5 leaves `req.body` UNDEFINED when the request carries no body (express 4 defaulted it
- * to `{}`) — a body-less `DELETE /cart/:productId` otherwise threw and surfaced as a 500.
- */
-const getRequestBody = (request: Request): Record<string, unknown> =>
-    (request.body ?? {}) as Record<string, unknown>;
-
-/**
- * True when the body arrived as `multipart/form-data`.
- *
- * The only body not already typed: a JSON body needs no coercion, and coercing it anyway would
- * swallow a contract violation (`!!'not-a-boolean'` is `true`). Express answers `null`, not
- * `false`, for no body at all — a distinction `!!` has to flatten here.
- */
-const isMultipartRequest = (request: Request): boolean => !!request.is('multipart/form-data');
 
 /** String spellings of a boolean, as URLs, HTML forms and common clients send them. */
 const FORM_BOOLEANS: Record<string, boolean> = {
@@ -81,9 +63,6 @@ const parseFormNumber = (value: unknown): unknown => {
     const parsed = Number(trimmed);
     return Number.isFinite(parsed) ? parsed : value;
 };
-
-/** A repeated key arrives as an array; scalar fields take the first entry. */
-const firstEntry = (value: unknown): unknown => (Array.isArray(value) ? value[0] : value);
 
 /** The three places a value can arrive from. Named so a route can declare which ones it reads. */
 export type RequestInputSource = 'params' | 'body' | 'query';
@@ -148,14 +127,6 @@ export interface RequestInputDeclaration<TId extends string> {
 }
 
 /**
- * The result of a declaration. Everything is `unknown` — this layer decodes a transport, it does
- * not validate, and whatever it could not recognise has to reach the schema downstream intact.
- * Declared ids are the one exception, because their resolution rule already determines their type.
- */
-export type RequestInput<TId extends string> = Record<string, unknown> &
-    Partial<Record<TId, string>>;
-
-/**
  * Read a route's input according to one declaration, so the multi-source rules aren't
  * re-assembled at every call site.
  *
@@ -165,11 +136,15 @@ export type RequestInput<TId extends string> = Record<string, unknown> &
  * and only string transports (params, query, or a multipart body) get decoded — a JSON body keeps
  * its own types. `anyTrue` fields are the one exception: OR'd across sources, not ranked, because
  * a flag whose `false` is a default nobody typed has no honest precedence order.
+ *
+ * @returns everything as `unknown` — this layer decodes a transport, it does not validate, and
+ * whatever it could not recognise has to reach the schema downstream intact. Declared ids are the
+ * one exception, because their resolution rule already determines their type.
  */
 export const readInput = <TId extends string = never>(
     request: Request,
     declaration: RequestInputDeclaration<TId>
-): RequestInput<TId> => {
+): Record<string, unknown> & Partial<Record<TId, string>> => {
     const anyTrue = declaration.anyTrue ?? [];
     // `anyTrue` fields are booleans too. Folded in here rather than asked of the caller twice,
     // because an `anyTrue` field left undecoded would never see the `true` a query string spells.
@@ -198,11 +173,16 @@ export const readInput = <TId extends string = never>(
     const stringTransport: Record<RequestInputSource, boolean> = {
         params: true,
         query: true,
-        body: decodes && isMultipartRequest(request)
+        // Multipart is the only body not already typed: a JSON body needs no coercion, and
+        // coercing it anyway would swallow a contract violation (`!!'not-a-boolean'` is `true`).
+        // Express' `req.is` answers `null`, not `false`, for no body at all — hence `!!`.
+        body: decodes && !!request.is('multipart/form-data')
     };
     const values: Record<RequestInputSource, Record<string, unknown>> = {
         params: request.params,
-        body: getRequestBody(request),
+        // Express 5 leaves `req.body` UNDEFINED when the request carries no body (express 4
+        // defaulted it to `{}`) — a body-less `DELETE /cart/:productId` otherwise surfaced as 500.
+        body: (request.body ?? {}) as Record<string, unknown>,
         query: request.query as Record<string, unknown>
     };
     const sources = SURFACE_SOURCES[declaration.surface].map((source) =>
@@ -219,7 +199,9 @@ export const readInput = <TId extends string = never>(
     for (const key of declaration.ids ?? []) {
         let resolved: unknown;
         for (const source of sources) {
-            const value = firstEntry(source[key]);
+            // A repeated key arrives as an array; scalar fields take the first entry.
+            const raw: unknown = source[key];
+            const value: unknown = Array.isArray(raw) ? raw[0] : raw;
             if (value) {
                 resolved = value;
                 break;
@@ -246,24 +228,8 @@ export const readInput = <TId extends string = never>(
     }
 
     // The declared shape is what the loops above just built; a record cannot express it.
-    return result as RequestInput<TId>;
+    return result as Record<string, unknown> & Partial<Record<TId, string>>;
 };
-
-/**
- * The caller on a route mounted behind `isAuth`.
- *
- * `Request.authContext` is optional on the global augmentation — absent until the auth middleware
- * resolves it — so this makes the "route is authenticated" claim ONCE, rather than each controller
- * re-checking, asserting with `!`, or branching on a ternary. A narrower request type isn't
- * available: Express' `RequestHandler` is contravariant, so asking for more than `Request` won't
- * mount. `tests/cross-cutting/authenticated-controllers.test.ts` asserts the other half — that the
- * route actually is behind `isAuth`.
- *
- * @param request - a request whose route mounts `isAuth`
- * @returns the resolved caller
- */
-export const authContextOf = (request: { authContext?: AuthContext }): AuthContext =>
-    request.authContext!;
 
 /**
  * Everything a service needs to know about the request that reached it — who made it, where it
@@ -305,18 +271,10 @@ export interface CallerContext {
 }
 
 /**
- * `X-Analytics-Consent` as a boolean, the way `environmentFlag` reads an env var — never
- * `Boolean(value)`, which would make the string `'false'` truthy. Anything unrecognised (absent
- * header included) is `false`, matching the stored field's own default.
- */
-const parseConsentHeader = (value: string | undefined): boolean =>
-    value !== undefined && parseFormBoolean(value) === true;
-
-/**
  * Build the `CallerContext` for the current request. Call once per controller, at the top, and
  * pass the result down to whichever service call ends up emitting.
  *
- * Structurally typed rather than `express.Request`, for the reason `authContextOf` gives: asking
+ * Structurally typed rather than `express.Request`: asking
  * for more than the minimum a helper reads is what breaks Express' contravariant handler typing.
  */
 export const callerContextOf = (request: {
@@ -348,8 +306,12 @@ export const callerContextOf = (request: {
         // The stored account preference wins over the header — but only when the account has
         // granted it. A logged-in caller who hasn't granted it falls through to the header too,
         // so a banner choice made before logging in still counts until `PUT /account` records it.
+        // The header is read the way `environmentFlag` reads an env var — never `Boolean(value)`,
+        // which would make the string `'false'` truthy. Unrecognised (absent included) is `false`,
+        // matching the stored field's own default.
         analyticsConsent:
-            request.authContext?.analyticsConsent === true || parseConsentHeader(consentHeader)
+            request.authContext?.analyticsConsent === true ||
+            (consentHeader !== undefined && parseFormBoolean(consentHeader) === true)
     };
 };
 

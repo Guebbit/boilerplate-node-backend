@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/verify-request — re-sends the verification link (signup already sent one; this
@@ -17,7 +17,7 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
  */
 export const postVerifyRequest = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     return accountService
         .requestEmailVerificationFor(id, callerContextOf(request))

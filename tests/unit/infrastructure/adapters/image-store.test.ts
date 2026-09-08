@@ -10,7 +10,8 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { filesystemImageStore } from '@infrastructure/adapters/image-store';
+import type { Request } from 'express';
+import { filesystemImageStore, readUploadedImage } from '@infrastructure/adapters/image-store';
 
 const ORIGINAL_PUBLIC_PATH = process.env.NODE_PUBLIC_PATH;
 const ORIGINAL_QUARANTINE_PATH = process.env.NODE_QUARANTINE_PATH;
@@ -355,5 +356,61 @@ describe('filesystemImageStore.remove', () => {
         } finally {
             process.chdir(originalCwd);
         }
+    });
+});
+
+/** Only the recorded-url fields and the body are read, so a partial Request keeps intent visible. */
+const requestWith = (parts: Partial<Request>): Parameters<typeof readUploadedImage>[0] =>
+    ({ body: {}, ...parts }) as Parameters<typeof readUploadedImage>[0];
+
+/**
+ * `readUploadedImage` reads back what the upload middleware recorded — it neither derives the url
+ * from multer's path nor hands the path back. The store constructs the url and owns the delete, so
+ * no filesystem path leaves the upload pipeline and none can reach a database row.
+ */
+describe('readUploadedImage', () => {
+    it('returns the url the store recorded for the upload', () => {
+        expect(
+            readUploadedImage(requestWith({ storedImageUrls: ['/images/a.png'] })).imageUrl
+        ).toBe('/images/a.png');
+    });
+
+    /* A remote store answers absolute urls, and controllers must not be able to tell. */
+    it('returns an absolute url unchanged', () => {
+        expect(
+            readUploadedImage(
+                requestWith({ storedImageUrls: ['https://cdn.example.com/images/a.png'] })
+            ).imageUrl
+        ).toBe('https://cdn.example.com/images/a.png');
+    });
+
+    it('takes only the first url when several images were committed', () => {
+        // These endpoints accept a single image; extras are ignored rather than silently
+        // overwriting each other downstream.
+        expect(
+            readUploadedImage(
+                requestWith({ storedImageUrls: ['/images/first.png', '/images/second.png'] })
+            ).imageUrl
+        ).toBe('/images/first.png');
+    });
+
+    it('returns undefined when the request uploaded nothing', () => {
+        // Callers distinguish "no image supplied" from "image supplied" on this being undefined,
+        // so an empty string here would read as "an image at the site root" — and, worse, would
+        // make the failure-path cleanup try to delete it.
+        expect(readUploadedImage(requestWith({})).imageUrl).toBeUndefined();
+    });
+
+    /**
+     * The staged path is deliberately NOT a fallback. A request whose upload never reached the
+     * store has no stored image, and answering with the temp path would persist a filesystem path
+     * into `imageUrl` — the exact bug the store exists to make impossible.
+     */
+    it('ignores a staged file the store never committed', () => {
+        expect(
+            readUploadedImage(
+                requestWith({ file: { path: '/tmp/staging/a.png' } as Express.Multer.File })
+            ).imageUrl
+        ).toBeUndefined();
     });
 });

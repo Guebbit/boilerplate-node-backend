@@ -124,12 +124,12 @@ describe('email templates render in every supported locale', () => {
     });
 
     /**
-     * The invoice PDF lives outside `templates-emails` but is the same kind of artefact — a
+     * The invoice PDF lives outside `templates/emails` but is the same kind of artefact — a
      * document a customer reads — so it is held to the same translation rule.
      */
     it.each(listSupportedLocales())('renders the invoice document in %s', async (locale) => {
         const html = await ejs.renderFile(
-            path.resolve('shared', 'views', 'templates-files', 'orders.invoice.ejs'),
+            path.resolve('shared', 'templates', 'documents', 'orders.invoice.ejs'),
             invoiceDocument(locale, {
                 id: 'an-order-id',
                 items: [{ product: { title: 'A product', price: 10 }, quantity: 2 }]

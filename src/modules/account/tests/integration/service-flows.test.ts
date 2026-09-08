@@ -10,10 +10,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
-import * as accountService from '@modules/account/services';
-// The namespace above is this file's house style, and `refreshAccessToken` is published on the
-// service object rather than as a bare name — so it is reached through the object, not the barrel.
-import { accountService as account } from '@modules/account/services';
+import { accountService } from '@modules/account/services';
 import * as auditPort from '@infrastructure/observability/audit';
 import { createRefreshToken, verifyAccessToken } from '@modules/account/session/jwt';
 import { accountAuditActions } from '../../audit';
@@ -301,7 +298,7 @@ describe('accountService.refreshAccessToken', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const refreshToken = await issueRefreshToken();
 
-        const result = await account.refreshAccessToken(refreshToken, testCallerContext);
+        const result = await accountService.refreshAccessToken(refreshToken, testCallerContext);
 
         expect(typeof result.accessToken).toBe('string');
         expect(auditSpy).toHaveBeenCalledWith(
@@ -317,12 +314,12 @@ describe('accountService.refreshAccessToken', () => {
     it('rotates the refresh token — the new value replaces the old one, which stops working', async () => {
         const refreshToken = await issueRefreshToken();
 
-        const result = await account.refreshAccessToken(refreshToken, testCallerContext);
+        const result = await accountService.refreshAccessToken(refreshToken, testCallerContext);
 
         expect(result.refreshToken).not.toBe(refreshToken);
         // The new token works…
         await expect(
-            account.refreshAccessToken(result.refreshToken, testCallerContext)
+            accountService.refreshAccessToken(result.refreshToken, testCallerContext)
         ).resolves.toBeDefined();
     });
 
@@ -332,7 +329,7 @@ describe('accountService.refreshAccessToken', () => {
     // that alone.
     it('does not move auth_time across ten consecutive refreshes', async () => {
         const refreshToken = await issueRefreshToken();
-        const first = await account.refreshAccessToken(refreshToken, testCallerContext);
+        const first = await accountService.refreshAccessToken(refreshToken, testCallerContext);
         const { auth_time: mintedAt } = await verifyAccessToken(first.accessToken);
 
         // Chained from `first.refreshToken`, not the original: each iteration presents the
@@ -340,7 +337,7 @@ describe('accountService.refreshAccessToken', () => {
         // not one rotation plus nine grace-window reissues of the same already-spent token.
         let current = first.refreshToken;
         for (let i = 0; i < 10; i++) {
-            const result = await account.refreshAccessToken(current, testCallerContext);
+            const result = await accountService.refreshAccessToken(current, testCallerContext);
             const { auth_time: authTime } = await verifyAccessToken(result.accessToken);
             expect(authTime).toBe(mintedAt);
             current = result.refreshToken;
@@ -353,8 +350,8 @@ describe('accountService.refreshAccessToken', () => {
         const refreshToken = await issueRefreshToken();
 
         const [first, second] = await Promise.all([
-            account.refreshAccessToken(refreshToken, testCallerContext),
-            account.refreshAccessToken(refreshToken, testCallerContext)
+            accountService.refreshAccessToken(refreshToken, testCallerContext),
+            accountService.refreshAccessToken(refreshToken, testCallerContext)
         ]);
 
         expect(typeof first.accessToken).toBe('string');
@@ -371,16 +368,16 @@ describe('accountService.refreshAccessToken', () => {
         const other = await createRefreshToken(user.id);
         const refreshToken = await createRefreshToken(user.id);
 
-        await account.refreshAccessToken(refreshToken, testCallerContext);
+        await accountService.refreshAccessToken(refreshToken, testCallerContext);
 
         // A zero-length grace window: by the time this next call re-reads the entry, ANY elapsed
         // time counts as outside it — the same test technique `jwt.test.ts` would use, without
         // reaching into `users`' storage to back-date a timestamp by hand.
         process.env.NODE_TOKEN_ROTATION_GRACE_MS = '0';
 
-        await expect(account.refreshAccessToken(refreshToken, testCallerContext)).rejects.toThrow(
-            'reuse'
-        );
+        await expect(
+            accountService.refreshAccessToken(refreshToken, testCallerContext)
+        ).rejects.toThrow('reuse');
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED,
@@ -390,13 +387,15 @@ describe('accountService.refreshAccessToken', () => {
         );
 
         // The unrelated session from before is gone too — the WHOLE refresh set, not just the one.
-        await expect(account.refreshAccessToken(other, testCallerContext)).rejects.toThrow();
+        await expect(accountService.refreshAccessToken(other, testCallerContext)).rejects.toThrow();
     });
 
     it('records a token that does not verify as an invalid_token failure', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await expect(account.refreshAccessToken('not-a-jwt', testCallerContext)).rejects.toThrow();
+        await expect(
+            accountService.refreshAccessToken('not-a-jwt', testCallerContext)
+        ).rejects.toThrow();
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -414,7 +413,9 @@ describe('accountService.refreshAccessToken', () => {
         const refreshToken = await issueRefreshToken();
         await userRepository.tokenRemoveByValue(refreshToken);
 
-        await expect(account.refreshAccessToken(refreshToken, testCallerContext)).rejects.toThrow();
+        await expect(
+            accountService.refreshAccessToken(refreshToken, testCallerContext)
+        ).rejects.toThrow();
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -428,7 +429,9 @@ describe('accountService.refreshAccessToken', () => {
     it('records a missing cookie as a missing_token failure, distinctly', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
-        await expect(account.refreshAccessToken(undefined, testCallerContext)).rejects.toThrow();
+        await expect(
+            accountService.refreshAccessToken(undefined, testCallerContext)
+        ).rejects.toThrow();
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({

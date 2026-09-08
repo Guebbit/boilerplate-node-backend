@@ -6,7 +6,7 @@
  */
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { generateSecret, generateURI, verify } from 'otplib';
+import { generateURI, verify } from 'otplib';
 import { getTotpEncryptionKey } from '../session/config';
 
 /** RFC 6238 default: a code is valid for this many seconds. */
@@ -29,7 +29,7 @@ const deriveKey = (secret: string) => createHash('sha256').update(secret).digest
  * `NODE_TOTP_ENCRYPTION_KEY` rotation can decrypt old rows against their own key while signing
  * new ones with the new key, rather than a migration that cannot tell which key a row used.
  *
- * @param plaintext - the base32 TOTP secret from `generateTotpSecret`
+ * @param plaintext - the base32 TOTP secret from otplib's `generateSecret`
  * @returns the versioned ciphertext to store in the method entry's `secret`
  */
 export const encryptTotpSecret = (plaintext: string): string => {
@@ -65,25 +65,21 @@ export const decryptTotpSecret = (stored: string): string => {
     ]).toString('utf8');
 };
 
-/** A fresh base32 TOTP secret, one per enrollment attempt. */
-export const generateTotpSecret = (): string => generateSecret();
-
-/**
- * The issuer name shown in an authenticator app, next to the account label.
- * Reuses `NODE_SMTP_SENDER`'s display name rather than adding a dedicated branding variable —
- * this deployment already named itself there.
- */
-const totpIssuer = (): string => process.env.NODE_SMTP_SENDER?.split('<')[0]?.trim() || 'Account';
-
 /**
  * The `otpauth://` URI an authenticator app scans to enroll — the frontend renders it as a QR
  * code; this backend has no business generating an image.
  *
- * @param secret - the base32 secret from `generateTotpSecret`
+ * @param secret - the base32 secret from otplib's `generateSecret`
  * @param label - the account identifier shown under the issuer, normally the user's email
  */
 export const buildOtpauthUri = (secret: string, label: string): string =>
-    generateURI({ issuer: totpIssuer(), label, secret });
+    generateURI({
+        // The issuer shown in an authenticator app. Reuses `NODE_SMTP_SENDER`'s display name
+        // rather than adding a dedicated branding variable — this deployment already named itself.
+        issuer: process.env.NODE_SMTP_SENDER?.split('<')[0]?.trim() || 'Account',
+        label,
+        secret
+    });
 
 /** What a TOTP verification decided, and the step it matched at — see {@link verifyTotpCode}. */
 export interface TotpVerification {

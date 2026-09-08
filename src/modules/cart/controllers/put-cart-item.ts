@@ -9,12 +9,7 @@ import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { CartResponse, UpdateCartItemByIdRequest } from '@types';
-import {
-    authContextOf,
-    isValidObjectId,
-    readInput,
-    callerContextOf
-} from '@infrastructure/http/request';
+import { isValidObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -27,7 +22,7 @@ export const putCartItem = (
     request: Request<{ productId?: string }, unknown, UpdateCartItemByIdRequest>,
     response: Response
 ) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
 
     const body = parseBody(UpdateCartItemByIdBody, request.body, response);
     if (!body) return;

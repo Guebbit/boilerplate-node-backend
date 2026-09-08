@@ -15,7 +15,7 @@ import { accountService } from '../services';
 import { issueSession } from '../session/session';
 import { authReauthTotal } from '../metrics';
 import { rejectValidation } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/reauth — re-proves the caller's password and re-mints their session with a fresh
@@ -28,7 +28,7 @@ export const postReauth = (
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     const parseResult = ReauthBody.safeParse(request.body);
     if (!parseResult.success) {

@@ -31,13 +31,6 @@ export interface AddressBookOverrides extends FactoryIdentity {
  */
 export type AddressBookFixture = Partial<AddressBookDocument> & Pick<AddressBookDocument, 'userId'>;
 
-/** The contract's `id` becomes the subdocument's `_id`; absent optionals leave no key behind. */
-const toEntry = ({ id, label, phone, ...fields }: Address): AddressItem => ({
-    _id: new Types.ObjectId(id),
-    ...fields,
-    ...stripUndefined({ label, phone })
-});
-
 /** A book fixture ready for `addressBookRepository.create`, from a caller's overrides. */
 export const makeAddressBook = ({
     userId,
@@ -46,5 +39,16 @@ export const makeAddressBook = ({
 }: AddressBookOverrides): AddressBookFixture => ({
     userId: new Types.ObjectId(userId),
     ...identityOf(identity),
-    ...(items === undefined ? {} : { items: items.map((item) => toEntry(item)) })
+    // The contract's `id` becomes the subdocument's `_id`; absent optionals leave no key behind.
+    ...(items === undefined
+        ? {}
+        : {
+              items: items.map(
+                  ({ id, label, phone, ...fields }): AddressItem => ({
+                      _id: new Types.ObjectId(id),
+                      ...fields,
+                      ...stripUndefined({ label, phone })
+                  })
+              )
+          })
 });

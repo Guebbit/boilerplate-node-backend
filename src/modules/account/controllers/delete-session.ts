@@ -9,7 +9,7 @@ import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/sessions/:sessionId — revoke one of the caller's own sessions ("log out that
@@ -22,7 +22,7 @@ import { authContextOf, callerContextOf } from '@infrastructure/http/request';
  */
 export const deleteSession = (request: Request<{ sessionId: string }>, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
     const { sessionId } = request.params;
 
     return accountService

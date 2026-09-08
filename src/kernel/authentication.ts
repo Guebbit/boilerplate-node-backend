@@ -8,37 +8,12 @@
  * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
  */
 
-/** The subset of a user the request context carries. Deliberately not the module's document type. */
-export interface AuthenticatedUser {
-    id: string;
-    email: string;
-    username: string;
-    admin: boolean;
-    imageUrl?: string;
-    /**
-     * Epoch seconds this session last actually proved itself — carried from the token's own
-     * `auth_time` claim, never derived here. `0` means "unknown/never" (a token minted before
-     * this claim existed), which reads as infinitely old — see `TokenData` in
-     * `account/session/jwt.ts`.
-     */
-    authTime: number;
-    /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. */
-    amr: readonly string[];
-    /** The account's analytics consent choice, read fresh from the document on every request. */
-    analyticsConsent: boolean;
-    /**
-     * Whether the account's email is proven, read fresh from the document on every request, same
-     * reasoning as `analyticsConsent`: a verification landing mid-session (or a pending change
-     * completing) must gate the very next request, not wait for a new token. What
-     * `requireVerified` reads.
-     */
-    verified: boolean;
-}
+import type { AuthContext } from '@types';
 
 /** Turns a signed token into the user it names. Implemented by `account`. */
 export interface AuthResolver {
-    fromAccessToken: (token: string) => Promise<AuthenticatedUser | undefined>;
-    fromRefreshToken: (token: string) => Promise<AuthenticatedUser | undefined>;
+    fromAccessToken: (token: string) => Promise<AuthContext | undefined>;
+    fromRefreshToken: (token: string) => Promise<AuthContext | undefined>;
 }
 
 /** The currently registered resolver, or `undefined` before `account` boots and installs one. */
@@ -69,9 +44,9 @@ const requireResolver = (): AuthResolver => {
 };
 
 /** Resolve an access token, for the `Authorization: Bearer` path. */
-export const resolveAccessToken = (token: string): Promise<AuthenticatedUser | undefined> =>
+export const resolveAccessToken = (token: string): Promise<AuthContext | undefined> =>
     Promise.resolve().then(() => requireResolver().fromAccessToken(token));
 
 /** Resolve a refresh token, for the cookie path. */
-export const resolveRefreshToken = (token: string): Promise<AuthenticatedUser | undefined> =>
+export const resolveRefreshToken = (token: string): Promise<AuthContext | undefined> =>
     Promise.resolve().then(() => requireResolver().fromRefreshToken(token));

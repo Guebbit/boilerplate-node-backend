@@ -8,7 +8,7 @@
  * See: docs/tools/email-and-rendering.md
  */
 
-import type { EmailJob } from '@infrastructure/adapters/mailer';
+import type { EmailJobPayload } from '@types';
 import { nodemailer } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 
@@ -20,10 +20,10 @@ export { EMAIL_QUEUE } from '@infrastructure/adapters/queue';
  *
  * `false` is a PERMANENT refusal — no recipient or template, so it's dead-lettered. Anything else
  * is left to reject, since an SMTP fault says nothing about the job and `consumeFromQueue`
- * requeues a rejection. `Partial<EmailJob>`, not `unknown`: the broker delivers whatever was
+ * requeues a rejection. `Partial<EmailJobPayload>`, not `unknown`: the broker delivers whatever was
  * published, so every field is a claim until checked below.
  */
-export const handleEmailJob = (job: Partial<EmailJob>): Promise<boolean> => {
+export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> => {
     // The optional chain does the narrowing on its own — past this point TypeScript knows both
     // fields are there, which is why no type predicate is needed to say so.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact

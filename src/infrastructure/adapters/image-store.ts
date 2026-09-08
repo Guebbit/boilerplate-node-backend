@@ -14,12 +14,7 @@ import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { Request } from 'express';
 import { deleteFile, moveFile } from '@infrastructure/adapters/filesystem';
-import {
-    resolveImageUrl,
-    resolvePendingImageKey,
-    resolveThumbnailUrl,
-    toPosixPath
-} from '@infrastructure/http/uploads';
+import { toPosixPath } from '@infrastructure/http/uploads';
 
 /**
  * The seam between an upload and wherever bytes actually live. One implementation ships today —
@@ -281,13 +276,19 @@ export const readUploadedImage = (
         'storedImageUrls' | 'storedThumbnailUrls' | 'quarantinedImageKeys' | 'body'
     >
 ): RequestImage => {
-    const promotedUrl = resolveImageUrl(request);
-    const pendingKey = resolvePendingImageKey(request);
+    /*
+     * Read back what the upload middleware recorded, never derived from multer's path: the store
+     * CONSTRUCTS these urls, which is what keeps a filesystem separator out of a persisted value
+     * and lets the same controller work whether the store answered a local path or a CDN url.
+     * `[0]` throughout — these endpoints accept a single image, so extras are ignored.
+     */
+    const promotedUrl = request.storedImageUrls?.[0];
+    const pendingKey = request.quarantinedImageKeys?.[0];
 
     if (promotedUrl)
         return {
             imageUrl: promotedUrl,
-            thumbnailUrl: resolveThumbnailUrl(request),
+            thumbnailUrl: request.storedThumbnailUrls?.[0],
             pendingImageKey: undefined,
             deleteUpload: () => imageStore.remove(promotedUrl)
         };

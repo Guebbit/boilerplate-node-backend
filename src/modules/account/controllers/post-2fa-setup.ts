@@ -11,7 +11,7 @@ import type { TwoFactorSetup } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import { twoFactorService } from '../services';
 
 /**
@@ -20,7 +20,7 @@ import { twoFactorService } from '../services';
  * working, which is exactly what an attacker holding a stolen session would reach for.
  */
 export const post2faSetup = (request: Request<{ method: string }>, response: Response) => {
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     const parseResult = SetupTwoFactorMethodParams.safeParse(request.params);
     if (!parseResult.success) return rejectValidation(response, parseResult.error);

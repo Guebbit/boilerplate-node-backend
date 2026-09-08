@@ -31,24 +31,6 @@ sharp.concurrency(1);
 sharp.cache(false);
 
 /**
- * Ceiling on decoded pixel count, checked before any resize runs. sharp's default is 268
- * megapixels; a 5 MB PNG can legally decode to gigabytes of raw pixels, so without an explicit cap
- * the decode step itself is the decompression bomb this pipeline exists to prevent.
- *
- * Read at call time, not frozen at import, like every other adapter's env reads — see
- * `maxUploadBytes` in `storage.ts`.
- */
-const maxInputPixels = (): number =>
-    environmentNumber('NODE_IMAGE_MAX_INPUT_PIXELS', 50_000_000, 1);
-
-/** Longest edge a digested original is allowed to keep. Smaller images are left alone. */
-const maxDigestDimension = (): number => environmentNumber('NODE_IMAGE_MAX_DIMENSION', 2048, 1);
-
-/** Longest edge a thumbnail is allowed to keep. */
-const maxThumbnailDimension = (): number =>
-    environmentNumber('NODE_IMAGE_THUMBNAIL_DIMENSION', 320, 1);
-
-/**
  * Decode a buffer under the shared safety limits, and auto-orient it from its own EXIF tag.
  *
  * `rotate()` with no args reads the embedded orientation once, bakes it into the pixels, and
@@ -56,12 +38,18 @@ const maxThumbnailDimension = (): number =>
  * read, and a portrait phone photo would come out sideways.
  *
  * @param input - the raw, undecoded bytes (a quarantined upload)
- * @throws When `input` is not a decodable image, or decodes past {@link maxInputPixels}.
+ * @throws When `input` is not a decodable image, or decodes past `NODE_IMAGE_MAX_INPUT_PIXELS`.
  */
 const decode = (input: Buffer): Sharp =>
     sharp(input, {
-        // Pixel ceiling, not a byte ceiling — see maxInputPixels above.
-        limitInputPixels: maxInputPixels()
+        /*
+         * Ceiling on decoded pixel count, checked before any resize runs. sharp's default is 268
+         * megapixels; a 5 MB PNG can legally decode to gigabytes of raw pixels, so without an
+         * explicit cap the decode step itself is the decompression bomb this pipeline prevents.
+         *
+         * Read at call time, not frozen at import, like every other adapter's env reads.
+         */
+        limitInputPixels: environmentNumber('NODE_IMAGE_MAX_INPUT_PIXELS', 50_000_000, 1)
     }).rotate();
 
 /**
@@ -100,11 +88,14 @@ const reencode = (pipeline: Sharp, mime: ReencodableImageMime): Sharp => {
  * @param input - the quarantined file's raw bytes
  * @param mime - the format declared at upload time; the output is re-encoded into the SAME one
  * @returns the digested bytes, ready to promote to the public store
- * @throws When `input` will not decode as `mime`, or exceeds {@link maxInputPixels}.
+ * @throws When `input` will not decode as `mime`, or exceeds `NODE_IMAGE_MAX_INPUT_PIXELS`.
  */
-export const digestImage = (input: Buffer, mime: ReencodableImageMime): Promise<Buffer> =>
-    reencode(
-        decode(input).resize(maxDigestDimension(), maxDigestDimension(), {
+export const digestImage = (input: Buffer, mime: ReencodableImageMime): Promise<Buffer> => {
+    /** Longest edge a digested original is allowed to keep. Smaller images are left alone. */
+    const maxDimension = environmentNumber('NODE_IMAGE_MAX_DIMENSION', 2048, 1);
+
+    return reencode(
+        decode(input).resize(maxDimension, maxDimension, {
             // Longest edge capped; the other shrinks to match, never cropped.
             fit: 'inside',
             // An image already smaller than the cap is left at its own resolution.
@@ -112,6 +103,7 @@ export const digestImage = (input: Buffer, mime: ReencodableImageMime): Promise<
         }),
         mime
     ).toBuffer();
+};
 
 /**
  * Produce the thumbnail that accompanies a digested original.
@@ -122,13 +114,17 @@ export const digestImage = (input: Buffer, mime: ReencodableImageMime): Promise<
  *
  * @param input - the quarantined file's raw bytes (the same input `digestImage` receives)
  * @returns the thumbnail bytes, ready to store as a derivative
- * @throws When `input` will not decode, or exceeds {@link maxInputPixels}.
+ * @throws When `input` will not decode, or exceeds `NODE_IMAGE_MAX_INPUT_PIXELS`.
  */
-export const thumbnailImage = (input: Buffer): Promise<Buffer> =>
-    decode(input)
-        .resize(maxThumbnailDimension(), maxThumbnailDimension(), {
+export const thumbnailImage = (input: Buffer): Promise<Buffer> => {
+    /** Longest edge a thumbnail is allowed to keep. */
+    const maxDimension = environmentNumber('NODE_IMAGE_THUMBNAIL_DIMENSION', 320, 1);
+
+    return decode(input)
+        .resize(maxDimension, maxDimension, {
             fit: 'inside',
             withoutEnlargement: true
         })
         .webp()
         .toBuffer();
+};

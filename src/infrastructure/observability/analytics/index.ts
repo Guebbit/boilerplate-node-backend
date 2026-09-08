@@ -166,15 +166,6 @@ export const buildAnalyticsBase = (
 });
 
 /**
- * Whether a caller's consent is required before capturing them at all.
- * Defaults `true`: Art. 25(2) says the PRIVATE setting is the default one, so a boilerplate that
- * shipped the permissive default would ship it into every project built on it. A deployment that
- * has taken its own legal advice about server-side, non-cookie analytics can opt out.
- */
-const requireAnalyticsConsent = (): boolean =>
-    environmentFlag('NODE_ANALYTICS_REQUIRE_CONSENT', true);
-
-/**
  * Send one product analytics event to the configured provider.
  *
  * Returns `void` (fire-and-forget): analytics must never delay or fail a user request, so there
@@ -191,7 +182,10 @@ const requireAnalyticsConsent = (): boolean =>
 export const emitAnalyticsEvent = (event: AnalyticsEventInput): void => {
     const { analyticsConsent, ...capturable } = event;
 
-    if (requireAnalyticsConsent() && !analyticsConsent) return;
+    // Defaults `true`: Art. 25(2) says the PRIVATE setting is the default one, so a boilerplate
+    // that shipped the permissive default would ship it into every project built on it. A
+    // deployment with its own legal advice about server-side, non-cookie analytics can opt out.
+    if (environmentFlag('NODE_ANALYTICS_REQUIRE_CONSENT', true) && !analyticsConsent) return;
 
     resolveAnalyticsProvider().capture(capturable);
 };

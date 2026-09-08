@@ -5,7 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { callerContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -17,7 +17,7 @@ import type { WishlistResponse } from '@types';
  * they need to know, the same contract the cart's remove keeps.
  */
 export const deleteWishlistItem = (request: Request<{ productId: string }>, response: Response) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
     const { productId } = request.params;
 
     if (!isValidObjectId(productId)) {

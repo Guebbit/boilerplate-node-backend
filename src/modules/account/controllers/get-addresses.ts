@@ -8,7 +8,6 @@ import { successResponse } from '@infrastructure/http/response';
 import type { AddressesResponse } from '@types';
 import { addressService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /account/addresses — the caller's whole address book.
@@ -19,7 +18,7 @@ import { authContextOf } from '@infrastructure/http/request';
  */
 export const getAddresses = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     return addressService
         .addressesGet(id)

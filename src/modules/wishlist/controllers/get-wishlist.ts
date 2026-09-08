@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';
 import { catchAs } from '@infrastructure/http/controller';
-import { authContextOf } from '@infrastructure/http/request';
+
 import type { WishlistResponse } from '@types';
 
 /**
@@ -17,7 +17,7 @@ import type { WishlistResponse } from '@types';
  */
 export const getWishlist = (request: Request, response: Response) => {
     return wishlistService
-        .wishlistGet(authContextOf(request).id)
+        .wishlistGet(request.authContext!.id)
         .then((view) => {
             successResponse<WishlistResponse>(response, view);
         })

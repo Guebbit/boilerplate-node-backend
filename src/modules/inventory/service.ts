@@ -18,7 +18,6 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { productRepository } from '@modules/products';
 import { StockMovementReason, type InventoryLevel } from '@types';
-import type { SearchFilters } from '@infrastructure/persistence/create-repository';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -60,7 +59,7 @@ export interface LevelFilters extends PaginationInput {
 }
 
 /** What a ledger read accepts, on top of the shared `page`/`pageSize`. */
-export interface MovementFilters extends SearchFilters {
+export interface MovementFilters {
     productId?: string;
     reason?: StockMovementReason;
 }
@@ -440,7 +439,7 @@ export const adjust = async (
  */
 export const listLevels = async (
     filters: LevelFilters = {}
-): Promise<ResponseSuccess<{ items: InventoryLevel[]; meta: PaginatedMeta }>> => {
+): Promise<{ items: InventoryLevel[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
     const { items, totalItems } = await productRepository.availabilityPage({
         skip: pagination.skip,
@@ -448,7 +447,7 @@ export const listLevels = async (
         ...(filters.lowOnly ? { maxAvailable: lowStockThreshold() } : {})
     });
 
-    return generateSuccess({ items, meta: buildPaginatedMeta(pagination, totalItems) });
+    return { items, meta: buildPaginatedMeta(pagination, totalItems) };
 };
 
 /**
@@ -460,12 +459,10 @@ export const listLevels = async (
  */
 export const listMovements = (
     filters: MovementFilters = {}
-): Promise<ResponseSuccess<{ items: StockMovementDocument[]; meta: PaginatedMeta }>> =>
-    stockMovementRepository
-        // No sort argument: `search`'s default is `DEFAULT_SORT`, which is this exact order and
-        // the only one that makes a paged ledger stable.
-        .search(filters)
-        .then(({ items, meta }) => generateSuccess({ items, meta }));
+): Promise<{ items: StockMovementDocument[]; meta: PaginatedMeta }> =>
+    // No sort argument: `search`'s default is `DEFAULT_SORT`, which is this exact order and
+    // the only one that makes a paged ledger stable.
+    stockMovementRepository.search(filters);
 
 /** The module's one service handle. */
 export const inventoryService = {

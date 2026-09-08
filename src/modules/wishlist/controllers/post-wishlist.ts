@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { AddWishlistItemBody } from '@api/schemas.zod';
 import { t } from '@infrastructure/i18n';
-import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { callerContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AddWishlistItemRequest, WishlistResponse } from '@types';
 import { wishlistService } from '../service';
@@ -21,7 +21,7 @@ export const postWishlist = (
     request: Request<unknown, unknown, AddWishlistItemRequest>,
     response: Response
 ) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
 
     const body = parseBody(AddWishlistItemBody, request.body, response);
     if (!body) return;

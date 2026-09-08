@@ -134,7 +134,7 @@ describe('handleEmailJob', () => {
 
 describe('handlePdfJob', () => {
     const job = {
-        templatePath: 'shared/views/invoice.ejs',
+        templatePath: 'shared/templates/documents/invoice.ejs',
         outputPath: '/tmp/invoice.pdf',
         templateData: { locale: 'it', total: 10 }
     } as Parameters<typeof handlePdfJob>[0];
@@ -158,7 +158,7 @@ describe('handlePdfJob', () => {
 
     it.each([
         ['no template path', { outputPath: '/tmp/invoice.pdf' }],
-        ['no output path', { templatePath: 'shared/views/invoice.ejs' }],
+        ['no output path', { templatePath: 'shared/templates/documents/invoice.ejs' }],
         ['an empty job', {}],
         ['a null job', null],
         ['an undefined job', undefined]

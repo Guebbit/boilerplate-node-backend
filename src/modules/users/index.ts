@@ -14,8 +14,8 @@ export { userService } from './service';
 /** Persistence, for `account` alone: a second service over the same record needs the queries. */
 export { userRepository } from './repository';
 
-/** The schema, the token-type enum, and the two pure helpers that travel with them. */
-export { TokenType, zodUserSchema, hashToken, toUser } from './model';
+/** The schema, the token-type enum, and the pure helpers that travel with them. */
+export { TokenType, zodUserSchema, hashToken, toUser, isLiveRefreshSession } from './model';
 
 /** The document shapes a sibling reads back. Types only — the model itself stays internal. */
 export type { UserDocument, Token, OAuthAccount, TwoFactorMethodRecord } from './model';

@@ -9,7 +9,7 @@ import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { CartResponse, UpsertCartItemRequest } from '@types';
-import { authContextOf, isValidObjectId, callerContextOf } from '@infrastructure/http/request';
+import { isValidObjectId, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -22,7 +22,7 @@ export const postCart = (
     request: Request<unknown, unknown, UpsertCartItemRequest>,
     response: Response
 ) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
 
     const body = parseBody(UpsertCartItemBody, request.body, response);
     if (!body) return;

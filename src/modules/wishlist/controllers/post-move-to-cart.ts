@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { authContextOf, callerContextOf, isValidObjectId } from '@infrastructure/http/request';
+import { callerContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -19,7 +19,7 @@ import type { WishlistResponse } from '@types';
  * see the service for why that order is the one a shopper can always repair.
  */
 export const postMoveToCart = (request: Request<{ productId: string }>, response: Response) => {
-    const userId = authContextOf(request).id;
+    const userId = request.authContext!.id;
     const { productId } = request.params;
 
     if (!isValidObjectId(productId)) {

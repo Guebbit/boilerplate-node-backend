@@ -1,87 +1,40 @@
 /**
  * @module
  * Account service — authentication, the profile a person manages, two-factor, and the address
- * book. A folder rather than one file because it passed ~300 lines (see `docs/theory/layers.md`),
- * split by what each operation does. `../session/` sits below this layer (JWT signing, the
- * refresh cookie, shared expiry) and nothing outside this module imports it directly; see
- * `../index`.
+ * book. A folder rather than one file because it passed ~300 lines, split by what each operation
+ * does — see `docs/theory/layers.md`.
  *
- * Three namespaces, not one: `accountService` (login, signup, profile, verification, tokens,
- * export, OAuth), `twoFactorService` (enrollment, removal, challenge/verify) and `addressService`
- * (the address book's CRUD). A caller of `accountService.login` was, to TypeScript, coupled to
- * 2FA and the address book too when all 44 functions lived on one object — splitting along the
- * same file boundaries below removes that coupling without adding new ones. Prefer importing the
- * one function you need directly from its file over any of these three when a caller needs only
- * one or two names; the namespaces exist so the module's surface can still be browsed by name.
+ * `accountService`:   login, signup, profile, verification, tokens, export, OAuth.
+ * `twoFactorService`: enrollment, removal, backup codes, the login challenge.
+ * `addressService`:   the address book's CRUD, plus the address a checkout resolves.
+ *
+ * Three, not one:  none of the three groups calls another, so one object each keeps a caller of
+ *                  `accountService.login` from being coupled, to TypeScript, to 2FA and the
+ *                  address book as well.
+ * Prefer direct:   import the one function you need from its own file when a caller needs only a
+ *                  name or two; the namespaces exist so the surface can still be browsed by name.
+ * Below this:      `../session/` — JWT signing, the refresh cookie, shared expiry. Nothing
+ *                  outside this module imports it directly; see `../index`.
  */
 
-import {
-    tokenAdd,
-    signup,
-    login,
-    tokenRemoveAll,
-    requestAccountDeletion,
-    requestPasswordReset,
-    requestAccountSetup,
-    sessionRevoke,
-    logoutCurrentSession,
-    refreshAccessToken,
-    reauth
-} from './authentication';
-import {
-    validatePasswordChange,
-    passwordChange,
-    passwordChangeWithCurrent,
-    passwordResetChange,
-    updateProfile,
-    getOwnProfile,
-    removeOwnAccount
-} from './profile';
-import {
-    sendVerificationEmail,
-    requestEmailVerification,
-    requestEmailVerificationFor,
-    completeEmailVerification,
-    completeEmailChange
-} from './verification';
-import { findLiveToken, spendLiveToken, sessionsList } from './tokens';
-import { runTokenCleanup, adminTokenCleanup } from './token-cleanup';
-import { exportOwnData } from './export';
-import { loginOrCreateFromOAuth, recordOAuthFailure } from './oauth';
-import {
-    buildLoginChallenge,
-    confirmTwoFactorMethod,
-    disableTwoFactor,
-    regenerateBackupCodes,
-    removeTwoFactorMethod,
-    sendLoginCode,
-    setupTwoFactorMethod,
-    twoFactorStatus,
-    verifyLoginChallenge
-} from './two-factor';
-import {
-    addressesGet,
-    addressAdd,
-    addressUpdate,
-    addressRemove,
-    addressForCheckout,
-    addressesDeleteByUserId
-} from './addresses';
+import * as authentication from './authentication';
+import * as profile from './profile';
+import * as verification from './verification';
+import * as tokens from './tokens';
+import * as tokenCleanup from './token-cleanup';
+import * as accountExport from './export';
+import * as oauth from './oauth';
+import * as twoFactor from './two-factor';
+import * as addresses from './addresses';
 
 /*
- * Published by name as well as through the namespace: several callers reach for the function
- * directly (controllers, `post-verify-confirm`, `auth-surface.test.ts`, the unit suites).
- * `tokenRemoveAll` stays out of this list — nothing imports it by name, so a second list would
- * just be a name that could quietly drift from `accountService`.
+ * Published by name as well as on the namespace, for the callers that import a single function
+ * rather than the object — controllers, and the suites that pin one flow. The criterion is
+ * literal: a name nothing imports this way stays off the list, because a second route to a
+ * function is a second thing to keep in step with the namespaces below.
  */
-export {
-    tokenAdd,
-    signup,
-    login,
-    wasRefusedByEmailPolicy,
-    PASSWORD_RESET_TOKEN_TYPE
-} from './authentication';
-export { passwordChange, passwordChangeWithCurrent, updateProfile } from './profile';
+export { PASSWORD_RESET_TOKEN_TYPE } from './authentication';
+export { passwordChangeWithCurrent, updateProfile } from './profile';
 export {
     sendVerificationEmail,
     EMAIL_VERIFY_TOKEN_TYPE,
@@ -98,37 +51,37 @@ export { addressForCheckout } from './addresses';
  * get their own namespace below.
  */
 export const accountService = {
-    tokenAdd,
-    signup,
-    login,
-    tokenRemoveAll,
-    requestAccountDeletion,
-    requestPasswordReset,
-    requestAccountSetup,
-    sessionRevoke,
-    logoutCurrentSession,
-    refreshAccessToken,
-    reauth,
-    validatePasswordChange,
-    passwordChange,
-    passwordChangeWithCurrent,
-    passwordResetChange,
-    updateProfile,
-    getOwnProfile,
-    removeOwnAccount,
-    sendVerificationEmail,
-    requestEmailVerification,
-    requestEmailVerificationFor,
-    completeEmailVerification,
-    completeEmailChange,
-    findLiveToken,
-    spendLiveToken,
-    sessionsList,
-    runTokenCleanup,
-    adminTokenCleanup,
-    exportOwnData,
-    loginOrCreateFromOAuth,
-    recordOAuthFailure
+    tokenAdd: authentication.tokenAdd,
+    signup: authentication.signup,
+    login: authentication.login,
+    tokenRemoveAll: authentication.tokenRemoveAll,
+    requestAccountDeletion: authentication.requestAccountDeletion,
+    requestPasswordReset: authentication.requestPasswordReset,
+    requestAccountSetup: authentication.requestAccountSetup,
+    sessionRevoke: authentication.sessionRevoke,
+    logoutCurrentSession: authentication.logoutCurrentSession,
+    refreshAccessToken: authentication.refreshAccessToken,
+    reauth: authentication.reauth,
+    validatePasswordChange: profile.validatePasswordChange,
+    passwordChange: profile.passwordChange,
+    passwordChangeWithCurrent: profile.passwordChangeWithCurrent,
+    passwordResetChange: profile.passwordResetChange,
+    updateProfile: profile.updateProfile,
+    getOwnProfile: profile.getOwnProfile,
+    removeOwnAccount: profile.removeOwnAccount,
+    sendVerificationEmail: verification.sendVerificationEmail,
+    requestEmailVerification: verification.requestEmailVerification,
+    requestEmailVerificationFor: verification.requestEmailVerificationFor,
+    completeEmailVerification: verification.completeEmailVerification,
+    completeEmailChange: verification.completeEmailChange,
+    findLiveToken: tokens.findLiveToken,
+    spendLiveToken: tokens.spendLiveToken,
+    sessionsList: tokens.sessionsList,
+    runTokenCleanup: tokenCleanup.runTokenCleanup,
+    adminTokenCleanup: tokenCleanup.adminTokenCleanup,
+    exportOwnData: accountExport.exportOwnData,
+    loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
+    recordOAuthFailure: oauth.recordOAuthFailure
 };
 
 /**
@@ -136,15 +89,15 @@ export const accountService = {
  * challenge/verify pair.
  */
 export const twoFactorService = {
-    buildLoginChallenge,
-    twoFactorStatus,
-    setupTwoFactorMethod,
-    confirmTwoFactorMethod,
-    removeTwoFactorMethod,
-    disableTwoFactor,
-    regenerateBackupCodes,
-    sendLoginCode,
-    verifyLoginChallenge
+    buildLoginChallenge: twoFactor.buildLoginChallenge,
+    twoFactorStatus: twoFactor.twoFactorStatus,
+    setupTwoFactorMethod: twoFactor.setupTwoFactorMethod,
+    confirmTwoFactorMethod: twoFactor.confirmTwoFactorMethod,
+    removeTwoFactorMethod: twoFactor.removeTwoFactorMethod,
+    disableTwoFactor: twoFactor.disableTwoFactor,
+    regenerateBackupCodes: twoFactor.regenerateBackupCodes,
+    sendLoginCode: twoFactor.sendLoginCode,
+    verifyLoginChallenge: twoFactor.verifyLoginChallenge
 };
 
 /**
@@ -152,10 +105,10 @@ export const twoFactorService = {
  * lookup, the cascade delete when a user account goes away).
  */
 export const addressService = {
-    addressesGet,
-    addressAdd,
-    addressUpdate,
-    addressRemove,
-    addressForCheckout,
-    addressesDeleteByUserId
+    addressesGet: addresses.addressesGet,
+    addressAdd: addresses.addressAdd,
+    addressUpdate: addresses.addressUpdate,
+    addressRemove: addresses.addressRemove,
+    addressForCheckout: addresses.addressForCheckout,
+    addressesDeleteByUserId: addresses.addressesDeleteByUserId
 };

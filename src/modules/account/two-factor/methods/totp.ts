@@ -6,13 +6,8 @@
  */
 
 import type { TwoFactorMethodHandler } from '../registry';
-import {
-    buildOtpauthUri,
-    decryptTotpSecret,
-    encryptTotpSecret,
-    generateTotpSecret,
-    verifyTotpCode
-} from '../totp';
+import { generateSecret } from 'otplib';
+import { buildOtpauthUri, decryptTotpSecret, encryptTotpSecret, verifyTotpCode } from '../totp';
 
 /**
  * An authenticator app holding a shared secret. Available everywhere and to everyone: it needs
@@ -26,7 +21,9 @@ export const totpMethod: TwoFactorMethodHandler = {
     target: () => undefined,
 
     setup: (user, entry) => {
-        const secret = generateTotpSecret();
+        // otplib: a fresh base32 TOTP secret, one per enrollment attempt.
+        // https://github.com/yeojz/otplib
+        const secret = generateSecret();
         entry.secret = encryptTotpSecret(secret);
         // A fresh secret means a fresh replay window: the old high-water mark belongs to a
         // secret that no longer exists, and keeping it would refuse the first valid code.

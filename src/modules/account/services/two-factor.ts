@@ -196,7 +196,7 @@ const summarize = (handler: TwoFactorMethodHandler, user: UserDocument): TwoFact
 };
 
 /** How long an MFA login challenge lives when every armed factor is read off a device — long enough to type six digits, no more. */
-export const MFA_CHALLENGE_TTL_MS = 300_000;
+const MFA_CHALLENGE_TTL_MS = 300_000;
 
 /**
  * The same, for an account with a DELIVERED factor armed. Double, because the window now has to
@@ -204,7 +204,7 @@ export const MFA_CHALLENGE_TTL_MS = 300_000;
  * legitimate user loses races against, and a challenge that expires mid-login reads as the app
  * being broken.
  */
-export const MFA_CHALLENGE_DELIVERED_TTL_MS = 600_000;
+const MFA_CHALLENGE_DELIVERED_TTL_MS = 600_000;
 
 /**
  * The `{ mfaRequired, challenge, ... }` body `POST /account/login` answers with, for an account

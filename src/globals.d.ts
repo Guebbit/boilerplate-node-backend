@@ -16,7 +16,7 @@ declare module 'express-serve-static-core' {
         /**
          * URLs of the images this request uploaded, set only when there was no broker to hand the
          * digest job to (`quarantineUploadedImages` ran the pipeline inline). Read through
-         * `resolveImageUrl`, never directly: the point of the value is that a controller cannot
+         * `readUploadedImage`, never directly: the point of the value is that a controller cannot
          * tell a local path from a CDN url.
          */
         storedImageUrls?: string[];
@@ -25,7 +25,7 @@ declare module 'express-serve-static-core' {
         /**
          * Quarantine keys of the images this request uploaded, set only when a broker is
          * configured — the digest happens later, in the worker, keyed by these
-         * (`imageStore.quarantine()`'s return value). Read through `resolvePendingImageKey`.
+         * (`imageStore.quarantine()`'s return value). Read through `readUploadedImage`.
          */
         quarantinedImageKeys?: string[];
         /**

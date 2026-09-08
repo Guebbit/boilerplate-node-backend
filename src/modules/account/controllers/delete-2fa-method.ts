@@ -11,7 +11,7 @@ import type { TwoFactorCodeRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
-import { authContextOf, callerContextOf } from '@infrastructure/http/request';
+import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { authTwoFactorDisableTotal } from '../metrics';
@@ -25,7 +25,7 @@ export const delete2faMethod = (
     request: Request<{ method: string }, unknown, TwoFactorCodeRequest>,
     response: Response
 ) => {
-    const { id } = authContextOf(request);
+    const { id } = request.authContext!;
 
     const pathParameters = RemoveTwoFactorMethodParams.safeParse(request.params);
     if (!pathParameters.success) return rejectValidation(response, pathParameters.error);
