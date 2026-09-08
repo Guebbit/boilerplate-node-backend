@@ -112,13 +112,20 @@ membershipSchema.index({ userId: 1 });
 
 /** The shop collection, typed for the store. */
 export type TenantModel = Model<TenantDocument>;
+
 /** The role collection, typed for the store. */
 export type RoleModel = Model<RoleDocument>;
+
 /** The "who holds which role, where" collection, typed for the store. */
 export type MembershipModel = Model<MembershipDocument>;
 
+/** The shop rows. */
 export const tenantModel: TenantModel = model<TenantDocument>('Tenant', tenantSchema);
+
+/** The role rows — editable, which is what makes roles data rather than code. */
 export const roleModel: RoleModel = model<RoleDocument>('Role', roleSchema);
+
+/** The membership rows the resolver reads to answer "which role, in which scope". */
 export const membershipModel: MembershipModel = model<MembershipDocument>(
     'Membership',
     membershipSchema
