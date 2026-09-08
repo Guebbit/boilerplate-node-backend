@@ -203,11 +203,32 @@ export const callerFor = (context: AuthContext, key: string): Caller =>
     callerInScope(context, scopeOfKey(key));
 
 /**
+ * Every key a caller holds in a scope: their role's, never fewer than the anonymous baseline.
+ *
+ * No role:  the anonymous role's keys, so a denial comes from the model rather than from an
+ *           accident of assembly.
+ * A role:   that role's keys UNIONED with the baseline — signing in may only ever widen what a
+ *           person can see. Without the union a role is free to hold nothing a visitor holds, and
+ *           `accessibleBy` then compiles an empty-result filter for a collection the same person
+ *           could read while logged out: the shop's catalogue disappearing on login, reported as
+ *           an empty shop rather than as a refusal.
+ * Scope:    the baseline is the anonymous role's own, and applies only there. Folding bare tenant
+ *           keys into a PLATFORM caller is the privilege confusion the two-scope split exists to
+ *           prevent — an operator administers the installation and reads no shop's rows.
+ */
+const keysInScope = (roleName: string | null, scope: AuthorizationScope): readonly string[] => {
+    const held = roleName ? permissionsOfRole(roleName) : [];
+
+    if (scope !== ANONYMOUS_ROLE.scope) {
+        return roleName ? held : [];
+    }
+
+    return [...new Set([...held, ...ANONYMOUS_ROLE.permissions])];
+};
+
+/**
  * The `Caller` an `AuthContext` becomes in a named scope — the primitive {@link callerFor} and
  * {@link callerForSubject} both resolve to.
- *
- * A caller with no role in that scope gets the anonymous role's permissions rather than an empty
- * list, so a denial comes from the model rather than from an accident of assembly.
  *
  * @param context - the resolved session
  * @param scope - which of the two worlds this request acts in
@@ -221,7 +242,7 @@ export const callerInScope = (context: AuthContext, scope: AuthorizationScope): 
         // platform rule be narrowed by a shop it does not belong to.
         tenantId: scope === 'platform' ? null : context.tenantId,
         scope,
-        permissions: roleName ? permissionsOfRole(roleName) : ANONYMOUS_ROLE.permissions
+        permissions: keysInScope(roleName, scope)
     };
 };
 
