@@ -57,6 +57,11 @@ const STEPS: readonly Step[] = [
             "docs/modules/index.md's module graph, read off the real imports by dependency-cruiser"
     },
     {
+        script: 'docs:roles',
+        because:
+            "docs/demo-ecommerce/index.md's role tables, asked of the permission evaluator rather than restated"
+    },
+    {
         script: 'seed:export',
         because:
             'db/demo/demo-data.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'

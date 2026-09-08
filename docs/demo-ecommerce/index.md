@@ -83,6 +83,64 @@ order history spread across them (mostly one small order each, three with a coup
 staff side has more than one shopper's activity to look at. Nobody is meant to log in as one of
 the ten; they exist to be _looked at_, not signed into.
 
+## What each role may do
+
+Two tables, generated from the permission model on every `npm run regenerate` — the first is what
+somebody edits, the second is what the server answers. They are here rather than in the theory
+pages because this is where you pick an account to log in as.
+
+<!-- role-matrix:start -->
+
+### What each role is given
+
+| Role         | Scope    | Permissions, as written in `shared/authorization-roles.yaml`                                                                                          |
+| ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `guest`      | tenant   | `products.read`, `locales.read`, `delivery.read`                                                                                                      |
+| `customer`   | tenant   | `products.read`, `locales.read`, `delivery.read`, `orders.read`, `payments.read`                                                                      |
+| `manager`    | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read` |
+| `warehouse`  | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                 |
+| `support`    | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                         |
+| `editor`     | tenant   | `products.manage`, `locales.read`                                                                                                                     |
+| `translator` | tenant   | `locales.manage`                                                                                                                                      |
+| `moderator`  | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                      |
+| `owner`      | tenant   | `all.manage`                                                                                                                                          |
+| `operator`   | platform | `platform.observability.manage`                                                                                                                       |
+
+`guest` is not an account anybody logs into — it is what an unauthenticated request
+resolves to, and the floor every signed-in role is raised to. Signing in can only ever
+widen what a person sees.
+
+### What that actually grants
+
+The same roles after the evaluator has had them: `manage` expanded into its module’s own
+keys, and the baseline folded in. This is what a route guard and a listing actually
+answer.
+
+| Role         | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | observability |
+| ------------ | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | ------------- |
+| `guest`      | r        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —             |
+| `customer`   | r        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —             |
+| `manager`    | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | —             |
+| `warehouse`  | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —             |
+| `support`    | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —             |
+| `editor`     | **all**  | —       | —        | —         | r        | —        | r       | —       | —       | —          | —             |
+| `translator` | r        | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —             |
+| `moderator`  | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —             |
+| `owner`      | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | —             |
+| `operator`   | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | **all**       |
+
+**all** — every key that module declares · `r` read · `c` create · `u` update · `d` delete · — nothing
+
+Read down a column to see who touches one part of the shop; read across a row to see one
+person’s whole job. `operator` is the only row outside the shop entirely: it runs the
+installation and reads no shop’s rows, which is why its row is empty everywhere else and
+why `owner` — unrestricted **inside one shop** — cannot reach observability either.
+
+<!-- role-matrix:end -->
+
+The rules behind them, and why a role cannot span both scopes, are in
+[Authorization](../theory/authorization.md).
+
 ## Money and delivery
 
 Prices are in **euros**. Delivery is picked by the customer at checkout:
