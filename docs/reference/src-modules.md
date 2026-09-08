@@ -1,6 +1,6 @@
 # Modules
 
-`src/modules/` is most of the repository, and almost none of it is unique. Thirteen domains are
+`src/modules/` is most of the repository, and almost none of it is unique. Fourteen domains are
 built from the same two dozen file shapes, so this page explains each **shape** once and then says
 which module carries which.
 
@@ -46,7 +46,7 @@ flowchart TD
 
 ## The core shape
 
-Every module has these, and a reader who knows them knows twelve of the thirteen.
+Every module has these, and a reader who knows them knows thirteen of the fourteen.
 
 | Pattern                          | What it is                                                                                                                                                                                                                                                                                                          | Read next                                                                                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -105,7 +105,7 @@ Every module also carries its own unit, contract and factory files. They are cat
 Per-module answers live on the [Modules](../modules/) pages, one per domain, listed on
 [its overview](../modules/index.md#every-module).
 
-Deliberately not restated here. This page says what a SHAPE is — one answer for all thirteen
+Deliberately not restated here. This page says what a SHAPE is — one answer for all fourteen
 domains; a module page says what its domain DECIDED. Which module happens to carry a `metrics.ts`
 today is neither, and is answered in one command:
 

@@ -182,7 +182,7 @@ inside a module folder is, is [Modules (files)](../reference/src-modules.md).
 
 ## The two repositories
 
-Eleven of thirteen domains exist on both sides under the same name. **The interesting two do not**,
+Twelve of fourteen domains exist on both sides under the same name. **The interesting two do not**,
 and neither does the frontend's third extra module — an asymmetry that is real architecture rather
 than drift, and that is written down nowhere else in either repository.
 
