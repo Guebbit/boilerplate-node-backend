@@ -3,7 +3,7 @@
 How this application decides who is making a request — and why none of it is published.
 
 ::: tip At a glance
-**Three files** — `config.ts` reads the lifetimes, `jwt.ts` signs and verifies, `cookies.ts` sets and clears.
+**Five files** — `config.ts` reads the lifetimes, `jwt.ts` signs and verifies, `cookies.ts` sets and clears, `session.ts` mints the three of them together, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
@@ -62,6 +62,37 @@ the login form and the lifetime in the environment stay one decision:
 `jwt.ts` signs against it and `cookies.ts` sets `maxAge` from it. Its name is deliberate: it holds
 no token and issues none.
 
+## Freshness: how recently they proved it {#freshness-auth-time-and-amr}
+
+A valid token and a recently-proved token are different things, and two OIDC claims are what makes
+the difference expressible. Wire names are OIDC's on purpose: a future external identity provider's
+tokens would satisfy the same guards unchanged.
+
+| Claim       | Holds                                                             |
+| ----------- | ----------------------------------------------------------------- |
+| `auth_time` | epoch seconds at which the user last actually proved themselves   |
+| `amr`       | **how** they proved it — RFC 8176 values, an array, not a boolean |
+
+Both are **stamped once**, at login, then COPIED FORWARD on every access-token mint and every
+rotation. Never re-stamped from the clock — a clock-derived `auth_time` would make every refresh
+look like a fresh proof, which is precisely the thing the claim exists to deny.
+
+`amr` is an array because proofs compose: a password login is `['pwd']`, a completed
+[2FA](./account-two-factor.md) login is `['pwd', 'otp']`, an [OAuth](./account-oauth.md) callback is
+`['google']`, and a future WebAuthn passkey is `['hwk']` without a schema change.
+
+::: warning Both are optional, and absent means infinitely old
+A token signed before these claims existed carries neither. Every reader treats a missing
+`auth_time` as `0` rather than trusting it, so a pre-existing session is asked to re-authenticate at
+its first sensitive action instead of reading as freshly authenticated. Fail-closed, in the only
+direction that is safe.
+:::
+
+`POST /account/reauth` is how a caller refreshes `auth_time` without logging out — re-prove the
+password, get a new stamp. What consumes all of this is the `stepUp` tier declared on a permission
+key, in [Authorization](../theory/authorization.md); the "remember me" tiers above set the cookie's
+lifetime and **do not** exempt a sensitive action from the freshness check.
+
 ## The cookie, flag by flag
 
 | Flag       | Value           | Why                                                                                 |
@@ -89,6 +120,23 @@ walls may import it, so it needs no barrel of its own.
 :::
 
 What the barrel does publish is `addressForCheckout` — one function, for [`cart`](./cart.md).
+
+## The two shared tails
+
+Three flows mint a session and two record one, so both halves are extracted rather than copied.
+Neither is a layer — they are the repeated ends of controllers.
+
+| File                     | Is                                                                        | Reused by                                             |
+| ------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `session.ts`             | `issueSession` — refresh token, its cookies, the access token handed back | `postLogin`, `postPasswordChange`, the OAuth callback |
+| `login-observability.ts` | the metrics / audit / analytics emit meaning "a login happened"           | `post-login.ts`, `post-login-2fa.ts`                  |
+
+::: tip Why the observability tail is not in the service
+`services/authentication.ts` checks credentials; it cannot know whether a session exists. The
+SUCCESS emit must fire only **after** cookies and an access token are real, which is a
+controller-layer fact — so `login()` and `verifyLoginChallenge()` are deliberately kept ignorant of
+it.
+:::
 
 ## Logout everywhere
 
@@ -139,6 +187,9 @@ expired tokens — see `tokenRemoveExpired` in [`users`](./users.md)'s repositor
 ## Related pages
 
 - [`account`](./account.md) — the module this belongs to
+- [Two-factor authentication](./account-two-factor.md) — the second factor a login may have to pass
+- [OAuth](./account-oauth.md) — the other way a session is minted
+- [Authorization](../theory/authorization.md) — what consumes `auth_time` and `amr`
 - [`users`](./users.md) — where the refresh tokens are stored
 - [Security](../tools/security.md) — hashing, headers, and rate limits
 - [Request Flow](../theory/request-flow.md) — where the guard sits

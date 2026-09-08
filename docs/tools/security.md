@@ -67,6 +67,10 @@ flowchart LR
 
 ## Two-factor authentication
 
+The attacker's side of the second factor. The registry's shape, the enrollment state machine and
+what a user document carries are on
+[Two-factor authentication](../modules/account-two-factor.md).
+
 An optional second factor on top of the login flow above. An account may arm **several**, and the
 set of them is a registry rather than a branch: `src/modules/account/two-factor/methods/` holds one
 handler per channel, and everything above it — services, controllers, contract — deals in a
@@ -140,7 +144,8 @@ delivered method armed, because a mailed code has an SMTP queue and an app switc
 
 `GET /account/oauth/{provider}/callback` mints a session without consulting `twoFactorEnabledAt`.
 An account with a linked provider therefore has an unchallenged way in, and 2FA on this deployment
-is a control on the password path only.
+is a control on the password path only — see [OAuth](../modules/account-oauth.md) for that path's
+own defences.
 
 ## The rate-limit budgets
 
@@ -333,6 +338,9 @@ That is why auth, headers, origin checks, and rate limiting stay near routes and
 ## Related pages
 
 - [Request Flow](../theory/request-flow.md)
+- [Sessions](../modules/account-sessions.md) — the token mechanics, and the freshness claims
+- [Two-factor authentication](../modules/account-two-factor.md) — the registry and its state machine
+- [OAuth](../modules/account-oauth.md) — the provider port and the CSRF handshake
 - [Winston & Audit Logs](./winston.md)
 - [API overview](../api/#rest-patterns-used-here)
 - [Data Protection](../theory/data-protection.md) — what personal data this stores, under what

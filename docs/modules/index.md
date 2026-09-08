@@ -168,7 +168,8 @@ solved problem where modelling effort would be waste.
 **generic** — a solved problem, kept plain.
 
 - [`account`](./account.md) — `/account`. Who is making this request, plus the address book.
-  Deeper: [Sessions](./account-sessions.md).
+  Deeper: [Sessions](./account-sessions.md), [Two-factor auth](./account-two-factor.md),
+  [OAuth](./account-oauth.md).
 - [`audit-logs`](./audit-logs.md) — headless. Owns the trail and no URL of its own.
 - [`feedback`](./feedback.md) — `/feedback`. Contact submissions and what an admin does with them.
 - [`locales`](./locales.md) — `/locales`. Language discovery and the API's own message dictionary.

@@ -116,7 +116,14 @@ export default withMermaid(
                             {
                                 text: 'account',
                                 link: '/modules/account',
-                                items: [{ text: 'Sessions', link: '/modules/account-sessions' }]
+                                items: [
+                                    { text: 'Sessions', link: '/modules/account-sessions' },
+                                    {
+                                        text: 'Two-factor auth',
+                                        link: '/modules/account-two-factor'
+                                    },
+                                    { text: 'OAuth', link: '/modules/account-oauth' }
+                                ]
                             },
                             { text: 'audit-logs', link: '/modules/audit-logs' },
                             { text: 'feedback', link: '/modules/feedback' },

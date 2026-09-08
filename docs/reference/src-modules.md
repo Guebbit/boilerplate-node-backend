@@ -85,15 +85,18 @@ tabled by `demo/index.ts` — what `npm run db:seed` and the demo profile put in
 
 ## The one-offs
 
-Four shapes exist in exactly one module each. They are genuine one-offs rather than a naming
-drift — each is a piece of a domain no other domain has.
+Six shapes exist in exactly one module each. They are genuine one-offs rather than a naming
+drift — each is a piece of a domain no other domain has, and three of the six are `account`'s,
+because proving who somebody is has more moving parts than any other domain here.
 
-| Pattern                        | What it is                                                                                                                                                | Read next                        |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| `src/modules/*/session/*.ts`   | `account` only. The session mechanics kept out of the services: JWT signing and verification, cookie shape and flags, and the lifetimes both read.        | [Security](../tools/security.md) |
-| `src/modules/*/providers/*.ts` | `payments` only. The payment provider port and the fake implementation behind it, so nothing above the port knows which processor is wired in.            | [Layers](../theory/layers.md)    |
-| `src/modules/*/config.ts`      | `inventory` only. The reservation and threshold settings, in one place because several of its transitions read the same numbers.                          | —                                |
-| `src/modules/*/tenants.ts`     | `locales` only. The tenant registry — which keyspaces this deployment holds words for, read from the environment and published by the module's own route. | [i18n](../tools/i18n.md)         |
+| Pattern                          | What it is                                                                                                                                                                                        | Read next                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `src/modules/*/session/*.ts`     | `account` only. The session mechanics kept out of the services: JWT signing and verification, cookie shape and flags, the lifetimes both read, and the two tails every login shares.              | [Sessions](../modules/account-sessions.md)          |
+| `src/modules/*/two-factor/**.ts` | `account` only. The second-factor registry and one handler per channel, so gaining a method is a file rather than a branch in the login flow. The crypto for each storage form sits beside it.    | [Two-factor auth](../modules/account-two-factor.md) |
+| `src/modules/*/oauth/**.ts`      | `account` only. The identity-provider port, its registry, and the CSRF state cookie carried across the redirect. Nested a level deeper than `payments`' port, since the providers are its leaves. | [OAuth](../modules/account-oauth.md)                |
+| `src/modules/*/providers/*.ts`   | `payments` only. The payment provider port and the fake implementation behind it, so nothing above the port knows which processor is wired in.                                                    | [Layers](../theory/layers.md)                       |
+| `src/modules/*/config.ts`        | `inventory` only. The reservation and threshold settings, in one place because several of its transitions read the same numbers.                                                                  | —                                                   |
+| `src/modules/*/tenants.ts`       | `locales` only. The tenant registry — which keyspaces this deployment holds words for, read from the environment and published by the module's own route.                                         | [i18n](../tools/i18n.md)                            |
 
 ::: tip Where the tests are
 Every module also carries its own unit, contract and factory files. They are catalogued on

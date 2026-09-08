@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — the session: signup, login, refresh, password reset, logout-everywhere, two-step deletion — plus the address book.
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion — plus the address book.
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::
@@ -63,11 +63,12 @@ is the **address book**, one document per account, and a destroyed account takes
 through the same `user.deleted` event the cart and wishlist listen for.
 
 ::: tip The barrel is one line wide, and that is the story
-The three files in `session/` — JWT signing, cookie shape, the lifetimes both read — used to be
-published on the theory that authorization would need them. It does not: `kernel/authentication.ts`
+`session/`, `two-factor/` and `oauth/` are three folders and not one exported symbol between them.
+They used to look like something authorization would need. It does not: `kernel/authentication.ts`
 is the port every request goes through, and this module fills it using its own relative imports. No
-sibling has ever reached for a token. Issuing this application's tokens _is_ what `account` is, and
-none of it is anyone else's business.
+sibling has ever reached for a token, a factor or a provider — even the admin 2FA reset in
+[`users`](./users.md) clears the fields rather than importing anything from here. Proving who
+somebody is _is_ what `account` is, and none of it is anyone else's business.
 :::
 
 What the barrel does publish is `addressForCheckout` — the single address an order ships to. The
@@ -76,15 +77,22 @@ the cart's `customer-supplier` arrow.
 
 ## The pipeline
 
-Two tokens with two lifetimes, and the one question the kernel asks on every guarded request.
-[Sessions](./account-sessions.md) has the mechanics.
+**Three ways in, one place they converge.** Password, password-plus-a-factor, and a provider's
+redirect all end in the same `issueSession` — two tokens with two lifetimes, and then the one
+question the kernel asks on every guarded request. [Sessions](./account-sessions.md) has the
+mechanics.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
 flowchart LR
     S["signup"] --> V["verification email"]
-    L["login"] --> T["access token<br/><i>short · in memory</i>"]
-    L --> RC["refresh cookie<br/><i>long · httpOnly</i>"]
+    L["login<br/><i>email + password</i>"] --> Q{"2FA armed?"}
+    Q -->|no| IS
+    Q -->|yes| CH["challenge + code<br/><i>amr gains 'otp'</i>"]
+    CH --> IS
+    OA["OAuth callback<br/><i>amr is the provider</i>"] --> IS
+    IS["issueSession"] --> T["access token<br/><i>short · in memory</i>"]
+    IS --> RC["refresh cookie<br/><i>long · httpOnly</i>"]
     RC -->|refresh| T
     T --> G["every guarded request<br/><i>the kernel asks, this module answers</i>"]
     LO["logout everywhere"] -.->|revokes| RC
@@ -94,10 +102,15 @@ flowchart LR
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef token fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
-    class S,L,LO,US entry;
-    class T,RC token;
-    class V,G,SU,AB done;
+    class S,L,LO,US,OA entry;
+    class T,RC,IS token;
+    class V,G,SU,AB,CH done;
 ```
+
+::: warning The two entries are not held to the same bar
+The OAuth callback does not consult `twoFactorEnabledAt` — see
+[OAuth](./account-oauth.md#two-consequences-worth-naming).
+:::
 
 ## Proving an address {#proving-an-address}
 
@@ -150,6 +163,8 @@ up-to-24-hours between the two.
 ## Related pages
 
 - [Sessions](./account-sessions.md) — the token mechanics, in detail
+- [Two-factor authentication](./account-two-factor.md) — the registry, and the enrollment state machine
+- [OAuth](./account-oauth.md) — the provider port and the three outcomes of a callback
 - [`users`](./users.md) — the collection this module shares
 - [Security](../tools/security.md) — hashing, cookies, and the headers around them
 - [Request Flow](../theory/request-flow.md) — where the guard sits in a request
