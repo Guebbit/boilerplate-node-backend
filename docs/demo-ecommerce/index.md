@@ -74,7 +74,10 @@ and this section splits them up because it reads better, not because the softwar
 narrower one. **The last three rows are different on purpose.** They exist to show restriction
 actually happening, and an omnipotent account cannot demonstrate a restriction — only a narrower
 one, refused when it reaches past its own job, can. Log into `editor@example.com` and try to open
-`/orders`; the 403 is the point of the account existing.
+`/users`; the 403 is the point of the account existing — `/orders` shows the same restriction a
+different way, coming back 200 and empty rather than refused, since nothing routes that list read
+through a permission check at all. See [the editor's own page](./editor.md#what-this-role-cannot-reach-and-why-each-one-is-a-different-reason)
+for why the two shapes differ.
 
 → [The editor](./editor.md) · [The translator](./translator.md) · [The moderator](./moderator.md)
 

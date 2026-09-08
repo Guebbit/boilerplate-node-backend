@@ -46,8 +46,12 @@ a new, narrower key to add — not something this role already enforces.
 | **An account**         | No `users.*` key — cannot see who bought anything.                             |
 | **The action history** | No `audit.read` — that is [the moderator's](./moderator.md) key, not this one. |
 
-Try it: log in as the editor and open `/orders` or `/users`. The 403 is not a bug in the demo —
-it is the whole reason this account exists rather than everyone sharing the owner's.
+Try it: log in as the editor and open `/users` — a 403, and not a bug in the demo: it is the whole
+reason this account exists rather than everyone sharing the owner's. `/orders` answers differently,
+not because the editor can reach it but because nothing routes a list read through a permission
+check at all — with no `orders.*` key to match, the row-scoping filter matches nothing and the
+list comes back 200 and empty, the same shape as a shop with no orders. Open one specific order
+(`/orders/:id`) and it 404s instead, for the same underlying reason.
 
 ## Why `locales.read` rides along
 

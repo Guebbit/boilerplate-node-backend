@@ -85,7 +85,7 @@ from the instructions.
 | Server-side includes (SSI) injection  | input reaches an SSI directive                         | `<!--#exec … -->` in a page the server processes for includes                        |
 | Insecure deserialization              | untrusted bytes rebuilt into objects                   | serialised payloads with gadget chains; language-native formats, `pickle`, YAML      |
 | Prototype pollution                   | input modifies `Object.prototype`                      | recursive merge / `__proto__` keys → later logic reads attacker defaults             |
-| Mass assignment / autobinding         | input sets fields it should not                        | request body bound directly to a model; `isAdmin`, `price`, `ownerId` overwritten    |
+| Mass assignment / autobinding         | input sets fields it should not                        | request body bound directly to a model; `role`, `price`, `ownerId` overwritten       |
 | Host header injection                 | input controls the `Host` used server-side             | absolute URLs, password-reset links, cache keys built from `Host`                    |
 | Path / URL parameter injection        | input alters a path built server-side                  | user value concatenated into a filesystem path or internal URL                       |
 

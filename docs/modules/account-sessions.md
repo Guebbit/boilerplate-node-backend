@@ -17,12 +17,12 @@ application depends on it existing before the first request arrives.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 50}}}%%
 flowchart LR
-    RQ["a request"] --> G["kernel guard<br/><i>getAuth · isAuth · isAdmin</i>"]
+    RQ["a request"] --> G["kernel guard<br/><i>getAuth · isAuth · requirePermission</i>"]
     G --> PT["kernel/authentication.ts<br/><i>the port</i>"]
     PT --> RS["account resolver"]
     RS --> V["session/jwt.ts<br/><i>verify</i>"]
     RS --> UR["users repository<br/><i>find the record</i>"]
-    UR --> OUT["id · email · username · admin · imageUrl"]
+    UR --> OUT["id · email · username · roles · imageUrl"]
 
     classDef k fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef a fill:#ede9fe,stroke:#7c3aed,color:#111827;

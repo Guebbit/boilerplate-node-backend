@@ -125,12 +125,12 @@ language is kept per context rather than shared.
 
 ## `users`
 
-| Term            | What it means here                                                                                                        |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **User**        | The person record. Owns identity and the admin flag; owns no credentials workflow — see `account`.                        |
-| **Admin**       | A flag on the User, not a role table. Two levels of access is the whole model.                                            |
-| **Token**       | A single-use secret bound to a user and a purpose (`TokenType`), stored on the record.                                    |
-| **Soft delete** | A destroyed account, kept for the audit trail. Emits `user.deleted`, which is what actually clears the cart and wishlist. |
+| Term            | What it means here                                                                                                               |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **User**        | The person record. Owns identity and the `role` name; owns no credentials workflow — see `account`.                              |
+| **Role**        | A named permission set on the User (`shared/authorization-roles.yaml`), not a boolean — see [authorization](./authorization.md). |
+| **Token**       | A single-use secret bound to a user and a purpose (`TokenType`), stored on the record.                                           |
+| **Soft delete** | A destroyed account, kept for the audit trail. Emits `user.deleted`, which is what actually clears the cart and wishlist.        |
 
 ## `wishlist`
 

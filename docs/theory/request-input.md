@@ -320,8 +320,8 @@ there, and per-operation declarations are what would remove it.
   query on both `GET /products` and `POST /products/search`. Now declared as query parameters too.
 - **`active`/`admin` were decoded, validated and stored on every user write route** while only
   `CreateUserRequest` declared them. Added to `UpdateUserRequest`, `UpdateUserByIdRequest` and
-  both multipart variants. Not a privilege hole — the whole `/users` router is behind
-  `isAuth, isAdmin` — but undeclared input all the same.
+  both multipart variants. Not a privilege hole — every route in `/users` is behind `isAuth` and
+  the matching `users.*` permission — but undeclared input all the same.
 - **The path-form deletes read `hardDelete` from a body they did not declare.** `DELETE
 /products/{id}` and `DELETE /users/{id}` now declare an optional `HardDeleteRequest` body. It
   carries only the flag: `{id}` already supplies the id and the path param wins, so a body `id`

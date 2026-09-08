@@ -183,7 +183,7 @@ flowchart LR
 ```
 
 In `account` it closes a `users → account → users` cycle, because `users`' own admin routes need
-`isAdmin`. In `app` it makes modules import upward. So `kernel` declares what it needs —
+`requirePermission`. In `app` it makes modules import upward. So `kernel` declares what it needs —
 "turn this token into a user" — and `account` registers an implementation at boot. Same inversion as
 `IAuditSink` and `IImageStore`. See `src/kernel/authentication.ts`.
 

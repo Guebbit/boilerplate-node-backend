@@ -51,8 +51,12 @@ at all; this role only decides what each one currently says.
 ## What this role cannot reach
 
 No `products.*`, no `orders.*`, no `users.*`, no `payments.*`, no `audit.read`. Try opening
-`/products` while logged in as the translator — a 403, the same shape an editor gets from `/orders`.
-Neither narrower account can reach into the other's job.
+`/products` while logged in as the translator: not a 403 — signing in only ever WIDENS what the
+anonymous baseline already grants, and that baseline includes `products.read`, so the translator
+sees exactly the public catalogue a logged-out visitor does, no more. `/orders` is the real
+difference: the translator holds no `orders.*` key at all, baseline or otherwise, so that answers
+200 with an empty list rather than a refusal — no route has a guard to refuse it with. Neither
+narrower account can reach into the other's job; the shapes of "cannot" just differ by route.
 
 ## The words we used
 
