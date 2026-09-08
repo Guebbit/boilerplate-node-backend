@@ -88,6 +88,8 @@ describe('auditLogRepository', () => {
                 makeEntry({
                     actor_user_id: 'user-2',
                     action: coreAuditActions.SECURITY_FORBIDDEN,
+                    target_type: 'user',
+                    target_id: 'target-9',
                     timestamp: new Date('2026-08-03T10:00:00.000Z')
                 })
             );
@@ -120,6 +122,13 @@ describe('auditLogRepository', () => {
             const byOutcome = await search({ outcome: 'failure' });
             expect(byOutcome.meta.totalItems).toBe(1);
             expect(byOutcome.items[0].action).toBe(coreAuditActions.SECURITY_RATE_LIMIT_HIT);
+        });
+
+        it('filters by target, matched verbatim like actor and action', async () => {
+            const { items, meta } = await search({ target: 'target-9' });
+
+            expect(meta.totalItems).toBe(1);
+            expect(items[0].action).toBe(coreAuditActions.SECURITY_FORBIDDEN);
         });
 
         it('applies `since` as an exclusive lower bound on timestamp', async () => {

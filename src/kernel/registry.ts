@@ -80,8 +80,8 @@ export interface AppModule {
 
     /**
      * Mount point for `routes`, e.g. `/products`. Absent on a module that owns a collection but no
-     * URL — `audit-logs` writes and reads the audit trail, and the endpoint exposing it belongs to
-     * `observability`.
+     * URL of its own — a domain reachable only through another module's endpoints, or through no
+     * endpoint at all.
      */
     basePath?: string;
 

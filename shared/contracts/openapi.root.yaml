@@ -42,6 +42,8 @@ tags:
       description: Public system endpoints (ping, liveness).
     - name: Observability
       description: Operational observability endpoints (metrics, health, audit, events). Protected endpoints require admin role.
+    - name: Audit
+      description: The tenant's own action history — who did what, when, to which row. Read-only, and separate from Observability's operational audit, which is the platform operator's view across every shop.
 
 # If set, by default all operation requires an authentication
 # security:
@@ -885,6 +887,10 @@ paths:
         $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1metrics~1overview'
     /observability/audit:
         $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1audit'
+
+    # ---------- audit-logs ----------
+    /audit:
+        $ref: '../../src/modules/audit-logs/openapi.yaml#/paths/~1audit'
 
     # ---------- antibot ----------
     /antibot/config:

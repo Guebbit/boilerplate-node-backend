@@ -32,6 +32,7 @@ import { enabledModules } from '../../src/modules';
 export const MODULE_SECTIONS = [
     'locales',
     'observability',
+    'audit-logs',
     'antibot',
     'account',
     'users',

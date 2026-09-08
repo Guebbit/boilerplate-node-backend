@@ -13,13 +13,18 @@ import { auditLogModel, applyAuditLogTransform } from './model';
 import type { AuditLogDocument } from './model';
 import { createRepository } from '@infrastructure/persistence/create-repository';
 
-/** What `search` accepts, mirroring the query parameters `GET /observability/audit` declares. */
+/**
+ * What `search` accepts, mirroring the query parameters `GET /observability/audit` and
+ * `GET /audit` declare. `target` is the one the tenant-facing route adds — "what happened to
+ * this row" is the question a moderator asks that an operator's dashboard never does.
+ */
 export interface AuditLogSearchFilters {
     actor?: string;
     action?: string;
     outcome?: 'success' | 'failure';
     /** Exclusive lower bound on `timestamp`, matching the buffer's `> since` behaviour. */
     since?: Date;
+    target?: string;
     page?: unknown;
     pageSize?: unknown;
 }
@@ -28,13 +33,14 @@ export interface AuditLogSearchFilters {
 const base = createRepository<AuditLogDocument>(auditLogModel, {
     transform: applyAuditLogTransform,
     searchable: {
-        // All three are closed vocabularies or opaque ids — matched verbatim, never as a regex.
+        // All four are closed vocabularies or opaque ids — matched verbatim, never as a regex.
         // `outcome` in particular must not be a partial match: 'fail' silently matching 'failure'
         // would make a filtered view quietly disagree with the numbers next to it.
         exact: {
             actor: 'actor_user_id',
             action: 'action',
-            outcome: 'outcome'
+            outcome: 'outcome',
+            target: 'target_id'
         }
     }
 });

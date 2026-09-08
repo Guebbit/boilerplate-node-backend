@@ -1,9 +1,11 @@
 /**
  * Every domain here names the module that answers it in `boilerplate-vue-frontend`.
  *
- * Eleven of thirteen domains exist on both sides under the same name. The interesting two do not,
- * and neither does the frontend's one extra module — an asymmetry that is real architecture rather
- * than drift, and that is written down nowhere else in either repository.
+ * Eleven of fourteen domains exist on both sides under the same name. The other three don't —
+ * `antibot` because it has no screen of its own, `audit-logs` and `observability` because two
+ * backend modules serve one frontend screen between them — and neither does the frontend's one
+ * extra module. An asymmetry that is real architecture rather than drift, and that is written
+ * down nowhere else in either repository.
  *
  * STATED, NOT DERIVED. A name matcher would call `audit-logs` unpaired, which is exactly the wrong
  * answer: the trail lives here, the endpoint that reads it belongs to `observability`, and the
@@ -48,7 +50,7 @@ const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
     },
     'audit-logs': {
         counterparts: ['admin'],
-        why: 'This module owns the trail and no URL; the endpoint that reads it belongs to `observability`, and the screen that renders it is the frontend’s admin dashboard.'
+        why: "Two endpoints read the one trail this module owns — its own `GET /audit` for a shop's staff, `observability`'s `GET /observability/audit` for the platform operator — and both render in the frontend's admin dashboard."
     },
     cart: { counterparts: ['cart'] },
     delivery: { counterparts: ['delivery'] },

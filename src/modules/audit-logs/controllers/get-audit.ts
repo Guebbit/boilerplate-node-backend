@@ -1,0 +1,72 @@
+/**
+ * @module
+ * Controller for `GET /audit`. The same filtered, paged read `observability`'s
+ * `getObservabilityAuditLogs` serves, reached with a tenant key instead of a platform one — see
+ * `../service.ts` for why one collection answers both.
+ *
+ * See: docs/modules/audit-logs.md
+ */
+
+import type { Request, Response } from 'express';
+import type { AuditEntryItem, AuditEntryList } from '@types';
+import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { auditLogService } from '../service';
+import { t } from '@infrastructure/i18n';
+import { catchAs, parseBody } from '@infrastructure/http/controller';
+import { readInput } from '@infrastructure/http/request';
+import { paginationSchema } from '@infrastructure/http/schemas';
+
+/**
+ * GET /audit
+ * A page of this shop's own action history, filtered by actor, action, outcome, target and since.
+ */
+export const getAudit = (request: Request, response: Response) => {
+    // Through `readInput` like every other route, rather than reaching into `request.query`: the
+    // sources a surface reads are a property of the route, not of this handler.
+    const input = readInput(request, {
+        // `list`: a GET-only route, so the query string is the whole input surface.
+        surface: 'list',
+        // Declared as ids so a repeated `?since=` collapses to its first entry rather than
+        // arriving as an array — these are scalars, and `new Date([…])` is not a date.
+        ids: ['actor', 'action', 'outcome', 'target', 'since']
+    });
+
+    // `page` / `pageSize` are bounded here and answer 422, as on every paged read: this trail
+    // has pages, so a page the caller cannot reach is a broken request rather than one to
+    // quietly rewrite. `normalizePagination` still owns what an absent page means.
+    const pagination = parseBody(paginationSchema, input, response);
+    if (!pagination) return;
+
+    const { actor, action, outcome, target, since } = input;
+    const sinceDate = since ? new Date(since) : undefined;
+
+    if (sinceDate !== undefined && Number.isNaN(sinceDate.getTime()))
+        return rejectResponse(response, 422, [t('audit-logs.since-invalid')]);
+
+    return auditLogService
+        .search({
+            // `readInput` answers `unknown` because a query value can arrive repeated; these four
+            // are scalars the repository matches verbatim, so they are read as the strings they are.
+            actor,
+            action,
+            // The repository matches `outcome` verbatim, so anything outside the enum is dropped
+            // rather than passed through — an unrecognised value must not silently return
+            // everything, which is what treating it as "no filter" would do if it reached Mongo.
+            outcome: outcome === 'success' || outcome === 'failure' ? outcome : undefined,
+            target,
+            since: sinceDate,
+            ...pagination
+        })
+        .then((result) => {
+            // `search()` already returns normalized (wire-shape) rows — unlike `findById`/`findOne`,
+            // it never hands back a hydrated document, so there is no `.toJSON()` to apply here.
+            // The repository factory's `PaginatedResult<TDocument>` names the pre-normalize type,
+            // which is why `items` needs the cast below.
+            const items: unknown = result.items;
+            return successResponse<AuditEntryList>(response, {
+                items: items as AuditEntryItem[],
+                meta: result.meta
+            });
+        })
+        .catch(catchAs(response, 'getAudit'));
+};
