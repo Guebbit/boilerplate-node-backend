@@ -1,26 +1,23 @@
 # Authorization
 
-**Who may act, how strongly they proved it, and which rows they see.** Three separate questions.
-Two of them are already answered in this repository; the third is a boolean that is about to stop
-being enough.
+**Who may act, how strongly they proved it, and which rows they see.** Three separate questions,
+answered by three separate things — and confusing them is how a system ends up with forty roles.
 
 [Web attack defences](./web-attack-defences.md) covers keeping the wrong person out.
 This page is about what the right person is allowed to do once they are in.
 
 ## The three axes
 
-Authorization is usually discussed as one axis. There are three, and confusing them is how systems
-end up with forty roles.
+| Axis                            | Answers                             | Where it lives                                                      |
+| ------------------------------- | ----------------------------------- | ------------------------------------------------------------------- |
+| **Who they are**                | may this caller act at all?         | the keys their role holds — `holdsKey`, behind `requirePermission`  |
+| **How strongly they proved it** | did they prove it _recently_?       | `amr` on the token + the freshness guards                           |
+| **Which rows**                  | of the things they may read, which? | `kernel/access/query.ts` — the same rules, compiled into the filter |
 
-| Axis                            | Answers                             | Where it lives today                                           |
-| ------------------------------- | ----------------------------------- | -------------------------------------------------------------- |
-| **Who they are**                | may this caller act at all?         | `caller.admin` — one boolean                                   |
-| **How strongly they proved it** | did they prove it _recently_?       | `amr` on the token + the freshness guards                      |
-| **Which rows**                  | of the things they may read, which? | `kernel/access/query.ts` — the rules, compiled into the filter |
-
-The middle axis is the one most applications never build. This one has it: `requireFreshAuth` and
-the `amr` claim (RFC 8176) mean a high-risk action can demand a recently proved session rather than
-merely a valid one. Nothing on this page changes it.
+The middle axis is the one most applications never build. This one has it: the `amr` claim
+(RFC 8176) and a `stepUp` tier let a high-risk action demand a recently proved session rather than
+merely a valid one. The tier is declared on the KEY, so a new route guarding that key inherits it
+instead of having to remember it.
 
 ## The rule that everything else is arranged around
 
@@ -31,21 +28,22 @@ window between the check and whatever uses the document, and it lets _"not yours
 exist"_ answer differently — which is a disclosure on its own, because a 403 confirms the row is
 there.
 
-So `createOwnerScope` and `createVisibilityScope` return a **query fragment**, not a verdict. Every
-model of authorization this repository will ever adopt has to preserve that property, and most of
-them cannot: anything that answers yes/no about an object already in memory is a downgrade.
+So `accessibleFilter` returns a **query fragment**, not a verdict, and every scoped read spreads it
+into its own find. That property is what picks the library: `@casl/ability` rules compile straight
+into a Mongo query, and anything that answers yes/no about a document already in memory is a
+downgrade.
 
-The fail-closed detail is worth ten seconds. A caller with no id yields an empty string, which is
-not a valid ObjectId, so the repository's scope builder throws. That is deliberate: the alternative
-— omitting the owner clause — fails no test and quietly widens the query to every user's data. **A
-bug here becomes a 500, never a disclosure.**
+The fail-closed detail is worth ten seconds. Rules that match nothing compile to CASL's
+`EMPTY_RESULT_QUERY` — a filter matching no row — never to an absent filter, which every caller
+downstream would read as "unrestricted". **A gap here returns an empty list, never somebody else's
+data.**
 
-## Where this is going
+## The model
 
-`admin: boolean` fails on the first product that has more than one customer in one database. Two
-callers can be admins of _different_ things, and one boolean cannot say which. The replacement is
-**RBAC scoped by tenant, with conditions on the resource** — roles decide whether you may act,
-conditions decide which rows, and the conditions compile into the query so the rule above survives.
+**RBAC scoped by tenant, with conditions on the resource.** The role decides whether you may act,
+the conditions its keys carry decide which rows, and those conditions compile into the query so the
+rule above survives. One boolean cannot do that job: two callers can be administrators of
+_different_ things, and `admin: true` cannot say which.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
@@ -104,7 +102,7 @@ property:
 > satisfied by a tenant-scope caller.
 
 A platform operator administers shared reference data and is **not** a super-member — they cannot
-read one tenant's content. Mapping that person onto `caller.admin` is one line to write, passes
+read one tenant's content. Mapping that person onto a single `admin` flag is one line to write, passes
 every test that exists today, and is a total confidentiality failure. The grammar makes it
 unrepresentable rather than discouraged.
 
@@ -113,14 +111,14 @@ Three supporting rules: keys are lower-case, dotted and **stable** (renaming one
 **roles are data, permissions are code** — a deployment may create roles at runtime and may never
 invent a key, because a key nothing checks grants nothing while looking like it grants something.
 
-## What is built
+## Where it lives
 
-All of it. `admin: boolean` is gone; the model is stored, evaluated, compiled into every scoped
-read, published to the client and enforced per key.
+The model is stored, evaluated, compiled into every scoped read, published to the client and
+enforced per key.
 
 - **`shared/authorization-keys.yaml`** — every key, its subject, scope, conditions and step-up
-  tier. **`-roles.yaml`** — the presets both seeders read. **`-conformance.yaml`** — 44 deny cases
-  both backends run. All three byte-identical in the PHP twin.
+  tier. **`-roles.yaml`** — the presets both seeders read. **`-conformance.yaml`** — 43 cases,
+  30 of them denials, run by both backends. All three byte-identical in the PHP twin.
 - **`kernel/permissions.ts`** turns an account's two role names into the keys for ONE scope;
   **`kernel/ability.ts`** builds the CASL ability and answers `holdsKey`.
 - **`kernel/access/`** stores it: tenants, roles and memberships, with the invariants as refusals —
@@ -149,15 +147,14 @@ and forcing one abstraction over both makes both worse.
 | The vocabulary: `action`, `subject`, `conditions`, `fields`, `manage`, `all`, `Caller` | The library doing the evaluating               |
 | The permission keys, and the preset roles seeded on day one                            | How rules become a query                       |
 | The scope model: `tenant` \| `platform`, never both, never derived from a flag         | `guard_name`, which only the PHP package needs |
-| The wire format of `GET /me/abilities`                                                 | Everything else about the implementation       |
+| The wire format of `GET /account/abilities`                                            | Everything else about the implementation       |
 | The conformance suite — one fixture file, identical bytes, run by both                 | —                                              |
 
 Here that is `@casl/ability`, whose rules compile straight into a Mongo query and can be shipped to
-the browser as the same rules. There it is `spatie/laravel-permission` registered with Laravel's
-native `Gate`, with conditions in Policies and Eloquent scopes for the query half.
+the browser as the same rules. There it is `spatie/laravel-permission` for the storage half only —
+which roles exist and who holds them, in which shop — with the evaluation and the query fragment
+hand-written over it, because a package that answers "does this name appear" cannot answer "in this
+scope, on rows matching these conditions".
 
 The suite is what keeps them honest, and it holds the **deny** cases rather than the happy path: a
 widened scope does not fail a test that only checks the right thing is allowed.
-
-`BE_ROLES_AND_PERMISSIONS_PLAN.md`, beside this repo in the workspace, has the work items, the <!-- doc-paths:ignore -->
-rejected options and the abort point.

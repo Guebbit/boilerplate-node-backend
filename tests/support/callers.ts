@@ -1,9 +1,9 @@
 /**
  * The callers a test acts as, by ROLE rather than by flag.
  *
- * `{ admin: true }` used to be the whole vocabulary, and it hid the thing most worth asserting:
- * which of several jobs a person is doing. A warehouse operator and a support agent are both
- * "not admin", and a test that says so proves nothing about the rule that separates them.
+ * By ROLE, because that is what the model decides from and what a reader needs to see. A warehouse
+ * operator and a support agent differ in every rule that matters and in no flag at all, so a test
+ * naming the flag proves nothing about the rule that separates them.
  *
  * Each factory returns a full `AuthContext` because that is what services take — the identity
  * fields are filler, and only `roles`/`tenantId` are ever read by an authorization decision.
@@ -44,7 +44,7 @@ export const asRole = (role: string, id = 'test-user'): AuthContext => ({
 /** A shopper. Reads the catalogue and their own orders, and nothing else. */
 export const asCustomer = (id = 'test-customer'): AuthContext => asRole('customer', id);
 
-/** Unrestricted inside the shop — the honest spelling of what `admin: true` used to mean. */
+/** Unrestricted inside the shop, and only inside it. */
 export const asOwner = (id = 'test-owner'): AuthContext => asRole('owner', id);
 
 /** Runs the shop: catalogue, orders, locales. Reads stock without moving it. */

@@ -11,8 +11,8 @@ export type AuthorizationScope = 'tenant' | 'platform';
 
 /**
  * The resolved caller — both the kernel resolver's own answer and the transport-safe shape
- * threaded through the request. One interface, not two: it used to be duplicated as the kernel's
- * `AuthenticatedUser` and this file's DTO, which let the two drift out of field-for-field sync.
+ * threaded through the request. One interface, not two, so the resolver's answer and the DTO
+ * cannot drift out of field-for-field sync.
  */
 export interface AuthContext {
     id: string;

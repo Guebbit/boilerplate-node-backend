@@ -6,13 +6,12 @@
  * `{}`, anyone else gets a filter on their own `userId` excluding soft-deleted rows, and a caller
  * with no identity gets a filter that matches nothing.
  *
- * TWO THINGS CHANGED WHEN THE RULES TOOK OVER, and both are worth asserting rather than
- * discovering. Unrestricted is now `{}` instead of `undefined` — both spread into a query as no
- * restriction, and `{}` is what "these are the conditions, and there are none" honestly looks
- * like. And an anonymous caller no longer THROWS: it compiles to CASL's `EMPTY_RESULT_QUERY`, so
- * the request answers an empty list rather than a 500. The fail-closed property is the same one —
- * a gap can never widen the read — reached by a filter that matches nothing instead of by an
- * exception.
+ * TWO SHAPES ARE WORTH ASSERTING rather than assuming. Unrestricted is `{}`, not `undefined` —
+ * both spread into a query as no restriction, and `{}` is what "these are the conditions, and
+ * there are none" honestly looks like. And a caller with no identity compiles to CASL's
+ * `EMPTY_RESULT_QUERY` rather than raising: the request answers an empty list, not a 500, and the
+ * fail-closed property — a gap can never widen the read — is reached by a filter that matches
+ * nothing.
  *
  * The filter's `userId` must be a real BSON `ObjectId`, not a string — `$match` inside an
  * aggregation skips schema casting, so a string id reads as "no orders" rather than as an error.

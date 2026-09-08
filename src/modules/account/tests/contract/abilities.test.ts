@@ -83,7 +83,7 @@ describe('GET /account/abilities', () => {
             .set('Authorization', bearer)
             .expect(200);
 
-        // The §7 invariant, reaching the client: what is published is the TENANT scope's rules,
+        // The scope invariant, reaching the client: what is published is the TENANT scope's rules,
         // and a platform key can never be satisfied from them.
         expect(response.body.data.scope).toBe('tenant');
         expect(abilityFrom(response.body).can('read', subject('ObservabilitySnapshot', {}))).toBe(

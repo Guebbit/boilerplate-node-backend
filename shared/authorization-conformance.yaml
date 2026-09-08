@@ -2,8 +2,8 @@
 #
 # Committed with identical bytes in `boilerplate-node-backend` and
 # `boilerplate-php-laravel-backend`. Each repository runs every case against its own
-# implementation — CASL on one side, Laravel's Gate and Policies on the other — and the two are
-# twins exactly as far as this file says they are.
+# implementation — CASL on one side, an evaluator over `spatie/laravel-permission` on the other —
+# and the two are twins exactly as far as this file says they are.
 #
 # IT HOLDS THE DENY CASES. A widened scope does not fail a test that only checks the right thing
 # is allowed, which is why an authorization suite made of happy paths is worth so little. Every
@@ -26,7 +26,7 @@ version: 1
 
 cases:
     # =============================================================================================
-    # The §7 invariant, both directions. These two are the reason the file exists.
+    # The scope invariant, both directions. These two are the reason the file exists.
     # =============================================================================================
 
     - name: a platform operator cannot read a shop's content

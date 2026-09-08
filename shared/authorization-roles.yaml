@@ -81,9 +81,8 @@ roles:
       scope: tenant
       title: The shop owner
       description: >-
-          Unrestricted within this shop, and only within it. This is the honest spelling of what
-          `admin: true` used to mean — note that it says nothing about the platform, which the old
-          boolean could not express.
+          Unrestricted within this shop, and only within it — and note that it says nothing
+          about the platform. One role cannot reach both scopes, which is the point.
       permissions:
           - all.manage
 

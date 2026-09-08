@@ -1,26 +1,17 @@
 /**
  * @module
  * Turning a resolved caller into the one object every authorization question is asked of — a CASL
- * `Ability`, built per request from the keys the caller's role holds plus the conditions those
- * keys carry.
+ * `Ability`, built per request from the keys the caller's role holds and the conditions they carry.
  *
- * WHY CASL AND NOT A HAND-ROLLED CHECK. The rules it holds compile into a database query
- * (`@casl/mongoose`'s `accessibleBy`), which is the only way to keep the property this repository
- * already had before roles existed: *the restriction rides IN the read*. Anything that answers
- * yes/no about a document already in memory opens a window between the check and its use, and
- * lets "not yours" and "does not exist" answer differently. The same rules also pack for the
- * browser, so the frontend greys out what the server would refuse — from the same rules, so the
- * two cannot drift.
+ * Why CASL:   its rules compile into a database query, so the restriction rides IN the read, and
+ *             they pack for the browser, so a client greys out what the server would refuse from
+ *             the same rules rather than from a copy of them.
+ * Not CASL's: two expansions happen here first, and both are NARROWER than its own wildcard —
  *
- * WHAT IS NOT CASL'S, and why. Two expansions happen here before any rule is built, and both are
- * narrower than CASL's own wildcard semantics:
- *
- *   - `all.manage` expands to every key DECLARED in the caller's scope, not to an unbounded
- *     `can('manage', 'all')`. A shop owner therefore cannot edit an audit row merely because no
- *     module thought to forbid it — nothing declares `audit.update`, so nothing grants it.
- *   - `<module>.manage` expands to every key that module declares, unconditionally. That is what
- *     makes staff see drafts without a second `products.read-drafts` key: the narrow read key
- *     carries `published: true`, and the wide one carries nothing.
+ *   - `all.manage` expands to every key DECLARED in the caller's scope, never to an unbounded
+ *     `can('manage', 'all')`. Nothing declares `audit.update`, so nothing grants it.
+ *   - `<module>.manage` expands to that module's keys, unconditionally — which is what lets staff
+ *     see drafts: the narrow read key carries `published: true`, the wide one carries nothing.
  *
  * See `docs/theory/authorization.md`, and `shared/authorization-keys.yaml` for the keys
  * themselves — a file the PHP twin reads byte-for-byte identically.
@@ -48,8 +39,8 @@ const PLACEHOLDER = '$caller.';
  * Returns `undefined` when a placeholder has no value, and the caller of this drops the rule
  * rather than emitting it. That is the fail-closed direction and it is load-bearing: a caller
  * with no id would otherwise get `{ userId: null }`, which is a perfectly good filter that
- * matches every unowned row. Same reasoning as the empty-id throw in `authorization.ts` — a gap
- * here must become "denied", never "widened".
+ * matches every unowned row. Same direction as the empty filter in `access/query.ts` — a gap here
+ * must become "denied", never "widened".
  */
 const resolveConditions = (
     conditions: Record<string, unknown>,
@@ -78,8 +69,8 @@ const resolveConditions = (
 /**
  * The keys a caller effectively holds, wildcards expanded and the other scope's keys dropped.
  *
- * The drop is the §7 invariant doing its work, and it happens here rather than at check time so
- * that a mis-seeded role is inert instead of dangerous: a bare key on a platform caller never
+ * The drop is the scope invariant doing its work, and it happens here rather than at check time
+ * so that a mis-seeded role is inert instead of dangerous: a bare key on a platform caller never
  * becomes a rule at all. `wide` marks a key reached through a `manage` wildcard, because those
  * grant their module unconditionally.
  */
@@ -191,7 +182,7 @@ export const buildAbility = (caller: Caller): Ability => {
  *   - **a concrete key** is the ordinary case, answered by the ability.
  *
  * Asked about the action and subject rather than about a row, because a route guard runs before
- * anything is fetched. Which rows survive is the read's business — see `authorization.ts`.
+ * anything is fetched. Which rows survive is the read's business — see `access/query.ts`.
  */
 export const holdsKey = (caller: Caller, key: string): boolean => {
     if (key === wildcardKeyFor(caller.scope)) {

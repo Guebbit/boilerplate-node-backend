@@ -4,8 +4,7 @@
  *
  * The suite in `tests/cross-cutting/authorization-conformance.test.ts` proves the two backends
  * decide the same way. This one proves the thing those decisions are read FROM can be written,
- * edited and refused correctly — a different question, and one the old boolean never had to
- * answer because it had nowhere to store anything.
+ * edited and refused correctly, which is a different question.
  *
  * Every refusal here is an invariant somebody learned the expensive way. A model whose invariants
  * are documented is a model whose invariants drift: the check that is not executed is the check

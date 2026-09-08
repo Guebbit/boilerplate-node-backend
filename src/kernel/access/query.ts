@@ -4,16 +4,13 @@
  * *"the restriction rides IN the read"* something a library guarantees rather than something four
  * modules each remembered to do.
  *
- * Before this, every module built its own fragment and the kernel decided whether to apply it. The
- * fragment and the rule agreed because somebody kept them agreeing; a widened rule did not widen
- * the query, and a widened query failed no test. Now there is one artefact: `@casl/mongoose`
- * compiles the same rules the route guard reads, so a key that grants more returns more, and a key
- * that grants less returns less, without anybody editing a filter.
- *
- * IT FAILS CLOSED BY CONSTRUCTION. When no rule matches, CASL answers `EMPTY_RESULT_QUERY` —
- * `{ $expr: { $eq: [0, 1] } }` — a filter that matches nothing rather than a filter that is
- * missing. That is strictly stronger than the empty-string trick it replaces, which was a clever
- * way to make a mistake loud; this makes the mistake unrepresentable.
+ * One artefact: `@casl/mongoose` compiles the same rules the route guard reads, so a key that
+ *               grants more returns more and nobody edits a filter. A module writing its own
+ *               fragment beside the rule is two things that agree only while somebody keeps them
+ *               agreeing, and the drift is silent — a widened query fails no test.
+ * Fails closed: no matching rule compiles to CASL's `EMPTY_RESULT_QUERY`, a filter matching
+ *               nothing — never to a filter that is missing, which reads as "unrestricted" to
+ *               every caller downstream.
  *
  * See: docs/theory/authorization.md
  */
@@ -30,9 +27,8 @@ import { anonymousCaller, callerForSubject } from '@kernel/permissions';
  * `tenantId` is the only one, and it is here rather than absent from the rules for a reason worth
  * stating: the MODEL is tenant-aware and its conformance cases prove it, while this deployment's
  * collections are not partitioned, because it ships one shop. Compiling `tenantId` into a query
- * over a collection that has no such field would match nothing and lock everybody out — the plan's
- * own line that "a single-tenant app runs this model with one tenant row and never notices" is
- * exactly this function.
+ * over a collection that has no such field would match nothing and lock everybody out, so this
+ * function is what lets one shop run the tenant-aware model and never notice it.
  *
  * A multi-tenant deployment deletes this list and adds the column. Nothing else changes: the rules
  * already carry the tenant, the guards already read it, and the caller already resolves it.

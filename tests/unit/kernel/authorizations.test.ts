@@ -403,9 +403,9 @@ describe('requirePermission', () => {
  * overall while scoring 85.42% on the part that was covered. That split is the diagnosis — the
  * assertions that existed were good, this middleware simply wasn't reached by any of them.
  *
- * It is worth more than its size suggests: it is an admin gate, it is agnostic boilerplate every
- * derived project inherits, and its failure mode is silent. A mutant that turns `!user?.admin`
- * into `false` hands every logged-in user an admin-only document.
+ * It is worth more than its size suggests: it gates a key, it is agnostic boilerplate every
+ * derived project inherits, and its failure mode is silent. A mutant that turns the ability's
+ * `can()` into `true` hands every logged-in user a document only a key-holder may read.
  */
 describe('requirePermissionViaCookie', () => {
     /** An admin user document, as `findById` resolves one. */
@@ -497,7 +497,7 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('rejects with 403 when the token is valid but the user is gone', async () => {
-        // `user?.admin` on `null` — a deleted account holding a still-signed cookie.
+        // The resolver answers `undefined` — a deleted account holding a still-signed cookie.
         mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
         const response = makeResponseStub();
 
