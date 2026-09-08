@@ -25,6 +25,7 @@ import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import type { AuditAction } from '@infrastructure/observability/audit';
 import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
@@ -225,6 +226,19 @@ export const update = (
     });
 };
 
+/**
+ * Which admin action an update represents: a ban, its reversal, or an ordinary edit — the
+ * distinction the history is for. `active` is `undefined` when the request never mentions the
+ * field, same as every other optional column `update()` handles; `wasActive` is `undefined` only
+ * when the type carries the contract's optionality rather than a loaded row's real state, so it
+ * falls back to the schema's own default rather than reporting a ban on a guess.
+ */
+const auditActionForUpdate = (wasActive: boolean | undefined, active?: boolean): AuditAction => {
+    if (active === undefined || active === (wasActive ?? true))
+        return usersAuditActions.ADMIN_USER_UPDATED;
+    return active ? usersAuditActions.ADMIN_USER_UNBANNED : usersAuditActions.ADMIN_USER_BANNED;
+};
+
 /** Update an existing user by ID. Fetches the document then delegates to update(). */
 export const updateById = (
     id: string,
@@ -237,11 +251,14 @@ export const updateById = (
         // at the `.catch()` that has to tell them apart.
         if (!user) return generateReject(404, [t('users.not-found')]);
 
+        // Read before `update()` mutates `user.active` in place — the flip is the whole signal.
+        const wasActive = user.active;
+
         return update(user, data).then((result) => {
             if (result.success) {
                 emitAuditEvent(
                     buildAuditEvent(context, {
-                        action: usersAuditActions.ADMIN_USER_UPDATED,
+                        action: auditActionForUpdate(wasActive, data.active),
                         outcome: 'success',
                         target_type: 'user',
                         target_id: id

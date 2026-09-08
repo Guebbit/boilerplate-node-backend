@@ -19,7 +19,14 @@ export const usersAuditActions = {
     ADMIN_USER_SOFT_DELETED: 'admin.user.soft_deleted',
     ADMIN_USER_ERASED: 'admin.user.erased',
     /** An admin stripped a user's second factor — the one non-self-service 2FA recovery path. */
-    ADMIN_USER_2FA_DISABLED: 'admin.user.two_factor_disabled'
+    ADMIN_USER_2FA_DISABLED: 'admin.user.two_factor_disabled',
+    /*
+     * A ban is `active: false` on the same PUT every other edit uses — see `users/service.ts`'s
+     * `auditActionForUpdate`. Split from `ADMIN_USER_UPDATED` so the history answers "was this
+     * account banned" without a reader having to diff two revisions of the row.
+     */
+    ADMIN_USER_BANNED: 'admin.user.banned',
+    ADMIN_USER_UNBANNED: 'admin.user.unbanned'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

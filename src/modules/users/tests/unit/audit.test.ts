@@ -15,7 +15,9 @@ describe('the users audit vocabulary', () => {
             ADMIN_USER_UPDATED: 'admin.user.updated',
             ADMIN_USER_SOFT_DELETED: 'admin.user.soft_deleted',
             ADMIN_USER_ERASED: 'admin.user.erased',
-            ADMIN_USER_2FA_DISABLED: 'admin.user.two_factor_disabled'
+            ADMIN_USER_2FA_DISABLED: 'admin.user.two_factor_disabled',
+            ADMIN_USER_BANNED: 'admin.user.banned',
+            ADMIN_USER_UNBANNED: 'admin.user.unbanned'
         });
     });
 });

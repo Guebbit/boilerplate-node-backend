@@ -5,14 +5,25 @@
  */
 
 import { asStub } from '@tests/stub';
+import { observePort } from '@tests/ports';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
 import * as userService from '@modules/users/service';
 import { userRepository, USER_SETUP_REQUESTED } from '@modules/users';
+import { usersAuditActions } from '@modules/users/audit';
+import * as auditPort from '@infrastructure/observability/audit';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { UserDocument } from '@modules/users';
+
+// See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
+// not the real (non-configurable) export, for `observePort` to be able to clear and hand it out.
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -425,6 +436,62 @@ describe('userService.updateById', () => {
         expect((result as { data: UserDocument }).data.active).toBe(false);
         const refreshed = await userRepository.findById(id);
         expect(refreshed!.active).toBe(false);
+    });
+
+    it('records a ban, not a plain update, when active flips from true to false', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ active: true });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { active: false }, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_BANNED,
+                target_type: 'user',
+                target_id: id
+            })
+        );
+    });
+
+    it('records an unban when active flips from false to true', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ active: false });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { active: true }, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_UNBANNED,
+                target_type: 'user',
+                target_id: id
+            })
+        );
+    });
+
+    it('records a plain update, not a ban, when active is sent unchanged', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ active: true, username: 'stays-active' });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { active: true, username: 'renamed' }, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ action: usersAuditActions.ADMIN_USER_UPDATED })
+        );
+    });
+
+    it('records a plain update, not a ban, when active is not mentioned at all', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ active: true });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { username: 'renamed-again' }, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ action: usersAuditActions.ADMIN_USER_UPDATED })
+        );
     });
 
     it('persists a locale change, the same as at creation', async () => {
