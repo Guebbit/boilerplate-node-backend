@@ -139,6 +139,7 @@ the point.
 | Follow one request end-to-end                                     | [Request Flow](./request-flow.md)                                           |
 | Know which sources an endpoint reads                              | [Request Input](./request-input.md)                                         |
 | Understand process model & shutdown                               | [Clustering & Shutdown](./clustering.md)                                    |
+| Know who may do what, and which rows they see                     | [Authorization](./authorization.md)                                         |
 | Know every attack a site can receive                              | [Web Attack Catalog](./web-attack-catalog.md)                               |
 | Know which of those attacks this codebase actually stops, and how | [Web Attack Defences](./web-attack-defences.md)                             |
 | Know what personal data is processed, and under what basis        | [Data Protection](./data-protection.md)                                     |

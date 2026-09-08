@@ -31,3 +31,10 @@ reports/stryker-incremental.json
 # concurrent session, and the way out people find is `--no-verify`, which costs the whole gate.
 .claude/
 CLAUDE.md
+
+# The three shared authorization artefacts. Committed with identical bytes in the PHP twin, which
+# formats YAML with dprint rather than Prettier. Two formatters over one shared file is a silent
+# fork — the same reasoning that excludes the Spectral rulesets over there.
+shared/authorization-keys.yaml
+shared/authorization-roles.yaml
+shared/authorization-conformance.yaml

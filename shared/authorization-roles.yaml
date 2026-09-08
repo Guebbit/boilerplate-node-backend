@@ -1,0 +1,110 @@
+# The preset roles, and the keys each one holds.
+#
+# Committed with identical bytes in `boilerplate-node-backend` and
+# `boilerplate-php-laravel-backend`, and read by both seeders rather than restated in each.
+#
+# WHY THIS FILE EXISTS AT ALL. `authorization-keys.yaml` and `authorization-conformance.yaml` make
+# the two implementations *agree*; only this one makes them the same **product**. The PHP twin
+# stores roles in a table via `spatie/laravel-permission` and the Node twin does not store them
+# that way at all, so two independently written seeders would produce two different shops that
+# both pass every test.
+#
+# Nobody is handed an empty permission matrix. A deployment gets these on day one and may edit
+# them afterwards — they are a starting point, not a schema.
+#
+# The four tenant roles are the four demo personas, which already exist and have already been run
+# against every screen: see `docs/demo-ecommerce/`. Reusing them means the permission model is
+# exercised by the demo rather than only by its own tests.
+
+version: 1
+
+roles:
+    # -- tenant scope --------------------------------------------------------------------------
+    - name: customer
+      scope: tenant
+      title: The customer
+      description: >-
+          Someone buying things. Everything they may do to their own basket, wishlist, addresses
+          and account follows from being signed in and needs no key at all — what is listed here
+          is only what they may read of the SHOP.
+      permissions:
+          - products.read
+          - locales.read
+          - delivery.read
+          - orders.read
+          - payments.read
+
+    - name: manager
+      scope: tenant
+      title: The shop manager
+      description: >-
+          What is for sale, at what price, and what happens to an order after it arrives. Reads
+          stock but does not move it; that is the warehouse's job and its audit trail.
+      permissions:
+          - products.manage
+          - orders.manage
+          - locales.manage
+          - payments.read
+          - inventory.read
+          - delivery.read
+          - feedback.read
+          - users.read
+          - audit.read
+
+    - name: warehouse
+      scope: tenant
+      title: The warehouse
+      description: >-
+          Stock, and getting parcels out of the door. Records movements and advances consignments;
+          may not change what a thing costs or delete it from the catalogue.
+      permissions:
+          - products.read
+          - orders.read
+          - inventory.manage
+          - delivery.manage
+
+    - name: support
+      scope: tenant
+      title: The support desk
+      description: >-
+          Messages from people, and accounts that need help. May update an account and may not
+          erase one — erasure is the owner's, and it expects a freshly proved session.
+      permissions:
+          - feedback.manage
+          - users.read
+          - users.update
+          - orders.read
+          - payments.read
+          - audit.read
+
+    - name: owner
+      scope: tenant
+      title: The shop owner
+      description: >-
+          Unrestricted within this shop, and only within it. This is the honest spelling of what
+          `admin: true` used to mean — note that it says nothing about the platform, which the old
+          boolean could not express.
+      permissions:
+          - all.manage
+
+    # -- platform scope ------------------------------------------------------------------------
+    - name: operator
+      scope: platform
+      title: The platform operator
+      description: >-
+          Runs the installation: health, metrics, the operational audit. Explicitly NOT a
+          super-owner — holds no bare key and therefore cannot read a single shop's orders,
+          customers or messages. The conformance suite asserts both halves of that.
+      permissions:
+          - platform.observability.manage
+
+# The role every unauthenticated request resolves to. Named so that "guest" is a value in the
+# model rather than a null somebody forgot to handle, and it holds exactly the keys a stranger
+# needs — reading published products and the dictionary the shop is rendered in.
+anonymous:
+    name: guest
+    scope: tenant
+    permissions:
+        - products.read
+        - locales.read
+        - delivery.read
