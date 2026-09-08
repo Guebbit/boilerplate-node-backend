@@ -21,21 +21,24 @@ import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 /** Express router for user management (admin only). */
 export const router = Router();
 
-// All routes require authentication + admin role
-router.use(getAuth, isAuth, requirePermission('users.manage'));
+// Every route below needs a caller, but not the SAME key — `manager` reads and `support` reads
+// and updates, and a router-wide `users.manage` gate made both unreachable no matter what the
+// role file granted. Each mount below states the one key its own action needs.
+router.use(getAuth, isAuth);
 
 /** Cache reader keyed on the same query parameters `getUsers`'s schema accepts. */
 const cacheUsersSearch = searchCache('users', searchUsersKeyParameters);
 
 // POST /users/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', cacheUsersSearch, getUsers);
+router.post('/search', requirePermission('users.read'), cacheUsersSearch, getUsers);
 
 // GET /users
-router.get('/', cacheUsersSearch, getUsers);
+router.get('/', requirePermission('users.read'), cacheUsersSearch, getUsers);
 
 // POST /users (create)
 router.post(
     '/',
+    requirePermission('users.create'),
     uploadLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
@@ -45,6 +48,7 @@ router.post(
 // PUT /users — id in body (update)
 router.put(
     '/',
+    requirePermission('users.update'),
     uploadLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
@@ -52,14 +56,25 @@ router.put(
 );
 
 // DELETE /users — id in body
-router.delete('/', invalidateCache(['users', 'account']), deleteUsers);
+router.delete(
+    '/',
+    requirePermission('users.delete'),
+    invalidateCache(['users', 'account']),
+    deleteUsers
+);
 
 // GET /users/:id
-router.get('/:id', setCache(3600, { tags: ['users'], keyParameters: [] }), getUserItem);
+router.get(
+    '/:id',
+    requirePermission('users.read'),
+    setCache(3600, { tags: ['users'], keyParameters: [] }),
+    getUserItem
+);
 
 // PUT /users/:id (update)
 router.put(
     '/:id',
+    requirePermission('users.update'),
     uploadLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
@@ -67,16 +82,28 @@ router.put(
 );
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true
-router.delete('/:id', invalidateCache(['users', 'account']), deleteUsers);
+router.delete(
+    '/:id',
+    requirePermission('users.delete'),
+    invalidateCache(['users', 'account']),
+    deleteUsers
+);
 
 // DELETE /users/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
+    requirePermission('users.delete'),
     invalidateCache(['users', 'account']),
     routeFlag('hardDelete'),
     deleteUsers
 );
 
 // DELETE /users/:id/2fa — admin-assisted 2FA recovery, no code required. The one deliberate
-// exception to "prove the factor to remove it" — see the controller's own comment.
-router.delete('/:id/2fa', invalidateCache(['users', 'account']), deleteUserTwoFactor);
+// exception to "prove the factor to remove it" — see the controller's own comment. Clearing a
+// second factor is `users.update`'s own description in `shared/authorization-keys.yaml`.
+router.delete(
+    '/:id/2fa',
+    requirePermission('users.update'),
+    invalidateCache(['users', 'account']),
+    deleteUserTwoFactor
+);

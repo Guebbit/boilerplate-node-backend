@@ -331,17 +331,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T12:56:57.000Z",
                             "description": "A complete, balanced diet formulated for adult dogs, made with real chicken and rice.",
                             "id": "65dc8a99604c307b702b5ccc",
                             "imageUrl": "/images/seed/ba302b38676e1a9220d28dddf28f9307.jpg",
-                            "onHand": 100,
                             "price": 68,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Grain-Free Dog Food, 15kg",
                             "updatedAt": "2024-02-26T12:56:57.000Z"
@@ -350,17 +345,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T14:10:49.000Z",
                             "description": "A tall, sisal-wrapped scratching post built to withstand daily use. Currently unavailable — back in stock soon.",
                             "id": "65dc9be92f2794d1c16741e1",
                             "imageUrl": "/images/seed/421a6d24283bcab298ed895cd76ab3c3.jpg",
-                            "onHand": 100,
                             "price": 45,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Cat Scratching Post",
                             "updatedAt": "2024-02-26T14:10:49.000Z"
@@ -382,17 +372,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T18:56:02.000Z",
                             "description": "A supportive memory foam bed designed to ease pressure on joints, suitable for senior and large-breed dogs.",
                             "id": "65dcdec2b18ad5e4bd597f0f",
                             "imageUrl": "/images/seed/e2e9ceb4241b096a71ff03d1bffccee2.jpg",
-                            "onHand": 100,
                             "price": 84,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Orthopedic Memory Foam Dog Bed",
                             "updatedAt": "2024-02-26T18:56:02.000Z"
@@ -425,17 +410,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T12:56:57.000Z",
                             "description": "A complete, balanced diet formulated for adult dogs, made with real chicken and rice.",
                             "id": "65dc8a99604c307b702b5ccc",
                             "imageUrl": "/images/seed/ba302b38676e1a9220d28dddf28f9307.jpg",
-                            "onHand": 100,
                             "price": 68,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Grain-Free Dog Food, 15kg",
                             "updatedAt": "2024-02-26T12:56:57.000Z"
@@ -457,17 +437,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T12:56:57.000Z",
                             "description": "A complete, balanced diet formulated for adult dogs, made with real chicken and rice.",
                             "id": "65dc8a99604c307b702b5ccc",
                             "imageUrl": "/images/seed/ba302b38676e1a9220d28dddf28f9307.jpg",
-                            "onHand": 100,
                             "price": 68,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Grain-Free Dog Food, 15kg",
                             "updatedAt": "2024-02-26T12:56:57.000Z"
@@ -476,17 +451,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2024-02-26T18:56:02.000Z",
                             "description": "A supportive memory foam bed designed to ease pressure on joints, suitable for senior and large-breed dogs.",
                             "id": "65dcdec2b18ad5e4bd597f0f",
                             "imageUrl": "/images/seed/e2e9ceb4241b096a71ff03d1bffccee2.jpg",
-                            "onHand": 100,
                             "price": 84,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Orthopedic Memory Foam Dog Bed",
                             "updatedAt": "2024-02-26T18:56:02.000Z"
@@ -495,17 +465,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for cat owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000019",
                             "imageUrl": "/images/seed/da2ade16a11e0c476cb77728734b4268.jpg",
-                            "onHand": 100,
                             "price": 114,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Cat Carrier",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -514,17 +479,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by bird owners: a set of tools for routine coat and nail care.",
                             "id": "67f0c100000000000000004d",
                             "imageUrl": "/images/seed/ead9f17de7d26a8f0a9795b5f3b5798d.jpg",
-                            "onHand": 100,
                             "price": 39,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Bird Grooming Kit",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -546,17 +506,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for dog owners: a leak-resistant system for a constant water supply.",
                             "id": "67f0c1000000000000000009",
                             "imageUrl": "/images/seed/f033021f5b36473d74906924a3c10142.jpg",
-                            "onHand": 100,
                             "price": 20,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Dog Water Dispenser",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -565,17 +520,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for rabbit owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000030",
                             "imageUrl": "/images/seed/92a55bd96548217591f9baa424ebe6c1.jpg",
-                            "onHand": 100,
                             "price": 19,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Rabbit Feeding Bowl",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -584,17 +534,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by reptile owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c1000000000000000065",
                             "imageUrl": "/images/seed/8cfb83d55627f938871b7602392d449f.jpg",
-                            "onHand": 100,
                             "price": 24,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Reptile Enrichment Toy",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -616,17 +561,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for cat owners: a leak-resistant system for a constant water supply.",
                             "id": "67f0c100000000000000001f",
                             "imageUrl": "/images/seed/af58a31d33f3b196152a4601aed0c7a9.jpg",
-                            "onHand": 100,
                             "price": 34,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Cat Water Dispenser",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -635,17 +575,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for bird owners: a supportive resting surface designed for daily use.",
                             "id": "67f0c1000000000000000040",
                             "imageUrl": "/images/seed/e161925bb7af5c31a67effca2a995120.jpg",
-                            "onHand": 100,
                             "price": 102,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Bird Bed",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -654,17 +589,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by small animal owners: a secure enclosure for transport and travel.",
                             "id": "67f0c100000000000000006e",
                             "imageUrl": "/images/seed/de9f099acefdd75b7644446e77a17ffa.jpg",
-                            "onHand": 100,
                             "price": 101,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Small Animal Carrier",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -673,17 +603,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for dog owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000004",
                             "imageUrl": "/images/seed/e161925bb7af5c31a67effca2a995120.jpg",
-                            "onHand": 100,
                             "price": 112,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Dog Carrier",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -705,17 +630,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for dog owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000003",
                             "imageUrl": "/images/seed/24caff6ebb8f0c96c7db765c2597b21b.jpg",
-                            "onHand": 100,
                             "price": 70,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Dog Carrier",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -737,17 +657,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for dog owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c100000000000000000f",
                             "imageUrl": "/images/seed/3ebe918cefaaac323c39df223850751b.jpg",
-                            "onHand": 100,
                             "price": 12,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Dog Enrichment Toy",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -769,17 +684,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for cat owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c100000000000000001b",
                             "imageUrl": "/images/seed/158debc5b4905fd1be217ad28abf4b57.jpg",
-                            "onHand": 100,
                             "price": 17,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Cat Feeding Bowl",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -801,17 +711,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for rabbit owners: a supportive resting surface designed for daily use.",
                             "id": "67f0c100000000000000002a",
                             "imageUrl": "/images/seed/f3c26b2c655d4f68f111c01c77eb2bf4.jpg",
-                            "onHand": 100,
                             "price": 64,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Rabbit Bed",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -833,17 +738,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for rabbit owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c100000000000000003a",
                             "imageUrl": "/images/seed/34c7b35ed620332cb78e29d6e7718df0.jpg",
-                            "onHand": 100,
                             "price": 23,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Rabbit Enrichment Toy",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -865,17 +765,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by bird owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000047",
                             "imageUrl": "/images/seed/af58a31d33f3b196152a4601aed0c7a9.jpg",
-                            "onHand": 100,
                             "price": 26,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Bird Feeding Bowl",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -897,17 +792,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000059",
                             "imageUrl": "/images/seed/f033021f5b36473d74906924a3c10142.jpg",
-                            "onHand": 100,
                             "price": 99,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Reptile Carrier",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -929,17 +819,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by dog owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000005",
                             "imageUrl": "/images/seed/da2ade16a11e0c476cb77728734b4268.jpg",
-                            "onHand": 100,
                             "price": 91,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Dog Carrier",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -948,17 +833,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for rabbit owners: a secure enclosure for transport and travel.",
                             "id": "67f0c100000000000000002e",
                             "imageUrl": "/images/seed/6c896532198da910493e6973ff0ba1da.jpg",
-                            "onHand": 100,
                             "price": 116,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Rabbit Carrier",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -980,17 +860,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for bird owners: a supportive resting surface designed for daily use.",
                             "id": "67f0c100000000000000003f",
                             "imageUrl": "/images/seed/24caff6ebb8f0c96c7db765c2597b21b.jpg",
-                            "onHand": 100,
                             "price": 66,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Bird Bed",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -999,17 +874,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for reptile owners: a set of tools for routine coat and nail care.",
                             "id": "67f0c1000000000000000061",
                             "imageUrl": "/images/seed/ead9f17de7d26a8f0a9795b5f3b5798d.jpg",
-                            "onHand": 100,
                             "price": 48,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Reptile Grooming Kit",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1018,17 +888,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for small animal owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000070",
                             "imageUrl": "/images/seed/23d91a58865208786fc3dcefd5997f0f.jpg",
-                            "onHand": 100,
                             "price": 34,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Small Animal Feeding Bowl",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1050,17 +915,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by dog owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000008",
                             "imageUrl": "/images/seed/92a55bd96548217591f9baa424ebe6c1.jpg",
-                            "onHand": 100,
                             "price": 20,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Dog Feeding Bowl",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1069,17 +929,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000032",
                             "imageUrl": "/images/seed/de9f099acefdd75b7644446e77a17ffa.jpg",
-                            "onHand": 100,
                             "price": 24,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Rabbit Feeding Bowl",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1101,17 +956,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for bird owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000046",
                             "imageUrl": "/images/seed/de9f099acefdd75b7644446e77a17ffa.jpg",
-                            "onHand": 100,
                             "price": 30,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Bird Feeding Bowl",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1120,17 +970,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for reptile owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c1000000000000000063",
                             "imageUrl": "/images/seed/0abc23b39789466a46b30b3d566216b3.jpg",
-                            "onHand": 100,
                             "price": 20,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Reptile Enrichment Toy",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1139,17 +984,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for small animal owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c1000000000000000078",
                             "imageUrl": "/images/seed/d9cfb7e63ad9a86b902e089297cd708e.jpg",
-                            "onHand": 100,
                             "price": 22,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Small Animal Enrichment Toy",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1171,17 +1011,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for dog owners: a set of tools for routine coat and nail care.",
                             "id": "67f0c100000000000000000c",
                             "imageUrl": "/images/seed/23d91a58865208786fc3dcefd5997f0f.jpg",
-                            "onHand": 100,
                             "price": 25,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Dog Grooming Kit",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1190,17 +1025,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for cat owners: a formulation intended to support everyday wellbeing.",
                             "id": "67f0c1000000000000000028",
                             "imageUrl": "/images/seed/d9cfb7e63ad9a86b902e089297cd708e.jpg",
-                            "onHand": 100,
                             "price": 31,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Cat Health Supplement",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1222,17 +1052,12 @@
                 "items": [
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for bird owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000042",
                             "imageUrl": "/images/seed/6c896532198da910493e6973ff0ba1da.jpg",
-                            "onHand": 100,
                             "price": 76,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Standard Bird Carrier",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1241,17 +1066,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a leak-resistant system for a constant water supply.",
                             "id": "67f0c100000000000000005f",
                             "imageUrl": "/images/seed/3ebe918cefaaac323c39df223850751b.jpg",
-                            "onHand": 100,
                             "price": 34,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Heavy-Duty Reptile Water Dispenser",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -1260,17 +1080,12 @@
                     },
                     {
                         "product": {
-                            "active": true,
-                            "available": 100,
                             "categories": [],
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for small animal owners: a set of tools for routine coat and nail care.",
                             "id": "67f0c1000000000000000076",
                             "imageUrl": "/images/seed/34c7b35ed620332cb78e29d6e7718df0.jpg",
-                            "onHand": 100,
                             "price": 50,
-                            "requiresShipping": true,
-                            "reserved": 0,
                             "tags": [],
                             "title": "Premium Small Animal Grooming Kit",
                             "updatedAt": "2025-04-05T05:34:56.000Z"
@@ -4445,10 +4260,6 @@
         ]
     },
     "credentials": {
-        "admin": {
-            "email": "root@root.it",
-            "password": "Demo-Admin1!"
-        },
         "editor": {
             "email": "editor@example.com",
             "password": "Demo-Editor1!"
@@ -4456,6 +4267,10 @@
         "moderator": {
             "email": "moderator@example.com",
             "password": "Demo-Moderator1!"
+        },
+        "owner": {
+            "email": "root@root.it",
+            "password": "Demo-Admin1!"
         },
         "translator": {
             "email": "translator@example.com",

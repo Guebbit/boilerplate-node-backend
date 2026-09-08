@@ -48,7 +48,7 @@ router.put(
     '/',
     uploadLimiter,
     isAuth,
-    requirePermission('products.create'),
+    requirePermission('products.update'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     writeProducts
@@ -79,7 +79,7 @@ router.put(
     '/:id',
     uploadLimiter,
     isAuth,
-    requirePermission('products.create'),
+    requirePermission('products.update'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     writeProducts
