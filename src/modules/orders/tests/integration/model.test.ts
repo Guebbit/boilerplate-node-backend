@@ -79,9 +79,10 @@ describe('order serialization', () => {
 describe('embedded product snapshot indexes', () => {
     it('does not let the embedded product schema smuggle its indexes into orders', () => {
         /*
-         * Mongoose copies a nested schema's indexes onto the schema that embeds it. Without
-         * `excludeIndexes` on `items.product`, every order would silently gain an index over
-         * `productSchema`'s fields — paid for on each insert, matched by no query. This lives
+         * Mongoose copies a nested schema's indexes onto the schema that embeds it, so an order
+         * line's own `orderLineProductSchema` gaining one (unlikely — it carries no index calls
+         * today) would need `excludeIndexes` at the embed site or every order would silently gain
+         * an index over frozen history, paid for on each insert, matched by no query. This lives
          * here because it is a fact about this module's schema, not the generic index suite.
          */
         const smuggled = orderSchema

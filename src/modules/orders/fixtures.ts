@@ -1,10 +1,12 @@
 /**
  * @module
  * How an order fixture is built. An order item embeds a product SNAPSHOT (`orderItemSchema`
- * declares `product: productSchema` with no `ref`), so this builder takes the snapshot as a
- * value rather than an id to look up later. It deliberately carries no `deletedAt` — a catalogue
- * soft-delete says nothing about an order already placed — and no totals, since those are
- * derived at serialization time by `applyOrderTransform` rather than stored.
+ * declares `product: orderLineProductSchema` with no `ref`), so this builder takes the snapshot
+ * as a value rather than an id to look up later. It deliberately carries no `onHand`/`reserved` —
+ * the embedded schema has nowhere to put them, same reasoning as `deletedAt`'s absence: a
+ * catalogue soft-delete or a stock count says nothing about an order already placed — and no
+ * totals, since those are derived at serialization time by `applyOrderTransform` rather than
+ * stored.
  */
 
 import { Types } from 'mongoose';
@@ -20,11 +22,13 @@ import type { OrderDocument } from './model';
 
 /**
  * The product as it was when the order was placed — the generated `Product`, with the three
- * fields a snapshot must carry made required. `createdAt`/`updatedAt` are the CATALOGUE row's,
- * carried in explicitly: a subdocument's timestamps stamp on insert regardless of the parent's
- * `{ timestamps: false }`, which would otherwise make every export non-deterministic.
+ * fields a snapshot must carry made required, and `onHand`/`reserved` dropped: the embedded
+ * schema has no path for either, so a fixture that pinned one would silently lose it on write.
+ * `createdAt`/`updatedAt` are the CATALOGUE row's, carried in explicitly: a subdocument's
+ * timestamps stamp on insert regardless of the parent's `{ timestamps: false }`, which would
+ * otherwise make every export non-deterministic.
  */
-export type OrderSnapshotInput = OverridesFor<Product> &
+export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserved'> &
     Required<Pick<Product, 'id' | 'title' | 'price'>>;
 
 /** One line of an order: the snapshot, and how many were bought. */

@@ -54,10 +54,13 @@ This is the module with the real invariants: what an order totals, which status 
 legal, and what cancelling gives back. If any module here ever grows a proper aggregate, it is
 this one.
 
-**An order embeds the catalogue row rather than referencing it.** `items` carries `productSchema`
-itself, so a later edit to a product cannot rewrite the history of an order placed last March.
-That is the whole reason [`products`](./products.md) publishes its schema and its serialisation
-transform through its barrel — the alternative is an invoice that changes after it was paid.
+**An order embeds a snapshot of the catalogue row rather than referencing it.** `items` carries its
+own `orderLineProductSchema` — the OpenAPI `OrderLineProduct` shape, not `Product` — populated at
+purchase time from [`products`](./products.md)'s live row, so a later edit cannot rewrite the
+history of an order placed last March. It is deliberately its OWN schema rather than a reuse of
+the catalogue's: `onHand` and `reserved` describe the warehouse right now, and an order line has no
+path to store either — the alternative is an invoice that quietly republishes live stock as if it
+were history.
 
 The status enum is the module's public vocabulary:
 

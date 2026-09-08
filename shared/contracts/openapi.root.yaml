@@ -685,13 +685,60 @@ components:
                 phone:
                     type: string
 
+        # `Product`, without `onHand`/`reserved`/`available`. An order line is a purchase-time
+        # SNAPSHOT — the price, title and image a customer actually saw and bought — and those
+        # three fields are the opposite of that: they describe the WAREHOUSE, right now, and
+        # publishing them on every past order republished live stock as if it were history.
+        # `id`/`title`/`price` stay `required`, same as `Product` itself.
+        OrderLineProduct:
+            type: object
+            additionalProperties: false
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                description:
+                    type: string
+                active:
+                    type: boolean
+                requiresShipping:
+                    type: boolean
+                    default: true
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '#/components/schemas/ThumbnailUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+
         OrderItem:
             type: object
             additionalProperties: false
             required: [product, quantity]
             properties:
                 product:
-                    $ref: '#/components/schemas/Product'
+                    $ref: '#/components/schemas/OrderLineProduct'
                 quantity:
                     type: integer
                     minimum: 1

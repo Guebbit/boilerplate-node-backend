@@ -7,6 +7,12 @@ a breaking change is one a generated client cannot absorb without being regenera
 
 ### Breaking — contract
 
+- **`OrderItem.product` is `OrderLineProduct`, not `Product`.** The embedded snapshot drops
+  `onHand`, `reserved` and the derived `available` — an order line is what a customer saw and
+  bought, and those three describe the warehouse right now, not a fact about the sale. A client
+  reading stock off an order's line items must read the live `GET /products/{id}` instead; nothing
+  in the paired frontend read those three fields on an order. Existing orders keep the stored
+  fields until `ops/strip-order-stock-snapshot.ts` runs; new orders never write them.
 - **`User.admin` is `User.role`.** The boolean became a role NAME, because a boolean could only
   ever say "unrestricted or not" and the model now separates the shop from the installation: a
   person holds one role inside the tenant and, rarely, a second over the platform. The seeded

@@ -13,7 +13,7 @@ import {
     type OverridesFor
 } from '@infrastructure/persistence/fixtures';
 import type { Product } from '@types';
-import type { ProductDocument, ProductSnapshot } from './model';
+import type { ProductDocument, ProductRecord } from './model';
 
 /**
  * What a caller may pin; everything absent is left to the schema. Derived from the generated
@@ -24,10 +24,10 @@ export type ProductOverrides = OverridesFor<Product>;
 
 /**
  * A product ready for `productRepository.create`. The three factory-set fields are required, not
- * optional, so callers like `orders/demo.ts` can read `fixture.title` without a `!`.
+ * optional, so callers like `demo/orders.ts` can read `fixture.title` without a `!`.
  */
 export type ProductFixture = Partial<ProductDocument> &
-    Pick<ProductSnapshot, '_id' | 'title' | 'price'>;
+    Pick<ProductRecord, '_id' | 'title' | 'price'>;
 
 /**
  * Builds one product fixture, filling `title` and `price` with placeholders and leaving every

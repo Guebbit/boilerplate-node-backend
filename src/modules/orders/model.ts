@@ -1,16 +1,16 @@
 /**
  * @module
  * The order Mongoose schema and the serialization transform that derives its wire-only totals.
- * An order embeds the product SNAPSHOT it was bought against (`productSchema`, no `ref`) rather
- * than referencing the live catalogue row, since a later product edit must not rewrite purchase
- * history. `totalItems`, `totalQuantity` and `totalPrice` are never stored — `applyOrderTransform`
- * derives them from `items` at the single serialization point every response passes through,
- * letting the contract mark them required. See: docs/modules/orders.md
+ * An order embeds the product SNAPSHOT it was bought against (`orderLineProductSchema`, no `ref`,
+ * and NOT `productSchema` — see the note there) rather than referencing the live catalogue row,
+ * since a later product edit must not rewrite purchase history. `totalItems`, `totalQuantity` and
+ * `totalPrice` are never stored — `applyOrderTransform` derives them from `items` at the single
+ * serialization point every response passes through, letting the contract mark them required.
+ * See: docs/modules/orders.md
  */
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { productSchema, applyProductTransform } from '@modules/products';
 import type { ProductSnapshot } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
@@ -26,9 +26,11 @@ export interface OrderDocumentItem {
     /**
      * The product snapshot, embedded.
      *
-     * Not a reference and never an `ObjectId`: `orderItemSchema` declares `product: productSchema`
-     * with no `ref`, so there is nothing for `populate()` to resolve and the un-joined case cannot
-     * occur. An order must keep what was bought, not what the catalogue says today.
+     * Not a reference and never an `ObjectId`: `orderItemSchema` declares
+     * `product: orderLineProductSchema` with no `ref`, so there is nothing for `populate()` to
+     * resolve and the un-joined case cannot occur. An order must keep what was bought, not what
+     * the catalogue says today — and not what the WAREHOUSE says today either, which is why the
+     * embedded schema is its own, narrower than the catalogue's.
      */
     product: ProductSnapshot;
     quantity: number;
@@ -101,17 +103,48 @@ export interface OrderDocument
 export type OrderModel = Model<OrderDocument>;
 
 /**
+ * Schema for the product snapshot embedded on an order line — `openapi.root.yaml`'s
+ * `OrderLineProduct`, not `Product`: no `onHand`, no `reserved`, and therefore nothing for a
+ * response to derive `available` FROM. Deliberately its own schema rather than `productSchema`
+ * reused: the two counters describe the warehouse right now, and an order line must not be ABLE
+ * to store them, not merely choose not to.
+ *
+ * `{ timestamps: true }`, matching `productSchema`: a subdocument stamps its own `createdAt`/
+ * `updatedAt` on insert regardless of the parent's timestamps option, which is why
+ * `orders/fixtures.ts` carries the catalogue row's own dates in explicitly rather than leaving
+ * them to default.
+ */
+const orderLineProductSchema = new Schema(
+    {
+        title: { type: String, required: true },
+        price: { type: Number, required: true },
+        description: { type: String },
+        imageUrl: { type: String },
+        thumbnailUrl: { type: String },
+        categories: { type: [String] },
+        tags: { type: [String] },
+        active: { type: Boolean },
+        requiresShipping: { type: Boolean },
+        deletedAt: { type: Date }
+    },
+    { timestamps: true }
+);
+
+/**
+ * The embedded snapshot's own wire-shape transform — `_id` → `id`, `__v` dropped, nothing derived:
+ * unlike `applyProductTransform`, there is no `available` to compute, because there is no
+ * `onHand`/`reserved` on this schema to compute it FROM.
+ */
+const applyOrderLineProductTransform = applySerialization(orderLineProductSchema);
+
+/**
  * Schema for a single embedded order item.
  * `_id: false` — OpenAPI's OrderItem is `{product, quantity}` only
  * (`additionalProperties: false`), so items don't need their own id.
  */
 const orderItemSchema = new Schema(
     {
-        /*
-         * `excludeIndexes`: without it, Mongoose copies the catalogue's indexes onto every
-         * order's `items.product.*` — frozen history that is never searched on its own.
-         */
-        product: { type: productSchema, excludeIndexes: true },
+        product: { type: orderLineProductSchema },
         quantity: {
             type: Number,
             required: true
@@ -232,17 +265,14 @@ orderSchema.index(
 );
 
 /**
- * Strips any leftover `_id` on embedded items (pre-existing documents saved before
- * `orderItemSchema`'s `_id: false` took effect still carry one at the BSON level), and
- * recursively normalizes the embedded product snapshot.
+ * Recursively normalizes each line's embedded product snapshot — `_id` → `id`, `__v` dropped.
  */
 const applyOrderItems = (serialized: Record<string, unknown>) => {
     if (!Array.isArray(serialized.items)) return;
 
     for (const item of serialized.items as Record<string, unknown>[]) {
-        delete item._id;
         if (item.product && typeof item.product === 'object')
-            applyProductTransform(item.product as Record<string, unknown>);
+            applyOrderLineProductTransform(item.product as Record<string, unknown>);
     }
 };
 

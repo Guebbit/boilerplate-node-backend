@@ -16,9 +16,10 @@ setupTestDb();
 
 /**
  * A complete, valid order payload: a real buyer and a real product snapshot.
- * `items[].product` embeds the whole `productSchema`, not a reference, since an order is a
+ * `items[].product` embeds `orderLineProductSchema`, not a reference, since an order is a
  * snapshot — a bare ObjectId fails validation here because title and price are required on the
- * embedded copy.
+ * embedded copy. The live product's `onHand`/`reserved` ride along on `product.toObject()` here
+ * but are dropped on write: the embedded schema declares no path for either.
  */
 const makeOrderPayload = async () => {
     const user = await createUser({ email: 'buyer@example.com' });
@@ -39,6 +40,19 @@ describe('order schema', () => {
         expect(serialized.id).toBe(String(order._id));
         expect(serialized).not.toHaveProperty('_id');
         expect(serialized).not.toHaveProperty('__v');
+    });
+
+    it('drops onHand/reserved even though the live product document carries both', async () => {
+        // `product.toObject()` in `makeOrderPayload` above is the FULL live product, `onHand`/
+        // `reserved` included — this is what proves `orderLineProductSchema` has no path for
+        // either, rather than merely relying on nobody setting them.
+        const order = await orderRepository.create((await makeOrderPayload()) as never);
+
+        const serialized = order.toJSON() as { items: Record<string, unknown>[] };
+
+        expect(serialized.items[0]?.product).not.toHaveProperty('onHand');
+        expect(serialized.items[0]?.product).not.toHaveProperty('reserved');
+        expect(serialized.items[0]?.product).not.toHaveProperty('available');
     });
 });
 

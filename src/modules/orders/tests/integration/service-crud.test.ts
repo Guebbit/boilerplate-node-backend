@@ -1,8 +1,9 @@
 /**
  * @module
- * Order CRUD — the write half of `src/modules/orders/service.ts` (`getById`, `create`, `update`,
- * `updateById`, `remove`, `removeById`); `orders.test.ts` covers the read/aggregation half
- * (`search`). Two behaviours carry real weight: `create` stores a full product snapshot, not a
+ * Order CRUD — the write half of `src/modules/orders/services/crud.ts` (`getById`, `create`,
+ * `update`, `updateById`, `remove`, `removeById`); `service-search.test.ts` covers the
+ * read/aggregation half (`search`). Two behaviours carry real weight: `create` stores a product
+ * snapshot, not a
  * reference, so repricing later cannot rewrite what a customer was charged; and `getById`'s
  * `scope` argument is an authorization boundary — a mismatched scope must yield `undefined`, not
  * the order.

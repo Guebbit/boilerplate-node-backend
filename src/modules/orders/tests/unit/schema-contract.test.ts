@@ -84,10 +84,11 @@ describe('orderSchema — the embedded snapshots', () => {
     });
 
     it('keeps the catalogue index definitions out of the order collection', () => {
-        // Mongoose copies an embedded schema's indexes onto whatever embeds it. Without
-        // `excludeIndexes`, every index describing how the CATALOGUE is searched would be
-        // maintained on every order write, pointed at `items.product.*` — indexes nobody queries.
-        expect(pathOptions(subSchema(orderSchema, 'items'), 'product').excludeIndexes).toBe(true);
+        // Mongoose copies an embedded schema's indexes onto whatever embeds it. The line item's
+        // product is `orderLineProductSchema`, not the catalogue's own `productSchema` —
+        // declares no index of its own, so there is nothing for a write here to inherit and
+        // maintain against `items.product.*`.
+        expect(indexSpecs(subSchema(subSchema(orderSchema, 'items'), 'product'))).toEqual([]);
         // And the proof it worked: no order index mentions the embedded product.
         expect(indexSpecs(orderSchema).filter((spec) => spec.includes('items.'))).toEqual([]);
     });

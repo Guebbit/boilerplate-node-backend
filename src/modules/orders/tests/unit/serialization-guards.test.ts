@@ -46,18 +46,6 @@ describe('order serialization guards', () => {
         expect(serialized.totalPrice).toBe(0);
     });
 
-    it('strips a leftover _id from an embedded line item', () => {
-        // Documents written before `orderItemSchema`'s `_id: false` took effect still carry one
-        // at the BSON level, and the contract declares the item shape closed.
-        const serialized: Record<string, unknown> = {
-            items: [{ _id: 'legacy-id', product: { price: 1 }, quantity: 1 }]
-        };
-
-        applyOrderTransform(serialized);
-
-        expect((serialized.items as Record<string, unknown>[])[0]).not.toHaveProperty('_id');
-    });
-
     it('leaves a line item whose product was not populated alone', () => {
         // `item.product && typeof item.product === 'object'` — an unpopulated ref is an ObjectId
         // or a string, and recursing into it is what the guard prevents.

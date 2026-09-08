@@ -18,10 +18,10 @@ import type { Product } from '@types';
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
  * `openapi.yaml` with its three dates as real `Date`s. `available` is omitted: it's derived at
- * serialization, never persisted. Kept separate from `ProductDocument` because `orders` embeds
- * this on line items, which aren't full documents and so can't satisfy that type.
+ * serialization, never persisted. Kept separate from `ProductDocument` so a plain object (a lean
+ * read, a fixture) can satisfy the shape without also satisfying `Document`.
  */
-export interface ProductSnapshot extends Omit<
+export interface ProductRecord extends Omit<
     Product,
     'id' | 'available' | 'createdAt' | 'updatedAt' | 'deletedAt'
 > {
@@ -33,9 +33,18 @@ export interface ProductSnapshot extends Omit<
 }
 
 /**
+ * A product as an ORDER LINE remembers it: `ProductRecord` without `onHand`/`reserved` — the two
+ * fields that describe the WAREHOUSE, right now, rather than what a customer saw and bought.
+ * `orders/model.ts` embeds a Mongoose schema that mirrors this shape (not `productSchema` itself,
+ * so the two counters are never even reachable to store), and its `OrderDocumentItem.product` is
+ * typed by this, not by `ProductRecord`.
+ */
+export type ProductSnapshot = Omit<ProductRecord, 'onHand' | 'reserved'>;
+
+/**
  * Product Document interface — the stored fields, plus everything Mongoose adds.
  */
-export interface ProductDocument extends ProductSnapshot, Document {
+export interface ProductDocument extends ProductRecord, Document {
     /** String version of _id — provided by Mongoose's Document getter. */
     id: string;
 

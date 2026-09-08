@@ -8,6 +8,7 @@
  */
 import { Types } from 'mongoose';
 import { makeOrder } from '@modules/orders/fixtures';
+import type { OrderSnapshotInput } from '@modules/orders/fixtures';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';
@@ -98,8 +99,18 @@ describe('makeOrder — the embedded product snapshot', () => {
         const snapshot = makeOrder({ items: [{ product: DOG_FOOD, quantity: 1 }] }).items![0]
             .product;
 
-        for (const field of ['categories', 'tags', 'active', 'onHand', 'reserved'])
+        for (const field of ['categories', 'tags', 'active'])
             expect(Object.hasOwn(snapshot, field)).toBe(false);
+    });
+
+    it('has no override at all for onHand/reserved — OrderSnapshotInput does not declare them', () => {
+        // The type-level half of B1: a snapshot override literally cannot name a live-stock
+        // counter. The write-time half — that a counter riding along on the LIVE product
+        // document still gets dropped — is `orders/tests/integration/schema-contract.test.ts`'s
+        // to prove.
+        // @ts-expect-error -- OrderSnapshotInput omits onHand/reserved; this is what proves it
+        const rejected: OrderSnapshotInput = { ...DOG_FOOD, onHand: 5 };
+        expect(Object.hasOwn(rejected, 'onHand')).toBe(true);
     });
 
     it('freezes the catalogue fields it IS given', () => {

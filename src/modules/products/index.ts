@@ -10,16 +10,19 @@ export { productRepository } from './repository';
 export type { ProductDocument } from './model';
 
 /**
- * A product's stored fields without the document machinery — what `orders` embeds on every line.
- * Published because that module's own types name it; see the note in `./model`.
+ * A product's stored fields without the document machinery — the base `ProductDocument` extends.
+ * Published for fixtures and lean reads outside this module that need the plain shape.
+ */
+export type { ProductRecord } from './model';
+
+/**
+ * A product as an ORDER LINE remembers it — `ProductRecord` without `onHand`/`reserved`. Published
+ * because `orders/model.ts` types its embedded snapshot with this, not with `ProductRecord`: an
+ * order line must not be able to carry a live warehouse counter, only what a customer saw.
  */
 export type { ProductSnapshot } from './model';
 
-/**
- * The mongoose schema and its serialization transform, for modules that embed a product rather
- * than reference one. Orders snapshot the product as it was at purchase time, so they need the
- * shape itself — a reference would let a later catalogue edit rewrite the history of an order.
- */
+/** The mongoose schema and its serialization transform, for this module's own callers. */
 export { productSchema, applyProductTransform, toProduct } from './model';
 
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */
