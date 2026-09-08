@@ -95,13 +95,30 @@ flowchart LR
 | `promtail`       | `grafana/promtail:3.3.2`                       | internal only                | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman. | [Loki](./loki.md)                          |
 | `grafana`        | `grafana/grafana:11.4.0`                       | `3001`                       | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.            | [Grafana](./grafana.md)                    |
 
+### Integrations (opt-in)
+
+The only group behind a compose **profile**. A plain `up` does not start it:
+
+```bash
+npm run compose -- --profile integrations up -d
+```
+
+| Container        | Image                                      | Port(s)                                | Role                                                                                                                                         | Read next                                     |
+| ---------------- | ------------------------------------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `webhook-tester` | `ghcr.io/tarampampam/webhook-tester:2.3.0` | `WEBHOOK_TESTER_PORT` (default `3070`) | Self-hosted webhook.site. A sink for outbound webhooks in development, showing each captured request with its headers. In-memory, no volume. | [Ports](./pairing-and-ports.md#host-port-map) |
+
+Nothing under `src/` imports it, names it, or fails when it is absent — it receives, and that is
+all. It is demo furniture in the same sense as the seeded catalogue, which is why it is gated
+rather than always-on.
+
 ## Service groups
 
-| Group         | Services                                                                               | Why they are here                                     |
-| ------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| App runtime   | `app`                                                                                  | runs the backend with container-friendly dev commands |
-| Core data     | `database`, `redis`, `rabbitmq`                                                        | persistence, cache/pub-sub, and async jobs            |
-| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `grafana` | traces, metrics, logs, and dashboards                 |
+| Group         | Services                                                                               | Why they are here                                           |
+| ------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| App runtime   | `app`                                                                                  | runs the backend with container-friendly dev commands       |
+| Core data     | `database`, `redis`, `rabbitmq`                                                        | persistence, cache/pub-sub, and async jobs                  |
+| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `grafana` | traces, metrics, logs, and dashboards                       |
+| Integrations  | `webhook-tester`                                                                       | opt-in sink for outbound webhooks; `--profile integrations` |
 
 ## How to think about the setup
 

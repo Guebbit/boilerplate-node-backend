@@ -62,6 +62,7 @@ The paired frontend owns **`8080–8099`**.
 | ---------------------------- | ----------------- | ------------------------------------------------- |
 | API                          | `3000`            | `NODE_PORT`                                       |
 | Grafana                      | `3001`            | `GRAFANA_PORT`                                    |
+| webhook-tester (sink UI)     | `3070`            | `WEBHOOK_TESTER_PORT`                             |
 | Umami dashboard / tracker    | `3080`            | `UMAMI_PORT`                                      |
 | Docs (VitePress + Nginx)     | `3090`            | `DOCS_PORT`                                       |
 | Loki                         | `3100`            | `LOKI_PORT`                                       |

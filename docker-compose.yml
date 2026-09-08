@@ -431,6 +431,42 @@ services:
             # frontend also claimed — for its own docs AND for its e2e vite server.
             - '${DOCS_PORT:-3090}:80'
 
+    # webhook-tester: a self-hosted webhook.site. Somewhere for outbound webhooks to be delivered
+    # TO during development — and specifically somewhere that shows the request headers, which is
+    # what makes a signature checkable by eye.
+    #
+    # Receives only. Nothing under `src/` imports it, names it, or fails when it is absent.
+    #
+    # Profile-gated, so a plain `up` is unchanged: `--profile integrations` starts it.
+    # https://github.com/tarampampam/webhook-tester
+    webhook-tester:
+        logging: *container-logging
+        profiles: ['integrations']
+        image: ghcr.io/tarampampam/webhook-tester:2.3.0
+        restart: unless-stopped
+        # The image entrypoint is `/bin/app start`, so no command override is needed. Every flag
+        # has an env equivalent, and these are read by the CONTAINER — none of them reach the app.
+        environment:
+            # A POST to /<any-uuid> creates that session on arrival. Without it a human has to open
+            # the UI and click "new URL" first, which a seeded subscription cannot do.
+            AUTO_CREATE_SESSIONS: 'true'
+            # In-memory on purpose: a restart clearing captured requests is right for a demo sink,
+            # and it keeps the container stateless, so there is no volume to declare below.
+            STORAGE_DRIVER: 'memory'
+            # Structured lines, so Promtail ships them to Loki parsed rather than as opaque text.
+            LOG_FORMAT: 'json'
+        ports:
+            # 3070 sits in this repo's 3000-3099 block — see docs/tools/pairing-and-ports.md.
+            - '${WEBHOOK_TESTER_PORT:-3070}:8080'
+        healthcheck:
+            # The image ships its own probe for this. It is `scratch`-based: no shell, no curl and
+            # no node, so the `node -e` form the app service uses is not available here.
+            test: ['CMD', '/bin/app', 'start', 'healthcheck']
+            interval: 2m
+            timeout: 5s
+            retries: 3
+            start_period: 10s
+
 # Volumes that will be used by the containers (and will persist unless removed manually)
 volumes:
     boilerplate_mongodb_volume:
