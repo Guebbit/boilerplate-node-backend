@@ -43,16 +43,16 @@ interface ImageEntry {
  * fixed pool (`FILLER_IMAGE_ROLE_KEYS`), independent of how large the generated catalogue grid
  * is — `./demo.ts` cycles through them, so growing the grid never needs a new download. */
 const PRODUCT_ROLES = [
-    'panino',
-    'carinoSoftDeleted',
-    'micionaOutOfStock',
-    'pufettino',
+    'dogFoodStandard',
+    'heaterSoftDeleted',
+    'scratchPostOutOfStock',
+    'dogBedPremium',
     'bundleInactive',
     ...FILLER_IMAGE_ROLE_KEYS
 ];
 
 /** The two named accounts that carry an avatar; every generated customer cycles between them. */
-const USER_ROLES = ['root', 'ginopinoshow'];
+const USER_ROLES = ['root', 'customer'];
 
 /**
  * Fetch a real photo from Lorem Picsum. The `seed` path segment pins which photo comes back, so
@@ -104,18 +104,28 @@ const generateOne = async (manifestKey: string, picsumSeed: string): Promise<Ima
 };
 
 /**
- * Deletes every `.jpg` directly under `public/images/seed/` whose name isn't one this run just
- * wrote — the six hand-placed originals from before this catalogue existed, plus any orphan left
- * by a role that was since renamed or dropped. Never touches `thumbs/`, `README.md`, or anything
- * in a nested directory — those are either this script's own output or someone else's fixture.
+ * Deletes every file of `extension` directly in `directory` whose name isn't one this run just
+ * wrote — an orphan left by a role that was since renamed or dropped. Runs over the originals and
+ * the thumbnails separately, since a rename orphans one of each and leaving either behind grows
+ * the committed fixture set on every rename.
  *
+ * Only files directly in `directory`, and only that one extension: `README.md`, and anything in a
+ * nested directory, is either someone else's fixture or a thumbnail generation this run isn't
+ * writing.
+ *
+ * @param directory - the directory to sweep, not recursed into
+ * @param extension - the file suffix this sweep owns, e.g. `.jpg`
  * @param keep - basenames (not full urls) this run just wrote and must not delete
  */
-const removeStaleOriginals = async (keep: ReadonlySet<string>): Promise<void> => {
-    const entries = await readdir(SEED_ROOT, { withFileTypes: true });
+const removeStale = async (
+    directory: string,
+    extension: string,
+    keep: ReadonlySet<string>
+): Promise<void> => {
+    const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
-        if (!entry.isFile() || !entry.name.endsWith('.jpg') || keep.has(entry.name)) continue;
-        await unlink(path.join(SEED_ROOT, entry.name));
+        if (!entry.isFile() || !entry.name.endsWith(extension) || keep.has(entry.name)) continue;
+        await unlink(path.join(directory, entry.name));
         console.info(`[seed-images] removed stale ${entry.name}`);
     }
 };
@@ -127,7 +137,10 @@ const writeManifest = (relativePath: string, manifest: Record<string, ImageEntry
         `${JSON.stringify(manifest, null, 4)}\n`
     );
 
-/** Fetch and digest every role's photo, sweep whatever the role lists no longer name, write both manifests. */
+/**
+ * Fetch and digest every role's photo, sweep whatever the role lists no longer name, write both
+ * manifests.
+ */
 const main = async (): Promise<void> => {
     await mkdir(SEED_ROOT, { recursive: true });
     await mkdir(THUMBS_ROOT, { recursive: true });
@@ -138,10 +151,13 @@ const main = async (): Promise<void> => {
     const users: Record<string, ImageEntry> = {};
     for (const role of USER_ROLES) users[role] = await generateOne(role, `user-${role}`);
 
-    const keptBasenames = new Set(
-        Object.values({ ...products, ...users }).map((entry) => path.basename(entry.imageUrl))
+    const written = Object.values({ ...products, ...users });
+    await removeStale(SEED_ROOT, '.jpg', new Set(written.map((e) => path.basename(e.imageUrl))));
+    await removeStale(
+        THUMBS_ROOT,
+        '.webp',
+        new Set(written.map((e) => path.basename(e.thumbnailUrl)))
     );
-    await removeStaleOriginals(keptBasenames);
 
     await writeManifest('src/modules/products/demo-images.generated.json', products);
     await writeManifest('src/modules/users/demo-images.generated.json', users);

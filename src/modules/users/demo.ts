@@ -1,14 +1,14 @@
 /**
  * @module
  * The user directory's slice of the demo dataset: `root` is the admin every admin-only route
- * needs a caller for, `ginopinoshow` is the customer every scoping rule needs someone to be
- * scoped against. Ids and credentials for both come from `@kernel/seed-accounts`, since other
+ * needs a caller for, and the `customer` account is the shopper every scoping rule needs someone
+ * to be scoped against. Ids and credentials for both come from `@kernel/seed-accounts`, since other
  * modules seed rows belonging to these two people.
  *
  * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so `cart/demo.ts` and
  * `orders/demo.ts` have more than one shopper to vary an order history across. None of them is
  * wired into `@kernel/seed-accounts` — there is no login promise attached to any of the ten, only
- * to `root`/`ginopinoshow`. Cart lines live in `src/modules/cart/demo.ts`, not here.
+ * to `root`/`customer`. Cart lines live in `src/modules/cart/demo.ts`, not here.
  */
 
 import {
@@ -70,7 +70,7 @@ const namedUsers = [
     }),
     makeUser({
         id: SEED_USER_ID,
-        username: 'ginopinoshow',
+        username: 'customer',
         email: SEED_USER_EMAIL,
         password: SEED_USER_PASSWORD,
         verified: true,
@@ -78,7 +78,7 @@ const namedUsers = [
         // the backend fires `cart_item_added` — `emitAnalyticsEvent`'s consent gate is opt-in,
         // so this is the account that has opted in.
         analyticsConsent: true,
-        ...userImages.ginopinoshow
+        ...userImages.customer
     })
 ];
 
@@ -86,7 +86,8 @@ const namedUsers = [
  * The ten further customers — plain shoppers, built from `SEED_CUSTOMER_IDS` in the same order so
  * the two stay in sync by construction. Each takes its password from `makeUser`'s own default
  * rather than stating one: none of these ten is a login anybody is meant to type. Images cycle
- * through the same two-photo pool `root`/`ginopinoshow` draw from, alternating by index.
+ * through the same two-photo pool the `root`/`customer` accounts draw from, alternating by
+ * index.
  */
 const CUSTOMER_NAMES: [key: keyof typeof SEED_CUSTOMER_IDS, username: string][] = [
     ['amelia', 'amelia.clarke'],
@@ -118,10 +119,10 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         email: SEED_CUSTOMER_EMAILS[key],
         verified: true,
         // Alternating, same as the image cycling below: a real customer base is a mix of
-        // opted-in and not, and `root`/`ginopinoshow` alone left the "granted" path exercised
+        // opted-in and not, and `root`/`customer` alone left the "granted" path exercised
         // by exactly one account.
         analyticsConsent: index % 2 === 0,
-        ...(index % 2 === 0 ? userImages.root : userImages.ginopinoshow)
+        ...(index % 2 === 0 ? userImages.root : userImages.customer)
     })
 );
 

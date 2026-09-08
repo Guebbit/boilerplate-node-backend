@@ -61,10 +61,10 @@ Staff see all 132. That difference is deliberate and it is explained on
 
 Two accounts come with a password you can actually type in:
 
-| Who            | Username       | Password   | Can do                            |
-| -------------- | -------------- | ---------- | --------------------------------- |
-| **A customer** | `ginopinoshow` | `password` | shop, buy, track their own orders |
-| **The owner**  | `root`         | `rootroot` | everything, plus run the shop     |
+| Who            | Email                  | Password       | Can do                            |
+| -------------- | ---------------------- | -------------- | --------------------------------- |
+| **A customer** | `customer@example.com` | `Demo-User1!`  | shop, buy, track their own orders |
+| **The owner**  | `root@root.it`         | `Demo-Admin1!` | everything, plus run the shop     |
 
 There are only these two levels. Either you are staff, or you are a customer. There is no
 "warehouse-only" or "support-only" login — those are jobs, not accounts, and this section splits

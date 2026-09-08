@@ -337,7 +337,7 @@
                             "createdAt": "2024-02-26T12:56:57.000Z",
                             "description": "A complete, balanced diet formulated for adult dogs, made with real chicken and rice.",
                             "id": "65dc8a99604c307b702b5ccc",
-                            "imageUrl": "/images/seed/15a2f96a1cf45eddf34d176ac89b0412.jpg",
+                            "imageUrl": "/images/seed/f9161f7c3f3ba7dd9e49972ecb976fec.jpg",
                             "onHand": 100,
                             "price": 68,
                             "requiresShipping": true,
@@ -356,7 +356,7 @@
                             "createdAt": "2024-02-26T14:10:49.000Z",
                             "description": "A tall, sisal-wrapped scratching post built to withstand daily use. Currently unavailable — back in stock soon.",
                             "id": "65dc9be92f2794d1c16741e1",
-                            "imageUrl": "/images/seed/db853894a058d715aef3cc977185b2a7.jpg",
+                            "imageUrl": "/images/seed/e9bb6b80be1be3222b5ea9f36c7cd199.jpg",
                             "onHand": 100,
                             "price": 45,
                             "requiresShipping": true,
@@ -388,7 +388,7 @@
                             "createdAt": "2024-02-26T18:56:02.000Z",
                             "description": "A supportive memory foam bed designed to ease pressure on joints, suitable for senior and large-breed dogs.",
                             "id": "65dcdec2b18ad5e4bd597f0f",
-                            "imageUrl": "/images/seed/b53a515bc382572c27aa8483d6eaf5fa.jpg",
+                            "imageUrl": "/images/seed/771d2d9d43b8e470d2ffbb0e2367b60c.jpg",
                             "onHand": 100,
                             "price": 84,
                             "requiresShipping": true,
@@ -420,7 +420,7 @@
             {
                 "createdAt": "2024-08-07T22:10:09.000Z",
                 "deletedAt": "2024-08-07T09:12:03.114Z",
-                "email": "gino@pino.it",
+                "email": "customer@example.com",
                 "id": "66b3f0c14d2e8a91c7d4a015",
                 "items": [
                     {
@@ -431,7 +431,7 @@
                             "createdAt": "2024-02-26T12:56:57.000Z",
                             "description": "A complete, balanced diet formulated for adult dogs, made with real chicken and rice.",
                             "id": "65dc8a99604c307b702b5ccc",
-                            "imageUrl": "/images/seed/15a2f96a1cf45eddf34d176ac89b0412.jpg",
+                            "imageUrl": "/images/seed/f9161f7c3f3ba7dd9e49972ecb976fec.jpg",
                             "onHand": 100,
                             "price": 68,
                             "requiresShipping": true,
@@ -452,7 +452,7 @@
             },
             {
                 "createdAt": "2025-04-05T05:47:44.000Z",
-                "email": "gino@pino.it",
+                "email": "customer@example.com",
                 "id": "67f0c4000000000000000000",
                 "items": [
                     {
@@ -463,7 +463,7 @@
                             "createdAt": "2024-02-26T12:56:57.000Z",
                             "description": "A complete, balanced diet formulated for adult dogs, made with real chicken and rice.",
                             "id": "65dc8a99604c307b702b5ccc",
-                            "imageUrl": "/images/seed/15a2f96a1cf45eddf34d176ac89b0412.jpg",
+                            "imageUrl": "/images/seed/f9161f7c3f3ba7dd9e49972ecb976fec.jpg",
                             "onHand": 100,
                             "price": 68,
                             "requiresShipping": true,
@@ -482,7 +482,7 @@
                             "createdAt": "2024-02-26T18:56:02.000Z",
                             "description": "A supportive memory foam bed designed to ease pressure on joints, suitable for senior and large-breed dogs.",
                             "id": "65dcdec2b18ad5e4bd597f0f",
-                            "imageUrl": "/images/seed/b53a515bc382572c27aa8483d6eaf5fa.jpg",
+                            "imageUrl": "/images/seed/771d2d9d43b8e470d2ffbb0e2367b60c.jpg",
                             "onHand": 100,
                             "price": 84,
                             "requiresShipping": true,
@@ -501,7 +501,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for cat owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000019",
-                            "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                            "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                             "onHand": 100,
                             "price": 114,
                             "requiresShipping": true,
@@ -520,7 +520,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by bird owners: a set of tools for routine coat and nail care.",
                             "id": "67f0c100000000000000004d",
-                            "imageUrl": "/images/seed/a6499de69d816432b42e3e1c0de1080f.jpg",
+                            "imageUrl": "/images/seed/a69f5952d62f8045889cb143d392863a.jpg",
                             "onHand": 100,
                             "price": 39,
                             "requiresShipping": true,
@@ -541,7 +541,7 @@
             },
             {
                 "createdAt": "2025-04-05T05:47:44.000Z",
-                "email": "gino@pino.it",
+                "email": "customer@example.com",
                 "id": "67f0c4000000000000000001",
                 "items": [
                     {
@@ -552,7 +552,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for dog owners: a leak-resistant system for a constant water supply.",
                             "id": "67f0c1000000000000000009",
-                            "imageUrl": "/images/seed/c660fd64ef6a447204b44d6691fb6990.jpg",
+                            "imageUrl": "/images/seed/7025690e35bf561597758282859fe59d.jpg",
                             "onHand": 100,
                             "price": 20,
                             "requiresShipping": true,
@@ -571,7 +571,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for rabbit owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000030",
-                            "imageUrl": "/images/seed/a2fa8960d83a87d3dbdf343a0adcb51b.jpg",
+                            "imageUrl": "/images/seed/c7e4692a446710d4d6a6cebfd6d2a1a0.jpg",
                             "onHand": 100,
                             "price": 19,
                             "requiresShipping": true,
@@ -590,7 +590,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by reptile owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c1000000000000000065",
-                            "imageUrl": "/images/seed/bec5ad8ace8cbf366997f5d2f87284b2.jpg",
+                            "imageUrl": "/images/seed/31e257d25b083c99156b65614a493a7d.jpg",
                             "onHand": 100,
                             "price": 24,
                             "requiresShipping": true,
@@ -611,7 +611,7 @@
             },
             {
                 "createdAt": "2025-04-05T05:47:44.000Z",
-                "email": "gino@pino.it",
+                "email": "customer@example.com",
                 "id": "67f0c4000000000000000002",
                 "items": [
                     {
@@ -622,7 +622,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for cat owners: a leak-resistant system for a constant water supply.",
                             "id": "67f0c100000000000000001f",
-                            "imageUrl": "/images/seed/9f30713ebb717f6502dcf0d8cd3b1497.jpg",
+                            "imageUrl": "/images/seed/041b2b26ddf426676992bb8156e76a5e.jpg",
                             "onHand": 100,
                             "price": 34,
                             "requiresShipping": true,
@@ -641,7 +641,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for bird owners: a supportive resting surface designed for daily use.",
                             "id": "67f0c1000000000000000040",
-                            "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                            "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                             "onHand": 100,
                             "price": 102,
                             "requiresShipping": true,
@@ -660,7 +660,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by small animal owners: a secure enclosure for transport and travel.",
                             "id": "67f0c100000000000000006e",
-                            "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                            "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                             "onHand": 100,
                             "price": 101,
                             "requiresShipping": true,
@@ -679,7 +679,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for dog owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000004",
-                            "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                            "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                             "onHand": 100,
                             "price": 112,
                             "requiresShipping": true,
@@ -711,7 +711,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for dog owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000003",
-                            "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                            "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                             "onHand": 100,
                             "price": 70,
                             "requiresShipping": true,
@@ -743,7 +743,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for dog owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c100000000000000000f",
-                            "imageUrl": "/images/seed/d8286714eaeaf86b7e87c08ede9418a0.jpg",
+                            "imageUrl": "/images/seed/0d3694eba7a98e7d0b87feb174dfe541.jpg",
                             "onHand": 100,
                             "price": 12,
                             "requiresShipping": true,
@@ -775,7 +775,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for cat owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c100000000000000001b",
-                            "imageUrl": "/images/seed/4e457c3638dba467d586254061282e58.jpg",
+                            "imageUrl": "/images/seed/c9adf944eb2136a9d950f987b1ef70bb.jpg",
                             "onHand": 100,
                             "price": 17,
                             "requiresShipping": true,
@@ -807,7 +807,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for rabbit owners: a supportive resting surface designed for daily use.",
                             "id": "67f0c100000000000000002a",
-                            "imageUrl": "/images/seed/95091e4c71b8f47e05deff3ca2a824e7.jpg",
+                            "imageUrl": "/images/seed/0c06e2eae0e678ac6a79db492aa41fd3.jpg",
                             "onHand": 100,
                             "price": 64,
                             "requiresShipping": true,
@@ -839,7 +839,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for rabbit owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c100000000000000003a",
-                            "imageUrl": "/images/seed/9804fed5a63dfc1835215f61727e3f60.jpg",
+                            "imageUrl": "/images/seed/df89372f0fcbdd7c698310f7b4c9574a.jpg",
                             "onHand": 100,
                             "price": 23,
                             "requiresShipping": true,
@@ -871,7 +871,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by bird owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000047",
-                            "imageUrl": "/images/seed/9f30713ebb717f6502dcf0d8cd3b1497.jpg",
+                            "imageUrl": "/images/seed/041b2b26ddf426676992bb8156e76a5e.jpg",
                             "onHand": 100,
                             "price": 26,
                             "requiresShipping": true,
@@ -903,7 +903,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000059",
-                            "imageUrl": "/images/seed/c660fd64ef6a447204b44d6691fb6990.jpg",
+                            "imageUrl": "/images/seed/7025690e35bf561597758282859fe59d.jpg",
                             "onHand": 100,
                             "price": 99,
                             "requiresShipping": true,
@@ -935,7 +935,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by dog owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000005",
-                            "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                            "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                             "onHand": 100,
                             "price": 91,
                             "requiresShipping": true,
@@ -954,7 +954,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for rabbit owners: a secure enclosure for transport and travel.",
                             "id": "67f0c100000000000000002e",
-                            "imageUrl": "/images/seed/b90aa28634ded90223b04bac5dbff08e.jpg",
+                            "imageUrl": "/images/seed/ade60c250458d8508c398e5f00344992.jpg",
                             "onHand": 100,
                             "price": 116,
                             "requiresShipping": true,
@@ -986,7 +986,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for bird owners: a supportive resting surface designed for daily use.",
                             "id": "67f0c100000000000000003f",
-                            "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                            "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                             "onHand": 100,
                             "price": 66,
                             "requiresShipping": true,
@@ -1005,7 +1005,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for reptile owners: a set of tools for routine coat and nail care.",
                             "id": "67f0c1000000000000000061",
-                            "imageUrl": "/images/seed/a6499de69d816432b42e3e1c0de1080f.jpg",
+                            "imageUrl": "/images/seed/a69f5952d62f8045889cb143d392863a.jpg",
                             "onHand": 100,
                             "price": 48,
                             "requiresShipping": true,
@@ -1024,7 +1024,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for small animal owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000070",
-                            "imageUrl": "/images/seed/646093c7c7c9b07fa65358fb2697c229.jpg",
+                            "imageUrl": "/images/seed/5251aaa263a14441af5061924a28c26c.jpg",
                             "onHand": 100,
                             "price": 34,
                             "requiresShipping": true,
@@ -1056,7 +1056,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by dog owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000008",
-                            "imageUrl": "/images/seed/a2fa8960d83a87d3dbdf343a0adcb51b.jpg",
+                            "imageUrl": "/images/seed/c7e4692a446710d4d6a6cebfd6d2a1a0.jpg",
                             "onHand": 100,
                             "price": 20,
                             "requiresShipping": true,
@@ -1075,7 +1075,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000032",
-                            "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                            "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                             "onHand": 100,
                             "price": 24,
                             "requiresShipping": true,
@@ -1107,7 +1107,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for bird owners: a stable, easy-to-clean feeding solution.",
                             "id": "67f0c1000000000000000046",
-                            "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                            "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                             "onHand": 100,
                             "price": 30,
                             "requiresShipping": true,
@@ -1126,7 +1126,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for reptile owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c1000000000000000063",
-                            "imageUrl": "/images/seed/652c2f4746c6fb78e0beefc2820da2ef.jpg",
+                            "imageUrl": "/images/seed/05a56d2dfcf8104d050a19f658caf031.jpg",
                             "onHand": 100,
                             "price": 20,
                             "requiresShipping": true,
@@ -1145,7 +1145,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for small animal owners: an interactive item that supports natural behaviour.",
                             "id": "67f0c1000000000000000078",
-                            "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                            "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                             "onHand": 100,
                             "price": 22,
                             "requiresShipping": true,
@@ -1177,7 +1177,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for dog owners: a set of tools for routine coat and nail care.",
                             "id": "67f0c100000000000000000c",
-                            "imageUrl": "/images/seed/646093c7c7c9b07fa65358fb2697c229.jpg",
+                            "imageUrl": "/images/seed/5251aaa263a14441af5061924a28c26c.jpg",
                             "onHand": 100,
                             "price": 25,
                             "requiresShipping": true,
@@ -1196,7 +1196,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for cat owners: a formulation intended to support everyday wellbeing.",
                             "id": "67f0c1000000000000000028",
-                            "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                            "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                             "onHand": 100,
                             "price": 31,
                             "requiresShipping": true,
@@ -1228,7 +1228,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A dependable, no-frills option for bird owners: a secure enclosure for transport and travel.",
                             "id": "67f0c1000000000000000042",
-                            "imageUrl": "/images/seed/b90aa28634ded90223b04bac5dbff08e.jpg",
+                            "imageUrl": "/images/seed/ade60c250458d8508c398e5f00344992.jpg",
                             "onHand": 100,
                             "price": 76,
                             "requiresShipping": true,
@@ -1247,7 +1247,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a leak-resistant system for a constant water supply.",
                             "id": "67f0c100000000000000005f",
-                            "imageUrl": "/images/seed/d8286714eaeaf86b7e87c08ede9418a0.jpg",
+                            "imageUrl": "/images/seed/0d3694eba7a98e7d0b87feb174dfe541.jpg",
                             "onHand": 100,
                             "price": 34,
                             "requiresShipping": true,
@@ -1266,7 +1266,7 @@
                             "createdAt": "2025-04-05T05:34:56.000Z",
                             "description": "A higher-grade option, built for small animal owners: a set of tools for routine coat and nail care.",
                             "id": "67f0c1000000000000000076",
-                            "imageUrl": "/images/seed/9804fed5a63dfc1835215f61727e3f60.jpg",
+                            "imageUrl": "/images/seed/df89372f0fcbdd7c698310f7b4c9574a.jpg",
                             "onHand": 100,
                             "price": 50,
                             "requiresShipping": true,
@@ -1297,7 +1297,7 @@
                 "createdAt": "2024-02-26T12:56:57.000Z",
                 "description": "A complete, balanced diet formulated for adult dogs, made with real chicken and rice.",
                 "id": "65dc8a99604c307b702b5ccc",
-                "imageUrl": "/images/seed/15a2f96a1cf45eddf34d176ac89b0412.jpg",
+                "imageUrl": "/images/seed/f9161f7c3f3ba7dd9e49972ecb976fec.jpg",
                 "onHand": 30,
                 "price": 68,
                 "requiresShipping": true,
@@ -1306,7 +1306,7 @@
                     "dog-food",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/775ba8ad2d7fc82cf797abaeb40fac86.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/229496a3a501dffcacd19f35a2fe062e.webp",
                 "title": "Premium Grain-Free Dog Food, 15kg",
                 "updatedAt": "2024-02-26T12:56:57.000Z"
             },
@@ -1320,7 +1320,7 @@
                 "deletedAt": "2024-02-26T23:34:44.832Z",
                 "description": "A ceramic heat emitter for reptile terrariums, providing consistent background heat without light. Discontinued — no longer offered for sale.",
                 "id": "65dc8ad8604c307b702b5cd4",
-                "imageUrl": "/images/seed/e41ca400acb71db62965f512757455a5.jpg",
+                "imageUrl": "/images/seed/aab4f9209313adcea25ea9892e2b8b5b.jpg",
                 "onHand": 12,
                 "price": 55,
                 "requiresShipping": true,
@@ -1329,7 +1329,7 @@
                     "heating",
                     "reptile"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/17c69ecf6826353efb081ccd07a54bb7.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/8affbf08336093c98f45525f54cfaa67.webp",
                 "title": "150W Ceramic Heat Emitter",
                 "updatedAt": "2024-02-26T12:58:00.000Z"
             },
@@ -1342,7 +1342,7 @@
                 "createdAt": "2024-02-26T14:10:49.000Z",
                 "description": "A tall, sisal-wrapped scratching post built to withstand daily use. Currently unavailable — back in stock soon.",
                 "id": "65dc9be92f2794d1c16741e1",
-                "imageUrl": "/images/seed/db853894a058d715aef3cc977185b2a7.jpg",
+                "imageUrl": "/images/seed/e9bb6b80be1be3222b5ea9f36c7cd199.jpg",
                 "onHand": 0,
                 "price": 45,
                 "requiresShipping": true,
@@ -1351,7 +1351,7 @@
                     "scratching-post",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/39127e9b5e16427ec3282cfcc52bd9ec.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/dc5f90df01fe8b8e308f3a5027678c34.webp",
                 "title": "Heavy-Duty Cat Scratching Post",
                 "updatedAt": "2024-02-26T14:10:49.000Z"
             },
@@ -1364,7 +1364,7 @@
                 "createdAt": "2024-02-26T18:56:02.000Z",
                 "description": "A supportive memory foam bed designed to ease pressure on joints, suitable for senior and large-breed dogs.",
                 "id": "65dcdec2b18ad5e4bd597f0f",
-                "imageUrl": "/images/seed/b53a515bc382572c27aa8483d6eaf5fa.jpg",
+                "imageUrl": "/images/seed/771d2d9d43b8e470d2ffbb0e2367b60c.jpg",
                 "onHand": 45,
                 "price": 84,
                 "requiresShipping": true,
@@ -1373,7 +1373,7 @@
                     "dog-bed",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/7f9c108e71eb3017491bb0c30742fbea.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/a3817c3b92227c601c576b51aa250c5a.webp",
                 "title": "Orthopedic Memory Foam Dog Bed",
                 "updatedAt": "2024-02-26T18:56:02.000Z"
             },
@@ -1387,7 +1387,7 @@
                 "createdAt": "2024-04-19T19:39:54.000Z",
                 "description": "A complete rabbit housing bundle including hutch, feeder and water bottle. Temporarily disabled while packaging is updated.",
                 "id": "6622c88a5123b1e286f440f8",
-                "imageUrl": "/images/seed/06f10292683e2c041571db4b394a05e9.jpg",
+                "imageUrl": "/images/seed/d166bc7ea150750e5e03217cbb5d3bab.jpg",
                 "onHand": 18,
                 "price": 96,
                 "requiresShipping": true,
@@ -1396,7 +1396,7 @@
                     "bundle",
                     "rabbit"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/3c90af6859a88f67ca76e1b6607c7af1.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/a87ab220e67308137b7086723e6037d9.webp",
                 "title": "Rabbit Starter Bundle — Hutch, Feeder & Water Bottle",
                 "updatedAt": "2024-04-19T19:39:54.000Z"
             },
@@ -1425,7 +1425,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for dog owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000000",
-                "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                 "onHand": 60,
                 "price": 60,
                 "requiresShipping": true,
@@ -1434,7 +1434,7 @@
                     "bed",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/367c50474de461a2f4a165f956465d0c.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0ae0720fe38dea6c3bd11a4abba391d1.webp",
                 "title": "Standard Dog Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1447,7 +1447,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for dog owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000001",
-                "imageUrl": "/images/seed/bec5ad8ace8cbf366997f5d2f87284b2.jpg",
+                "imageUrl": "/images/seed/31e257d25b083c99156b65614a493a7d.jpg",
                 "onHand": 45,
                 "price": 96,
                 "requiresShipping": true,
@@ -1456,7 +1456,7 @@
                     "bed",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/a1d24f87db475dc900e209fdd699e1fa.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/fd7b7bdcb7cfc3c2d94399532869f16f.webp",
                 "title": "Premium Dog Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1469,7 +1469,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by dog owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000002",
-                "imageUrl": "/images/seed/95091e4c71b8f47e05deff3ca2a824e7.jpg",
+                "imageUrl": "/images/seed/0c06e2eae0e678ac6a79db492aa41fd3.jpg",
                 "onHand": 30,
                 "price": 78,
                 "requiresShipping": true,
@@ -1478,7 +1478,7 @@
                     "bed",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/2e923c2442195ca13ae36d758a9ee679.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/31ec080a95101326995e3a0f5ed1a053.webp",
                 "title": "Heavy-Duty Dog Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1491,7 +1491,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for dog owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000003",
-                "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                 "onHand": 57,
                 "price": 70,
                 "requiresShipping": true,
@@ -1500,7 +1500,7 @@
                     "carrier",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ac3416de563d3d3f8fa376d664fc4b7a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/4dd1cdcae235f5a1155efcdf1186c132.webp",
                 "title": "Standard Dog Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1513,7 +1513,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for dog owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000004",
-                "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                 "onHand": 42,
                 "price": 112,
                 "requiresShipping": true,
@@ -1522,7 +1522,7 @@
                     "carrier",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/88caf32baecfb7d6bb9c9db69763c543.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1bf65e4622abc04d60c7000352d496bb.webp",
                 "title": "Premium Dog Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1535,7 +1535,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by dog owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000005",
-                "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                 "onHand": 27,
                 "price": 91,
                 "requiresShipping": true,
@@ -1544,7 +1544,7 @@
                     "carrier",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/cc04561e3b653351a7dcf55f37b1495a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f05910ea4912f7934859d6f3e8d91447.webp",
                 "title": "Heavy-Duty Dog Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1557,7 +1557,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for dog owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000006",
-                "imageUrl": "/images/seed/b90aa28634ded90223b04bac5dbff08e.jpg",
+                "imageUrl": "/images/seed/ade60c250458d8508c398e5f00344992.jpg",
                 "onHand": 54,
                 "price": 15,
                 "requiresShipping": true,
@@ -1566,7 +1566,7 @@
                     "feeding-bowl",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/57869cd7b3fdefbb5cdb147b61b94ead.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/6a3f4a2eccac8f2c25d2413f06bb96b7.webp",
                 "title": "Standard Dog Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1579,7 +1579,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for dog owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000007",
-                "imageUrl": "/images/seed/4e457c3638dba467d586254061282e58.jpg",
+                "imageUrl": "/images/seed/c9adf944eb2136a9d950f987b1ef70bb.jpg",
                 "onHand": 39,
                 "price": 24,
                 "requiresShipping": true,
@@ -1588,7 +1588,7 @@
                     "feeding-bowl",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/b453f77ecfd1111ef542122c21d7d2b6.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/253a1a54e83c7a50b41ea864aa2cce0b.webp",
                 "title": "Premium Dog Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1601,7 +1601,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by dog owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000008",
-                "imageUrl": "/images/seed/a2fa8960d83a87d3dbdf343a0adcb51b.jpg",
+                "imageUrl": "/images/seed/c7e4692a446710d4d6a6cebfd6d2a1a0.jpg",
                 "onHand": 24,
                 "price": 20,
                 "requiresShipping": true,
@@ -1610,7 +1610,7 @@
                     "feeding-bowl",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/c4a179491e26556c9be8a821d0e18918.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/626b8410ef55dbd19fc2010c2cf56169.webp",
                 "title": "Heavy-Duty Dog Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1623,7 +1623,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for dog owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000009",
-                "imageUrl": "/images/seed/c660fd64ef6a447204b44d6691fb6990.jpg",
+                "imageUrl": "/images/seed/7025690e35bf561597758282859fe59d.jpg",
                 "onHand": 51,
                 "price": 20,
                 "requiresShipping": true,
@@ -1632,7 +1632,7 @@
                     "water-dispenser",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/0976105e2963b83253f6389ca1cf0daf.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/65ef54510616dee0bdac60c20b43b9ea.webp",
                 "title": "Standard Dog Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1645,7 +1645,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for dog owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c100000000000000000a",
-                "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                 "onHand": 36,
                 "price": 32,
                 "requiresShipping": true,
@@ -1654,7 +1654,7 @@
                     "water-dispenser",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/12fd65b32fea36bf752bcb0dad13d169.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/d89a4280efd00435aed1509c120f1756.webp",
                 "title": "Premium Dog Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1667,7 +1667,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by dog owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c100000000000000000b",
-                "imageUrl": "/images/seed/9f30713ebb717f6502dcf0d8cd3b1497.jpg",
+                "imageUrl": "/images/seed/041b2b26ddf426676992bb8156e76a5e.jpg",
                 "onHand": 21,
                 "price": 26,
                 "requiresShipping": true,
@@ -1676,7 +1676,7 @@
                     "water-dispenser",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/dc93447b32a6d8fe62d5ddcf27a9ca5e.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/9f6729cc0f3b01912423b965ff5dd362.webp",
                 "title": "Heavy-Duty Dog Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1689,7 +1689,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for dog owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c100000000000000000c",
-                "imageUrl": "/images/seed/646093c7c7c9b07fa65358fb2697c229.jpg",
+                "imageUrl": "/images/seed/5251aaa263a14441af5061924a28c26c.jpg",
                 "onHand": 48,
                 "price": 25,
                 "requiresShipping": true,
@@ -1698,7 +1698,7 @@
                     "grooming-kit",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/af8dce7f233b72aa8a08bdd578b2a5ff.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cae4efafa6f18257e6cabce0f72a7a03.webp",
                 "title": "Standard Dog Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1711,7 +1711,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for dog owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c100000000000000000d",
-                "imageUrl": "/images/seed/8abfcb8758f76d29ecea218ea26b5fa6.jpg",
+                "imageUrl": "/images/seed/fc5a643a79d2aca574fb5225441c2944.jpg",
                 "onHand": 33,
                 "price": 40,
                 "requiresShipping": true,
@@ -1720,7 +1720,7 @@
                     "grooming-kit",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee41ee5870b1972c0378cea9d0e55acd.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0de8a069adada3940289d7df0ef41936.webp",
                 "title": "Premium Dog Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1733,7 +1733,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by dog owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c100000000000000000e",
-                "imageUrl": "/images/seed/b1e3c07ff13a6ab482c9e25d18668a75.jpg",
+                "imageUrl": "/images/seed/716c4f76d778d385e710bfdb8ec48874.jpg",
                 "onHand": 18,
                 "price": 33,
                 "requiresShipping": true,
@@ -1742,7 +1742,7 @@
                     "grooming-kit",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/24cde525953bab35e50da1e7cb7ce064.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/e98e514af9623d929b72c9d7a06fc468.webp",
                 "title": "Heavy-Duty Dog Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1755,7 +1755,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for dog owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c100000000000000000f",
-                "imageUrl": "/images/seed/d8286714eaeaf86b7e87c08ede9418a0.jpg",
+                "imageUrl": "/images/seed/0d3694eba7a98e7d0b87feb174dfe541.jpg",
                 "onHand": 45,
                 "price": 12,
                 "requiresShipping": true,
@@ -1764,7 +1764,7 @@
                     "enrichment-toy",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/4e56c6b692d727ce9ae7b25ed97f19c7.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/671583722516c8016cebfc1a8a07fbac.webp",
                 "title": "Standard Dog Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1777,7 +1777,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for dog owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000010",
-                "imageUrl": "/images/seed/4b31520ab1296f2d2523bd6ad52c443f.jpg",
+                "imageUrl": "/images/seed/c1b149d12738f708fc05f7c9339173c7.jpg",
                 "onHand": 30,
                 "price": 19,
                 "requiresShipping": true,
@@ -1786,7 +1786,7 @@
                     "enrichment-toy",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/71e2d0d2fa1c315fc51c2b7c38ff76ed.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/3435cc60136631430806fc45b82194fb.webp",
                 "title": "Premium Dog Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1799,7 +1799,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by dog owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000011",
-                "imageUrl": "/images/seed/a6499de69d816432b42e3e1c0de1080f.jpg",
+                "imageUrl": "/images/seed/a69f5952d62f8045889cb143d392863a.jpg",
                 "onHand": 15,
                 "price": 16,
                 "requiresShipping": true,
@@ -1808,7 +1808,7 @@
                     "enrichment-toy",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/f05c3e1ef87e3529d0306fae5c2c3651.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f51dd10c48c638de1815c8284eea4f7c.webp",
                 "title": "Heavy-Duty Dog Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1821,7 +1821,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for dog owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000012",
-                "imageUrl": "/images/seed/9804fed5a63dfc1835215f61727e3f60.jpg",
+                "imageUrl": "/images/seed/df89372f0fcbdd7c698310f7b4c9574a.jpg",
                 "onHand": 42,
                 "price": 18,
                 "requiresShipping": true,
@@ -1830,7 +1830,7 @@
                     "health-supplement",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee0cb5bd65138a1b2acbda54360fe96f.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1f02651f516b8aa9ed95d1f52e473eda.webp",
                 "title": "Standard Dog Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1843,7 +1843,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for dog owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000013",
-                "imageUrl": "/images/seed/652c2f4746c6fb78e0beefc2820da2ef.jpg",
+                "imageUrl": "/images/seed/05a56d2dfcf8104d050a19f658caf031.jpg",
                 "onHand": 27,
                 "price": 29,
                 "requiresShipping": true,
@@ -1852,7 +1852,7 @@
                     "health-supplement",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/92bd4daa36e1bc7d156bbc2e35972542.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cf756420e10c071b11c2c84eee564919.webp",
                 "title": "Premium Dog Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1865,7 +1865,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by dog owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000014",
-                "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                 "onHand": 12,
                 "price": 23,
                 "requiresShipping": true,
@@ -1874,7 +1874,7 @@
                     "health-supplement",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/367c50474de461a2f4a165f956465d0c.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0ae0720fe38dea6c3bd11a4abba391d1.webp",
                 "title": "Heavy-Duty Dog Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1887,7 +1887,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for cat owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000015",
-                "imageUrl": "/images/seed/bec5ad8ace8cbf366997f5d2f87284b2.jpg",
+                "imageUrl": "/images/seed/31e257d25b083c99156b65614a493a7d.jpg",
                 "onHand": 62,
                 "price": 62,
                 "requiresShipping": true,
@@ -1896,7 +1896,7 @@
                     "bed",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/a1d24f87db475dc900e209fdd699e1fa.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/fd7b7bdcb7cfc3c2d94399532869f16f.webp",
                 "title": "Standard Cat Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1909,7 +1909,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for cat owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000016",
-                "imageUrl": "/images/seed/95091e4c71b8f47e05deff3ca2a824e7.jpg",
+                "imageUrl": "/images/seed/0c06e2eae0e678ac6a79db492aa41fd3.jpg",
                 "onHand": 47,
                 "price": 98,
                 "requiresShipping": true,
@@ -1918,7 +1918,7 @@
                     "bed",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/2e923c2442195ca13ae36d758a9ee679.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/31ec080a95101326995e3a0f5ed1a053.webp",
                 "title": "Premium Cat Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1931,7 +1931,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by cat owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000017",
-                "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                 "onHand": 32,
                 "price": 80,
                 "requiresShipping": true,
@@ -1940,7 +1940,7 @@
                     "bed",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ac3416de563d3d3f8fa376d664fc4b7a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/4dd1cdcae235f5a1155efcdf1186c132.webp",
                 "title": "Heavy-Duty Cat Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1953,7 +1953,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for cat owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000018",
-                "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                 "onHand": 59,
                 "price": 72,
                 "requiresShipping": true,
@@ -1962,7 +1962,7 @@
                     "carrier",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/88caf32baecfb7d6bb9c9db69763c543.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1bf65e4622abc04d60c7000352d496bb.webp",
                 "title": "Standard Cat Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1975,7 +1975,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for cat owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000019",
-                "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                 "onHand": 44,
                 "price": 114,
                 "requiresShipping": true,
@@ -1984,7 +1984,7 @@
                     "carrier",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/cc04561e3b653351a7dcf55f37b1495a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f05910ea4912f7934859d6f3e8d91447.webp",
                 "title": "Premium Cat Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -1997,7 +1997,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by cat owners: a secure enclosure for transport and travel.",
                 "id": "67f0c100000000000000001a",
-                "imageUrl": "/images/seed/b90aa28634ded90223b04bac5dbff08e.jpg",
+                "imageUrl": "/images/seed/ade60c250458d8508c398e5f00344992.jpg",
                 "onHand": 29,
                 "price": 93,
                 "requiresShipping": true,
@@ -2006,7 +2006,7 @@
                     "carrier",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/57869cd7b3fdefbb5cdb147b61b94ead.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/6a3f4a2eccac8f2c25d2413f06bb96b7.webp",
                 "title": "Heavy-Duty Cat Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2019,7 +2019,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for cat owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c100000000000000001b",
-                "imageUrl": "/images/seed/4e457c3638dba467d586254061282e58.jpg",
+                "imageUrl": "/images/seed/c9adf944eb2136a9d950f987b1ef70bb.jpg",
                 "onHand": 56,
                 "price": 17,
                 "requiresShipping": true,
@@ -2028,7 +2028,7 @@
                     "feeding-bowl",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/b453f77ecfd1111ef542122c21d7d2b6.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/253a1a54e83c7a50b41ea864aa2cce0b.webp",
                 "title": "Standard Cat Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2041,7 +2041,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for cat owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c100000000000000001c",
-                "imageUrl": "/images/seed/a2fa8960d83a87d3dbdf343a0adcb51b.jpg",
+                "imageUrl": "/images/seed/c7e4692a446710d4d6a6cebfd6d2a1a0.jpg",
                 "onHand": 41,
                 "price": 26,
                 "requiresShipping": true,
@@ -2050,7 +2050,7 @@
                     "feeding-bowl",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/c4a179491e26556c9be8a821d0e18918.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/626b8410ef55dbd19fc2010c2cf56169.webp",
                 "title": "Premium Cat Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2063,7 +2063,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by cat owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c100000000000000001d",
-                "imageUrl": "/images/seed/c660fd64ef6a447204b44d6691fb6990.jpg",
+                "imageUrl": "/images/seed/7025690e35bf561597758282859fe59d.jpg",
                 "onHand": 26,
                 "price": 22,
                 "requiresShipping": true,
@@ -2072,7 +2072,7 @@
                     "feeding-bowl",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/0976105e2963b83253f6389ca1cf0daf.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/65ef54510616dee0bdac60c20b43b9ea.webp",
                 "title": "Heavy-Duty Cat Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2085,7 +2085,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for cat owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c100000000000000001e",
-                "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                 "onHand": 53,
                 "price": 22,
                 "requiresShipping": true,
@@ -2094,7 +2094,7 @@
                     "water-dispenser",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/12fd65b32fea36bf752bcb0dad13d169.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/d89a4280efd00435aed1509c120f1756.webp",
                 "title": "Standard Cat Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2107,7 +2107,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for cat owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c100000000000000001f",
-                "imageUrl": "/images/seed/9f30713ebb717f6502dcf0d8cd3b1497.jpg",
+                "imageUrl": "/images/seed/041b2b26ddf426676992bb8156e76a5e.jpg",
                 "onHand": 38,
                 "price": 34,
                 "requiresShipping": true,
@@ -2116,7 +2116,7 @@
                     "water-dispenser",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/dc93447b32a6d8fe62d5ddcf27a9ca5e.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/9f6729cc0f3b01912423b965ff5dd362.webp",
                 "title": "Premium Cat Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2129,7 +2129,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by cat owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000020",
-                "imageUrl": "/images/seed/646093c7c7c9b07fa65358fb2697c229.jpg",
+                "imageUrl": "/images/seed/5251aaa263a14441af5061924a28c26c.jpg",
                 "onHand": 23,
                 "price": 28,
                 "requiresShipping": true,
@@ -2138,7 +2138,7 @@
                     "water-dispenser",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/af8dce7f233b72aa8a08bdd578b2a5ff.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cae4efafa6f18257e6cabce0f72a7a03.webp",
                 "title": "Heavy-Duty Cat Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2151,7 +2151,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for cat owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000021",
-                "imageUrl": "/images/seed/8abfcb8758f76d29ecea218ea26b5fa6.jpg",
+                "imageUrl": "/images/seed/fc5a643a79d2aca574fb5225441c2944.jpg",
                 "onHand": 50,
                 "price": 27,
                 "requiresShipping": true,
@@ -2160,7 +2160,7 @@
                     "grooming-kit",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee41ee5870b1972c0378cea9d0e55acd.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0de8a069adada3940289d7df0ef41936.webp",
                 "title": "Standard Cat Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2173,7 +2173,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for cat owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000022",
-                "imageUrl": "/images/seed/b1e3c07ff13a6ab482c9e25d18668a75.jpg",
+                "imageUrl": "/images/seed/716c4f76d778d385e710bfdb8ec48874.jpg",
                 "onHand": 35,
                 "price": 42,
                 "requiresShipping": true,
@@ -2182,7 +2182,7 @@
                     "grooming-kit",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/24cde525953bab35e50da1e7cb7ce064.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/e98e514af9623d929b72c9d7a06fc468.webp",
                 "title": "Premium Cat Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2195,7 +2195,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by cat owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000023",
-                "imageUrl": "/images/seed/d8286714eaeaf86b7e87c08ede9418a0.jpg",
+                "imageUrl": "/images/seed/0d3694eba7a98e7d0b87feb174dfe541.jpg",
                 "onHand": 20,
                 "price": 35,
                 "requiresShipping": true,
@@ -2204,7 +2204,7 @@
                     "grooming-kit",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/4e56c6b692d727ce9ae7b25ed97f19c7.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/671583722516c8016cebfc1a8a07fbac.webp",
                 "title": "Heavy-Duty Cat Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2217,7 +2217,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for cat owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000024",
-                "imageUrl": "/images/seed/4b31520ab1296f2d2523bd6ad52c443f.jpg",
+                "imageUrl": "/images/seed/c1b149d12738f708fc05f7c9339173c7.jpg",
                 "onHand": 47,
                 "price": 14,
                 "requiresShipping": true,
@@ -2226,7 +2226,7 @@
                     "enrichment-toy",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/71e2d0d2fa1c315fc51c2b7c38ff76ed.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/3435cc60136631430806fc45b82194fb.webp",
                 "title": "Standard Cat Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2239,7 +2239,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for cat owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000025",
-                "imageUrl": "/images/seed/a6499de69d816432b42e3e1c0de1080f.jpg",
+                "imageUrl": "/images/seed/a69f5952d62f8045889cb143d392863a.jpg",
                 "onHand": 32,
                 "price": 21,
                 "requiresShipping": true,
@@ -2248,7 +2248,7 @@
                     "enrichment-toy",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/f05c3e1ef87e3529d0306fae5c2c3651.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f51dd10c48c638de1815c8284eea4f7c.webp",
                 "title": "Premium Cat Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2261,7 +2261,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by cat owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000026",
-                "imageUrl": "/images/seed/9804fed5a63dfc1835215f61727e3f60.jpg",
+                "imageUrl": "/images/seed/df89372f0fcbdd7c698310f7b4c9574a.jpg",
                 "onHand": 17,
                 "price": 18,
                 "requiresShipping": true,
@@ -2270,7 +2270,7 @@
                     "enrichment-toy",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee0cb5bd65138a1b2acbda54360fe96f.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1f02651f516b8aa9ed95d1f52e473eda.webp",
                 "title": "Heavy-Duty Cat Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2283,7 +2283,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for cat owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000027",
-                "imageUrl": "/images/seed/652c2f4746c6fb78e0beefc2820da2ef.jpg",
+                "imageUrl": "/images/seed/05a56d2dfcf8104d050a19f658caf031.jpg",
                 "onHand": 44,
                 "price": 20,
                 "requiresShipping": true,
@@ -2292,7 +2292,7 @@
                     "health-supplement",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/92bd4daa36e1bc7d156bbc2e35972542.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cf756420e10c071b11c2c84eee564919.webp",
                 "title": "Standard Cat Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2305,7 +2305,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for cat owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000028",
-                "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                 "onHand": 29,
                 "price": 31,
                 "requiresShipping": true,
@@ -2314,7 +2314,7 @@
                     "health-supplement",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/367c50474de461a2f4a165f956465d0c.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0ae0720fe38dea6c3bd11a4abba391d1.webp",
                 "title": "Premium Cat Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2327,7 +2327,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by cat owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000029",
-                "imageUrl": "/images/seed/bec5ad8ace8cbf366997f5d2f87284b2.jpg",
+                "imageUrl": "/images/seed/31e257d25b083c99156b65614a493a7d.jpg",
                 "onHand": 14,
                 "price": 25,
                 "requiresShipping": true,
@@ -2336,7 +2336,7 @@
                     "health-supplement",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/a1d24f87db475dc900e209fdd699e1fa.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/fd7b7bdcb7cfc3c2d94399532869f16f.webp",
                 "title": "Heavy-Duty Cat Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2349,7 +2349,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for rabbit owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c100000000000000002a",
-                "imageUrl": "/images/seed/95091e4c71b8f47e05deff3ca2a824e7.jpg",
+                "imageUrl": "/images/seed/0c06e2eae0e678ac6a79db492aa41fd3.jpg",
                 "onHand": 64,
                 "price": 64,
                 "requiresShipping": true,
@@ -2358,7 +2358,7 @@
                     "bed",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/2e923c2442195ca13ae36d758a9ee679.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/31ec080a95101326995e3a0f5ed1a053.webp",
                 "title": "Standard Rabbit Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2371,7 +2371,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for rabbit owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c100000000000000002b",
-                "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                 "onHand": 49,
                 "price": 100,
                 "requiresShipping": true,
@@ -2380,7 +2380,7 @@
                     "bed",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ac3416de563d3d3f8fa376d664fc4b7a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/4dd1cdcae235f5a1155efcdf1186c132.webp",
                 "title": "Premium Rabbit Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2393,7 +2393,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c100000000000000002c",
-                "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                 "onHand": 34,
                 "price": 82,
                 "requiresShipping": true,
@@ -2402,7 +2402,7 @@
                     "bed",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/88caf32baecfb7d6bb9c9db69763c543.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1bf65e4622abc04d60c7000352d496bb.webp",
                 "title": "Heavy-Duty Rabbit Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2415,7 +2415,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for rabbit owners: a secure enclosure for transport and travel.",
                 "id": "67f0c100000000000000002d",
-                "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                 "onHand": 61,
                 "price": 74,
                 "requiresShipping": true,
@@ -2424,7 +2424,7 @@
                     "carrier",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/cc04561e3b653351a7dcf55f37b1495a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f05910ea4912f7934859d6f3e8d91447.webp",
                 "title": "Standard Rabbit Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2437,7 +2437,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for rabbit owners: a secure enclosure for transport and travel.",
                 "id": "67f0c100000000000000002e",
-                "imageUrl": "/images/seed/b90aa28634ded90223b04bac5dbff08e.jpg",
+                "imageUrl": "/images/seed/ade60c250458d8508c398e5f00344992.jpg",
                 "onHand": 46,
                 "price": 116,
                 "requiresShipping": true,
@@ -2446,7 +2446,7 @@
                     "carrier",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/57869cd7b3fdefbb5cdb147b61b94ead.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/6a3f4a2eccac8f2c25d2413f06bb96b7.webp",
                 "title": "Premium Rabbit Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2459,7 +2459,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: a secure enclosure for transport and travel.",
                 "id": "67f0c100000000000000002f",
-                "imageUrl": "/images/seed/4e457c3638dba467d586254061282e58.jpg",
+                "imageUrl": "/images/seed/c9adf944eb2136a9d950f987b1ef70bb.jpg",
                 "onHand": 31,
                 "price": 95,
                 "requiresShipping": true,
@@ -2468,7 +2468,7 @@
                     "carrier",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/b453f77ecfd1111ef542122c21d7d2b6.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/253a1a54e83c7a50b41ea864aa2cce0b.webp",
                 "title": "Heavy-Duty Rabbit Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2481,7 +2481,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for rabbit owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000030",
-                "imageUrl": "/images/seed/a2fa8960d83a87d3dbdf343a0adcb51b.jpg",
+                "imageUrl": "/images/seed/c7e4692a446710d4d6a6cebfd6d2a1a0.jpg",
                 "onHand": 58,
                 "price": 19,
                 "requiresShipping": true,
@@ -2490,7 +2490,7 @@
                     "feeding-bowl",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/c4a179491e26556c9be8a821d0e18918.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/626b8410ef55dbd19fc2010c2cf56169.webp",
                 "title": "Standard Rabbit Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2503,7 +2503,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for rabbit owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000031",
-                "imageUrl": "/images/seed/c660fd64ef6a447204b44d6691fb6990.jpg",
+                "imageUrl": "/images/seed/7025690e35bf561597758282859fe59d.jpg",
                 "onHand": 43,
                 "price": 28,
                 "requiresShipping": true,
@@ -2512,7 +2512,7 @@
                     "feeding-bowl",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/0976105e2963b83253f6389ca1cf0daf.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/65ef54510616dee0bdac60c20b43b9ea.webp",
                 "title": "Premium Rabbit Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2525,7 +2525,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000032",
-                "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                 "onHand": 28,
                 "price": 24,
                 "requiresShipping": true,
@@ -2534,7 +2534,7 @@
                     "feeding-bowl",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/12fd65b32fea36bf752bcb0dad13d169.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/d89a4280efd00435aed1509c120f1756.webp",
                 "title": "Heavy-Duty Rabbit Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2547,7 +2547,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for rabbit owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000033",
-                "imageUrl": "/images/seed/9f30713ebb717f6502dcf0d8cd3b1497.jpg",
+                "imageUrl": "/images/seed/041b2b26ddf426676992bb8156e76a5e.jpg",
                 "onHand": 55,
                 "price": 24,
                 "requiresShipping": true,
@@ -2556,7 +2556,7 @@
                     "water-dispenser",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/dc93447b32a6d8fe62d5ddcf27a9ca5e.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/9f6729cc0f3b01912423b965ff5dd362.webp",
                 "title": "Standard Rabbit Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2569,7 +2569,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for rabbit owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000034",
-                "imageUrl": "/images/seed/646093c7c7c9b07fa65358fb2697c229.jpg",
+                "imageUrl": "/images/seed/5251aaa263a14441af5061924a28c26c.jpg",
                 "onHand": 40,
                 "price": 36,
                 "requiresShipping": true,
@@ -2578,7 +2578,7 @@
                     "water-dispenser",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/af8dce7f233b72aa8a08bdd578b2a5ff.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cae4efafa6f18257e6cabce0f72a7a03.webp",
                 "title": "Premium Rabbit Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2591,7 +2591,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000035",
-                "imageUrl": "/images/seed/8abfcb8758f76d29ecea218ea26b5fa6.jpg",
+                "imageUrl": "/images/seed/fc5a643a79d2aca574fb5225441c2944.jpg",
                 "onHand": 25,
                 "price": 30,
                 "requiresShipping": true,
@@ -2600,7 +2600,7 @@
                     "water-dispenser",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee41ee5870b1972c0378cea9d0e55acd.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0de8a069adada3940289d7df0ef41936.webp",
                 "title": "Heavy-Duty Rabbit Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2613,7 +2613,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for rabbit owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000036",
-                "imageUrl": "/images/seed/b1e3c07ff13a6ab482c9e25d18668a75.jpg",
+                "imageUrl": "/images/seed/716c4f76d778d385e710bfdb8ec48874.jpg",
                 "onHand": 52,
                 "price": 29,
                 "requiresShipping": true,
@@ -2622,7 +2622,7 @@
                     "grooming-kit",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/24cde525953bab35e50da1e7cb7ce064.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/e98e514af9623d929b72c9d7a06fc468.webp",
                 "title": "Standard Rabbit Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2635,7 +2635,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for rabbit owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000037",
-                "imageUrl": "/images/seed/d8286714eaeaf86b7e87c08ede9418a0.jpg",
+                "imageUrl": "/images/seed/0d3694eba7a98e7d0b87feb174dfe541.jpg",
                 "onHand": 37,
                 "price": 44,
                 "requiresShipping": true,
@@ -2644,7 +2644,7 @@
                     "grooming-kit",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/4e56c6b692d727ce9ae7b25ed97f19c7.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/671583722516c8016cebfc1a8a07fbac.webp",
                 "title": "Premium Rabbit Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2657,7 +2657,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000038",
-                "imageUrl": "/images/seed/4b31520ab1296f2d2523bd6ad52c443f.jpg",
+                "imageUrl": "/images/seed/c1b149d12738f708fc05f7c9339173c7.jpg",
                 "onHand": 22,
                 "price": 37,
                 "requiresShipping": true,
@@ -2666,7 +2666,7 @@
                     "grooming-kit",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/71e2d0d2fa1c315fc51c2b7c38ff76ed.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/3435cc60136631430806fc45b82194fb.webp",
                 "title": "Heavy-Duty Rabbit Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2679,7 +2679,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for rabbit owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000039",
-                "imageUrl": "/images/seed/a6499de69d816432b42e3e1c0de1080f.jpg",
+                "imageUrl": "/images/seed/a69f5952d62f8045889cb143d392863a.jpg",
                 "onHand": 49,
                 "price": 16,
                 "requiresShipping": true,
@@ -2688,7 +2688,7 @@
                     "enrichment-toy",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/f05c3e1ef87e3529d0306fae5c2c3651.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f51dd10c48c638de1815c8284eea4f7c.webp",
                 "title": "Standard Rabbit Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2701,7 +2701,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for rabbit owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c100000000000000003a",
-                "imageUrl": "/images/seed/9804fed5a63dfc1835215f61727e3f60.jpg",
+                "imageUrl": "/images/seed/df89372f0fcbdd7c698310f7b4c9574a.jpg",
                 "onHand": 34,
                 "price": 23,
                 "requiresShipping": true,
@@ -2710,7 +2710,7 @@
                     "enrichment-toy",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee0cb5bd65138a1b2acbda54360fe96f.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1f02651f516b8aa9ed95d1f52e473eda.webp",
                 "title": "Premium Rabbit Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2723,7 +2723,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c100000000000000003b",
-                "imageUrl": "/images/seed/652c2f4746c6fb78e0beefc2820da2ef.jpg",
+                "imageUrl": "/images/seed/05a56d2dfcf8104d050a19f658caf031.jpg",
                 "onHand": 19,
                 "price": 20,
                 "requiresShipping": true,
@@ -2732,7 +2732,7 @@
                     "enrichment-toy",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/92bd4daa36e1bc7d156bbc2e35972542.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cf756420e10c071b11c2c84eee564919.webp",
                 "title": "Heavy-Duty Rabbit Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2745,7 +2745,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for rabbit owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c100000000000000003c",
-                "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                 "onHand": 46,
                 "price": 22,
                 "requiresShipping": true,
@@ -2754,7 +2754,7 @@
                     "health-supplement",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/367c50474de461a2f4a165f956465d0c.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0ae0720fe38dea6c3bd11a4abba391d1.webp",
                 "title": "Standard Rabbit Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2767,7 +2767,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for rabbit owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c100000000000000003d",
-                "imageUrl": "/images/seed/bec5ad8ace8cbf366997f5d2f87284b2.jpg",
+                "imageUrl": "/images/seed/31e257d25b083c99156b65614a493a7d.jpg",
                 "onHand": 31,
                 "price": 33,
                 "requiresShipping": true,
@@ -2776,7 +2776,7 @@
                     "health-supplement",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/a1d24f87db475dc900e209fdd699e1fa.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/fd7b7bdcb7cfc3c2d94399532869f16f.webp",
                 "title": "Premium Rabbit Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2789,7 +2789,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by rabbit owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c100000000000000003e",
-                "imageUrl": "/images/seed/95091e4c71b8f47e05deff3ca2a824e7.jpg",
+                "imageUrl": "/images/seed/0c06e2eae0e678ac6a79db492aa41fd3.jpg",
                 "onHand": 16,
                 "price": 27,
                 "requiresShipping": true,
@@ -2798,7 +2798,7 @@
                     "health-supplement",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/2e923c2442195ca13ae36d758a9ee679.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/31ec080a95101326995e3a0f5ed1a053.webp",
                 "title": "Heavy-Duty Rabbit Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2811,7 +2811,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for bird owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c100000000000000003f",
-                "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                 "onHand": 66,
                 "price": 66,
                 "requiresShipping": true,
@@ -2820,7 +2820,7 @@
                     "bed",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ac3416de563d3d3f8fa376d664fc4b7a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/4dd1cdcae235f5a1155efcdf1186c132.webp",
                 "title": "Standard Bird Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2833,7 +2833,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for bird owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000040",
-                "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                 "onHand": 51,
                 "price": 102,
                 "requiresShipping": true,
@@ -2842,7 +2842,7 @@
                     "bed",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/88caf32baecfb7d6bb9c9db69763c543.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1bf65e4622abc04d60c7000352d496bb.webp",
                 "title": "Premium Bird Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2855,7 +2855,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by bird owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000041",
-                "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                 "onHand": 36,
                 "price": 84,
                 "requiresShipping": true,
@@ -2864,7 +2864,7 @@
                     "bed",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/cc04561e3b653351a7dcf55f37b1495a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f05910ea4912f7934859d6f3e8d91447.webp",
                 "title": "Heavy-Duty Bird Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2877,7 +2877,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for bird owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000042",
-                "imageUrl": "/images/seed/b90aa28634ded90223b04bac5dbff08e.jpg",
+                "imageUrl": "/images/seed/ade60c250458d8508c398e5f00344992.jpg",
                 "onHand": 63,
                 "price": 76,
                 "requiresShipping": true,
@@ -2886,7 +2886,7 @@
                     "carrier",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/57869cd7b3fdefbb5cdb147b61b94ead.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/6a3f4a2eccac8f2c25d2413f06bb96b7.webp",
                 "title": "Standard Bird Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2899,7 +2899,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for bird owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000043",
-                "imageUrl": "/images/seed/4e457c3638dba467d586254061282e58.jpg",
+                "imageUrl": "/images/seed/c9adf944eb2136a9d950f987b1ef70bb.jpg",
                 "onHand": 48,
                 "price": 118,
                 "requiresShipping": true,
@@ -2908,7 +2908,7 @@
                     "carrier",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/b453f77ecfd1111ef542122c21d7d2b6.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/253a1a54e83c7a50b41ea864aa2cce0b.webp",
                 "title": "Premium Bird Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2921,7 +2921,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by bird owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000044",
-                "imageUrl": "/images/seed/a2fa8960d83a87d3dbdf343a0adcb51b.jpg",
+                "imageUrl": "/images/seed/c7e4692a446710d4d6a6cebfd6d2a1a0.jpg",
                 "onHand": 33,
                 "price": 97,
                 "requiresShipping": true,
@@ -2930,7 +2930,7 @@
                     "carrier",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/c4a179491e26556c9be8a821d0e18918.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/626b8410ef55dbd19fc2010c2cf56169.webp",
                 "title": "Heavy-Duty Bird Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2943,7 +2943,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for bird owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000045",
-                "imageUrl": "/images/seed/c660fd64ef6a447204b44d6691fb6990.jpg",
+                "imageUrl": "/images/seed/7025690e35bf561597758282859fe59d.jpg",
                 "onHand": 60,
                 "price": 21,
                 "requiresShipping": true,
@@ -2952,7 +2952,7 @@
                     "feeding-bowl",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/0976105e2963b83253f6389ca1cf0daf.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/65ef54510616dee0bdac60c20b43b9ea.webp",
                 "title": "Standard Bird Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2965,7 +2965,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for bird owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000046",
-                "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                 "onHand": 45,
                 "price": 30,
                 "requiresShipping": true,
@@ -2974,7 +2974,7 @@
                     "feeding-bowl",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/12fd65b32fea36bf752bcb0dad13d169.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/d89a4280efd00435aed1509c120f1756.webp",
                 "title": "Premium Bird Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -2987,7 +2987,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by bird owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000047",
-                "imageUrl": "/images/seed/9f30713ebb717f6502dcf0d8cd3b1497.jpg",
+                "imageUrl": "/images/seed/041b2b26ddf426676992bb8156e76a5e.jpg",
                 "onHand": 30,
                 "price": 26,
                 "requiresShipping": true,
@@ -2996,7 +2996,7 @@
                     "feeding-bowl",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/dc93447b32a6d8fe62d5ddcf27a9ca5e.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/9f6729cc0f3b01912423b965ff5dd362.webp",
                 "title": "Heavy-Duty Bird Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3009,7 +3009,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for bird owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000048",
-                "imageUrl": "/images/seed/646093c7c7c9b07fa65358fb2697c229.jpg",
+                "imageUrl": "/images/seed/5251aaa263a14441af5061924a28c26c.jpg",
                 "onHand": 57,
                 "price": 26,
                 "requiresShipping": true,
@@ -3018,7 +3018,7 @@
                     "water-dispenser",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/af8dce7f233b72aa8a08bdd578b2a5ff.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cae4efafa6f18257e6cabce0f72a7a03.webp",
                 "title": "Standard Bird Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3031,7 +3031,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for bird owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000049",
-                "imageUrl": "/images/seed/8abfcb8758f76d29ecea218ea26b5fa6.jpg",
+                "imageUrl": "/images/seed/fc5a643a79d2aca574fb5225441c2944.jpg",
                 "onHand": 42,
                 "price": 38,
                 "requiresShipping": true,
@@ -3040,7 +3040,7 @@
                     "water-dispenser",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee41ee5870b1972c0378cea9d0e55acd.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0de8a069adada3940289d7df0ef41936.webp",
                 "title": "Premium Bird Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3053,7 +3053,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by bird owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c100000000000000004a",
-                "imageUrl": "/images/seed/b1e3c07ff13a6ab482c9e25d18668a75.jpg",
+                "imageUrl": "/images/seed/716c4f76d778d385e710bfdb8ec48874.jpg",
                 "onHand": 27,
                 "price": 32,
                 "requiresShipping": true,
@@ -3062,7 +3062,7 @@
                     "water-dispenser",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/24cde525953bab35e50da1e7cb7ce064.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/e98e514af9623d929b72c9d7a06fc468.webp",
                 "title": "Heavy-Duty Bird Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3075,7 +3075,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for bird owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c100000000000000004b",
-                "imageUrl": "/images/seed/d8286714eaeaf86b7e87c08ede9418a0.jpg",
+                "imageUrl": "/images/seed/0d3694eba7a98e7d0b87feb174dfe541.jpg",
                 "onHand": 54,
                 "price": 31,
                 "requiresShipping": true,
@@ -3084,7 +3084,7 @@
                     "grooming-kit",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/4e56c6b692d727ce9ae7b25ed97f19c7.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/671583722516c8016cebfc1a8a07fbac.webp",
                 "title": "Standard Bird Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3097,7 +3097,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for bird owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c100000000000000004c",
-                "imageUrl": "/images/seed/4b31520ab1296f2d2523bd6ad52c443f.jpg",
+                "imageUrl": "/images/seed/c1b149d12738f708fc05f7c9339173c7.jpg",
                 "onHand": 39,
                 "price": 46,
                 "requiresShipping": true,
@@ -3106,7 +3106,7 @@
                     "grooming-kit",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/71e2d0d2fa1c315fc51c2b7c38ff76ed.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/3435cc60136631430806fc45b82194fb.webp",
                 "title": "Premium Bird Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3119,7 +3119,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by bird owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c100000000000000004d",
-                "imageUrl": "/images/seed/a6499de69d816432b42e3e1c0de1080f.jpg",
+                "imageUrl": "/images/seed/a69f5952d62f8045889cb143d392863a.jpg",
                 "onHand": 24,
                 "price": 39,
                 "requiresShipping": true,
@@ -3128,7 +3128,7 @@
                     "grooming-kit",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/f05c3e1ef87e3529d0306fae5c2c3651.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f51dd10c48c638de1815c8284eea4f7c.webp",
                 "title": "Heavy-Duty Bird Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3141,7 +3141,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for bird owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c100000000000000004e",
-                "imageUrl": "/images/seed/9804fed5a63dfc1835215f61727e3f60.jpg",
+                "imageUrl": "/images/seed/df89372f0fcbdd7c698310f7b4c9574a.jpg",
                 "onHand": 51,
                 "price": 18,
                 "requiresShipping": true,
@@ -3150,7 +3150,7 @@
                     "enrichment-toy",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee0cb5bd65138a1b2acbda54360fe96f.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1f02651f516b8aa9ed95d1f52e473eda.webp",
                 "title": "Standard Bird Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3163,7 +3163,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for bird owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c100000000000000004f",
-                "imageUrl": "/images/seed/652c2f4746c6fb78e0beefc2820da2ef.jpg",
+                "imageUrl": "/images/seed/05a56d2dfcf8104d050a19f658caf031.jpg",
                 "onHand": 36,
                 "price": 25,
                 "requiresShipping": true,
@@ -3172,7 +3172,7 @@
                     "enrichment-toy",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/92bd4daa36e1bc7d156bbc2e35972542.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cf756420e10c071b11c2c84eee564919.webp",
                 "title": "Premium Bird Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3185,7 +3185,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by bird owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000050",
-                "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                 "onHand": 21,
                 "price": 22,
                 "requiresShipping": true,
@@ -3194,7 +3194,7 @@
                     "enrichment-toy",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/367c50474de461a2f4a165f956465d0c.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0ae0720fe38dea6c3bd11a4abba391d1.webp",
                 "title": "Heavy-Duty Bird Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3207,7 +3207,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for bird owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000051",
-                "imageUrl": "/images/seed/bec5ad8ace8cbf366997f5d2f87284b2.jpg",
+                "imageUrl": "/images/seed/31e257d25b083c99156b65614a493a7d.jpg",
                 "onHand": 48,
                 "price": 24,
                 "requiresShipping": true,
@@ -3216,7 +3216,7 @@
                     "health-supplement",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/a1d24f87db475dc900e209fdd699e1fa.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/fd7b7bdcb7cfc3c2d94399532869f16f.webp",
                 "title": "Standard Bird Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3229,7 +3229,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for bird owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000052",
-                "imageUrl": "/images/seed/95091e4c71b8f47e05deff3ca2a824e7.jpg",
+                "imageUrl": "/images/seed/0c06e2eae0e678ac6a79db492aa41fd3.jpg",
                 "onHand": 33,
                 "price": 35,
                 "requiresShipping": true,
@@ -3238,7 +3238,7 @@
                     "health-supplement",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/2e923c2442195ca13ae36d758a9ee679.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/31ec080a95101326995e3a0f5ed1a053.webp",
                 "title": "Premium Bird Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3251,7 +3251,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by bird owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000053",
-                "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                 "onHand": 18,
                 "price": 29,
                 "requiresShipping": true,
@@ -3260,7 +3260,7 @@
                     "health-supplement",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ac3416de563d3d3f8fa376d664fc4b7a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/4dd1cdcae235f5a1155efcdf1186c132.webp",
                 "title": "Heavy-Duty Bird Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3273,7 +3273,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for reptile owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000054",
-                "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                 "onHand": 68,
                 "price": 68,
                 "requiresShipping": true,
@@ -3282,7 +3282,7 @@
                     "bed",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/88caf32baecfb7d6bb9c9db69763c543.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1bf65e4622abc04d60c7000352d496bb.webp",
                 "title": "Standard Reptile Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3295,7 +3295,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for reptile owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000055",
-                "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                 "onHand": 53,
                 "price": 104,
                 "requiresShipping": true,
@@ -3304,7 +3304,7 @@
                     "bed",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/cc04561e3b653351a7dcf55f37b1495a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f05910ea4912f7934859d6f3e8d91447.webp",
                 "title": "Premium Reptile Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3317,7 +3317,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000056",
-                "imageUrl": "/images/seed/b90aa28634ded90223b04bac5dbff08e.jpg",
+                "imageUrl": "/images/seed/ade60c250458d8508c398e5f00344992.jpg",
                 "onHand": 38,
                 "price": 86,
                 "requiresShipping": true,
@@ -3326,7 +3326,7 @@
                     "bed",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/57869cd7b3fdefbb5cdb147b61b94ead.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/6a3f4a2eccac8f2c25d2413f06bb96b7.webp",
                 "title": "Heavy-Duty Reptile Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3339,7 +3339,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for reptile owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000057",
-                "imageUrl": "/images/seed/4e457c3638dba467d586254061282e58.jpg",
+                "imageUrl": "/images/seed/c9adf944eb2136a9d950f987b1ef70bb.jpg",
                 "onHand": 65,
                 "price": 78,
                 "requiresShipping": true,
@@ -3348,7 +3348,7 @@
                     "carrier",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/b453f77ecfd1111ef542122c21d7d2b6.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/253a1a54e83c7a50b41ea864aa2cce0b.webp",
                 "title": "Standard Reptile Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3361,7 +3361,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for reptile owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000058",
-                "imageUrl": "/images/seed/a2fa8960d83a87d3dbdf343a0adcb51b.jpg",
+                "imageUrl": "/images/seed/c7e4692a446710d4d6a6cebfd6d2a1a0.jpg",
                 "onHand": 50,
                 "price": 120,
                 "requiresShipping": true,
@@ -3370,7 +3370,7 @@
                     "carrier",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/c4a179491e26556c9be8a821d0e18918.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/626b8410ef55dbd19fc2010c2cf56169.webp",
                 "title": "Premium Reptile Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3383,7 +3383,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a secure enclosure for transport and travel.",
                 "id": "67f0c1000000000000000059",
-                "imageUrl": "/images/seed/c660fd64ef6a447204b44d6691fb6990.jpg",
+                "imageUrl": "/images/seed/7025690e35bf561597758282859fe59d.jpg",
                 "onHand": 35,
                 "price": 99,
                 "requiresShipping": true,
@@ -3392,7 +3392,7 @@
                     "carrier",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/0976105e2963b83253f6389ca1cf0daf.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/65ef54510616dee0bdac60c20b43b9ea.webp",
                 "title": "Heavy-Duty Reptile Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3405,7 +3405,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for reptile owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c100000000000000005a",
-                "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                 "onHand": 62,
                 "price": 23,
                 "requiresShipping": true,
@@ -3414,7 +3414,7 @@
                     "feeding-bowl",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/12fd65b32fea36bf752bcb0dad13d169.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/d89a4280efd00435aed1509c120f1756.webp",
                 "title": "Standard Reptile Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3427,7 +3427,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for reptile owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c100000000000000005b",
-                "imageUrl": "/images/seed/9f30713ebb717f6502dcf0d8cd3b1497.jpg",
+                "imageUrl": "/images/seed/041b2b26ddf426676992bb8156e76a5e.jpg",
                 "onHand": 47,
                 "price": 32,
                 "requiresShipping": true,
@@ -3436,7 +3436,7 @@
                     "feeding-bowl",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/dc93447b32a6d8fe62d5ddcf27a9ca5e.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/9f6729cc0f3b01912423b965ff5dd362.webp",
                 "title": "Premium Reptile Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3449,7 +3449,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c100000000000000005c",
-                "imageUrl": "/images/seed/646093c7c7c9b07fa65358fb2697c229.jpg",
+                "imageUrl": "/images/seed/5251aaa263a14441af5061924a28c26c.jpg",
                 "onHand": 32,
                 "price": 28,
                 "requiresShipping": true,
@@ -3458,7 +3458,7 @@
                     "feeding-bowl",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/af8dce7f233b72aa8a08bdd578b2a5ff.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cae4efafa6f18257e6cabce0f72a7a03.webp",
                 "title": "Heavy-Duty Reptile Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3471,7 +3471,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for reptile owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c100000000000000005d",
-                "imageUrl": "/images/seed/8abfcb8758f76d29ecea218ea26b5fa6.jpg",
+                "imageUrl": "/images/seed/fc5a643a79d2aca574fb5225441c2944.jpg",
                 "onHand": 59,
                 "price": 28,
                 "requiresShipping": true,
@@ -3480,7 +3480,7 @@
                     "water-dispenser",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee41ee5870b1972c0378cea9d0e55acd.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0de8a069adada3940289d7df0ef41936.webp",
                 "title": "Standard Reptile Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3493,7 +3493,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for reptile owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c100000000000000005e",
-                "imageUrl": "/images/seed/b1e3c07ff13a6ab482c9e25d18668a75.jpg",
+                "imageUrl": "/images/seed/716c4f76d778d385e710bfdb8ec48874.jpg",
                 "onHand": 44,
                 "price": 40,
                 "requiresShipping": true,
@@ -3502,7 +3502,7 @@
                     "water-dispenser",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/24cde525953bab35e50da1e7cb7ce064.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/e98e514af9623d929b72c9d7a06fc468.webp",
                 "title": "Premium Reptile Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3515,7 +3515,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c100000000000000005f",
-                "imageUrl": "/images/seed/d8286714eaeaf86b7e87c08ede9418a0.jpg",
+                "imageUrl": "/images/seed/0d3694eba7a98e7d0b87feb174dfe541.jpg",
                 "onHand": 29,
                 "price": 34,
                 "requiresShipping": true,
@@ -3524,7 +3524,7 @@
                     "water-dispenser",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/4e56c6b692d727ce9ae7b25ed97f19c7.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/671583722516c8016cebfc1a8a07fbac.webp",
                 "title": "Heavy-Duty Reptile Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3537,7 +3537,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for reptile owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000060",
-                "imageUrl": "/images/seed/4b31520ab1296f2d2523bd6ad52c443f.jpg",
+                "imageUrl": "/images/seed/c1b149d12738f708fc05f7c9339173c7.jpg",
                 "onHand": 56,
                 "price": 33,
                 "requiresShipping": true,
@@ -3546,7 +3546,7 @@
                     "grooming-kit",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/71e2d0d2fa1c315fc51c2b7c38ff76ed.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/3435cc60136631430806fc45b82194fb.webp",
                 "title": "Standard Reptile Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3559,7 +3559,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for reptile owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000061",
-                "imageUrl": "/images/seed/a6499de69d816432b42e3e1c0de1080f.jpg",
+                "imageUrl": "/images/seed/a69f5952d62f8045889cb143d392863a.jpg",
                 "onHand": 41,
                 "price": 48,
                 "requiresShipping": true,
@@ -3568,7 +3568,7 @@
                     "grooming-kit",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/f05c3e1ef87e3529d0306fae5c2c3651.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f51dd10c48c638de1815c8284eea4f7c.webp",
                 "title": "Premium Reptile Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3581,7 +3581,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000062",
-                "imageUrl": "/images/seed/9804fed5a63dfc1835215f61727e3f60.jpg",
+                "imageUrl": "/images/seed/df89372f0fcbdd7c698310f7b4c9574a.jpg",
                 "onHand": 26,
                 "price": 41,
                 "requiresShipping": true,
@@ -3590,7 +3590,7 @@
                     "grooming-kit",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee0cb5bd65138a1b2acbda54360fe96f.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1f02651f516b8aa9ed95d1f52e473eda.webp",
                 "title": "Heavy-Duty Reptile Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3603,7 +3603,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for reptile owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000063",
-                "imageUrl": "/images/seed/652c2f4746c6fb78e0beefc2820da2ef.jpg",
+                "imageUrl": "/images/seed/05a56d2dfcf8104d050a19f658caf031.jpg",
                 "onHand": 53,
                 "price": 20,
                 "requiresShipping": true,
@@ -3612,7 +3612,7 @@
                     "enrichment-toy",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/92bd4daa36e1bc7d156bbc2e35972542.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cf756420e10c071b11c2c84eee564919.webp",
                 "title": "Standard Reptile Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3625,7 +3625,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for reptile owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000064",
-                "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                 "onHand": 38,
                 "price": 27,
                 "requiresShipping": true,
@@ -3634,7 +3634,7 @@
                     "enrichment-toy",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/367c50474de461a2f4a165f956465d0c.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0ae0720fe38dea6c3bd11a4abba391d1.webp",
                 "title": "Premium Reptile Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3647,7 +3647,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by reptile owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000065",
-                "imageUrl": "/images/seed/bec5ad8ace8cbf366997f5d2f87284b2.jpg",
+                "imageUrl": "/images/seed/31e257d25b083c99156b65614a493a7d.jpg",
                 "onHand": 23,
                 "price": 24,
                 "requiresShipping": true,
@@ -3656,7 +3656,7 @@
                     "enrichment-toy",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/a1d24f87db475dc900e209fdd699e1fa.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/fd7b7bdcb7cfc3c2d94399532869f16f.webp",
                 "title": "Heavy-Duty Reptile Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3669,7 +3669,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for reptile owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000066",
-                "imageUrl": "/images/seed/95091e4c71b8f47e05deff3ca2a824e7.jpg",
+                "imageUrl": "/images/seed/0c06e2eae0e678ac6a79db492aa41fd3.jpg",
                 "onHand": 50,
                 "price": 26,
                 "requiresShipping": true,
@@ -3678,7 +3678,7 @@
                     "health-supplement",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/2e923c2442195ca13ae36d758a9ee679.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/31ec080a95101326995e3a0f5ed1a053.webp",
                 "title": "Standard Reptile Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3691,7 +3691,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for reptile owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000067",
-                "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                 "onHand": 35,
                 "price": 37,
                 "requiresShipping": true,
@@ -3700,7 +3700,7 @@
                     "health-supplement",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ac3416de563d3d3f8fa376d664fc4b7a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/4dd1cdcae235f5a1155efcdf1186c132.webp",
                 "title": "Premium Reptile Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3713,7 +3713,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by reptile owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c1000000000000000068",
-                "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                 "onHand": 20,
                 "price": 31,
                 "requiresShipping": true,
@@ -3722,7 +3722,7 @@
                     "health-supplement",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/88caf32baecfb7d6bb9c9db69763c543.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1bf65e4622abc04d60c7000352d496bb.webp",
                 "title": "Heavy-Duty Reptile Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3735,7 +3735,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for small animal owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c1000000000000000069",
-                "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                 "onHand": 70,
                 "price": 70,
                 "requiresShipping": true,
@@ -3744,7 +3744,7 @@
                     "bed",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/cc04561e3b653351a7dcf55f37b1495a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f05910ea4912f7934859d6f3e8d91447.webp",
                 "title": "Standard Small Animal Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3757,7 +3757,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for small animal owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c100000000000000006a",
-                "imageUrl": "/images/seed/b90aa28634ded90223b04bac5dbff08e.jpg",
+                "imageUrl": "/images/seed/ade60c250458d8508c398e5f00344992.jpg",
                 "onHand": 55,
                 "price": 106,
                 "requiresShipping": true,
@@ -3766,7 +3766,7 @@
                     "bed",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/57869cd7b3fdefbb5cdb147b61b94ead.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/6a3f4a2eccac8f2c25d2413f06bb96b7.webp",
                 "title": "Premium Small Animal Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3779,7 +3779,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by small animal owners: a supportive resting surface designed for daily use.",
                 "id": "67f0c100000000000000006b",
-                "imageUrl": "/images/seed/4e457c3638dba467d586254061282e58.jpg",
+                "imageUrl": "/images/seed/c9adf944eb2136a9d950f987b1ef70bb.jpg",
                 "onHand": 40,
                 "price": 88,
                 "requiresShipping": true,
@@ -3788,7 +3788,7 @@
                     "bed",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/b453f77ecfd1111ef542122c21d7d2b6.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/253a1a54e83c7a50b41ea864aa2cce0b.webp",
                 "title": "Heavy-Duty Small Animal Bed",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3801,7 +3801,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for small animal owners: a secure enclosure for transport and travel.",
                 "id": "67f0c100000000000000006c",
-                "imageUrl": "/images/seed/a2fa8960d83a87d3dbdf343a0adcb51b.jpg",
+                "imageUrl": "/images/seed/c7e4692a446710d4d6a6cebfd6d2a1a0.jpg",
                 "onHand": 67,
                 "price": 80,
                 "requiresShipping": true,
@@ -3810,7 +3810,7 @@
                     "carrier",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/c4a179491e26556c9be8a821d0e18918.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/626b8410ef55dbd19fc2010c2cf56169.webp",
                 "title": "Standard Small Animal Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3823,7 +3823,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for small animal owners: a secure enclosure for transport and travel.",
                 "id": "67f0c100000000000000006d",
-                "imageUrl": "/images/seed/c660fd64ef6a447204b44d6691fb6990.jpg",
+                "imageUrl": "/images/seed/7025690e35bf561597758282859fe59d.jpg",
                 "onHand": 52,
                 "price": 122,
                 "requiresShipping": true,
@@ -3832,7 +3832,7 @@
                     "carrier",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/0976105e2963b83253f6389ca1cf0daf.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/65ef54510616dee0bdac60c20b43b9ea.webp",
                 "title": "Premium Small Animal Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3845,7 +3845,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by small animal owners: a secure enclosure for transport and travel.",
                 "id": "67f0c100000000000000006e",
-                "imageUrl": "/images/seed/842bfc54183aa98edbfe0a9f6822f64c.jpg",
+                "imageUrl": "/images/seed/89f82d5d6557e1fb8beb801262698810.jpg",
                 "onHand": 37,
                 "price": 101,
                 "requiresShipping": true,
@@ -3854,7 +3854,7 @@
                     "carrier",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/12fd65b32fea36bf752bcb0dad13d169.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/d89a4280efd00435aed1509c120f1756.webp",
                 "title": "Heavy-Duty Small Animal Carrier",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3867,7 +3867,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for small animal owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c100000000000000006f",
-                "imageUrl": "/images/seed/9f30713ebb717f6502dcf0d8cd3b1497.jpg",
+                "imageUrl": "/images/seed/041b2b26ddf426676992bb8156e76a5e.jpg",
                 "onHand": 64,
                 "price": 25,
                 "requiresShipping": true,
@@ -3876,7 +3876,7 @@
                     "feeding-bowl",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/dc93447b32a6d8fe62d5ddcf27a9ca5e.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/9f6729cc0f3b01912423b965ff5dd362.webp",
                 "title": "Standard Small Animal Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3889,7 +3889,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for small animal owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000070",
-                "imageUrl": "/images/seed/646093c7c7c9b07fa65358fb2697c229.jpg",
+                "imageUrl": "/images/seed/5251aaa263a14441af5061924a28c26c.jpg",
                 "onHand": 49,
                 "price": 34,
                 "requiresShipping": true,
@@ -3898,7 +3898,7 @@
                     "feeding-bowl",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/af8dce7f233b72aa8a08bdd578b2a5ff.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cae4efafa6f18257e6cabce0f72a7a03.webp",
                 "title": "Premium Small Animal Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3911,7 +3911,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by small animal owners: a stable, easy-to-clean feeding solution.",
                 "id": "67f0c1000000000000000071",
-                "imageUrl": "/images/seed/8abfcb8758f76d29ecea218ea26b5fa6.jpg",
+                "imageUrl": "/images/seed/fc5a643a79d2aca574fb5225441c2944.jpg",
                 "onHand": 34,
                 "price": 30,
                 "requiresShipping": true,
@@ -3920,7 +3920,7 @@
                     "feeding-bowl",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee41ee5870b1972c0378cea9d0e55acd.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0de8a069adada3940289d7df0ef41936.webp",
                 "title": "Heavy-Duty Small Animal Feeding Bowl",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3933,7 +3933,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for small animal owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000072",
-                "imageUrl": "/images/seed/b1e3c07ff13a6ab482c9e25d18668a75.jpg",
+                "imageUrl": "/images/seed/716c4f76d778d385e710bfdb8ec48874.jpg",
                 "onHand": 61,
                 "price": 30,
                 "requiresShipping": true,
@@ -3942,7 +3942,7 @@
                     "water-dispenser",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/24cde525953bab35e50da1e7cb7ce064.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/e98e514af9623d929b72c9d7a06fc468.webp",
                 "title": "Standard Small Animal Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3955,7 +3955,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for small animal owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000073",
-                "imageUrl": "/images/seed/d8286714eaeaf86b7e87c08ede9418a0.jpg",
+                "imageUrl": "/images/seed/0d3694eba7a98e7d0b87feb174dfe541.jpg",
                 "onHand": 46,
                 "price": 42,
                 "requiresShipping": true,
@@ -3964,7 +3964,7 @@
                     "water-dispenser",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/4e56c6b692d727ce9ae7b25ed97f19c7.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/671583722516c8016cebfc1a8a07fbac.webp",
                 "title": "Premium Small Animal Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3977,7 +3977,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by small animal owners: a leak-resistant system for a constant water supply.",
                 "id": "67f0c1000000000000000074",
-                "imageUrl": "/images/seed/4b31520ab1296f2d2523bd6ad52c443f.jpg",
+                "imageUrl": "/images/seed/c1b149d12738f708fc05f7c9339173c7.jpg",
                 "onHand": 31,
                 "price": 36,
                 "requiresShipping": true,
@@ -3986,7 +3986,7 @@
                     "water-dispenser",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/71e2d0d2fa1c315fc51c2b7c38ff76ed.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/3435cc60136631430806fc45b82194fb.webp",
                 "title": "Heavy-Duty Small Animal Water Dispenser",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -3999,7 +3999,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for small animal owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000075",
-                "imageUrl": "/images/seed/a6499de69d816432b42e3e1c0de1080f.jpg",
+                "imageUrl": "/images/seed/a69f5952d62f8045889cb143d392863a.jpg",
                 "onHand": 58,
                 "price": 35,
                 "requiresShipping": true,
@@ -4008,7 +4008,7 @@
                     "grooming-kit",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/f05c3e1ef87e3529d0306fae5c2c3651.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f51dd10c48c638de1815c8284eea4f7c.webp",
                 "title": "Standard Small Animal Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -4021,7 +4021,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for small animal owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000076",
-                "imageUrl": "/images/seed/9804fed5a63dfc1835215f61727e3f60.jpg",
+                "imageUrl": "/images/seed/df89372f0fcbdd7c698310f7b4c9574a.jpg",
                 "onHand": 43,
                 "price": 50,
                 "requiresShipping": true,
@@ -4030,7 +4030,7 @@
                     "grooming-kit",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ee0cb5bd65138a1b2acbda54360fe96f.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1f02651f516b8aa9ed95d1f52e473eda.webp",
                 "title": "Premium Small Animal Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -4043,7 +4043,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by small animal owners: a set of tools for routine coat and nail care.",
                 "id": "67f0c1000000000000000077",
-                "imageUrl": "/images/seed/652c2f4746c6fb78e0beefc2820da2ef.jpg",
+                "imageUrl": "/images/seed/05a56d2dfcf8104d050a19f658caf031.jpg",
                 "onHand": 28,
                 "price": 43,
                 "requiresShipping": true,
@@ -4052,7 +4052,7 @@
                     "grooming-kit",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/92bd4daa36e1bc7d156bbc2e35972542.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/cf756420e10c071b11c2c84eee564919.webp",
                 "title": "Heavy-Duty Small Animal Grooming Kit",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -4065,7 +4065,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for small animal owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000078",
-                "imageUrl": "/images/seed/ebe7d649d1aff75dbd235e9eae1f98b3.jpg",
+                "imageUrl": "/images/seed/84700df0e74fe6ac9c3c6bfc84bb09be.jpg",
                 "onHand": 55,
                 "price": 22,
                 "requiresShipping": true,
@@ -4074,7 +4074,7 @@
                     "enrichment-toy",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/367c50474de461a2f4a165f956465d0c.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/0ae0720fe38dea6c3bd11a4abba391d1.webp",
                 "title": "Standard Small Animal Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -4087,7 +4087,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for small animal owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c1000000000000000079",
-                "imageUrl": "/images/seed/bec5ad8ace8cbf366997f5d2f87284b2.jpg",
+                "imageUrl": "/images/seed/31e257d25b083c99156b65614a493a7d.jpg",
                 "onHand": 40,
                 "price": 29,
                 "requiresShipping": true,
@@ -4096,7 +4096,7 @@
                     "enrichment-toy",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/a1d24f87db475dc900e209fdd699e1fa.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/fd7b7bdcb7cfc3c2d94399532869f16f.webp",
                 "title": "Premium Small Animal Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -4109,7 +4109,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by small animal owners: an interactive item that supports natural behaviour.",
                 "id": "67f0c100000000000000007a",
-                "imageUrl": "/images/seed/95091e4c71b8f47e05deff3ca2a824e7.jpg",
+                "imageUrl": "/images/seed/0c06e2eae0e678ac6a79db492aa41fd3.jpg",
                 "onHand": 25,
                 "price": 26,
                 "requiresShipping": true,
@@ -4118,7 +4118,7 @@
                     "enrichment-toy",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/2e923c2442195ca13ae36d758a9ee679.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/31ec080a95101326995e3a0f5ed1a053.webp",
                 "title": "Heavy-Duty Small Animal Enrichment Toy",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -4131,7 +4131,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A dependable, no-frills option for small animal owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c100000000000000007b",
-                "imageUrl": "/images/seed/c3fc9bfdf4f823e73ef96160a0c6c4af.jpg",
+                "imageUrl": "/images/seed/faa2ebb211e758f15a8b0be7c73a4f89.jpg",
                 "onHand": 52,
                 "price": 28,
                 "requiresShipping": true,
@@ -4140,7 +4140,7 @@
                     "health-supplement",
                     "standard"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/ac3416de563d3d3f8fa376d664fc4b7a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/4dd1cdcae235f5a1155efcdf1186c132.webp",
                 "title": "Standard Small Animal Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -4153,7 +4153,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "A higher-grade option, built for small animal owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c100000000000000007c",
-                "imageUrl": "/images/seed/7b7a0bd0471320f5a4f0d56636790e1b.jpg",
+                "imageUrl": "/images/seed/260113cdfaacb76ca70073c45e830640.jpg",
                 "onHand": 37,
                 "price": 39,
                 "requiresShipping": true,
@@ -4162,7 +4162,7 @@
                     "health-supplement",
                     "premium"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/88caf32baecfb7d6bb9c9db69763c543.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/1bf65e4622abc04d60c7000352d496bb.webp",
                 "title": "Premium Small Animal Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             },
@@ -4175,7 +4175,7 @@
                 "createdAt": "2025-04-05T05:34:56.000Z",
                 "description": "Reinforced construction intended for demanding, everyday use by small animal owners: a formulation intended to support everyday wellbeing.",
                 "id": "67f0c100000000000000007d",
-                "imageUrl": "/images/seed/e85f87ff4484844623b921db5f926cf5.jpg",
+                "imageUrl": "/images/seed/4cff00b1e2e85827ec94a169b6461243.jpg",
                 "onHand": 22,
                 "price": 33,
                 "requiresShipping": true,
@@ -4184,7 +4184,7 @@
                     "health-supplement",
                     "heavy-duty"
                 ],
-                "thumbnailUrl": "/images/seed/thumbs/v1/cc04561e3b653351a7dcf55f37b1495a.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/f05910ea4912f7934859d6f3e8d91447.webp",
                 "title": "Heavy-Duty Small Animal Health Supplement",
                 "updatedAt": "2025-04-05T05:34:56.000Z"
             }
@@ -4197,10 +4197,10 @@
                 "createdAt": "2024-02-27T00:24:59.000Z",
                 "email": "root@root.it",
                 "id": "65dd2bdb923652b7800fe180",
-                "imageUrl": "/images/seed/5904a5788e8b8b655dd19656bbb204ff.jpg",
+                "imageUrl": "/images/seed/64fffcf93f931af24bfc23f427c081e2.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/026d9731b947e42d8f258f0458cf3d6d.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/7ae8df11dc741ad4f57f1ee105d9e140.webp",
                 "updatedAt": "2024-02-27T00:24:59.000Z",
                 "username": "root",
                 "verified": true
@@ -4210,14 +4210,14 @@
                 "admin": false,
                 "analyticsConsent": true,
                 "createdAt": "2024-02-27T22:38:34.000Z",
-                "email": "gino@pino.it",
+                "email": "customer@example.com",
                 "id": "65de646a44f861fd83c13f13",
-                "imageUrl": "/images/seed/cb25bbb71781ab745e2fc50bda1a6f96.jpg",
+                "imageUrl": "/images/seed/d693025fd369cb453a6742871f5c8593.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/8b8dd9ae70e9cc07c7778aeb1a2f70a9.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/604e3dd501dbf4c40f9082558e04d80a.webp",
                 "updatedAt": "2024-02-27T22:38:34.000Z",
-                "username": "ginopinoshow",
+                "username": "customer",
                 "verified": true
             },
             {
@@ -4227,10 +4227,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "amelia.clarke@example.com",
                 "id": "67f0c2000000000000000000",
-                "imageUrl": "/images/seed/5904a5788e8b8b655dd19656bbb204ff.jpg",
+                "imageUrl": "/images/seed/64fffcf93f931af24bfc23f427c081e2.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/026d9731b947e42d8f258f0458cf3d6d.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/7ae8df11dc741ad4f57f1ee105d9e140.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "amelia.clarke",
                 "verified": true
@@ -4242,10 +4242,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "benjamin.hughes@example.com",
                 "id": "67f0c2000000000000000001",
-                "imageUrl": "/images/seed/cb25bbb71781ab745e2fc50bda1a6f96.jpg",
+                "imageUrl": "/images/seed/d693025fd369cb453a6742871f5c8593.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/8b8dd9ae70e9cc07c7778aeb1a2f70a9.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/604e3dd501dbf4c40f9082558e04d80a.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "benjamin.hughes",
                 "verified": true
@@ -4257,10 +4257,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "chloe.whitfield@example.com",
                 "id": "67f0c2000000000000000002",
-                "imageUrl": "/images/seed/5904a5788e8b8b655dd19656bbb204ff.jpg",
+                "imageUrl": "/images/seed/64fffcf93f931af24bfc23f427c081e2.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/026d9731b947e42d8f258f0458cf3d6d.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/7ae8df11dc741ad4f57f1ee105d9e140.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "chloe.whitfield",
                 "verified": true
@@ -4272,10 +4272,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "daniel.osei@example.com",
                 "id": "67f0c2000000000000000003",
-                "imageUrl": "/images/seed/cb25bbb71781ab745e2fc50bda1a6f96.jpg",
+                "imageUrl": "/images/seed/d693025fd369cb453a6742871f5c8593.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/8b8dd9ae70e9cc07c7778aeb1a2f70a9.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/604e3dd501dbf4c40f9082558e04d80a.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "daniel.osei",
                 "verified": true
@@ -4287,10 +4287,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "grace.sutton@example.com",
                 "id": "67f0c2000000000000000004",
-                "imageUrl": "/images/seed/5904a5788e8b8b655dd19656bbb204ff.jpg",
+                "imageUrl": "/images/seed/64fffcf93f931af24bfc23f427c081e2.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/026d9731b947e42d8f258f0458cf3d6d.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/7ae8df11dc741ad4f57f1ee105d9e140.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "grace.sutton",
                 "verified": true
@@ -4302,10 +4302,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "felix.moreno@example.com",
                 "id": "67f0c2000000000000000005",
-                "imageUrl": "/images/seed/cb25bbb71781ab745e2fc50bda1a6f96.jpg",
+                "imageUrl": "/images/seed/d693025fd369cb453a6742871f5c8593.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/8b8dd9ae70e9cc07c7778aeb1a2f70a9.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/604e3dd501dbf4c40f9082558e04d80a.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "felix.moreno",
                 "verified": true
@@ -4317,10 +4317,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "priya.kapoor@example.com",
                 "id": "67f0c2000000000000000006",
-                "imageUrl": "/images/seed/5904a5788e8b8b655dd19656bbb204ff.jpg",
+                "imageUrl": "/images/seed/64fffcf93f931af24bfc23f427c081e2.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/026d9731b947e42d8f258f0458cf3d6d.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/7ae8df11dc741ad4f57f1ee105d9e140.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "priya.kapoor",
                 "verified": true
@@ -4332,10 +4332,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "marcus.bellamy@example.com",
                 "id": "67f0c2000000000000000007",
-                "imageUrl": "/images/seed/cb25bbb71781ab745e2fc50bda1a6f96.jpg",
+                "imageUrl": "/images/seed/d693025fd369cb453a6742871f5c8593.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/8b8dd9ae70e9cc07c7778aeb1a2f70a9.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/604e3dd501dbf4c40f9082558e04d80a.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "marcus.bellamy",
                 "verified": true
@@ -4347,10 +4347,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "harper.quinn@example.com",
                 "id": "67f0c2000000000000000008",
-                "imageUrl": "/images/seed/5904a5788e8b8b655dd19656bbb204ff.jpg",
+                "imageUrl": "/images/seed/64fffcf93f931af24bfc23f427c081e2.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/026d9731b947e42d8f258f0458cf3d6d.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/7ae8df11dc741ad4f57f1ee105d9e140.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "harper.quinn",
                 "verified": true
@@ -4362,10 +4362,10 @@
                 "createdAt": "2025-04-05T05:39:12.000Z",
                 "email": "isla.fenwick@example.com",
                 "id": "67f0c2000000000000000009",
-                "imageUrl": "/images/seed/cb25bbb71781ab745e2fc50bda1a6f96.jpg",
+                "imageUrl": "/images/seed/d693025fd369cb453a6742871f5c8593.jpg",
                 "locale": "en",
                 "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/8b8dd9ae70e9cc07c7778aeb1a2f70a9.webp",
+                "thumbnailUrl": "/images/seed/thumbs/v1/604e3dd501dbf4c40f9082558e04d80a.webp",
                 "updatedAt": "2025-04-05T05:39:12.000Z",
                 "username": "isla.fenwick",
                 "verified": true
@@ -4405,7 +4405,7 @@
             "password": "Demo-Admin1!"
         },
         "user": {
-            "email": "gino@pino.it",
+            "email": "customer@example.com",
             "password": "Demo-User1!"
         }
     }

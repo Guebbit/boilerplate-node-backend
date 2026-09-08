@@ -29,9 +29,9 @@ describe('makeProduct', () => {
     });
 
     it('lets an override replace a default', () => {
-        const product = makeProduct({ title: 'Sallyno Panino', price: 100 });
+        const product = makeProduct({ title: 'Grain-Free Dog Food', price: 100 });
 
-        expect(product.title).toBe('Sallyno Panino');
+        expect(product.title).toBe('Grain-Free Dog Food');
         expect(product.price).toBe(100);
     });
 

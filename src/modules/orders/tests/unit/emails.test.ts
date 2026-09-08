@@ -13,8 +13,8 @@ const NAME = 'Ada Lovelace';
 /** Two lines with different titles, quantities and prices, so no field can stand in for another. */
 const ORDER: OrderLines = {
     items: [
-        { quantity: 2, product: { title: 'Sallyno Panino', price: 100 } },
-        { quantity: 3, product: { title: 'Pufettino', price: 7.5 } }
+        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: 100 } },
+        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: 7.5 } }
     ],
     shippingCost: 4.25
 };
@@ -37,10 +37,10 @@ describe('orderConfirmEmail', () => {
         // or reused the first item for both lines, cannot pass.
         const lines = orderConfirmEmail('en', NAME, ORDER).data.lines as string[];
 
-        expect(lines[0]).toContain('Sallyno Panino');
+        expect(lines[0]).toContain('Grain-Free Dog Food');
         expect(lines[0]).toContain('2');
         expect(lines[0]).toContain('100');
-        expect(lines[1]).toContain('Pufettino');
+        expect(lines[1]).toContain('Memory Foam Dog Bed');
         expect(lines[1]).toContain('3');
         expect(lines[1]).toContain('7.5');
     });
@@ -104,8 +104,8 @@ describe('invoiceDocument', () => {
         const lines = invoiceDocument('en', { ...ORDER, id: 'abc123' }).lines as string[];
 
         expect(lines).toHaveLength(2);
-        expect(lines[0]).toContain('Sallyno Panino');
-        expect(lines[1]).toContain('Pufettino');
+        expect(lines[0]).toContain('Grain-Free Dog Food');
+        expect(lines[1]).toContain('Memory Foam Dog Bed');
     });
 
     it('names the order in its title metadata', () => {

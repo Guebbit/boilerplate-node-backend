@@ -28,16 +28,16 @@ const demoCartId = (index: number): string => `67f0c3${index.toString(16).padSta
  * The seeded carts. `SEED_ADMIN_ID` keeps its original two-line basket; the three "medium"
  * customers (`marcus`, `harper`, `isla` — see `@modules/users/demo`) each get a two-line basket
  * of their own, drawn from the combinatorial catalogue so a cart page has more than the same two
- * named products to show. The other seven demo customers, and `ginopinoshow`, have no cart row at
- * all — see this module's own docblock for why that IS their fixture.
+ * named products to show. The other seven demo shoppers, and the `customer` account, have no
+ * cart row at all — see this module's own docblock for why that IS their fixture.
  */
 export const cartFixtures = [
     makeCart({
         id: '65dd2c9e1b4a7f3c0d2e5a01',
         userId: SEED_ADMIN_ID,
         items: [
-            { productId: SEED_PRODUCT_IDS.panino, quantity: 2 },
-            { productId: SEED_PRODUCT_IDS.pufettino, quantity: 3 }
+            { productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 2 },
+            { productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 3 }
         ]
     }),
     makeCart({

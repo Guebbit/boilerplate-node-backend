@@ -61,7 +61,10 @@ const namedOrders = [
          * one, so "the order remembers where it was sent" is a property the dataset demonstrates
          * rather than a sentence in a comment. */
         email: 'oldpsw@root.it',
-        items: [line(SEED_PRODUCT_IDS.panino, 1), line(SEED_PRODUCT_IDS.micionaOutOfStock, 10)]
+        items: [
+            line(SEED_PRODUCT_IDS.dogFoodStandard, 1),
+            line(SEED_PRODUCT_IDS.scratchPostOutOfStock, 10)
+        ]
     }),
     /* The only fixture with shipping columns — added because the fixtures predate those columns
      * and none demonstrated a chosen delivery method. */
@@ -69,7 +72,7 @@ const namedOrders = [
         id: '661c795a9e22bcbef63a5832',
         userId: SEED_ADMIN_ID,
         email: SEED_ADMIN_EMAIL,
-        items: [line(SEED_PRODUCT_IDS.pufettino, 20)],
+        items: [line(SEED_PRODUCT_IDS.dogBedPremium, 20)],
         /* `standard` costs 5 with `freeAbove: 100` (see `delivery/domain/rates`), and these lines
          * total 1,540 — so 0, not 5, is what `priceShipping` decided at checkout. An order keeps
          * the price it was charged, not the method's current rate card. */
@@ -90,13 +93,14 @@ const namedOrders = [
      * The soft-deleted order, and it sits on the NON-ADMIN account on purpose. The case it
      * exercises is "the owner cannot see their own soft-deleted order" — which ownership-only
      * scoping would wrongly allow, and which an admin-owned fixture could never catch. It also
-     * anchors `ginopinoshow`'s "large" history below: this is the FOURTH order, not the first.
+     * anchors the `customer` account's "large" history below: this is the FOURTH order, not the
+     * first.
      */
     makeOrder({
         id: '66b3f0c14d2e8a91c7d4a015',
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
-        items: [line(SEED_PRODUCT_IDS.panino, 4)],
+        items: [line(SEED_PRODUCT_IDS.dogFoodStandard, 4)],
         /* Earlier than the `createdAt` this order's id encodes, i.e. deleted before it was
          * placed — left that way on purpose. The fixtures don't promise their three dates agree;
          * nothing reads them together, only the field's PRESENCE. See
@@ -106,19 +110,20 @@ const namedOrders = [
 ];
 
 /**
- * `ginopinoshow`'s three ADDITIONAL orders (on top of the soft-deleted one above), each larger
- * than anything a "small" or "medium" customer below carries — more lines, higher quantities.
+ * The `customer` account's three ADDITIONAL orders (on top of the soft-deleted one above), each
+ * larger than anything a "small" or "medium" shopper below carries — more lines, higher
+ * quantities.
  * None has `shippingAddress`/`shippingMethod`: like the admin's first order, these predate a
  * chosen delivery method.
  */
-const ginoOrders = [
+const customerOrders = [
     makeOrder({
         id: demoOrderId(0),
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         items: [
-            line(SEED_PRODUCT_IDS.panino, 3),
-            line(SEED_PRODUCT_IDS.pufettino, 2),
+            line(SEED_PRODUCT_IDS.dogFoodStandard, 3),
+            line(SEED_PRODUCT_IDS.dogBedPremium, 2),
             line(fillerProductId(25), 4),
             line(fillerProductId(77), 1)
         ]
@@ -177,8 +182,8 @@ interface MediumOrderSeed {
 }
 
 /**
- * The three "medium" customers (`marcus`, `harper`, `isla`) — two orders each, two or three lines
- * apiece, bigger than a "small" order but well short of `ginopinoshow`'s.
+ * The three "medium" shoppers (`marcus`, `harper`, `isla`) — two orders each, two or three lines
+ * apiece, bigger than a "small" order but well short of the `customer` account's.
  */
 const MEDIUM_ORDERS: MediumOrderSeed[] = [
     {
@@ -243,7 +248,7 @@ const mediumCustomerOrders = MEDIUM_ORDERS.map(({ customer, lines }, index) =>
 /** Every demo order, in id order. The seeder and the exported dataset both read this. */
 export const orderFixtures = [
     ...namedOrders,
-    ...ginoOrders,
+    ...customerOrders,
     ...smallCustomerOrders,
     ...mediumCustomerOrders
 ];

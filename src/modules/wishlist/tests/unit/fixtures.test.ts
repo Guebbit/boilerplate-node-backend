@@ -10,8 +10,8 @@ import { Types } from 'mongoose';
 import { makeWishlist } from '@modules/wishlist/fixtures';
 
 const USER = '65dc8a99604c307b702b5ccc';
-const PANINO = '65dcdec2b18ad5e4bd597f0f';
-const PUFETTINO = '65dc9be92f2794d1c16741e1';
+const DOG_FOOD = '65dcdec2b18ad5e4bd597f0f';
+const DOG_BED = '65dc9be92f2794d1c16741e1';
 
 describe('makeWishlist', () => {
     it('stores the owner as a real ObjectId', () => {
@@ -26,17 +26,17 @@ describe('makeWishlist', () => {
     });
 
     it('wraps each bare product id into a line, as a real ObjectId', () => {
-        const wishlist = makeWishlist({ userId: USER, productIds: [PANINO, PUFETTINO] });
+        const wishlist = makeWishlist({ userId: USER, productIds: [DOG_FOOD, DOG_BED] });
 
         expect(wishlist.items).toHaveLength(2);
         expect(wishlist.items![0].productId).toBeInstanceOf(Types.ObjectId);
-        expect(wishlist.items!.map((item) => String(item.productId))).toEqual([PANINO, PUFETTINO]);
+        expect(wishlist.items!.map((item) => String(item.productId))).toEqual([DOG_FOOD, DOG_BED]);
     });
 
     it('gives a line nothing but a product id', () => {
         // No quantity, deliberately — that is the whole difference from a cart line, and a
         // fixture that added one would seed documents the schema strips and the contract forbids.
-        const wishlist = makeWishlist({ userId: USER, productIds: [PANINO] });
+        const wishlist = makeWishlist({ userId: USER, productIds: [DOG_FOOD] });
 
         expect(Object.keys(wishlist.items![0])).toEqual(['productId']);
     });

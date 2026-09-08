@@ -18,8 +18,8 @@
  * drifted from the one below — `npm run db:seed:reset` is what does.
  *
  * Passwords are given in PLAIN TEXT: the model's pre-save hook hashes them. Anything hashed by
- * hand here would drift from that hook, and its plaintext would be lost (which is exactly what
- * happened to the old `gino@pino.it` fixture).
+ * hand here would drift from that hook, and its plaintext would be lost with no way to recover
+ * the login.
  *
  * Usage:
  *   npm run db:seed          # upsert the fixtures

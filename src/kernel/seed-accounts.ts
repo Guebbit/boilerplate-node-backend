@@ -26,7 +26,7 @@ export const SEED_ADMIN_EMAIL = 'root@root.it';
 export const SEED_ADMIN_PASSWORD = process.env.NODE_SEED_ADMIN_PASSWORD ?? 'Demo-Admin1!';
 
 /** The demo user's login email. */
-export const SEED_USER_EMAIL = 'gino@pino.it';
+export const SEED_USER_EMAIL = 'customer@example.com';
 
 /**
  * The demo user's login password — PLAINTEXT; see the file header for why. `NODE_SEED_USER_PASSWORD`

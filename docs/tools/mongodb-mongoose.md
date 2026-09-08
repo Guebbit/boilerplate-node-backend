@@ -192,8 +192,8 @@ response — and a confidently wrong label is worse than none, because the reade
 
 The default seed creates:
 
-- **2 users** — `root@root.it` (admin) and `gino@pino.it` (regular user)
-- **1 cart** — the admin's, in the `carts` collection; `gino@pino.it` gets none, because an empty cart and no cart are the same state
+- **2 users** — `root@root.it` (admin) and `customer@example.com` (regular user)
+- **1 cart** — the admin's, in the `carts` collection; `customer@example.com` gets none, because an empty cart and no cart are the same state
 - **5 products** — mix of active, inactive, and soft-deleted items
 - **2 wishlists** — one per user
 - **3 orders** — two the admin's, one the ordinary user's and soft-deleted, so "the owner cannot see their own deleted order" has a fixture behind it

@@ -13,7 +13,7 @@ const HEX = '65dc8a99604c307b702b5ccc';
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';
 
 /** The minimum a snapshot override must state, per `OrderSnapshotInput`. */
-const PANINO = { id: PRODUCT, title: 'Sallyno Panino', price: 100 };
+const DOG_FOOD = { id: PRODUCT, title: 'Grain-Free Dog Food', price: 100 };
 
 describe('makeOrder — identity and defaults', () => {
     it('builds a complete order with no overrides at all', () => {
@@ -69,7 +69,7 @@ describe('makeOrder — identity and defaults', () => {
 
 describe('makeOrder — the embedded product snapshot', () => {
     it('keys the snapshot by _id, as a real ObjectId', () => {
-        const order = makeOrder({ items: [{ product: PANINO, quantity: 2 }] });
+        const order = makeOrder({ items: [{ product: DOG_FOOD, quantity: 2 }] });
         const snapshot = order.items![0].product;
 
         // `_id`, not `id`: `applyProductTransform` renames `_id` on the way out, so a snapshot
@@ -80,21 +80,23 @@ describe('makeOrder — the embedded product snapshot', () => {
     });
 
     it('always carries the title and price the email and invoice render', () => {
-        const snapshot = makeOrder({ items: [{ product: PANINO, quantity: 1 }] }).items![0].product;
+        const snapshot = makeOrder({ items: [{ product: DOG_FOOD, quantity: 1 }] }).items![0]
+            .product;
 
-        expect(snapshot.title).toBe('Sallyno Panino');
+        expect(snapshot.title).toBe('Grain-Free Dog Food');
         expect(snapshot.price).toBe(100);
     });
 
     it('keeps the quantity beside the snapshot, not inside it', () => {
-        const line = makeOrder({ items: [{ product: PANINO, quantity: 3 }] }).items![0];
+        const line = makeOrder({ items: [{ product: DOG_FOOD, quantity: 3 }] }).items![0];
 
         expect(line.quantity).toBe(3);
         expect(Object.hasOwn(line.product, 'quantity')).toBe(false);
     });
 
     it('omits the catalogue fields the snapshot was not given', () => {
-        const snapshot = makeOrder({ items: [{ product: PANINO, quantity: 1 }] }).items![0].product;
+        const snapshot = makeOrder({ items: [{ product: DOG_FOOD, quantity: 1 }] }).items![0]
+            .product;
 
         for (const field of ['categories', 'tags', 'active', 'onHand', 'reserved'])
             expect(Object.hasOwn(snapshot, field)).toBe(false);
@@ -104,7 +106,7 @@ describe('makeOrder — the embedded product snapshot', () => {
         // The whole reason a snapshot exists: an order keeps what was bought. A field stated on
         // the override has to survive into the stored copy.
         const snapshot = makeOrder({
-            items: [{ product: { ...PANINO, categories: ['food'], active: false }, quantity: 1 }]
+            items: [{ product: { ...DOG_FOOD, categories: ['food'], active: false }, quantity: 1 }]
         }).items![0].product;
 
         expect(snapshot.categories).toEqual(['food']);
@@ -115,7 +117,7 @@ describe('makeOrder — the embedded product snapshot', () => {
         const snapshot = makeOrder({
             items: [
                 {
-                    product: { ...PANINO, deletedAt: '2026-08-27T10:00:00.000Z' },
+                    product: { ...DOG_FOOD, deletedAt: '2026-08-27T10:00:00.000Z' },
                     quantity: 1
                 }
             ]
@@ -126,17 +128,17 @@ describe('makeOrder — the embedded product snapshot', () => {
     });
 
     it('builds one snapshot per line, in order', () => {
-        const other = { id: '65dc9be92f2794d1c16741e1', title: 'Pufettino', price: 7.5 };
+        const other = { id: '65dc9be92f2794d1c16741e1', title: 'Memory Foam Dog Bed', price: 7.5 };
         const order = makeOrder({
             items: [
-                { product: PANINO, quantity: 1 },
+                { product: DOG_FOOD, quantity: 1 },
                 { product: other, quantity: 2 }
             ]
         });
 
         expect(order.items!.map((line) => line.product.title)).toEqual([
-            'Sallyno Panino',
-            'Pufettino'
+            'Grain-Free Dog Food',
+            'Memory Foam Dog Bed'
         ]);
     });
 });

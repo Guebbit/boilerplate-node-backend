@@ -2,7 +2,7 @@
 
 Running the shop: what is for sale, at what price, and what happens to orders after they arrive.
 
-Everything on this page needs the staff login (`root` / `rootroot`).
+Everything on this page needs the staff login (`root@root.it` / `Demo-Admin1!`).
 
 ## An order's life
 

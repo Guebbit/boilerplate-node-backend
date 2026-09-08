@@ -32,15 +32,15 @@ import { productRepository } from './repository';
  * The catalogue ids, named by what each row is for.
  *
  * `cart`, `wishlist` and `orders` read these via `@modules/products/demo` instead of repeating a
- * hex string — a name like `panino` makes intent like "only visible products are saved" checkable
- * by eye, where a raw id would just be a claim in a comment. The names are internal identifiers
- * only, unrelated to the English catalogue copy below.
+ * hex string. Each name states the row's product and the branch it exists to exercise, so intent
+ * like "only visible products are saved" is checkable by eye where a raw id would just be a claim
+ * in a comment.
  */
 export const SEED_PRODUCT_IDS = {
-    panino: '65dc8a99604c307b702b5ccc',
-    carinoSoftDeleted: '65dc8ad8604c307b702b5cd4',
-    micionaOutOfStock: '65dc9be92f2794d1c16741e1',
-    pufettino: '65dcdec2b18ad5e4bd597f0f',
+    dogFoodStandard: '65dc8a99604c307b702b5ccc',
+    heaterSoftDeleted: '65dc8ad8604c307b702b5cd4',
+    scratchPostOutOfStock: '65dc9be92f2794d1c16741e1',
+    dogBedPremium: '65dcdec2b18ad5e4bd597f0f',
     bundleInactive: '6622c88a5123b1e286f440f8',
     barebones: '67f0a1c2d3e4b5a6c7d8e9f0'
 } as const;
@@ -54,7 +54,7 @@ export const SEED_PRODUCT_IDS = {
  */
 const namedProducts = [
     makeProduct({
-        id: SEED_PRODUCT_IDS.panino,
+        id: SEED_PRODUCT_IDS.dogFoodStandard,
         title: 'Premium Grain-Free Dog Food, 15kg',
         description:
             'A complete, balanced diet formulated for adult dogs, made with real chicken and rice.',
@@ -62,7 +62,7 @@ const namedProducts = [
         onHand: 30,
         categories: ['dogs', 'food'],
         tags: ['dog-food', 'premium'],
-        ...productImages.panino
+        ...productImages.dogFoodStandard
     }),
     /*
      * The soft-deleted one — exercises the `deletedAt` branch that `isVisibleToCaller` and the
@@ -70,7 +70,7 @@ const namedProducts = [
      * the inactive one, so the dataset can tell the two states apart.
      */
     makeProduct({
-        id: SEED_PRODUCT_IDS.carinoSoftDeleted,
+        id: SEED_PRODUCT_IDS.heaterSoftDeleted,
         title: '150W Ceramic Heat Emitter',
         description:
             'A ceramic heat emitter for reptile terrariums, providing consistent background heat ' +
@@ -80,7 +80,7 @@ const namedProducts = [
         categories: ['reptiles'],
         tags: ['heating', 'reptile'],
         deletedAt: '2024-02-26T23:34:44.832Z',
-        ...productImages.carinoSoftDeleted
+        ...productImages.heaterSoftDeleted
     }),
     /*
      * `onHand: 0` on purpose — the storefront needs an out-of-stock badge and checkout needs a
@@ -88,7 +88,7 @@ const namedProducts = [
      * to be unbuyable (units held, all reserved) is deliberately not seeded — see `orders/demo.ts`.
      */
     makeProduct({
-        id: SEED_PRODUCT_IDS.micionaOutOfStock,
+        id: SEED_PRODUCT_IDS.scratchPostOutOfStock,
         title: 'Heavy-Duty Cat Scratching Post',
         description:
             'A tall, sisal-wrapped scratching post built to withstand daily use. Currently ' +
@@ -97,10 +97,10 @@ const namedProducts = [
         onHand: 0,
         categories: ['cats'],
         tags: ['scratching-post', 'heavy-duty'],
-        ...productImages.micionaOutOfStock
+        ...productImages.scratchPostOutOfStock
     }),
     makeProduct({
-        id: SEED_PRODUCT_IDS.pufettino,
+        id: SEED_PRODUCT_IDS.dogBedPremium,
         title: 'Orthopedic Memory Foam Dog Bed',
         description:
             'A supportive memory foam bed designed to ease pressure on joints, suitable for ' +
@@ -109,7 +109,7 @@ const namedProducts = [
         onHand: 45,
         categories: ['dogs'],
         tags: ['dog-bed', 'premium'],
-        ...productImages.pufettino
+        ...productImages.dogBedPremium
     }),
     /* The inactive one — soft-deleted's independent twin. `publicScope()` requires active AND not
      * deleted, so from outside these two behave identically while remaining distinct states. */
