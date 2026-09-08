@@ -29,7 +29,10 @@ export default withMermaid(
                             { text: 'The customer', link: '/demo-ecommerce/shopper' },
                             { text: 'The shop manager', link: '/demo-ecommerce/manager' },
                             { text: 'The warehouse', link: '/demo-ecommerce/warehouse' },
-                            { text: 'The support desk', link: '/demo-ecommerce/support' }
+                            { text: 'The support desk', link: '/demo-ecommerce/support' },
+                            { text: 'The editor', link: '/demo-ecommerce/editor' },
+                            { text: 'The translator', link: '/demo-ecommerce/translator' },
+                            { text: 'The moderator', link: '/demo-ecommerce/moderator' }
                         ]
                     }
                 ],

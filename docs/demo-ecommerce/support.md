@@ -75,15 +75,19 @@ process it.
 
 ## Languages
 
-The shop speaks more than one language, and **the wording can be changed without a developer**.
+The shop's buttons, labels and messages speak more than one language, and **that wording can be
+changed without a developer** — the [translator](./translator.md) does exactly this, and needs no
+other access to do it.
 
-Someone with staff access can edit the text customers see, and register or retire a language. The
-demo ships with Spanish, Italian, French and Japanese in deliberately different states of
+Someone in that role can edit the text customers see on-screen, and register or retire a language.
+The demo ships with Spanish, Italian, French and Japanese in deliberately different states of
 completeness, so a half-translated shop can be seen behaving.
 
-::: tip You can change what a phrase says, not invent new ones
+::: tip You can change what a phrase says, not invent new ones — and not what a product says
 Editing replaces existing wording. A brand-new label still needs a developer — the application
-decides _what text exists_, the editor decides _what it says_.
+decides _what text exists_, the translator decides _what it says_. And it is screen text only: a
+product's own title and description are not translated at all today, in any language — see
+[`products`](../modules/products.md).
 :::
 
 → [`locales`](../modules/locales.md)
@@ -94,7 +98,8 @@ There is a health page that answers plainly, plus a live activity view that upda
 you watch it — useful for "is anything happening at all right now".
 
 And there is the **90-day record of every staff action**: who changed that price, who cancelled that
-order, when. Most "what happened here?" questions end there.
+order, when. Most "what happened here?" questions end there — reachable from your own role, without
+needing the platform-wide view a developer or operator would use instead.
 
 → [`observability`](../modules/observability.md) · [`audit-logs`](../modules/audit-logs.md)
 

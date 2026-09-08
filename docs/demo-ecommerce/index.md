@@ -57,18 +57,26 @@ So a visitor sees **130** products (the four ordinary ones above, plus all 126 g
 Staff see all 132. That difference is deliberate and it is explained on
 [the shop manager's page](./manager.md).
 
-## The two people in it
+## The people in it
 
-Two accounts come with a password you can actually type in:
+Every account below comes with a password you can actually type in:
 
-| Who            | Email                  | Password       | Can do                            |
-| -------------- | ---------------------- | -------------- | --------------------------------- |
-| **A customer** | `customer@example.com` | `Demo-User1!`  | shop, buy, track their own orders |
-| **The owner**  | `root@root.it`         | `Demo-Admin1!` | everything, plus run the shop     |
+| Who                | Email                    | Password            | Can do                            |
+| ------------------ | ------------------------ | ------------------- | --------------------------------- |
+| **A customer**     | `customer@example.com`   | `Demo-User1!`       | shop, buy, track their own orders |
+| **The owner**      | `root@root.it`           | `Demo-Admin1!`      | everything, plus run the shop     |
+| **The editor**     | `editor@example.com`     | `Demo-Editor1!`     | the catalogue, and nothing else   |
+| **The translator** | `translator@example.com` | `Demo-Translator1!` | the dictionary, and nothing else  |
+| **The moderator**  | `moderator@example.com`  | `Demo-Moderator1!`  | accounts, orders, payments        |
 
-There are only these two levels. Either you are staff, or you are a customer. There is no
-"warehouse-only" or "support-only" login — those are jobs, not accounts, and this section splits
-the pages up that way because it is easier to read, not because the software does.
+The manager, warehouse and support pages are jobs, not logins — the owner account does all three,
+and this section splits them up because it reads better, not because the software forces a
+narrower one. **The last three rows are different on purpose.** They exist to show restriction
+actually happening, and an omnipotent account cannot demonstrate a restriction — only a narrower
+one, refused when it reaches past its own job, can. Log into `editor@example.com` and try to open
+`/orders`; the 403 is the point of the account existing.
+
+→ [The editor](./editor.md) · [The translator](./translator.md) · [The moderator](./moderator.md)
 
 A further ten customer accounts exist too — `amelia.clarke`, `benjamin.hughes` and so on — with an
 order history spread across them (mostly one small order each, three with a couple more) so the
@@ -91,13 +99,16 @@ declined" path can be shown on demand.
 
 ## Which page do you want
 
-| You are…                                    | Read                             |
-| ------------------------------------------- | -------------------------------- |
-| Wondering what a customer experiences       | [The customer](./shopper.md)     |
-| Running the shop — products, prices, orders | [The shop manager](./manager.md) |
-| Looking after stock and getting parcels out | [The warehouse](./warehouse.md)  |
-| Answering emails, resets, complaints        | [The support desk](./support.md) |
-| A developer who took a wrong turn           | [Modules](../modules/)           |
+| You are…                                         | Read                              |
+| ------------------------------------------------ | --------------------------------- |
+| Wondering what a customer experiences            | [The customer](./shopper.md)      |
+| Running the shop — products, prices, orders      | [The shop manager](./manager.md)  |
+| Looking after stock and getting parcels out      | [The warehouse](./warehouse.md)   |
+| Answering emails, resets, complaints             | [The support desk](./support.md)  |
+| Writing and photographing products, not prices   | [The editor](./editor.md)         |
+| Translating the shop's screens, not its products | [The translator](./translator.md) |
+| Handling accounts, disputed orders and refunds   | [The moderator](./moderator.md)   |
+| A developer who took a wrong turn                | [Modules](../modules/)            |
 
 ## Opening it yourself
 

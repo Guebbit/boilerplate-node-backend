@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — which languages this deployment speaks, and the runtime overrides layered over the bundled copy.
 **Depends on** — nothing. It has no barrel either: nothing may import it.
-**Breaks if you change** — the `scope` field. It decides which of two dictionaries a row patches.
+**Breaks if you change** — the `tenant` field. It decides which of two dictionaries a row patches.
 :::
 
 ## Its neighbourhood
@@ -26,13 +26,15 @@ the filesystem permanently. It exists so a client can render copy _when no respo
 putting it behind a database would make it unavailable in exactly the outage it was created for.
 
 _Tier 2 is the overrides_ — the two collections this module owns, edited at runtime by people who do
-not open a code editor. One row per `(locale, scope, key)`, and `scope` says which dictionary it
-patches:
+not open a code editor. One row per `(locale, tenant, key)`, and `tenant` says which dictionary it
+patches — a keyspace, not a customer: `NODE_LOCALE_TENANT_BACKEND`/`_FRONTEND` name the two this
+deployment starts with, and `NODE_LOCALE_TENANTS_EXTRA` may add more frontend ones (a mobile app, a
+kiosk) that share the same rows and never collide with each other's keys:
 
-| `scope` | Served by                           | Merged where                                                         |
-| ------- | ----------------------------------- | -------------------------------------------------------------------- |
-| `app`   | `GET /locales/:locale/messages`     | the frontend, over what it bundles, key by key                       |
-| `api`   | nothing — never leaves this service | layered over tier 1 at boot, on a timer, and after every admin write |
+| Tenant kind | Served by                           | Merged where                                                         |
+| ----------- | ----------------------------------- | -------------------------------------------------------------------- |
+| `frontend`  | `GET /locales/:locale/messages`     | the frontend, over what it bundles, key by key                       |
+| `backend`   | nothing — never leaves this service | layered over tier 1 at boot, on a timer, and after every admin write |
 
 ::: warning Both halves are overrides, never dictionaries
 Neither side may introduce a key its files do not already define and expect it to render. **The
@@ -40,7 +42,7 @@ files decide what exists; the rows decide what it says.**
 :::
 
 ::: warning A language in the database does not mean the API can answer in it
-`GET /locales` reports `scopes` per language rather than a bare list of tags, so "may I send
+`GET /locales` reports `tenants` per language rather than a bare list of tags, so "may I send
 `Accept-Language: es`" and "may I download a Spanish dictionary" stay two questions. The demo
 dataset registers `es` with no `src/locales/es.json` behind it precisely so the answers really are <!-- doc-paths:ignore -->
 _no_ and _yes_.
@@ -52,15 +54,15 @@ response still resolves its copy from the files.
 
 ## The pipeline
 
-The two tiers, and the two sinks they never share. Follow `scope` and the whole module falls out.
+The two tiers, and the two sinks they never share. Follow `tenant` and the whole module falls out.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 28, 'rankSpacing': 60}}}%%
 flowchart LR
     F["src/locales/*.json<br/><i>+ every module's locales/ — the files decide what EXISTS</i>"] --> I["i18next at boot<br/><i>tier 1 · what t() resolves</i>"]
-    AD["admin<br/><i>never opens a code editor</i>"] --> DB[("override rows<br/><i>tier 2 · one per locale·scope·key</i>")]
-    DB -->|"scope: api<br/><i>re-layered at boot · on a timer · after every write</i>"| I
-    DB -->|"scope: app"| HT["GET /locales/:locale/messages"]
+    AD["admin<br/><i>never opens a code editor</i>"] --> DB[("override rows<br/><i>tier 2 · one per locale·tenant·key</i>")]
+    DB -->|"tenant: backend<br/><i>re-layered at boot · on a timer · after every write</i>"| I
+    DB -->|"tenant: frontend"| HT["GET /locales/:locale/messages"]
     HT --> FE["the frontend<br/><i>merges over what it bundles</i>"]
     I --> RS["every response<br/><i>copy · Content-Language</i>"]
 

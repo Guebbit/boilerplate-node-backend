@@ -1,7 +1,7 @@
 # users
 
 ::: tip At a glance
-**Owns** — the user record: email, password hash, admin flag, and the reset/refresh tokens hanging off it.
+**Owns** — the user record: email, password hash, role name, and the reset/refresh tokens hanging off it.
 **Depends on** — nothing. Authentication is next door in [`account`](./account.md).
 **Breaks if you change** — the `tokens` subdocument. `account` reads and writes it, and it is the repo's only shared-kernel edge.
 :::
@@ -50,9 +50,13 @@ flowchart LR
 
 ## The story
 
-A user record with an email, a password hash and an admin flag is the same problem in every
+A user record with an email, a password hash and a role name is the same problem in every
 application that has ever had one. Nothing about it differentiates this shop — which is exactly
 what `generic` means, and why no aggregate belongs here however central the record feels.
+
+The role name is a fallback, not the source of truth — a stored membership always wins, and this
+module publishes its own field alongside it purely so a staff list has something to show. See
+[Authorization](../theory/authorization.md) for where the decision actually gets made.
 
 **Authentication is not here.** Signup, login, password reset and the token lifecycle all live in
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
@@ -77,7 +81,7 @@ not import.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["admin<br/><i>/users</i>"] --> R["the user record<br/><i>email · hash · admin flag · tokens</i>"]
+    A["admin<br/><i>/users</i>"] --> R["the user record<br/><i>email · hash · role name · tokens</i>"]
     AC["account<br/><i>/account — signup · login · reset</i>"] --> R
     R -. "user.deleted" .-> C["cart emptied"]
     R -. "user.deleted" .-> W["wishlist emptied"]

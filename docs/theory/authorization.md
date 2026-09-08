@@ -117,8 +117,8 @@ The model is stored, evaluated, compiled into every scoped read, published to th
 enforced per key.
 
 - **`shared/authorization-keys.yaml`** — every key, its subject, scope, conditions and step-up
-  tier. **`-roles.yaml`** — the presets both seeders read. **`-conformance.yaml`** — 43 cases,
-  30 of them denials, run by both backends. All three byte-identical in the PHP twin.
+  tier. **`-roles.yaml`** — the presets both seeders read. **`-conformance.yaml`** — dozens of
+  cases, most of them denials, run by both backends. All three byte-identical in the PHP twin.
 - **`kernel/permissions.ts`** turns an account's two role names into the keys for ONE scope;
   **`kernel/ability.ts`** builds the CASL ability and answers `holdsKey`.
 - **`kernel/access/`** stores it: tenants, roles and memberships, with the invariants as refusals —
