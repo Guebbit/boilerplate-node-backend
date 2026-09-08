@@ -26,8 +26,9 @@
  *
  * ── What it deliberately does not cover ──────────────────────────────────────────────────────
  * `multipart/form-data` operations are skipped: their bodies are files, `fast-check` has nothing
- * useful to say about a PNG, and the upload path already has `tests/integration/upload-security.
- * test.ts` driving real magic-byte checks. The count is asserted below so "skipped" cannot quietly
+ * useful to say about a PNG, and the upload path already has
+ * `tests/integration/upload-security.test.ts` driving real magic-byte checks. The count is
+ * asserted below so "skipped" cannot quietly
  * become "skipped everything".
  */
 import fc from 'fast-check';

@@ -23,7 +23,7 @@ import {
 
 /*
  * Fixtures are built from TUPLES rather than object literals, because the keys are file paths:
- * `'src/a.ts'` as a literal key trips the naming-convention lint rule in every fixture, and
+ * `'<path>.ts'` as a literal key trips the naming-convention lint rule in every fixture, and
  * disabling the rule per line would be more noise than the helper.
  */
 
@@ -212,7 +212,7 @@ describe('formatRegressions', () => {
 
 describe('missingFromReport — the partial-run guard', () => {
     /*
-     * `stryker run --mutate 'src/one/file.ts'` is the normal way to check one file quickly, and
+     * `stryker run --mutate '<path>.ts'` is the normal way to check one file quickly, and
      * its report contains only that file. Recording it would rebuild the baseline from those keys
      * alone and drop everything else — silently, and worse than silently: the next full run would
      * then re-record current scores as if they had always been the baseline, laundering any

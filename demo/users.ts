@@ -85,9 +85,9 @@ const namedUsers = [
         email: SEED_USER_EMAIL,
         password: SEED_USER_PASSWORD,
         verified: true,
-        // `tests/e2e/specs/../analytics.cy.ts` (frontend) logs in as this account and asserts
-        // the backend fires `cart_item_added` — `emitAnalyticsEvent`'s consent gate is opt-in,
-        // so this is the account that has opted in.
+        // `<paired-frontend>/src/modules/cart/tests/e2e/analytics.cy.ts` logs in as this account
+        // and asserts the backend fires `cart_item_added` — `emitAnalyticsEvent`'s consent gate
+        // is opt-in, so this is the account that has opted in.
         analyticsConsent: true,
         ...userImages.customer
     }),

@@ -233,12 +233,13 @@ if (failures.length > 0) {
  * Line coverage per module, read from `coverage/lcov.info`.
  *
  * lcov rather than a JSON coverage map because it is the one format BOTH sides emit: Jest's
- * defaults include it, and the frontend's `vitest.config.ts` names it explicitly. Parsing it is
- * four lines of string handling and no dependency — `SF:` opens a file, `LF:`/`LH:` are the lines
- * found and hit in it.
+ * defaults include it, and the frontend's `<paired-frontend>/vitest.config.ts` names it
+ * explicitly. Parsing it is four lines of string handling and no dependency — `SF:` opens a file,
+ * `LF:`/`LH:` are the lines found and hit in it.
  *
  * Absent by design when a run was not a coverage run: this is the report, not the gate, and the
- * per-file floors in `jest.config.js` / `vitest.config.ts` remain the thing that fails a build. What
+ * per-file floors in `jest.config.js` / `<paired-frontend>/vitest.config.ts` remain the thing that
+ * fails a build. What
  * this adds is the number those floors cannot express — what a MODULE costs and what it covers —
  * because a floor is per file and a module is a directory of them.
  *

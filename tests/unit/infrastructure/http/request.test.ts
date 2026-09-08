@@ -154,7 +154,7 @@ describe('readInput', () => {
         // Nothing is defaulted or bounded here, so `undefined` still means "did not paginate".
         // Defaults, the 1-100 bounds and the NODE_SETTINGS_PAGINATION_PAGE_SIZE fallback all live
         // in `normalizePagination` (@infrastructure/persistence/search), which runs on every search — see
-        // tests/unit/repositories/search-pagination.test.ts.
+        // tests/cross-cutting/search-pagination.test.ts.
         it('reports absent pagination as absent, not as a default', () => {
             const input = readInput(makeRequest(), { surface: 'search' });
 

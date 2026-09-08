@@ -6,7 +6,7 @@ import { defineConfig } from 'orval';
  * Full output reference: https://orval.dev/docs/reference/configuration/output
  *
  * This project only consumes generated TS types (@api/models, e.g. src/types/index.ts)
- * and Zod validators (@api/schemas.zod, e.g. src/services/auth.ts) - there's no in-repo
+ * and Zod validators (@api/schemas.zod, e.g. src/modules/users/model.ts) - there's no in-repo
  * consumer of an HTTP-calling client (fetch/axios/react-query/...), so 'zod' is the only
  * client generated. `schemas` still produces the raw model interfaces regardless of
  * client choice, so a single block covers both needs.

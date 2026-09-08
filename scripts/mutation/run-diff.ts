@@ -12,7 +12,7 @@
  * about the scoring is special-cased.
  *
  * ── WHY WHOLE FILES, NOT CHANGED LINES ───────────────────────────────────────────────────────
- * Stryker can mutate a line range (`--mutate 'file.ts:10-40'`), and Google's published practice
+ * Stryker can mutate a line range (`--mutate '<path>.ts:10-40'`), and Google's published practice
  * mutates diffs that way. This mutates the whole file on purpose: whole-file scores are what
  * `mutation-baseline-deep.json` records, so they compare directly, whereas a line-range score is
  * comparable to nothing. The consequence is deliberate — touch a file and you own its debt not

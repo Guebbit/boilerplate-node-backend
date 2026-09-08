@@ -300,10 +300,11 @@ interface Layer {
  * Walks a router's stack once, in mount order, and answers every question the exports below need.
  *
  * The single place coupled to the undocumented Express internals `router.stack`,
- * `layer.route.methods` and `route.stack[].handle` — see `tests/unit/infrastructure/http/router-
- * internals.test.ts` for the pinned shape. Everything exported from this file is a projection of
- * this one pass — one walker, so `handlerName`'s two callers cannot disagree about the fallback
- * below (a `router.use` layer's own Express name vs the literal `'(anonymous)'`).
+ * `layer.route.methods` and `route.stack[].handle` — see
+ * `tests/unit/infrastructure/http/router-internals.test.ts` for the pinned shape. Everything
+ * exported from this file is a projection of this one pass — one walker, so `handlerName`'s two
+ * callers cannot disagree about the fallback below (a `router.use` layer's own Express name vs the
+ * literal `'(anonymous)'`).
  *
  * @param router - the module's exported Express router
  * @returns `rows`, one per mounted endpoint with the `use` layers accumulated above it, in mount

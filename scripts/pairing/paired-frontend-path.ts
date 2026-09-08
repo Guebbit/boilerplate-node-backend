@@ -3,7 +3,8 @@ import path from 'node:path';
 /**
  * Default sibling-checkout location of the paired frontend, relative to this repo's root.
  *
- * Mirrors `scripts/pairing/paired-backend-path.ts` in the frontend, which resolves this repo from over there.
+ * Mirrors `<paired-frontend>/scripts/pairing/paired-backend-path.ts`, which resolves this repo
+ * from over there.
  * The two conventions have to agree — each repo assumes the other sits beside it — so changing
  * one without the other breaks the contract check in exactly one direction, which is the
  * confusing half.

@@ -1,11 +1,17 @@
 /**
- * `eslint/rules/comment-links` — the rule that keeps a comment's Markdown pointer stable.
+ * `eslint/rules/comment-links` — the two comment-hygiene checks it carries.
  *
  * Exercised through ESLint's own `RuleTester`, so what is asserted is exactly what a lint run
- * does. The cases split along the one distinction that makes the rule usable: a path INSIDE this
- * repo (which must be under `docs/`) versus a path inside an external URL (which this repo does
- * not control and must never flag). A rule that got the second half wrong would fire on every
+ * does. The Markdown half splits along the one distinction that makes it usable: a path INSIDE
+ * this repo (which must be under `docs/`) versus a path inside an external URL (which this repo
+ * does not control and must never flag). A rule that got the second half wrong would fire on every
  * library doc link the third-party-comment convention asks for.
+ *
+ * The `.ts`/`.tsx` half checks against files this repo ACTUALLY TRACKS (`git ls-files`, read once
+ * by `scripts/docs/repo-references.ts`), so its cases necessarily name real, stable files rather
+ * than fixtures — `eslint/rules/index.ts` and this test file's own directory, both foundational
+ * enough not to move. `filename` is set per case because the relative-path half resolves against
+ * wherever the comment actually lives, unlike the Markdown half which does not need to know.
  *
  * `tester.run` sits at the top level: RuleTester emits its own describe/it blocks, and jest
  * refuses describes nested inside a test.
@@ -63,6 +69,45 @@ tester.run('comment-links', commentLinks as never, {
         {
             code: '// See notdocs/thing.md\nconst a = 1;',
             errors: [{ messageId: 'unstable' }]
+        }
+    ]
+});
+
+tester.run('comment-links (.ts/.tsx)', commentLinks as never, {
+    valid: [
+        // A real, tracked file, cited by its repo-relative path.
+        { code: '// See eslint/rules/index.ts for the barrel.\nconst a = 1;' },
+        // Resolved by suffix, same as check-references.ts does for a doc page.
+        { code: '// See rules/index.ts.\nconst a = 1;' },
+        // A `<placeholder>` segment is a deliberate wildcard, not a citation.
+        { code: '// Each src/modules/<name>/module.ts declares a basePath.\nconst a = 1;' },
+        { code: '// Mirrors <paired-frontend>/vitest.config.ts over there.\nconst a = 1;' },
+        { code: "// stryker run --mutate '<path>.ts:10-40'\nconst a = 1;" },
+        // A relative reference, resolved against the file the comment lives in.
+        {
+            code: '// See ./index.ts for the barrel.\nconst a = 1;',
+            filename: 'eslint/rules/comment-links.ts'
+        },
+        // The generated-artifact and node_modules exemptions `check-references.ts` already has.
+        {
+            code: '// Generated into src/types/asyncapi.generated.ts by gen:asyncapi.\nconst a = 1;'
+        },
+        {
+            code: '// See node_modules/zod/v4/core/schemas.d.ts for the introspection surface.\nconst a = 1;'
+        },
+        // No .ts/.tsx reference at all.
+        { code: '// Nothing to see here.\nconst a = 1;' }
+    ],
+    invalid: [
+        {
+            code: '// See eslint/rules/definitely-not-a-real-rule.ts for the shape.\nconst a = 1;',
+            errors: [{ messageId: 'stale' }]
+        },
+        // A relative reference that does not exist next to the citing file.
+        {
+            code: '// See ./definitely-not-a-real-rule.ts for the shape.\nconst a = 1;',
+            filename: 'eslint/rules/comment-links.ts',
+            errors: [{ messageId: 'stale' }]
         }
     ]
 });

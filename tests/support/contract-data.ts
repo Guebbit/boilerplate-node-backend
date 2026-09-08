@@ -27,8 +27,8 @@
  * on first use) — not reseeded per call, so repeated calls in one test file draw
  * different-but-reproducible values (distinct emails, ids, ...) from the same seeded stream.
  *
- * `RANDOM_DATA_SEED` is deliberately the same name the paired frontend reads for its random mock
- * profile (`tests/mocks/shared/mockProfilesRandom.ts` there). The two sides keep their own PRNGs
+ * `RANDOM_DATA_SEED` is deliberately the same name the paired frontend reads for its own random
+ * mock profile generator, over in `<paired-frontend>`. The two sides keep their own PRNGs
  * — this Mulberry32 against faker's Mersenne Twister — and given one seed they produce unrelated
  * values. That is fine and intended: they generate opposite halves of the same contract (requests
  * here, responses there) from different schema surfaces, so making the streams agree would buy

@@ -220,7 +220,7 @@ module.exports = {
          *
          * Turned on, the graph also carries `import type` edges, and every rule here then reports
          * on a graph that does not exist after compilation. It showed up immediately: eight
-         * "cycles" across `cache.ts`, `queue.ts`, `dependency-health.ts` and `payments/fake.ts`,
+         * "cycles" across `cache.ts`, `queue.ts`, `dependency-health.ts` and `payments/providers/fake.ts`,
          * every one of them closed by an `import type` that TypeScript erases. None can produce
          * the boot-order failure the cycle rule is for, and none can be fixed except by deleting
          * a type import that is doing its job.
