@@ -12,11 +12,11 @@ This page is about what the right person is allowed to do once they are in.
 Authorization is usually discussed as one axis. There are three, and confusing them is how systems
 end up with forty roles.
 
-| Axis                            | Answers                             | Where it lives today                                   |
-| ------------------------------- | ----------------------------------- | ------------------------------------------------------ |
-| **Who they are**                | may this caller act at all?         | `caller.admin` — one boolean                           |
-| **How strongly they proved it** | did they prove it _recently_?       | `amr` on the token + the freshness guards              |
-| **Which rows**                  | of the things they may read, which? | `kernel/authorization.ts` — the caller scope factories |
+| Axis                            | Answers                             | Where it lives today                                           |
+| ------------------------------- | ----------------------------------- | -------------------------------------------------------------- |
+| **Who they are**                | may this caller act at all?         | `caller.admin` — one boolean                                   |
+| **How strongly they proved it** | did they prove it _recently_?       | `amr` on the token + the freshness guards                      |
+| **Which rows**                  | of the things they may read, which? | `kernel/access/query.ts` — the rules, compiled into the filter |
 
 The middle axis is the one most applications never build. This one has it: `requireFreshAuth` and
 the `amr` claim (RFC 8176) mean a high-risk action can demand a recently proved session rather than
