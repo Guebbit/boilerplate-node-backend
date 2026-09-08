@@ -359,3 +359,107 @@ cases:
       subject: NoSuchThing
       resource: { tenantId: shop_1 }
       expect: deny
+
+    # =============================================================================================
+    # The catalogue editor. Manages products in words and pictures, and reads the dictionary they
+    # are written against — nothing about stock, an order, or a person.
+    # =============================================================================================
+
+    - name: an editor may add a product
+      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage, locales.read] }
+      action: create
+      subject: Product
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: an editor sees a draft the storefront does not
+      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage, locales.read] }
+      action: read
+      subject: Product
+      resource: { tenantId: shop_1, active: false }
+      expect: allow
+
+    - name: an editor may not read an order
+      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage, locales.read] }
+      action: read
+      subject: Order
+      resource: { tenantId: shop_1, userId: usr_1 }
+      expect: deny
+
+    - name: an editor may not read an account
+      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage, locales.read] }
+      action: read
+      subject: User
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    # =============================================================================================
+    # The translator. The dictionary, in every registered language — nothing that costs money.
+    # =============================================================================================
+
+    - name: a translator may register a language
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+      action: create
+      subject: Locale
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: a translator may read a draft language nobody has published yet
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+      action: read
+      subject: Locale
+      resource: { tenantId: shop_1, active: false }
+      expect: allow
+
+    - name: a translator may not add a product
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+      action: create
+      subject: Product
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: a translator may not update a price
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+      action: update
+      subject: Product
+      resource: { tenantId: shop_1, active: true }
+      expect: deny
+
+    # =============================================================================================
+    # The moderator. Accounts, orders and payments — and the audit trail those three write to.
+    # =============================================================================================
+
+    - name: a moderator may ban an account
+      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      action: update
+      subject: User
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: a moderator may read any order, not only their own
+      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      action: read
+      subject: Order
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: allow
+
+    - name: a moderator may refund a payment
+      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      action: update
+      subject: Payment
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: allow
+
+    - name: a moderator may read the action history
+      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      action: read
+      subject: AuditLog
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: a moderator may not change what a product costs
+      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      action: update
+      subject: Product
+      resource: { tenantId: shop_1, active: true }
+      expect: deny

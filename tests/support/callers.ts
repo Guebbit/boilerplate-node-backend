@@ -33,7 +33,8 @@ const identity = (id: string) => ({
 /**
  * Someone acting in the shop, in the named role.
  *
- * @param role - a preset tenant role: `customer`, `manager`, `warehouse`, `support` or `owner`
+ * @param role - a preset tenant role: `customer`, `manager`, `warehouse`, `support`, `editor`,
+ * `translator`, `moderator` or `owner`
  */
 export const asRole = (role: string, id = 'test-user'): AuthContext => ({
     ...identity(id),
@@ -55,6 +56,15 @@ export const asWarehouse = (id = 'test-warehouse'): AuthContext => asRole('wareh
 
 /** Handles messages and accounts. May update an account, never erase one. */
 export const asSupport = (id = 'test-support'): AuthContext => asRole('support', id);
+
+/** Manages the catalogue in words and pictures. Cannot touch stock, an order, or a person. */
+export const asEditor = (id = 'test-editor'): AuthContext => asRole('editor', id);
+
+/** Edits the dictionary in every registered language. Cannot touch anything that costs money. */
+export const asTranslator = (id = 'test-translator'): AuthContext => asRole('translator', id);
+
+/** Accounts, orders and payments, plus the audit trail those three write to. Cannot set a price. */
+export const asModerator = (id = 'test-moderator'): AuthContext => asRole('moderator', id);
 
 /**
  * Operates the installation and is NOT a super-owner: holds no bare key, so it cannot read one

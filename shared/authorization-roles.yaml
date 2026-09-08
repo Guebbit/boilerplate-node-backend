@@ -12,9 +12,9 @@
 # Nobody is handed an empty permission matrix. A deployment gets these on day one and may edit
 # them afterwards — they are a starting point, not a schema.
 #
-# The four tenant roles are the four demo personas, which already exist and have already been run
-# against every screen: see `docs/demo-ecommerce/`. Reusing them means the permission model is
-# exercised by the demo rather than only by its own tests.
+# Every tenant role below is a demo persona, run against every screen — see `docs/demo-ecommerce/`
+# — except `owner`, the shop's one superuser account rather than a job. Reusing the others means
+# the permission model is exercised by the demo rather than only by its own tests.
 
 version: 1
 
@@ -75,6 +75,41 @@ roles:
           - users.update
           - orders.read
           - payments.read
+          - audit.read
+
+    - name: editor
+      scope: tenant
+      title: The catalogue editor
+      description: >-
+          What is for sale, in words, pictures and price. Sees a draft the storefront does not.
+          `products.manage` is the whole catalogue record, price included — what it may not touch
+          is a different subject entirely: stock (that is `inventory`), a delivery rule, or an
+          order.
+      permissions:
+          - products.manage
+          - locales.read
+
+    - name: translator
+      scope: tenant
+      title: The translator
+      description: >-
+          The dictionary a shopper reads the shop in — every screen's copy, in every registered
+          language. May add a language the shop has not spoken before. Touches no product, no
+          order, no account: a mistranslation cannot become a mischarge.
+      permissions:
+          - locales.manage
+
+    - name: moderator
+      scope: tenant
+      title: The moderator
+      description: >-
+          Accounts, and the two things people write about their orders: the message they send and
+          the order itself. May ban an account, reverse a bad charge, and read why either happened.
+          `orders.manage` also reaches delete, which nothing narrower would let a moderator update.
+      permissions:
+          - users.manage
+          - orders.manage
+          - payments.manage
           - audit.read
 
     - name: owner
