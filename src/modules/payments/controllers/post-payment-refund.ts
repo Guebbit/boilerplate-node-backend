@@ -9,7 +9,7 @@
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { paymentService } from '../service';
+import { paymentService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 

@@ -21,7 +21,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { catchAs } from '@infrastructure/http/controller';
 import { resolvePaymentProvider, WebhookRejected, WEBHOOK_SIGNATURE_HEADER } from '../providers';
-import { paymentService } from '../service';
+import { paymentService } from '../services';
 
 /** Handles `POST /payments/webhook`. */
 export const postPaymentWebhook = (request: Request, response: Response) => {

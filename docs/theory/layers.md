@@ -53,7 +53,7 @@ Two things hold that beyond what a per-file rule can see:
   reach it at all", plus cycle detection, which no per-file rule can perform because no file in a
   cycle is doing anything wrong on its own. It is a structural check, not a behavioural one, so it
   runs beside `lint` and the other `check:*` steps in `npm run complete` — never inside `npm run
-  test`, which is Jest suites only.
+test`, which is Jest suites only.
 
 Two modules that each need the other are not a dependency pair. Either they are one module, or the
 reverse edge becomes a domain event — see `src/kernel/events.ts`, and the catalogue/cart pair for
@@ -150,12 +150,12 @@ have nowhere below `services/` to go. `keys.ts` is where they live instead — t
 
 **These modules are over the threshold and have not been split:**
 
-| File                   | Why it is over                                                        |
-| ---------------------- | --------------------------------------------------------------------- |
-| `orders/services/`     | the lifecycle writes, the cancel sequence and the read scopes         |
-| `inventory/service.ts` | reserve, commit, release, the sweep, and the operator's own writes    |
-| `payments/service.ts`  | intent, confirm, refund, and the ownership scope around them          |
-| `products/service.ts`  | the CRUD writes, the visibility scope, and the catalogue's own facets |
+| File                              | Why it is over                                                                                        |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `orders/services/crud.ts`         | `getById`/`create`/`update`/`updateById`/`remove`/`removeById` — the whole write half                 |
+| `inventory/service.ts`            | reserve, commit, release, the sweep, and the operator's own writes                                    |
+| `payments/services/settlement.ts` | confirm, sync and webhook reconciliation — the one settlement choreography every path funnels through |
+| `products/service.ts`             | the CRUD writes, the visibility scope, and the catalogue's own facets                                 |
 
 That is recorded rather than quietly fixed, because the number's job is to make the split feel
 sanctioned instead of furtive — and a threshold silently re-fitted to whatever the largest file

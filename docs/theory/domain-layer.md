@@ -203,7 +203,7 @@ language rather than a handle on this module's storage, which is the distinction
 one table saying which status may follow which, and who may make each move. The _set_ of statuses is
 not its business — `OrderStatus` is generated from `openapi.yaml`, so the values stay contract-first
 — but the edges between them were previously spelled out three times: a `CANCELLABLE_ORDER_STATUSES`
-literal in `orders/services/cancel.ts`, a bare `status !== 'pending'` in `payments/service.ts`, and, on the
+literal in `orders/services/cancel.ts`, a bare `status !== 'pending'` in `payments/services/settlement.ts`, and, on the
 admin write, nothing at all. All three now read the table, which is the whole point of a domain
 folder: the rule exists once and the callers ask it.
 

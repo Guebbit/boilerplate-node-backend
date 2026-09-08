@@ -14,7 +14,7 @@ import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { CreatePaymentIntentBody } from '@api/schemas.zod';
-import { paymentService } from '../service';
+import { paymentService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /** Handles `POST /payments/intent`. */

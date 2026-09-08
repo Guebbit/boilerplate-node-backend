@@ -41,7 +41,7 @@ implementation answers is a deployment decision rather than a code path.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 34, 'rankSpacing': 52}}}%%
 flowchart TD
-    S["payments/service.ts"] --> P["PaymentProvider<br/><i>the port</i>"]
+    S["payments/services/"] --> P["PaymentProvider<br/><i>the port</i>"]
     W["POST /payments/webhook"] --> P
     P --> F["fake.ts<br/><i>shipped</i>"]
     P -.-> X["stripe.ts<br/><i>yours, one file</i>"]

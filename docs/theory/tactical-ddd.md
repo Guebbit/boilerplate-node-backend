@@ -87,11 +87,11 @@ the only one today.
 
 Lifecycle knowledge used to live in three places that did not agree.
 
-| Where                            | What it encoded                                    | The problem                                          |
-| -------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
-| `orders/services/cancel.ts`      | `CANCELLABLE_ORDER_STATUSES = ['pending', 'paid']` | correct, but local                                   |
-| `payments/service.ts`            | `if (order.status !== 'pending')`                  | a second module asserting the lifecycle from outside |
-| `orders/services/crud.ts`, admin | `order.status = data.status`                       | **no guard at all**                                  |
+| Where                             | What it encoded                                    | The problem                                          |
+| --------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| `orders/services/cancel.ts`       | `CANCELLABLE_ORDER_STATUSES = ['pending', 'paid']` | correct, but local                                   |
+| `payments/services/settlement.ts` | `if (order.status !== 'pending')`                  | a second module asserting the lifecycle from outside |
+| `orders/services/crud.ts`, admin  | `order.status = data.status`                       | **no guard at all**                                  |
 
 That third row was a live bug rather than an untidiness:
 
@@ -121,12 +121,12 @@ was `succeeded`, so the guard passed.
 
 Four call sites, all reading the same rows:
 
-| Call site                                  | Question asked                                  |
-| ------------------------------------------ | ----------------------------------------------- |
-| `orders/services/crud.ts` — `update`       | `canTransition(from, to, 'admin')`              |
-| `orders/services/cancel.ts` — `cancelById` | `statusesLeadingTo(cancelled, actorOf(caller))` |
-| `payments/service.ts` — `createIntent`     | `canTransition(from, paid, 'system')`           |
-| `payments/service.ts` — `settlePayment`    | `statusesLeadingTo(paid, 'system')`             |
+| Call site                                           | Question asked                                  |
+| --------------------------------------------------- | ----------------------------------------------- |
+| `orders/services/crud.ts` — `update`                | `canTransition(from, to, 'admin')`              |
+| `orders/services/cancel.ts` — `cancelById`          | `statusesLeadingTo(cancelled, actorOf(caller))` |
+| `payments/services/intent.ts` — `createIntent`      | `canTransition(from, paid, 'system')`           |
+| `payments/services/settlement.ts` — `settlePayment` | `statusesLeadingTo(paid, 'system')`             |
 
 `cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
@@ -348,7 +348,7 @@ design decision, not a config edit.
 
 ### No currency in the type — yet
 
-The shop is single-currency per deployment: `payments/service.ts` stamps `defaultCurrency()` on
+The shop is single-currency per deployment: `payments/services/intent.ts` stamps `defaultCurrency()` on
 every payment and nothing reads a second one. A currency tag today would be a field with exactly one
 possible value, checked against itself.
 

@@ -17,7 +17,12 @@
  */
 
 import { createIntent } from './intent';
-import { confirmPayment, syncPayment, applyWebhookDelivery, applyWebhookSettlement } from './settlement';
+import {
+    confirmPayment,
+    syncPayment,
+    applyWebhookDelivery,
+    applyWebhookSettlement
+} from './settlement';
 import { refundByOrder, refundForOrder } from './refunds';
 import { getForOrder } from './view';
 import { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';

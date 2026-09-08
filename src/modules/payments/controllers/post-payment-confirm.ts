@@ -13,7 +13,7 @@ import type { Payment } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { ConfirmPaymentBody } from '@api/schemas.zod';
 import { paymentConfirmTotal } from '../metrics';
-import { paymentService } from '../service';
+import { paymentService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 

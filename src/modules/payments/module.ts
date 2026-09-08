@@ -15,7 +15,7 @@ import { onDomainEvent } from '@kernel/events';
 import { ORDER_CANCELLED } from '@modules/orders';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
-import { refundForOrder, detachUserId } from './service';
+import { refundForOrder, detachUserId } from './services';
 
 /** This module's manifest entry: routes, the cancel-refund subscription, and locales. */
 export default {

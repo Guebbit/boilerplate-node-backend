@@ -14,7 +14,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { orderRepository } from '@modules/orders';
-import { createIntent, confirmPayment, reapAbandonedPayments } from '@modules/payments/service';
+import { createIntent, confirmPayment, reapAbandonedPayments } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
 import { userService } from '@modules/users';

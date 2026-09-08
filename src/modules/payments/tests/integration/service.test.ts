@@ -1,6 +1,6 @@
 /**
  * @module
- * Payments service (`src/modules/payments/service.ts`) — pins the invariants: the intent freezes
+ * Payments service (`src/modules/payments/services/`) — pins the invariants: the intent freezes
  * the ORDER's total (shipping included), a confirm moves the order `pending → paid` conditionally
  * so the payment row only says `succeeded` when the order does, a decline is retryable, and a
  * refund (the `ORDER_CANCELLED` listener) is at-most-once. Real Mongo throughout, because the
@@ -24,7 +24,7 @@ import {
     applyWebhookSettlement,
     getForOrder,
     refundByOrder
-} from '@modules/payments/service';
+} from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
@@ -336,7 +336,7 @@ describe('refund on cancel', () => {
 
 /**
  * Committing the order's held stock — the other thing a confirm does. Lives here, not in
- * `cart/tests/unit/stock.test.ts`, because reaching `@modules/payments/service` from that suite
+ * `cart/tests/integration/stock.test.ts`, because reaching `@modules/payments/services` from that suite
  * is what `eslint-plugin-boundaries` forbids. Orders are placed via `orderService.create` rather
  * than fixtures, so there is a real hold for the commit to claim.
  */

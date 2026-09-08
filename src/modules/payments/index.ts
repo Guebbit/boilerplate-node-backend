@@ -7,4 +7,4 @@
  * See: docs/modules/payments.md
  */
 
-export { paymentService } from './service';
+export { paymentService } from './services';
