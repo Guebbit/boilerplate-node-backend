@@ -8,8 +8,8 @@
  */
 
 import {
-    SEED_ADMIN_EMAIL,
-    SEED_ADMIN_ID,
+    SEED_OWNER_EMAIL,
+    SEED_OWNER_ID,
     SEED_USER_EMAIL,
     SEED_USER_ID
 } from '@kernel/seed-accounts';
@@ -57,8 +57,8 @@ const demoOrderId = (index: number): string => `67f0c4${index.toString(16).padSt
 const namedOrders = [
     makeOrder({
         id: '65de73a69ca05739be2b5e85',
-        userId: SEED_ADMIN_ID,
-        /* Not the admin's current address. This order predates an email change and keeps the old
+        userId: SEED_OWNER_ID,
+        /* Not the owner's current address. This order predates an email change and keeps the old
          * one, so "the order remembers where it was sent" is a property the dataset demonstrates
          * rather than a sentence in a comment. */
         email: 'oldpsw@root.it',
@@ -71,8 +71,8 @@ const namedOrders = [
      * and none demonstrated a chosen delivery method. */
     makeOrder({
         id: '661c795a9e22bcbef63a5832',
-        userId: SEED_ADMIN_ID,
-        email: SEED_ADMIN_EMAIL,
+        userId: SEED_OWNER_ID,
+        email: SEED_OWNER_EMAIL,
         items: [line(SEED_PRODUCT_IDS.dogBedPremium, 20)],
         /* `standard` costs 5 with `freeAbove: 100` (see `delivery/domain/rates`), and these lines
          * total 1,540 — so 0, not 5, is what `priceShipping` decided at checkout. An order keeps
@@ -114,7 +114,7 @@ const namedOrders = [
  * The `customer` account's three ADDITIONAL orders (on top of the soft-deleted one above), each
  * larger than anything a "small" or "medium" shopper below carries — more lines, higher
  * quantities.
- * None has `shippingAddress`/`shippingMethod`: like the admin's first order, these predate a
+ * None has `shippingAddress`/`shippingMethod`: like the owner's first order, these predate a
  * chosen delivery method.
  */
 const customerOrders = [

@@ -2,11 +2,11 @@
  * @module
  * The address book's slice of the demo dataset. The admin keeps two entries so "exactly one
  * default" is observable; the ordinary customer keeps one, the common case. `./orders`
- * freezes a copy of the admin's default entry as one order's `shippingAddress`, which is what
+ * freezes a copy of the owner's default entry as one order's `shippingAddress`, which is what
  * makes "an order remembers where it was sent" checkable against a book that can still change.
  */
 
-import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
+import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import {
     type SeedOutcome,
     exportCollection,
@@ -16,11 +16,11 @@ import { makeAddressBook } from '@modules/account/fixtures';
 import { addressBookModel } from '@modules/account/model';
 import { addressBookRepository } from '@modules/account/repository';
 
-/** The two seeded books: the admin's (two entries) and the ordinary customer's (one). */
+/** The two seeded books: the owner's (two entries) and the ordinary customer's (one). */
 export const addressBookFixtures = [
     makeAddressBook({
         id: '65dd2ce31f5b3a9e04c7b210',
-        userId: SEED_ADMIN_ID,
+        userId: SEED_OWNER_ID,
         items: [
             /*
              * `./orders` restates (not imports) a copy of this entry as its `shippingAddress`: an

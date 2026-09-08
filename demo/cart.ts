@@ -6,7 +6,7 @@
  * is itself the fixture for a person who has never added anything.
  */
 
-import { SEED_ADMIN_ID } from '@kernel/seed-accounts';
+import { SEED_OWNER_ID } from '@kernel/seed-accounts';
 import { SEED_PRODUCT_IDS, fillerProductId } from './products';
 import { SEED_CUSTOMER_IDS } from './users';
 import { makeCart } from '@modules/cart/fixtures';
@@ -42,7 +42,7 @@ const FILLER_CARTS: [
 ];
 
 /**
- * The seeded carts. `SEED_ADMIN_ID` keeps its original two-line basket, stated directly since it
+ * The seeded carts. `SEED_OWNER_ID` keeps its original two-line basket, stated directly since it
  * draws on the named catalogue rather than the filler one; {@link FILLER_CARTS} supplies the rest.
  * The other seven demo shoppers, and the `customer` account, have no cart row at all — see this
  * module's own docblock for why that IS their fixture.
@@ -50,7 +50,7 @@ const FILLER_CARTS: [
 export const cartFixtures = [
     makeCart({
         id: '65dd2c9e1b4a7f3c0d2e5a01',
-        userId: SEED_ADMIN_ID,
+        userId: SEED_OWNER_ID,
         items: [
             { productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 2 },
             { productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 3 }

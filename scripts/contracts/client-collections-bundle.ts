@@ -62,11 +62,11 @@ const sections = (): Section[] =>
 
 /*
  * Positional, and safe to be: every collection in `demo-data.json` is sorted by `_id`, so these
- * indices are stable across exports. The admin sorts before the ordinary user because their
+ * indices are stable across exports. The owner sorts before the ordinary user because their
  * ObjectIds encode the order the two accounts were created in.
  */
 const { credentials, collections } = dataset;
-const [seedAdmin, seedUser] = collections.users;
+const [seedOwner, seedUser] = collections.users;
 const [seedProduct] = collections.products;
 const [seedOrder] = collections.orders;
 const [seedCart] = collections.carts;
@@ -146,14 +146,14 @@ const values: ValueSources = {
 
     /*
      * Bodies a schema cannot produce correctly on its own. Only two, and both for the same reason:
-     * the credentials have to be the ADMIN's. A login that returns a non-admin token makes every
+     * the credentials have to be the OWNER's. A login that returns a narrower token makes every
      * admin-only request in the collection fail with a 403, and the first thing anyone would do
      * with the collection is log in.
      */
     byOperation: {
         'POST /account/login': {
-            email: credentials.admin.email,
-            password: credentials.admin.password
+            email: credentials.owner.email,
+            password: credentials.owner.password
         },
         'POST /account/signup': {
             username: seedUser.username,
@@ -175,7 +175,7 @@ const values: ValueSources = {
         if (template.startsWith('/orders')) return seedOrder.id;
         if (template.startsWith('/users')) return seedUser.id;
         if (template.startsWith('/feedback')) return seedOrder.id;
-        return seedAdmin.id;
+        return seedOwner.id;
     },
 
     /*
@@ -186,16 +186,16 @@ const values: ValueSources = {
      * takes its probe with it instead of leaving one that quietly tests nothing.
      */
     tokens: {
-        seedAdminEmail: credentials.admin.email,
-        seedAdminPassword: credentials.admin.password,
-        seedAdminId: seedAdmin.id,
+        seedOwnerEmail: credentials.owner.email,
+        seedOwnerPassword: credentials.owner.password,
+        seedOwnerId: seedOwner.id,
         seedUserEmail: credentials.user.email,
         seedUserPassword: credentials.user.password,
         seedUserId: seedUser.id,
         seedProductId: seedProduct.id,
         seedOrderId: seedOrder.id,
         /* The dataset carries exactly one of each on purpose — see the comments in
-         * `src/modules/products/demo.ts`: without them the soft-delete and role-scoping branches
+         * `demo/products.ts`: without them the soft-delete and role-scoping branches
          * have no fixture behind them, and a branch with no fixture is a branch nothing exercises. */
         seedSoftDeletedProductId: (
             seedProducts.find((product) => 'deletedAt' in product) ?? seedProduct
@@ -242,7 +242,7 @@ export const PROBED_SECTIONS: readonly SectionName[] = Object.keys(PROBES) as Se
 /**
  * One run of the generator.
  *
- * Deliberately not memoised: `build-contract-bundles.ts` writes `openapi.yaml` in phase 1 and generates
+ * Deliberately not memoised: `scripts/contracts/build-bundles.ts` writes `openapi.yaml` in phase 1 and generates
  * from it in phase 2, so a cached result would be one taken before the contract it claims to derive
  * from existed.
  */

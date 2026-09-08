@@ -1,6 +1,6 @@
 /**
  * @module
- * The user directory's slice of the demo dataset: `root` is the admin every admin-only route
+ * The user directory's slice of the demo dataset: `root` is the owner every admin-only route
  * needs a caller for, and the `customer` account is the shopper every scoping rule needs someone
  * to be scoped against. Alongside them, one account per newer tenant role — editor, translator,
  * moderator — so each can be logged into and tried on its own rather than only read about. Ids and
@@ -14,9 +14,9 @@
  */
 
 import {
-    SEED_ADMIN_EMAIL,
-    SEED_ADMIN_ID,
-    SEED_ADMIN_PASSWORD,
+    SEED_OWNER_EMAIL,
+    SEED_OWNER_ID,
+    SEED_OWNER_PASSWORD,
     SEED_USER_EMAIL,
     SEED_USER_ID,
     SEED_USER_PASSWORD,
@@ -66,10 +66,10 @@ export const SEED_CUSTOMER_IDS = {
 /** The five test-critical accounts — one per role a person actually logs in as. */
 const namedUsers = [
     makeUser({
-        id: SEED_ADMIN_ID,
+        id: SEED_OWNER_ID,
         username: 'root',
-        email: SEED_ADMIN_EMAIL,
-        password: SEED_ADMIN_PASSWORD,
+        email: SEED_OWNER_EMAIL,
+        password: SEED_OWNER_PASSWORD,
         role: 'owner',
         /*
          * Overrides the schema's `verified: false`, which is right for self-signup — nobody has

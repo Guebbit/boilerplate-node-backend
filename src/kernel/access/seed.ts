@@ -14,7 +14,7 @@
 
 import { ANONYMOUS_ROLE, PRESET_ROLES } from '@kernel/permissions';
 import {
-    SEED_ADMIN_ID,
+    SEED_OWNER_ID,
     SEED_USER_ID,
     SEED_EDITOR_ID,
     SEED_TRANSLATOR_ID,
@@ -69,8 +69,8 @@ export const seedAccessModel = (): Promise<void> =>
         .then(() => ensureTenant(DEMO_TENANT_SLUG, 'The Demo Shop'))
         .then((tenant) =>
             Promise.all([
-                assignRole(SEED_ADMIN_ID, String(tenant._id), 'tenant', 'owner'),
-                assignRole(SEED_ADMIN_ID, null, 'platform', 'operator'),
+                assignRole(SEED_OWNER_ID, String(tenant._id), 'tenant', 'owner'),
+                assignRole(SEED_OWNER_ID, null, 'platform', 'operator'),
                 assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer'),
                 assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
                 assignRole(SEED_TRANSLATOR_ID, String(tenant._id), 'tenant', 'translator'),

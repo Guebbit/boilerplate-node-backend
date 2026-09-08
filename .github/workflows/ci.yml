@@ -347,6 +347,12 @@ jobs:
         # `check:docs-references` answers the third question neither of those can: a dead LINK
         # fails the build, a stale GRAPH fails the check, but a page naming a source file that no
         # longer exists reads as current to everyone who has not opened the tree.
+        #
+        # `check:docs-roles` is the same shape as `check:docs-graph`, over the permission model
+        # instead of the dependency graph: `docs/demo-ecommerce/index.md`'s role tables are
+        # generated from `holdsKey` and `shared/authorization-roles.yaml`, and a role edit that
+        # nobody regenerated the page for fails here rather than leaving a table that quietly
+        # describes a permission model the code no longer has.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -362,6 +368,9 @@ jobs:
 
             - name: Check the module graph is current
               run: npm run check:docs-graph
+
+            - name: Check the role tables are current
+              run: npm run check:docs-roles
 
             - name: Check every path the docs cite still exists
               run: npm run check:docs-references

@@ -27,7 +27,7 @@ import {
 } from '@kernel/access/store';
 import { roleModel } from '@kernel/access/models';
 import { DEMO_TENANT_SLUG, seedAccessModel, seedPresetRoles } from '@kernel/access/seed';
-import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
+import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import { userRepository } from '@modules/users';
 import { demoModules } from '@demo/index';
 import { PRESET_ROLES, wildcardKeyFor } from '@kernel/permissions';
@@ -274,7 +274,7 @@ describe('the seeded model', () => {
         await seedAccessModel();
 
         const tenant = await tenantBySlug(DEMO_TENANT_SLUG);
-        const rootMemberships = await membershipsOf(SEED_ADMIN_ID);
+        const rootMemberships = await membershipsOf(SEED_OWNER_ID);
 
         // Two memberships for one person, because running a shop and operating the installation
         // are two jobs. Which one a request acts as is settled by the key it asks about — this is
@@ -297,7 +297,7 @@ describe('the seeded model', () => {
         await seedAccessModel();
         await seedAccessModel();
 
-        expect(await membershipsOf(SEED_ADMIN_ID)).toHaveLength(2);
+        expect(await membershipsOf(SEED_OWNER_ID)).toHaveLength(2);
     });
 
     it('agrees with what the users module publishes', async () => {
@@ -306,8 +306,8 @@ describe('the seeded model', () => {
 
         const tenant = await tenantBySlug(DEMO_TENANT_SLUG);
         const [membership, published] = await Promise.all([
-            membershipIn(SEED_ADMIN_ID, String(tenant?._id), 'tenant'),
-            userRepository.findById(SEED_ADMIN_ID)
+            membershipIn(SEED_OWNER_ID, String(tenant?._id), 'tenant'),
+            userRepository.findById(SEED_OWNER_ID)
         ]);
 
         /*
