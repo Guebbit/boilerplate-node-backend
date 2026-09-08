@@ -53,8 +53,8 @@ describe('userSchema — what a user must carry', () => {
     });
 
     it('creates a user as a customer, active and unverified', () => {
-        // `admin: false` is the fail-safe direction and the only one: a default of `true`, or an
-        // absent default read as truthy anywhere, is an account-creation privilege escalation.
+        // `customer` is the fail-safe direction and the only one: defaulting to a role that
+        // holds more — `owner` above all — is an account-creation privilege escalation.
         // `verified: false` matters equally — a default of `true` makes the whole email
         // verification flow decorative, since every new account already satisfies it.
         expect(defaultOf(userSchema, 'role')).toBe('customer');

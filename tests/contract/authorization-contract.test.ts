@@ -51,18 +51,6 @@ const request = (method: HttpMethod, path: string) => {
 const routes = everyMountedRoute();
 const signature = ({ method, path }: { method: string; path: string }) => `${method} ${path}`;
 
-/**
- * `requirePermission`-guarded, but `openapi.yaml` never declared their 403 — a real spec gap this sweep
- * found by covering every route instead of a hand-picked sample. Fixing the spec forks the
- * bundle from `boilerplate-vue-frontend`'s copy until `sync:frontend` runs there too, which is
- * cross-repo and out of scope for a suite-bloat pass. Tracked here rather than silently dropped.
- */
-const SPEC_GAP_403 = new Set([
-    'PUT /products/:id',
-    'DELETE /products/:id',
-    'DELETE /products/:id/hard'
-]);
-
 describe('every route requiring a caller (contract-derived)', () => {
     const requiresAuth = routes.filter((route) => route.guards.includes('isAuth'));
 
@@ -78,10 +66,7 @@ describe('every route requiring a caller (contract-derived)', () => {
 });
 
 describe('every route requiring an admin (contract-derived)', () => {
-    const requiresAdmin = routes.filter(
-        (route) =>
-            route.guards.includes('requirePermissionGuard') && !SPEC_GAP_403.has(signature(route))
-    );
+    const requiresAdmin = routes.filter((route) => route.guards.includes('requirePermissionGuard'));
 
     it.each(requiresAdmin.map((route) => [signature(route), route] as const))(
         '%s matches the error contract for a non-admin',

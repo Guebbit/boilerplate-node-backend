@@ -12,15 +12,16 @@ import { userService } from '../service';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 
-/** A boolean as a query string spells it. Named once: three filters here need the same coercion. */
+/** A boolean as a query string spells it. Named once: two filters here need the same coercion. */
 const queryBoolean = z.preprocess(
     (value) => (typeof value === 'string' ? value === 'true' : value),
     z.boolean().optional()
 );
 
 /**
- * Extends the orval-generated `SearchUsersBody`; page/pageSize and the three booleans are
- * coerced from strings since GET carries them as query text, not JSON types.
+ * Extends the orval-generated `SearchUsersBody`; page/pageSize and the two booleans are
+ * coerced from strings since GET carries them as query text, not JSON types. `role` needs no
+ * coercion — it arrives as the string it already is.
  * page/pageSize come from the shared http schemas so all search endpoints agree on what's
  * legal; absent stays absent, since `normalizePagination` owns the defaults.
  */
@@ -28,7 +29,6 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
     active: queryBoolean,
-    admin: queryBoolean,
     verified: queryBoolean
 });
 

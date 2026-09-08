@@ -86,10 +86,15 @@ export const userRepository: Repository<UserDocument> & {
              * deactivated accounts" and "show me deleted accounts" are different questions.
              */
             /*
-             * `admin` and `verified` narrow a listing that already answers 403 to anyone who is
+             * `role` and `verified` narrow a listing that already answers 403 to anyone who is
              * not staff, which is what makes publishing them safe.
+             *
+             * `role` is matched exactly, not as a regex: a role name is a closed vocabulary
+             * (`shared/authorization-roles.yaml`), so a partial match would answer for a role
+             * nobody asked about.
              */
-            booleans: { active: 'active', admin: 'admin', verified: 'verified' }
+            exact: { role: 'role' },
+            booleans: { active: 'active', verified: 'verified' }
         }
     }),
 
