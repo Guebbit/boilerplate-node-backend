@@ -112,8 +112,10 @@ they are charged cannot disagree. → [`delivery`](../modules/delivery.md)
 
 ## Customers
 
-The staff side can list, search, edit and remove customer accounts, one at a time or in bulk.
-Removing an account clears that person's basket, wishlist and address book with it.
+The staff side can list, search and open a customer account — enough to answer "who is this" while
+looking at their orders. Editing an account or erasing one is not part of this job: that is
+[the support desk's](./support.md), and erasure is the owner's alone, gated on a freshly proved
+session.
 → [`users`](../modules/users.md)
 
 ## Everything is written down
