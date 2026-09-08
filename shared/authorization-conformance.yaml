@@ -78,7 +78,7 @@ cases:
       caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [platform.all.manage] }
       action: read
       subject: Product
-      resource: { tenantId: shop_1, published: true }
+      resource: { tenantId: shop_1, active: true }
       expect: deny
 
     - name: a platform caller holding the tenant wildcard is denied the shop
@@ -108,14 +108,14 @@ cases:
       caller: { id: op_1, scope: platform, tenantId: null, permissions: [products.read] }
       action: read
       subject: Product
-      resource: { tenantId: shop_1, published: true }
+      resource: { tenantId: shop_1, active: true }
       expect: deny
 
     - name: platform.all.manage is scoped, so it does not satisfy a bare key
       caller: { id: op_1, scope: platform, tenantId: null, permissions: [platform.all.manage] }
       action: manage
       subject: Product
-      resource: { tenantId: shop_1, published: true }
+      resource: { tenantId: shop_1, active: true }
       expect: deny
 
     # =============================================================================================
@@ -140,14 +140,14 @@ cases:
       caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [products.manage] }
       action: update
       subject: Product
-      resource: { tenantId: shop_2, published: true }
+      resource: { tenantId: shop_2, active: true }
       expect: deny
 
     - name: the same person, member of two shops, is one caller in one of them at a time
       caller: { id: usr_2, scope: tenant, tenantId: shop_2, permissions: [products.manage] }
       action: update
       subject: Product
-      resource: { tenantId: shop_2, published: true }
+      resource: { tenantId: shop_2, active: true }
       expect: allow
 
     # =============================================================================================
@@ -194,39 +194,39 @@ cases:
     # Visibility. A third axis, and a property of the row rather than of the caller.
     # =============================================================================================
 
-    - name: a guest cannot read an unpublished product
+    - name: a guest cannot read an inactive product
       caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [products.read, locales.read] }
       action: read
       subject: Product
-      resource: { tenantId: shop_1, published: false }
+      resource: { tenantId: shop_1, active: false }
       expect: deny
 
     - name: a guest can read a published product
       caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [products.read, locales.read] }
       action: read
       subject: Product
-      resource: { tenantId: shop_1, published: true }
+      resource: { tenantId: shop_1, active: true }
       expect: allow
 
     - name: a signed-in customer sees exactly what a guest sees of the catalogue
       caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [products.read] }
       action: read
       subject: Product
-      resource: { tenantId: shop_1, published: false }
+      resource: { tenantId: shop_1, active: false }
       expect: deny
 
-    - name: a manager reads an unpublished product, because products.manage carries no condition
+    - name: a manager reads an inactive product, because products.manage carries no condition
       caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [products.manage] }
       action: read
       subject: Product
-      resource: { tenantId: shop_1, published: false }
+      resource: { tenantId: shop_1, active: false }
       expect: allow
 
-    - name: a guest cannot read an unpublished locale
+    - name: a guest cannot read an inactive locale
       caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [locales.read] }
       action: read
       subject: Locale
-      resource: { tenantId: shop_1, published: false }
+      resource: { tenantId: shop_1, active: false }
       expect: deny
 
     # =============================================================================================
@@ -258,14 +258,14 @@ cases:
       caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [products.read, inventory.manage, delivery.manage] }
       action: delete
       subject: Product
-      resource: { tenantId: shop_1, published: true }
+      resource: { tenantId: shop_1, active: true }
       expect: deny
 
     - name: the warehouse may not change a price
       caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [products.read, inventory.manage, delivery.manage] }
       action: update
       subject: Product
-      resource: { tenantId: shop_1, published: true }
+      resource: { tenantId: shop_1, active: true }
       expect: deny
 
     - name: a customer may not advance a consignment
@@ -336,7 +336,7 @@ cases:
       caller: { id: usr_6, scope: tenant, tenantId: shop_1, permissions: [] }
       action: read
       subject: Product
-      resource: { tenantId: shop_1, published: true }
+      resource: { tenantId: shop_1, active: true }
       expect: deny
 
     - name: an audit row cannot be updated, because no key grants it

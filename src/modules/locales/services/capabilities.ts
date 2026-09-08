@@ -13,7 +13,8 @@ import {
 } from '@types';
 import { getDefaultLocale, getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { createVisibilityScope } from '@kernel/authorization';
+import type { AuthContext } from '@types';
+import { accessibleFilter } from '@kernel/access/query';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
 import { backendTenant, frontendTenant } from '../tenants';
@@ -152,9 +153,9 @@ export const readDynamicTier = (
  * Which languages a caller is allowed to read.
  *
  * `undefined` for admins, meaning "no restriction"; the active languages for everyone else. Why
- * the scope rides in the read is the shared rule's to explain — see `createVisibilityScope`.
+ * the scope rides in the read is the shared rule's to explain — see `accessibleFilter`.
  */
-export const callerScope = createVisibilityScope('Locale', localeRepository.publicScope);
+export const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Locale');
 
 /**
  * Every language this deployment offers, and what each of them can do.

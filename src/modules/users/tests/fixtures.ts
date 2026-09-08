@@ -39,11 +39,19 @@ export const WEAK_PASSWORD = 'weak';
 export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
     userRepository.create(makeUser(overrides));
 
-/** Insert a shop owner — unrestricted inside the shop — into the test database. */
+/**
+ * Insert the demo's `root` — the account every operator test signs in as.
+ *
+ * TWO ROLES, because that is what the seeded `root` holds and because the two scopes are two
+ * jobs: unrestricted inside the shop, and operator over the installation. A fixture carrying only
+ * the first would pass every shop test and fail every observability one, which is a fixture that
+ * disagrees with the deployment it is standing in for.
+ */
 export const createAdminUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
     createUser({
         role: 'owner',
+        platformRole: 'operator',
         email: 'admin@example.com',
         username: 'adminuser',
         ...overrides
-    });
+    } as UserOverrides);

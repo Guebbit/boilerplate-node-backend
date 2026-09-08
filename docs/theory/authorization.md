@@ -115,30 +115,28 @@ invent a key, because a key nothing checks grants nothing while looking like it 
 
 ## What is built
 
-The model is live. `admin: boolean` is gone from this repository, from the wire, and from the
-paired frontend.
+All of it. `admin: boolean` is gone; the model is stored, evaluated, compiled into every scoped
+read, published to the client and enforced per key.
 
-- **`shared/authorization-keys.yaml`** — every permission key, its subject, its scope and its
-  conditions. The PHP twin holds the same bytes.
-- **`shared/authorization-roles.yaml`** — the preset roles, which are the four demo personas plus
-  an owner and a platform operator. Both seeders read this rather than each declaring a list.
-- **`shared/authorization-conformance.yaml`** — the deny cases, run by
-  `tests/cross-cutting/authorization-conformance.test.ts` here and by an identical suite there.
+- **`shared/authorization-keys.yaml`** — every key, its subject, scope, conditions and step-up
+  tier. **`-roles.yaml`** — the presets both seeders read. **`-conformance.yaml`** — 44 deny cases
+  both backends run. All three byte-identical in the PHP twin.
+- **`kernel/permissions.ts`** turns an account's two role names into the keys for ONE scope;
+  **`kernel/ability.ts`** builds the CASL ability and answers `holdsKey`.
+- **`kernel/access/`** stores it: tenants, roles and memberships, with the invariants as refusals —
+  the last administrator cannot be removed, a granter cannot hand over what they do not hold, a
+  deleted role's members go somewhere named.
+- **`kernel/access/query.ts`** compiles the rules into the Mongo filter every scoped read spreads,
+  so a key that grants more returns more without anybody editing a fragment.
+- **`GET /account/abilities`** publishes the packed rules; the frontend evaluates _those_, not a
+  copy of them.
+- Route guards take a KEY. `users.delete` and `payments.update` carry `stepUp: critical`, and the
+  guard demands the fresh session and audits that it did.
 
-`src/kernel/permissions.ts` reads the first two and turns an account's two role names into the
-keys for ONE scope; `src/kernel/ability.ts` builds the CASL ability and answers `holdsKey`;
-`src/kernel/authorization.ts` narrows a read by asking that ability rather than a role name, so
-the guard on the route and the filter on the query cannot disagree.
-
-An account carries `role` (in the shop) and `platformRole` (over the installation). The first is
-on the wire because a staff list has to show and edit it; the second is not, because who operates
-the installation is not a fact about a shop.
-
-**What is not built yet.** The rules do not compile into the query — `createOwnerScope` still
-hands back a hand-written fragment rather than `@casl/mongoose`'s `accessibleBy`, and
-`GET /me/abilities` does not exist, so the frontend still decides what to grey out from a role
-name instead of from the server's own rules. Route guards take keys, but the blanket
-`requireUnrestricted` still stands where a narrower key would say more.
+**Where the boilerplate stops short, on purpose.** It ships one shop, so no collection carries a
+`tenantId` column and `accessibleFilter` drops that condition — the model is tenant-aware and its
+conformance cases prove it, while these tables are not partitioned. A multi-tenant deployment adds
+the column and empties one list; the rules, the guards and the caller already carry the tenant.
 
 ## The twins
 

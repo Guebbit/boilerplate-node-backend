@@ -3,7 +3,7 @@
  * Route table for the operator dashboard. Guards are chosen per route rather than shared, because
  * `/events` and `/metrics` are reached by callers that cannot carry the ordinary admin JWT — a
  * browser's `EventSource` and a Prometheus scraper, respectively. The other three routes take the
- * normal `getAuth`/`isAuth`/`requireUnrestricted` chain.
+ * normal `getAuth`/`isAuth`/`requirePermission(...)` chain.
  *
  * See: docs/modules/observability.md
  */
@@ -12,8 +12,8 @@ import { Router } from 'express';
 import {
     getAuth,
     isAuth,
-    requireUnrestricted,
-    requireUnrestrictedViaCookie
+    requirePermission,
+    requirePermissionViaCookie
 } from '@kernel/middlewares/authorizations';
 import { isMetricsScraper } from '@infrastructure/http/middlewares/rate-limit';
 import { getObservabilityHealth } from './controllers/get-observability-health';
@@ -33,9 +33,13 @@ export const router = Router();
  * browser's `EventSource`, which can't set a header and so uses the session cookie; the scrape
  * endpoint is hit by Prometheus, which can't log in and so uses a static credential.
  */
-router.get('/events', requireUnrestrictedViaCookie, (_request, response) => {
-    streamObservabilityMetrics(response);
-});
+router.get(
+    '/events',
+    requirePermissionViaCookie('platform.observability.read'),
+    (_request, response) => {
+        streamObservabilityMetrics(response);
+    }
+);
 
 router.get('/metrics', isMetricsScraper, (_request, response) => {
     void getPrometheusMetrics()
@@ -50,12 +54,24 @@ router.get('/metrics', isMetricsScraper, (_request, response) => {
 });
 
 /* Endpoints a normal API client calls — admin JWT required. */
-router.get('/health', getAuth, isAuth, requireUnrestricted, getObservabilityHealth);
+router.get(
+    '/health',
+    getAuth,
+    isAuth,
+    requirePermission('platform.observability.read'),
+    getObservabilityHealth
+);
 router.get(
     '/metrics/overview',
     getAuth,
     isAuth,
-    requireUnrestricted,
+    requirePermission('platform.observability.read'),
     getObservabilityMetricsOverview
 );
-router.get('/audit', getAuth, isAuth, requireUnrestricted, getObservabilityAuditLogs);
+router.get(
+    '/audit',
+    getAuth,
+    isAuth,
+    requirePermission('platform.observability.read'),
+    getObservabilityAuditLogs
+);

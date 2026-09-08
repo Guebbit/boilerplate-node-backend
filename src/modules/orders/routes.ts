@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requireUnrestricted } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { getOrders, searchOrdersKeyParameters } from './controllers/get-orders';
 import { writeOrders } from './controllers/write-orders';
 import { deleteOrders } from './controllers/delete-orders';
@@ -32,13 +32,18 @@ router.post('/search', cacheOrdersSearch, getOrders);
 router.get('/', cacheOrdersSearch, getOrders);
 
 // POST /orders — admin creates order directly
-router.post('/', requireUnrestricted, invalidateCache(['orders', 'products']), writeOrders);
+router.post(
+    '/',
+    requirePermission('orders.create'),
+    invalidateCache(['orders', 'products']),
+    writeOrders
+);
 
 // PUT /orders — admin, id in body (update)
-router.put('/', requireUnrestricted, invalidateCache(['orders']), writeOrders);
+router.put('/', requirePermission('orders.update'), invalidateCache(['orders']), writeOrders);
 
 // DELETE /orders — admin, id in body
-router.delete('/', requireUnrestricted, invalidateCache(['orders']), deleteOrders);
+router.delete('/', requirePermission('orders.delete'), invalidateCache(['orders']), deleteOrders);
 
 // POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
 // the service's conditional write carries the caller's scope)
@@ -55,15 +60,20 @@ router.get(
 router.get('/:id', setCache(3600, { tags: ['orders'], keyParameters: [] }), getOrderItem);
 
 // PUT /orders/:id — admin only (update)
-router.put('/:id', requireUnrestricted, invalidateCache(['orders']), writeOrders);
+router.put('/:id', requirePermission('orders.update'), invalidateCache(['orders']), writeOrders);
 
 // DELETE /orders/:id — admin only (soft delete unless ?hardDelete=true)
-router.delete('/:id', requireUnrestricted, invalidateCache(['orders']), deleteOrders);
+router.delete(
+    '/:id',
+    requirePermission('orders.delete'),
+    invalidateCache(['orders']),
+    deleteOrders
+);
 
 // DELETE /orders/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
-    requireUnrestricted,
+    requirePermission('orders.delete'),
     invalidateCache(['orders']),
     routeFlag('hardDelete'),
     deleteOrders

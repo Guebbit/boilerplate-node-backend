@@ -1,6 +1,6 @@
 /**
  * @module
- * Route table for inventory. One `router.use(getAuth, isAuth, requireUnrestricted)` gate covers every route,
+ * Route table for inventory. One `router.use(getAuth, isAuth, requirePermission('inventory.manage'))` gate covers every route,
  * because every route here is staff's — the customer-facing half of this module is deliberately
  * not a route at all: a shopper learns about stock from `available` on the product they are
  * looking at.
@@ -9,7 +9,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requireUnrestricted } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { getInventoryLevels } from './controllers/get-inventory-levels';
 import { getStockMovements } from './controllers/get-stock-movements';
 import { postReceipt } from './controllers/post-receipt';
@@ -23,7 +23,7 @@ export const router = Router();
  * Exposing the counters or ledger publicly would tell competitors what sells and tell customers
  * how close they are to missing out — a dark pattern when true, a lie when not.
  */
-router.use(getAuth, isAuth, requireUnrestricted);
+router.use(getAuth, isAuth, requirePermission('inventory.manage'));
 
 // GET /inventory/levels — the stock board, scarcest first
 router.get('/levels', getInventoryLevels);

@@ -29,6 +29,8 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { assignRole, resolveDeploymentTenantId } from '@kernel/access/store';
+import { DEMO_TENANT_SLUG } from '@kernel/access/seed';
 
 /**
  * Validate user data for admin create/edit forms; returns UI-friendly error messages (empty means
@@ -163,6 +165,13 @@ export const update = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
     if (data.username !== undefined) user.username = data.username;
+    /*
+     * The column AND the membership. `role` on the user row is what this module publishes — a
+     * staff list has to show it — while the membership is what authorization is decided from, and
+     * writing only the first is a change that appears to take and does nothing. One caller writes
+     * both, which is what keeps them from disagreeing; the membership write is chained after the
+     * save so a role change that cannot be stored fails the request rather than half-applying.
+     */
     if (data.role !== undefined) user.role = data.role;
     if (data.active !== undefined) user.active = data.active;
     // The three travel as one unit, all produced by the same `readUploadedImage` call on the
@@ -194,7 +203,25 @@ export const update = (
             data.active === false
                 ? savedUser.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
                 : Promise.resolve();
-        return revoke.then(() => generateSuccess(enqueueIfPending(savedUser)));
+
+        /*
+         * NOT caught, unlike the revoke above: a role that did not reach the membership is a
+         * permission change that silently did not happen, and the caller has to hear about it.
+         * `assignRole` is also where the invariants live — an undeclared role, or a key no module
+         * owns, is refused here rather than discovered by the member who cannot work.
+         */
+        const membership =
+            data.role === undefined
+                ? Promise.resolve()
+                : resolveDeploymentTenantId(DEMO_TENANT_SLUG).then((tenantId) =>
+                      assignRole(String(savedUser._id), tenantId, 'tenant', data.role!).then(
+                          () => undefined
+                      )
+                  );
+
+        return revoke
+            .then(() => membership)
+            .then(() => generateSuccess(enqueueIfPending(savedUser)));
     });
 };
 

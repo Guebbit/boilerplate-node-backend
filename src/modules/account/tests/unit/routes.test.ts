@@ -92,6 +92,7 @@ describe('account routes — what is mounted', () => {
             'POST /reset-confirm',
             'POST /password',
             'POST /reauth',
+            'GET /abilities',
             'GET /refresh',
             'POST /logout',
             'POST /logout-all',
@@ -156,7 +157,7 @@ describe('account routes — authorization', () => {
         // `DELETE /account/tokens/expired` is maintenance across every account, not self-service.
         // It is the only admin route in a module that is otherwise entirely first-person.
         const adminGuarded = routeSignatures(router).filter((signature) =>
-            guardsOn(router, signature).includes('requireUnrestricted')
+            guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
         expect(adminGuarded).toEqual(['DELETE /tokens/expired']);
@@ -165,7 +166,7 @@ describe('account routes — authorization', () => {
     it('demands a session before checking the role on the sweep', () => {
         const guards = guardsOn(router, 'DELETE /tokens/expired');
 
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requireUnrestricted'));
+        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 });
 

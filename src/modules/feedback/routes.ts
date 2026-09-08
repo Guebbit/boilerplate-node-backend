@@ -1,7 +1,7 @@
 /**
  * @module
  * Route table for feedback/contact. One public route — the visitor contact form — mounted above a
- * single `router.use(getAuth, isAuth, requireUnrestricted)` gate; everything below it is the operator's view of
+ * single `router.use(getAuth, isAuth, requirePermission('feedback.manage'))` gate; everything below it is the operator's view of
  * what visitors sent. The gate is positional: a route appended in the wrong half is public or
  * admin-only purely by where it was typed.
  *
@@ -9,7 +9,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requireUnrestricted } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { postFeedbackContact } from './controllers/post-feedback-contact';
 import { getFeedback, searchFeedbackKeyParameters } from './controllers/get-feedback';
 import { putFeedbackStatus } from './controllers/put-feedback-status';
@@ -46,7 +46,7 @@ router.post(
  * the one public route sits alone at the top. `tests/cross-cutting/authenticated-controllers.test.ts`
  * catches a misplaced route that also reads the caller.
  */
-router.use(getAuth, isAuth, requireUnrestricted);
+router.use(getAuth, isAuth, requirePermission('feedback.manage'));
 
 /**
  * The DTO form of `GET /` — a GET body has no defined semantics and `setCache` keys only on

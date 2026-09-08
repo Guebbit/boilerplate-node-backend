@@ -19,16 +19,23 @@ import { wildcardKeyFor } from '@infrastructure/authorization/keys';
  *
  * Only the app-level actions live here — every domain action belongs to its own module
  * (`modules/account/audit.ts`, etc.), because `infrastructure` must not know which domains exist.
- * These three are the exception: `middlewares/authorizations.ts` emits them for requests refused
+ * These four are the exception: `middlewares/authorizations.ts` emits them for requests refused
  * before any domain saw them, so no module could own them.
  */
 export const coreAuditActions = {
     SECURITY_UNAUTHORIZED: 'security.unauthorized',
     SECURITY_FORBIDDEN: 'security.forbidden',
-    SECURITY_RATE_LIMIT_HIT: 'security.rate_limit_hit'
+    SECURITY_RATE_LIMIT_HIT: 'security.rate_limit_hit',
+    /*
+     * A step-up was DEMANDED — the caller held the key and had not proved themselves recently
+     * enough to use it. Recorded because "we asked" is the half of step-up nobody can reconstruct
+     * afterwards: the retry that follows looks like an ordinary success, and a challenge nobody
+     * logged is a control nobody can show was applied.
+     */
+    SECURITY_REAUTH_REQUIRED: 'security.reauth_required'
 } as const;
 
-/** The three app-level action strings, derived from {@link coreAuditActions}'s values. */
+/** The four app-level action strings, derived from {@link coreAuditActions}'s values. */
 type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
 
 /**

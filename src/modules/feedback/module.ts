@@ -15,6 +15,12 @@ import { router } from './routes';
 export default {
     name: 'feedback',
     basePath: '/feedback',
+    /**
+     * The permission keys this module introduces. Deleting the module deletes them:
+     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
+     * whose module is gone, and a module claiming one the file does not attribute to it.
+     */
+    permissions: ['feedback.read', 'feedback.update', 'feedback.delete', 'feedback.manage'],
     routes: router,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -22,6 +22,18 @@ import './events';
 export default {
     name: 'products',
     basePath: '/products',
+    /**
+     * The permission keys this module introduces. Deleting the module deletes them:
+     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
+     * whose module is gone, and a module claiming one the file does not attribute to it.
+     */
+    permissions: [
+        'products.read',
+        'products.create',
+        'products.update',
+        'products.delete',
+        'products.manage'
+    ],
     routes: router,
     seeds: seedProductsCollection,
     seedExport: exportSeededProducts,

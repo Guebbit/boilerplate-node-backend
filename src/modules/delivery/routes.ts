@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requireUnrestricted } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { getShipmentByOrder } from './controllers/get-shipment-by-order';
 import { postCourierAdvance } from './controllers/post-courier-advance';
@@ -21,4 +21,4 @@ router.get('/methods', getShippingMethods);
 router.get('/order/:orderId', getAuth, isAuth, getShipmentByOrder);
 
 // POST /delivery/advance — the fake courier's tick; an operator is the cron
-router.post('/advance', getAuth, isAuth, requireUnrestricted, postCourierAdvance);
+router.post('/advance', getAuth, isAuth, requirePermission('delivery.update'), postCourierAdvance);

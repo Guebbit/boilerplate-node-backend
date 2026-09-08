@@ -8,8 +8,7 @@
 import { callerForSubject, isUnrestricted } from '@kernel/permissions';
 import type { AuthContext, Order } from '@types';
 import type { OrderDocument } from '../model';
-import { createOwnerScope } from '@kernel/authorization';
-import { orderRepository } from '../repository';
+import { accessibleFilter } from '@kernel/access/query';
 import { orderActionsFor } from '../domain';
 import type { OrderActor } from '../domain';
 
@@ -18,9 +17,9 @@ import type { OrderActor } from '../domain';
  * orders vs everyone's, and a soft-deleted order visible or not. `visibleScope` makes it BOTH;
  * `ownerScope` alone would leave soft-deleted rows visible to their owner. Returns `undefined`
  * for admins ("no restriction"), so callers must spread it, not treat it as a filter — see
- * `createOwnerScope` for why the scope rides in the read.
+ * `accessibleFilter` for why the scope rides in the read.
  */
-export const callerScope = createOwnerScope('Order', orderRepository.visibleScope);
+export const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Order');
 
 /**
  * Which column of the lifecycle table a caller reads. Two actors reach the HTTP surface;

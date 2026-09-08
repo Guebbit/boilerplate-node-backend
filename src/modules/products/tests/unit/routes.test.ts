@@ -70,11 +70,11 @@ describe('product routes — authorization', () => {
         );
 
         expect(row).toBeDefined();
-        // Both, and in this order: `requireUnrestricted` alone would read the role off an absent auth context.
+        // Both, and in this order: `requirePermission` alone would read the role off an absent auth context.
         expect(row!.chain).toContain('isAuth');
-        expect(row!.chain).toContain('requireUnrestricted');
+        expect(row!.chain).toContain('requirePermissionGuard');
         expect(row!.chain.indexOf('isAuth')).toBeLessThan(
-            row!.chain.indexOf('requireUnrestricted')
+            row!.chain.indexOf('requirePermissionGuard')
         );
     });
 
@@ -87,7 +87,7 @@ describe('product routes — authorization', () => {
 
             // The catalogue is a storefront: a guard added here is an outage, not a hardening.
             expect(row!.chain).not.toContain('isAuth');
-            expect(row!.chain).not.toContain('requireUnrestricted');
+            expect(row!.chain).not.toContain('requirePermissionGuard');
         }
     );
 });

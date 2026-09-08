@@ -21,6 +21,12 @@ import './events';
 export default {
     name: 'users',
     basePath: '/users',
+    /**
+     * The permission keys this module introduces. Deleting the module deletes them:
+     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
+     * whose module is gone, and a module claiming one the file does not attribute to it.
+     */
+    permissions: ['users.read', 'users.create', 'users.update', 'users.delete', 'users.manage'],
     routes: router,
     seeds: seedUsersCollection,
     seedExport: exportSeededUsers,

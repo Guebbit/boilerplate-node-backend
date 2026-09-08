@@ -28,7 +28,8 @@ import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import { createVisibilityScope } from '@kernel/authorization';
+import type { AuthContext } from '@types';
+import { accessibleFilter } from '@kernel/access/query';
 
 /**
  * Validates product data against the Zod schema; empty array means valid.
@@ -52,9 +53,9 @@ const sanitizeStringArray = (values?: string[] | null): string[] => {
  *
  * `undefined` for admins, meaning "no restriction"; the published catalogue for everyone else.
  * Why the scope rides in the read rather than being checked after it is the shared rule's to
- * explain — see `createVisibilityScope`.
+ * explain — see `accessibleFilter`.
  */
-export const callerScope = createVisibilityScope('Product', productRepository.publicScope);
+export const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Product');
 
 /**
  * Search products (DTO-friendly) — matches POST /products/search in OpenAPI.

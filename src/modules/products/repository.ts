@@ -85,7 +85,7 @@ export const productRepository: Repository<ProductDocument> & {
      *
      * The id lookup and the scope are applied by the same query — checking visibility after the read
      * is how a scoped find turns into an information leak. No scope means no restriction, the admin
-     * branch (see `createVisibilityScope`). `async` because `toObjectId` throws on a malformed id —
+     * branch (see `accessibleFilter`). `async` because `toObjectId` throws on a malformed id —
      * see `create-repository.ts`; `orders.findByIdScoped` is the same idea.
      *
      * @param productId - the product's id

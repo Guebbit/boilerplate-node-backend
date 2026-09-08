@@ -21,5 +21,13 @@ registerAuditSink(auditLogService.record);
 
 /** This module's manifest entry: a headless module, no router. */
 export default {
-    name: 'audit-logs'
+    name: 'audit-logs',
+    /**
+     * The permission key this module introduces. Read only, and deliberately: nothing edits an
+     * audit row, so no module declares a key that would let anything try.
+     *
+     * Deleting the module deletes it — `tests/cross-cutting/module-permissions.test.ts` refuses a
+     * key in the shared file whose module is gone.
+     */
+    permissions: ['audit.read']
 } satisfies AppModule;

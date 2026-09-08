@@ -19,7 +19,7 @@ import { Router } from 'express';
 import {
     getAuth,
     isAuth,
-    requireUnrestricted,
+    requirePermission,
     requireFreshAuth,
     requireVerified,
     REAUTH_TIME_CRITICAL
@@ -49,13 +49,13 @@ router.post('/intent', requireFreshAuth(REAUTH_TIME_CRITICAL), requireVerified, 
 router.get('/order/:orderId', getPaymentByOrder);
 
 // POST /payments/order/:orderId/refund — the operator returns the money, order untouched.
-// requireFreshAuth AFTER requireUnrestricted: an admin session moving money out is worth more, not less.
-router.post(
-    '/order/:orderId/refund',
-    requireUnrestricted,
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
-    postPaymentRefund
-);
+/*
+ * No `requireFreshAuth` here: `payments.update` carries `stepUp: critical` in
+ * `shared/authorization-keys.yaml`, so the guard demands the fresh session and audits that it did.
+ * The tier belongs to the ACTION — money leaving the shop — rather than to this one route, and a
+ * second route reaching the same key would otherwise have to remember.
+ */
+router.post('/order/:orderId/refund', requirePermission('payments.update'), postPaymentRefund);
 
 // POST /payments/:id/confirm — the payment form's submit.
 router.post(

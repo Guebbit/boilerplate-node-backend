@@ -30,6 +30,18 @@ registerLocaleOverrideProvider(() => localeService.readApiOverrides());
 export default {
     name: 'locales',
     basePath: '/locales',
+    /**
+     * The permission keys this module introduces. Deleting the module deletes them:
+     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
+     * whose module is gone, and a module claiming one the file does not attribute to it.
+     */
+    permissions: [
+        'locales.read',
+        'locales.create',
+        'locales.update',
+        'locales.delete',
+        'locales.manage'
+    ],
     routes: router,
     /*
      * Its own copy, for its own error messages. The module that owns the translation feature was

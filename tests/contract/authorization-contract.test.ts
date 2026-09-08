@@ -1,7 +1,7 @@
 /**
  * @module
  * Contract-derived authorization sweep: every route `@tests/contract-routes` finds behind `isAuth`
- * must answer 401 to a callerless request, and every route behind `requireUnrestricted` must answer 403 to a
+ * must answer 401 to a callerless request, and every route behind `requirePermission` must answer 403 to a
  * logged-in non-admin — mirror image of `request-contract.test.ts`, which sweeps request BODIES
  * against the contract instead of AUTHORIZATION. One table-driven case per route, rather than one
  * hand-written "matches the error contract when unauthenticated" (or "for a non-admin") per
@@ -52,7 +52,7 @@ const routes = everyMountedRoute();
 const signature = ({ method, path }: { method: string; path: string }) => `${method} ${path}`;
 
 /**
- * `requireUnrestricted`-guarded, but `openapi.yaml` never declared their 403 — a real spec gap this sweep
+ * `requirePermission`-guarded, but `openapi.yaml` never declared their 403 — a real spec gap this sweep
  * found by covering every route instead of a hand-picked sample. Fixing the spec forks the
  * bundle from `boilerplate-vue-frontend`'s copy until `sync:frontend` runs there too, which is
  * cross-repo and out of scope for a suite-bloat pass. Tracked here rather than silently dropped.
@@ -80,7 +80,7 @@ describe('every route requiring a caller (contract-derived)', () => {
 describe('every route requiring an admin (contract-derived)', () => {
     const requiresAdmin = routes.filter(
         (route) =>
-            route.guards.includes('requireUnrestricted') && !SPEC_GAP_403.has(signature(route))
+            route.guards.includes('requirePermissionGuard') && !SPEC_GAP_403.has(signature(route))
     );
 
     it.each(requiresAdmin.map((route) => [signature(route), route] as const))(

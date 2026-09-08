@@ -22,7 +22,7 @@ import { humanChallengeGate } from '@infrastructure/http/middlewares/human-chall
 import {
     getAuth,
     isAuth,
-    requireUnrestricted,
+    requirePermission,
     requireFreshAuth,
     requireFreshAuthWhen,
     REAUTH_TIME_CRITICAL,
@@ -64,6 +64,7 @@ import { getOAuthProviders } from './controllers/get-oauth-providers';
 import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { invalidateCache, noStore } from '@infrastructure/http/middlewares/cache';
+import { getMyAbilities } from './controllers/get-my-abilities';
 
 /**
  * Whether THIS `PUT /account` request is changing the caller's email — the one field
@@ -158,6 +159,14 @@ router.post('/password', credentialLimiters, isAuth, postPasswordChange);
 router.post('/reauth', credentialLimiters, isAuth, postReauth);
 
 // GET /account/refresh — create a new access token from the jwt cookie
+/*
+ * GET /account/abilities — the rules the server enforces, for a client to render from.
+ *
+ * `getAuth` and no guard: a stranger has rules too (the `guest` role), and a shop front that
+ * greys nothing out for a visitor is a shop front that lies twice.
+ */
+router.get('/abilities', getAuth, getMyAbilities);
+
 router.get('/refresh', getRefreshToken);
 
 // POST /account/logout — revoke THIS session's refresh token (cookie is the credential)
@@ -221,7 +230,7 @@ router.post(
 router.delete(
     '/tokens/expired',
     isAuth,
-    requireUnrestricted,
+    requirePermission('tokens.delete'),
     invalidateCache(['users', 'account']),
     deleteExpiredTokens
 );

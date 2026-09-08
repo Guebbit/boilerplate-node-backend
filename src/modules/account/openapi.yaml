@@ -4,6 +4,38 @@ info:
     version: '2.0.0'
 
 paths:
+    # --------- What this caller may do ---------
+    # The plan calls this `/me/abilities`. It lives under `/account` instead, because a module
+    # here mounts at one `basePath` and a second mount point for a single route would make the
+    # account module two things. Same endpoint, same shape, inside the module that owns the
+    # caller's own record.
+    /account/abilities:
+        get:
+            tags: [Account]
+            summary: The caller's own authorization rules
+            description: |
+                The rules the SERVER enforces, packed for a client to evaluate.
+
+                Published so a client can grey out what it would be refused, from the same rules
+                rather than from a copy of them — a hand-maintained duplicate of "what may I do"
+                drifts, and the drift is silent until somebody is shown a button that answers 403.
+
+                **The client's copy has no authority.** It decides what to RENDER, never what is
+                allowed; every request is re-evaluated server-side. Published here because the
+                alternative is every client inventing the same guess.
+
+                Answered for an anonymous caller too: a stranger holds the `guest` role, which is
+                a value in the model rather than an absence, and a shop front that greys nothing
+                out for a visitor is a shop front that lies twice.
+            operationId: getMyAbilities
+            responses:
+                '200':
+                    description: The caller's packed rules.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AbilitiesEnvelope'
+
     # --------- Authentication and profile ---------
     /account:
         get:

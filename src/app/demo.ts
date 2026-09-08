@@ -12,6 +12,7 @@ import { connection } from '@infrastructure/runtime/database';
 import { clearDemoOutbox, readDemoOutbox } from '@infrastructure/adapters/demo-outbox';
 import { logger } from '@infrastructure/adapters/logger';
 import { enabledModules } from '../modules';
+import { seedAccessModel } from '@kernel/access/seed';
 
 export { isDemoMode } from '@infrastructure/adapters/demo-outbox';
 
@@ -24,6 +25,10 @@ export { isDemoMode } from '@infrastructure/adapters/demo-outbox';
  */
 export const runDemoSeed = (reset: boolean): Promise<void> =>
     (reset ? connection.dropDatabase() : Promise.resolve(true))
+        // The shop, the preset roles and the demo memberships first: a module's fixtures may be
+        // written in any order, but nothing can resolve a caller until there is a shop to be a
+        // member of.
+        .then(() => seedAccessModel())
         .then(() =>
             Promise.all(
                 enabledModules.map((appModule) => appModule.seeds?.() ?? Promise.resolve([]))

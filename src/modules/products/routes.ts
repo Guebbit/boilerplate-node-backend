@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requireUnrestricted } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/adapters/storage';
 import { getProducts, searchProductsKeyParameters } from './controllers/get-products';
@@ -37,7 +37,7 @@ router.post(
     '/',
     uploadLimiter,
     isAuth,
-    requireUnrestricted,
+    requirePermission('products.create'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     writeProducts
@@ -48,14 +48,20 @@ router.put(
     '/',
     uploadLimiter,
     isAuth,
-    requireUnrestricted,
+    requirePermission('products.create'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     writeProducts
 );
 
 // DELETE /products — admin only, id in body
-router.delete('/', isAuth, requireUnrestricted, invalidateCache(['products']), deleteProducts);
+router.delete(
+    '/',
+    isAuth,
+    requirePermission('products.delete'),
+    invalidateCache(['products']),
+    deleteProducts
+);
 
 // GET /products/categories — the filter chips; a static segment, so declared before /:id
 // for the same readability rule the create route follows
@@ -73,20 +79,26 @@ router.put(
     '/:id',
     uploadLimiter,
     isAuth,
-    requireUnrestricted,
+    requirePermission('products.create'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     writeProducts
 );
 
 // DELETE /products/:id — admin only (soft delete unless ?hardDelete=true)
-router.delete('/:id', isAuth, requireUnrestricted, invalidateCache(['products']), deleteProducts);
+router.delete(
+    '/:id',
+    isAuth,
+    requirePermission('products.delete'),
+    invalidateCache(['products']),
+    deleteProducts
+);
 
 // DELETE /products/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
     isAuth,
-    requireUnrestricted,
+    requirePermission('products.delete'),
     invalidateCache(['products']),
     routeFlag('hardDelete'),
     deleteProducts

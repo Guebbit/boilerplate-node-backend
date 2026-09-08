@@ -19,7 +19,13 @@
 import type { Request, Response, NextFunction } from 'express';
 import { resolveAccessToken, resolveRefreshToken } from '@kernel/authentication';
 import { holdsKey } from '@kernel/ability';
-import { assertDeclared, callerFor, callerInScope, wildcardKeyFor } from '@kernel/permissions';
+import {
+    assertDeclared,
+    callerFor,
+    callerInScope,
+    findKey,
+    type StepUpTier
+} from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -42,7 +48,7 @@ export const getTokenBearer = (request: Request) => request.header('Authorizatio
  * Resolve `request.authContext` from a bearer token when one is present, then always continue.
  *
  * Never rejects: an absent or invalid token just leaves `authContext` unset, so this can sit in
- * front of routes that work for both anonymous and authenticated callers — `isAuth`/`requireUnrestricted`
+ * front of routes that work for both anonymous and authenticated callers — `isAuth`/`requirePermission`
  * are what actually gate a route.
  *
  * @param request - populated with `authContext` on success
@@ -110,6 +116,42 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
     next();
 };
 
+/** How many seconds a tier allows since the caller last proved themselves. */
+const tierSeconds = (tier: StepUpTier): number =>
+    tier === 'critical' ? REAUTH_TIME_CRITICAL : REAUTH_TIME_SENSITIVE;
+
+/**
+ * Did this caller prove themselves recently enough for the tier?
+ *
+ * Reads `authTime`, which is carried from the token's own `auth_time` claim and never derived
+ * here. `0` — a token minted before the claim existed — reads as infinitely old, which is the
+ * fail-closed direction: a pre-existing session is asked to re-authenticate at its first
+ * high-risk action rather than being treated as freshly authenticated.
+ */
+const provedRecentlyEnough = (request: Request, tier: StepUpTier): boolean =>
+    Math.floor(Date.now() / 1000) - (request.authContext?.authTime ?? 0) <= tierSeconds(tier);
+
+/**
+ * Answer the step-up challenge — 401, not 403, and the status names the client's next move.
+ *
+ * Both dialects, as `requireFreshAuth` sends them: `WWW-Authenticate` for anything that speaks
+ * OAuth, and this app's own `errors[].code` envelope for its own clients, which read the code and
+ * never the header.
+ */
+const challengeForFreshAuth = (response: Response, maxAgeSeconds: number): void => {
+    response.setHeader(
+        'WWW-Authenticate',
+        `Bearer error="insufficient_user_authentication", max_age=${maxAgeSeconds}`
+    );
+    rejectResponse(response, 401, [
+        {
+            code: 'REAUTH_REQUIRED',
+            message: t('generic.error-reauth-required'),
+            details: { maxAge: maxAgeSeconds }
+        }
+    ]);
+};
+
 /**
  * Reject with 403 unless the resolved caller's role holds `key`. MUST run after `isAuth`.
  *
@@ -122,6 +164,7 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  */
 export const requirePermission = (key: string) => {
     assertDeclared(key);
+    const declared = findKey(key);
 
     // Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each
     // module's route sweep identify a guard by its function name, and a factory that returns an
@@ -162,6 +205,30 @@ export const requirePermission = (key: string) => {
          * the whole point of keeping the row restriction in the read instead.
          */
         const allowed = holdsKey(callerFor(request.authContext, key), key);
+
+        /*
+         * Step-up is asked AFTER the key check, and the order is the argument: telling somebody
+         * to re-authenticate for an action they could never take either way hands them a fact
+         * about the permission model they had not earned. Refused first, challenged second.
+         */
+        if (allowed && declared?.stepUp && !provedRecentlyEnough(request, declared.stepUp)) {
+            emitAuditEvent(
+                buildAuditEvent(callerContextOf(request), {
+                    action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
+                    outcome: 'failure',
+                    metadata: {
+                        route: request.path,
+                        method: request.method,
+                        reason: 'step_up_required',
+                        permission: key,
+                        tier: declared.stepUp
+                    }
+                })
+            );
+            challengeForFreshAuth(response, tierSeconds(declared.stepUp));
+
+            return;
+        }
 
         if (!allowed) {
             emitAuditEvent(
@@ -246,73 +313,6 @@ export const requirePermissionViaCookie = (key: string) => {
 };
 
 /**
- * Reject with 403 unless the caller holds the WILDCARD key for their tenant scope. MUST run after
- * `isAuth`.
- *
- * `admin` is this guard's word for UNRESTRICTED, not a role name — the same definition the audit
- * trail uses, and for the same reason: role names are data a deployment may rename or add to,
- * while "holds the wildcard" is a property of the permission model itself. A route that wants a
- * narrower rule should mount {@link requirePermission} with the key it actually needs; this is
- * the blanket gate for routes whose whole surface is operator-only.
- */
-export const requireUnrestricted = (request: Request, response: Response, next: NextFunction) => {
-    const wildcard = wildcardKeyFor('tenant');
-
-    /*
-     * No credentials at all — 401, not 403, and audited as an AUTHENTICATION failure rather than
-     * a permission one. Unreachable through the current routes, which all mount `isAuth` first;
-     * it guards a future mount that forgets.
-     *
-     * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
-     */
-    if (!request.authContext) {
-        emitAuditEvent(
-            buildAuditEvent(callerContextOf(request), {
-                action: coreAuditActions.SECURITY_UNAUTHORIZED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
-                outcome: 'failure',
-                metadata: {
-                    route: request.path,
-                    method: request.method,
-                    reason: 'not_authenticated'
-                }
-            })
-        );
-        rejectResponse(response, 401);
-        return;
-    }
-
-    if (!holdsKey(callerFor(request.authContext, wildcard), wildcard)) {
-        emitAuditEvent(
-            buildAuditEvent(callerContextOf(request), {
-                action: coreAuditActions.SECURITY_FORBIDDEN,
-                outcome: 'failure',
-                metadata: {
-                    route: request.path,
-                    method: request.method,
-                    reason: 'missing_permission',
-                    permission: wildcard
-                }
-            })
-        );
-        rejectResponse(response, 403, [
-            { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
-        ]);
-        return;
-    }
-
-    next();
-};
-
-/**
- * {@link requireUnrestricted} for endpoints a BROWSER opens without being able to set a header — same cookie
- * credential and same verification as {@link requirePermissionViaCookie}, which this delegates to
- * rather than restating: one code path for "verify the cookie, then check a key".
- */
-export const requireUnrestrictedViaCookie = requirePermissionViaCookie(wildcardKeyFor('tenant'));
-
-/**
  * The two step-up tiers, read through `environmentNumber` exactly like the token TTLs are.
  * Kernel-level, not `account`'s: `requireFreshAuth` is mounted
  * by any module with a money or identity route — `cart`, `payments`, `account` itself — and none
@@ -353,7 +353,7 @@ export const requireFreshAuth =
     (maxAgeSeconds: number, options: FreshAuthOptions = {}) =>
     (request: Request, response: Response, next: NextFunction) => {
         // Defensive, not the expected path: a route mounting this without `isAuth` first would
-        // otherwise read `undefined.authTime` and throw. Same shape as `requireUnrestricted`'s guard above.
+        // otherwise read `undefined.authTime` and throw. Same shape as `requirePermission`'s guard above.
         if (!request.authContext) {
             rejectResponse(response, 401);
             return;
@@ -415,7 +415,7 @@ export const requireFreshAuthWhen =
  * `payments`' intent/confirm are the two mount points: where this app's money moves, which are
  * also the two `requireFreshAuth(REAUTH_TIME_CRITICAL)` already gates.
  *
- * 403, not 401: the caller IS who their token says, same distinction `requireUnrestricted` draws — this is a
+ * 403, not 401: the caller IS who their token says, same distinction `requirePermission` draws — this is a
  * permission gap, not an identity one, and `EMAIL_NOT_VERIFIED` is what lets a client route to
  * "check your inbox" instead of a generic denial.
  *

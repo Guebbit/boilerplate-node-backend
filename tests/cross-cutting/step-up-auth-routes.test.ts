@@ -7,6 +7,13 @@
  * `STEP_UP_ROUTES` is checked in both directions: every entry must still be a mounted route
  * (no stale table), and every mounted route actually carrying the guard must be IN the table (no
  * silent tier change, and no route quietly gated without anyone documenting why here).
+ *
+ * THE OTHER HALF LIVES ON THE KEYS. A route mounts this guard when freshness is a property of the
+ * ROUTE — checking out, changing your own address, ending every session — and those are about the
+ * caller's own record, which no permission key names. Where freshness is a property of the ACTION,
+ * `shared/authorization-keys.yaml` says so with `stepUp:` and `requirePermission` enforces it:
+ * `users.delete` and `payments.update` are both there, and neither route mounts anything.
+ * `tests/unit/kernel/step-up.test.ts` covers that path; the sweep below covers this one.
  */
 import type { Router } from 'express';
 import { guardsOn, routeSignatures } from '@tests/routes';
@@ -48,7 +55,6 @@ const STEP_UP_ROUTES: Record<string, string> = {
     // The sync settles money just as the confirm does, from the provider's answer rather than
     // from a method the caller supplied — so it sits at the same tier, not a lower one.
     'payments POST /:id/sync': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'payments POST /order/:orderId/refund': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'account DELETE /': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
     'account PUT /': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
     'account POST /logout-all': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,

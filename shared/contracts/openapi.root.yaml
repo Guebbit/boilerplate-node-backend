@@ -416,6 +416,58 @@ components:
         # The schemas below describe the "data" payload for each endpoint.
         # Wrapped response schemas below combine the envelope with the domain payload.
 
+        Abilities:
+            type: object
+            additionalProperties: false
+            description: |
+                What the caller may do, as CASL's packed-rule format — the shape `unpackRules`
+                takes. A tuple per rule rather than an object, which is what makes shipping a few
+                dozen of them cheap.
+
+                The client's copy has NO AUTHORITY: it decides what to render, never what is
+                allowed, and every request is re-evaluated server-side. Published so a client greys
+                out what it would be refused from the same rules the server enforces, rather than
+                from a hand-maintained duplicate that drifts — the drift is silent until somebody
+                is shown a button that answers 403.
+            required: [tenantId, scope, rules, version]
+            properties:
+                tenantId:
+                    type: string
+                    nullable: true
+                    description: The shop these rules are about. `null` in platform scope, and only there.
+                scope:
+                    type: string
+                    enum: [tenant, platform]
+                    description: Which of the two worlds this caller is acting in. Never both.
+                rules:
+                    type: array
+                    description: |
+                        CASL packed rules — `[action, subject, conditions?, fields?, inverted?,
+                        reason?]`, with trailing absent members omitted.
+                    items:
+                        type: array
+                        items: {}
+                version:
+                    type: integer
+                    description: |
+                        The permission model's own version, bumped when the KEYS change rather than
+                        when a role does. A client caches these; this is what tells it the cache is
+                        about a different model, not merely a different person.
+
+        AbilitiesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Abilities'
+
         UserEnvelope:
             type: object
             additionalProperties: false
@@ -830,6 +882,8 @@ paths:
     # ---------- account ----------
     /account:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account'
+    /account/abilities:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password'
     /account/reauth:

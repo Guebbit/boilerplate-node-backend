@@ -20,6 +20,12 @@ import { shipOrder } from './service';
 export default {
     name: 'delivery',
     basePath: '/delivery',
+    /**
+     * The permission keys this module introduces. Deleting the module deletes them:
+     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
+     * whose module is gone, and a module claiming one the file does not attribute to it.
+     */
+    permissions: ['delivery.read', 'delivery.update', 'delivery.manage'],
     routes: router,
     subscribe: () => {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) => {

@@ -1,11 +1,21 @@
 /**
  * @module
  * Order read scoping — `orderService.callerScope`, the authorization boundary for order reads.
- * Admin gets `undefined` (no restriction); anyone else gets a filter on their own `userId`
- * excluding soft-deleted rows; no auth context *throws*, rather than widening the scope. The
- * filter's `userId` must be a real BSON `ObjectId`, not a string — `$match` inside an aggregation
- * skips schema casting, so a string id reads as "no orders" rather than as an error; the coercion
- * lives in `orderRepository.ownerScope`.
+ *
+ * Compiled from the caller's RULES rather than assembled here: a role that reads everything gets
+ * `{}`, anyone else gets a filter on their own `userId` excluding soft-deleted rows, and a caller
+ * with no identity gets a filter that matches nothing.
+ *
+ * TWO THINGS CHANGED WHEN THE RULES TOOK OVER, and both are worth asserting rather than
+ * discovering. Unrestricted is now `{}` instead of `undefined` — both spread into a query as no
+ * restriction, and `{}` is what "these are the conditions, and there are none" honestly looks
+ * like. And an anonymous caller no longer THROWS: it compiles to CASL's `EMPTY_RESULT_QUERY`, so
+ * the request answers an empty list rather than a 500. The fail-closed property is the same one —
+ * a gap can never widen the read — reached by a filter that matches nothing instead of by an
+ * exception.
+ *
+ * The filter's `userId` must be a real BSON `ObjectId`, not a string — `$match` inside an
+ * aggregation skips schema casting, so a string id reads as "no orders" rather than as an error.
  */
 
 import { Types } from 'mongoose';
@@ -14,69 +24,40 @@ import { asCustomer, asOwner } from '../../../../../tests/support/callers';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
-describe('orderService.callerScope', () => {
-    it('returns undefined for an admin, so the caller applies no restriction', () => {
-        const scope = orderService.callerScope(asOwner(USER_ID));
+/** What CASL compiles a caller with no matching rule to. */
+const MATCHES_NOTHING = { $expr: { $eq: [0, 1] } };
 
-        // Not `toBeFalsy()`: `{}` is falsy-adjacent in review but would spread into a filter
-        // that matches nothing. Only `undefined` spreads to nothing.
-        expect(scope).toBeUndefined();
+describe('orderService.callerScope', () => {
+    it('applies no restriction for a role that reads everything', () => {
+        expect(orderService.callerScope(asOwner(USER_ID))).toEqual({});
     });
 
-    it('restricts a non-admin to their own userId', () => {
-        const scope = orderService.callerScope(asCustomer(USER_ID));
-
-        expect(scope).toEqual({
+    it('restricts a customer to their own userId', () => {
+        expect(orderService.callerScope(asCustomer(USER_ID))).toEqual({
             userId: new Types.ObjectId(USER_ID),
-            deletedAt: { $exists: false }
+            deletedAt: null
         });
     });
 
     it('hides soft-deleted orders from their own owner', () => {
-        // The second axis of the scope, and the one an ownership-only assertion would miss: a
-        // soft-deleted order still belongs to the caller, so `userId` alone still matches it.
-        // `$exists: false` rather than `null` — `remove` unsets the field to restore.
-        const scope = orderService.callerScope(asCustomer(USER_ID));
-
-        expect(scope!.deletedAt).toEqual({ $exists: false });
+        // Two axes in one rule: `userId` answers "whose", `deletedAt` answers "still there". The
+        // wide key carries neither, which is how staff read a soft-deleted order to restore it.
+        expect(orderService.callerScope(asCustomer(USER_ID))).toHaveProperty('deletedAt', null);
     });
 
-    it('lets an admin see soft-deleted orders, by restricting nothing', () => {
-        expect(orderService.callerScope(asOwner(USER_ID))).toBeUndefined();
+    it('lets a role that reads everything see soft-deleted orders', () => {
+        expect(orderService.callerScope(asOwner(USER_ID))).not.toHaveProperty('deletedAt');
     });
 
-    it('restricts a caller whose role holds no wide key', () => {
-        // A role that does not grant unconditional reads must narrow, never widen: the question
-        // is asked of the ability, so "no rule" and "a conditional rule" both mean restricted.
-        // This is the fail-safe direction.
-        const scope = orderService.callerScope(asCustomer(USER_ID));
-
-        expect(scope).toEqual({
-            userId: new Types.ObjectId(USER_ID),
-            deletedAt: { $exists: false }
-        });
+    it('matches nothing when there is no auth context at all', () => {
+        // The load-bearing case. Returning `{}` here — or omitting the owner clause — would widen
+        // an anonymous request to every user's orders without failing anything.
+        expect(orderService.callerScope(undefined)).toEqual(MATCHES_NOTHING);
     });
 
-    it('emits a BSON ObjectId rather than a string, so aggregation $match can compare it', () => {
-        const scope = orderService.callerScope(asCustomer(USER_ID));
-
-        // The distinction that a `toEqual` on ids alone would miss: a plain string would satisfy
-        // a loose comparison but silently match zero documents inside a pipeline.
-        expect(scope!.userId).toBeInstanceOf(Types.ObjectId);
-        expect(String(scope!.userId)).toBe(USER_ID);
-    });
-
-    it('throws when there is no auth context at all', () => {
-        // The documented safe direction: an unauthenticated request must error out rather than
-        // fall through to an unscoped query. `toObjectId('')` is what enforces it.
-        expect(() => orderService.callerScope(undefined)).toThrow();
-    });
-
-    it('throws when the auth context carries no id', () => {
-        expect(() => orderService.callerScope(asCustomer(''))).toThrow();
-    });
-
-    it('throws on a malformed id instead of scoping to nothing', () => {
-        expect(() => orderService.callerScope(asCustomer('not-an-object-id'))).toThrow();
+    it('matches nothing for a caller whose identity is missing', () => {
+        // A condition whose placeholder cannot be resolved drops its whole rule rather than
+        // resolving to `{ userId: null }`, which is a perfectly good filter over unowned rows.
+        expect(orderService.callerScope(asCustomer(''))).toEqual(MATCHES_NOTHING);
     });
 });

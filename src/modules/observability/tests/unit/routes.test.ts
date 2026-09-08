@@ -132,7 +132,7 @@ describe('observability routes — the two guard styles', () => {
 
             expect(guards).toContain('getAuth');
             expect(guards).toContain('isAuth');
-            expect(guards).toContain('requireUnrestricted');
+            expect(guards).toContain('requirePermissionGuard');
         }
     );
 
@@ -143,7 +143,7 @@ describe('observability routes — the two guard styles', () => {
             (signature) =>
                 !guardsOn(router, signature).some((guard) =>
                     [
-                        'requireUnrestricted',
+                        'requirePermissionGuard',
                         'requirePermissionViaCookieGuard',
                         'isMetricsScraper'
                     ].includes(guard)

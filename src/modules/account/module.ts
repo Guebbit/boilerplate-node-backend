@@ -18,6 +18,8 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
+import { resolveDeploymentTenantId, rolesOf } from '@kernel/access/store';
+import { DEMO_TENANT_SLUG } from '@kernel/access/seed';
 import { onDomainEvent } from '@kernel/events';
 import { userRepository, USER_DELETED, USER_SETUP_REQUESTED } from '@modules/users';
 import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session/jwt';
@@ -50,8 +52,27 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
         .then((claims) =>
             userRepository.findAuthenticatableById(claims.id).then((user) => ({ user, claims }))
         )
-        /* Only the fields the port declares: the kernel must not learn the document shape. */
+        /*
+         * The stored memberships, which are what a role assignment actually IS. The user row's own
+         * `role` is the users module's published field and is not read here: two stores answering
+         * one question is how they drift, and this is the one that authorization is decided from.
+         */
         .then(({ user, claims }) =>
+            (user
+                ? resolveDeploymentTenantId(DEMO_TENANT_SLUG).then((tenantId) =>
+                      rolesOf(user.id, tenantId, {
+                          // What the account itself says, for the account no membership names —
+                          // an unseeded deployment, or a fixture written straight to the
+                          // collection. A stored membership always wins over it.
+                          tenant: user.role ?? 'customer',
+                          platform: user.platformRole ?? null
+                      }).then((roles) => ({ tenantId, roles }))
+                  )
+                : Promise.resolve({ tenantId: null, roles: { tenant: 'customer', platform: null } })
+            ).then((membership) => ({ user, claims, membership }))
+        )
+        /* Only the fields the port declares: the kernel must not learn the document shape. */
+        .then(({ user, claims, membership }) =>
             user
                 ? {
                       id: user.id,
@@ -66,17 +87,15 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                        * A stranger never reaches here at all — they are `guest`, via
                        * `anonymousCaller()`.
                        */
-                      roles: {
-                          tenant: user.role ?? 'customer',
-                          platform: user.platformRole ?? null
-                      },
+                      roles: membership.roles,
                       /*
-                       * Single-tenant deployment: this boilerplate seeds one shop and no account
-                       * names it. The field is carried anyway, so a downstream multi-tenant app
-                       * fills it in without touching the kernel, the guards or the evaluator —
-                       * which is the whole reason the model is tenant-aware before it needs to be.
+                       * The shop this deployment is, resolved once by `resolveDeploymentTenantId`.
+                       * A multi-tenant app replaces that one function — reading a host, a
+                       * subdomain, a claim — and nothing else changes, because every rule
+                       * downstream already takes the tenant from the resolved caller rather than
+                       * from anything the request could name.
                        */
-                      tenantId: null,
+                      tenantId: membership.tenantId,
                       imageUrl: user.imageUrl,
                       // Absent (a token minted before this claim existed) reads as infinitely
                       // old — fail closed, so a pre-existing session is asked to re-authenticate
@@ -107,6 +126,12 @@ registerAuthResolver({
 export default {
     name: 'account',
     basePath: '/account',
+    /**
+     * The permission keys this module introduces. Deleting the module deletes them:
+     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
+     * whose module is gone, and a module claiming one the file does not attribute to it.
+     */
+    permissions: ['tokens.delete'],
     routes: router,
     /*
      * `.env-example` ships both as literal placeholders that sign and verify perfectly —

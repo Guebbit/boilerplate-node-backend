@@ -28,6 +28,18 @@ import './events';
 export default {
     name: 'orders',
     basePath: '/orders',
+    /**
+     * The permission keys this module introduces. Deleting the module deletes them:
+     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
+     * whose module is gone, and a module claiming one the file does not attribute to it.
+     */
+    permissions: [
+        'orders.read',
+        'orders.create',
+        'orders.update',
+        'orders.delete',
+        'orders.manage'
+    ],
     routes: router,
     /*
      * A hold that timed out takes its order with it — the units are already released by the

@@ -22,7 +22,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
-import { createOwnerScope } from '@kernel/authorization';
+import { accessibleFilter } from '@kernel/access/query';
 import { OrderStatus } from '@types';
 import type { Payment, PaymentStatus, AuthContext } from '@types';
 import {
@@ -113,7 +113,7 @@ const resolvePayerId = (orderUserId: string | undefined): Promise<string | undef
  * module's collection. `ownerScope` not `visibleScope`: payments are never soft-deleted, so
  * "whose" is the only axis there is.
  */
-const callerScope = createOwnerScope('Payment', paymentRepository.ownerScope);
+const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Payment');
 
 /**
  * Create (or refresh) the payment intent for an order.

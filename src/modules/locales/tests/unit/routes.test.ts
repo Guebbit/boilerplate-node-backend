@@ -56,7 +56,7 @@ describe('locale routes — authorization', () => {
         // The documented decision. A guard here makes the copy unavailable to the clients that
         // most need it — see this file's header, and the router's own.
         expect(guards).not.toContain('isAuth');
-        expect(guards).not.toContain('requireUnrestricted');
+        expect(guards).not.toContain('requirePermissionGuard');
     });
 
     it('reads the caller on the manifest, without demanding one', () => {
@@ -72,9 +72,9 @@ describe('locale routes — authorization', () => {
 
         expect(guards).toContain('getAuth');
         expect(guards).toContain('isAuth');
-        expect(guards).toContain('requireUnrestricted');
+        expect(guards).toContain('requirePermissionGuard');
         expect(guards.indexOf('getAuth')).toBeLessThan(guards.indexOf('isAuth'));
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requireUnrestricted'));
+        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 
     it('has no route that is neither a documented public read nor fully guarded', () => {
@@ -84,7 +84,7 @@ describe('locale routes — authorization', () => {
         const ungoverned = routeSignatures(router).filter(
             (signature) =>
                 !PUBLIC.includes(signature) &&
-                !guardsOn(router, signature).includes('requireUnrestricted')
+                !guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
         expect(ungoverned).toEqual([]);

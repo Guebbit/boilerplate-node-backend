@@ -98,7 +98,7 @@
         "@redocly/cli": "^2.46.1",
         "@stoplight/prism-cli": "^5.6.0",
         "@stoplight/spectral-cli": "^6.15.0",
-        "@stoplight/spectral-rulesets": "^1.22.0",
+        "@stoplight/spectral-rulesets": "1.22.7",
         "@stryker-mutator/core": "^9.6.1",
         "@stryker-mutator/jest-runner": "^9.6.1",
         "@swc/core": "^1.15.47",
@@ -150,6 +150,7 @@
     },
     "dependencies": {
         "@casl/ability": "^7.0.1",
+        "@casl/mongoose": "^9.0.2",
         "@guebbit/js-toolkit": "^2.1.0",
         "@guebbit/openapi-runnable-collections": "^0.1.0",
         "@opentelemetry/api": "^1.9.1",

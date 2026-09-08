@@ -31,6 +31,7 @@ import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
 import { enabledModules } from '../../src/modules';
+import { seedAccessModel } from '@kernel/access/seed';
 
 const reset = process.argv.includes('--reset');
 
@@ -58,6 +59,11 @@ async function seed() {
      * from Mongo, and a cart references a user id rather than requiring the user row to exist
      * first.
      */
+    // The shop, the preset roles and the demo memberships first: a module's fixtures may be
+    // written in any order, but nothing can resolve a caller until there is a shop to be a member
+    // of. Not part of the concurrent batch below for that reason.
+    await seedAccessModel();
+
     const perModule = await Promise.all(
         enabledModules.map((appModule) => appModule.seeds?.() ?? Promise.resolve([]))
     );

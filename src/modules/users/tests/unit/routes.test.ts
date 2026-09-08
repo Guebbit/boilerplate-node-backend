@@ -2,7 +2,7 @@
  * @module
  * The user-administration route table. Every route is admin-only by one line —
  * `router.use(getAuth, isAuth, requireUnrestricted)` — so a route added later inherits the guard, but losing
- * `requireUnrestricted` there makes the entire directory readable by any logged-in customer. The guard is
+ * `requirePermission` there makes the entire directory readable by any logged-in customer. The guard is
  * asserted per endpoint rather than once, so a route mounted above that `use` still fails here.
  */
 import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
@@ -53,20 +53,20 @@ describe('user routes — authorization', () => {
     it.each(ALL)('%s is reachable only by an authenticated admin', (signature) => {
         const guards = guardsOn(router, signature);
 
-        // All three, in order. `getAuth` populates the context, `isAuth` demands one, `requireUnrestricted`
-        // reads the role off it — `requireUnrestricted` before `isAuth` would read a role from nothing.
+        // All three, in order. `getAuth` populates the context, `isAuth` demands one, `requirePermission`
+        // reads the role off it — `requirePermission` before `isAuth` would read a role from nothing.
         expect(guards).toContain('getAuth');
         expect(guards).toContain('isAuth');
-        expect(guards).toContain('requireUnrestricted');
+        expect(guards).toContain('requirePermissionGuard');
         expect(guards.indexOf('getAuth')).toBeLessThan(guards.indexOf('isAuth'));
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requireUnrestricted'));
+        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 
     it('has no public endpoint at all', () => {
         // The directory is admin-only in full. This is the assertion that fails if someone mounts
         // a "harmless" public read above the gate.
         const unguarded = routeSignatures(router).filter(
-            (signature) => !guardsOn(router, signature).includes('requireUnrestricted')
+            (signature) => !guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
         expect(unguarded).toEqual([]);

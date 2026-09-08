@@ -146,6 +146,20 @@ export type AppModule = {
     locales?: string;
 
     /**
+     * The permission keys this module INTRODUCES, next to the routes that check them.
+     *
+     * Declared here rather than only in `shared/authorization-keys.yaml` so that deleting a module
+     * deletes its keys: the shared file says which module owns each key, this says which keys each
+     * module claims, and `tests/cross-cutting/module-permissions.test.ts` refuses any disagreement.
+     * A key whose module is gone would otherwise sit in the file forever, grantable by a role
+     * editor and checked by nothing.
+     *
+     * Absent for a module with no keys, which is a decision rather than an omission: `cart` and
+     * `wishlist` are *your own things*, and what you may do with them follows from being signed in.
+     */
+    permissions?: readonly string[];
+
+    /**
      * Write this module's slice of the demo dataset. Called only by `db/demo/index.ts`, never at
      * boot — seeding is a script, not part of starting the application.
      */

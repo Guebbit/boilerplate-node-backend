@@ -7,7 +7,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requireUnrestricted } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/adapters/storage';
 import { getUsers, searchUsersKeyParameters } from './controllers/get-users';
@@ -22,7 +22,7 @@ import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 export const router = Router();
 
 // All routes require authentication + admin role
-router.use(getAuth, isAuth, requireUnrestricted);
+router.use(getAuth, isAuth, requirePermission('users.manage'));
 
 /** Cache reader keyed on the same query parameters `getUsers`'s schema accepts. */
 const cacheUsersSearch = searchCache('users', searchUsersKeyParameters);

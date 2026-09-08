@@ -41,7 +41,7 @@ describe('feedback routes — the positional guard', () => {
         // The whole reason the module exists for a visitor. A guard reaching this route is an
         // outage of the contact form, not a hardening.
         expect(guards).not.toContain('isAuth');
-        expect(guards).not.toContain('requireUnrestricted');
+        expect(guards).not.toContain('requirePermissionGuard');
     });
 
     it.each(['POST /search', 'GET /', 'PUT /:id', 'DELETE /:id'])(
@@ -51,7 +51,7 @@ describe('feedback routes — the positional guard', () => {
 
             expect(guards).toContain('getAuth');
             expect(guards).toContain('isAuth');
-            expect(guards).toContain('requireUnrestricted');
+            expect(guards).toContain('requirePermissionGuard');
         }
     );
 
@@ -69,7 +69,7 @@ describe('feedback routes — the positional guard', () => {
         );
 
         for (const signature of readsSubmissions)
-            expect(guardsOn(router, signature)).toContain('requireUnrestricted');
+            expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
     });
 });
 

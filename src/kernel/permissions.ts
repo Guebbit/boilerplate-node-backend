@@ -34,6 +34,12 @@ export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'manage
  * `subject` is the CASL subject type — the concrete thing a rule is about — while the key's own
  * first segment is the resource family. `orders.read` is a permission, `Order` is a thing.
  */
+/** How recently a caller must have proved themselves to use a key that demands it. */
+export type StepUpTier = 'critical' | 'sensitive';
+
+/**
+ *
+ */
 export interface PermissionKey {
     key: string;
     module: string;
@@ -41,6 +47,15 @@ export interface PermissionKey {
     action: PermissionAction;
     scope: AuthorizationScope;
     description: string;
+    /**
+     * Whether this key demands a recently proved session, and how recently.
+     *
+     * On the KEY rather than on a route because the tier is a property of what the action IS:
+     * erasing somebody's account deserves a fresh session wherever it is reached from, and a
+     * second route reaching the same key would otherwise have to remember. Absent for almost
+     * everything — a challenge people learn to dismiss protects nothing.
+     */
+    stepUp?: StepUpTier;
     /**
      * The ABAC half: a filter fragment that must ALSO hold of the row, in the shape both
      * repositories already spread into a query. `$caller.<field>` is substituted from the

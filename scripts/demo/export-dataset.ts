@@ -19,6 +19,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { assembleDemoDataset, DEMO_DATA_PATH } from './assemble';
 import { enabledModules } from '../../src/modules';
+import { seedAccessModel } from '@kernel/access/seed';
 
 const checkOnly = process.argv.includes('--check');
 
@@ -38,6 +39,9 @@ const run = async (): Promise<number> => {
 
     try {
         await mongoose.connect(process.env.NODE_DB_URI);
+        // Same order as the two runtime runners: the shop and its roles before any module's
+        // fixtures, because nothing can resolve a caller until there is a shop to be a member of.
+        await seedAccessModel();
         await Promise.all(
             enabledModules.map((appModule) => appModule.seeds?.() ?? Promise.resolve([]))
         );

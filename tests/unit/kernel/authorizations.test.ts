@@ -7,7 +7,7 @@
  *                not "rejected", because it also guards public routes. It must always call
  *                `next()` exactly once, on every path, or the request hangs.
  *   `isAuth`   — *required* identification. Fails closed with 401.
- *   `requireUnrestricted`  — *required* elevation. Fails closed, and the status says which check refused:
+ *   `requirePermission(WILDCARD)`  — *required* elevation. Fails closed, and the status says which check refused:
  *                401 with no credentials at all (as `isAuth` does), 403 for a caller without the key.
  *                Both bodies stay generic; the reason is recorded in the audit trail only.
  *
@@ -21,8 +21,8 @@ import {
     getTokenBearer,
     getAuth,
     isAuth,
-    requireUnrestricted,
-    requireUnrestrictedViaCookie,
+    requirePermission,
+    requirePermissionViaCookie,
     requireFreshAuth,
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
@@ -32,6 +32,7 @@ import { makeResponseStub } from '@tests/express';
 import { asCustomer, asOwner } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext } from '@types';
+import { wildcardKeyFor } from '@kernel/permissions';
 
 // Only the sink is replaced; `buildAuditEvent` and the `coreAuditActions` vocabulary stay real, so an
 // event that stops matching the real builder's shape fails here rather than in production.
@@ -48,9 +49,12 @@ jest.mock('@infrastructure/observability/audit', () => ({
  *   - a rejection means the token is bad;
  *   - resolving `undefined` means the token was fine but names nobody.
  *
- * `requireUnrestrictedViaCookie` turns the first into 401 and the second into 403, so the two must stay
+ * `requirePermissionViaCookie(WILDCARD)` turns the first into 401 and the second into 403, so the two must stay
  * distinguishable in the fake exactly as they are in production.
  */
+/** The shop's wildcard — what the deleted blanket guards used to check, spelled as a key. */
+const WILDCARD = wildcardKeyFor('tenant');
+
 const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
 const fromRefreshToken = jest.fn<Promise<unknown>, [string]>();
 registerAuthResolver({
@@ -272,12 +276,16 @@ describe('isAuth', () => {
     });
 });
 
-describe('requireUnrestricted', () => {
+describe('requirePermission', () => {
     it('passes an unrestricted caller through', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requireUnrestricted(makeRequest({ authContext: asOwner('user-1') }), response, next);
+        requirePermission(WILDCARD)(
+            makeRequest({ authContext: asOwner('user-1') }),
+            response,
+            next
+        );
 
         expect(next).toHaveBeenCalledTimes(1);
         expect(response.status).not.toHaveBeenCalled();
@@ -287,7 +295,11 @@ describe('requireUnrestricted', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requireUnrestricted(makeRequest({ authContext: asCustomer('user-1') }), response, next);
+        requirePermission(WILDCARD)(
+            makeRequest({ authContext: asCustomer('user-1') }),
+            response,
+            next
+        );
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(403);
@@ -299,7 +311,11 @@ describe('requireUnrestricted', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requireUnrestricted(makeRequest({ authContext: asCustomer('user-1') }), response, next);
+        requirePermission(WILDCARD)(
+            makeRequest({ authContext: asCustomer('user-1') }),
+            response,
+            next
+        );
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(403);
@@ -311,14 +327,14 @@ describe('requireUnrestricted', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requireUnrestricted(makeRequest(), response, next);
+        requirePermission(WILDCARD)(makeRequest(), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
     });
 
     it('distinguishes not-authenticated from not-permitted in the audit trail', () => {
-        requireUnrestricted(makeRequest(), makeResponseStub(), jest.fn());
+        requirePermission(WILDCARD)(makeRequest(), makeResponseStub(), jest.fn());
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -335,7 +351,7 @@ describe('requireUnrestricted', () => {
     it('attributes a not-permitted denial to the actual user, not to anonymous', () => {
         // The whole value of the audit record: "who tried". Falling back to 'anonymous' here
         // would erase the identity of a real user probing admin routes.
-        requireUnrestricted(
+        requirePermission(WILDCARD)(
             makeRequest({ authContext: asCustomer('user-9') }),
             makeResponseStub(),
             jest.fn()
@@ -361,10 +377,10 @@ describe('requireUnrestricted', () => {
          * trail (`reason`, asserted above), not disclosed to whoever is probing.
          */
         const unauthenticated = makeResponseStub();
-        requireUnrestricted(makeRequest(), unauthenticated, jest.fn());
+        requirePermission(WILDCARD)(makeRequest(), unauthenticated, jest.fn());
 
         const nonAdmin = makeResponseStub();
-        requireUnrestricted(
+        requirePermission(WILDCARD)(
             makeRequest({ authContext: asCustomer('user-9') }),
             nonAdmin,
             jest.fn()
@@ -376,7 +392,7 @@ describe('requireUnrestricted', () => {
 });
 
 /**
- * `requireUnrestrictedViaCookie` — admin elevation proved by the refresh COOKIE rather than a bearer header.
+ * `requirePermissionViaCookie(WILDCARD)` — admin elevation proved by the refresh COOKIE rather than a bearer header.
  *
  * It exists for the requests a browser makes without JavaScript setting a header: a PDF invoice
  * opened in a new tab, an `EventSource` stream. Those cannot carry `Authorization`, so the
@@ -391,7 +407,7 @@ describe('requireUnrestricted', () => {
  * derived project inherits, and its failure mode is silent. A mutant that turns `!user?.admin`
  * into `false` hands every logged-in user an admin-only document.
  */
-describe('requireUnrestrictedViaCookie', () => {
+describe('requirePermissionViaCookie', () => {
     /** An admin user document, as `findById` resolves one. */
     const adminUser = { ...asOwner('admin-1'), username: 'root', imageUrl: '/images/root.png' };
 
@@ -399,7 +415,11 @@ describe('requireUnrestrictedViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requireUnrestrictedViaCookie(makeCookieRequest(), response, asStub<NextFunction>(next));
+        requirePermissionViaCookie(WILDCARD)(
+            makeCookieRequest(),
+            response,
+            asStub<NextFunction>(next)
+        );
 
         expect(response.status).toHaveBeenCalledWith(401);
         expect(next).not.toHaveBeenCalled();
@@ -410,7 +430,7 @@ describe('requireUnrestrictedViaCookie', () => {
     it('rejects an empty cookie value the same way as a missing one', () => {
         const response = makeResponseStub();
 
-        requireUnrestrictedViaCookie(
+        requirePermissionViaCookie(WILDCARD)(
             makeCookieRequest(''),
             response,
             asStub<NextFunction>(jest.fn())
@@ -425,7 +445,7 @@ describe('requireUnrestrictedViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
 
         await runUntilNext(
-            requireUnrestrictedViaCookie,
+            requirePermissionViaCookie(WILDCARD),
             makeCookieRequest('cookie.jwt'),
             makeResponseStub()
         );
@@ -438,7 +458,7 @@ describe('requireUnrestrictedViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
 
         const next = await runUntilNext(
-            requireUnrestrictedViaCookie,
+            requirePermissionViaCookie(WILDCARD),
             makeCookieRequest('cookie.jwt'),
             makeResponseStub()
         );
@@ -452,7 +472,7 @@ describe('requireUnrestrictedViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
         const request = makeCookieRequest('cookie.jwt');
 
-        await runUntilNext(requireUnrestrictedViaCookie, request, makeResponseStub());
+        await runUntilNext(requirePermissionViaCookie(WILDCARD), request, makeResponseStub());
 
         expect(request.authContext).toEqual(adminUser);
         expect(request.caller).toEqual(callerInScope(adminUser, 'tenant'));
@@ -465,7 +485,7 @@ describe('requireUnrestrictedViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requireUnrestrictedViaCookie(
+        requirePermissionViaCookie(WILDCARD)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(next)
@@ -481,7 +501,7 @@ describe('requireUnrestrictedViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
         const response = makeResponseStub();
 
-        requireUnrestrictedViaCookie(
+        requirePermissionViaCookie(WILDCARD)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(jest.fn())
@@ -494,7 +514,7 @@ describe('requireUnrestrictedViaCookie', () => {
     it('records a forbidden attempt in the audit trail', async () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
 
-        requireUnrestrictedViaCookie(
+        requirePermissionViaCookie(WILDCARD)(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -514,7 +534,7 @@ describe('requireUnrestrictedViaCookie', () => {
         // `user?.id ?? 'anonymous'` — an audit row with an empty actor is a row nobody can act on.
         mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
 
-        requireUnrestrictedViaCookie(
+        requirePermissionViaCookie(WILDCARD)(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -533,7 +553,7 @@ describe('requireUnrestrictedViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requireUnrestrictedViaCookie(
+        requirePermissionViaCookie(WILDCARD)(
             makeCookieRequest('forged.jwt'),
             response,
             asStub<NextFunction>(next)
@@ -550,7 +570,7 @@ describe('requireUnrestrictedViaCookie', () => {
         mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('mongo is down'));
         const response = makeResponseStub();
 
-        requireUnrestrictedViaCookie(
+        requirePermissionViaCookie(WILDCARD)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(jest.fn())

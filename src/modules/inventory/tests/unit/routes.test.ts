@@ -3,7 +3,7 @@
  * Inventory route table tests. Every route here is staff's, guarded by one
  * `router.use(getAuth, isAuth, requireUnrestricted)` at the top — the customer-facing half of this module is
  * deliberately not a route at all, since a shopper learns about stock from `available` on the
- * product page. A route mounted above the guard, or the guard losing `requireUnrestricted`, would publish
+ * product page. A route mounted above the guard, or the guard losing `requirePermission`, would publish
  * the counters and the ledger to anyone.
  */
 
@@ -32,14 +32,14 @@ describe('inventory routes', () => {
 
         expect(guards).toContain('getAuth');
         expect(guards).toContain('isAuth');
-        expect(guards).toContain('requireUnrestricted');
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requireUnrestricted'));
+        expect(guards).toContain('requirePermissionGuard');
+        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 
     it('has no public endpoint at all', () => {
         // Positional: this is what fails if a route is ever mounted above the gate.
         const unguarded = routeSignatures(router).filter(
-            (signature) => !guardsOn(router, signature).includes('requireUnrestricted')
+            (signature) => !guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
         expect(unguarded).toEqual([]);

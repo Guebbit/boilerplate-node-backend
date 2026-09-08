@@ -47,6 +47,18 @@ wildcards:
     subject: all # `all.manage` — every declared key in this scope, and only this scope
     action: manage # `<subject>.manage` — any declared action on that subject
 
+# Step-up — the third axis, declared on the KEY rather than on a route.
+#
+# A key may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
+# caller proved themselves within that window before it lets them through. The tiers are the ones
+# `REAUTH_TIME_CRITICAL` / `REAUTH_TIME_SENSITIVE` already name, so this adds a place to say WHICH
+# actions are worth a challenge, not a second mechanism for making one.
+#
+# On the key and not the route because the key is what the action IS: erasing somebody's account
+# deserves a fresh session wherever it is reached from, and a second route that reaches it would
+# otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
+# rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
+
 # Conditions — the ABAC half, and the reason this is not pure RBAC.
 #
 # A key may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
@@ -56,12 +68,28 @@ wildcards:
 # `$caller.<field>` is substituted from the resolved caller at request time. That is the whole
 # placeholder grammar; there is no expression language, on purpose.
 #
+# THE FIELD NAMES ARE THE MODEL'S, not either storage's. `active` and `userId` are what the rule
+# is ABOUT; one backend stores them under those names and the other under `active` and `user_id`,
+# and each maps this vocabulary onto its own columns on the way into a query. The shared artefact
+# is the condition set — that is what §13 of the plan means by generating both from one.
+#
 # Tenancy is NOT written here. Every tenant-scope rule has `tenantId: $caller.tenantId` injected
 # by the resolver, so no key can forget it and no request parameter can supply it.
 #
 # A key with no `conditions` is unconditional within its scope. Read the pairs below in that
-# light: `products.read` sees published rows, `products.update` sees every row, and staff get
-# the second one — which is why the shop does not need a `products.read-drafts` key.
+# light: `products.read` sees active, undeleted rows, `products.update` sees every row, and staff
+# get the second one — which is why the shop does not need a `products.read-drafts` key.
+#
+# `deletedAt: null` is on the narrow reads of the subjects that HAVE it — `Product`, `Locale` and
+# `Order`. A payment is a record of money moving and is never withdrawn from view, so it carries
+# no such column and no such condition; a rule naming a column the table lacks is a query that
+# throws rather than one that narrows.
+#
+# It is on the narrow reads and not the wide ones, and that asymmetry is the rule
+# somebody would otherwise have to remember: a soft-deleted row is gone for the audience it was
+# hidden from and still there for the staff who can restore it. Matching `null` covers a field
+# that is absent as well as one that is set to nothing, which is what an "unset to restore" write
+# leaves behind.
 
 # The keys themselves.
 #
@@ -81,9 +109,10 @@ keys:
       subject: Product
       action: read
       scope: tenant
-      description: Read products. Unpublished rows need a condition, not this key alone.
+      description: Read products. Inactive rows need a wider key, not this one.
       conditions:
-          published: true
+          active: true
+          deletedAt: null
     - key: products.create
       module: products
       subject: Product
@@ -118,6 +147,7 @@ keys:
       description: Read orders. Without a wider condition this is your own orders only.
       conditions:
           userId: $caller.id
+          deletedAt: null
     - key: orders.create
       module: orders
       subject: Order
@@ -157,7 +187,10 @@ keys:
       subject: Payment
       action: update
       scope: tenant
-      description: Reconcile a payment against the provider. High risk; expects step-up.
+      description: Reconcile a payment against the provider, or return the money.
+      # Money leaving the shop. The one action here whose damage cannot be undone by another
+      # request.
+      stepUp: critical
     - key: payments.manage
       module: payments
       subject: Payment
@@ -237,9 +270,10 @@ keys:
       subject: Locale
       action: read
       scope: tenant
-      description: Read locales and their dictionaries. Unpublished ones need a condition.
+      description: Read locales and their dictionaries. Inactive ones need a wider key.
       conditions:
-          published: true
+          active: true
+          deletedAt: null
     - key: locales.create
       module: locales
       subject: Locale
@@ -289,13 +323,27 @@ keys:
       subject: User
       action: delete
       scope: tenant
-      description: Erase someone else's account. High risk; expects step-up.
+      description: Erase someone else's account.
+      # Irreversible and about somebody else. A stolen session should not be able to reach it on
+      # the strength of a login that happened this morning.
+      stepUp: critical
     - key: users.manage
       module: users
       subject: User
       action: manage
       scope: tenant
       description: Any action on an account.
+
+    # -- account -------------------------------------------------------------------------------
+    # `account` is otherwise keyless on purpose — what you may do to your OWN record follows from
+    # being signed in. This one is the exception because it is not about your own record: it prunes
+    # expired credentials across every account, which is an operational lever.
+    - key: tokens.delete
+      module: account
+      subject: AccountToken
+      action: delete
+      scope: tenant
+      description: Remove expired tokens from every account. Operational, not self-service.
 
     # -- audit-logs ----------------------------------------------------------------------------
     - key: audit.read
