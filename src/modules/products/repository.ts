@@ -6,6 +6,7 @@
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 
+import type { QueryFilter } from 'mongoose';
 import type { FacetCount } from '@types';
 import { productModel, applyProductTransform } from './model';
 import type { ProductDocument } from './model';
@@ -38,6 +39,27 @@ const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
 };
 
 /** The catalogue's repository: base CRUD from the factory, extended with scoping, facets, and the inventory counter transitions. */
+/**
+ * One guarded counter transition: apply `inc` only to a document the filter still matches.
+ *
+ * The five transitions below differ in their FILTER — which is where each one's guard lives — and
+ * in nothing else. Sharing the plumbing is what keeps `timestamps: false` and the modified-count
+ * check from drifting apart across five copies, since a copy that dropped either would still
+ * compile and still look right.
+ *
+ * @param filter - the guard; a document it does not match is the refusal
+ * @param inc - the signed counter movement, as `$inc` takes it
+ * @returns whether a document matched and moved
+ */
+const guardedInc = (
+    filter: QueryFilter<ProductDocument>,
+    inc: Record<string, number>
+): Promise<boolean> =>
+    productModel
+        .updateOne(filter, { $inc: inc }, { timestamps: false })
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount > 0);
+
 export const productRepository: Repository<ProductDocument> & {
     publicScope: () => Record<string, unknown>;
     findByIdScoped: (
@@ -164,17 +186,13 @@ export const productRepository: Repository<ProductDocument> & {
      * @returns whether there were that many unclaimed units
      */
     reserveUnits: (productId: string, quantity: number) =>
-        productModel
-            .updateOne(
-                {
-                    _id: toObjectId(productId),
-                    $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, quantity] }
-                },
-                { $inc: { reserved: quantity } },
-                { timestamps: false }
-            )
-            .exec()
-            .then(({ modifiedCount }) => modifiedCount > 0),
+        guardedInc(
+            {
+                _id: toObjectId(productId),
+                $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, quantity] }
+            },
+            { reserved: quantity }
+        ),
 
     /**
      * Turn a hold into a sale — the units leave and stop being reserved.
@@ -187,18 +205,14 @@ export const productRepository: Repository<ProductDocument> & {
      * @returns whether the hold and the units were both there to commit
      */
     commitUnits: (productId: string, quantity: number) =>
-        productModel
-            .updateOne(
-                {
-                    _id: toObjectId(productId),
-                    onHand: { $gte: quantity },
-                    reserved: { $gte: quantity }
-                },
-                { $inc: { onHand: -quantity, reserved: -quantity } },
-                { timestamps: false }
-            )
-            .exec()
-            .then(({ modifiedCount }) => modifiedCount > 0),
+        guardedInc(
+            {
+                _id: toObjectId(productId),
+                onHand: { $gte: quantity },
+                reserved: { $gte: quantity }
+            },
+            { onHand: -quantity, reserved: -quantity }
+        ),
 
     /**
      * Give up a hold — the units are still here and become sellable again.
@@ -211,14 +225,10 @@ export const productRepository: Repository<ProductDocument> & {
      * @returns whether that many units were actually held
      */
     releaseUnits: (productId: string, quantity: number) =>
-        productModel
-            .updateOne(
-                { _id: toObjectId(productId), reserved: { $gte: quantity } },
-                { $inc: { reserved: -quantity } },
-                { timestamps: false }
-            )
-            .exec()
-            .then(({ modifiedCount }) => modifiedCount > 0),
+        guardedInc(
+            { _id: toObjectId(productId), reserved: { $gte: quantity } },
+            { reserved: -quantity }
+        ),
 
     /**
      * Units arrive from a supplier.
@@ -228,14 +238,7 @@ export const productRepository: Repository<ProductDocument> & {
      * @returns whether the product still exists — the only guard on a receipt
      */
     receiveUnits: (productId: string, quantity: number) =>
-        productModel
-            .updateOne(
-                { _id: toObjectId(productId) },
-                { $inc: { onHand: quantity } },
-                { timestamps: false }
-            )
-            .exec()
-            .then(({ modifiedCount }) => modifiedCount > 0),
+        guardedInc({ _id: toObjectId(productId) }, { onHand: quantity }),
 
     /**
      * A stocktake correction — signed, because shrinkage is the common case and it is negative.
@@ -249,17 +252,13 @@ export const productRepository: Repository<ProductDocument> & {
      * @returns whether the correction fit above what is reserved
      */
     adjustUnits: (productId: string, delta: number) =>
-        productModel
-            .updateOne(
-                {
-                    _id: toObjectId(productId),
-                    $expr: { $gte: [{ $add: ['$onHand', delta] }, '$reserved'] }
-                },
-                { $inc: { onHand: delta } },
-                { timestamps: false }
-            )
-            .exec()
-            .then(({ modifiedCount }) => modifiedCount > 0),
+        guardedInc(
+            {
+                _id: toObjectId(productId),
+                $expr: { $gte: [{ $add: ['$onHand', delta] }, '$reserved'] }
+            },
+            { onHand: delta }
+        ),
 
     /**
      * How many products a buyer would find at or under `threshold` units — counts AVAILABILITY, not
