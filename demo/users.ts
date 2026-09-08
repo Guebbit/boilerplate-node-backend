@@ -2,13 +2,15 @@
  * @module
  * The user directory's slice of the demo dataset: `root` is the admin every admin-only route
  * needs a caller for, and the `customer` account is the shopper every scoping rule needs someone
- * to be scoped against. Ids and credentials for both come from `@kernel/seed-accounts`, since other
- * files in this folder seed rows belonging to these two people.
+ * to be scoped against. Alongside them, one account per newer tenant role — editor, translator,
+ * moderator — so each can be logged into and tried on its own rather than only read about. Ids and
+ * credentials for all five come from `@kernel/seed-accounts`, since other files in this folder
+ * seed rows belonging to these people.
  *
  * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so `./cart` and
  * `./orders` have more than one shopper to vary an order history across. None of them is
  * wired into `@kernel/seed-accounts` — there is no login promise attached to any of the ten, only
- * to `root`/`customer`. Cart lines live in `./cart`, not here.
+ * to the five named accounts above. Cart lines live in `./cart`, not here.
  */
 
 import {
@@ -17,7 +19,16 @@ import {
     SEED_ADMIN_PASSWORD,
     SEED_USER_EMAIL,
     SEED_USER_ID,
-    SEED_USER_PASSWORD
+    SEED_USER_PASSWORD,
+    SEED_EDITOR_EMAIL,
+    SEED_EDITOR_ID,
+    SEED_EDITOR_PASSWORD,
+    SEED_TRANSLATOR_EMAIL,
+    SEED_TRANSLATOR_ID,
+    SEED_TRANSLATOR_PASSWORD,
+    SEED_MODERATOR_EMAIL,
+    SEED_MODERATOR_ID,
+    SEED_MODERATOR_PASSWORD
 } from '@kernel/seed-accounts';
 import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/fixtures';
@@ -52,7 +63,7 @@ export const SEED_CUSTOMER_IDS = {
     isla: demoCustomerId(9)
 } as const;
 
-/** The two test-critical accounts — one admin, one ordinary customer. */
+/** The five test-critical accounts — one per role a person actually logs in as. */
 const namedUsers = [
     makeUser({
         id: SEED_ADMIN_ID,
@@ -79,6 +90,33 @@ const namedUsers = [
         // so this is the account that has opted in.
         analyticsConsent: true,
         ...userImages.customer
+    }),
+    makeUser({
+        id: SEED_EDITOR_ID,
+        username: 'editor',
+        email: SEED_EDITOR_EMAIL,
+        password: SEED_EDITOR_PASSWORD,
+        role: 'editor',
+        verified: true,
+        ...userImages.root
+    }),
+    makeUser({
+        id: SEED_TRANSLATOR_ID,
+        username: 'translator',
+        email: SEED_TRANSLATOR_EMAIL,
+        password: SEED_TRANSLATOR_PASSWORD,
+        role: 'translator',
+        verified: true,
+        ...userImages.customer
+    }),
+    makeUser({
+        id: SEED_MODERATOR_ID,
+        username: 'moderator',
+        email: SEED_MODERATOR_EMAIL,
+        password: SEED_MODERATOR_PASSWORD,
+        role: 'moderator',
+        verified: true,
+        ...userImages.root
     })
 ];
 

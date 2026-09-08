@@ -13,7 +13,13 @@
  */
 
 import { ANONYMOUS_ROLE, PRESET_ROLES } from '@kernel/permissions';
-import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
+import {
+    SEED_ADMIN_ID,
+    SEED_USER_ID,
+    SEED_EDITOR_ID,
+    SEED_TRANSLATOR_ID,
+    SEED_MODERATOR_ID
+} from '@kernel/seed-accounts';
 import { assignRole, ensureTenant } from './store';
 import { roleModel } from './models';
 
@@ -50,12 +56,13 @@ export const seedPresetRoles = (): Promise<void> =>
     ).then(() => undefined);
 
 /**
- * The whole model, seeded: one shop, the presets, and the two demo accounts placed in it.
+ * The whole model, seeded: one shop, the presets, and the demo accounts placed in it.
  *
  * `root` is the shop's owner AND the installation's operator — two memberships, because they are
  * two jobs. A request acts as one or the other depending on the key it is asking about, which is
  * exactly the behaviour the platform/tenant split exists to produce, demonstrated by the account
- * everybody logs in as.
+ * everybody logs in as. The three staff accounts each hold exactly one of the newer tenant roles,
+ * so each can be logged into and tried on its own — the whole point of adding them to experiment.
  */
 export const seedAccessModel = (): Promise<void> =>
     seedPresetRoles()
@@ -64,7 +71,10 @@ export const seedAccessModel = (): Promise<void> =>
             Promise.all([
                 assignRole(SEED_ADMIN_ID, String(tenant._id), 'tenant', 'owner'),
                 assignRole(SEED_ADMIN_ID, null, 'platform', 'operator'),
-                assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer')
+                assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer'),
+                assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
+                assignRole(SEED_TRANSLATOR_ID, String(tenant._id), 'tenant', 'translator'),
+                assignRole(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator')
             ])
         )
         .then(() => undefined);

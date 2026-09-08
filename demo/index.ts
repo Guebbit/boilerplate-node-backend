@@ -13,6 +13,7 @@
  */
 
 import { seedAddressBooksCollection, exportSeededAddressBooks } from './account';
+import { seedAuditLogsCollection, exportSeededAuditLogs } from './audit-logs';
 import { seedCartsCollection, exportSeededCarts } from './cart';
 import { seedLocalesCollection, exportSeededLocales } from './locales';
 import { seedOrdersCollection, exportSeededOrders } from './orders';
@@ -56,7 +57,7 @@ export interface DemoModule {
 }
 
 /** Every module with demo fixtures. Replaces what each `module.ts` used to carry as `seeds`,
- * `seedExport` and `demoShapes` — the seven pairs collapsed into one table. */
+ * `seedExport` and `demoShapes` — the pairs collapsed into one table. */
 export const demoModules: Readonly<Record<string, DemoModule>> = {
     account: {
         seed: seedAddressBooksCollection,
@@ -64,6 +65,13 @@ export const demoModules: Readonly<Record<string, DemoModule>> = {
         /* A book is never served raw: `GET /account/addresses` answers `{ addresses: [...] }`,
          * which carries the book's `items` and nothing else it holds. */
         shapes: { addressBooks: 'stored' }
+    },
+    'audit-logs': {
+        seed: seedAuditLogsCollection,
+        export: exportSeededAuditLogs,
+        // Empty on purpose — see `demo/audit-logs.ts`'s own docblock: a TTL-backed, `now`-relative
+        // collection cannot join a byte-stable published dataset.
+        shapes: {}
     },
     cart: {
         seed: seedCartsCollection,

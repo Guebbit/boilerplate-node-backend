@@ -212,7 +212,9 @@ describe('the exported dataset conforms to the generated contract', () => {
             const deleted = collections.orders.filter((order) => 'deletedAt' in order);
             expect(deleted).toHaveLength(1);
 
-            const admin = collections.users.find((user) => user.role);
+            // `role` alone no longer picks out the admin: the staff accounts (editor, translator,
+            // moderator) carry one too, so this must name the one role that means "runs the shop".
+            const admin = collections.users.find((user) => user.role === 'owner');
             expect(deleted[0].userId).not.toBe(admin?.id);
         });
     });
