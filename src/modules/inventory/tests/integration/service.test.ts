@@ -1,7 +1,7 @@
 /**
  * @module
  * Inventory service tests. The lifecycle across modules is covered by
- * `cart/tests/unit/stock.test.ts`, and the replay invariant by `ledger.property.test.ts`, so
+ * `cart/tests/integration/stock.test.ts`, and the replay invariant by `ledger.property.test.ts`, so
  * what's left here is the module's own edges: the exactly-once claims, the two admin transitions
  * and their refusals, and the sweep. Real Mongo throughout, since every guarantee is a
  * conditional write.

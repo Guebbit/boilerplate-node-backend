@@ -9,7 +9,7 @@
  *        read at, so exactly one checkout matches and the loser retracts its order and answers 409.
  *
  *   R3 — the cart upsert retry was correct, documented, and completely untested.
- *        `repositories/carts.ts` carries each condition IN THE FILTER and retries a duplicate key
+ *        `cart/repository.ts` carries each condition IN THE FILTER and retries a duplicate key
  *        within a three-attempt budget, and the comment explains why it converges. Nothing
  *        exercised it: the retry branch, the `attemptsLeft` bound and `isDuplicateKey` were all
  *        live mutants. Nothing is fixed here — these cases are the tests that were missing, and

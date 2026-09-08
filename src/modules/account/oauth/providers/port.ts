@@ -8,7 +8,7 @@
 
 /**
  * What a successful token exchange tells this app about the caller. `providerId`, never `email`,
- * is the identity key `../link.ts` stores — see its own doc for why.
+ * is the identity key `account/services/oauth.ts` stores — see its own doc for why.
  */
 export interface OAuthIdentity {
     /** The provider's stable subject ("sub") for this identity. */
@@ -16,8 +16,8 @@ export interface OAuthIdentity {
     /** The provider's claimed address for this identity. */
     email: string;
     /**
-     * The provider's OWN claim that `email` is verified. `../link.ts` refuses to link an
-     * unverified one to an existing password account — see its security note.
+     * The provider's OWN claim that `email` is verified. `account/services/oauth.ts` refuses to
+     * link an unverified one to an existing password account — see its security note.
      */
     emailVerified: boolean;
     /** Display name, if the provider returned one. */
@@ -34,7 +34,7 @@ export interface OAuthProvider {
     /**
      * The URL to send the browser to for consent.
      *
-     * @param state - the CSRF token `./state.ts` minted for this attempt
+     * @param state - the CSRF token `../state.ts` minted for this attempt
      * @param redirectUri - where the provider must send the browser back — always
      *   server-derived (`../config.ts`), never taken from the request
      */

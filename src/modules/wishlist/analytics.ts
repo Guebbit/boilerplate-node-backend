@@ -1,8 +1,8 @@
 /**
  * @module
  * Analytics event names this module emits — a save funnel with one exit into the purchase funnel.
- * Declared by augmenting the analytics port's name map, same pattern as `./audit.ts`. Naming rule:
- * docs/tools/analytics.md#naming.
+ * Declared by augmenting the analytics port's name map, same pattern a module with its own audit
+ * actions uses for those — see `cart/audit.ts`. Naming rule: docs/tools/analytics.md#naming.
  */
 
 /** The event names this module fires, keyed by intent. */

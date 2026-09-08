@@ -783,7 +783,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
  * The independence rule, from the API's side: a language works end to end with no client
  * involvement — no route change, no list to update, no row in any collection. Uses Italian rather
  * than Spanish deliberately: Spanish is now the OPPOSITE fixture, existing only as database rows
- * (see `../../demo.ts`).
+ * (see `demo/locales.ts`).
  */
 describe('a locale only the API has', () => {
     it('answers validation errors in Italian for Accept-Language: it', async () => {

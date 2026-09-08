@@ -2,7 +2,7 @@
  * @module
  * The OAuth provider registry (`oauth/providers/index.ts`) and the `fake` implementation it always
  * carries. Google/GitHub each get their own file for the token-exchange parsing; this one is about
- * "which providers show up at all", the same question `payments/providers/providers.test.ts`
+ * "which providers show up at all", the same question `payments/tests/unit/providers.test.ts`
  * answers for the single-active-provider registry.
  */
 

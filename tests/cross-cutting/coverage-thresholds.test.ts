@@ -16,8 +16,8 @@
  *
  * What this does NOT assert is the converse — that every covered file matches some key. That
  * list has deliberate absences (the controllers, driven by the contract and integration suites;
- * the per-module `routes.ts`/`seeds.ts` tier, awaiting per-module floors), and legislating it
- * is a decision for whoever owns the ratchet, not for a guard test.
+ * the per-module `routes.ts` tier, awaiting per-module floors), and legislating it is a decision
+ * for whoever owns the ratchet, not for a guard test.
  */
 
 import path from 'node:path';

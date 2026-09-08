@@ -149,7 +149,7 @@ describe('the exported dataset conforms to the generated contract', () => {
 
         it('include exactly one shop owner, and several ordinary accounts', () => {
             /* Only `root` runs the shop. The ordinary count is deliberately not pinned to a
-             * literal — `users/demo.ts`'s ten further customers exist to give `cart`/`orders` a
+             * literal — `demo/users.ts`'s ten further customers exist to give `cart`/`orders` a
              * spread of shoppers, and that number is that module's to grow without this test
              * moving too. */
             expect(collections.users.filter((user) => user.role === 'owner')).toHaveLength(1);

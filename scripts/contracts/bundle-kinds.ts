@@ -96,7 +96,7 @@ export const isGenerated = (bundle: ContractBundle): bundle is GeneratedBundle =
  *
  * A single call because the two kinds differ in where their input comes from, not in how the text
  * is made: each one already knows how to build itself, and the ordering that keeps a generated
- * bundle reading a fresh contract is `build-contract-bundles.ts`'s job, not this function's.
+ * bundle reading a fresh contract is `scripts/contracts/build-bundles.ts`'s job, not this function's.
  */
 export const assembleBundle = (bundle: ContractBundle): string => bundle.content();
 

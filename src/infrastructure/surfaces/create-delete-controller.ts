@@ -1,8 +1,8 @@
 /**
  * @module
  * The soft/hard delete controller shared by every module with a `DELETE /x`, `DELETE /x/:id` and
- * `DELETE /x/:id/hard` triplet. Each module still owns a controller file (required by
- * `controller-naming.test.ts`), which becomes a short spec of what differs per entity — name,
+ * `DELETE /x/:id/hard` triplet. Each module still owns a controller file — `delete-<entity>.ts`,
+ * one call to this factory — which becomes a short spec of what differs per entity — name,
  * service call, audit action, not-found key. The handler carries the entity's own name (e.g.
  * `deleteOrder`) via a computed property key, since that is what stack traces and the generated
  * `docs/modules/` tables print.

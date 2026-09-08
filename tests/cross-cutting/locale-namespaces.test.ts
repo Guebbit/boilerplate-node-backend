@@ -14,7 +14,7 @@
  *      and the earlier one's string is simply gone.
  *
  * The language-parity check (every locale declaring the same keys) lives in
- * `tests/unit/i18n/validation-messages.test.ts`, which asserts it against the merged dictionaries
+ * `tests/cross-cutting/locale-parity.test.ts`, which asserts it against the merged dictionaries
  * and so already covers every module at once.
  */
 

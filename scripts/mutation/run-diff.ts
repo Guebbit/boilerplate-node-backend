@@ -8,7 +8,7 @@
  * reviewer can act on.
  *
  * It is the same Stryker run as `test:mutation:deep`, with `--mutate` narrowed to the changed
- * files, followed by the ordinary per-file ratchet (`check-mutation-baseline.ts --deep`). Nothing
+ * files, followed by the ordinary per-file ratchet (`scripts/mutation/check-baseline.ts --deep`). Nothing
  * about the scoring is special-cased.
  *
  * ── WHY WHOLE FILES, NOT CHANGED LINES ───────────────────────────────────────────────────────
@@ -30,7 +30,7 @@
  *
  * ── NEVER RECORDS ────────────────────────────────────────────────────────────────────────────
  * `--update` is not forwarded. A partial report recorded as the baseline would erase every file the
- * run did not measure; `check-mutation-baseline.ts` refuses that explicitly, and this never asks.
+ * run did not measure; `scripts/mutation/check-baseline.ts` refuses that explicitly, and this never asks.
  * The nightly owns the baseline.
  *
  * Usage:

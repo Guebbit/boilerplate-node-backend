@@ -1,7 +1,8 @@
 /**
  * @module
- * Cart service tests — `src/modules/cart/service.ts`. Highest-risk seam: `set` vs `add` share
- * one private `upsertCartItem`, differing only in `$set` vs `$inc` on one repository line — a
+ * Cart service tests — `src/modules/cart/services/`. Highest-risk seam: `set` vs `add` share
+ * one private `upsertCartItem` (`services/items.ts`), differing only in `$set` vs `$inc` on one
+ * repository line — a
  * collapsed mutation is invisible in review and silently multiplies or drops a user's quantity.
  * Also pins the over-serialization guard on the cart view, and that a cart is its own per-user
  * document with no per-line `_id`. Real Mongo throughout (`setupTestDb`) — the behaviour lives

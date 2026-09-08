@@ -319,7 +319,7 @@ export const userRepository: Repository<UserDocument> & {
     /**
      * Link a provider identity to an account and mark it verified — atomic `$push`/`$set`, never
      * read-modify-write, same rule `tokens` follows: `oauthAccounts` is `select: false`, so the
-     * document `account/oauth/link.ts` already holds never carries the array to mutate in place.
+     * document `account/services/oauth.ts` already holds never carries the array to mutate in place.
      * `verified` is set unconditionally: the provider vouching for the email is exactly the fact
      * that already makes a fresh signup `verified: true`, so re-asserting it on an existing
      * account is idempotent, never a downgrade. `timestamps: false` — linking a login method isn't
