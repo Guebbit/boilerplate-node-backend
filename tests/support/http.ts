@@ -14,8 +14,16 @@
 import request from 'supertest';
 import { app } from '../../src/app';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import type { UserDocument } from '@modules/users';
 
 export const api = () => request(app);
+
+/** What every `authenticateAs*` helper resolves to — the account and its bearer token. */
+interface AuthenticatedTestUser {
+    user: UserDocument;
+    token: string;
+    bearer: `Bearer ${string}`;
+}
 
 /**
  * Creates a user and logs it in through the real `POST /account/login` route, returning the
@@ -27,11 +35,44 @@ export const api = () => request(app);
  * user with `createUser({ verified: false })` (`account`'s own suites do exactly that) rather than
  * fighting this default.
  */
-export const authenticateAs = async (role: 'admin' | 'user' = 'user') => {
+export const authenticateAs = async (
+    role: 'admin' | 'user' = 'user'
+): Promise<AuthenticatedTestUser> => {
     const user = await (role === 'admin'
         ? createAdminUser({ verified: true })
         : createUser({ verified: true }));
 
+    return authenticateUser(user, role);
+};
+
+/**
+ * Creates a user seeded with an arbitrary TENANT role name — `manager`, `warehouse`, `support`,
+ * `editor`, `translator`, `moderator`, `customer` — and logs it in the same way
+ * {@link authenticateAs} does. Separate from it rather than a third accepted value there: those
+ * two are the two accounts most tests reach for by NAME, while this one exists for the contract
+ * sweep that has to drive every preset role through the HTTP surface — see `rolesOf`'s
+ * column-fallback in `@kernel/access/store`, which is what makes a bare `role` column enough
+ * without seeding a membership row too.
+ */
+export const authenticateAsRole = async (role: string): Promise<AuthenticatedTestUser> => {
+    // Distinct per role, not `createUser`'s shared default: the contract sweep this exists for
+    // authenticates several roles inside ONE test, and a second account at the same address is a
+    // duplicate-key error, not a second caller.
+    const user = await createUser({
+        role,
+        email: `${role}@example.com`,
+        username: role,
+        verified: true
+    });
+
+    return authenticateUser(user, role);
+};
+
+/** Shared by {@link authenticateAs} and {@link authenticateAsRole} — the login round trip itself. */
+const authenticateUser = async (
+    user: UserDocument,
+    role: string
+): Promise<AuthenticatedTestUser> => {
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });

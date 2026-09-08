@@ -68,6 +68,14 @@ export interface AuditEvent {
      * a query against the field above it. Absent for a request that never resolved a role at all.
      */
     actor_role_name?: string;
+    /**
+     * Which world this action happened in. Derived from `context.caller.scope` by default, which
+     * is correct for every ordinary tenant action — but `context.caller` is ALWAYS resolved in
+     * tenant scope (see `CallerContext`'s own docblock), so a PLATFORM-key check must override it
+     * explicitly with the scope the guard actually resolved, or every platform refusal records as
+     * a tenant one. `requirePermissionGuard` is the one caller that does.
+     */
+    actor_scope?: 'tenant' | 'platform';
     /** What was attempted (see the enum above). */
     action: AuditAction;
     /** Whether it worked. Failures are the security-relevant half: repeated ones signal attack. */
@@ -182,7 +190,7 @@ export const extractRequestContext = (
  * @param context - the caller context built once in the controller
  * @returns the actor's role
  */
-export const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
+const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
     /*
      * `admin` here is the trail's word for UNRESTRICTED, not a role name. Roles are data a
      * deployment may rename or add to; the audit vocabulary is closed and its values outlive
@@ -217,6 +225,7 @@ export const buildAuditEvent = (
                 | 'actor_user_id'
                 | 'actor_role'
                 | 'actor_role_name'
+                | 'actor_scope'
                 | 'target_type'
                 | 'target_id'
                 | 'metadata'
@@ -229,6 +238,10 @@ export const buildAuditEvent = (
     actor_user_id: fields.actor_user_id ?? context.caller.id ?? 'unknown',
     actor_role: fields.actor_role ?? resolveActorRole(context),
     actor_role_name: fields.actor_role_name ?? context.actorRoleName,
+    // `context.caller.scope` is always `'tenant'` (see `AuditEvent.actor_scope`'s own docblock),
+    // so this default is correct for every ordinary tenant action and wrong for a platform one —
+    // which is exactly why a platform-key check overrides it explicitly instead of relying here.
+    actor_scope: fields.actor_scope ?? context.caller.scope,
     // Spread after the defaults so caller values replace them.
     ...fields,
     // Spread last, deliberately: context-derived fields (ip, trace_id, ...) are not

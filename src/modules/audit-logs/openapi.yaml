@@ -78,6 +78,12 @@ components:
                         type: string,
                         description: 'The tenant role behind actor_role, e.g. moderator. Absent when the request never resolved one.'
                     }
+                actor_scope:
+                    {
+                        type: string,
+                        enum: [tenant, platform],
+                        description: 'Which world this action happened in — a shop or the installation. Absent on a row recorded before this field existed.'
+                    }
                 action:
                     {
                         type: string,

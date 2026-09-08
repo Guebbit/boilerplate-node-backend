@@ -170,7 +170,7 @@ export const revokeRole = (
  *
  * @throws AccessInvariantError when this person is the only holder of the scope's wildcard
  */
-export const assertNotLastAdministrator = (
+const assertNotLastAdministrator = (
     userId: string,
     tenantId: string | null,
     scope: AuthorizationScope

@@ -253,7 +253,7 @@ export const callerInScope = (context: AuthContext, scope: AuthorizationScope): 
  * it reaches a caller. Defaults to `tenant` for a subject nothing declares — the narrower of the
  * two, so an unknown subject is restricted rather than opened.
  */
-export const scopeOfSubject = (subject: string): AuthorizationScope =>
+const scopeOfSubject = (subject: string): AuthorizationScope =>
     PERMISSION_KEYS.find((entry) => entry.subject === subject)?.scope ?? 'tenant';
 
 /** The `Caller` an `AuthContext` becomes for a SUBJECT's rows — see {@link scopeOfSubject}. */

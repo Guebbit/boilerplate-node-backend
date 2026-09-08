@@ -53,6 +53,7 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
     "action": "auth.login",
     "actor_user_id": "user-123",
     "actor_role": "user",
+    "actor_scope": "tenant",
     "outcome": "success",
     "ip": "1.2.3.4",
     "request_id": "…",

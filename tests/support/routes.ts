@@ -45,6 +45,8 @@ const ROUTE_LABEL = Symbol.for('tests.routeLabel');
 interface LabelledMiddleware {
     [ROUTE_LABEL]?: string;
     name?: string;
+    /** The key a `requirePermission(key)` guard closed over — real code, not a test label. */
+    permissionKey?: string;
 }
 
 /** One mounted endpoint. Internal: the walker's return type, not referenced outside this file. */
@@ -55,6 +57,11 @@ interface RouteRow {
     path: string;
     /** Every handler on the route, in mount order, named or labelled. */
     chain: string[];
+    /**
+     * The `requirePermission` key guarding this route, own stack or router-level `use`,
+     * `undefined` for a route with no such guard.
+     */
+    permissionKey?: string;
 }
 
 /**
@@ -307,13 +314,25 @@ const walk = (
 ): { rows: (RouteRow & { applies: string[] })[]; middleware: string[] } => {
     const layers = asStub<{ stack: Layer[] }>(router).stack;
     const applies: string[] = [];
+    // Parallel to `applies`, kept only long enough to read `.permissionKey` back off a
+    // `router.use(..., requirePermission('key'))` layer — the string form has already thrown that
+    // away by the time a row is built.
+    const appliesHandles: LabelledMiddleware[] = [];
     const rows: (RouteRow & { applies: string[] })[] = [];
 
     for (const layer of layers) {
         if (layer.route === undefined) {
             applies.push(handlerName(layer.handle, layer.name));
+            appliesHandles.push(layer.handle);
             continue;
         }
+
+        const ownKey = layer.route.stack
+            .map(({ handle }) => handle.permissionKey)
+            .find((key): key is string => key !== undefined);
+        const inheritedKey = appliesHandles
+            .map((handle) => handle.permissionKey)
+            .find((key): key is string => key !== undefined);
 
         for (const method of Object.keys(layer.route.methods).filter(
             (each) => layer.route!.methods[each]
@@ -322,6 +341,7 @@ const walk = (
                 method: method.toUpperCase(),
                 path: layer.route.path,
                 chain: layer.route.stack.map(({ handle }) => handlerName(handle)),
+                permissionKey: ownKey ?? inheritedKey,
                 // Copied, not shared: later `use` layers must not appear to guard earlier routes.
                 applies: [...applies]
             });

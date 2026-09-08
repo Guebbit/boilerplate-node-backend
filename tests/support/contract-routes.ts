@@ -17,6 +17,8 @@ export interface MountedRoute {
     path: string;
     /** Router-level and per-route guards, in the order they actually run. */
     guards: string[];
+    /** The `requirePermission` key guarding this route, `undefined` for one with no such guard. */
+    permissionKey?: string;
 }
 
 /**
@@ -32,9 +34,12 @@ export const everyMountedRoute = (): MountedRoute[] =>
             Boolean(appModule.basePath && appModule.routes)
         )
         .flatMap((appModule) =>
-            effectiveRouteTable(appModule.routes).map(({ method, path, applies, chain }) => ({
-                method,
-                path: `${appModule.basePath}${path}`,
-                guards: [...applies, ...chain]
-            }))
+            effectiveRouteTable(appModule.routes).map(
+                ({ method, path, applies, chain, permissionKey }) => ({
+                    method,
+                    path: `${appModule.basePath}${path}`,
+                    guards: [...applies, ...chain],
+                    permissionKey
+                })
+            )
         );

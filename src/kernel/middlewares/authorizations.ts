@@ -24,6 +24,7 @@ import {
     callerFor,
     callerInScope,
     findKey,
+    scopeOfKey,
     type StepUpTier
 } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
@@ -179,15 +180,15 @@ const challengeForFreshAuth = (response: Response, maxAgeSeconds: number): void 
 export const requirePermission = (key: string) => {
     assertDeclared(key);
     const declared = findKey(key);
+    // The one place this guard's own scope is known — everything it audits below states it
+    // explicitly, because `buildAuditEvent`'s default (`context.caller.scope`) is always
+    // `'tenant'` and would misreport every platform-key refusal as a tenant one.
+    const scope = scopeOfKey(key);
 
     // Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each
     // module's route sweep identify a guard by its function name, and a factory that returns an
     // arrow makes every mount read as unguarded.
-    return function requirePermissionGuard(
-        request: Request,
-        response: Response,
-        next: NextFunction
-    ) {
+    function requirePermissionGuard(request: Request, response: Response, next: NextFunction) {
         /*
          * No credentials at all — 401, not 403. Unreachable through the current routes, which all
          * mount `isAuth` first; it guards a future mount that forgets.
@@ -199,6 +200,7 @@ export const requirePermission = (key: string) => {
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
                 actor_user_id: 'anonymous',
                 actor_role: 'anonymous',
+                actor_scope: scope,
                 metadata: { reason: 'not_authenticated' }
             });
             rejectResponse(response, 401);
@@ -221,6 +223,7 @@ export const requirePermission = (key: string) => {
         if (allowed && declared?.stepUp && !provedRecentlyEnough(request, declared.stepUp)) {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
+                actor_scope: scope,
                 metadata: { reason: 'step_up_required', permission: key, tier: declared.stepUp }
             });
             challengeForFreshAuth(response, tierSeconds(declared.stepUp));
@@ -231,6 +234,7 @@ export const requirePermission = (key: string) => {
         if (!allowed) {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_FORBIDDEN,
+                actor_scope: scope,
                 metadata: { reason: 'missing_permission', permission: key }
             });
             rejectResponse(response, 403);
@@ -238,7 +242,12 @@ export const requirePermission = (key: string) => {
         }
 
         next();
-    };
+    }
+
+    // The key this guard closes over, otherwise invisible once mounted — `tests/support/routes.ts`
+    // reads it back so the contract sweep can ask, per route, WHICH roles a 403 is correct for,
+    // rather than only whether a guard is present at all.
+    return Object.assign(requirePermissionGuard, { permissionKey: key });
 };
 
 /**
