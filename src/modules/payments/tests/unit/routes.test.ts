@@ -62,7 +62,7 @@ describe('payment routes', () => {
         // The one route that moves money back out. Everything else is the customer's own
         // checkout, which they must be able to complete themselves.
         const adminGuarded = routeSignatures(router).filter((signature) =>
-            guardsOn(router, signature).includes('isAdmin')
+            guardsOn(router, signature).includes('requireUnrestricted')
         );
 
         expect(adminGuarded).toEqual(['POST /order/:orderId/refund']);

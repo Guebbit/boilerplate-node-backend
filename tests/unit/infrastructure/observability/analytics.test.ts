@@ -25,6 +25,7 @@ import { accountAnalyticsEvents } from '@modules/account/analytics';
 import { productsAnalyticsEvents } from '@modules/products/analytics';
 import { cartAnalyticsEvents } from '@modules/cart/analytics';
 import { ordersAnalyticsEvents } from '@modules/orders/analytics';
+import { callerAs, strangerCaller } from '../../../support/callers';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -541,7 +542,7 @@ describe('shutdownAnalytics', () => {
 describe('buildAnalyticsBase', () => {
     it('lifts the attribution a server-side event has no other way to carry', () => {
         const base = buildAnalyticsBase({
-            caller: { id: 'user-9' },
+            caller: callerAs('customer', 'user-9'),
             ip: '198.51.100.4',
             userAgent: 'Chrome/131',
             host: 'api.example.com',
@@ -557,28 +558,37 @@ describe('buildAnalyticsBase', () => {
     });
 
     it("falls back to 'anonymous' for unauthenticated traffic", () => {
-        expect(buildAnalyticsBase({ caller: {}, analyticsConsent: false }).distinctId).toBe(
-            'anonymous'
-        );
         expect(
-            buildAnalyticsBase({ caller: { admin: false }, analyticsConsent: false }).distinctId
+            buildAnalyticsBase({ caller: strangerCaller(), analyticsConsent: false }).distinctId
+        ).toBe('anonymous');
+        expect(
+            buildAnalyticsBase({
+                // A role but no identity: what a guest resolves to, and still not a person.
+                caller: { ...callerAs('customer'), id: null },
+                analyticsConsent: false
+            }).distinctId
         ).toBe('anonymous');
     });
 
     it('leaves attribution undefined rather than inventing it', () => {
-        const base = buildAnalyticsBase({ caller: { id: 'u1' }, analyticsConsent: false });
+        const base = buildAnalyticsBase({
+            caller: callerAs('customer', 'u1'),
+            analyticsConsent: false
+        });
 
         expect(base.clientIp).toBeUndefined();
         expect(base.userAgent).toBeUndefined();
     });
 
     it('carries the consent choice through', () => {
-        expect(buildAnalyticsBase({ caller: {}, analyticsConsent: true }).analyticsConsent).toBe(
-            true
-        );
-        expect(buildAnalyticsBase({ caller: {}, analyticsConsent: false }).analyticsConsent).toBe(
-            false
-        );
+        expect(
+            buildAnalyticsBase({ caller: strangerCaller(), analyticsConsent: true })
+                .analyticsConsent
+        ).toBe(true);
+        expect(
+            buildAnalyticsBase({ caller: strangerCaller(), analyticsConsent: false })
+                .analyticsConsent
+        ).toBe(false);
     });
 });
 

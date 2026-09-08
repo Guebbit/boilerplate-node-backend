@@ -29,10 +29,10 @@ describe('userRepository', () => {
             expect(user.password).not.toBe(PLAIN_PASSWORD);
         });
 
-        it('sets admin to false by default', async () => {
+        it('sets the role to customer by default', async () => {
             const user = await userRepository.create(makeUser() as Partial<UserDocument>);
 
-            expect(user.admin).toBe(false);
+            expect(user.role).toBe('customer');
         });
     });
 
@@ -111,15 +111,15 @@ describe('userRepository', () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                admin: true
+                role: 'owner'
             });
             await createUser({
                 email: 'user@example.com',
                 username: 'user',
-                admin: false
+                role: 'customer'
             });
 
-            const admins = await userRepository.findAll({ admin: true });
+            const admins = await userRepository.findAll({ role: 'owner' });
 
             expect(admins).toHaveLength(1);
             expect(admins[0].email).toBe('admin@example.com');
@@ -147,16 +147,16 @@ describe('userRepository', () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                admin: true
+                role: 'owner'
             });
             await createUser({
                 email: 'user@example.com',
                 username: 'user',
-                admin: false
+                role: 'customer'
             });
 
-            expect(await userRepository.count({ admin: true })).toBe(1);
-            expect(await userRepository.count({ admin: false })).toBe(1);
+            expect(await userRepository.count({ role: 'owner' })).toBe(1);
+            expect(await userRepository.count({ role: 'customer' })).toBe(1);
         });
 
         it('returns 0 when the collection is empty', async () => {
@@ -192,31 +192,34 @@ describe('userRepository', () => {
 
     describe('updateMany', () => {
         it('applies the update to every document matching the filter', async () => {
-            await createUser({ email: 'a@example.com', username: 'a', admin: false });
-            await createUser({ email: 'b@example.com', username: 'b', admin: false });
-            await createUser({ email: 'c@example.com', username: 'c', admin: true });
+            await createUser({ email: 'a@example.com', username: 'a', role: 'customer' });
+            await createUser({ email: 'b@example.com', username: 'b', role: 'customer' });
+            await createUser({ email: 'c@example.com', username: 'c', role: 'owner' });
 
-            // Promote all non-admins
-            await userRepository.updateMany({ admin: false }, { $set: { admin: true } });
+            // Promote every customer
+            await userRepository.updateMany({ role: 'customer' }, { $set: { role: 'owner' } });
 
-            expect(await userRepository.count({ admin: true })).toBe(3);
-            expect(await userRepository.count({ admin: false })).toBe(0);
+            expect(await userRepository.count({ role: 'owner' })).toBe(3);
+            expect(await userRepository.count({ role: 'customer' })).toBe(0);
         });
 
         it('does not modify documents that do not match the filter', async () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                admin: true
+                role: 'owner'
             });
             await createUser({
                 email: 'user@example.com',
                 username: 'user',
-                admin: false
+                role: 'customer'
             });
 
-            // Only target the non-admin
-            await userRepository.updateMany({ admin: false }, { $set: { username: 'changed' } });
+            // Only target the customer
+            await userRepository.updateMany(
+                { role: 'customer' },
+                { $set: { username: 'changed' } }
+            );
 
             const admin = await userRepository.findOne({
                 email: 'admin@example.com'

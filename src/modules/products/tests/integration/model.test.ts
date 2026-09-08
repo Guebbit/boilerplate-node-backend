@@ -9,6 +9,7 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/fixtures';
 import * as productService from '@modules/products/service';
+import { asOwner } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
@@ -26,7 +27,7 @@ describe('product serialization', () => {
         const product = await createProduct({ title: 'Lookup Product', active: true });
         const found = await productService.getById(
             product._id.toString(),
-            productService.callerScope({ admin: true })
+            productService.callerScope(asOwner())
         );
 
         expect(found!.toJSON()).toMatchObject({
@@ -37,10 +38,7 @@ describe('product serialization', () => {
 
     it('normalizes a lean list via productService.search', async () => {
         await createProduct({ title: 'Listed Product', active: true });
-        const { items } = await productService.search(
-            {},
-            productService.callerScope({ admin: true })
-        );
+        const { items } = await productService.search({}, productService.callerScope(asOwner()));
 
         expect(items).toHaveLength(1);
         const item = asStub<Record<string, unknown>>(items[0]);

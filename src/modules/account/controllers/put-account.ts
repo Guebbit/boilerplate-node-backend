@@ -20,7 +20,7 @@ import { toUser } from '@modules/users';
 /**
  * PUT /account — the authenticated user updates their OWN profile (email, username, locale,
  * image, phone, website).
- * This is why a normal user can edit at all: `/users` writes sit behind `isAdmin`, which would
+ * This is why a normal user can edit at all: `/users` writes sit behind `requireUnrestricted`, which would
  * 403 every non-admin doing self-service through them.
  */
 export const putAccount = (

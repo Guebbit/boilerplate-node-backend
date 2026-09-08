@@ -1,18 +1,25 @@
 /**
  * @module
  * Express guards built on `kernel/authentication.ts`'s resolver: `getAuth` populates
- * `request.authContext` when a token is present, `isAuth`/`isAdmin` reject when it is missing or
- * insufficient, `isAdminViaCookie` is the SSE-only variant that authenticates by refresh cookie
+ * `request.authContext` when a token is present, `isAuth` rejects when it is missing,
+ * `requirePermission` rejects when the caller's role does not hold a given key,
+ * `requirePermissionViaCookie` is the SSE-only variant that authenticates by refresh cookie
  * instead of an `Authorization` header, and `requireFreshAuth`/`requireFreshAuthWhen` gate an
  * already-authenticated caller on HOW RECENTLY they proved it. Every rejection from the
  * identity guards is audited before the response is sent, so a denied request always leaves a
  * trail.
  *
- * See: docs/tools/security.md
+ * A guard takes a PERMISSION KEY, never a role name. A role is data a deployment may edit; a key
+ * is code, declared beside the routes that check it, and `assertDeclared` refuses one no module
+ * owns — so a typo in a mount is a boot failure rather than a route nobody can reach.
+ *
+ * See: docs/tools/security.md · docs/theory/authorization.md
  */
 
 import type { Request, Response, NextFunction } from 'express';
 import { resolveAccessToken, resolveRefreshToken } from '@kernel/authentication';
+import { holdsKey } from '@kernel/ability';
+import { assertDeclared, callerFor, callerInScope, wildcardKeyFor } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -35,7 +42,7 @@ export const getTokenBearer = (request: Request) => request.header('Authorizatio
  * Resolve `request.authContext` from a bearer token when one is present, then always continue.
  *
  * Never rejects: an absent or invalid token just leaves `authContext` unset, so this can sit in
- * front of routes that work for both anonymous and authenticated callers — `isAuth`/`isAdmin`
+ * front of routes that work for both anonymous and authenticated callers — `isAuth`/`requireUnrestricted`
  * are what actually gate a route.
  *
  * @param request - populated with `authContext` on success
@@ -57,13 +64,16 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                     id: user.id,
                     email: user.email,
                     username: user.username,
-                    admin: user.admin,
+                    roles: user.roles,
+                    tenantId: user.tenantId,
                     imageUrl: user.imageUrl,
                     authTime: user.authTime,
                     amr: user.amr,
                     analyticsConsent: user.analyticsConsent,
                     verified: user.verified
                 };
+                // Resolved once, here, so nothing below turns two role names into keys again.
+                request.caller = callerInScope(request.authContext, 'tenant');
             }
         })
         .catch(() => {
@@ -101,16 +111,157 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
 };
 
 /**
- * Reject with 403 unless the resolved caller is an admin. MUST run after `isAuth`.
+ * Reject with 403 unless the resolved caller's role holds `key`. MUST run after `isAuth`.
  *
- * @param request - must already carry `authContext`, set upstream by `getAuth`/`isAuth`
- * @param response - answered 401 with no caller at all, 403 for a non-admin caller
- * @param next - called only once an admin caller is confirmed
+ * The key is checked against the declared set at MOUNT time, not at request time: a route guarded
+ * by a key no module owns would otherwise answer 403 to everyone and look like a permissions
+ * problem for as long as nobody tried it.
+ *
+ * @param key - the permission key this route requires, e.g. `products.update`
+ * @throws Error at mount time when no module declares the key
  */
-export const isAdmin = (request: Request, response: Response, next: NextFunction) => {
+export const requirePermission = (key: string) => {
+    assertDeclared(key);
+
+    // Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each
+    // module's route sweep identify a guard by its function name, and a factory that returns an
+    // arrow makes every mount read as unguarded.
+    return function requirePermissionGuard(
+        request: Request,
+        response: Response,
+        next: NextFunction
+    ) {
+        /*
+         * No credentials at all — 401, not 403. Unreachable through the current routes, which all
+         * mount `isAuth` first; it guards a future mount that forgets.
+         *
+         * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
+         */
+        if (!request.authContext) {
+            emitAuditEvent(
+                buildAuditEvent(callerContextOf(request), {
+                    action: coreAuditActions.SECURITY_UNAUTHORIZED,
+                    actor_user_id: 'anonymous',
+                    actor_role: 'anonymous',
+                    outcome: 'failure',
+                    metadata: {
+                        route: request.path,
+                        method: request.method,
+                        reason: 'not_authenticated'
+                    }
+                })
+            );
+            rejectResponse(response, 401);
+            return;
+        }
+
+        /*
+         * The guard asks the ability, not the key list, so a route and a query agree by
+         * construction: both read the same rules. It asks about the ACTION and SUBJECT rather
+         * than about the row, because a route guard runs before anything is fetched — which is
+         * the whole point of keeping the row restriction in the read instead.
+         */
+        const allowed = holdsKey(callerFor(request.authContext, key), key);
+
+        if (!allowed) {
+            emitAuditEvent(
+                buildAuditEvent(callerContextOf(request), {
+                    action: coreAuditActions.SECURITY_FORBIDDEN,
+                    outcome: 'failure',
+                    metadata: {
+                        route: request.path,
+                        method: request.method,
+                        reason: 'missing_permission',
+                        permission: key
+                    }
+                })
+            );
+            rejectResponse(response, 403);
+            return;
+        }
+
+        next();
+    };
+};
+
+/**
+ * {@link requirePermission} for endpoints a BROWSER opens without being able to set a header —
+ * SSE, via `EventSource`, which cannot send `Authorization`. The refresh cookie is the credential,
+ * verified as `GET /account/refresh` verifies it: signature *and* presence on the user document,
+ * so a revoked token is rejected rather than merely an expired one.
+ *
+ * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
+ *
+ * @param key - the permission key this route requires
+ * @throws Error at mount time when no module declares the key
+ */
+export const requirePermissionViaCookie = (key: string) => {
+    assertDeclared(key);
+
+    // Named for the same reason as `requirePermissionGuard` above.
+    return function requirePermissionViaCookieGuard(
+        request: Request,
+        response: Response,
+        next: NextFunction
+    ) {
+        const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
+
+        // No cookie is 401 (who are you); a valid cookie without the key is 403 (not you).
+        if (!refreshToken) {
+            rejectResponse(response, 401, [
+                { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
+            ]);
+            return;
+        }
+
+        resolveRefreshToken(refreshToken)
+            .then((user) => {
+                const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
+
+                if (!allowed) {
+                    emitAuditEvent(
+                        buildAuditEvent(callerContextOf(request), {
+                            action: coreAuditActions.SECURITY_FORBIDDEN,
+                            actor_user_id: user?.id ?? 'anonymous',
+                            outcome: 'failure',
+                            metadata: { reason: 'missing_permission', permission: key }
+                        })
+                    );
+                    rejectResponse(response, 403, [
+                        { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
+                    ]);
+                    return;
+                }
+
+                request.authContext = user;
+                request.caller = callerInScope(user, 'tenant');
+                next();
+            })
+            .catch(() =>
+                rejectResponse(response, 401, [
+                    { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
+                ])
+            );
+    };
+};
+
+/**
+ * Reject with 403 unless the caller holds the WILDCARD key for their tenant scope. MUST run after
+ * `isAuth`.
+ *
+ * `admin` is this guard's word for UNRESTRICTED, not a role name — the same definition the audit
+ * trail uses, and for the same reason: role names are data a deployment may rename or add to,
+ * while "holds the wildcard" is a property of the permission model itself. A route that wants a
+ * narrower rule should mount {@link requirePermission} with the key it actually needs; this is
+ * the blanket gate for routes whose whole surface is operator-only.
+ */
+export const requireUnrestricted = (request: Request, response: Response, next: NextFunction) => {
+    const wildcard = wildcardKeyFor('tenant');
+
     /*
-     * No credentials at all — 401, not 403. Unreachable through the current routes, which all mount
-     * `isAuth` first; it guards a future mount that forgets.
+     * No credentials at all — 401, not 403, and audited as an AUTHENTICATION failure rather than
+     * a permission one. Unreachable through the current routes, which all mount `isAuth` first;
+     * it guards a future mount that forgets.
      *
      * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
      */
@@ -131,78 +282,35 @@ export const isAdmin = (request: Request, response: Response, next: NextFunction
         rejectResponse(response, 401);
         return;
     }
-    if (!request.authContext.admin) {
+
+    if (!holdsKey(callerFor(request.authContext, wildcard), wildcard)) {
         emitAuditEvent(
             buildAuditEvent(callerContextOf(request), {
                 action: coreAuditActions.SECURITY_FORBIDDEN,
                 outcome: 'failure',
-                metadata: { route: request.path, method: request.method, reason: 'not_admin' }
+                metadata: {
+                    route: request.path,
+                    method: request.method,
+                    reason: 'missing_permission',
+                    permission: wildcard
+                }
             })
         );
-        rejectResponse(response, 403);
-        return;
-    }
-    next();
-};
-
-/**
- * Admin check for endpoints a BROWSER opens without being able to set a header — SSE, via
- * `EventSource`, which cannot send `Authorization`. The refresh cookie is the credential, verified
- * as `GET /account/refresh` verifies it: signature *and* presence on the user document, so a
- * revoked token is rejected rather than merely an expired one.
- *
- * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
- *
- * @param request - the incoming request, whose `jwt` cookie carries the refresh token
- * @param response - answered 401 without a cookie, 403 for a verified non-admin
- * @param next - called only once an admin is resolved onto `request.authContext`
- */
-export const isAdminViaCookie = (request: Request, response: Response, next: NextFunction) => {
-    const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
-
-    // No cookie is 401 (who are you); a valid cookie for a non-admin is 403 (not you) — see below.
-    if (!refreshToken) {
-        rejectResponse(response, 401, [
-            { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
+        rejectResponse(response, 403, [
+            { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
         ]);
         return;
     }
 
-    resolveRefreshToken(refreshToken)
-        .then((user) => {
-            if (!user?.admin) {
-                emitAuditEvent(
-                    buildAuditEvent(callerContextOf(request), {
-                        action: coreAuditActions.SECURITY_FORBIDDEN,
-                        actor_user_id: user?.id ?? 'anonymous',
-                        outcome: 'failure'
-                    })
-                );
-                rejectResponse(response, 403, [
-                    { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
-                ]);
-                return;
-            }
-
-            request.authContext = {
-                id: user.id,
-                email: user.email,
-                username: user.username,
-                admin: true,
-                imageUrl: user.imageUrl,
-                authTime: user.authTime,
-                amr: user.amr,
-                analyticsConsent: user.analyticsConsent,
-                verified: user.verified
-            };
-            next();
-        })
-        .catch(() =>
-            rejectResponse(response, 401, [
-                { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
-            ])
-        );
+    next();
 };
+
+/**
+ * {@link requireUnrestricted} for endpoints a BROWSER opens without being able to set a header — same cookie
+ * credential and same verification as {@link requirePermissionViaCookie}, which this delegates to
+ * rather than restating: one code path for "verify the cookie, then check a key".
+ */
+export const requireUnrestrictedViaCookie = requirePermissionViaCookie(wildcardKeyFor('tenant'));
 
 /**
  * The two step-up tiers, read through `environmentNumber` exactly like the token TTLs are.
@@ -245,7 +353,7 @@ export const requireFreshAuth =
     (maxAgeSeconds: number, options: FreshAuthOptions = {}) =>
     (request: Request, response: Response, next: NextFunction) => {
         // Defensive, not the expected path: a route mounting this without `isAuth` first would
-        // otherwise read `undefined.authTime` and throw. Same shape as `isAdmin`'s guard above.
+        // otherwise read `undefined.authTime` and throw. Same shape as `requireUnrestricted`'s guard above.
         if (!request.authContext) {
             rejectResponse(response, 401);
             return;
@@ -307,7 +415,7 @@ export const requireFreshAuthWhen =
  * `payments`' intent/confirm are the two mount points: where this app's money moves, which are
  * also the two `requireFreshAuth(REAUTH_TIME_CRITICAL)` already gates.
  *
- * 403, not 401: the caller IS who their token says, same distinction `isAdmin` draws — this is a
+ * 403, not 401: the caller IS who their token says, same distinction `requireUnrestricted` draws — this is a
  * permission gap, not an identity one, and `EMAIL_NOT_VERIFIED` is what lets a client route to
  * "check your inbox" instead of a generic denial.
  *

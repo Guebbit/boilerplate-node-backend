@@ -11,6 +11,7 @@
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import type { CallerContext } from '@infrastructure/http/request';
+import { wildcardKeyFor } from '@infrastructure/authorization/keys';
 
 /**
  * Action constants — domain.resource.verb dot-notation, so a log backend can filter by prefix
@@ -169,9 +170,15 @@ export const extractRequestContext = (
  * @returns the actor's role
  */
 export const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
-    // Order matters: most-privileged first, since an admin also satisfies the `user` check.
-    if (context.caller.admin) return 'admin';
-    // A caller id present but not admin → an authenticated regular user.
+    /*
+     * `admin` here is the trail's word for UNRESTRICTED, not a role name. Roles are data a
+     * deployment may rename or add to; the audit vocabulary is closed and its values outlive
+     * them, so the test is "holds the scope's wildcard" rather than "is called owner".
+     *
+     * Order matters: most-privileged first, since an unrestricted caller also has an id.
+     */
+    if (context.caller.permissions.includes(wildcardKeyFor(context.caller.scope))) return 'admin';
+    // A caller id present without the wildcard → an authenticated regular user.
     if (context.caller.id) return 'user';
     // No caller id at all: an unauthenticated request. Still audited — failed logins and
     // blocked access attempts are exactly the events worth keeping.

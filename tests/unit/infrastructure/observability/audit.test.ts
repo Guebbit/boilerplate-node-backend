@@ -7,6 +7,7 @@ import {
     type AuditEntry
 } from '@infrastructure/observability/audit';
 import { auditLogger } from '@infrastructure/adapters/logger';
+import { strangerCaller } from '../../../support/callers';
 
 // Spy on auditLogger.log so we don't write to disk during tests.
 jest.spyOn(auditLogger, 'log').mockImplementation(() => auditLogger);
@@ -165,7 +166,7 @@ describe('registerAuditSink', () => {
 describe('extractRequestContext', () => {
     it('extracts ip, user_agent, and request_id', () => {
         const ctx = extractRequestContext({
-            caller: {},
+            caller: strangerCaller(),
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
             requestId: 'req-111',
@@ -180,7 +181,7 @@ describe('extractRequestContext', () => {
     });
 
     it('returns undefined for missing fields', () => {
-        const ctx = extractRequestContext({ caller: {}, analyticsConsent: false });
+        const ctx = extractRequestContext({ caller: strangerCaller(), analyticsConsent: false });
 
         expect(ctx.ip).toBeUndefined();
         expect(ctx.user_agent).toBeUndefined();

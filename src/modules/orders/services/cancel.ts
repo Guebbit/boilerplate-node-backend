@@ -6,11 +6,12 @@
  * `retryPendingEffects` is what discharges it when the announcement was not enough.
  */
 
+import { callerForSubject, isUnrestricted, SYSTEM_ACTOR } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { OrderStatus } from '@types';
-import type { Caller } from '@types';
+import type { AuthContext } from '@types';
 import type { OrderDocument } from '../model';
 import {
     generateReject,
@@ -48,7 +49,7 @@ const SWEEP_BATCH_SIZE = 200;
  */
 export const cancelById = (
     id: string,
-    authContext?: Caller,
+    authContext?: AuthContext,
     options: { refund?: boolean } = {},
     context?: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
@@ -57,7 +58,10 @@ export const cancelById = (
      * theirs to waive. Only an operator chooses, because only an operator has a reason to cancel
      * without returning the money: a replacement going out, a correction, a refund handled apart.
      */
-    const refund = authContext?.admin ? (options.refund ?? true) : true;
+    const refund =
+        authContext && isUnrestricted(callerForSubject(authContext, 'Order'))
+            ? (options.refund ?? true)
+            : true;
 
     /*
      * The statuses a cancel may move from are read off the lifecycle table, not declared, and the
@@ -106,7 +110,10 @@ export const cancelById = (
                 // actor rather than skipped — see the docblock above — and reported under its own
                 // analytics name so a timeout is never counted as a customer's choice to cancel.
                 const isSystemExpiry = !context;
-                const emitContext = context ?? { caller: {}, analyticsConsent: false };
+                const emitContext = context ?? {
+                    caller: callerForSubject(SYSTEM_ACTOR, 'Order'),
+                    analyticsConsent: false
+                };
 
                 emitAuditEvent(
                     buildAuditEvent(emitContext, {

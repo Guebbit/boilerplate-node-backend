@@ -47,16 +47,17 @@ describe('makeUser', () => {
     it('omits unspecified fields, leaving the schema"s defaults to apply', () => {
         const user = makeUser();
 
-        for (const field of ['admin', 'verified', 'deletedAt', 'tokens'])
+        for (const field of ['role', 'verified', 'deletedAt', 'tokens'])
             expect(Object.hasOwn(user, field)).toBe(false);
     });
 
     it('keeps an explicit false rather than dropping it', () => {
-        // `admin: false` and `verified: false` are the fixtures the authorization and
-        // verification branches need, and both are falsy.
-        const user = makeUser({ admin: false, verified: false });
+        // `active: false` and `verified: false` are the fixtures the deactivation and
+        // verification branches need, and both are falsy — which is exactly what a
+        // `stripUndefined` that tested truthiness instead of `undefined` would drop.
+        const user = makeUser({ active: false, verified: false });
 
-        expect(user.admin).toBe(false);
+        expect(user.active).toBe(false);
         expect(user.verified).toBe(false);
     });
 

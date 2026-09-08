@@ -12,6 +12,8 @@
  */
 import { asStub } from '@tests/stub';
 import type { Request, Response } from 'express';
+import { asCustomer } from '../../../support/callers';
+import { callerInScope } from '@kernel/permissions';
 import {
     callerContextOf,
     extractAndValidateId,
@@ -623,6 +625,9 @@ const makeCallerRequest = (
         ip: overrides.ip,
         headers: overrides.headers ?? {},
         authContext: overrides.authContext,
+        // Both, because `getAuth` sets both. A stub carrying only the session would let the
+        // context be built from a caller nothing ever resolved.
+        caller: overrides.authContext && callerInScope(overrides.authContext, 'tenant'),
         requestId: overrides.requestId
     });
 
@@ -632,31 +637,15 @@ describe('callerContextOf', () => {
             makeCallerRequest({
                 ip: '10.0.0.1',
                 headers: { 'user-agent': 'Mozilla/5.0', host: 'shop.example.com' },
-                authContext: {
-                    id: 'user-1',
-                    email: 'a@b.c',
-                    username: 'a',
-                    admin: false,
-                    authTime: 0,
-                    amr: [],
-                    analyticsConsent: false,
-                    verified: false
-                },
+                authContext: asCustomer('user-1'),
                 requestId: 'req-111'
             })
         );
 
         expect(context).toEqual({
-            caller: {
-                id: 'user-1',
-                email: 'a@b.c',
-                username: 'a',
-                admin: false,
-                authTime: 0,
-                amr: [],
-                analyticsConsent: false,
-                verified: false
-            },
+            // The CALLER, not the session: an audit row and an analytics event are about which
+            // keys were held, and identity beyond the id is nobody's business downstream.
+            caller: callerInScope(asCustomer('user-1'), 'tenant'),
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
             host: 'shop.example.com',
@@ -673,10 +662,17 @@ describe('callerContextOf', () => {
         expect(context.userAgent).toBe('agent-a');
     });
 
-    it('defaults to an anonymous caller ({}) when the request carries no auth context', () => {
+    it('defaults to a caller who proved nothing when the request carries no auth context', () => {
         const context = callerContextOf(makeCallerRequest({ ip: '9.9.9.9' }));
 
-        expect(context.caller).toEqual({});
+        // Not the `guest` ROLE: this is what the trail records for a request the resolver never
+        // saw, and an empty key list is the honest answer to "what had this request proved".
+        expect(context.caller).toEqual({
+            id: null,
+            tenantId: null,
+            scope: 'tenant',
+            permissions: []
+        });
         expect(context.ip).toBe('9.9.9.9');
         expect(context.userAgent).toBeUndefined();
         expect(context.host).toBeUndefined();
@@ -708,7 +704,8 @@ describe('callerContextOf', () => {
                     id: 'user-1',
                     email: 'a@b.c',
                     username: 'a',
-                    admin: false,
+                    roles: { tenant: 'customer', platform: null },
+                    tenantId: null,
                     authTime: 0,
                     amr: [],
                     analyticsConsent: true,

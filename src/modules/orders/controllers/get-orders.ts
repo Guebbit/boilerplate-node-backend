@@ -4,6 +4,7 @@
  * factory, scoped through the caller's own visibility.
  */
 
+import { callerForSubject, isUnrestricted } from '@kernel/permissions';
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -36,7 +37,10 @@ export const getOrders = createSearchController({
     schema: searchOrdersQuerySchema,
     // Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their own.
     extendInput: (input, request) => ({
-        userId: request.authContext?.admin ? (input.userId as string | undefined) : undefined
+        userId:
+            request.authContext && isUnrestricted(callerForSubject(request.authContext, 'Order'))
+                ? (input.userId as string | undefined)
+                : undefined
     }),
     runSearch: (parsed, request) =>
         orderService.search(

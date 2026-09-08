@@ -113,9 +113,10 @@ Three supporting rules: keys are lower-case, dotted and **stable** (renaming one
 **roles are data, permissions are code** — a deployment may create roles at runtime and may never
 invent a key, because a key nothing checks grants nothing while looking like it grants something.
 
-## What is built, and what still runs on the boolean
+## What is built
 
-Three things exist and are green:
+The model is live. `admin: boolean` is gone from this repository, from the wire, and from the
+paired frontend.
 
 - **`shared/authorization-keys.yaml`** — every permission key, its subject, its scope and its
   conditions. The PHP twin holds the same bytes.
@@ -124,14 +125,20 @@ Three things exist and are green:
 - **`shared/authorization-conformance.yaml`** — the deny cases, run by
   `tests/cross-cutting/authorization-conformance.test.ts` here and by an identical suite there.
 
-`src/kernel/permissions.ts` reads the first two, `src/kernel/ability.ts` turns a caller into a
-CASL `Ability`, and `tests/cross-cutting/authorization-keys.test.ts` refuses a preset role that
-names a key nobody declares.
+`src/kernel/permissions.ts` reads the first two and turns an account's two role names into the
+keys for ONE scope; `src/kernel/ability.ts` builds the CASL ability and answers `holdsKey`;
+`src/kernel/authorization.ts` narrows a read by asking that ability rather than a role name, so
+the guard on the route and the filter on the query cannot disagree.
 
-**Nothing routes through any of it yet.** `AuthContext` still carries `admin: boolean`, the guards
-still read it, and `authorization.ts` still narrows reads from it. Replacing that is one change
-across both backends and the paired frontend — `admin` is on the wire — and it is the point at
-which this model starts being enforced rather than merely proved.
+An account carries `role` (in the shop) and `platformRole` (over the installation). The first is
+on the wire because a staff list has to show and edit it; the second is not, because who operates
+the installation is not a fact about a shop.
+
+**What is not built yet.** The rules do not compile into the query — `createOwnerScope` still
+hands back a hand-written fragment rather than `@casl/mongoose`'s `accessibleBy`, and
+`GET /me/abilities` does not exist, so the frontend still decides what to grey out from a role
+name instead of from the server's own rules. Route guards take keys, but the blanket
+`requireUnrestricted` still stands where a narrower key would say more.
 
 ## The twins
 
@@ -154,5 +161,5 @@ native `Gate`, with conditions in Policies and Eloquent scopes for the query hal
 The suite is what keeps them honest, and it holds the **deny** cases rather than the happy path: a
 widened scope does not fail a test that only checks the right thing is allowed.
 
-`BE_ROLES_AND_PERMISSIONS_PLAN.md`, beside this repo in the workspace, has the work items, the
-rejected options and the abort point. <!-- doc-paths:ignore -->
+`BE_ROLES_AND_PERMISSIONS_PLAN.md`, beside this repo in the workspace, has the work items, the <!-- doc-paths:ignore -->
+rejected options and the abort point.

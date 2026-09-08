@@ -1,0 +1,91 @@
+/**
+ * The callers a test acts as, by ROLE rather than by flag.
+ *
+ * `{ admin: true }` used to be the whole vocabulary, and it hid the thing most worth asserting:
+ * which of several jobs a person is doing. A warehouse operator and a support agent are both
+ * "not admin", and a test that says so proves nothing about the rule that separates them.
+ *
+ * Each factory returns a full `AuthContext` because that is what services take — the identity
+ * fields are filler, and only `roles`/`tenantId` are ever read by an authorization decision.
+ *
+ * Roles come from `shared/authorization-roles.yaml`, so a preset renamed there fails here rather
+ * than in one route's integration test three layers down.
+ */
+
+import type { AuthContext, Caller } from '@types';
+import { anonymousCaller, callerInScope } from '@kernel/permissions';
+import type { CallerContext } from '@infrastructure/http/request';
+
+/** The single shop every fixture belongs to. Multi-tenant behaviour is the conformance suite's. */
+export const TEST_TENANT_ID = 'shop';
+
+/** Identity filler. Nothing authorization-facing reads any of it. */
+const identity = (id: string) => ({
+    id,
+    email: `${id}@example.com`,
+    username: id,
+    authTime: Math.floor(Date.now() / 1000),
+    amr: ['pwd'] as readonly string[],
+    analyticsConsent: false,
+    verified: true
+});
+
+/**
+ * Someone acting in the shop, in the named role.
+ *
+ * @param role - a preset tenant role: `customer`, `manager`, `warehouse`, `support` or `owner`
+ */
+export const asRole = (role: string, id = 'test-user'): AuthContext => ({
+    ...identity(id),
+    roles: { tenant: role, platform: null },
+    tenantId: TEST_TENANT_ID
+});
+
+/** A shopper. Reads the catalogue and their own orders, and nothing else. */
+export const asCustomer = (id = 'test-customer'): AuthContext => asRole('customer', id);
+
+/** Unrestricted inside the shop — the honest spelling of what `admin: true` used to mean. */
+export const asOwner = (id = 'test-owner'): AuthContext => asRole('owner', id);
+
+/** Runs the shop: catalogue, orders, locales. Reads stock without moving it. */
+export const asManager = (id = 'test-manager'): AuthContext => asRole('manager', id);
+
+/** Moves stock and advances consignments. Cannot change a price. */
+export const asWarehouse = (id = 'test-warehouse'): AuthContext => asRole('warehouse', id);
+
+/** Handles messages and accounts. May update an account, never erase one. */
+export const asSupport = (id = 'test-support'): AuthContext => asRole('support', id);
+
+/**
+ * Operates the installation and is NOT a super-owner: holds no bare key, so it cannot read one
+ * shop's orders, customers or messages. The pair to {@link asOwner} in every scope test.
+ */
+export const asOperator = (id = 'test-operator'): AuthContext => ({
+    ...identity(id),
+    roles: { tenant: 'guest', platform: 'operator' },
+    tenantId: null
+});
+
+/**
+ * A `CallerContext` for a unit test calling a service directly, bypassing the controller that
+ * would build one from the request. Anonymous by default — most such tests do not care who the
+ * caller is, only that the emit does not throw for lack of one.
+ */
+export const testCallerContext: CallerContext = {
+    caller: anonymousCaller(),
+    analyticsConsent: false
+};
+
+/**
+ * The same actors as a `Caller` — what an authorization decision, an audit row or an analytics
+ * event actually sees, rather than the whole session behind it.
+ *
+ * Tenant scope, because that is the scope those three things are about. A platform-scope caller
+ * is built by asking `callerInScope(asOperator(), 'platform')`, which is rare enough to spell out
+ * where it happens.
+ */
+export const callerAs = (role: string, id?: string): Caller =>
+    callerInScope(asRole(role, id), 'tenant');
+
+/** A stranger, as the evaluator sees them: the `guest` role, in the shop. */
+export const strangerCaller = (): Caller => anonymousCaller();

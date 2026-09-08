@@ -24,6 +24,7 @@ import deliveryModule from '@modules/delivery/module';
 import accountModule from '@modules/account/module';
 import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
+import { asCustomer, asOwner } from '../../../../../tests/support/callers';
 
 /**
  * Mock the image store, not the filesystem underneath it.
@@ -50,8 +51,8 @@ afterEach(() => {
 /* The three callers every visibility rule answers for. `guest` and `logged` differ by identity
  * alone, so a rule that starts distinguishing them fails a case rather than passing silently. */
 const GUEST: Caller | undefined = undefined;
-const LOGGED: Caller = { id: '507f1f77bcf86cd799439011', admin: false };
-const ADMIN: Caller = { id: '507f1f77bcf86cd799439012', admin: true };
+const LOGGED = asCustomer('507f1f77bcf86cd799439011');
+const ADMIN = asOwner('507f1f77bcf86cd799439012');
 
 const titlesOf = (items: ProductDocument[]): string[] => items.map(({ title }) => title);
 

@@ -30,10 +30,10 @@ paths:
                   in: query
                   schema:
                       type: boolean
-                - name: admin
+                - name: role
                   in: query
                   schema:
-                      type: boolean
+                      type: string
                 - name: verified
                   in: query
                   schema:
@@ -315,11 +315,11 @@ components:
                 # "deleted".
                 active:
                     type: boolean
-                # Both narrow an ALREADY admin-only listing, which is what makes publishing
-                # them safe: the endpoint answers 403 to anyone who is not staff before a
+                # Both narrow an ALREADY staff-only listing, which is what makes publishing
+                # them safe: the endpoint answers 403 to anyone without the key before a
                 # filter is read at all.
-                admin:
-                    type: boolean
+                role:
+                    type: string
                 verified:
                     type: boolean
 
@@ -344,8 +344,8 @@ components:
                 sendSetupEmail:
                     type: boolean
                     default: false
-                admin:
-                    type: boolean
+                role:
+                    type: string
                 # Same reasoning as `CreateProductRequest.active`: independent of soft-deletion,
                 # and defaulted here so both implementations derive it rather than each choosing.
                 # Create bodies only — an omitted `active` on an update means "leave it alone".
@@ -373,8 +373,8 @@ components:
                 sendSetupEmail:
                     type: boolean
                     default: false
-                admin:
-                    type: boolean
+                role:
+                    type: string
                 # Same default, same reasoning as `CreateUserRequest.active` above.
                 active:
                     type: boolean
@@ -400,8 +400,8 @@ components:
                     type: string
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
-                admin:
-                    type: boolean
+                role:
+                    type: string
                 active:
                     type: boolean
                 imageUrl:
@@ -426,8 +426,8 @@ components:
                     type: string
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
-                admin:
-                    type: boolean
+                role:
+                    type: string
                 active:
                     type: boolean
                 imageUpload:
@@ -452,8 +452,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 username:
                     type: string
-                admin:
-                    type: boolean
+                role:
+                    type: string
                 active:
                     type: boolean
                 imageUrl:
@@ -475,8 +475,8 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
                 username:
                     type: string
-                admin:
-                    type: boolean
+                role:
+                    type: string
                 active:
                     type: boolean
                 imageUpload:

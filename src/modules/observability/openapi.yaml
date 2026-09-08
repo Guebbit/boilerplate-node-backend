@@ -20,7 +20,7 @@ paths:
                         text/event-stream:
                             schema:
                                 type: string
-                # Guarded by `isAdminViaCookie`: an EventSource cannot set an Authorization
+                # Guarded by `requireUnrestrictedViaCookie`: an EventSource cannot set an Authorization
                 # header, so the HttpOnly refresh cookie is the credential here.
                 '401':
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized'

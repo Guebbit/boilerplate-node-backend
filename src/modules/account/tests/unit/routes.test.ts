@@ -152,11 +152,11 @@ describe('account routes — authorization', () => {
         }
     );
 
-    it('admin-guards the token sweep, and nothing else', () => {
+    it('guards the token sweep with the shop wildcard, and nothing else', () => {
         // `DELETE /account/tokens/expired` is maintenance across every account, not self-service.
         // It is the only admin route in a module that is otherwise entirely first-person.
         const adminGuarded = routeSignatures(router).filter((signature) =>
-            guardsOn(router, signature).includes('isAdmin')
+            guardsOn(router, signature).includes('requireUnrestricted')
         );
 
         expect(adminGuarded).toEqual(['DELETE /tokens/expired']);
@@ -165,7 +165,7 @@ describe('account routes — authorization', () => {
     it('demands a session before checking the role on the sweep', () => {
         const guards = guardsOn(router, 'DELETE /tokens/expired');
 
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('isAdmin'));
+        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requireUnrestricted'));
     });
 });
 

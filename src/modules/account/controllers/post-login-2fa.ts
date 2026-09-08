@@ -16,6 +16,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
+import { isUnrestrictedRole } from '@kernel/permissions';
 
 /**
  * POST /account/login/2fa — the answer to the `{ mfaRequired: true, challenge }` response from
@@ -54,7 +55,7 @@ export const postLoginTwoFactor = (
 
             return issueSession(response, userId, undefined, ['pwd', 'otp']).then((accessToken) => {
                 authTwoFactorChallengeTotal.inc({ status: 'success' });
-                recordLoginSuccess(request, userId, !!data.admin);
+                recordLoginSuccess(request, userId, isUnrestrictedRole(data.role));
                 successResponse<AuthTokens>(
                     response,
                     { token: accessToken },

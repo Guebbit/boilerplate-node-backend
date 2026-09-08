@@ -54,7 +54,7 @@ const sanitizeStringArray = (values?: string[] | null): string[] => {
  * Why the scope rides in the read rather than being checked after it is the shared rule's to
  * explain — see `createVisibilityScope`.
  */
-export const callerScope = createVisibilityScope(productRepository.publicScope);
+export const callerScope = createVisibilityScope('Product', productRepository.publicScope);
 
 /**
  * Search products (DTO-friendly) — matches POST /products/search in OpenAPI.

@@ -6,12 +6,21 @@
  */
 
 import type { TFunction } from 'i18next';
-import type { AuthContext } from './types/auth-context';
+import type { AuthContext, Caller } from './types/auth-context';
 
 declare module 'express-serve-static-core' {
     interface Request {
         /** Transport-safe auth context DTO (available after auth middleware). */
         authContext?: AuthContext;
+        /**
+         * The same caller as an authorization decision sees them, in TENANT scope — resolved once
+         * by the auth guard so nothing below has to turn two role names into keys again.
+         *
+         * Set together with {@link authContext} and absent for the same requests. Platform-scope
+         * questions are resolved per key inside the guard and never travel on the request: a
+         * request acts in one scope, and which one is settled by what is being asked.
+         */
+        caller?: Caller;
         requestId?: string;
         /**
          * URLs of the images this request uploaded, set only when there was no broker to hand the

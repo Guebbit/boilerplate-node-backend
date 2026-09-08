@@ -53,7 +53,7 @@ describe('cart routes — authorization', () => {
         // A cart belongs to its owner and to nobody else; there is no operator route here to
         // guard. If one is added, this fails and the addition gets looked at.
         const adminGuarded = ALL.filter((signature) =>
-            guardsOn(router, signature).includes('isAdmin')
+            guardsOn(router, signature).includes('requireUnrestricted')
         );
 
         expect(adminGuarded).toEqual([]);

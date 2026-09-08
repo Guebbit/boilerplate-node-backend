@@ -52,12 +52,12 @@ describe('userSchema — what a user must carry', () => {
         expect(pattern.test('ada@example.com\nBcc: evil@attacker.test')).toBe(false);
     });
 
-    it('creates a user as a non-admin, active and unverified', () => {
+    it('creates a user as a customer, active and unverified', () => {
         // `admin: false` is the fail-safe direction and the only one: a default of `true`, or an
         // absent default read as truthy anywhere, is an account-creation privilege escalation.
         // `verified: false` matters equally — a default of `true` makes the whole email
         // verification flow decorative, since every new account already satisfies it.
-        expect(defaultOf(userSchema, 'admin')).toBe(false);
+        expect(defaultOf(userSchema, 'role')).toBe('customer');
         expect(defaultOf(userSchema, 'active')).toBe(true);
         expect(defaultOf(userSchema, 'verified')).toBe(false);
     });

@@ -31,13 +31,13 @@ describe('delivery routes', () => {
         const guards = guardsOn(router, 'GET /order/:orderId');
 
         expect(guards).toContain('isAuth');
-        expect(guards).not.toContain('isAdmin');
+        expect(guards).not.toContain('requireUnrestricted');
     });
 
     it('restricts the courier tick to an operator', () => {
         // `POST /advance` moves every parcel forward — an operator standing in for a cron. Open
         // to any logged-in caller, a customer could advance the whole shop's deliveries.
-        expect(guardsOn(router, 'POST /advance')).toContain('isAdmin');
+        expect(guardsOn(router, 'POST /advance')).toContain('requireUnrestricted');
     });
 
     it('leaves nothing but the methods list unauthenticated', () => {

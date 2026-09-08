@@ -22,7 +22,7 @@ import { humanChallengeGate } from '@infrastructure/http/middlewares/human-chall
 import {
     getAuth,
     isAuth,
-    isAdmin,
+    requireUnrestricted,
     requireFreshAuth,
     requireFreshAuthWhen,
     REAUTH_TIME_CRITICAL,
@@ -221,7 +221,7 @@ router.post(
 router.delete(
     '/tokens/expired',
     isAuth,
-    isAdmin,
+    requireUnrestricted,
     invalidateCache(['users', 'account']),
     deleteExpiredTokens
 );

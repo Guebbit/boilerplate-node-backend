@@ -96,8 +96,7 @@ describe('user credential exposure', () => {
 
             expect(Object.keys(user.toJSON() as object).toSorted()).toEqual([
                 'active',
-                'admin',
-                // Now defaulted like `active`/`admin` rather than tri-state, so it is always
+                // Now defaulted like `active`/`role` rather than tri-state, so it is always
                 // present rather than omitted when unset.
                 'analyticsConsent',
                 'createdAt',
@@ -107,7 +106,10 @@ describe('user credential exposure', () => {
                 // The user's preferred language. Public rather than stripped: the client shows
                 // it in the profile and writes it back, and it is in the `User` contract.
                 'locale',
-                // Defaulted `true` like `active`/`admin`, always present — enforced at signup,
+                // The role held inside the shop. `platformRole` is NOT here and must not be:
+                // who operates the installation is not a fact about a shop.
+                'role',
+                // Defaulted `true` like `active`/`role`, always present — enforced at signup,
                 // informational everywhere else (see `users/model.ts`).
                 'termsAccepted',
                 'updatedAt',
@@ -142,7 +144,7 @@ describe('user credential exposure', () => {
         });
 
         // `deletedAt` is exposed, as `Product` exposes it: stripping it would leave deletion with
-        // no representation, and an admin list couldn't tell a deleted account from a live one.
+        // no representation, and a staff list couldn't tell a deleted account from a live one.
         it('exposes deletedAt on a soft-deleted account', async () => {
             const deletedAt = new Date('2026-03-04T05:06:07.000Z');
             const user = await createUser({ email: 'gone@example.com', deletedAt });

@@ -116,7 +116,7 @@ describe('observability routes — the two guard styles', () => {
         // The trailing `(anonymous)` is the inline handler itself — this route's work is written
         // in `routes.ts` rather than in `controllers/`, which is why it is exercised below
         // through the stack instead of by importing it.
-        expect(guards).toEqual(['isAdminViaCookie', '(anonymous)']);
+        expect(guards).toEqual(['requirePermissionViaCookieGuard', '(anonymous)']);
         // The ordinary chain here would lock out the only client this route exists for.
         expect(guards).not.toContain('isAuth');
     });
@@ -132,7 +132,7 @@ describe('observability routes — the two guard styles', () => {
 
             expect(guards).toContain('getAuth');
             expect(guards).toContain('isAuth');
-            expect(guards).toContain('isAdmin');
+            expect(guards).toContain('requireUnrestricted');
         }
     );
 
@@ -142,7 +142,11 @@ describe('observability routes — the two guard styles', () => {
         const unguarded = routeSignatures(router).filter(
             (signature) =>
                 !guardsOn(router, signature).some((guard) =>
-                    ['isAdmin', 'isAdminViaCookie', 'isMetricsScraper'].includes(guard)
+                    [
+                        'requireUnrestricted',
+                        'requirePermissionViaCookieGuard',
+                        'isMetricsScraper'
+                    ].includes(guard)
                 )
         );
 

@@ -14,6 +14,7 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
+import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
@@ -31,12 +32,13 @@ export default {
     /*
      * A hold that timed out takes its order with it — the units are already released by the
      * time this fires; what `inventory` cannot do is cancel an order without importing this
-     * module. Admin scope because the shop is cancelling, not the customer: `cancelById` calls
+     * module. The SHOP is cancelling, not the customer, so the sweep acts as `SYSTEM_ACTOR`:
+     * `cancelById` calls
      * back into `releaseForOrder`, which finds the hold already released, so the two paths
      * converge and neither can double-release.
      */
     subscribe: () => {
-        onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => cancelById(orderId, { admin: true }));
+        onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => cancelById(orderId, SYSTEM_ACTOR));
         // Detach, never delete: the order survives the account.
         onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
     },

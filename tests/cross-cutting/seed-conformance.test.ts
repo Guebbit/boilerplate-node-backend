@@ -69,7 +69,7 @@ const productSchema = GetProductByIdResponse.shape.data
     .strict();
 
 const userSchema = GetUserByIdResponse.shape.data
-    .required({ admin: true, active: true, imageUrl: true })
+    .required({ role: true, active: true, imageUrl: true })
     .strict();
 
 const orderSchema = GetOrderByIdResponse.shape.data.strict();
@@ -145,14 +145,15 @@ describe('the exported dataset conforms to the generated contract', () => {
             }
         });
 
-        it('include exactly one admin, and several ordinary accounts', () => {
-            /* Only `root` is staff. The ordinary count is deliberately not pinned to a literal —
-             * `users/demo.ts`'s ten further customers exist to give `cart`/`orders` a spread of
-             * shoppers, and that number is that module's to grow without this test moving too. */
-            expect(collections.users.filter((user) => user.admin)).toHaveLength(1);
-            expect(collections.users.filter((user) => !user.admin).length).toBeGreaterThanOrEqual(
-                2
-            );
+        it('include exactly one shop owner, and several ordinary accounts', () => {
+            /* Only `root` runs the shop. The ordinary count is deliberately not pinned to a
+             * literal — `users/demo.ts`'s ten further customers exist to give `cart`/`orders` a
+             * spread of shoppers, and that number is that module's to grow without this test
+             * moving too. */
+            expect(collections.users.filter((user) => user.role === 'owner')).toHaveLength(1);
+            expect(
+                collections.users.filter((user) => user.role === 'customer').length
+            ).toBeGreaterThanOrEqual(2);
         });
     });
 
@@ -209,7 +210,7 @@ describe('the exported dataset conforms to the generated contract', () => {
             const deleted = collections.orders.filter((order) => 'deletedAt' in order);
             expect(deleted).toHaveLength(1);
 
-            const admin = collections.users.find((user) => user.admin);
+            const admin = collections.users.find((user) => user.role);
             expect(deleted[0].userId).not.toBe(admin?.id);
         });
     });

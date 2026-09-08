@@ -28,6 +28,7 @@ import usersModule from '@modules/users/module';
 import accountModule from '@modules/account/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
+import { asCustomer } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
@@ -360,7 +361,7 @@ describe('cancel releases the hold', () => {
         expect(await countersOf(product._id)).toMatchObject({ reserved: 4, available: 6 });
 
         const orderId = String(checkout.success && checkout.data?._id);
-        const cancelled = await orderService.cancelById(orderId, { id: user.id, admin: false });
+        const cancelled = await orderService.cancelById(orderId, asCustomer(user.id));
 
         expect(cancelled.success).toBe(true);
         expect(await countersOf(product._id)).toEqual({
@@ -377,8 +378,8 @@ describe('cancel releases the hold', () => {
         const checkout = await cartService.orderConfirm(user.id, testCallerContext);
         const orderId = String(checkout.success && checkout.data?._id);
 
-        await orderService.cancelById(orderId, { id: user.id, admin: false });
-        const again = await orderService.cancelById(orderId, { id: user.id, admin: false });
+        await orderService.cancelById(orderId, asCustomer(user.id));
+        const again = await orderService.cancelById(orderId, asCustomer(user.id));
 
         expect(again.success).toBe(false);
         // Not 14, which is what an unconditional put-back would have produced.
@@ -397,7 +398,7 @@ describe('cancel releases the hold', () => {
         const checkout = await cartService.orderConfirm(user.id, testCallerContext);
         const orderId = String(checkout.success && checkout.data?._id);
 
-        await orderService.cancelById(orderId, { id: user.id, admin: false });
+        await orderService.cancelById(orderId, asCustomer(user.id));
 
         expect(await countersOf(bought._id)).toMatchObject({ onHand: 10, reserved: 0 });
         expect(await countersOf(untouched._id)).toMatchObject({ onHand: 5, reserved: 0 });
@@ -423,7 +424,7 @@ describe('cancel releases the hold', () => {
              * race — so the units come back exactly once either way.
              */
             await Promise.all([
-                orderService.cancelById(orderId, { id: user.id, admin: false }),
+                orderService.cancelById(orderId, asCustomer(user.id)),
                 inventoryService.runReservationSweep()
             ]);
 

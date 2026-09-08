@@ -77,7 +77,7 @@ const ROUTED_MODULES: Record<string, Router> = {
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
- * One write route's exception from the default (`isAuth` then `isAdmin`).
+ * One write route's exception from the default (`isAuth` then `requireUnrestricted`).
  *
  * `requiresAuth: false` is reserved for a route that genuinely needs no session — either there is
  * none to have yet (login, signup), or a token IN the request is itself the credential (an emailed
@@ -294,12 +294,14 @@ describe('every write route is guarded by default', () => {
             if (exception === undefined) {
                 // The default: authenticated, and admin, in that order.
                 expect(guards).toContain('isAuth');
-                expect(guards).toContain('isAdmin');
-                expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('isAdmin'));
+                expect(guards).toContain('requireUnrestricted');
+                expect(guards.indexOf('isAuth')).toBeLessThan(
+                    guards.indexOf('requireUnrestricted')
+                );
                 return;
             }
 
-            expect(guards).not.toContain('isAdmin');
+            expect(guards).not.toContain('requireUnrestricted');
             if (exception.requiresAuth) expect(guards).toContain('isAuth');
             else expect(guards).not.toContain('isAuth');
         });

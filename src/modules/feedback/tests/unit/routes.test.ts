@@ -1,7 +1,7 @@
 /**
  * @module
  * The feedback route table. `routes.ts` mounts ONE public route (the visitor contact form), then
- * `router.use(getAuth, isAuth, isAdmin)` — everything below is admin-only, purely by position, and
+ * `router.use(getAuth, isAuth, requireUnrestricted)` — everything below is admin-only, purely by position, and
  * nothing looks wrong either way if that's gotten wrong. Assertions here are positional for that
  * reason (see `effectiveRouteTable` in `tests/support/routes.ts`); per-route middleware alone
  * would pass whatever happened.
@@ -41,7 +41,7 @@ describe('feedback routes — the positional guard', () => {
         // The whole reason the module exists for a visitor. A guard reaching this route is an
         // outage of the contact form, not a hardening.
         expect(guards).not.toContain('isAuth');
-        expect(guards).not.toContain('isAdmin');
+        expect(guards).not.toContain('requireUnrestricted');
     });
 
     it.each(['POST /search', 'GET /', 'PUT /:id', 'DELETE /:id'])(
@@ -51,7 +51,7 @@ describe('feedback routes — the positional guard', () => {
 
             expect(guards).toContain('getAuth');
             expect(guards).toContain('isAuth');
-            expect(guards).toContain('isAdmin');
+            expect(guards).toContain('requireUnrestricted');
         }
     );
 
@@ -69,7 +69,7 @@ describe('feedback routes — the positional guard', () => {
         );
 
         for (const signature of readsSubmissions)
-            expect(guardsOn(router, signature)).toContain('isAdmin');
+            expect(guardsOn(router, signature)).toContain('requireUnrestricted');
     });
 });
 

@@ -87,8 +87,7 @@ describe('DELETE /account — deleteAccountRequest', () => {
             authContext: {
                 id: 'uid1',
                 email: 'user@example.com',
-                username: 'testuser',
-                admin: false
+                username: 'testuser'
             }
         };
         const res = makeResponse();
@@ -108,7 +107,7 @@ describe('DELETE /account — deleteAccountRequest', () => {
         mockFindByEmail.mockResolvedValue(undefined);
 
         const req = {
-            authContext: { id: 'uid1', email: 'ghost@example.com', username: 'ghost', admin: false }
+            authContext: { id: 'uid1', email: 'ghost@example.com', username: 'ghost' }
         };
         const res = makeResponse();
 
@@ -123,7 +122,7 @@ describe('DELETE /account — deleteAccountRequest', () => {
         mockFindByEmail.mockRejectedValue(new Error('db error'));
 
         const req = {
-            authContext: { id: 'uid1', email: 'user@example.com', username: 'user', admin: false }
+            authContext: { id: 'uid1', email: 'user@example.com', username: 'user' }
         };
         const res = makeResponse();
 
@@ -138,7 +137,6 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         _id: 'uid1',
         email: 'user@example.com',
         username: 'testuser',
-        admin: false,
         tokens: [
             { token: 'valid-token', type: 'delete', expiration: new Date(Date.now() + 3_600_000) }
         ]

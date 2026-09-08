@@ -27,6 +27,7 @@ import ordersModule from '@modules/orders/module';
 import productsModule from '@modules/products/module';
 import usersModule from '@modules/users/module';
 import type { ResponseReject } from '@infrastructure/http/response';
+import { asCustomer } from '../../../../../tests/support/callers';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -131,8 +132,8 @@ describe('getForOrder', () => {
         await shipOrder(String(order._id));
         const stranger = await createUser({ email: 'stranger@example.com' });
 
-        const own = await getForOrder(String(order._id), { id: user.id, admin: false });
-        const other = await getForOrder(String(order._id), { id: stranger.id, admin: false });
+        const own = await getForOrder(String(order._id), asCustomer(user.id));
+        const other = await getForOrder(String(order._id), asCustomer(stranger.id));
 
         expect(own.success).toBe(true);
         expect(asReject(other).status).toBe(404);
@@ -140,7 +141,7 @@ describe('getForOrder', () => {
         // An order of the caller's that simply has not shipped is also absence — of the parcel.
         const product = await createProduct();
         const unshipped = await createOrder(user, [toOrderItem(product, 1)]);
-        const early = await getForOrder(String(unshipped._id), { id: user.id, admin: false });
+        const early = await getForOrder(String(unshipped._id), asCustomer(user.id));
         expect(asReject(early).status).toBe(404);
     });
 });
@@ -164,7 +165,7 @@ describe('shipment rides the status change', () => {
         resetDomainEvents();
     });
 
-    it('the admin status write alone produces the parcel', async () => {
+    it('the staff status write alone produces the parcel', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);

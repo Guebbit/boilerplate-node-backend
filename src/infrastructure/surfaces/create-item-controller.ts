@@ -22,7 +22,7 @@ export interface ItemControllerSpec {
     entity: string;
     /**
      * Fetch the row. Takes the request too, because visibility is a property of the CALLER:
-     * `products` narrows by `callerScope`, `users` sits behind `isAdmin`. The row is `unknown`
+     * `products` narrows by `callerScope`, `users` sits behind `requireUnrestricted`. The row is `unknown`
      * because this controller never looks inside it — a miss is whatever the service answers for
      * one (`null`/`undefined`/`void`), and everything else is serialized as it comes.
      */

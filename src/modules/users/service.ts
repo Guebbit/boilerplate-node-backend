@@ -163,7 +163,7 @@ export const update = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.email !== undefined) user.email = data.email;
     if (data.username !== undefined) user.username = data.username;
-    if (data.admin !== undefined) user.admin = data.admin;
+    if (data.role !== undefined) user.role = data.role;
     if (data.active !== undefined) user.active = data.active;
     // The three travel as one unit, all produced by the same `readUploadedImage` call on the
     // controller — set together whenever a new upload replaces the image.

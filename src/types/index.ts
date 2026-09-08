@@ -13,4 +13,4 @@ export * from '@api/models';
 export * from './asyncapi.generated';
 
 // Auth context DTO (DIP: transport-safe user representation)
-export type { AuthContext, Caller } from './auth-context';
+export type { AuthContext, AuthorizationScope, Caller } from './auth-context';

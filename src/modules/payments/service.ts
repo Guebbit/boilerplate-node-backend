@@ -11,6 +11,7 @@
  * paths go through it. Two copies would drift, and drifted copies commit inventory twice.
  */
 
+import { callerForSubject, isUnrestricted } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
@@ -23,7 +24,7 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { createOwnerScope } from '@kernel/authorization';
 import { OrderStatus } from '@types';
-import type { Payment, PaymentStatus, Caller } from '@types';
+import type { Payment, PaymentStatus, AuthContext } from '@types';
 import {
     orderService,
     orderRepository,
@@ -112,7 +113,7 @@ const resolvePayerId = (orderUserId: string | undefined): Promise<string | undef
  * module's collection. `ownerScope` not `visibleScope`: payments are never soft-deleted, so
  * "whose" is the only axis there is.
  */
-const callerScope = createOwnerScope(paymentRepository.ownerScope);
+const callerScope = createOwnerScope('Payment', paymentRepository.ownerScope);
 
 /**
  * Create (or refresh) the payment intent for an order.
@@ -133,7 +134,7 @@ const callerScope = createOwnerScope(paymentRepository.ownerScope);
  */
 export const createIntent = (
     orderId: string,
-    authContext?: Caller
+    authContext?: AuthContext
 ): Promise<ResponseSuccess<Payment> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('payments.order-not-found')]);
@@ -391,7 +392,7 @@ const findConfirmable = (
 export const confirmPayment = (
     paymentId: string,
     paymentMethodRef: string,
-    authContext: Caller | undefined,
+    authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository
@@ -419,7 +420,7 @@ export const confirmPayment = (
  */
 export const syncPayment = (
     paymentId: string,
-    authContext: Caller | undefined,
+    authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     paymentRepository
@@ -525,7 +526,7 @@ export const applyWebhookSettlement = (
  */
 export const getForOrder = (
     orderId: string,
-    authContext?: Caller
+    authContext?: AuthContext
 ): Promise<ResponseSuccess<Payment> | ResponseReject> =>
     paymentRepository.findByOrderId(orderId, callerScope(authContext)).then((payment) => {
         if (!payment) return generateReject(404, [t('payments.not-found')]);
@@ -545,7 +546,7 @@ export const getForOrder = (
 const withActions = (
     payment: PaymentDocument,
     order: OrderDocument | undefined,
-    authContext?: Caller
+    authContext?: AuthContext
 ): Payment => ({
     // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document
     // itself is typed as stored, not as the wire shape `Payment` promises.
@@ -560,7 +561,10 @@ const withActions = (
             Boolean(order) &&
             canTransition(order!.status, OrderStatus.paid, 'system'),
         // Only an operator returns money, and only money that actually arrived.
-        refund: Boolean(authContext?.admin) && payment.status === REFUNDABLE_PAYMENT_STATUS
+        refund:
+            authContext !== undefined &&
+            isUnrestricted(callerForSubject(authContext, 'Payment')) &&
+            payment.status === REFUNDABLE_PAYMENT_STATUS
     }
 });
 
@@ -623,7 +627,7 @@ const performRefund = (orderId: string, context?: CallerContext): Promise<Paymen
  */
 export const refundByOrder = (
     orderId: string,
-    authContext: Caller | undefined,
+    authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
     performRefund(orderId, context).then((refunded) => {

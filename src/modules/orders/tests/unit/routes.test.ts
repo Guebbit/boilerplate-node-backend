@@ -1,7 +1,7 @@
 /**
  * @module
  * The orders route table. The whole router is authenticated at the top (`router.use(getAuth,
- * isAuth)`), with the admin guard applied per route — an `isAdmin` omitted from a write reads as
+ * isAuth)`), with the admin guard applied per route — an `requireUnrestricted` omitted from a write reads as
  * "any authenticated user may do this", easy to get wrong in the unsafe direction. `POST
  * /:id/cancel` is deliberately NOT admin-guarded, since a customer cancelling their own order is
  * the one write they may make; its safety comes from the service's scoped conditional write, not
@@ -72,21 +72,21 @@ describe('order routes — authorization', () => {
     it.each(['POST /', 'PUT /', 'DELETE /', 'PUT /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
         '%s is admin-only',
         (signature) => {
-            expect(guardsOn(router, signature)).toContain('isAdmin');
+            expect(guardsOn(router, signature)).toContain('requireUnrestricted');
         }
     );
 
     it('leaves POST /:id/cancel open to the owner, not just admins', () => {
         // Not an oversight: the customer cancel. Its authorization is the caller scope inside
         // `orderService.cancelById`, covered by `service-scope.test.ts` and `cancel.test.ts`.
-        // Adding `isAdmin` here would silently remove the feature.
-        expect(guardsOn(router, 'POST /:id/cancel')).not.toContain('isAdmin');
+        // Adding `requireUnrestricted` here would silently remove the feature.
+        expect(guardsOn(router, 'POST /:id/cancel')).not.toContain('requireUnrestricted');
     });
 
     it.each(['POST /search', 'GET /', 'GET /:id', 'GET /:id/invoice'])(
         '%s is readable by any logged-in caller, scoped in the service',
         (signature) => {
-            expect(guardsOn(router, signature)).not.toContain('isAdmin');
+            expect(guardsOn(router, signature)).not.toContain('requireUnrestricted');
         }
     );
 });

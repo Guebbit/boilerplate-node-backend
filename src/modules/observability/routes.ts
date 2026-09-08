@@ -3,13 +3,18 @@
  * Route table for the operator dashboard. Guards are chosen per route rather than shared, because
  * `/events` and `/metrics` are reached by callers that cannot carry the ordinary admin JWT — a
  * browser's `EventSource` and a Prometheus scraper, respectively. The other three routes take the
- * normal `getAuth`/`isAuth`/`isAdmin` chain.
+ * normal `getAuth`/`isAuth`/`requireUnrestricted` chain.
  *
  * See: docs/modules/observability.md
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, isAdmin, isAdminViaCookie } from '@kernel/middlewares/authorizations';
+import {
+    getAuth,
+    isAuth,
+    requireUnrestricted,
+    requireUnrestrictedViaCookie
+} from '@kernel/middlewares/authorizations';
 import { isMetricsScraper } from '@infrastructure/http/middlewares/rate-limit';
 import { getObservabilityHealth } from './controllers/get-observability-health';
 import { getObservabilityMetricsOverview } from './controllers/get-observability-metrics-overview';
@@ -28,7 +33,7 @@ export const router = Router();
  * browser's `EventSource`, which can't set a header and so uses the session cookie; the scrape
  * endpoint is hit by Prometheus, which can't log in and so uses a static credential.
  */
-router.get('/events', isAdminViaCookie, (_request, response) => {
+router.get('/events', requireUnrestrictedViaCookie, (_request, response) => {
     streamObservabilityMetrics(response);
 });
 
@@ -45,6 +50,12 @@ router.get('/metrics', isMetricsScraper, (_request, response) => {
 });
 
 /* Endpoints a normal API client calls — admin JWT required. */
-router.get('/health', getAuth, isAuth, isAdmin, getObservabilityHealth);
-router.get('/metrics/overview', getAuth, isAuth, isAdmin, getObservabilityMetricsOverview);
-router.get('/audit', getAuth, isAuth, isAdmin, getObservabilityAuditLogs);
+router.get('/health', getAuth, isAuth, requireUnrestricted, getObservabilityHealth);
+router.get(
+    '/metrics/overview',
+    getAuth,
+    isAuth,
+    requireUnrestricted,
+    getObservabilityMetricsOverview
+);
+router.get('/audit', getAuth, isAuth, requireUnrestricted, getObservabilityAuditLogs);

@@ -57,11 +57,11 @@ describe('userService.validateData', () => {
     });
 
     /**
-     * The fields a `.pick({ email, username, password })` would never look at. `admin` is the
+     * The fields a `.pick({ email, username, password })` would never look at. `active` is the
      * costliest: an unchecked string reaches Mongoose and throws a CastError on save, so
      * `POST /users` answers 500 where its own contract promises 422.
      */
-    it.each(['admin', 'active'])('rejects a wrong-typed %s flag', (field) => {
+    it.each(['active'])('rejects a wrong-typed %s flag', (field) => {
         const errors = userService.validateData({
             email: 'valid@example.com',
             username: 'validuser',
@@ -72,12 +72,12 @@ describe('userService.validateData', () => {
         expect(errors.length).toBeGreaterThan(0);
     });
 
-    it.each([true, false])('accepts a real boolean admin flag (%s)', (admin) => {
+    it.each(['owner', 'customer', 'manager'])('accepts a declared role name (%s)', (role) => {
         const errors = userService.validateData({
             email: 'valid@example.com',
             username: 'validuser',
             password: PLAIN_PASSWORD,
-            admin
+            role
         });
 
         expect(errors).toHaveLength(0);
@@ -274,18 +274,18 @@ describe('userService.create', () => {
         expect(user.password).not.toBe(PLAIN_PASSWORD);
     });
 
-    it('can create an admin user when admin flag is set', async () => {
+    it('creates a user in the role the request names', async () => {
         const user = await userService.create(
             {
                 email: 'superadmin@example.com',
                 username: 'superadmin',
                 password: PLAIN_PASSWORD,
-                admin: true
+                role: 'owner'
             },
             testCallerContext
         );
 
-        expect(user.admin).toBe(true);
+        expect(user.role).toBe('owner');
     });
 
     describe('with no password', () => {
@@ -364,7 +364,7 @@ describe('userService.create', () => {
 });
 
 describe('userService.updateById', () => {
-    it('updates the username and admin flag of an existing user', async () => {
+    it('updates the username and role of an existing user', async () => {
         const user = await createUser();
         const id = user._id.toString();
 
@@ -372,7 +372,7 @@ describe('userService.updateById', () => {
             id,
             {
                 username: 'new-name',
-                admin: true
+                role: 'owner'
             },
             testCallerContext
         );
@@ -380,7 +380,7 @@ describe('userService.updateById', () => {
         expect(result.success).toBe(true);
         const updated = (result as { data: UserDocument }).data;
         expect(updated.username).toBe('new-name');
-        expect(updated.admin).toBe(true);
+        expect(updated.role).toBe('owner');
     });
 
     it('changes the password when a non-empty password is supplied', async () => {

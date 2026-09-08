@@ -20,6 +20,7 @@ import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/respo
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
+import { isUnrestrictedRole } from '@kernel/permissions';
 
 /**
  * The `tokens.type` under which a signup/re-send verification token is stored — proves the
@@ -170,7 +171,7 @@ export const completeEmailVerification = (
             buildAuditEvent(context, {
                 action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
                 actor_user_id: saved.id,
-                actor_role: saved.admin ? 'admin' : 'user',
+                actor_role: isUnrestrictedRole(saved.role) ? 'admin' : 'user',
                 outcome: 'success'
             })
         );
@@ -214,7 +215,7 @@ export const completeEmailChange = (
                     buildAuditEvent(context, {
                         action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
                         actor_user_id: saved.id,
-                        actor_role: saved.admin ? 'admin' : 'user',
+                        actor_role: isUnrestrictedRole(saved.role) ? 'admin' : 'user',
                         outcome: 'success'
                     })
                 );

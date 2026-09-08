@@ -19,7 +19,7 @@ import { Router } from 'express';
 import {
     getAuth,
     isAuth,
-    isAdmin,
+    requireUnrestricted,
     requireFreshAuth,
     requireVerified,
     REAUTH_TIME_CRITICAL
@@ -49,10 +49,10 @@ router.post('/intent', requireFreshAuth(REAUTH_TIME_CRITICAL), requireVerified, 
 router.get('/order/:orderId', getPaymentByOrder);
 
 // POST /payments/order/:orderId/refund — the operator returns the money, order untouched.
-// requireFreshAuth AFTER isAdmin: an admin session moving money out is worth more, not less.
+// requireFreshAuth AFTER requireUnrestricted: an admin session moving money out is worth more, not less.
 router.post(
     '/order/:orderId/refund',
-    isAdmin,
+    requireUnrestricted,
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     postPaymentRefund
 );

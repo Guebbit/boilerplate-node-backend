@@ -108,6 +108,17 @@ export interface UserRecord extends Omit<
      */
     inactivityWarnedAt?: Date;
 
+    /**
+     * The role held over the INSTALLATION rather than inside the shop — `operator`, or absent for
+     * the overwhelming majority.
+     *
+     * Document-only, deliberately: `role` is on the wire because a shop's staff list has to show
+     * and edit it, while who operates the installation is not a fact about a shop and no
+     * shop-facing screen has any business rendering it. Read by the auth resolver, and by nothing
+     * else.
+     */
+    platformRole?: string | null;
+
     /** Every second factor this account has enrolled or half-enrolled — see {@link TwoFactorMethodRecord}. */
     twoFactorMethods: TwoFactorMethodRecord[];
 
@@ -346,9 +357,29 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: Boolean,
             default: true
         },
-        admin: {
-            type: Boolean,
-            default: false
+        /*
+         * The role this person holds inside the shop, by name — one of the presets in
+         * `shared/authorization-roles.yaml`. A NAME rather than a key list: roles are data a
+         * deployment may edit, and storing the keys would freeze each account at the permissions
+         * its role happened to hold on the day it was created.
+         *
+         * Not an enum on the schema: a deployment may add roles, and a mongoose enum would refuse
+         * one this build did not ship. `permissionsOfRole` is what refuses an unknown name, at the
+         * point the caller is resolved, where the error can say which account is wrong.
+         */
+        role: {
+            type: String,
+            default: 'customer'
+        },
+        /*
+         * The role held over the INSTALLATION rather than inside the shop — `operator`, or absent
+         * for the overwhelming majority. Separate from `role` because they are different jobs
+         * with different keys: a platform operator is explicitly not a super-owner, and one field
+         * could not say which of the two a request is acting as.
+         */
+        platformRole: {
+            type: String,
+            default: null
         },
         /*
          * Whether the account is enabled — independent of `deletedAt`, matching `products`:
@@ -651,12 +682,14 @@ userSchema.methods.tokenRemoveAll = function (this: UserDocument, type: Token['t
  * also `select: false` on the schema; this is defense in depth, not the only guard. Exported so
  * lean results (which bypass `toJSON`) can be mapped through the same logic — see `./service`
  * `search()`. `active` and `deletedAt` pass through untouched: both are in the `User` contract,
- * and every route serving a `User` list is admin-only.
+ * and every route serving a `User` list requires `users.read`.
  */
 export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
-    // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment.
+    // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment. `platformRole` is
+    // document-only for a different reason than secrecy: who operates the INSTALLATION is not a
+    // fact about a shop, and no shop-facing screen has any business rendering it.
     // `twoFactorMethods`/`twoFactorBackupCodes` are 2FA credential material —
     // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
     // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
@@ -665,6 +698,7 @@ export const applyUserTransform = applySerialization(userSchema, {
         'password',
         'tokens',
         'pendingImageKey',
+        'platformRole',
         'inactivityWarnedAt',
         'twoFactorMethods',
         'twoFactorBackupCodes',
@@ -683,7 +717,7 @@ export const toUser = (document: UserDocument): User => ({
     id: document.id,
     email: document.email,
     username: document.username,
-    ...(document.admin === undefined ? {} : { admin: document.admin }),
+    ...(document.role === undefined ? {} : { role: document.role }),
     ...(document.active === undefined ? {} : { active: document.active }),
     ...(document.verified === undefined ? {} : { verified: document.verified }),
     ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),

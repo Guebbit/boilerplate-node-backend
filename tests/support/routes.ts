@@ -3,7 +3,7 @@
  *
  * ── WHAT THIS IS FOR ────────────────────────────────────────────────────────────────────────────
  * A `routes.ts` is configuration written as code, and it fails the way configuration fails:
- * silently, and in the direction of MORE access. Dropping `isAdmin` from a delete route, writing
+ * silently, and in the direction of MORE access. Dropping `requireUnrestricted` from a delete route, writing
  * `/:id` where `/id` was meant, invalidating the `product` cache tag where every reader writes
  * `products` — none of these throw, none change a type, and each one is a live defect the moment
  * it merges. The contract suite exercises a handful of these paths end to end, but it cannot say
@@ -14,7 +14,7 @@
  * change the test in the same commit — deliberately, where a reviewer sees it.
  *
  * ── WHY THE MIDDLEWARE FACTORIES ARE MOCKED ─────────────────────────────────────────────────────
- * Express keeps the mounted FUNCTION, not the call that produced it. `isAuth` and `isAdmin` are
+ * Express keeps the mounted FUNCTION, not the call that produced it. `isAuth` and `requireUnrestricted` are
  * declared functions, so they arrive with their names intact and need nothing. `setCache(3600,
  * {...})`, `invalidateCache([...])`, `routeFlag('hardDelete')` and `upload.single('imageUpload')`
  * are factories: what reaches the stack is an anonymous closure, and the arguments — the cache
@@ -219,7 +219,7 @@ export const routeFlagMock = () => ({
 /**
  * Replacement for `@kernel/middlewares/authorizations`'s two step-up factories.
  *
- * `isAuth`/`isAdmin`/`getAuth` pass through unchanged from the actual module — they are declared
+ * `isAuth`/`requireUnrestricted`/`getAuth` pass through unchanged from the actual module — they are declared
  * functions and already arrive named. Only `requireFreshAuth`/`requireFreshAuthWhen` are
  * factories, and the tier (`maxAgeSeconds`) each call closes over is exactly the argument a
  * step-up-auth assertion needs to see: which routes are gated is only half the property, the
@@ -376,7 +376,7 @@ export const effectiveRouteTable = (router: Router): (RouteRow & { applies: stri
 /**
  * Every guard in force on one endpoint — router-level and per-route, in that order.
  *
- * The spelling an authorization assertion wants: "is `isAdmin` on this route" is a question about
+ * The spelling an authorization assertion wants: "is `requireUnrestricted` on this route" is a question about
  * both halves at once, and asking only the per-route half reports `locales`' admin writes as
  * unguarded while reporting `feedback`'s as guarded, when the difference is only where the same
  * guard is written.

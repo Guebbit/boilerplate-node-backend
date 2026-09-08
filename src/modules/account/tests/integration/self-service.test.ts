@@ -96,10 +96,10 @@ describe('updateProfile', () => {
         expect(response.status).toBe(401);
     });
 
-    it('cannot escalate: admin, active and password do not pass through', async () => {
+    it('cannot escalate: role, active and password do not pass through', async () => {
         const user = await createUser();
 
-        // `zodProfileSchema` is strict — `admin`/`active`/`password` aren't fields `PUT
+        // `zodProfileSchema` is strict — `role`/`active`/`password` aren't fields `PUT
         // /account` accepts, so the whole body is refused rather than applying `username` and
         // silently dropping the rest.
         const response = asReject(
@@ -107,7 +107,7 @@ describe('updateProfile', () => {
                 user.id,
                 {
                     username: 'still-plain',
-                    admin: true,
+                    role: 'owner',
                     active: false,
                     password: 'injected-password'
                 },
@@ -117,7 +117,7 @@ describe('updateProfile', () => {
         expect(response.status).toBe(422);
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(stored?.admin).toBe(false);
+        expect(stored?.role).toBe('customer');
         expect(stored?.active).toBe(true);
         // The password is untouched — the fixture's original still logs in.
         const login = await accountService.login(user.email, PLAIN_PASSWORD);

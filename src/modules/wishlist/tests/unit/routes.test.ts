@@ -30,7 +30,7 @@ describe('wishlist routes', () => {
         // There is no operator view of someone else's wishlist. If one appears, this fails and
         // the addition gets looked at.
         const adminGuarded = routeSignatures(router).filter((signature) =>
-            guardsOn(router, signature).includes('isAdmin')
+            guardsOn(router, signature).includes('requireUnrestricted')
         );
 
         expect(adminGuarded).toEqual([]);

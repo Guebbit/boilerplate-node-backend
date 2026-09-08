@@ -21,7 +21,7 @@ const validUser = {
     email: 'valid@example.com',
     username: 'validuser',
     password: PLAIN_PASSWORD,
-    admin: false,
+    role: 'customer',
     active: true
 };
 
@@ -133,9 +133,12 @@ describe('password messages', () => {
 
 describe('inherited rules', () => {
     it('still validates the fields it did not override', () => {
-        // `admin`, `active` and `imageUrl` come from the generated CreateUserBody. If `.extend()`
+        // `role`, `active` and `imageUrl` come from the generated CreateUserBody. If `.extend()`
         // ever replaced the base instead of extending it, these would silently stop being checked.
-        const result = zodUserSchema.safeParse({ ...validUser, admin: 'yes' });
+        // `active` carries the assertion rather than `role`, because a wrong-typed STRING is what
+        // a string field cannot have — the check has to be against a field whose type can be
+        // broken.
+        const result = zodUserSchema.safeParse({ ...validUser, active: 'yes' });
 
         expect(result.success).toBe(false);
     });

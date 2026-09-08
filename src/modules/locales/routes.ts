@@ -3,13 +3,13 @@
  * Express router for locale discovery and translation administration. The four GET reads are
  * public — an unauthenticated client is exactly who needs a dictionary — with only the manifest
  * taking `getAuth`, to include inactive languages for admins. Every write is admin-gated per mount
- * (`getAuth, isAuth, isAdmin` spelled on each route, not a shared `router.use`) and invalidates
+ * (`getAuth, isAuth, requireUnrestricted` spelled on each route, not a shared `router.use`) and invalidates
  * the shared Redis cache. Route order matters: `/tenants` and `/:locale/messages` must be declared
  * before `/:locale`, or Express's first-match wins the wildcard instead.
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, isAdmin } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuth, requireUnrestricted } from '@kernel/middlewares/authorizations';
 import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { getLocales, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
@@ -59,17 +59,31 @@ router.get('/:locale', publicLocaleCache, getLocaleDictionary);
  * Everything past here is an admin write on the dynamic tier — or, in one case, the read that
  * feeds the screen those writes are made from.
  */
-router.post('/', getAuth, isAuth, isAdmin, invalidateCache(['locales']), createLocale);
-router.put('/:locale', getAuth, isAuth, isAdmin, invalidateCache(['locales']), updateLocale);
-router.delete('/:locale', getAuth, isAuth, isAdmin, invalidateCache(['locales']), deleteLocale);
+router.post('/', getAuth, isAuth, requireUnrestricted, invalidateCache(['locales']), createLocale);
+router.put(
+    '/:locale',
+    getAuth,
+    isAuth,
+    requireUnrestricted,
+    invalidateCache(['locales']),
+    updateLocale
+);
+router.delete(
+    '/:locale',
+    getAuth,
+    isAuth,
+    requireUnrestricted,
+    invalidateCache(['locales']),
+    deleteLocale
+);
 
 // Uncached on purpose — see the controller for why the editing screen is the one read that is not.
-router.get('/:locale/entries', getAuth, isAuth, isAdmin, getLocaleEntries);
+router.get('/:locale/entries', getAuth, isAuth, requireUnrestricted, getLocaleEntries);
 router.post(
     '/:locale/entries',
     getAuth,
     isAuth,
-    isAdmin,
+    requireUnrestricted,
     invalidateCache(['locales']),
     createLocaleEntry
 );
@@ -78,7 +92,7 @@ router.put(
     '/:locale/entries',
     getAuth,
     isAuth,
-    isAdmin,
+    requireUnrestricted,
     invalidateCache(['locales']),
     replaceLocaleEntries
 );
@@ -86,7 +100,7 @@ router.patch(
     '/:locale/entries',
     getAuth,
     isAuth,
-    isAdmin,
+    requireUnrestricted,
     invalidateCache(['locales']),
     mergeLocaleEntries
 );
@@ -95,7 +109,7 @@ router.put(
     '/:locale/entries/:entryId',
     getAuth,
     isAuth,
-    isAdmin,
+    requireUnrestricted,
     invalidateCache(['locales']),
     updateLocaleEntry
 );
@@ -103,7 +117,7 @@ router.delete(
     '/:locale/entries/:entryId',
     getAuth,
     isAuth,
-    isAdmin,
+    requireUnrestricted,
     invalidateCache(['locales']),
     deleteLocaleEntry
 );

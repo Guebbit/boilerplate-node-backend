@@ -30,8 +30,12 @@ export const recordLoginFailure = (request: Request): void => {
 };
 
 /** Emit login success observability (metrics + audit + analytics). */
-export const recordLoginSuccess = (request: Request, userId: string, isAdmin: boolean): void => {
-    const role = isAdmin ? 'admin' : 'user';
+export const recordLoginSuccess = (
+    request: Request,
+    userId: string,
+    requireUnrestricted: boolean
+): void => {
+    const role = requireUnrestricted ? 'admin' : 'user';
     const context = callerContextOf(request);
     authLoginTotal.inc({ status: 'success' });
     emitAuditEvent(

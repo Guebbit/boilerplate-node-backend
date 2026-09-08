@@ -16,7 +16,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { ShippingMethodsResponse, Shipment, Caller } from '@types';
+import type { ShippingMethodsResponse, Shipment, AuthContext } from '@types';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -52,7 +52,7 @@ const toShipmentResponse = (shipment: ShipmentDocument): Shipment => ({
  */
 export const getForOrder = (
     orderId: string,
-    authContext?: Caller
+    authContext?: AuthContext
 ): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);

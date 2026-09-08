@@ -241,7 +241,13 @@ export const readInput = <TId extends string = never>(
  * See: docs/tools/analytics.md#caller-context
  */
 export interface CallerContext {
-    /** The authenticated caller, or `{}` for anonymous — same shape authorization rules use. */
+    /**
+     * The caller as an authorization decision sees them, in TENANT scope.
+     *
+     * Tenant scope because that is what an audit row and an analytics event are about: something
+     * that happened inside a shop. Platform work resolves its own caller per key, in the guard,
+     * and never travels on this.
+     */
     caller: Caller;
     /** The caller's address, as Express resolved it (trust-proxy aware). */
     ip?: string;
@@ -271,6 +277,15 @@ export interface CallerContext {
 }
 
 /**
+ * A request that reached here without passing an auth guard.
+ *
+ * Not the `guest` role: this is what the TRAIL records for someone the resolver never saw, and an
+ * empty key list is the honest answer to "what had this request proved". Anything that needs to
+ * know what a stranger may DO asks `anonymousCaller()` in the kernel, which reads the role.
+ */
+const STRANGER: Caller = { id: null, tenantId: null, scope: 'tenant', permissions: [] };
+
+/**
  * Build the `CallerContext` for the current request. Call once per controller, at the top, and
  * pass the result down to whichever service call ends up emitting.
  *
@@ -278,7 +293,8 @@ export interface CallerContext {
  * for more than the minimum a helper reads is what breaks Express' contravariant handler typing.
  */
 export const callerContextOf = (request: {
-    authContext?: Caller & { analyticsConsent?: boolean };
+    caller?: Caller;
+    authContext?: { analyticsConsent?: boolean };
     ip?: string;
     headers?: {
         'user-agent'?: string | string[];
@@ -292,7 +308,7 @@ export const callerContextOf = (request: {
     const rawConsentHeader = request.headers?.['x-analytics-consent'];
     const consentHeader = Array.isArray(rawConsentHeader) ? rawConsentHeader[0] : rawConsentHeader;
     return {
-        caller: request.authContext ?? {},
+        caller: request.caller ?? STRANGER,
         ip: request.ip,
         // Node exposes a repeated header as an array; take the first rather than logging
         // '[object Object]'-style noise.

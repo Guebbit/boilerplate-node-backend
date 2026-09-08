@@ -33,7 +33,6 @@ import {
     PERMISSION_KEYS,
     wildcardKeyFor,
     WILDCARD_ACTION,
-    type AuthorizationScope,
     type PermissionKey
 } from '@kernel/permissions';
 
@@ -177,4 +176,41 @@ export const buildAbility = (caller: Caller): Ability => {
      * `all.manage` reads it and cannot touch it.
      */
     return build();
+};
+
+/**
+ * Does this caller hold `key`?
+ *
+ * The question a route guard asks, and it is not simply `ability.can(...)`, because two of the
+ * three kinds of key are not things CASL can be asked about directly:
+ *
+ *   - **the scope wildcard** (`all.manage`) is not a declared key at all — it is the grant of
+ *     every declared key in the scope — so it is answered from what the role holds;
+ *   - **a `manage` key** (`feedback.manage`) is an instruction to expand, and no `manage` RULE is
+ *     ever built, so it is answered as "every action this module declares";
+ *   - **a concrete key** is the ordinary case, answered by the ability.
+ *
+ * Asked about the action and subject rather than about a row, because a route guard runs before
+ * anything is fetched. Which rows survive is the read's business — see `authorization.ts`.
+ */
+export const holdsKey = (caller: Caller, key: string): boolean => {
+    if (key === wildcardKeyFor(caller.scope)) {
+        return caller.permissions.includes(key);
+    }
+
+    const declared = findKey(key);
+
+    if (!declared) {
+        return false;
+    }
+
+    const ability = buildAbility(caller);
+
+    if (declared.action !== WILDCARD_ACTION) {
+        return ability.can(declared.action, declared.subject);
+    }
+
+    return PERMISSION_KEYS.filter(
+        (candidate) => candidate.module === declared.module && candidate.action !== WILDCARD_ACTION
+    ).every((candidate) => ability.can(candidate.action, candidate.subject));
 };

@@ -37,6 +37,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
+import { isUnrestrictedRole } from '@kernel/permissions';
 
 /**
  * Validate a new-password pair without touching the user.
@@ -143,7 +144,7 @@ export const passwordResetChange = (
                 buildAuditEvent(context, {
                     action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
                     actor_user_id: String(user._id),
-                    actor_role: user.admin ? 'admin' : 'user',
+                    actor_role: isUnrestrictedRole(user.role) ? 'admin' : 'user',
                     outcome: 'success'
                 })
             );
@@ -184,7 +185,7 @@ export const removeOwnAccount = (
      * document left to take an address, a name or a language from — the goodbye mail has to be
      * addressed from a copy taken while the account still existed.
      */
-    const { email, username, locale, _id, admin } = user;
+    const { email, username, locale, _id, role } = user;
 
     return userService.remove(user, true).then((result) => {
         if (result.success) {
@@ -192,7 +193,7 @@ export const removeOwnAccount = (
                 buildAuditEvent(context, {
                     action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
                     actor_user_id: String(_id),
-                    actor_role: admin ? 'admin' : 'user',
+                    actor_role: isUnrestrictedRole(role) ? 'admin' : 'user',
                     outcome: 'success'
                 })
             );

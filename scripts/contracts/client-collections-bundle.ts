@@ -113,7 +113,7 @@ const values: ValueSources = {
             id: seedUser.id,
             username: seedUser.username,
             email: seedUser.email,
-            admin: seedUser.admin,
+            role: seedUser.role,
             active: seedUser.active,
             imageUrl: seedUser.imageUrl
         },

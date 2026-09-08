@@ -18,7 +18,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { subject } from '@casl/ability';
-import { buildAbility, type Caller } from '@kernel/ability';
+import type { Caller } from '@types';
+import { buildAbility } from '@kernel/ability';
 
 interface ConformanceCase {
     name: string;

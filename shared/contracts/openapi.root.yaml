@@ -441,8 +441,13 @@ components:
                     $ref: '#/components/schemas/Email'
                 username:
                     type: string
-                admin:
-                    type: boolean
+                # The role this person holds inside the shop, by name — one of the presets in
+                # `shared/authorization-roles.yaml`. A NAME rather than a key list: roles are data
+                # a deployment may edit, and publishing the keys would freeze each account at the
+                # permissions its role held on the day it was written. What a caller may DO is
+                # `GET /me/abilities`, which answers for the caller rather than about a row.
+                role:
+                    type: string
                 # Independent of `deletedAt` below: an account can be deactivated without being
                 # deleted, and a deleted one keeps whatever `active` it had. They share an effect,
                 # not a value — see the note on `CreateProductRequest.active`.

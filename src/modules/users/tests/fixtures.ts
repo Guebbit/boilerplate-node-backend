@@ -39,10 +39,10 @@ export const WEAK_PASSWORD = 'weak';
 export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
     userRepository.create(makeUser(overrides));
 
-/** Insert an admin user into the test database. */
+/** Insert a shop owner — unrestricted inside the shop — into the test database. */
 export const createAdminUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
     createUser({
-        admin: true,
+        role: 'owner',
         email: 'admin@example.com',
         username: 'adminuser',
         ...overrides

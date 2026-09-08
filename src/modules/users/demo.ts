@@ -59,7 +59,7 @@ const namedUsers = [
         username: 'root',
         email: SEED_ADMIN_EMAIL,
         password: SEED_ADMIN_PASSWORD,
-        admin: true,
+        role: 'owner',
         /*
          * Overrides the schema's `verified: false`, which is right for self-signup — nobody has
          * vouched for the address yet — and wrong here. A seed account exists to be logged into,

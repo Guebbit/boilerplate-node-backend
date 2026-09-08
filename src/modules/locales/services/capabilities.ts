@@ -154,7 +154,7 @@ export const readDynamicTier = (
  * `undefined` for admins, meaning "no restriction"; the active languages for everyone else. Why
  * the scope rides in the read is the shared rule's to explain — see `createVisibilityScope`.
  */
-export const callerScope = createVisibilityScope(localeRepository.publicScope);
+export const callerScope = createVisibilityScope('Locale', localeRepository.publicScope);
 
 /**
  * Every language this deployment offers, and what each of them can do.

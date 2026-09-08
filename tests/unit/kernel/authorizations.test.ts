@@ -7,8 +7,8 @@
  *                not "rejected", because it also guards public routes. It must always call
  *                `next()` exactly once, on every path, or the request hangs.
  *   `isAuth`   — *required* identification. Fails closed with 401.
- *   `isAdmin`  — *required* elevation. Fails closed, and the status says which check refused:
- *                401 with no credentials at all (as `isAuth` does), 403 for a known non-admin.
+ *   `requireUnrestricted`  — *required* elevation. Fails closed, and the status says which check refused:
+ *                401 with no credentials at all (as `isAuth` does), 403 for a caller without the key.
  *                Both bodies stay generic; the reason is recorded in the audit trail only.
  *
  * The response layer is real (not mocked) so the asserted status codes are the ones a client
@@ -21,14 +21,17 @@ import {
     getTokenBearer,
     getAuth,
     isAuth,
-    isAdmin,
-    isAdminViaCookie,
+    requireUnrestricted,
+    requireUnrestrictedViaCookie,
     requireFreshAuth,
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
 import { registerAuthResolver } from '@kernel/authentication';
 import { emitAuditEvent, coreAuditActions } from '@infrastructure/observability/audit';
 import { makeResponseStub } from '@tests/express';
+import { asCustomer, asOwner } from '../../support/callers';
+import { callerInScope } from '@kernel/permissions';
+import type { AuthContext } from '@types';
 
 // Only the sink is replaced; `buildAuditEvent` and the `coreAuditActions` vocabulary stay real, so an
 // event that stops matching the real builder's shape fails here rather than in production.
@@ -45,7 +48,7 @@ jest.mock('@infrastructure/observability/audit', () => ({
  *   - a rejection means the token is bad;
  *   - resolving `undefined` means the token was fine but names nobody.
  *
- * `isAdminViaCookie` turns the first into 401 and the second into 403, so the two must stay
+ * `requireUnrestrictedViaCookie` turns the first into 401 and the second into 403, so the two must stay
  * distinguishable in the fake exactly as they are in production.
  */
 const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
@@ -60,12 +63,15 @@ const mockedVerifyRefreshToken = fromRefreshToken;
 const mockedEmitAuditEvent = emitAuditEvent as jest.MockedFunction<typeof emitAuditEvent>;
 
 /** Request stub carrying an optional Authorization header and auth context. */
-const makeRequest = (options: { authorization?: string; authContext?: unknown } = {}) =>
+const makeRequest = (options: { authorization?: string; authContext?: AuthContext } = {}) =>
     asStub<Request>({
         header: jest.fn((name: string) =>
             name === 'Authorization' ? options.authorization : undefined
         ),
         authContext: options.authContext,
+        // Both, because `getAuth` sets both: a stub carrying only the session would let a guard
+        // pass a test while attributing every denial in the trail to nobody.
+        caller: options.authContext && callerInScope(options.authContext, 'tenant'),
         path: '/protected',
         method: 'GET',
         headers: {}
@@ -94,7 +100,7 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 /** A request whose session authenticated well outside any tier's window. */
 const staleRequest = () =>
-    makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 999 } });
+    makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 999 } });
 
 /** Response stub with a chainable status().json(), capturing the real envelope. */
 
@@ -144,24 +150,16 @@ describe('getAuth', () => {
     });
 
     it('attaches the identity of the user the token names', async () => {
-        mockedVerifyAccessToken.mockResolvedValue({
-            id: 'user-1',
-            email: 'user@example.com',
-            username: 'tester',
-            admin: true,
-            imageUrl: '/images/a.png'
-        } as never);
+        const resolved = { ...asOwner('user-1'), username: 'tester', imageUrl: '/images/a.png' };
+        mockedVerifyAccessToken.mockResolvedValue(resolved as never);
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         await runUntilNext(getAuth, request, makeResponseStub());
 
-        expect(request.authContext).toEqual({
-            id: 'user-1',
-            email: 'user@example.com',
-            username: 'tester',
-            admin: true,
-            imageUrl: '/images/a.png'
-        });
+        expect(request.authContext).toEqual(resolved);
+        // The caller is resolved alongside the session, in the shop: everything downstream reads
+        // keys, and turning two role names into keys twice is how the two answers drift.
+        expect(request.caller).toEqual(callerInScope(resolved, 'tenant'));
     });
 
     it('proceeds anonymously when the token is invalid or expired', async () => {
@@ -215,7 +213,7 @@ describe('isAuth', () => {
         const response = makeResponseStub();
 
         isAuth(
-            makeRequest({ authorization: 'Bearer valid.token', authContext: { id: 'user-1' } }),
+            makeRequest({ authorization: 'Bearer valid.token', authContext: asCustomer('user-1') }),
             response,
             next
         );
@@ -243,7 +241,7 @@ describe('isAuth', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        isAuth(makeRequest({ authContext: { id: 'user-1' } }), response, next);
+        isAuth(makeRequest({ authContext: asCustomer('user-1') }), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
@@ -265,7 +263,7 @@ describe('isAuth', () => {
 
     it('records nothing when the request is allowed through', () => {
         isAuth(
-            makeRequest({ authorization: 'Bearer valid.token', authContext: { id: 'user-1' } }),
+            makeRequest({ authorization: 'Bearer valid.token', authContext: asCustomer('user-1') }),
             makeResponseStub(),
             jest.fn()
         );
@@ -274,34 +272,34 @@ describe('isAuth', () => {
     });
 });
 
-describe('isAdmin', () => {
-    it('passes an admin through', () => {
+describe('requireUnrestricted', () => {
+    it('passes an unrestricted caller through', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        isAdmin(makeRequest({ authContext: { id: 'user-1', admin: true } }), response, next);
+        requireUnrestricted(makeRequest({ authContext: asOwner('user-1') }), response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
         expect(response.status).not.toHaveBeenCalled();
     });
 
-    it('rejects an authenticated non-admin with 403', () => {
+    it('rejects an authenticated caller without the wildcard with 403', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        isAdmin(makeRequest({ authContext: { id: 'user-1', admin: false } }), response, next);
+        requireUnrestricted(makeRequest({ authContext: asCustomer('user-1') }), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(403);
     });
 
-    it('rejects a caller whose admin flag is absent', () => {
+    it('rejects a caller whose role holds no wildcard', () => {
         // Absent must mean "not an admin". The fail-safe direction, asserted separately from the
         // explicit-false case because they take different code paths.
         const next = jest.fn();
         const response = makeResponseStub();
 
-        isAdmin(makeRequest({ authContext: { id: 'user-1' } }), response, next);
+        requireUnrestricted(makeRequest({ authContext: asCustomer('user-1') }), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(403);
@@ -313,14 +311,14 @@ describe('isAdmin', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        isAdmin(makeRequest(), response, next);
+        requireUnrestricted(makeRequest(), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
     });
 
-    it('distinguishes not-authenticated from not-admin in the audit trail', () => {
-        isAdmin(makeRequest(), makeResponseStub(), jest.fn());
+    it('distinguishes not-authenticated from not-permitted in the audit trail', () => {
+        requireUnrestricted(makeRequest(), makeResponseStub(), jest.fn());
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -334,11 +332,11 @@ describe('isAdmin', () => {
         );
     });
 
-    it('attributes a not-admin denial to the actual user, not to anonymous', () => {
+    it('attributes a not-permitted denial to the actual user, not to anonymous', () => {
         // The whole value of the audit record: "who tried". Falling back to 'anonymous' here
         // would erase the identity of a real user probing admin routes.
-        isAdmin(
-            makeRequest({ authContext: { id: 'user-9', admin: false } }),
+        requireUnrestricted(
+            makeRequest({ authContext: asCustomer('user-9') }),
             makeResponseStub(),
             jest.fn()
         );
@@ -347,7 +345,7 @@ describe('isAdmin', () => {
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_FORBIDDEN,
                 actor_user_id: 'user-9',
-                metadata: expect.objectContaining({ reason: 'not_admin' })
+                metadata: expect.objectContaining({ reason: 'missing_permission' })
             })
         );
     });
@@ -363,10 +361,14 @@ describe('isAdmin', () => {
          * trail (`reason`, asserted above), not disclosed to whoever is probing.
          */
         const unauthenticated = makeResponseStub();
-        isAdmin(makeRequest(), unauthenticated, jest.fn());
+        requireUnrestricted(makeRequest(), unauthenticated, jest.fn());
 
         const nonAdmin = makeResponseStub();
-        isAdmin(makeRequest({ authContext: { id: 'user-9', admin: false } }), nonAdmin, jest.fn());
+        requireUnrestricted(
+            makeRequest({ authContext: asCustomer('user-9') }),
+            nonAdmin,
+            jest.fn()
+        );
 
         expect(unauthenticated.status).toHaveBeenCalledWith(401);
         expect(nonAdmin.status).toHaveBeenCalledWith(403);
@@ -374,7 +376,7 @@ describe('isAdmin', () => {
 });
 
 /**
- * `isAdminViaCookie` — admin elevation proved by the refresh COOKIE rather than a bearer header.
+ * `requireUnrestrictedViaCookie` — admin elevation proved by the refresh COOKIE rather than a bearer header.
  *
  * It exists for the requests a browser makes without JavaScript setting a header: a PDF invoice
  * opened in a new tab, an `EventSource` stream. Those cannot carry `Authorization`, so the
@@ -389,21 +391,15 @@ describe('isAdmin', () => {
  * derived project inherits, and its failure mode is silent. A mutant that turns `!user?.admin`
  * into `false` hands every logged-in user an admin-only document.
  */
-describe('isAdminViaCookie', () => {
+describe('requireUnrestrictedViaCookie', () => {
     /** An admin user document, as `findById` resolves one. */
-    const adminUser = {
-        id: 'admin-1',
-        email: 'root@example.com',
-        username: 'root',
-        admin: true,
-        imageUrl: '/images/root.png'
-    };
+    const adminUser = { ...asOwner('admin-1'), username: 'root', imageUrl: '/images/root.png' };
 
     it('rejects with 401 when there is no session cookie at all', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        isAdminViaCookie(makeCookieRequest(), response, asStub<NextFunction>(next));
+        requireUnrestrictedViaCookie(makeCookieRequest(), response, asStub<NextFunction>(next));
 
         expect(response.status).toHaveBeenCalledWith(401);
         expect(next).not.toHaveBeenCalled();
@@ -414,7 +410,11 @@ describe('isAdminViaCookie', () => {
     it('rejects an empty cookie value the same way as a missing one', () => {
         const response = makeResponseStub();
 
-        isAdminViaCookie(makeCookieRequest(''), response, asStub<NextFunction>(jest.fn()));
+        requireUnrestrictedViaCookie(
+            makeCookieRequest(''),
+            response,
+            asStub<NextFunction>(jest.fn())
+        );
 
         expect(response.status).toHaveBeenCalledWith(401);
     });
@@ -424,17 +424,21 @@ describe('isAdminViaCookie', () => {
         // the access-token secret would either always fail or, worse, accept the wrong audience.
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
 
-        await runUntilNext(isAdminViaCookie, makeCookieRequest('cookie.jwt'), makeResponseStub());
+        await runUntilNext(
+            requireUnrestrictedViaCookie,
+            makeCookieRequest('cookie.jwt'),
+            makeResponseStub()
+        );
 
         expect(mockedVerifyRefreshToken).toHaveBeenCalledWith('cookie.jwt');
         expect(mockedVerifyAccessToken).not.toHaveBeenCalled();
     });
 
-    it('admits an admin and calls next exactly once', async () => {
+    it('admits an unrestricted caller and calls next exactly once', async () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
 
         const next = await runUntilNext(
-            isAdminViaCookie,
+            requireUnrestrictedViaCookie,
             makeCookieRequest('cookie.jwt'),
             makeResponseStub()
         );
@@ -442,35 +446,30 @@ describe('isAdminViaCookie', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
-    it('populates authContext with the admin flag set', async () => {
-        // Downstream handlers read `request.authContext.admin`; a context that arrives without it
-        // turns an authorized request into a confusing 403 further down.
+    it('populates authContext with the resolved caller', async () => {
+        // Downstream handlers read the caller's keys; a context that arrives without them turns
+        // an authorized request into a confusing 403 further down.
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
         const request = makeCookieRequest('cookie.jwt');
 
-        await runUntilNext(isAdminViaCookie, request, makeResponseStub());
+        await runUntilNext(requireUnrestrictedViaCookie, request, makeResponseStub());
 
-        expect(request.authContext).toEqual({
-            id: adminUser.id,
-            email: adminUser.email,
-            username: adminUser.username,
-            admin: true,
-            imageUrl: adminUser.imageUrl
-        });
+        expect(request.authContext).toEqual(adminUser);
+        expect(request.caller).toEqual(callerInScope(adminUser, 'tenant'));
     });
 
-    it('rejects a valid session belonging to a NON-admin with 403', async () => {
-        // The mutant that matters most: `!user?.admin` forced to `false` would hand every
-        // logged-in user an admin-only document.
-        mockedVerifyRefreshToken.mockResolvedValueOnce({
-            ...adminUser,
-            id: 'user-1',
-            admin: false
-        } as never);
+    it('rejects a valid session without the wildcard with 403', async () => {
+        // The mutant that matters most: a key check forced to `true` would hand every logged-in
+        // customer a document only the shop's staff may see.
+        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
         const response = makeResponseStub();
         const next = jest.fn();
 
-        isAdminViaCookie(makeCookieRequest('cookie.jwt'), response, asStub<NextFunction>(next));
+        requireUnrestrictedViaCookie(
+            makeCookieRequest('cookie.jwt'),
+            response,
+            asStub<NextFunction>(next)
+        );
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(response.status).toHaveBeenCalledWith(403);
@@ -482,7 +481,7 @@ describe('isAdminViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
         const response = makeResponseStub();
 
-        isAdminViaCookie(
+        requireUnrestrictedViaCookie(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(jest.fn())
@@ -493,13 +492,9 @@ describe('isAdminViaCookie', () => {
     });
 
     it('records a forbidden attempt in the audit trail', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce({
-            ...adminUser,
-            id: 'user-1',
-            admin: false
-        } as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
 
-        isAdminViaCookie(
+        requireUnrestrictedViaCookie(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -519,7 +514,7 @@ describe('isAdminViaCookie', () => {
         // `user?.id ?? 'anonymous'` — an audit row with an empty actor is a row nobody can act on.
         mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
 
-        isAdminViaCookie(
+        requireUnrestrictedViaCookie(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -538,7 +533,11 @@ describe('isAdminViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        isAdminViaCookie(makeCookieRequest('forged.jwt'), response, asStub<NextFunction>(next));
+        requireUnrestrictedViaCookie(
+            makeCookieRequest('forged.jwt'),
+            response,
+            asStub<NextFunction>(next)
+        );
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(response.status).toHaveBeenCalledWith(401);
@@ -551,7 +550,7 @@ describe('isAdminViaCookie', () => {
         mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('mongo is down'));
         const response = makeResponseStub();
 
-        isAdminViaCookie(
+        requireUnrestrictedViaCookie(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(jest.fn())
@@ -573,7 +572,7 @@ describe('requireFreshAuth', () => {
         const response = makeStepUpResponseStub();
 
         requireFreshAuth(300)(
-            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() } }),
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() } }),
             response,
             next
         );
@@ -587,7 +586,7 @@ describe('requireFreshAuth', () => {
         const response = makeStepUpResponseStub();
 
         requireFreshAuth(300)(
-            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 301 } }),
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 301 } }),
             response,
             next
         );
@@ -601,7 +600,7 @@ describe('requireFreshAuth', () => {
         const response = makeStepUpResponseStub();
 
         requireFreshAuth(300)(
-            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 300 } }),
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 300 } }),
             response,
             next
         );
@@ -617,7 +616,7 @@ describe('requireFreshAuth', () => {
         const response = makeStepUpResponseStub();
 
         requireFreshAuth(300)(
-            makeRequest({ authContext: { id: 'user-1', authTime: 0 } }),
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: 0 } }),
             response,
             next
         );
@@ -630,7 +629,7 @@ describe('requireFreshAuth', () => {
         const response = makeStepUpResponseStub();
 
         requireFreshAuth(300)(
-            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 999 } }),
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 999 } }),
             response,
             jest.fn()
         );
@@ -651,7 +650,7 @@ describe('requireFreshAuth', () => {
         const response = makeStepUpResponseStub();
 
         requireFreshAuth(300)(
-            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() - 999 } }),
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 999 } }),
             response,
             jest.fn()
         );
@@ -703,7 +702,7 @@ describe('requireFreshAuthWhen', () => {
         const response = makeResponseStub();
 
         requireFreshAuthWhen(() => true, 900)(
-            makeRequest({ authContext: { id: 'user-1', authTime: nowSeconds() } }),
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() } }),
             response,
             next
         );

@@ -1,6 +1,6 @@
 /**
  * @module
- * Controller for `POST /users`, `PUT /users` and `PUT /users/:id` — admin create/update, with
+ * Controller for `POST /users`, `PUT /users` and `PUT /users/:id` — staff create/update, with
  * the create-vs-update branch decided by whether an id is present.
  *
  * See: docs/modules/users.md
@@ -44,11 +44,13 @@ export const writeUsers = (
 ) => {
     // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
     // `booleans` are the fields whose type a multipart body cannot carry.
-    const { id, admin, active, sendSetupEmail } = readInput(request, {
+    // `role` needs no coercion — it arrives as the string it is, on every surface.
+    const { id, active, sendSetupEmail } = readInput(request, {
         surface: 'write',
         ids: ['id'],
-        booleans: ['admin', 'active', 'sendSetupEmail']
+        booleans: ['active', 'sendSetupEmail']
     });
+    const { role } = request.body as { role?: string };
 
     // `= ''` because `zodUserSchema` wants a string: an absent image is an empty url here.
     const {
@@ -67,7 +69,7 @@ export const writeUsers = (
         {
             ...request.body,
             imageUrl,
-            admin,
+            role,
             active
         },
         false
@@ -88,9 +90,9 @@ export const writeUsers = (
     // records what the validator just established rather than assuming it. `thumbnailUrl` is on
     // `User` itself (readOnly on the contract); `pendingImageKey` is not, so it joins via an
     // intersection — both are server-derived, never client-supplied.
-    const validated = { imageUrl, admin, active, thumbnailUrl, pendingImageKey } as Pick<
+    const validated = { imageUrl, role, active, thumbnailUrl, pendingImageKey } as Pick<
         User,
-        'imageUrl' | 'admin' | 'active' | 'thumbnailUrl'
+        'imageUrl' | 'role' | 'active' | 'thumbnailUrl'
     > & { pendingImageKey?: string };
 
     /**

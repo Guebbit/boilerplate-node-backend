@@ -10,12 +10,13 @@
 
 import { Types } from 'mongoose';
 import { orderService } from '@modules/orders';
+import { asCustomer, asOwner } from '../../../../../tests/support/callers';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
 describe('orderService.callerScope', () => {
     it('returns undefined for an admin, so the caller applies no restriction', () => {
-        const scope = orderService.callerScope({ id: USER_ID, admin: true });
+        const scope = orderService.callerScope(asOwner(USER_ID));
 
         // Not `toBeFalsy()`: `{}` is falsy-adjacent in review but would spread into a filter
         // that matches nothing. Only `undefined` spreads to nothing.
@@ -23,7 +24,7 @@ describe('orderService.callerScope', () => {
     });
 
     it('restricts a non-admin to their own userId', () => {
-        const scope = orderService.callerScope({ id: USER_ID, admin: false });
+        const scope = orderService.callerScope(asCustomer(USER_ID));
 
         expect(scope).toEqual({
             userId: new Types.ObjectId(USER_ID),
@@ -35,19 +36,20 @@ describe('orderService.callerScope', () => {
         // The second axis of the scope, and the one an ownership-only assertion would miss: a
         // soft-deleted order still belongs to the caller, so `userId` alone still matches it.
         // `$exists: false` rather than `null` — `remove` unsets the field to restore.
-        const scope = orderService.callerScope({ id: USER_ID, admin: false });
+        const scope = orderService.callerScope(asCustomer(USER_ID));
 
         expect(scope!.deletedAt).toEqual({ $exists: false });
     });
 
     it('lets an admin see soft-deleted orders, by restricting nothing', () => {
-        expect(orderService.callerScope({ id: USER_ID, admin: true })).toBeUndefined();
+        expect(orderService.callerScope(asOwner(USER_ID))).toBeUndefined();
     });
 
-    it('restricts a caller whose admin flag is absent entirely', () => {
-        // `admin` is optional on the context; absent must mean "not an admin", never "unknown,
-        // so allow". This is the fail-safe direction.
-        const scope = orderService.callerScope({ id: USER_ID });
+    it('restricts a caller whose role holds no wide key', () => {
+        // A role that does not grant unconditional reads must narrow, never widen: the question
+        // is asked of the ability, so "no rule" and "a conditional rule" both mean restricted.
+        // This is the fail-safe direction.
+        const scope = orderService.callerScope(asCustomer(USER_ID));
 
         expect(scope).toEqual({
             userId: new Types.ObjectId(USER_ID),
@@ -56,7 +58,7 @@ describe('orderService.callerScope', () => {
     });
 
     it('emits a BSON ObjectId rather than a string, so aggregation $match can compare it', () => {
-        const scope = orderService.callerScope({ id: USER_ID, admin: false });
+        const scope = orderService.callerScope(asCustomer(USER_ID));
 
         // The distinction that a `toEqual` on ids alone would miss: a plain string would satisfy
         // a loose comparison but silently match zero documents inside a pipeline.
@@ -71,10 +73,10 @@ describe('orderService.callerScope', () => {
     });
 
     it('throws when the auth context carries no id', () => {
-        expect(() => orderService.callerScope({ admin: false })).toThrow();
+        expect(() => orderService.callerScope(asCustomer(''))).toThrow();
     });
 
     it('throws on a malformed id instead of scoping to nothing', () => {
-        expect(() => orderService.callerScope({ id: 'not-an-object-id', admin: false })).toThrow();
+        expect(() => orderService.callerScope(asCustomer('not-an-object-id'))).toThrow();
     });
 });

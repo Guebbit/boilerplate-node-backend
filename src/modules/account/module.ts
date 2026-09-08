@@ -30,7 +30,7 @@ import { router } from './routes';
  * This module answers the kernel's "who is making this request". Registered at import time
  * (installs a function, touches no connection) since every guard in the app depends on it being
  * there before the first request. The resolver rejects a bad token and resolves `undefined` for
- * a token whose user is gone — the distinction `isAdminViaCookie` turns into 401 versus 403.
+ * a token whose user is gone — the distinction `requireUnrestrictedViaCookie` turns into 401 versus 403.
  */
 
 /**
@@ -57,7 +57,26 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       id: user.id,
                       email: user.email,
                       username: user.username,
-                      admin: user.admin ?? false,
+                      /*
+                       * Both roles come off the account. `customer` is the default for a row
+                       * written before the field existed, which is the least-privileged answer
+                       * and therefore the safe one; `platform` is `null` for everyone who does
+                       * not operate the installation, which is almost everyone.
+                       *
+                       * A stranger never reaches here at all — they are `guest`, via
+                       * `anonymousCaller()`.
+                       */
+                      roles: {
+                          tenant: user.role ?? 'customer',
+                          platform: user.platformRole ?? null
+                      },
+                      /*
+                       * Single-tenant deployment: this boilerplate seeds one shop and no account
+                       * names it. The field is carried anyway, so a downstream multi-tenant app
+                       * fills it in without touching the kernel, the guards or the evaluator —
+                       * which is the whole reason the model is tenant-aware before it needs to be.
+                       */
+                      tenantId: null,
                       imageUrl: user.imageUrl,
                       // Absent (a token minted before this claim existed) reads as infinitely
                       // old — fail closed, so a pre-existing session is asked to re-authenticate
