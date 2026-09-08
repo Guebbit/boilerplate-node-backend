@@ -51,8 +51,8 @@ export interface RoleDocument extends Document {
 /**
  * One person holding one role in one place.
  *
- * The row that makes "a member of several associations with different roles in each" expressible
- * — the requirement the old boolean could not meet and the reason this collection exists at all.
+ * The row that makes "a member of several associations with different roles in each" expressible,
+ * which is the requirement this collection exists to meet.
  * `tenantId` is `null` for a platform membership, which is the same `null` the caller carries in
  * that scope.
  */
@@ -110,17 +110,11 @@ membershipSchema.index({ userId: 1, tenantId: 1, scope: 1 }, { unique: true });
 /** Lookups the resolver makes on every authenticated request. */
 membershipSchema.index({ userId: 1 });
 
-/**
- *
- */
+/** The shop collection, typed for the store. */
 export type TenantModel = Model<TenantDocument>;
-/**
- *
- */
+/** The role collection, typed for the store. */
 export type RoleModel = Model<RoleDocument>;
-/**
- *
- */
+/** The "who holds which role, where" collection, typed for the store. */
 export type MembershipModel = Model<MembershipDocument>;
 
 export const tenantModel: TenantModel = model<TenantDocument>('Tenant', tenantSchema);

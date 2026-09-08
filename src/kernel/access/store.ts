@@ -86,7 +86,7 @@ export const membershipIn = (
 /**
  * Give somebody a role in a place.
  *
- * Refuses three things, and each refusal is one of §10's invariants:
+ * Refuses three things, and each refusal is an invariant of the model:
  *
  *   - **a role nothing declares** — assigning a name no row and no preset defines produces a
  *     member who can do nothing and looks like a member who can;
@@ -267,9 +267,7 @@ export const deleteRole = (
  */
 let deploymentTenantId: string | null | undefined;
 
-/**
- *
- */
+/** The id of the shop a bare tenant key is held in, read once and remembered. */
 export const resolveDeploymentTenantId = (slug: string): Promise<string | null> =>
     deploymentTenantId === undefined
         ? tenantBySlug(slug).then((tenant) => {
@@ -279,26 +277,18 @@ export const resolveDeploymentTenantId = (slug: string): Promise<string | null> 
           })
         : Promise.resolve(deploymentTenantId);
 
-/** Forget the cached shop. For tests, and for a seeder that has just created one. */
-export const forgetDeploymentTenant = (): void => {
-    deploymentTenantId = undefined;
-};
-
 /**
  * The two role names a person holds, and the shop they hold the first one in.
  *
- * This is what the auth resolver needs and the only shape it needs: the stored memberships, turned
- * into the two names `AuthContext` carries.
+ * What the auth resolver needs and the only shape it needs: the stored memberships, turned into
+ * the two names `AuthContext` carries.
  *
- * `fallback` is what the ACCOUNT ITSELF says — the `role` column the users module publishes — and
- * the precedence is deliberate and one-way: **a stored membership always wins.** The fallback is
- * for the account that has never been assigned a role through the store, which is every account in
- * a deployment that has not seeded and every fixture a test creates directly. Without it the
- * kernel would have to read the users collection to answer, and the kernel naming a module is the
- * coupling this whole layout exists to remove.
- *
- * The two agree wherever both exist — `tests/integration/kernel/access.test.ts` refuses to let
- * them drift — so the precedence only ever decides a case where one of them is absent.
+ * `fallback`:  what the ACCOUNT itself says — the `role` column the users module publishes.
+ * Precedence:  one-way, **a stored membership always wins**. Without the fallback the kernel would
+ *              read the users collection to answer, and the kernel naming a module is the coupling
+ *              this layout exists to remove.
+ * Never a tie: the two agree wherever both exist, and
+ *              `tests/integration/kernel/access.test.ts` refuses to let them drift.
  */
 export const rolesOf = (
     userId: string,

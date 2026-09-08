@@ -28,17 +28,14 @@ import {
 /** The action vocabulary, CASL's own. `manage` is the wildcard meaning any declared action. */
 export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'manage';
 
+/** How recently a caller must have proved themselves to use a key that demands it. */
+export type StepUpTier = 'critical' | 'sensitive';
+
 /**
  * One declared key.
  *
  * `subject` is the CASL subject type — the concrete thing a rule is about — while the key's own
  * first segment is the resource family. `orders.read` is a permission, `Order` is a thing.
- */
-/** How recently a caller must have proved themselves to use a key that demands it. */
-export type StepUpTier = 'critical' | 'sensitive';
-
-/**
- *
  */
 export interface PermissionKey {
     key: string;
@@ -64,9 +61,7 @@ export interface PermissionKey {
     conditions?: Record<string, unknown>;
 }
 
-/**
- *
- */
+/** A role the seeders create, and the keys it holds. Roles are data; the keys they name are not. */
 export interface PresetRole {
     name: string;
     scope: AuthorizationScope;
@@ -170,14 +165,6 @@ export const anonymousCaller = (): Caller => ({
 export const findKey = (key: string): PermissionKey | undefined => byKey.get(key);
 
 /**
- * Every declared key in one scope. This is what `all.manage` EXPANDS TO, which is narrower than
- * CASL's unbounded wildcard and deliberately so: a shop owner cannot edit an audit row merely
- * because no module thought to forbid it, and adding a key stays the only way to widen anybody.
- */
-export const keysInScope = (scope: AuthorizationScope): readonly PermissionKey[] =>
-    PERMISSION_KEYS.filter((entry) => entry.scope === scope);
-
-/**
  * Refuse a key no module declares — on ASSIGNMENT, not at check time.
  *
  * At check time an undeclared key is merely inert, which reads as a role that grants nothing and
@@ -253,7 +240,7 @@ export const callerForSubject = (context: AuthContext, subject: string): Caller 
     callerInScope(context, scopeOfSubject(subject));
 
 /**
- * Does this caller hold the wildcard key in a scope — the honest spelling of the old `admin: true`.
+ * Does this caller hold the wildcard key in a scope — unrestricted, within that scope only.
  *
  * Role names are data a deployment may rename or add to; "holds the wildcard" is a property of
  * the permission model itself, which is why the audit trail, `requireUnrestricted` and the domain actor all

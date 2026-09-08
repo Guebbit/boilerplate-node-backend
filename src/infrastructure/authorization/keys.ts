@@ -24,7 +24,7 @@ import type { AuthorizationScope } from '@types';
  * safety property: a bare key can never be satisfied by a platform-scope caller, and a
  * `platform.` key can never be satisfied by a tenant-scope one.
  */
-export const PLATFORM_PREFIX = 'platform.';
+const PLATFORM_PREFIX = 'platform.';
 
 /** `all` — the wildcard subject, CASL's own. */
 export const WILDCARD_SUBJECT = 'all';

@@ -37,6 +37,24 @@ import {
 } from '@infrastructure/observability/audit';
 
 /**
+ * Record a refusal before answering it, so a denied request always leaves a trail.
+ *
+ * Which route and which method are on every one of them, and are added here rather than at each
+ * call site — a refusal nobody can locate is half a record.
+ */
+const auditRefusal = (
+    request: Request,
+    fields: Omit<Parameters<typeof buildAuditEvent>[1], 'outcome'>
+): void =>
+    emitAuditEvent(
+        buildAuditEvent(callerContextOf(request), {
+            ...fields,
+            outcome: 'failure',
+            metadata: { route: request.path, method: request.method, ...fields.metadata }
+        })
+    );
+
+/**
  * Pull the bearer token out of the `Authorization` header, if any.
  *
  * @param request - the incoming request
@@ -100,15 +118,11 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
 
     // Audited before rejecting: a failed auth attempt is exactly what the trail exists to record.
     if (!request.authContext || !token) {
-        emitAuditEvent(
-            buildAuditEvent(callerContextOf(request), {
-                action: coreAuditActions.SECURITY_UNAUTHORIZED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
-                outcome: 'failure',
-                metadata: { route: request.path, method: request.method }
-            })
-        );
+        auditRefusal(request, {
+            action: coreAuditActions.SECURITY_UNAUTHORIZED,
+            actor_user_id: 'anonymous',
+            actor_role: 'anonymous'
+        });
         rejectResponse(response, 401);
         return;
     }
@@ -181,19 +195,12 @@ export const requirePermission = (key: string) => {
          * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
          */
         if (!request.authContext) {
-            emitAuditEvent(
-                buildAuditEvent(callerContextOf(request), {
-                    action: coreAuditActions.SECURITY_UNAUTHORIZED,
-                    actor_user_id: 'anonymous',
-                    actor_role: 'anonymous',
-                    outcome: 'failure',
-                    metadata: {
-                        route: request.path,
-                        method: request.method,
-                        reason: 'not_authenticated'
-                    }
-                })
-            );
+            auditRefusal(request, {
+                action: coreAuditActions.SECURITY_UNAUTHORIZED,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                metadata: { reason: 'not_authenticated' }
+            });
             rejectResponse(response, 401);
             return;
         }
@@ -212,37 +219,20 @@ export const requirePermission = (key: string) => {
          * about the permission model they had not earned. Refused first, challenged second.
          */
         if (allowed && declared?.stepUp && !provedRecentlyEnough(request, declared.stepUp)) {
-            emitAuditEvent(
-                buildAuditEvent(callerContextOf(request), {
-                    action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
-                    outcome: 'failure',
-                    metadata: {
-                        route: request.path,
-                        method: request.method,
-                        reason: 'step_up_required',
-                        permission: key,
-                        tier: declared.stepUp
-                    }
-                })
-            );
+            auditRefusal(request, {
+                action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
+                metadata: { reason: 'step_up_required', permission: key, tier: declared.stepUp }
+            });
             challengeForFreshAuth(response, tierSeconds(declared.stepUp));
 
             return;
         }
 
         if (!allowed) {
-            emitAuditEvent(
-                buildAuditEvent(callerContextOf(request), {
-                    action: coreAuditActions.SECURITY_FORBIDDEN,
-                    outcome: 'failure',
-                    metadata: {
-                        route: request.path,
-                        method: request.method,
-                        reason: 'missing_permission',
-                        permission: key
-                    }
-                })
-            );
+            auditRefusal(request, {
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                metadata: { reason: 'missing_permission', permission: key }
+            });
             rejectResponse(response, 403);
             return;
         }
@@ -286,14 +276,11 @@ export const requirePermissionViaCookie = (key: string) => {
                 const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
 
                 if (!allowed) {
-                    emitAuditEvent(
-                        buildAuditEvent(callerContextOf(request), {
-                            action: coreAuditActions.SECURITY_FORBIDDEN,
-                            actor_user_id: user?.id ?? 'anonymous',
-                            outcome: 'failure',
-                            metadata: { reason: 'missing_permission', permission: key }
-                        })
-                    );
+                    auditRefusal(request, {
+                        action: coreAuditActions.SECURITY_FORBIDDEN,
+                        actor_user_id: user?.id ?? 'anonymous',
+                        metadata: { reason: 'missing_permission', permission: key }
+                    });
                     rejectResponse(response, 403, [
                         { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
                     ]);
@@ -368,17 +355,7 @@ export const requireFreshAuth =
             return;
         }
 
-        response.setHeader(
-            'WWW-Authenticate',
-            `Bearer error="insufficient_user_authentication", max_age=${maxAgeSeconds}`
-        );
-        rejectResponse(response, 401, [
-            {
-                code: 'REAUTH_REQUIRED',
-                message: t('generic.error-reauth-required'),
-                details: { maxAge: maxAgeSeconds }
-            }
-        ]);
+        challengeForFreshAuth(response, maxAgeSeconds);
     };
 
 /**
