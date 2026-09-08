@@ -1,7 +1,6 @@
 {
     "cart": {
         "changed": "Il carrello è cambiato durante la conferma dell’ordine. Controllalo e riprova.",
-        "emptied": "Tutti i prodotti sono stati rimossi dal carrello.",
         "empty": "Il tuo carrello è vuoto.",
         "product-removed": "Prodotto rimosso dal carrello.",
         "product-unavailable": "Uno o più prodotti nel carrello non sono più disponibili.",

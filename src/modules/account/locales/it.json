@@ -1,9 +1,7 @@
 {
     "account": {
         "login": {
-            "invalid-data": "I dati inseriti non sono validi.",
-            "wrong-data": "Email o password non validi.",
-            "success": "Accesso effettuato."
+            "wrong-data": "Email o password non validi."
         },
         "signup": {
             "email-already-used": "L'email è già stata utilizzata.",
@@ -39,9 +37,7 @@
             "unknown-method": "Questo metodo di autenticazione a due fattori non è disponibile.",
             "not-delivered": "Questo metodo non invia codici: leggilo dal tuo dispositivo.",
             "email-unverified": "Conferma il tuo indirizzo email prima di usarlo come secondo fattore.",
-            "already-enrolled": "Questo metodo è già attivo su questo account.",
             "resend-too-soon": "Un codice è stato appena inviato. Attendi prima di richiederne un altro.",
-            "enrolled": "L'autenticazione a due fattori è ora attiva.",
             "method-added": "Il secondo fattore è ora attivo.",
             "method-removed": "Il secondo fattore è stato rimosso.",
             "disabled": "L'autenticazione a due fattori è ora disattivata.",
@@ -72,7 +68,6 @@
                 "meta-title": "Verifica email",
                 "greeting": "Ciao, {{name}}!",
                 "intro": "Conferma che questo indirizzo email è tuo.",
-                "cta": "Clicca su questo link per verificare il tuo indirizzo email.",
                 "link-label": "Verifica la mia email",
                 "ignore": "Se non hai creato questo account, puoi ignorare questa email."
             },
@@ -81,7 +76,6 @@
                 "meta-title": "Reimpostazione della password richiesta",
                 "greeting": "Ciao, {{name}}!",
                 "intro": "Abbiamo ricevuto una richiesta di reimpostazione della password.",
-                "cta": "Clicca su questo link per impostare una nuova password.",
                 "link-label": "Reimposta la password",
                 "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
             },
@@ -90,7 +84,6 @@
                 "meta-title": "Configurazione dell'account richiesta",
                 "greeting": "Ciao, {{name}}!",
                 "intro": "Un amministratore ha creato un account per te. Scegli una password per completare la registrazione.",
-                "cta": "Clicca su questo link per impostare la tua password.",
                 "link-label": "Imposta la mia password",
                 "ignore": "Se non te lo aspettavi, contatta chi gestisce questo sito."
             },
@@ -105,7 +98,6 @@
                 "meta-title": "Eliminazione dell'account richiesta",
                 "greeting": "Ciao, {{name}}!",
                 "intro": "Abbiamo ricevuto una richiesta di eliminazione definitiva del tuo account.",
-                "cta": "Clicca su questo link per confermare l'eliminazione dell'account.",
                 "link-label": "Conferma l'eliminazione",
                 "ignore": "Se non hai richiesto tu questa operazione, puoi ignorare questa email."
             },

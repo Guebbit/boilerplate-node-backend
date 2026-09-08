@@ -1,9 +1,7 @@
 {
     "account": {
         "login": {
-            "invalid-data": "Inserted data are invalid.",
-            "wrong-data": "Invalid email or password.",
-            "success": "Login successful."
+            "wrong-data": "Invalid email or password."
         },
         "signup": {
             "email-already-used": "Email was already used.",
@@ -39,9 +37,7 @@
             "unknown-method": "That two-factor method isn't available on this deployment.",
             "not-delivered": "That method doesn't send codes — read it off your device instead.",
             "email-unverified": "Confirm your email address before using it as a second factor.",
-            "already-enrolled": "That method is already armed on this account.",
             "resend-too-soon": "A code was just sent. Wait a moment before asking for another.",
-            "enrolled": "Two-factor authentication is now on.",
             "method-added": "That second factor is now armed.",
             "method-removed": "That second factor has been removed.",
             "disabled": "Two-factor authentication is now off.",
@@ -72,7 +68,6 @@
                 "meta-title": "Email verification",
                 "greeting": "Hello, {{name}}!",
                 "intro": "Please confirm that this email address is yours.",
-                "cta": "Click this link to verify your email address.",
                 "link-label": "Verify my email",
                 "ignore": "If you did not create this account, you can safely ignore this email."
             },
@@ -81,7 +76,6 @@
                 "meta-title": "Password reset requested",
                 "greeting": "Hello, {{name}}!",
                 "intro": "We received a request to reset your password.",
-                "cta": "Click this link to set a new password.",
                 "link-label": "Reset my password",
                 "ignore": "If you did not request this, you can safely ignore this email."
             },
@@ -90,7 +84,6 @@
                 "meta-title": "Account setup requested",
                 "greeting": "Hello, {{name}}!",
                 "intro": "An administrator created an account for you. Choose a password to complete your registration.",
-                "cta": "Click this link to set your password.",
                 "link-label": "Set my password",
                 "ignore": "If you weren't expecting this, contact whoever manages this site."
             },
@@ -105,7 +98,6 @@
                 "meta-title": "Account deletion requested",
                 "greeting": "Hello, {{name}}!",
                 "intro": "We received a request to permanently delete your account.",
-                "cta": "Click this link to confirm account deletion.",
                 "link-label": "Confirm deletion",
                 "ignore": "If you did not request this, you can safely ignore this email."
             },
