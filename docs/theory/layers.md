@@ -183,10 +183,11 @@ both call it.
 
 A module may also carry the things that used to live in shared registries, each named for what it
 is: `audit.ts` (the actions it emits), `metrics.ts` (its Prometheus counters), `events.ts` (its
-domain events), `demo.ts` (its slice of the demo dataset) and `locales/` (its copy, in every
-language it ships). None of these is enumerated anywhere central — `audit.ts`, `metrics.ts` and
-`events.ts` register or augment themselves, while `seeds` and `locales` are declared in the
-manifest so the seeder and the i18n boot can walk the registry without naming a domain.
+domain events) and `locales/` (its copy, in every language it ships). None of these is enumerated
+anywhere central — `audit.ts`, `metrics.ts` and `events.ts` register or augment themselves, while
+`locales` is declared in the manifest so the i18n boot can walk the registry without naming a
+domain. A module's slice of the demo dataset lives in `demo/<name>.ts` instead, deliberately
+outside this list — see [Data](../reference/data.md#the-demo-dataset).
 
 A module carries one of these only when it has something to declare, so they are not a per-module
 tax: the real spread is thirty files across thirteen modules, and `observability` has none of them.

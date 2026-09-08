@@ -164,10 +164,22 @@ module.exports = {
         {
             name: 'module-internals-are-private',
             comment:
-                'A module has two public paths — `@modules/<name>` and `@modules/<name>/demo` — and the moment anything reaches past them the module stops being deletable. `eslint-plugin-boundaries` states this for one module reaching another and cannot state it for the tiers that are not modules: `src/app/` reaching `@modules/account/session/jwt` passes every lint rule. This is that gap, for all thirteen at once.',
+                "A module has one public path, `@modules/<name>`, and the moment anything reaches past it the module stops being deletable. `eslint-plugin-boundaries` states this for one module reaching another and cannot state it for the tiers that are not modules: `src/app/` reaching `@modules/account/session/jwt` passes every lint rule. This is that gap, for all thirteen at once. Scoped to `from: ^src/` on purpose — `demo/<name>.ts` needs its own module's repository, model and fixtures directly, and sits outside `src/` precisely so this rule does not reach it.",
             severity: 'error',
             from: { path: '^src/', pathNot: '^src/modules/[^/]+/' },
-            to: { path: String.raw`^src/modules/[^/]+/(?!index\.ts|module\.ts|demo\.ts)` }
+            to: { path: String.raw`^src/modules/[^/]+/(?!index\.ts|module\.ts)` }
+        },
+
+        {
+            name: 'src-cannot-reach-demo',
+            comment:
+                "demo/ imports a module's repository, model and fixtures directly — the inversion that lets a production image omit the folder outright, but only if nothing PRODUCTION under src/ reaches it, even transitively through a helper. src/app/demo.ts is the one file allowed to import it (it mounts the reset route that has to walk the same table db/demo/index.ts does); src/app.ts and src/cluster.ts are exempted too, since the only way either reaches demo/ is by composing that same file. A co-located spec is exempted for an unrelated reason: it boots the real app over supertest, and every contract/integration test does that regardless of demo/ — a production image never ships tests/ either way.",
+            severity: 'error',
+            from: {
+                path: '^src/',
+                pathNot: String.raw`^src/(app\.ts|cluster\.ts|app/demo\.ts)$|/tests/`
+            },
+            to: { path: '^demo/', reachable: true }
         },
 
         {

@@ -1,21 +1,18 @@
 /*
  * Demo data seeder.
  *
- * `db:seed` owns DATA; `db:sync` owns SCHEMA. Each module owns its own slice of the demo
- * dataset in `src/modules/<name>/demo.ts`; this file is the RUNNER — connection, production gate
- * and the walk over `enabledModules`, nothing else. The upsert policy lives in
- * `@infrastructure/persistence/seed`. What the API then serves is published by
- * `npm run seed:export` as `./demo-data.json` — an OUTPUT of this seeder, never an input to it.
+ * `db:seed` owns DATA; `db:sync` owns SCHEMA. `demo/index.ts` is the table of what to seed; this
+ * file is the RUNNER — connection, production gate and the walk over that table, nothing else.
+ * The upsert policy lives in `@infrastructure/persistence/seed`. What the API then serves is
+ * published by `npm run seed:export` as `./demo-data.json` — an OUTPUT of this seeder, never an
+ * input to it.
  *
- * It runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so
- * it must be:
- *
- *   - IDEMPOTENT — fixed `_id`s are upserted, not created, so a second run is a no-op
- *   - GATED — refuses to touch a production database
- *
- * Note what idempotent means here: `upsertById()` SKIPS a fixture whose `_id` already exists, it
- * does not rewrite it. So re-running this does NOT repair a fixture whose stored row has since
- * drifted from the one below — `npm run db:seed:reset` is what does.
+ * Runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so it
+ * must be IDEMPOTENT (fixed `_id`s are upserted, not created, so a second run is a no-op) and
+ * GATED (refuses to touch a production database). Note what idempotent means here:
+ * `upsertById()` SKIPS a fixture whose `_id` already exists, it does not rewrite it — re-running
+ * this does NOT repair a fixture whose stored row has since drifted from the one below;
+ * `npm run db:seed:reset` is what does.
  *
  * Passwords are given in PLAIN TEXT: the model's pre-save hook hashes them. Anything hashed by
  * hand here would drift from that hook, and its plaintext would be lost with no way to recover
@@ -30,7 +27,7 @@ import { start, connection } from '@infrastructure/runtime/database';
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
-import { enabledModules } from '../../src/modules';
+import { demoModules } from '@demo/index';
 import { seedAccessModel } from '@kernel/access/seed';
 
 const reset = process.argv.includes('--reset');
@@ -50,9 +47,9 @@ async function seed() {
     }
 
     /*
-     * Every enabled module seeds its own collection. This runner names no domain: a module that
-     * declares `seeds` in its manifest gets called, one that does not is skipped, and deleting a
-     * module takes its demo data with it without touching this file.
+     * Every module in `demo/index.ts`'s table seeds its own collection. This runner names no
+     * domain: it only walks whatever that table lists. `tests/cross-cutting/seed-conformance.test.ts`
+     * refuses an entry left behind after the module it names is deleted.
      *
      * Concurrent on purpose, and safe to be: no fixture is derived from another fixture's WRITE.
      * An order embeds a product snapshot built from the catalogue's own fixtures, not read back
@@ -65,7 +62,7 @@ async function seed() {
     await seedAccessModel();
 
     const perModule = await Promise.all(
-        enabledModules.map((appModule) => appModule.seeds?.() ?? Promise.resolve([]))
+        Object.values(demoModules).map((demoModule) => demoModule.seed())
     );
     const results = perModule.flat();
 

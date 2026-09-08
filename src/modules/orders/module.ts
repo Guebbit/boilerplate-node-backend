@@ -19,12 +19,11 @@ import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
-import { seedOrdersCollection, exportSeededOrders } from './demo';
 import { cancelById, detachUserId } from './services';
 // Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import './events';
 
-/** This module's manifest entry: routes, event subscriptions, demo seeding, and locales. */
+/** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'orders',
     basePath: '/orders',
@@ -54,9 +53,5 @@ export default {
         // Detach, never delete: the order survives the account.
         onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
     },
-    seeds: seedOrdersCollection,
-    seedExport: exportSeededOrders,
-    /* `GET /orders/:id` answers the serialized document as it stands, totals included. */
-    demoShapes: { orders: 'response' },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

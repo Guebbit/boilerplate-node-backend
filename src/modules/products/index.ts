@@ -26,8 +26,6 @@ export { productSchema, applyProductTransform, toProduct } from './model';
 export { PRODUCT_DELETED } from './events';
 
 /*
- * The demo catalogue is NOT re-exported here — it lives behind a second public path,
- * `@modules/products/demo`, used only by seeders in `cart`, `wishlist` and `orders`. That keeps
- * this barrel's surface production-only; `eslint-plugin-boundaries` enforces that only a seeder
- * imports the demo path.
+ * The demo catalogue is NOT re-exported here, and never was reachable through this barrel: it
+ * lives in `demo/products.ts`, outside `src/` entirely, imported by nothing this module ships.
  */

@@ -11,7 +11,8 @@
 
             "@infrastructure/*": ["./src/infrastructure/*"],
             "@kernel/*": ["./src/kernel/*"],
-            "@modules/*": ["./src/modules/*"]
+            "@modules/*": ["./src/modules/*"],
+            "@demo/*": ["./demo/*"]
         },
         "strict": true,
         "composite": true,
@@ -35,6 +36,8 @@
         "src/**/*.ts",
         "src/**/*.json",
         "tests/**/*.ts",
+        "demo/**/*.ts",
+        "demo/**/*.json",
         "db/**/*.ts",
         "db/demo/demo-data.json",
         "eslint/**/*.ts",

@@ -15,10 +15,9 @@ import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
-import { seedWishlistsCollection, exportSeededWishlists } from './demo';
 import { wishlistDeleteByUserId, productRemoveFromWishlistsById } from './service';
 
-/** This module's manifest entry: routes, event subscriptions, demo seeding, and locales. */
+/** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'wishlist',
     basePath: '/wishlist',
@@ -29,9 +28,5 @@ export default {
         );
         onDomainEvent(USER_DELETED, ({ userId }) => wishlistDeleteByUserId(userId));
     },
-    seeds: seedWishlistsCollection,
-    seedExport: exportSeededWishlists,
-    /* `GET /wishlist` answers the caller's own list, resolved against the catalogue. */
-    demoShapes: { wishlists: 'stored' },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

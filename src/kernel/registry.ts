@@ -10,48 +10,7 @@
  */
 
 import type { Router } from 'express';
-import type { SeedOutcome } from '@infrastructure/persistence/seed';
 import { assertRequiredConfig } from '@kernel/required-config';
-
-/**
- * What a published collection is to the consumer reading it.
- *
- * `response` — a GET answers with this row as it stands, so a mock may hand it straight back.
- * `stored` — no endpoint serves the row raw; a consumer returning it verbatim would describe an
- * API that does not exist.
- *
- * See: docs/tools/demo-profile.md
- */
-export type DemoShape = 'response' | 'stored';
-
-/**
- * The demo export, and the classification of what it publishes.
- *
- * A union rather than two optional fields, so declaring one without the other is a type error at
- * the manifest: an unclassified collection cannot be caught later, because the artefact is consumed
- * by a sibling repo where "is this row servable?" has no local answer.
- */
-type DemoExport =
-    | {
-          /**
-           * Read this module's seeded rows back in the shape the API serves them, keyed by
-           * collection. `scripts/demo/export-dataset.ts` walks `enabledModules` and publishes what it finds.
-           *
-           * **Must read back through the model's `toJSON`** — the real serializer — rather than
-           * returning the fixtures it wrote. Returning fixtures publishes a guess labelled as truth.
-           */
-          seedExport: () => Promise<Record<string, unknown[]>>;
-
-          /**
-           * One entry per collection `seedExport` returns, published as `_meta.shapes`.
-           *
-           * Stated rather than derived: a matcher would label the `locales` rows `response`, since a
-           * stored language happens to parse against the CREATE response, and a confidently wrong
-           * label is worse than none.
-           */
-          demoShapes: Readonly<Record<string, DemoShape>>;
-      }
-    | { seedExport?: never; demoShapes?: never };
 
 /**
  * One environment variable a module cannot run without. Declared on
@@ -115,7 +74,7 @@ export interface ImageTarget {
  *
  * See: docs/theory/modules.md#the-manifest
  */
-export type AppModule = {
+export interface AppModule {
     /** Registry identity. Must match the folder name under `src/modules/`. */
     name: string;
 
@@ -160,12 +119,6 @@ export type AppModule = {
     permissions?: readonly string[];
 
     /**
-     * Write this module's slice of the demo dataset. Called only by `db/demo/index.ts`, never at
-     * boot — seeding is a script, not part of starting the application.
-     */
-    seeds?: () => Promise<SeedOutcome[]>;
-
-    /**
      * This module's {@link ImageTarget}s, keyed by the `collection` string an
      * `ImageDigestJobPayload` names. Most modules have none; a module whose documents can carry an
      * uploaded image registers one entry per such collection.
@@ -187,7 +140,7 @@ export type AppModule = {
      * none; `account` and `observability` each hold a secret that must not boot on a placeholder.
      */
     requiredConfig?: readonly RequiredConfig[];
-} & DemoExport;
+}
 
 /**
  * Every registered module's {@link ImageTarget}s, flattened into one lookup keyed by `collection`.

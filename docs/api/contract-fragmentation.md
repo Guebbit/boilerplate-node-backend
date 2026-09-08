@@ -174,16 +174,17 @@ Today `products` already owns everything about itself except its slice of the co
 
 ```
 src/modules/products/
-├── module.ts        name, basePath '/products', routes, seeds, locales
+├── module.ts        name, basePath '/products', routes, locales
 ├── routes.ts        the express router
 ├── controllers/     request handling
 ├── service.ts       business rules
 ├── repository.ts    persistence
 ├── model.ts         the mongoose schema
 ├── events.ts        what it publishes and subscribes to
-├── demo.ts         its own seed data
 ├── locales/         its own copy
 └── tests/           its own specs
+
+demo/products.ts     its own seed data — outside src/, see Demo profile
 ```
 
 After fragmentation it also owns `openapi.yaml`, holding the ten operations under
@@ -397,9 +398,9 @@ that lists every domain.
 
 It is gone, and the machinery went with it. The dataset is now **published rather than assembled**:
 `npm run seed:export` seeds a throwaway database with the real seeders and writes what the API
-answers to `db/demo/demo-data.json`. Each module states its records in an ordinary
-`src/modules/<name>/demo.ts` that its own code imports — no fragment, no text concatenation, no
-staleness check on this CLI. `npm run check:seed-export` is its equivalent.
+answers to `db/demo/demo-data.json`. Each module's records live in `demo/<name>.ts`, imported by
+`demo/index.ts` and by nothing under `src/` — no fragment, no text concatenation, no staleness
+check on this CLI. `npm run check:seed-export` is its equivalent.
 
 The reason is worth keeping, because it is the one case on this page where fragmenting the SOURCE
 was the wrong answer. Sharing facts left each repo writing its own mapper over them, and the mappers

@@ -217,6 +217,7 @@ module.exports = {
         '^@infrastructure/(.*)$': '<rootDir>/src/infrastructure/$1',
         '^@kernel/(.*)$': '<rootDir>/src/kernel/$1',
         '^@modules/(.*)$': '<rootDir>/src/modules/$1',
+        '^@demo/(.*)$': '<rootDir>/demo/$1',
 
         /*
          * The one third-party module replaced wholesale: `puppeteer-core` v25 is ESM-only and

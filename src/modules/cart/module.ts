@@ -11,12 +11,11 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { router } from './routes';
-import { seedCartsCollection, exportSeededCarts } from './demo';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
 import { cartDeleteByUserId, productRemoveFromCartsById } from './services';
 
-/** This module's manifest entry: routes, event subscriptions, demo seeding, and locales. */
+/** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'cart',
     basePath: '/cart',
@@ -25,10 +24,5 @@ export default {
         onDomainEvent(PRODUCT_DELETED, ({ productId }) => productRemoveFromCartsById(productId));
         onDomainEvent(USER_DELETED, ({ userId }) => cartDeleteByUserId(userId));
     },
-    seeds: seedCartsCollection,
-    seedExport: exportSeededCarts,
-    /* `GET /cart` answers the caller's own cart with its lines resolved against the catalogue,
-     * so the stored row is the input to that response rather than the response. */
-    demoShapes: { carts: 'stored' },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -4,8 +4,9 @@
 **`db:sync` owns SCHEMA, `db:seed` owns DATA.** `db:sync` makes a collection's indexes match the
 schemas that declare them; `db:seed` fills a collection. Neither does the other's job.
 
-Neither half is authored here. A module owns its indexes and its fixtures the same way it owns its
-`openapi.yaml` fragment; `db/` is only where the runners live.
+Neither half is authored here. A module owns its indexes the same way it owns its `openapi.yaml`
+fragment; its demo fixtures live in `demo/<name>.ts` instead, outside the module folder — see
+[The demo dataset](#the-demo-dataset) for why. `db/` is only where the runners live.
 
 There is no migration tool, no changelog collection and no timestamped files. What replaced them,
 and why, is the whole of the next section.
@@ -19,7 +20,7 @@ and why, is the whole of the next section.
 flowchart LR
     Models["per-module model.ts<br/><i>the only author</i>"] --> Sync["db/sync-indexes.ts<br/><i>npm run db:sync</i>"]
     Sync --> Mongo[("MongoDB")]
-    Seeds["per-module demo.ts<br/><i>fixtures</i>"] --> Index["db/demo/index.ts<br/><i>the seeder</i>"]
+    Seeds["demo/*.ts<br/><i>fixtures</i>"] --> Index["db/demo/index.ts<br/><i>the seeder</i>"]
     Index --> Mongo
     Mongo --> Assemble["scripts/demo/assemble.ts"]
     Assemble --> Data["db/demo/demo-data.json<br/><i>published dataset</i>"]
@@ -171,12 +172,12 @@ after when it needs an index to be fast.
 
 | File                       | What it is                                                                                                                                                                                                                                                                                                                                                                               | Read next                                                              |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `db/demo/index.ts`         | The seeder that `npm run db:seed` runs. Walks every enabled module's seed file and upserts its fixtures through the shared seeding primitive — so seeding is idempotent, and a module that is disabled seeds nothing. A reset flag empties first.                                                                                                                                        | [Modules](./src-modules.md) · [Demo profile](../tools/demo-profile.md) |
+| `db/demo/index.ts`         | The seeder that `npm run db:seed` runs. Walks `demo/index.ts`'s table and upserts each entry's fixtures through the shared seeding primitive — so seeding is idempotent, and a module absent from the table seeds nothing. A reset flag empties first.                                                                                                                                   | [Modules](./src-modules.md) · [Demo profile](../tools/demo-profile.md) |
 | `scripts/demo/assemble.ts` | Reads the seeded rows back out **through the real serializers** and checks the result is what the API would actually answer. That is what makes the published dataset a record of the API's behaviour rather than of its storage.                                                                                                                                                        | [Contract Testing (Response)](../tools/contract-testing.md)            |
 | `db/demo/demo-data.json`   | **Generated** by `npm run seed:export`. The demo dataset exactly as the API serves it. Published here and nowhere else: it is not in `SHARED_FILES`, so the paired frontend keeps no copy and reads this repo's API instead. `npm run check:seed-export` fails when the committed bytes differ from a fresh run, and Prettier is told to leave it alone so the two writers cannot fight. | [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) |
 
-The fixtures themselves are not here — each module owns its own slice, and the two demo accounts
-are declared in `src/kernel/seed-accounts.ts`.
+The fixtures themselves are not here — each module's slice lives in `demo/<name>.ts`, and the two
+demo accounts are declared in `src/kernel/seed-accounts.ts`.
 
 Two tests guard the schema half: `tests/integration/db/index-sync.test.ts` runs the reconciliation
 against a real database — from nothing, against drift, and twice over — and

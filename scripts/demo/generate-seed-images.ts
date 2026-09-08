@@ -14,8 +14,8 @@
  * manifests and deletes any `public/images/seed/*.jpg` this run's role list no longer names, so a
  * retired role's old file doesn't linger unreferenced.
  *
- * `./demo.ts` and `./demo-catalog.ts` (products), and the users equivalent, read the resulting
- * `demo-images.generated.json` files — nothing there is hand-edited.
+ * `demo/products.ts` and `demo/demo-catalog.ts`, and `demo/users.ts`, read the resulting
+ * `*-images.generated.json` files — nothing there is hand-edited.
  *
  * See: docs/tools/image-processing.md
  */
@@ -24,7 +24,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
-import { FILLER_IMAGE_ROLE_KEYS } from '../../src/modules/products/demo-catalog';
+import { FILLER_IMAGE_ROLE_KEYS } from '@demo/demo-catalog';
 
 /** Where the full-size seed photos land — served directly, so this is a public path. */
 const SEED_ROOT = path.join(__dirname, '../../public/images/seed');
@@ -41,7 +41,7 @@ interface ImageEntry {
 /** The five named product roles that keep an image — `barebones` deliberately has none, since
  * its whole point is exercising the schema's own `imageUrl` default. The filler roles are a
  * fixed pool (`FILLER_IMAGE_ROLE_KEYS`), independent of how large the generated catalogue grid
- * is — `./demo.ts` cycles through them, so growing the grid never needs a new download. */
+ * is — `demo/products.ts` cycles through them, so growing the grid never needs a new download. */
 const PRODUCT_ROLES = [
     'dogFoodStandard',
     'heaterSoftDeleted',
@@ -58,10 +58,14 @@ const USER_ROLES = ['root', 'customer'];
  * Fetch a real photo from Lorem Picsum. The `seed` path segment pins which photo comes back, so
  * re-running this script is reproducible without hitting an actually-random endpoint twice.
  * https://picsum.photos/ — `id/seed/width/height`, no API key required.
+ *
+ * 800×600, not larger: `digestImage` never upscales, only downscales to
+ * `NODE_IMAGE_MAX_DIMENSION` (2048 by default), so a bigger fetch here would just be more bytes
+ * downloaded and thrown away — invisible at the catalogue-card size these are ever shown at.
  */
 const fetchSourcePhoto = async (picsumSeed: string): Promise<Buffer> => {
     const response = await fetch(
-        `https://picsum.photos/seed/${encodeURIComponent(picsumSeed)}/1600/1200`
+        `https://picsum.photos/seed/${encodeURIComponent(picsumSeed)}/800/600`
     );
     if (!response.ok)
         throw new Error(`picsum.photos returned ${response.status} for seed "${picsumSeed}"`);
@@ -130,7 +134,7 @@ const removeStale = async (
     }
 };
 
-/** Writes one `demo-images.generated.json`, four-space indented to match what Prettier expects. */
+/** Writes one `*-images.generated.json`, four-space indented to match what Prettier expects. */
 const writeManifest = (relativePath: string, manifest: Record<string, ImageEntry>): Promise<void> =>
     writeFile(
         path.join(__dirname, '..', '..', relativePath),
@@ -159,8 +163,8 @@ const main = async (): Promise<void> => {
         new Set(written.map((e) => path.basename(e.thumbnailUrl)))
     );
 
-    await writeManifest('src/modules/products/demo-images.generated.json', products);
-    await writeManifest('src/modules/users/demo-images.generated.json', users);
+    await writeManifest('demo/products-images.generated.json', products);
+    await writeManifest('demo/users-images.generated.json', users);
 
     console.info(
         `[seed-images] done: ${Object.keys(products).length} product images, ` +

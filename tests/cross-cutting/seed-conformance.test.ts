@@ -42,7 +42,9 @@ import {
     GetWishlistResponse
 } from '@api/schemas.zod';
 import { listSupportedLocales } from '@infrastructure/i18n';
+import { demoModules } from '@demo/index';
 import dataset from '../../db/demo/demo-data.json';
+import { enabledModules } from '../../src/modules';
 
 const { _meta, credentials, collections } = dataset;
 
@@ -414,6 +416,21 @@ describe('the exported dataset conforms to the generated contract', () => {
                 .map(([name]) => name);
 
             expect(servable.toSorted()).toStrictEqual(parsedAsWholeResponses);
+        });
+    });
+
+    /**
+     * `demo/index.ts` colocates nothing — moving a module's fixtures out from under it means
+     * `rm -rf src/modules/<name>` no longer takes its demo data with it. This is the check that
+     * replaces the guarantee colocation used to give for free: an entry left behind after its
+     * module is deleted is loud here, instead of quietly seeding a collection nothing serves.
+     */
+    describe('the demo registry', () => {
+        it('registers no module that `enabledModules` does not also enable', () => {
+            const known = new Set(enabledModules.map((appModule) => appModule.name));
+            for (const name of Object.keys(demoModules)) {
+                expect(known).toContain(name);
+            }
         });
     });
 });

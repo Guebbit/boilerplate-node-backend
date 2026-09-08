@@ -626,19 +626,20 @@ export default tseslint.config(
      *      `{{ from.element.captured.module }}` compares the two sides, so one policy covers every
      *      domain — including the one added tomorrow.
      *
-     * ── The two doors, and why they are stated as files ───────────────────────────────────────
-     * A module publishes `index.ts` (its runtime API) and `demo.ts` (its fixtures), and nothing
-     * else. `fileInternalPath` names those two files inside the target element, so the rule is
-     * about the door rather than about the path spelling that reaches it.
+     * ── The one door, and why it is stated as a file ──────────────────────────────────────────
+     * A module publishes `index.ts` — its runtime API — and nothing else. `fileInternalPath`
+     * names that file inside the target element, so the rule is about the door rather than about
+     * the path spelling that reaches it. A module's demo fixtures used to be the second door,
+     * `demo.ts`; they now live in `demo/`, a tier of its own — see below.
      */
     {
         settings: {
             /*
-             * Only `src/`. The tiers live here, and this is the tree `no-unknown-files` is meant
-             * to hold exhaustively — `tests/`, `scripts/`, `ops/`, `db/` and `shared/` have no tier and
-             * would each need a descriptor for the sake of being ignored.
+             * `src/` and `demo/`. The tiers live here, and this is the tree `no-unknown-files` is
+             * meant to hold exhaustively — `tests/`, `scripts/`, `ops/`, `db/` and `shared/` have
+             * no tier and would each need a descriptor for the sake of being ignored.
              */
-            'boundaries/include': ['src/**/*.ts'],
+            'boundaries/include': ['src/**/*.ts', 'demo/**/*.ts'],
 
             /*
              * Every wall below is stated in terms of the FILE an import resolves to, so an
@@ -676,7 +677,15 @@ export default tseslint.config(
                 { type: 'kernel', pattern: 'src/kernel', partialMatch: false },
                 { type: 'infrastructure', pattern: 'src/infrastructure', partialMatch: false },
                 { type: 'app', pattern: 'src/app', partialMatch: false },
-                { type: 'types', pattern: 'src/types', partialMatch: false }
+                { type: 'types', pattern: 'src/types', partialMatch: false },
+                /*
+                 * Outside `src/` entirely, on purpose. A demo file imports a module's repository,
+                 * model and fixtures directly, which is wider access than the one-door rule below
+                 * grants a sibling module; the trade is that nothing under `src/` may import
+                 * `demo` back (see the policies below), so a production image can omit this
+                 * folder outright.
+                 */
+                { type: 'demo', pattern: 'demo', partialMatch: false }
             ],
 
             /*
@@ -840,58 +849,58 @@ export default tseslint.config(
                         },
 
                         /*
-                         * The two doors. A sibling is reachable through `index.ts` (its runtime
-                         * API) or `demo.ts` (its fixtures); every other file of it is internal.
-                         * The allow follows the disallow because the LAST matching policy wins.
+                         * The one door. A sibling is reachable through `index.ts` — its runtime
+                         * API — and nothing else; every other file of it is internal.
                          */
                         {
                             from: { element: { type: ['module', 'domain'] } },
                             disallow: { to: { element: { type: ['module', 'domain'] } } },
                             message:
-                                'Import a sibling module through one of its two public paths: @modules/<name> for its runtime API, @modules/<name>/demo for its demo fixtures. Never its internals — the moment one is reached the module stops being deletable.'
+                                'Import a sibling module through its public path: @modules/<name>. Never its internals — the moment one is reached the module stops being deletable.'
                         },
                         {
                             from: { element: { type: ['module', 'domain'] } },
                             allow: {
+                                to: { element: { type: 'module', fileInternalPath: 'index.ts' } }
+                            }
+                        },
+
+                        /*
+                         * `demo/` reaches down into every tier: a demo file imports its module's
+                         * repository, model and fixtures directly, which is wider than the one
+                         * door above grants a sibling module — see the element descriptor above
+                         * for why that trade is fine here specifically. It also reaches its own
+                         * files freely, the same way `infrastructure` and `kernel` do below —
+                         * `demo/cart.ts` reads `demo/products.ts`'s filler ids directly.
+                         */
+                        {
+                            from: { element: { type: 'demo' } },
+                            allow: {
                                 to: {
                                     element: {
-                                        type: 'module',
-                                        fileInternalPath: ['index.ts', 'demo.ts']
+                                        type: [
+                                            'demo',
+                                            'module',
+                                            'domain',
+                                            'kernel',
+                                            'infrastructure',
+                                            'types'
+                                        ]
                                     }
                                 }
                             }
                         },
 
                         /*
-                         * The second door is narrower than the first, and the asymmetry is the
-                         * whole reason it exists: `demo.ts` is published so that a SEEDER may
-                         * point at a sibling's fixtures, and for no other reason.
-                         *
-                         * Before the split, `products/index.ts` published `SEED_PRODUCT_IDS` and
-                         * `productFixtures` beside `productService`, so a controller could have
-                         * imported demo rows without anything failing — the barrel made runtime
-                         * and demo the same surface, and nothing could tell the two edges apart.
-                         * Splitting the paths only helps while something asserts they carry
-                         * different traffic.
-                         *
-                         * The other half of that — a barrel re-exporting its own `demo.ts` — is
-                         * NOT expressible here: it is an edge inside one element, and this plugin
-                         * only weighs edges between them. Nothing asserts it — a barrel
-                         * re-exporting its own demo fixtures is a review question.
+                         * `src/app/demo.ts` is the one file under `src/` allowed back into
+                         * `demo/` — it mounts `POST /__demo/reset`, which has to walk the same
+                         * table `db/demo/index.ts` does. Nothing else may: that is what lets a
+                         * production image omit `demo/` outright, since every OTHER file reaching
+                         * it would pull the whole folder into the bundle regardless of `NODE_DEMO`.
                          */
                         {
-                            from: { element: { type: ['module', 'domain'] } },
-                            disallow: {
-                                to: { element: { type: 'module', fileInternalPath: 'demo.ts' } }
-                            },
-                            message:
-                                'Only a seeder may take a sibling’s /demo path. Demo data exists to be written by db/demo, and an import of it from runtime code puts fixtures into the graph the application actually runs.'
-                        },
-                        {
-                            from: { element: { fileInternalPath: 'demo.ts' } },
-                            allow: {
-                                to: { element: { type: 'module', fileInternalPath: 'demo.ts' } }
-                            }
+                            from: { element: { type: 'app', fileInternalPath: 'demo.ts' } },
+                            allow: { to: { element: { type: 'demo' } } }
                         },
 
                         /*

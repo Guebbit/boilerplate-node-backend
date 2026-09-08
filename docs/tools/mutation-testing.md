@@ -1108,7 +1108,7 @@ No `mutation-baseline.json` existed in this checkout at all until 2026-08-27 —
 | ------------- | ---------- | ---------- |
 | **All files** | **28.66%** | **51.57%** |
 
-That reads much lower than the last pre-rewrite measurement (65.69% / 72.22%, 2026-08-12) — expected, not a regression. Controllers, `module.ts`, `demo.ts` and the runtime wiring had all fallen out of `mutate` scope at some point and only came back recently; this is the first time they were actually measured, and most have zero unit tests by design (`tests/contract`/`tests/integration` cover them instead — see [Reading a 0%](#reading-a-0--and-the-one-case-where-it-was-excluded-instead)). Per-area, that shows up as one area dragging the whole number down:
+That reads much lower than the last pre-rewrite measurement (65.69% / 72.22%, 2026-08-12) — expected, not a regression. Controllers, `module.ts`, `demo.ts` <!-- doc-paths:ignore --> (per-module then; moved to `demo/<name>.ts` since) and the runtime wiring had all fallen out of `mutate` scope at some point and only came back recently; this is the first time they were actually measured, and most have zero unit tests by design (`tests/contract`/`tests/integration` cover them instead — see [Reading a 0%](#reading-a-0--and-the-one-case-where-it-was-excluded-instead)). Per-area, that shows up as one area dragging the whole number down:
 
 | Area                  | Mutants | Total     | Covered | Note                                                                                        |
 | --------------------- | ------- | --------- | ------- | ------------------------------------------------------------------------------------------- |
@@ -1131,7 +1131,7 @@ Both have since moved again, and neither move restored the floor: `src/modules/a
 — which _is_ floored, so that half is closed by the merge rather than by a config change.
 `jest.config.js` floors `model.ts`,
 `repository.ts` and `service.ts` per module, and the newer per-module files (`audit.ts`,
-`metrics.ts`, `demo.ts`, `events.ts`, `routes.ts`) have never had floors and may not need them.
+`metrics.ts`, `demo.ts`, `events.ts`, `routes.ts`) have never had floors and may not need them. <!-- doc-paths:ignore -->
 Left alone on purpose: the floors are being redone from the ground up once this sequence completes,
 and a floor moved twice is worse than a floor moved once.
 

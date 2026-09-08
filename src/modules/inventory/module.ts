@@ -31,9 +31,10 @@ export default {
     permissions: ['inventory.read', 'inventory.create', 'inventory.manage'],
     routes: router,
     /*
-     * No `seeds`: a hold only exists once someone has checked out, so a seeded one would be a
-     * state the application cannot reach by seeding — see the note in `orders/demo.ts`. No
-     * `seedExport` either, since a reservation is never serialized to a client (see `./model`).
+     * No entry in `demo/index.ts`: a hold only exists once someone has checked out, so a seeded
+     * one would be a state the application cannot reach by seeding — see the note in
+     * `demo/orders.ts`. A reservation is also never serialized to a client (see `./model`), so
+     * there is nothing to export even if there were something to seed.
      */
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

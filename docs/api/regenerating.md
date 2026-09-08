@@ -99,7 +99,7 @@ phase and not the others.
 | `src/modules/*/openapi.yaml`                           | `contracts:bundle` → `gen:api`                       | `openapi.yaml`, then the types and Zod schemas from it |
 | `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
 | `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml` and `asyncapi.public.yaml`, then `src/types/asyncapi.generated.ts` |
-| `src/modules/*/demo.ts`                             | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
+| `demo/*.ts`                                          | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
 | `src/modules/*/module.ts`, `model.ts`, `routes.ts`    | nothing                                             | no generator reads them. If the change is worth a reader knowing, say so on the module's page in `docs/modules/` — by hand, like the rest of that page |
 | `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `contracts:bundle` for `probes.ts` only | the client collections embed the probes; the other four feed no generator — an analytics name is read straight from the module that declares it |
@@ -225,16 +225,19 @@ bundle's section list under `scripts/contracts/`:
 src/modules/<name>/openapi.yaml      its operations, and the types only it uses
 src/modules/<name>/asyncapi.yaml     its server, channels, messages and schemas — one whole document
 src/modules/<name>/analytics.ts      the events it emits
-src/modules/<name>/demo.ts          the demo records it owns
-src/modules/<name>/fixtures.ts        how those records are built
+src/modules/<name>/fixtures.ts        how demo/test records are built
 src/modules/<name>/probes.ts         the requests a spec cannot describe
+
+demo/<name>.ts                       the demo records — outside src/, see Demo profile
 ```
 
 Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a
 good sign rather than an omission. Deleting a module is `rm -rf` of the folder, one line out of
-`src/modules.ts`, and one line out of each section list it appeared in. A module that declared
-probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one announces itself:
-the import stops compiling.
+`src/modules.ts`, one line out of each section list it appeared in, and its entry out of
+`demo/index.ts`'s table — the last one is not colocated with the folder, so
+`tests/cross-cutting/seed-conformance.test.ts` is what catches a forgotten one. A module that
+declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one
+announces itself: the import stops compiling.
 
 ## Related pages
 

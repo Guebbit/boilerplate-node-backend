@@ -25,7 +25,6 @@ import { userRepository, USER_DELETED, USER_SETUP_REQUESTED } from '@modules/use
 import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session/jwt';
 import { addressesDeleteByUserId } from './services/addresses';
 import { requestAccountSetup } from './services/authentication';
-import { exportSeededAddressBooks, seedAddressBooksCollection } from './demo';
 import { router } from './routes';
 
 /*
@@ -122,7 +121,7 @@ registerAuthResolver({
     fromRefreshToken: resolve(verifyRefreshToken)
 });
 
-/** This module's manifest entry: routes, event subscriptions, demo seeding, and locales. */
+/** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'account',
     basePath: '/account',
@@ -163,10 +162,5 @@ export default {
             userRepository.findById(userId).then((user) => user && requestAccountSetup(user))
         );
     },
-    seeds: seedAddressBooksCollection,
-    seedExport: exportSeededAddressBooks,
-    /* A book is never served raw: `GET /account/addresses` answers `{ addresses: [...] }`,
-     * which carries the book's `items` and nothing else it holds. */
-    demoShapes: { addressBooks: 'stored' },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -107,7 +107,7 @@ The dataset is split by ROLE, and the split matters:
 | File                             | Holds                                                                                                                                                                                                                                                           |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/modules/<name>/fixtures.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a fixture builder is for |
-| `src/modules/<name>/demo.ts`     | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory and owned by the module that owns the collection. Declared as `seeds` in the manifest; `db/demo/index.ts` walks the registry and names no domain                 |
+| `demo/<name>.ts`                 | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory, but living outside `src/` entirely: `demo/index.ts` tables it by name, and `db/demo/index.ts` walks that table                                                  |
 | `src/kernel/seed-accounts.ts`    | The **six shared literals** — two account ids and four credentials. In the kernel because four modules need a piece of them and only one owns the record; the file explains why that beats three registry edges                                                 |
 | `db/demo/demo-data.json`         | The **output** — every row as the API actually serves it. Written by `npm run seed:export`, never by hand                                                                                                                                                       |
 
@@ -168,12 +168,12 @@ Two values rather than three, because that is the whole of the question anyone a
 can I return this row? A collection that is composed and one that is never served differ only in
 how the response is built, which the consumer is writing anyway.
 
-Each module states its own entries as `demoShapes` beside `seedExport`, and the manifest type pairs
-them — declaring the export without the classification is a compile error. `seed:export` then
-reconciles the map against what was actually published and refuses both an unclassified collection
-and a label naming one that no longer exists, so neither state reaches the artefact.
-`tests/cross-cutting/seed-conformance.test.ts` holds the committed file to the same rule, in both
-repos.
+Each demo module states its own entries as `shapes` beside `export` in `demo/index.ts`'s table,
+and the `DemoModule` type pairs them — declaring one without the other is a compile error.
+`seed:export` then reconciles the map against what was actually published and refuses both an
+unclassified collection and a label naming one that no longer exists, so neither state reaches the
+artefact. `tests/cross-cutting/seed-conformance.test.ts` holds the committed file to the same
+rule, in both repos.
 
 The labels are **stated, not derived**. A matcher that tried each collection against the generated
 schemas would mark the locale rows `response` — a stored language does parse against the CREATE

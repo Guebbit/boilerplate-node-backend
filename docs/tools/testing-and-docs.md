@@ -82,7 +82,7 @@ Several things can hand you an entity, and it is reasonable to wonder whether th
 | Source                           | Repo | What it is for                                                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `db/demo/demo-data.json`         | BE   | **The demo dataset, as the API answers it.** Every seeded row, serialized — schema defaults, derived order totals and all. The one dataset a human sees when they open either app. Written by `npm run seed:export`; `npm run check:seed-export` fails the gate when the committed snapshot is stale, which is what pins serializer drift                             |
-| `src/modules/<name>/demo.ts`     | BE   | **The records themselves** — the demo catalogue, the two accounts, the order book. One per module, declared as `seeds` in the manifest and consumed by `db:seed`; the export reads them back out through `seedExport`                                                                                                                                                 |
+| `demo/<name>.ts`                 | BE   | **The records themselves** — the demo catalogue, the two accounts, the order book. One per module, outside `src/` entirely; tabled by `demo/index.ts` and consumed by `db:seed`, which reads them back out through the table's `export`                                                                                                                               |
 | `src/modules/<name>/fixtures.ts` | BE   | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/fixtures.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift |
 | `tests/support/contract-data.ts` | BE   | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a fixture                                                                                                   |
 
@@ -93,7 +93,7 @@ Reading it as a shape: **one** hand-maintained dataset, **one** mapper over it �
 flowchart TB
     subgraph one["One dataset, published not mapped"]
         direction TB
-        Seed["src/modules/*/demo.ts<br/>the records, per module"]
+        Seed["demo/*.ts<br/>the records, per module"]
         Seed --> Export["seed:export<br/>real seeders + real serializers"]
         Export --> Dataset["db/demo/demo-data.json<br/>this repo's gated snapshot"]
     end
@@ -114,7 +114,7 @@ flowchart TB
 
 ### The three questions, and why none absorbs another
 
-- **"Give me _the_ demo data."** → `demo-data.json`, edited through the `demo.ts` of the module that owns the records and republished with `npm run seed:export`. Published here and nowhere else — it is not in `SHARED_FILES`, so the paired frontend keeps no copy and reads this repo's API instead. Fixed, and the one a human sees on screen. The frontend's `cy.loginAs('user')` types its credentials into a real form served by this repo's demo profile, so it cannot be randomised or generated.
+- **"Give me _the_ demo data."** → `demo-data.json`, edited through `demo/<name>.ts` and republished with `npm run seed:export`. Published here and nowhere else — it is not in `SHARED_FILES`, so the paired frontend keeps no copy and reads this repo's API instead. Fixed, and the one a human sees on screen. The frontend's `cy.loginAs('user')` types its credentials into a real form served by this repo's demo profile, so it cannot be randomised or generated.
 - **"Give me _a_ product, I do not care which."** → the module's `fixtures.ts`. The opposite need: fresh, isolated, overridable per test, and never the demo data — 25 test files would interfere with each other if they shared rows. It is the same builder the demo records go through, so "a product" and "the demo product" cannot disagree about what a product is.
 - **"Give me one the API must _reject_."** → `contract-data.ts`. Derived from the zod schemas so each payload violates exactly one declared constraint. Nothing else here can produce something deliberately illegal, which is the difference between a contract test and a fixture.
   Merging any two would mean one of those questions stops being asked. The merge that _was_ worth doing — the demo dataset, previously written out by hand on both sides — is the one already done.
@@ -140,10 +140,10 @@ flowchart TB
 
 The paired `boilerplate-vue-frontend` repo carries no mock of this API. Its Cypress suite runs against this backend in two profiles, and every change here answers to both:
 
-- **The demo profile — every frontend e2e run.** The frontend's shard runner boots this repo's `npm run demo` once per shard (see [Demo profile](./demo-profile.md)): the real routes, validators and serializers against an in-memory database seeded from `src/modules/<name>/demo.ts`, reset between specs through `POST /__demo/reset`. Response validation on the frontend side parses every answer through the OpenAPI-derived schemas, so a contract violation here is a hard failure there.
+- **The demo profile — every frontend e2e run.** The frontend's shard runner boots this repo's `npm run demo` once per shard (see [Demo profile](./demo-profile.md)): the real routes, validators and serializers against an in-memory database seeded from `demo/<name>.ts`, reset between specs through `POST /__demo/reset`. Response validation on the frontend side parses every answer through the OpenAPI-derived schemas, so a contract violation here is a hard failure there.
 - **The live profile — the frontend's PR gate and nightly.** `npm run test:e2e:live` runs the same specs against the fully-composed stack (`compose:restart` + `host -- db:bootstrap`), with `host -- db:seed:reset` between specs. This is the one that also exercises what the demo profile deliberately disables: the real cache, the real broker, a session cookie over a real network. The frontend's CI requires it on every PR, and its nightly answers whether `main` here still agrees with `main` there.
 
-The practical implication for changes in this repo: an edit to a module's `demo.ts`, a controller or `openapi.yaml` is exercised by the frontend's suites on their very next run — there is no mock in between to keep an old answer alive. Boot sequences and rationale live in the frontend repo: `boilerplate-vue-frontend/docs/tools/demo-profile.md` (demo) and `boilerplate-vue-frontend/docs/tools/live-e2e.md` (live).
+The practical implication for changes in this repo: an edit to a module's `demo/<name>.ts`, a controller or `openapi.yaml` is exercised by the frontend's suites on their very next run — there is no mock in between to keep an old answer alive. Boot sequences and rationale live in the frontend repo: `boilerplate-vue-frontend/docs/tools/demo-profile.md` (demo) and `boilerplate-vue-frontend/docs/tools/live-e2e.md` (live).
 
 ## Test timings
 

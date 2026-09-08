@@ -14,7 +14,6 @@ import type { AppModule } from '@kernel/registry';
 import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
 import { router } from './routes';
 import { localeService } from './services';
-import { seedLocalesCollection, exportSeededLocales } from './demo';
 
 /*
  * The backend tenant's share of this module's collection, handed to `@infrastructure/i18n` so an
@@ -26,7 +25,7 @@ import { seedLocalesCollection, exportSeededLocales } from './demo';
  */
 registerLocaleOverrideProvider(() => localeService.readApiOverrides());
 
-/** This module's manifest entry: routes, demo seeding, and its own locales. */
+/** This module's manifest entry: routes and its own locales. */
 export default {
     name: 'locales',
     basePath: '/locales',
@@ -48,10 +47,5 @@ export default {
      * the last one in the repo with no translations of its own, which was funny and also a bug:
      * a 409 on a key collision was reaching admins in English regardless of what they asked for.
      */
-    locales: path.join(__dirname, 'locales'),
-    seeds: seedLocalesCollection,
-    seedExport: exportSeededLocales,
-    /* Neither row is served raw. `GET /locales` answers a composed capabilities envelope and
-     * `GET /locales/:locale/messages` answers a nested tree built from the flat entries. */
-    demoShapes: { locales: 'stored', localeEntries: 'stored' }
+    locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

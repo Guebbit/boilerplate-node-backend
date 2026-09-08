@@ -29,7 +29,7 @@ import { roleModel } from '@kernel/access/models';
 import { DEMO_TENANT_SLUG, seedAccessModel, seedPresetRoles } from '@kernel/access/seed';
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import { userRepository } from '@modules/users';
-import { seedUsersCollection } from '@modules/users/demo';
+import { demoModules } from '@demo/index';
 import { PRESET_ROLES, wildcardKeyFor } from '@kernel/permissions';
 
 setupTestDb();
@@ -39,7 +39,7 @@ beforeEach(async () => {
 });
 
 /** The user rows the last describe compares against — seeded only where it needs them. */
-const seedUsers = () => seedUsersCollection();
+const seedUsers = () => demoModules.users.seed();
 
 describe('the preset roles', () => {
     it('are seeded as editable rows, one per name', async () => {

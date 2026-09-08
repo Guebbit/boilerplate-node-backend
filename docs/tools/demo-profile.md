@@ -7,7 +7,7 @@ npm run demo               # :3000 — in-memory Mongo, seeded, cache/queue disa
 NODE_PORT=3101 npm run demo   # several run side by side; each owns its own database
 ```
 
-One process, no Docker: `scripts/demo/run-server.ts` starts a `mongodb-memory-server` (the same dependency the test suite already uses), points `NODE_DB_URI` at it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Every enabled module's demo fixtures (`src/modules/<name>/demo.ts`) are seeded at boot. Kill the process and nothing survives it.
+One process, no Docker: `scripts/demo/run-server.ts` starts a `mongodb-memory-server` (the same dependency the test suite already uses), points `NODE_DB_URI` at it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Every module `demo/index.ts` registers is seeded at boot. Kill the process and nothing survives it.
 
 ## Who it is for
 
@@ -21,7 +21,7 @@ It is also the lightest way for a human to get a working API for anything — a 
 
 | Route                | What it does                                                                                                                                                                                                                                                                                                           |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /__demo/reset` | Drop the database, reseed from the modules' demo fixtures, clear the outbox — the deterministic start-of-spec state, in-process and fast enough to run once per e2e spec                                                                                                                                               |
+| `POST /__demo/reset` | Drop the database, reseed from `demo/`'s fixtures, clear the outbox — the deterministic start-of-spec state, in-process and fast enough to run once per e2e spec                                                                                                                                                       |
 | `GET /__demo/emails` | The emails the app "sent" since the last reset. In demo mode the mailer (`src/infrastructure/adapters/mailer.ts`) records to an in-memory outbox (`demo-outbox.ts`) instead of talking to SMTP, with the reset/verify token lifted out of the link — a password-reset spec is the token in the email, or it is nothing |
 
 The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — `NODE_DEMO` is not read from any `.env` example, compose file or Dockerfile.

@@ -241,7 +241,7 @@ flowchart TD
         RP["repository.ts"]
         MD["model.ts"]
         CN["<b>openapi.yaml</b> · probes.ts<br/>its slice of the contract"]
-        EX["audit.ts · metrics.ts · demo.ts<br/>locales/ · events.ts · emails.ts"]
+        EX["audit.ts · metrics.ts<br/>locales/ · events.ts · emails.ts"]
         TS["tests/unit · tests/contract"]
     end
 
@@ -261,22 +261,22 @@ flowchart TD
     class CN,EX,TS side;
 ```
 
-| File                                                             | Required?                             | What it is                                                                          |
-| ---------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| `module.ts`                                                      | **yes**                               | the manifest — the only file `src/modules.ts` imports                               |
-| `index.ts`                                                       | only if a sibling imports this module | the public barrel; a module nothing imports has none                                |
-| `routes.ts` + `controllers/`                                     | only if the domain serves HTTP        | `audit-logs` has neither                                                            |
-| `service.ts` · `repository.ts` · `model.ts`                      | only if it owns data                  | `observability` owns none — it serves URLs over other domains' data                 |
-| `services/`                                                      | when `service.ts` outgrows one file   | see [Layers](./layers.md#when-service-ts-becomes-services)                          |
-| `domain/`                                                        | only if the module has rules to prove | see [Domain Layer](./domain-layer.md)                                               |
-| `openapi.yaml`                                                   | if it serves HTTP                     | its standalone slice of the REST contract                                           |
-| `asyncapi.yaml`                                                  | if it owns a channel                  | the same, for the async contract, server included — `observability` is the only one |
-| `probes.ts`                                                      | as needed                             | the requests a spec cannot describe — see below                                     |
-| `providers/`                                                     | if the domain has an outbound port    | `payments` is the only one — see below                                              |
-| `audit.ts` · `metrics.ts` · `demo.ts` · `locales/` · `events.ts` | as needed                             | the domain's slice of what used to be shared registries                             |
-| `analytics.ts` · `fixtures.ts`                                   | as needed                             | the event names it emits; how its records are built                                 |
-| `emails.ts`                                                      | only if the domain sends email        | the finished copy of its emails — see below                                         |
-| `tests/unit/` · `tests/contract/`                                | yes, in practice                      | deleted with the module                                                             |
+| File                                                 | Required?                             | What it is                                                                          |
+| ---------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
+| `module.ts`                                          | **yes**                               | the manifest — the only file `src/modules.ts` imports                               |
+| `index.ts`                                           | only if a sibling imports this module | the public barrel; a module nothing imports has none                                |
+| `routes.ts` + `controllers/`                         | only if the domain serves HTTP        | `audit-logs` has neither                                                            |
+| `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                  | `observability` owns none — it serves URLs over other domains' data                 |
+| `services/`                                          | when `service.ts` outgrows one file   | see [Layers](./layers.md#when-service-ts-becomes-services)                          |
+| `domain/`                                            | only if the module has rules to prove | see [Domain Layer](./domain-layer.md)                                               |
+| `openapi.yaml`                                       | if it serves HTTP                     | its standalone slice of the REST contract                                           |
+| `asyncapi.yaml`                                      | if it owns a channel                  | the same, for the async contract, server included — `observability` is the only one |
+| `probes.ts`                                          | as needed                             | the requests a spec cannot describe — see below                                     |
+| `providers/`                                         | if the domain has an outbound port    | `payments` is the only one — see below                                              |
+| `audit.ts` · `metrics.ts` · `locales/` · `events.ts` | as needed                             | the domain's slice of what used to be shared registries                             |
+| `analytics.ts` · `fixtures.ts`                       | as needed                             | the event names it emits; how its test/demo records are built                       |
+| `emails.ts`                                          | only if the domain sends email        | the finished copy of its emails — see below                                         |
+| `tests/unit/` · `tests/contract/`                    | yes, in practice                      | deleted with the module                                                             |
 
 The table lists what a module MAY have. What decides **where** in the module a file goes is one
 rule, and `account` is the module that forced it to be written down:
@@ -295,8 +295,8 @@ rule is what makes the table above readable as a shape rather than a suggestion:
 is a layer, and a folder is a subject.
 
 Nothing central enumerates these. `audit.ts`, `metrics.ts` and `events.ts` register or augment
-themselves on import; `seeds` and `locales` are declared in the manifest so the seeder and the
-i18n boot can walk the registry without naming a domain.
+themselves on import; `locales` is declared in the manifest so the i18n boot can walk the registry
+without naming a domain.
 
 `probes.ts` is the one row that is not obvious from the name. A generated API collection can only
 contain the calls the contract describes, and a contract describes valid calls and their declared
@@ -333,16 +333,17 @@ export default {
     name: 'orders',
     basePath: '/orders',
     routes: router,
-    locales: path.join(__dirname, 'locales'),
-    seeds: seedOrdersCollection
+    locales: path.join(__dirname, 'locales')
 } satisfies AppModule;
 ```
 
 Every field is read by something: the router is mounted at `basePath`, `locales` is handed to
-i18next, `subscribe` attaches the module's event handlers, `seeds` is called by the seeding script.
-That is the bar for a field being here at all — the manifest used to also carry `subdomain`
-and a labelled `dependsOn` graph, which nothing read and three tests checked; see
-[Strategic DDD](./strategic-ddd.md) §2 and §4 for where that description lives now.
+i18next, `subscribe` attaches the module's event handlers. That is the bar for a field being here
+at all — the manifest used to also carry `subdomain` and a labelled `dependsOn` graph, which
+nothing read and three tests checked; see [Strategic DDD](./strategic-ddd.md) §2 and §4 for where
+that description lives now. It also used to carry `seeds`/`seedExport`/`demoShapes`: gone for the
+same reason — `demo/index.ts` reads a module's repository and fixtures directly, so a domain with
+no demo data carries nothing about demo data at all, not even an absent field.
 
 `basePath` and `routes` are both optional, so a domain that owns data but no URL is an ordinary
 entry rather than a special case — `audit-logs` declares neither and `app/routes.ts` mounts only
@@ -575,14 +576,15 @@ Some of these rules are relational — what a file may import depends on which m
 | A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`  |
 | Every committed bundle still equals a fresh run of the bundler                        | `contract-bundles.test.ts`           |
 | Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`            |
+| `demo/index.ts` names no module `enabledModules` does not also enable                 | `seed-conformance.test.ts`           |
 
 Each of these was verified by deliberately breaking it and watching it fail. A guard nobody has seen
 fire is a comment. All but the last live in `tests/cross-cutting/`; `request-sources.test.ts` sits
 in `tests/contract/`, because it needs the loaded spec the contract harness already registers.
 
 **`module-subscriptions.test.ts` is the least obvious of these**, because the thing it catches never
-fails on its own. `subscribe` is the one part of a manifest that is pure behaviour: `routes`,
-`locales` and `seeds` are values a test can read, but a subscription only exists as the side effect
+fails on its own. `subscribe` is the one part of a manifest that is pure behaviour: `routes` and
+`locales` are values a test can read, but a subscription only exists as the side effect
 of calling a function at boot. Nothing else in the suite calls these hooks — `app.ts` does, once —
 so an emptied `subscribe` body is invisible. The module still registers, still serves its routes,
 still passes every other check, and simply stops reacting to the rest of the system: deleting a

@@ -32,7 +32,7 @@ flowchart TD
     Service --> Domain["domain/<br/><i>pure rules</i>"]
     Service --> Repo["repository.ts"]
     Repo --> Model["model.ts"]
-    Manifest -.-> Side["locales/ · demo.ts · audit.ts<br/>metrics.ts · analytics.ts · events.ts"]
+    Manifest -.-> Side["locales/ · audit.ts<br/>metrics.ts · analytics.ts · events.ts"]
 
     classDef dec fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef layer fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -50,7 +50,7 @@ Every module has these, and a reader who knows them knows twelve of the thirteen
 
 | Pattern                          | What it is                                                                                                                                                                                                                                                                                                          | Read next                                                                                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `src/modules/*/module.ts`        | The manifest, and the only file the application loads directly. Declares the module's name, base path, router, dependency edges, locales, seeds and event subscriptions. Everything else in the folder is reached through it.                                                                                       | [Modules](../theory/modules.md) · [Strategic DDD](../theory/strategic-ddd.md)                                           |
+| `src/modules/*/module.ts`        | The manifest, and the only file the application loads directly. Declares the module's name, base path, router, dependency edges, locales and event subscriptions. Everything else in the folder is reached through it.                                                                                              | [Modules](../theory/modules.md) · [Strategic DDD](../theory/strategic-ddd.md)                                           |
 | `src/modules/*/routes.ts`        | The URL surface: one line per endpoint, naming its middlewares, the role it requires and the controller it lands on. Reading it top to bottom is reading the module's API.                                                                                                                                          | [Endpoints](../api/endpoints.md)                                                                                        |
 | `src/modules/*/controllers/*.ts` | One file per operation, named for the verb it serves. Reads inputs, calls the service, answers through the response envelope — and catches, which `eslint/rules/controller-chain-must-catch.ts` enforces. The filename convention is `<verb>-<thing>.ts` so `ls controllers/` sorts into the shape of the resource. | [Layers](../theory/layers.md) · [Request Flow](../theory/request-flow.md)                                               |
 | `src/modules/*/service.ts`       | The domain decision, and the layer that owns status-code meaning. Past roughly 300 lines it becomes a services directory with a barrel.                                                                                                                                                                             | [Layers](../theory/layers.md)                                                                                           |
@@ -74,9 +74,14 @@ Present when the domain needs it. A module that has none of these is not incompl
 | `src/modules/*/analytics.ts`  | The product-analytics events this module emits. Also a contract fragment: `npm run contracts:bundle` publishes the names to the paired frontend.                             | [Product Analytics](../tools/analytics.md)                                            |
 | `src/modules/*/emails.ts`     | Which templates this module sends and what they are given. The templates themselves are EJS files under `shared/templates/`.                                                 | [Email & PDF Rendering](../tools/email-and-rendering.md)                              |
 | `src/modules/*/probes.ts`     | The requests the contract cannot describe — the calls that prove the API REJECTS things. Emitted into every client collection after this module's contract-derived requests. | [Contract request data](../tools/contract-request-data.md)                            |
-| `src/modules/*/demo.ts`       | The module's seed fixtures, upserted through the shared seeding primitive. What `npm run db:seed` and the demo profile put in the database.                                  | [Data](./data.md) · [Demo profile](../tools/demo-profile.md)                          |
 | `src/modules/*/fixtures.ts`   | Fixture builders for tests, on top of the shared persistence fixtures. Production code, deliberately — a sibling's contract suite may need to build this module's documents. | [Unit Testing](../tools/unit-testing.md)                                              |
 | `src/modules/*/asyncapi.yaml` | This module's slice of the realtime contract, bundled into the root `asyncapi.yaml` the same way the REST fragments are.                                                     | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                      |
+
+::: tip A module's seed fixtures are not in this folder
+`demo/<name>.ts`, outside `src/` entirely, upserted through the shared seeding primitive and
+tabled by `demo/index.ts` — what `npm run db:seed` and the demo profile put in the database. See
+[Data](./data.md) and [Demo profile](../tools/demo-profile.md).
+:::
 
 ## The one-offs
 

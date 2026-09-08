@@ -1,21 +1,18 @@
 /**
  * Assemble the demo dataset from whatever is currently in the database.
  *
- * Reads every enabled module's rows back through the real serializers, checks the result is
+ * Reads every demo module's rows back through the real serializers, checks the result is
  * internally consistent, and renders it as the bytes `db/demo/demo-data.json` holds. Nothing here
  * connects, seeds or writes — the caller supplies an open connection and decides what to do with
  * the string.
  *
  * ## Why this is a module and not part of the export script
  *
- * Two callers need the same answer from the same rows:
- *
- *   - `scripts/demo/export-dataset.ts` publishes it, against a database it seeded from scratch;
- *   - `npm run check:seed-export` re-derives it and compares against the committed bytes.
- *
- * A second implementation of this walk would let those two disagree about what the dataset even
- * is, which is the class of bug the published-output design exists to remove. So there is one
- * assembler and both callers import it.
+ * Two callers need the same answer from the same rows — `scripts/demo/export-dataset.ts`
+ * publishes it against a database it seeded from scratch, and `npm run check:seed-export`
+ * re-derives it and compares against the committed bytes. A second implementation of this walk
+ * would let those two disagree about what the dataset even is, which is the class of bug the
+ * published-output design exists to remove. So there is one assembler and both callers import it.
  *
  * ## Determinism is a hard requirement
  *
@@ -27,9 +24,8 @@
  */
 
 import path from 'node:path';
-import type { DemoShape } from '../../src/kernel/registry';
+import { demoModules, type DemoShape } from '@demo/index';
 import { seedCredentials } from '../../src/kernel/seed-accounts';
-import { enabledModules } from '../../src/modules';
 
 /* The dataset sits beside the seeder that produces the rows, not beside this file: `db/` is where
  * the demo data lives, and this is only the tool that renders it.
@@ -167,14 +163,13 @@ const reconcileShapes = (
 };
 
 export const assembleDemoDataset = async (): Promise<string> => {
-    const sections = await Promise.all(
-        enabledModules.map((appModule) => appModule.seedExport?.() ?? Promise.resolve({}))
-    );
+    const modules = Object.values(demoModules);
+    const sections = await Promise.all(modules.map((demoModule) => demoModule.export()));
 
     /*
-     * Collections are keyed and then sorted by name rather than kept in module order, so that
-     * reordering `enabledModules` — or renaming a module, which moves it in that list — does not
-     * rewrite the file and light up the cross-repo hash check for no reason.
+     * Collections are keyed and then sorted by name rather than kept in table order, so that
+     * reordering `demo/index.ts`'s table — or renaming a module, which moves it in that table —
+     * does not rewrite the file and light up the cross-repo hash check for no reason.
      */
     const merged = Object.assign({}, ...sections) as Record<string, unknown[]>;
     const collections = toPlainJson(merged);
@@ -185,10 +180,10 @@ export const assembleDemoDataset = async (): Promise<string> => {
      * has the answer in the file they already have open. `sortKeys` orders the map, exactly as it
      * orders everything else here.
      */
-    const shapes = Object.assign(
-        {},
-        ...enabledModules.map((appModule) => appModule.demoShapes ?? {})
-    ) as Record<string, DemoShape>;
+    const shapes = Object.assign({}, ...modules.map((demoModule) => demoModule.shapes)) as Record<
+        string,
+        DemoShape
+    >;
     reconcileShapes(collections, shapes);
 
     const dataset = { _meta: { shapes }, credentials: seedCredentials, collections };
