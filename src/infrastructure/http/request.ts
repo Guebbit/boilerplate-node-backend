@@ -249,6 +249,16 @@ export interface CallerContext {
      * and never travels on this.
      */
     caller: Caller;
+    /**
+     * The tenant role name behind {@link caller} — `AuthContext.roles.tenant`, absent when the
+     * request never resolved one at all (see `STRANGER` below).
+     *
+     * `caller.permissions` is the expanded key list a rule reads; this is the NAME a person would
+     * recognise, kept only for the audit trail's `actor_role_name` — a renamed role invalidates a
+     * value read from here, never a decision made from `caller`, which is why the two travel
+     * separately instead of one standing in for the other.
+     */
+    actorRoleName?: string;
     /** The caller's address, as Express resolved it (trust-proxy aware). */
     ip?: string;
     /** The `User-Agent` the caller sent, if any. */
@@ -294,7 +304,7 @@ const STRANGER: Caller = { id: null, tenantId: null, scope: 'tenant', permission
  */
 export const callerContextOf = (request: {
     caller?: Caller;
-    authContext?: { analyticsConsent?: boolean };
+    authContext?: { analyticsConsent?: boolean; roles?: { tenant?: string } };
     ip?: string;
     headers?: {
         'user-agent'?: string | string[];
@@ -309,6 +319,7 @@ export const callerContextOf = (request: {
     const consentHeader = Array.isArray(rawConsentHeader) ? rawConsentHeader[0] : rawConsentHeader;
     return {
         caller: request.caller ?? STRANGER,
+        actorRoleName: request.authContext?.roles?.tenant,
         ip: request.ip,
         // Node exposes a repeated header as an array; take the first rather than logging
         // '[object Object]'-style noise.

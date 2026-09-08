@@ -62,6 +62,12 @@ export interface AuditEvent {
     actor_user_id: string;
     /** Privilege level at the time of the action, so a later role change cannot rewrite history. */
     actor_role: 'admin' | 'user' | 'anonymous';
+    /**
+     * The tenant role name behind `actor_role`, e.g. `moderator` — open where `actor_role` is
+     * closed, so a reader can ask "which moderator did this" without a renamed role invalidating
+     * a query against the field above it. Absent for a request that never resolved a role at all.
+     */
+    actor_role_name?: string;
     /** What was attempted (see the enum above). */
     action: AuditAction;
     /** Whether it worked. Failures are the security-relevant half: repeated ones signal attack. */
@@ -208,7 +214,12 @@ export const buildAuditEvent = (
         Partial<
             Pick<
                 AuditEvent,
-                'actor_user_id' | 'actor_role' | 'target_type' | 'target_id' | 'metadata'
+                | 'actor_user_id'
+                | 'actor_role'
+                | 'actor_role_name'
+                | 'target_type'
+                | 'target_id'
+                | 'metadata'
             >
         >
 ): AuditEvent => ({
@@ -217,6 +228,7 @@ export const buildAuditEvent = (
     // email) is the single most useful field in the record.
     actor_user_id: fields.actor_user_id ?? context.caller.id ?? 'unknown',
     actor_role: fields.actor_role ?? resolveActorRole(context),
+    actor_role_name: fields.actor_role_name ?? context.actorRoleName,
     // Spread after the defaults so caller values replace them.
     ...fields,
     // Spread last, deliberately: context-derived fields (ip, trace_id, ...) are not

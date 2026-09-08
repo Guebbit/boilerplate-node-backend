@@ -8,7 +8,14 @@
  */
 
 import { auditLogSchema } from '@modules/audit-logs/model';
-import { enumOf, indexOptionSpecs, indexSpecs, optionsOf, requiredPaths } from '@tests/schema';
+import {
+    enumOf,
+    indexOptionSpecs,
+    indexSpecs,
+    optionsOf,
+    pathNames,
+    requiredPaths
+} from '@tests/schema';
 
 /** The retention window the schema was built with, in seconds. Mirrors the model's own default. */
 const RETENTION_SECONDS = Number(process.env.NODE_AUDIT_RETENTION_DAYS ?? 90) * 24 * 60 * 60;
@@ -42,6 +49,14 @@ describe('auditLogSchema — what an entry must carry', () => {
         // before an account is taken — has nowhere to record who it was not.
         expect(enumOf(auditLogSchema, 'actor_role')).toContain('anonymous');
     });
+
+    it('carries the real role name beside the closed bucket, open and optional', () => {
+        // Open where `actor_role` is closed: a preset role renamed in `authorization-roles.yaml`
+        // must not fail a write, so no enum and no `required` — see `AuditEvent.actor_role_name`.
+        expect(pathNames(auditLogSchema)).toContain('actor_role_name');
+        expect(requiredPaths(auditLogSchema)).not.toContain('actor_role_name');
+        expect(enumOf(auditLogSchema, 'actor_role_name')).toEqual([]);
+    });
 });
 
 describe('auditLogSchema — options', () => {
@@ -61,12 +76,14 @@ describe('auditLogSchema — options', () => {
 });
 
 describe('auditLogSchema — indexes and retention', () => {
-    it('indexes the two questions an operator asks, newest first', () => {
-        // "What did this account do" and "who did this action" — both read latest-first, which is
-        // what the `-1` buys. The third index is the retention sweep below.
+    it('indexes the three questions an operator or a moderator asks, newest first', () => {
+        // "What did this account do", "who did this action" and "what happened to this row" —
+        // all three read latest-first, which is what the `-1` buys. The fourth index is the
+        // retention sweep below.
         expect(indexSpecs(auditLogSchema)).toEqual([
             'action_1_timestamp_-1: action+1, timestamp-1',
             'actor_user_id_1_timestamp_-1: actor_user_id+1, timestamp-1',
+            'target_id_1_timestamp_-1: target_id+1, timestamp-1',
             'timestamp_1: timestamp+1'
         ]);
     });
@@ -78,6 +95,7 @@ describe('auditLogSchema — indexes and retention', () => {
         expect(indexOptionSpecs(auditLogSchema)).toEqual([
             'action_1_timestamp_-1: (none)',
             'actor_user_id_1_timestamp_-1: (none)',
+            'target_id_1_timestamp_-1: (none)',
             `timestamp_1: expireAfterSeconds=${RETENTION_SECONDS}`
         ]);
     });

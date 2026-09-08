@@ -56,6 +56,11 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
             enum: ['admin', 'user', 'anonymous'],
             required: true
         },
+        // Open where `actor_role` is closed — no enum, so a renamed or newly added preset role
+        // never needs a migration here. See `actor_role_name` on `AuditEvent`.
+        actor_role_name: {
+            type: String
+        },
         action: {
             type: String,
             required: true
@@ -128,7 +133,7 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
 );
 
 /*
- * Indexes matching the two filtered ways the endpoint is queried. Both are compound with
+ * Indexes matching the three filtered ways the endpoints are queried. All three are compound with
  * `timestamp: -1` because every query sorts newest-first — a plain `{ actor_user_id: 1 }` index
  * would find the matching entries and then sort them in memory, which is the shape that falls
  * over first as the collection grows.
@@ -139,6 +144,8 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
  */
 auditLogSchema.index({ actor_user_id: 1, timestamp: -1 });
 auditLogSchema.index({ action: 1, timestamp: -1 });
+// "What happened to this row" — the question `GET /audit`'s `target` filter answers.
+auditLogSchema.index({ target_id: 1, timestamp: -1 });
 
 /*
  * TTL index — Mongo deletes entries older than the retention window on its own.

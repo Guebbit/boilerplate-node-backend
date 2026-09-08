@@ -646,6 +646,9 @@ describe('callerContextOf', () => {
             // The CALLER, not the session: an audit row and an analytics event are about which
             // keys were held, and identity beyond the id is nobody's business downstream.
             caller: callerInScope(asCustomer('user-1'), 'tenant'),
+            // The NAME behind that caller, for the audit trail alone — see `actorRoleName`'s
+            // docblock on `CallerContext`.
+            actorRoleName: 'customer',
             ip: '10.0.0.1',
             userAgent: 'Mozilla/5.0',
             host: 'shop.example.com',
@@ -678,6 +681,8 @@ describe('callerContextOf', () => {
         expect(context.host).toBeUndefined();
         expect(context.requestId).toBeUndefined();
         expect(context.analyticsConsent).toBe(false);
+        // Same reasoning as `caller` above: nothing was resolved, so there is no name either.
+        expect(context.actorRoleName).toBeUndefined();
     });
 
     it('reads analytics consent off the header for an anonymous caller, decoding boolean spellings', () => {
