@@ -17,6 +17,7 @@ import { emitDomainEvent } from '@kernel/events';
 import { OrderStatus } from '@types';
 import type { PaymentStatus, AuthContext } from '@types';
 import { orderRepository, statusesLeadingTo, ORDER_STATUS_CHANGED } from '@modules/orders';
+import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -104,7 +105,16 @@ export const settlePayment = (
     if (state.status === 'declined')
         return paymentRepository
             .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, 'declined', extra)
-            .then((updated) => ({ payment: updated ?? payment, orderLost: false }));
+            .then((updated) => {
+                // Only when THIS call actually moved the write — a redelivered decline that lost
+                // its race must not tell `webhooks` the attempt happened twice.
+                if (updated)
+                    void emitDomainEvent(PAYMENT_FAILED, {
+                        paymentId: String(updated._id),
+                        orderId
+                    });
+                return { payment: updated ?? payment, orderLost: false };
+            });
 
     // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
     // racing settlements gets past it.
@@ -164,6 +174,7 @@ export const settlePayment = (
                 from: 'pending',
                 to: 'paid'
             });
+            await emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: String(succeeded._id), orderId });
 
             return { payment: succeeded, orderLost: false };
         });

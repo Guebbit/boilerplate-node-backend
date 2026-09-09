@@ -8,3 +8,4 @@
  */
 
 export { paymentService } from './services';
+export { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from './events';

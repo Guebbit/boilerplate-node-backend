@@ -26,7 +26,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
-import { ORDER_STATUS_CHANGED } from '../events';
+import { ORDER_CREATED, ORDER_STATUS_CHANGED } from '../events';
 import { orderRepository } from '../repository';
 import { canTransition, checkOrderLines, statusesReachableFrom } from '../domain';
 import { resolveSnapshotProducts } from './snapshot';
@@ -97,6 +97,10 @@ export const recordCreated = (
         event: ordersAnalyticsEvents.ORDER_CREATED,
         properties: { order_id: String(order._id) }
     });
+    // Fire-and-forget, like the audit/analytics emits above: `webhooks` reacts to this from its
+    // own `subscribe()` hook, and a slow or failing listener there must not delay the response
+    // this function's callers are already sending.
+    void emitDomainEvent(ORDER_CREATED, { orderId: String(order._id) });
 };
 
 /**

@@ -16,6 +16,8 @@ import { ORDER_CANCELLED } from '@modules/orders';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { refundForOrder, detachUserId } from './services';
+// Installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED).
+import './events';
 
 /** This module's manifest entry: routes, the cancel-refund subscription, and locales. */
 export default {

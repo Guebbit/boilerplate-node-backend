@@ -15,7 +15,7 @@ export { orderRepository } from './repository';
 // `cart`'s checkout runs the same compensation as this module's own `create`: an order written
 // and then refused by a later step. Shared rather than copied — the two failure paths are one.
 export { retractOrder } from './services';
-export { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
+export { ORDER_CANCELLED, ORDER_STATUS_CHANGED, ORDER_CREATED } from './events';
 // `cart` sends the confirmation itself: only the checkout has the recipient's locale in scope.
 export { orderConfirmEmail } from './emails';
 // `cart`'s checkout freezes its own line snapshots the same way `create()` does — one resolver,

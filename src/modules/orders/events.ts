@@ -25,6 +25,14 @@ declare module '@kernel/events' {
          * know who cares.
          */
         'order.status_changed': { orderId: string; from: OrderStatus; to: OrderStatus };
+
+        /**
+         * A new order was written — the admin create and the storefront checkout both funnel
+         * through `recordCreated`, so this fires exactly once per order regardless of which path
+         * made it. `webhooks` is the first listener that needs this fact as an event rather than
+         * as audit/analytics noise.
+         */
+        'order.created': { orderId: string };
     }
 }
 
@@ -33,3 +41,6 @@ export const ORDER_CANCELLED = 'order.cancelled';
 
 /** See `DomainEventMap['order.status_changed']` above. */
 export const ORDER_STATUS_CHANGED = 'order.status_changed';
+
+/** See `DomainEventMap['order.created']` above. */
+export const ORDER_CREATED = 'order.created';
