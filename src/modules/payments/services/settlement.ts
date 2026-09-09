@@ -174,7 +174,10 @@ export const settlePayment = (
                 from: 'pending',
                 to: 'paid'
             });
-            await emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: String(succeeded._id), orderId });
+            // Fire-and-forget, like `PAYMENT_FAILED` above: `webhooks` reacts to this from its own
+            // `subscribe()` hook, and a slow or failing listener there must not delay the response
+            // this settlement's callers (confirm, sync, the provider webhook) are already sending.
+            void emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: String(succeeded._id), orderId });
 
             return { payment: succeeded, orderLost: false };
         });
