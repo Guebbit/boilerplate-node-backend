@@ -21,6 +21,7 @@ import {
     orderRepository,
     orderService,
     orderConfirmEmail,
+    resolveSnapshotProducts,
     retractOrder,
     sumLineItems,
     type OrderDocument
@@ -82,6 +83,10 @@ const runCheckout = async (
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const user = await userRepository.findById(userId);
     if (!user) return generateReject(404, []);
+
+    // The whole language chain for this checkout — both the snapshot each line freezes and,
+    // further down, the confirmation email — decided once so the two cannot disagree.
+    const buyerLocale = user.locale ?? getDefaultLocale();
 
     /*
      * Resolved before any stock moves: an unmatched name refuses the checkout while
@@ -164,9 +169,17 @@ const runCheckout = async (
             }
         ]);
 
-    const orderItems = joined.map(({ product, quantity }) => ({
-        product,
-        quantity
+    // Resolved into the buyer's language only now every check has passed — translation must
+    // never gate a purchase, so it runs strictly after the stock/shipping verdicts above.
+    const resolvedProducts = await resolveSnapshotProducts(
+        buyerLocale,
+        joined.map(({ product }) => product)
+    );
+    const orderItems = joined.map(({ quantity }, index) => ({
+        // Same array, same order as `resolvedProducts` — `resolveSnapshotProducts` maps 1:1.
+        product: resolvedProducts[index],
+        quantity,
+        locale: buyerLocale
     }));
 
     /*
@@ -220,9 +233,10 @@ const runCheckout = async (
     if (clearedCart) {
         /*
          * Sent from the service, not the controller: only this point knows the order
-         * stood. Goes out in the customer's own locale, not the request's.
+         * stood. Same `buyerLocale` the snapshot above was frozen in, so the email and the
+         * order it describes never quote two different languages.
          */
-        const mail = orderConfirmEmail(user.locale ?? getDefaultLocale(), user.username, order);
+        const mail = orderConfirmEmail(buyerLocale, user.username, order);
         void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
         return generateSuccess<OrderDocument>(order);
     }

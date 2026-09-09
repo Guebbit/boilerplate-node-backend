@@ -10,6 +10,7 @@
  */
 
 import { Types } from 'mongoose';
+import { getDefaultLocale } from '@infrastructure/i18n';
 import {
     identityOf,
     stripUndefined,
@@ -31,8 +32,17 @@ import type { OrderDocument } from './model';
 export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserved'> &
     Required<Pick<Product, 'id' | 'title' | 'price'>>;
 
-/** One line of an order: the snapshot, and how many were bought. */
-export type OrderLineInput = Omit<OrderItem, 'product'> & { product: OrderSnapshotInput };
+/**
+ * One line of an order: the snapshot, and how many were bought.
+ *
+ * `locale` is optional here, unlike the contract's `OrderItem`: a fixture usually doesn't care
+ * which language a snapshot claims to be resolved into, so `makeOrder` defaults it to
+ * `getDefaultLocale()` rather than making every caller state it.
+ */
+export type OrderLineInput = Omit<OrderItem, 'product' | 'locale'> & {
+    product: OrderSnapshotInput;
+    locale?: string;
+};
 
 /**
  * What a caller may pin, derived from the generated `Order`. The three totals and `status` are
@@ -95,9 +105,10 @@ export const makeOrder = ({
     ...identityOf({ id, createdAt, updatedAt }),
     userId: new Types.ObjectId(userId),
     email: email ?? 'test@example.com',
-    items: (items ?? []).map(({ product, quantity }) => ({
+    items: (items ?? []).map(({ product, quantity, locale }) => ({
         product: toSnapshot(product),
-        quantity
+        quantity,
+        locale: locale ?? getDefaultLocale()
     })),
     /*
      * The three shipping columns pass through rather than defaulting to anything. All three are

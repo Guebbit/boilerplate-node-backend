@@ -735,13 +735,19 @@ components:
         OrderItem:
             type: object
             additionalProperties: false
-            required: [product, quantity]
+            required: [product, quantity, locale]
             properties:
                 product:
                     $ref: '#/components/schemas/OrderLineProduct'
                 quantity:
                     type: integer
                     minimum: 1
+                # The language `product.title`/`description` were resolved into when this line was
+                # frozen — the buyer's, not the request's. A historical record, not a preference:
+                # re-reading the order later must reproduce what was actually bought, in whatever
+                # language it was bought in, regardless of the reader's own locale.
+                locale:
+                    $ref: '#/components/schemas/Locale'
 
         OrderStatus:
             type: string

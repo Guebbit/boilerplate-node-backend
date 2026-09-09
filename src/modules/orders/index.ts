@@ -18,6 +18,9 @@ export { retractOrder } from './services';
 export { ORDER_CANCELLED, ORDER_STATUS_CHANGED } from './events';
 // `cart` sends the confirmation itself: only the checkout has the recipient's locale in scope.
 export { orderConfirmEmail } from './emails';
+// `cart`'s checkout freezes its own line snapshots the same way `create()` does — one resolver,
+// not a second opinion on how a buyer's language gets embedded.
+export { resolveSnapshotProducts } from './services';
 // `OrderDocumentItem` stays unpublished — tests derive order lines from a product fixture
 // (`tests/fixtures.ts`'s `toOrderItem`) instead of casting around the type.
 export type { OrderDocument } from './model';

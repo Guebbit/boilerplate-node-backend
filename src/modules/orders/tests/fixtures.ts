@@ -25,10 +25,17 @@ type OrderExtras = Omit<OrderOverrides, 'userId' | 'email' | 'items'>;
  * Convert a persisted product document into an order line ready to embed.
  * Copies the whole document, minus Mongo's `_id`/`__v`, so a newly added column isn't silently
  * missed the way naming fields individually did. `toObject()` keeps `Date`s as `Date`s.
+ *
+ * @param locale - which locale the line claims its snapshot is resolved into; defaults (via
+ *   `makeOrder`) to `getDefaultLocale()` when omitted, same as an untranslated order would freeze
  */
-export const toOrderItem = (product: ProductDocument, quantity = 1): OrderLineInput => {
+export const toOrderItem = (
+    product: ProductDocument,
+    quantity = 1,
+    locale?: string
+): OrderLineInput => {
     const { _id, __v, ...snapshot } = product.toObject();
-    return { product: { ...snapshot, id: String(_id) }, quantity };
+    return { product: { ...snapshot, id: String(_id) }, quantity, locale };
 };
 
 /**

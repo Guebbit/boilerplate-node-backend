@@ -16,6 +16,10 @@ import { orderTotal } from './domain';
  *
  * Structural rather than `OrderDocument`: what the documents print is the lines, and asking for
  * less than the whole document keeps both builders callable from a test with a two-line fixture.
+ *
+ * `product.title` arrives already resolved into the order's own frozen locale — see
+ * `OrderDocumentItem.locale` and `resolveSnapshotProducts` — never the recipient's or the
+ * request's. Neither builder below re-resolves it; they only interpolate.
  */
 export interface OrderLines {
     items: { quantity: number; product: { title: string; price: number } }[];

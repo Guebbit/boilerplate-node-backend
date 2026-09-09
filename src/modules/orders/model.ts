@@ -6,6 +6,12 @@
  * since a later product edit must not rewrite purchase history. `totalItems`, `totalQuantity` and
  * `totalPrice` are never stored — `applyOrderTransform` derives them from `items` at the single
  * serialization point every response passes through, letting the contract mark them required.
+ *
+ * The snapshot is not just a copy of the product row: `title`/`description` are that product's
+ * text as resolved into the buyer's language at order-creation time, then frozen — each item
+ * carries the `locale` that resolution happened in, so a later read reproduces what was actually
+ * bought rather than re-resolving against whoever happens to be reading it. See
+ * `./services/snapshot`.
  * See: docs/modules/orders.md
  */
 
@@ -21,6 +27,11 @@ import type { Order } from '@types';
  * A single item stored inside an order document. Uses `ProductSnapshot` rather than OpenAPI's
  * `OrderItem`, since Mongoose embeds the product directly — and not `ProductDocument`, since
  * what's embedded is a subdocument with none of `Document`'s methods on it.
+ *
+ * `product.title`/`description` are not the catalogue's own words: they are that product's text
+ * as RESOLVED into `locale` at order-creation time, then frozen. Reading them later must not
+ * re-resolve against whatever locale is ambient at read time — that would let an old order's
+ * copy drift into a language the buyer never saw.
  */
 export interface OrderDocumentItem {
     /**
@@ -34,6 +45,12 @@ export interface OrderDocumentItem {
      */
     product: ProductSnapshot;
     quantity: number;
+    /**
+     * The language `product.title`/`description` were resolved into, frozen alongside them —
+     * see `resolveSnapshotProducts` in `./services/snapshot`. Lives on the item, not the product:
+     * it describes the resolution of the whole line, not a property of the product itself.
+     */
+    locale: string;
 }
 
 /**
@@ -147,6 +164,12 @@ const orderItemSchema = new Schema(
         product: { type: orderLineProductSchema },
         quantity: {
             type: Number,
+            required: true
+        },
+        // The language `product.title`/`description` were resolved into when this line was
+        // frozen — see `OrderDocumentItem.locale`.
+        locale: {
+            type: String,
             required: true
         }
     },

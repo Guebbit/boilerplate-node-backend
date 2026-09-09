@@ -29,6 +29,7 @@ import { ordersAuditActions } from '../audit';
 import { ORDER_STATUS_CHANGED } from '../events';
 import { orderRepository } from '../repository';
 import { canTransition, checkOrderLines, statusesReachableFrom } from '../domain';
+import { resolveSnapshotProducts } from './snapshot';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -148,6 +149,11 @@ export const create = async (
     items: CartItem[],
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
+    // The whole language chain — both the snapshot each line freezes and, further down, the
+    // confirmation email — decided once so the two cannot disagree. `context.locale` is the caller's
+    // own: an admin-created order has no recipient record, only a supplied address.
+    const buyerLocale = context.locale ?? getDefaultLocale();
+
     // One rule call, two outcomes. `Promise.all([])` settles without a query, so an empty basket
     // still costs no round trip. The rule is in `domain/rules.ts`; mapping it to a status code
     // and translated copy is this layer's job.
@@ -165,9 +171,17 @@ export const create = async (
             ? generateReject(422, [t('generic.error-missing-data')])
             : generateReject(404, [t('products.not-found')]);
 
-    const orderItems: OrderDocumentItem[] = resolvedItems.map(({ item, product }) => ({
-        product: product!,
-        quantity: item.quantity
+    // Resolved into the buyer's language only now the lines are known good — translation must
+    // never gate a purchase, so it runs strictly after the availability verdict above.
+    const resolvedProducts = await resolveSnapshotProducts(
+        buyerLocale,
+        resolvedItems.map(({ product }) => product!)
+    );
+    const orderItems: OrderDocumentItem[] = resolvedItems.map(({ item }, index) => ({
+        // Same array, same order as `resolvedProducts` — `resolveSnapshotProducts` maps 1:1.
+        product: resolvedProducts[index],
+        quantity: item.quantity,
+        locale: buyerLocale
     }));
 
     /*
@@ -208,11 +222,10 @@ export const create = async (
     /*
      * The confirmation mail for THIS path only — `recordCreated` is shared with
      * `@modules/cart`'s checkout, which sends its own, so mailing here too would double-send.
-     * `context.locale` is the whole language chain: an admin-created order has no recipient
-     * record, only a supplied address, so there's no stored preference to prefer over the
-     * request's.
+     * Same `buyerLocale` the snapshot above was frozen in, so the email and the order it
+     * describes never quote two different languages.
      */
-    const mail = orderConfirmEmail(context.locale ?? getDefaultLocale(), email, order);
+    const mail = orderConfirmEmail(buyerLocale, email, order);
     void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
 
     return generateSuccess(order, 201, t('orders.creation-success'));
@@ -294,11 +307,24 @@ export const update = async (
                       const missingProduct = resolvedItems.some(({ product }) => !product);
                       if (missingProduct) return generateReject(404, [t('products.not-found')]);
 
-                      order.items = resolvedItems.map(({ item, product }) => ({
-                          product: product!,
-                          quantity: item.quantity
-                      }));
-                      return undefined;
+                      /*
+                       * No fresh buyer context on an admin PATCH — `update()` takes no
+                       * `CallerContext`. Reuse whatever language the order's own lines are
+                       * already frozen in, so an admin editing line items doesn't silently
+                       * switch the order to a different language mid-flight.
+                       */
+                      const lineLocale = order.items[0]?.locale ?? getDefaultLocale();
+                      return resolveSnapshotProducts(
+                          lineLocale,
+                          resolvedItems.map(({ product }) => product!)
+                      ).then((resolvedProducts) => {
+                          order.items = resolvedItems.map(({ item }, index) => ({
+                              product: resolvedProducts[index],
+                              quantity: item.quantity,
+                              locale: lineLocale
+                          }));
+                          return undefined;
+                      });
                   });
               })
             : Promise.resolve();

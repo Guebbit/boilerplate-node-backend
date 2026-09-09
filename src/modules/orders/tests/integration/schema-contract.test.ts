@@ -27,7 +27,7 @@ const makeOrderPayload = async () => {
     return {
         userId: user._id,
         email: user.email,
-        items: [{ product: product.toObject(), quantity: 2 }]
+        items: [{ product: product.toObject(), quantity: 2, locale: 'en' }]
     };
 };
 

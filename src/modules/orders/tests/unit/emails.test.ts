@@ -97,6 +97,26 @@ describe('orderConfirmEmail', () => {
         }
         expect(data.pageMetaLinks).toEqual([]);
     });
+
+    /*
+     * The Phase 6 regression: a line's own product text is frozen upstream, at order-creation
+     * time (`resolveSnapshotProducts`) — this builder only INTERPOLATES `item.product.title`,
+     * never re-resolves it. A title that happens to collide with a real translation key is the
+     * sharpest proof: if this ever regressed to `t(item.product.title)`, the key would resolve
+     * to that OTHER string instead of surviving verbatim.
+     */
+    it("never re-resolves a line's title through `t()`, even one that collides with a real key", () => {
+        const collidingTitle = 'orders.email-confirm.greeting';
+        const order: OrderLines = {
+            items: [{ quantity: 1, product: { title: collidingTitle, price: 1 } }]
+        };
+
+        const english = orderConfirmEmail('en', NAME, order).data.lines as string[];
+        const italian = orderConfirmEmail('it', NAME, order).data.lines as string[];
+
+        expect(english[0]).toContain(collidingTitle);
+        expect(italian[0]).toContain(collidingTitle);
+    });
 });
 
 describe('invoiceDocument', () => {
@@ -136,5 +156,19 @@ describe('invoiceDocument', () => {
         expect(english.locale).toBe('en');
         expect(italian.locale).toBe('it');
         expect(italian.title).not.toBe(english.title);
+    });
+
+    it("never re-resolves a line's title through `t()`, even one that collides with a real key", () => {
+        const collidingTitle = 'orders.invoice.title';
+        const order = {
+            items: [{ quantity: 1, product: { title: collidingTitle, price: 1 } }],
+            id: 'x'
+        };
+
+        const english = invoiceDocument('en', order).lines as string[];
+        const italian = invoiceDocument('it', order).lines as string[];
+
+        expect(english[0]).toContain(collidingTitle);
+        expect(italian[0]).toContain(collidingTitle);
     });
 });
