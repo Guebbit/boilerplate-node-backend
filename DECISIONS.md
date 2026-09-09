@@ -1,8 +1,50 @@
 # Decisions
 
-Implementation choices made while finishing `TRANSLATION_UPGRADE.md` (phases 6-9) and
-`PRODUCT_WRITE_REWORK.md` (steps 5-6), where the design docs left a genuine gap. Format: problem,
-options considered, decision and why.
+Implementation choices made across the multi-document backlog (`TRANSLATION_UPGRADE.md`,
+`OUTBOUND_WEBHOOKS.md`, `SCHEDULING_AND_COORDINATION.md`), where the design docs left a genuine
+gap or the task's own instructions needed a judgment call. Format: problem, options considered,
+decision and why.
+
+## Build order: scheduling before webhooks, not after
+
+**Problem:** The task asked for `TRANSLATION_UPGRADE.md`, then `OUTBOUND_WEBHOOKS.md`, then
+`SCHEDULING_AND_COORDINATION.md`, in that order. But `OUTBOUND_WEBHOOKS.md`'s own decision 2
+(delayed retry, option (c)) requires `nextAttemptAt` on a delivery row **swept by the cron
+container** — infrastructure that `SCHEDULING_AND_COORDINATION.md` Q1 builds, and that does not
+exist yet anywhere in this repo (`docker/crontab`, the `leases` collection and `withLease` were
+unbuilt at the time of writing). Building webhooks first would mean either inventing a second,
+throwaway scheduling mechanism or leaving the retry sweep unimplemented.
+
+**Options:** (a) keep the literal order and stub webhook retry until scheduling lands later; (b)
+swap the build order — implement `SCHEDULING_AND_COORDINATION.md` second, `OUTBOUND_WEBHOOKS.md`
+third — while keeping the user-visible sequence (commit, doc update, notify) otherwise identical.
+
+**Decision:** (b). `OUTBOUND_WEBHOOKS.md` itself already reasons about this exact ordering ("Taken
+after `SCHEDULING_AND_COORDINATION.md` Q1 was settled independently, not as a side effect of it" —
+see its "Decided: (c)" section) — the design docs already assume scheduling lands first. Following
+the task's literal document order over the documents' own stated dependency would produce
+throwaway work.
+
+## Webhooks proceeds without item 7 (`api-keys`)
+
+**Problem:** `OUTBOUND_WEBHOOKS.md`'s decision 5 ("Ordering") says the feature "waits behind item
+7" — `api-keys`, a machine-to-machine credential module — for two reasons: shared secret-handling
+conventions, and the `N8N_INSERT.md` closed-loop demo needing a credential for the callback. Item
+7 is `PRODUCTION_READINESS.md` item 7, a whole new module, and it is not one of the three documents
+this task covers.
+
+**Options:** (a) build `api-keys` first, out of scope, to satisfy the stated ordering; (b) build
+`OUTBOUND_WEBHOOKS.md` now, on its own fully-specified secret handling, and treat the item-7 wait
+as describing a larger roadmap (`PRODUCTION_READINESS.md`) this task was not asked to execute; (c)
+skip webhooks entirely and leave it for a future task.
+
+**Decision:** (b). Reason 1 (shared secret conventions) is a style preference, not a technical
+dependency — `OUTBOUND_WEBHOOKS.md`'s "Secrets" section already fully specifies AES-256-GCM with a
+`requiredConfig` key and a rotatable secret ring, independent of anything `api-keys` would add.
+Reason 2 (the n8n closed-loop demo) only blocks `N8N_INSERT.md` tier 2, which that document already
+defers on its own terms — nothing here needs it. `PRODUCTION_READINESS.md` items 1, 4, 5, 7, S1-S3
+and `DATA_MIGRATIONS.md`/`ASYNCAPI_TOOLING.md` remain untouched and out of scope; only items 2 and 6
+(this task's three documents map to) are built.
 
 ## Where the order-snapshot resolver lives
 
