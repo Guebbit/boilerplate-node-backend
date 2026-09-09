@@ -6,7 +6,12 @@
  */
 
 import type { TranslationFields, TranslationOrigin, UpsertTranslationsRequest } from '@types';
-import { getFallbackLocale, t } from '@infrastructure/i18n';
+import {
+    getFallbackLocale,
+    t,
+    type TranslationWritePlan,
+    type TranslationWriteSlot
+} from '@infrastructure/i18n';
 import {
     generateReject,
     generateSuccess,
@@ -39,7 +44,7 @@ const entityTypeUnknown = (entityType: string): ResponseReject =>
  * One locale slot's outcome, before any write happens — the whole batch validates before anything
  * writes, so a rejected slot never leaves a partial edit behind.
  */
-type PlannedWrite =
+export type PlannedWrite =
     | { locale: string; kind: 'upsert'; fields: TranslationFields; origin: TranslationOrigin }
     | { locale: string; kind: 'delete' };
 
@@ -80,9 +85,126 @@ const planSlot = async (
     return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
 };
 
-/** `true` for a rejection, narrowing a `PlannedWrite | ResponseReject` union. */
-const isRejection = (value: PlannedWrite | ResponseReject): value is ResponseReject =>
-    'success' in value && !value.success;
+/** `true` for a rejection, narrowing a union of it and a plan/slot shape — neither of which carries `success`. */
+const isRejection = (value: unknown): value is ResponseReject =>
+    typeof value === 'object' && value !== null && 'success' in value && !value.success;
+
+/**
+ * Validate a whole PATCH-shaped batch against the `locales` collection, the registry's declared
+ * fields, and the fallback-locale delete guard — the pre-flight half of a write, with no entity id
+ * at all: every check here is about the LOCALE and the FIELD NAMES, never about a specific row, so
+ * this runs the same whether the entity already exists or is still being created in the same
+ * request (`productService.write`'s `POST /products`, notably).
+ *
+ * @returns the plan, or the first rejection encountered
+ */
+export const planTranslationWrites = async (
+    entityType: string,
+    payload: UpsertTranslationsRequest
+): Promise<{ fallbackLocale: string; planned: PlannedWrite[] } | ResponseReject> => {
+    const target = translatableTarget(entityType);
+    if (!target) return entityTypeUnknown(entityType);
+
+    const fallbackLocale = getFallbackLocale();
+    const planned: PlannedWrite[] = [];
+
+    for (const [locale, value] of Object.entries(payload)) {
+        const result = await planSlot(entityType, target.fields, fallbackLocale, locale, value);
+        if (isRejection(result)) return result;
+        planned.push(result);
+    }
+
+    return { fallbackLocale, planned };
+};
+
+/**
+ * Apply an ALREADY-VALIDATED plan — see {@link planTranslationWrites} — without touching the
+ * entity's own derived index column, its cache tag, or the audit trail: a caller with its own
+ * document to write (`productService.write`) owns all three itself, in the same operation that
+ * calls this. `upsertEntityTranslations` below is the generic door's own caller, and still owns
+ * that full sequence for itself.
+ *
+ * Never validates. A caller that skips {@link planTranslationWrites} first can corrupt data.
+ */
+export const writePlannedTranslations = async (
+    entityType: string,
+    entityId: string,
+    fallbackLocale: string,
+    planned: readonly PlannedWrite[],
+    translatedBy: string | undefined
+): Promise<void> => {
+    const fallbackRow = await translationRepository.findEntityLocale(
+        entityType,
+        entityId,
+        fallbackLocale
+    );
+    const fallbackDigest = fallbackRow ? deriveSourceDigest(fallbackRow.fields) : undefined;
+
+    for (const slot of planned) {
+        if (slot.kind === 'delete') {
+            await translationRepository.removeEntityLocale(entityType, entityId, slot.locale);
+            continue;
+        }
+
+        await translationRepository.upsertEntityLocale(
+            entityType,
+            entityId,
+            slot.locale,
+            slot.fields,
+            slot.origin,
+            translatedBy,
+            slot.locale === fallbackLocale ? undefined : fallbackDigest
+        );
+    }
+};
+
+/**
+ * {@link planTranslationWrites}, shaped for the `@infrastructure/i18n` port — which cannot import
+ * this module's own `PlannedWrite` (the wall `translation.ts`'s header names), so its `plan`
+ * capability is typed against `TranslationWriteSlot` instead: the same shape, minus `origin`,
+ * which a caller writing its own document alongside the translations (`productService.write`) has
+ * no use for.
+ */
+export const planForPort = (
+    entityType: string,
+    payload: UpsertTranslationsRequest
+): Promise<TranslationWritePlan | ResponseReject> =>
+    planTranslationWrites(entityType, payload).then((plan) =>
+        isRejection(plan)
+            ? plan
+            : {
+                  fallbackLocale: plan.fallbackLocale,
+                  planned: plan.planned.map(
+                      (slot): TranslationWriteSlot =>
+                          slot.kind === 'upsert'
+                              ? { locale: slot.locale, kind: 'upsert', fields: slot.fields }
+                              : slot
+                  )
+              }
+    );
+
+/**
+ * {@link writePlannedTranslations}, shaped for the port — `origin` defaults to `human` for every
+ * upsert, since the port's callers are editors and translators, never a machine import.
+ */
+export const writeForPort = (
+    entityType: string,
+    entityId: string,
+    writePlan: TranslationWritePlan,
+    translatedBy: string | undefined
+): Promise<void> =>
+    writePlannedTranslations(
+        entityType,
+        entityId,
+        writePlan.fallbackLocale,
+        writePlan.planned.map(
+            (slot): PlannedWrite =>
+                slot.kind === 'upsert'
+                    ? { locale: slot.locale, kind: 'upsert', fields: slot.fields, origin: 'human' }
+                    : slot
+        ),
+        translatedBy
+    );
 
 /** Every locale row an entity has, in the admin shape. */
 export const getEntityTranslations = async (
@@ -116,57 +238,25 @@ export const upsertEntityTranslations = async (
     const target = translatableTarget(entityType);
     if (!target) return entityTypeUnknown(entityType);
 
-    const fallbackLocale = getFallbackLocale();
-
-    // The whole batch validates before anything writes — a rejected slot must never leave a
-    // partial edit behind, the same guarantee `services/entries.ts`'s bulk import gives.
-    const planned: PlannedWrite[] = [];
-    for (const [locale, value] of Object.entries(payload)) {
-        const result = await planSlot(entityType, target.fields, fallbackLocale, locale, value);
-        if (isRejection(result)) return result;
-        planned.push(result);
-    }
-
-    /*
-     * Read once, before any write in this batch: a non-fallback row's digest is stamped against
-     * the fallback's CURRENT content and never touched again until that row is itself rewritten.
-     * Sibling rows are never re-stamped when the fallback changes — an edit to the source stays
-     * O(1) rather than O(languages), and a stale digest elsewhere is the intended signal, not a
-     * bug to chase.
-     */
-    const fallbackRow = await translationRepository.findEntityLocale(
-        entityType,
-        entityId,
-        fallbackLocale
-    );
-    const fallbackDigest = fallbackRow ? deriveSourceDigest(fallbackRow.fields) : undefined;
+    const plan = await planTranslationWrites(entityType, payload);
+    if (isRejection(plan)) return plan;
+    const { fallbackLocale, planned } = plan;
 
     const translatedBy = context?.caller.id ?? undefined;
+    await writePlannedTranslations(entityType, entityId, fallbackLocale, planned, translatedBy);
 
-    for (const slot of planned) {
-        if (slot.kind === 'delete') {
-            await translationRepository.removeEntityLocale(entityType, entityId, slot.locale);
-            continue;
-        }
-
-        const isFallback = slot.locale === fallbackLocale;
-        await translationRepository.upsertEntityLocale(
-            entityType,
+    // The generic door owns its derived index column, unlike a caller with its own document to
+    // write (`productService.write`, via the port) — see `writePlannedTranslations`'s docblock.
+    const fallbackWrite = planned.find(
+        (slot): slot is Extract<PlannedWrite, { kind: 'upsert' }> =>
+            slot.kind === 'upsert' && slot.locale === fallbackLocale
+    );
+    if (fallbackWrite)
+        await translationRepository.updateDerivedColumn(
+            target.collection,
             entityId,
-            slot.locale,
-            slot.fields,
-            slot.origin,
-            translatedBy,
-            isFallback ? undefined : fallbackDigest
+            fallbackWrite.fields
         );
-
-        if (isFallback)
-            await translationRepository.updateDerivedColumn(
-                target.collection,
-                entityId,
-                slot.fields
-            );
-    }
 
     await invalidateCacheTagsLogged([target.cacheTag]);
 

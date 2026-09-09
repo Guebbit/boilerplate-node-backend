@@ -17,6 +17,7 @@ import { registerLocaleOverrideProvider, registerTranslationPort } from '@infras
 import { router } from './routes';
 import { localeService } from './services';
 import { translationRepository } from './repository';
+import { planForPort, writeForPort } from './services/translations';
 
 /**
  * Hands the app tier the one function it needs from this module: `resolveTranslatables`'s result,
@@ -39,13 +40,17 @@ registerLocaleOverrideProvider(() => localeService.readApiOverrides());
 /*
  * This module's implementation of the translation port, registered at import time the same way —
  * `resolve` is what a read-path decorator batches a page against, `removeAll` is what a product's
- * HARD delete calls to take its translations with it in the same operation, and `search` is what
- * a free-text search unions with an entity's own (fallback-language) match.
+ * HARD delete calls to take its translations with it in the same operation, `search` is what a
+ * free-text search unions with an entity's own (fallback-language) match, and `plan`/`write` are
+ * what a caller with its own entity to write (`productService.write`) validates and applies the
+ * translations half of its request through.
  */
 registerTranslationPort({
     resolve: translationRepository.resolveEntityFields,
     removeAll: translationRepository.removeEntityTranslations,
-    search: translationRepository.findEntityIdsByFieldMatch
+    search: translationRepository.findEntityIdsByFieldMatch,
+    plan: planForPort,
+    write: writeForPort
 });
 
 /** This module's manifest entry: routes and its own locales. */

@@ -14,6 +14,8 @@
  * See: docs/tools/i18n.md
  */
 
+import type { UpsertTranslationsRequest } from '@types';
+import type { ResponseReject } from '@infrastructure/http/response';
 import { getFallbackLocale } from './catalog';
 import { getCurrentLocale } from './context';
 
@@ -69,6 +71,49 @@ export interface TranslationPort {
         pattern: string,
         localeCandidates: string[]
     ) => Promise<string[]>;
+
+    /**
+     * Validates a PATCH-shaped batch — see `UpsertTranslationsRequest` — against the `locales`
+     * collection and the registry's declared fields, WITHOUT writing anything. No entity id: every
+     * check is about the locale and the field names, never about a specific row, which is what
+     * lets a caller creating a new entity in the SAME request (`productService.write`'s
+     * `POST /products`) validate before that entity even exists.
+     *
+     * @returns the plan {@link write} applies, or the first rejection encountered
+     */
+    plan: (
+        entityType: string,
+        payload: UpsertTranslationsRequest
+    ) => Promise<TranslationWritePlan | ResponseReject>;
+
+    /**
+     * Applies an ALREADY-VALIDATED plan — see {@link plan} — without touching the entity's own
+     * derived index column, its cache tag, or an audit trail: a caller with its own document to
+     * write owns all three itself, in the same operation that calls this. Never validates; a
+     * caller that skips {@link plan} first can corrupt data.
+     */
+    write: (
+        entityType: string,
+        entityId: string,
+        writePlan: TranslationWritePlan,
+        translatedBy: string | undefined
+    ) => Promise<void>;
+}
+
+/**
+ * One locale slot {@link TranslationPort.plan} decided on: upsert with these fields, or delete.
+ * Never `origin` — that is the generic translator's-door concept a caller writing its OWN
+ * document (an editor's product write) has no use for; {@link TranslationPort.write}'s
+ * implementation defaults it.
+ */
+export type TranslationWriteSlot =
+    | { locale: string; kind: 'upsert'; fields: TranslatedFields }
+    | { locale: string; kind: 'delete' };
+
+/** A validated batch, ready for {@link TranslationPort.write}. */
+export interface TranslationWritePlan {
+    fallbackLocale: string;
+    planned: TranslationWriteSlot[];
 }
 
 /** The registered port, or `undefined` before `modules/locales` has supplied one. */
@@ -117,6 +162,40 @@ export const searchTranslatedEntityIds = (
     translationPort
         ? translationPort.search(entityType, fields, pattern, localeCandidates)
         : Promise.resolve([]);
+
+/**
+ * The validate half of a write, for a caller with its own entity to write alongside the
+ * translations — see {@link TranslationPort.plan}.
+ *
+ * Unregistered is a hard failure rather than a silent no-op, unlike this file's other entry
+ * points: a caller reaching this expects to WRITE, and pretending the batch validated when
+ * nothing is registered to ask would be the one lie in this module that costs data.
+ */
+export const planTranslations = (
+    entityType: string,
+    payload: UpsertTranslationsRequest
+): Promise<TranslationWritePlan | ResponseReject> => {
+    if (!translationPort)
+        return Promise.resolve({
+            success: false,
+            status: 500,
+            message: 'no translation port registered',
+            data: undefined,
+            errors: [{ code: 'INTERNAL', message: 'no translation port registered' }]
+        });
+    return translationPort.plan(entityType, payload);
+};
+
+/** The write half of a write — see {@link TranslationPort.write}. A no-op when unregistered. */
+export const writeTranslations = (
+    entityType: string,
+    entityId: string,
+    writePlan: TranslationWritePlan,
+    translatedBy: string | undefined
+): Promise<void> =>
+    translationPort
+        ? translationPort.write(entityType, entityId, writePlan, translatedBy)
+        : Promise.resolve();
 
 /**
  * The locale chain a resolver query walks, most specific first: the exact tag, its base language,

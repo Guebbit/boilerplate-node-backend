@@ -47,11 +47,15 @@ export { negotiateLocale } from './negotiate';
 export {
     applyTranslations,
     localeCandidatesFor,
+    planTranslations,
     registerTranslationPort,
     removeTranslations,
     resolveTranslations,
     searchTranslatedEntityIds,
+    writeTranslations,
     type TranslatedFields,
     type Translatable,
-    type TranslationPort
+    type TranslationPort,
+    type TranslationWritePlan,
+    type TranslationWriteSlot
 } from './translation';

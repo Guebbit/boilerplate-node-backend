@@ -9,11 +9,13 @@
 import {
     applyTranslations,
     localeCandidatesFor,
+    planTranslations,
     registerTranslationPort,
     removeTranslations,
     resolveTranslations,
     runWithLocale,
     searchTranslatedEntityIds,
+    writeTranslations,
     type TranslationPort
 } from '@infrastructure/i18n';
 
@@ -24,6 +26,8 @@ const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => 
     resolve: jest.fn().mockResolvedValue(new Map()),
     removeAll: jest.fn().mockResolvedValue(0),
     search: jest.fn().mockResolvedValue([]),
+    plan: jest.fn().mockResolvedValue({ fallbackLocale: 'en', planned: [] }),
+    write: jest.fn().mockResolvedValue(undefined),
     ...overrides
 });
 
@@ -108,6 +112,48 @@ describe('searchTranslatedEntityIds', () => {
             'en'
         ]);
         expect(result).toEqual(['p1', 'p2']);
+    });
+});
+
+describe('planTranslations', () => {
+    it('fails rather than pretending to validate when no port is registered', async () => {
+        const result = await planTranslations('product', {});
+
+        expect('success' in result && !result.success).toBe(true);
+    });
+
+    it('delegates to the registered port with exactly what it was given', async () => {
+        const plan = { fallbackLocale: 'en', planned: [] };
+        const port = fakePort({ plan: jest.fn().mockResolvedValue(plan) });
+        registerTranslationPort(port);
+
+        const payload = { it: { fields: { title: 'Cuccia' } } };
+        const result = await planTranslations('product', payload);
+
+        expect(port.plan).toHaveBeenCalledWith('product', payload);
+        expect(result).toBe(plan);
+    });
+});
+
+describe('writeTranslations', () => {
+    it('resolves without writing anything when no port is registered', async () => {
+        await expect(
+            writeTranslations('product', 'p1', { fallbackLocale: 'en', planned: [] }, undefined)
+        ).resolves.toBeUndefined();
+    });
+
+    it('delegates to the registered port with exactly what it was given', async () => {
+        const write = jest.fn().mockResolvedValue(undefined);
+        const port = fakePort({ write });
+        registerTranslationPort(port);
+
+        const plan = {
+            fallbackLocale: 'en',
+            planned: [{ locale: 'en', kind: 'upsert' as const, fields: { title: 'Bed' } }]
+        };
+        await writeTranslations('product', 'p1', plan, 'translator-1');
+
+        expect(write).toHaveBeenCalledWith('product', 'p1', plan, 'translator-1');
     });
 });
 
