@@ -44,6 +44,8 @@ tags:
       description: Operational observability endpoints (metrics, health, audit, events). Protected endpoints require admin role.
     - name: Audit
       description: The tenant's own action history — who did what, when, to which row. Read-only, and separate from Observability's operational audit, which is the platform operator's view across every shop.
+    - name: Webhooks
+      description: Outbound webhook subscriptions, the delivery log, replay, and the public event catalogue.
 
 # If set, by default all operation requires an authentication
 # security:
@@ -1122,3 +1124,15 @@ paths:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1adjustments'
     /inventory/reservations/sweep:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1reservations~1sweep'
+
+    # ---------- webhooks ----------
+    /webhooks/subscriptions:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1subscriptions'
+    /webhooks/subscriptions/{id}:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1subscriptions~1{id}'
+    /webhooks/deliveries:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1deliveries'
+    /webhooks/deliveries/{id}/replay:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1deliveries~1{id}~1replay'
+    /webhooks/events:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1events'

@@ -22,6 +22,7 @@ import orders from './modules/orders/module';
 import payments from './modules/payments/module';
 import products from './modules/products/module';
 import users from './modules/users/module';
+import webhooks from './modules/webhooks/module';
 import wishlist from './modules/wishlist/module';
 
 /** Every module this build serves, in the one list the app tier, docs and scripts all walk. */
@@ -39,5 +40,6 @@ export const enabledModules: AppModule[] = [
     payments,
     products,
     users,
+    webhooks,
     wishlist
 ];

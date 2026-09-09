@@ -50,6 +50,7 @@ roles:
           - feedback.read
           - users.read
           - audit.read
+          - webhooks.manage
 
     - name: warehouse
       scope: tenant

@@ -211,3 +211,115 @@ that was not the deciding argument: even a genuinely expensive refresh would nee
 lease, because the problem is "every reader must know", not "only one writer may act". This repo
 has no such broadcast primitive today, and building one was out of scope for a decision this
 document only asked to make one way or the other.
+
+## Reconciling a concurrent-session collision on `webhooks`
+
+**Problem:** Three research subagents fanned out at the start of this phase (asked only to read
+the codebase and report back) each independently exceeded their brief and started implementing
+the `webhooks` module in the same working tree, one of them spawning a further subagent of its
+own. By the time this was caught, `src/modules/webhooks/` held two competing implementations of
+the secret ring (`secrets.ts` vs `services/secrets.ts`), two of the event-filter rule
+(`domain/event-filter.ts` vs `domain/matcher.ts`), a `domain/backoff.ts` overwritten mid-edit by a
+sibling with a different function signature, and a `config.ts`/`secrets.ts` pair reading two
+different env var names for the same encryption key.
+
+**Options:** (a) discard everything and restart the module from nothing; (b) pick one writer's
+output wholesale and discard the other's; (c) read every file actually on disk, keep whichever
+version of each duplicated piece was more complete or better-aligned with the design doc, delete
+the rest, and reconcile the seams between the surviving pieces by hand.
+
+**Decision:** (c). The substrate files (`webhook-signing.ts`, `ssrf-guard.ts`,
+`webhook-delivery.ts`, both contract fragments, the openapi/asyncapi bundling wiring) were
+complete, correct, and consistent with each other and with the design doc — discarding them would
+have thrown away good work for no reason. Kept: `domain/event-filter.ts` (matched what
+`domain/index.ts` already re-exported), `domain/backoff.ts` (more complete — included the
+auto-disable threshold), the module-root `secrets.ts` (matched the model's actual
+`WebhookSecretRingEntry` shape; the `services/secrets.ts` copy imported a type that no longer
+existed). `config.ts`'s env var name (`NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`) became canonical;
+`secrets.ts` was rewritten to read the key through `config.ts` instead of inlining its own,
+matching `account/two-factor/totp.ts`'s `getTotpEncryptionKey` precedent. Everything from that
+point on (services, controllers, routes, the worker, the sweep, demo, tests) was written directly,
+without further fan-out into shared files, specifically to avoid repeating this.
+
+## The secret ring's id is a real field, not Mongoose's `_id`
+
+**Problem:** `secrets.ts`'s `mintRingSecret()` mints its own id (`randomUUID()`) so a subscription
+`POST`'s response can name the ring entry it just created before anything is saved — an
+auto-assigned Mongoose `_id` isn't knowable that early. But the ring subdocument's schema (as
+inherited from the collision above) declared no `id` field at all and left `_id: false` unset,
+so Mongoose silently dropped the caller-supplied `id` in favour of its own auto-assigned `_id`.
+The bug surfaced as `GET /webhooks/subscriptions` and `POST .../subscriptions` both answering
+`secretIds: []` — proven by the contract test written for this phase, not caught by hand.
+
+**Decision:** the subdocument schema now declares `id: { type: String, required: true }` and sets
+`_id: false`, so the UUID `mintRingSecret` mints is what actually persists and what
+`secretIds`/`removeSecretId` address — matching what `secrets.ts` (and every caller of it) already
+assumed. The alternative — drop the custom UUID and rely on Mongoose's own `_id`, minted only on
+save — would mean `create()`'s response could no longer name the ring entry it just made without
+a second round trip, which is a worse shape for no real gain.
+
+## `applyWebhookSubscriptionTransform`: derive `secretIds` before deleting `secrets`, not via `omit`
+
+**Problem:** `applySerialization`'s `omit` list runs strictly before its `after` hook (see
+`serialize.ts`). The transform originally listed `secrets` in `omit` AND tried to read
+`serialized.secrets` inside `after` to build `secretIds` — by the time `after` ran, `omit` had
+already deleted the field, so `secretIds` was always empty. Also caught by the contract test, not
+by hand.
+
+**Decision:** `secrets` is read and deleted manually inside `after`, after `secretIds` is derived
+from it, and no longer named in `omit`. Recorded because the ordering isn't obvious from
+`applySerialization`'s call site alone, and it is exactly the kind of thing a future field would
+get wrong the same way.
+
+## `WebhookSubscriptionCreated` is a flat schema, not `allOf`
+
+**Problem:** The contract originally composed `WebhookSubscriptionCreated` as
+`allOf: [WebhookSubscription, { additionalProperties: false, properties: { secret, newSecret } }]`.
+Two sibling schemas each declaring `additionalProperties: false` is a standard JSON Schema trap:
+ajv validates the instance against EACH `allOf` branch independently, so every field the OTHER
+branch owns reads as "additional" on this one, and the whole document fails — caught by the
+contract test's `toSatisfyApiSpec()` on the very first `POST /webhooks/subscriptions` response.
+
+**Decision:** restated flat — every property `WebhookSubscription` declares, plus `secret` and
+`newSecret`, in one schema with one `additionalProperties: false`. No other schema in this
+contract composes two closed schemas this way, so this was worth writing down rather than leaving
+as a silent one-off fix.
+
+## Tenant scoping needs a seeded tenant, in tests and in production alike
+
+**Problem:** The admin surface is tenant-scoped (`context.caller.tenantId`, a `required: true`
+Mongoose field on both collections) per `OUTBOUND_WEBHOOKS.md`'s own "tenant-scoped, permission-
+keyed" line. `kernel/access/store.ts`'s `resolveDeploymentTenantId` — what a real login resolves
+`tenantId` from — caches `null` ("no shop") the first time it is asked, for the life of the
+process, until `ensureTenant` has run at least once. A production deployment always has this from
+`npm run db:seed`'s `seedAccessModel()`; a fresh test database does not, and no existing cross-
+cutting or global test hook seeds one — every other module's schema either has no `tenant`-shaped
+field or scopes by `userId` instead, so nothing had surfaced this before.
+
+**Decision:** the contract suite (`tests/contract/webhooks.test.ts`) seeds the tenant itself, in a
+`beforeEach` registered after `setupTestDb()`'s own (so it re-runs after every `clearAll`). Not
+fixed by relaxing `tenant` to optional: the doc is explicit that this surface is tenant-scoped,
+and a nullable tenant would make that unenforceable at the one layer (the schema) that cannot be
+bypassed by a caller forgetting a check.
+
+## Frontend admin screen for webhooks: deferred, not built
+
+**Problem:** The task asked whether an admin webhooks screen (subscriptions, the delivery log,
+replay) is expected given this repo's conventions, and to record the answer either as done or as
+an explicitly reasoned deferral — not to silently skip it.
+
+**Options:** (a) build a full admin screen in the paired frontend now; (b) defer it, reasoned and
+recorded.
+
+**Decision:** (b). The closest precedent, `audit-logs`, pairs with the frontend's EXISTING
+`admin` module rather than a new dedicated one — its read-only trail renders inside the admin
+dashboard already there. A webhooks screen would follow the same shape, but is a genuinely
+multi-part frontend feature (a list/create/rotate/delete flow for subscriptions, a filtered
+delivery log, a replay action) that the frontend's own conventions hold to a real bar — a11y
+coverage, the form idiom cross-cutting checks, mutation-tested store logic — none of which this
+phase had the remaining budget to build to that bar rather than bolt on hastily. The backend
+admin surface is complete, tested, and usable today from any HTTP client (`GET/POST/PATCH/DELETE
+/webhooks/subscriptions`, `GET /webhooks/deliveries`, `POST /webhooks/deliveries/{id}/replay`);
+what is deferred is only the frontend's own screen for it, recorded in
+`tests/cross-cutting/frontend-pairing.test.ts`'s `FRONTEND_PAIRING.webhooks` entry so the gap is
+asserted rather than merely remembered.

@@ -69,6 +69,7 @@ const SUBDOMAIN: Readonly<Record<string, 'core' | 'supporting' | 'generic'>> = {
     wishlist: 'supporting',
     account: 'supporting',
     users: 'supporting',
+    webhooks: 'supporting',
     antibot: 'generic',
     'audit-logs': 'generic',
     locales: 'generic',

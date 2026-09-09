@@ -96,18 +96,18 @@ pages because this is where you pick an account to log in as.
 
 ### What each role is given
 
-| Role         | Scope    | Permissions, as written in `shared/authorization-roles.yaml`                                                                                          |
-| ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `guest`      | tenant   | `products.read`, `locales.read`, `delivery.read`                                                                                                      |
-| `customer`   | tenant   | `products.read`, `locales.read`, `delivery.read`, `orders.read`, `payments.read`                                                                      |
-| `manager`    | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read` |
-| `warehouse`  | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                 |
-| `support`    | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                         |
-| `editor`     | tenant   | `products.manage`, `locales.read`, `translations.manage`                                                                                              |
-| `translator` | tenant   | `locales.manage`, `translations.read`, `translations.manage`                                                                                          |
-| `moderator`  | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                      |
-| `owner`      | tenant   | `all.manage`                                                                                                                                          |
-| `operator`   | platform | `platform.observability.manage`                                                                                                                       |
+| Role         | Scope    | Permissions, as written in `shared/authorization-roles.yaml`                                                                                                             |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `guest`      | tenant   | `products.read`, `locales.read`, `delivery.read`                                                                                                                         |
+| `customer`   | tenant   | `products.read`, `locales.read`, `delivery.read`, `orders.read`, `payments.read`                                                                                         |
+| `manager`    | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read`, `webhooks.manage` |
+| `warehouse`  | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                                    |
+| `support`    | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                                            |
+| `editor`     | tenant   | `products.manage`, `locales.read`, `translations.manage`                                                                                                                 |
+| `translator` | tenant   | `locales.manage`, `translations.read`, `translations.manage`                                                                                                             |
+| `moderator`  | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                                         |
+| `owner`      | tenant   | `all.manage`                                                                                                                                                             |
+| `operator`   | platform | `platform.observability.manage`                                                                                                                                          |
 
 `guest` is not an account anybody logs into — it is what an unauthenticated request
 resolves to, and the floor every signed-in role is raised to. Signing in can only ever
@@ -119,18 +119,18 @@ The same roles after the evaluator has had them: `manage` expanded into its modu
 keys, and the baseline folded in. This is what a route guard and a listing actually
 answer.
 
-| Role         | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | observability |
-| ------------ | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | ------------- |
-| `guest`      | r        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —             |
-| `customer`   | r        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —             |
-| `manager`    | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | —             |
-| `warehouse`  | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —             |
-| `support`    | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —             |
-| `editor`     | **all**  | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —             |
-| `translator` | r        | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —             |
-| `moderator`  | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —             |
-| `owner`      | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | —             |
-| `operator`   | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | **all**       |
+| Role         | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | observability |
+| ------------ | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | ------------- |
+| `guest`      | r        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —        | —             |
+| `customer`   | r        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —             |
+| `manager`    | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | **all**  | —             |
+| `warehouse`  | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —        | —             |
+| `support`    | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —        | —             |
+| `editor`     | **all**  | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —             |
+| `translator` | r        | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —             |
+| `moderator`  | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —        | —             |
+| `owner`      | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | **all**  | —             |
+| `operator`   | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | —        | **all**       |
 
 **all** — every key that module declares · `r` read · `c` create · `u` update · `d` delete · — nothing
 

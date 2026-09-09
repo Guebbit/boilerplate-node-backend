@@ -46,7 +46,16 @@ const CREDENTIAL_SHAPE = /password|token|secret|salt|apikey|api_key|credential|p
  * Empty today. An entry needs a reason and a reviewer: the whole value of the rule above is that
  * it fires on things nobody thought about, and every exemption is a small hole in that.
  */
-const PUBLISHABLE: { model: string; key: string; because: string }[] = [];
+const PUBLISHABLE: { model: string; key: string; because: string }[] = [
+    {
+        model: 'WebhookSubscription',
+        key: 'secretIds',
+        because:
+            'Opaque ring ids only — never the ciphertext or a decrypted secret. This is what ' +
+            'lets an admin name a specific entry for `removeSecretId` after `rotateSecret` ' +
+            'without the response ever carrying anything that could sign a delivery.'
+    }
+];
 
 /**
  * Registers every module's schemas, so `mongoose.models` is the whole catalogue.

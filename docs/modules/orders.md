@@ -24,11 +24,13 @@ flowchart LR
     payments["payments"]
     products["products"]
     users["users"]
+    webhooks["webhooks"]
 
     account --> orders
     cart --> orders
     delivery --> orders
     payments --> orders
+    webhooks --> orders
     orders --> inventory
     orders --> products
     orders --> users
@@ -42,7 +44,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class account,delivery,inventory,payments,users supporting;
+    class account,delivery,inventory,payments,users,webhooks supporting;
     class orders centre;
 ```
 

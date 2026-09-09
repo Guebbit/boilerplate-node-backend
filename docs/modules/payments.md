@@ -21,8 +21,10 @@ flowchart LR
     inventory["inventory"]
     orders["orders"]
     users["users"]
+    webhooks["webhooks"]
 
     account --> payments
+    webhooks --> payments
     payments --> inventory
     payments --> orders
     payments --> users
@@ -34,7 +36,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class account,inventory,users supporting;
+    class account,inventory,users,webhooks supporting;
     class payments centre;
 ```
 

@@ -97,6 +97,31 @@ channels:
                 is detected rather than silently ignored.
             message:
                 $ref: '#/components/messages/ImageDigestJobConsumeMessage'
+    worker.webhook.deliver:
+        description: >-
+            Outbound webhook delivery job queue — the `webhooks` module's subscriber enqueues one
+            message per matching subscription, the webhook worker consumes it.
+        servers:
+            - rabbitmqLocal
+        publish:
+            operationId: workerWebhookDeliverPublish
+            summary: Enqueue one subscription's delivery attempt for a domain event.
+            description: >-
+                One event fan out to N subscriptions is N messages, never one message N
+                subscriptions read — a slow or dead endpoint must delay only its own deliveries,
+                not the sibling subscriptions matching the same event.
+            message:
+                $ref: '#/components/messages/WebhookDeliverJobMessage'
+        subscribe:
+            operationId: workerWebhookDeliverConsume
+            summary: Webhook worker signs, sends, and records the attempt.
+            description: >-
+                Signs the payload (Standard Webhooks format), resolves and validates the target
+                through the SSRF guard, POSTs with a hard timeout, and records the outcome on the
+                delivery row this job names. A failure schedules `nextAttemptAt` for the retry
+                sweep rather than requeueing here — see `docs/reference/ops.md#scheduled-jobs`.
+            message:
+                $ref: '#/components/messages/WebhookDeliverJobConsumeMessage'
 components:
     messages:
         EmailJobMessage:
@@ -135,6 +160,18 @@ components:
             title: Image digest job (worker consume)
             payload:
                 $ref: '#/components/schemas/ImageDigestJobPayload'
+        WebhookDeliverJobMessage:
+            name: WebhookDeliverJobMessage
+            messageId: worker.webhook.deliver
+            title: Webhook delivery job
+            payload:
+                $ref: '#/components/schemas/WebhookDeliverJobPayload'
+        WebhookDeliverJobConsumeMessage:
+            name: WebhookDeliverJobConsumeMessage
+            messageId: worker.webhook.job.consume
+            title: Webhook delivery job (worker consume)
+            payload:
+                $ref: '#/components/schemas/WebhookDeliverJobPayload'
     schemas:
         EmailJobPayload:
             type: object
@@ -222,4 +259,46 @@ components:
                         The opaque key `imageStore.quarantine()` returned. Never a filesystem
                         path — the consumer calls back into the store, which stays free to change
                         backend without this payload's shape changing.
+            additionalProperties: false
+        WebhookDeliverJobPayload:
+            type: object
+            required:
+                - deliveryId
+                - subscriptionId
+                - eventId
+                - eventType
+                - occurredAt
+                - data
+                - attempt
+            properties:
+                deliveryId:
+                    type: string
+                    description: >-
+                        The `webhookdeliveries` row this attempt updates in place — created
+                        `pending` before the job is published, so `GET /webhooks/deliveries` shows
+                        it immediately and a lost message still leaves a queryable trace.
+                subscriptionId:
+                    type: string
+                    description: The `webhooksubscriptions` row to deliver to.
+                eventId:
+                    type: string
+                    description: >-
+                        Stable id for the domain event that triggered this delivery — sent
+                        verbatim as the Standard Webhooks `webhook-id` header, so a consumer can
+                        dedupe across retries and across the subscriptions one event fans out to.
+                eventType:
+                    type: string
+                    description: 'The public event name, e.g. order.paid — see asyncapi.public.yaml.'
+                occurredAt:
+                    type: string
+                    format: date-time
+                    description: When the domain event fired, not when this attempt runs.
+                data:
+                    type: object
+                    additionalProperties: true
+                    description: The event's public payload, exactly as sent in the delivery body.
+                attempt:
+                    type: integer
+                    minimum: 1
+                    description: Which attempt this is — 1 on the first try, incremented on retry.
             additionalProperties: false

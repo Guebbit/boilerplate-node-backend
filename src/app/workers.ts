@@ -16,7 +16,13 @@ import {
     handleImageDigestJob,
     registerImageWritebackResolver
 } from '@infrastructure/adapters/image.worker';
-import { EmailJobPayloadSchema, ImageDigestJobPayloadSchema, PdfJobPayloadSchema } from '@types';
+import { WEBHOOK_QUEUE, handleWebhookDeliverJob } from '@infrastructure/adapters/webhook.worker';
+import {
+    EmailJobPayloadSchema,
+    ImageDigestJobPayloadSchema,
+    PdfJobPayloadSchema,
+    WebhookDeliverJobPayloadSchema
+} from '@types';
 import { resolveImageTargets } from '@kernel/registry';
 import { enabledModules } from '../modules';
 
@@ -63,6 +69,14 @@ export const registerWorkers = (): Promise<void> => {
             handler: handleImageDigestJob,
             schema: ImageDigestJobPayloadSchema,
             prefetch: 1
+        }),
+        // `prefetch: 5` — one signed POST per job, I/O-bound like email, and a dead endpoint's
+        // hard timeout (`webhook-delivery.ts`) must not let a burst of jobs pile up serially.
+        consumeFromQueue({
+            queue: WEBHOOK_QUEUE,
+            handler: handleWebhookDeliverJob,
+            schema: WebhookDeliverJobPayloadSchema,
+            prefetch: 5
         })
     ]).then(() => {
         logger.info('Queue workers registered.');

@@ -133,6 +133,9 @@ process.env.NODE_TOKEN_REFRESH ??= 'test-refresh-secret';
 /** Same reasoning as the two secrets above — `account/two-factor/` needs a real value too. */
 process.env.NODE_TOTP_ENCRYPTION_KEY ??= 'test-totp-encryption-key';
 
+/** Same reasoning again — a webhook subscription's secret ring (`modules/webhooks/secrets.ts`). */
+process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY ??= 'test-webhook-secret-encryption-key';
+
 /**
  * Same again for the payment webhook: signing and verifying both refuse an absent secret, which is
  * the right production behaviour and would otherwise fail every webhook suite in CI.

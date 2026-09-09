@@ -43,7 +43,8 @@ export const MODULE_SECTIONS = [
     'orders',
     'payments',
     'delivery',
-    'inventory'
+    'inventory',
+    'webhooks'
 ] as const;
 
 type ModuleSection = (typeof MODULE_SECTIONS)[number];

@@ -32,12 +32,19 @@ import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
 type AsyncScope = 'shared' | 'backend';
 
 /** The order sections are merged in, and therefore the order they appear in the output. */
-export const ASYNC_SECTION_ORDER = ['observability', 'workers'] as const;
+export const ASYNC_SECTION_ORDER = ['observability', 'webhooks', 'workers'] as const;
 
 type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
 
-/** Which sections an API client shares. Everything absent from here is backend-only. */
-const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability']);
+/**
+ * Which sections an API client shares. Everything absent from here is backend-only.
+ *
+ * `webhooks` belongs here for the reason `observability` does: its channels ARE the public event
+ * catalogue (`GET /webhooks/events` reads `asyncapi.public.yaml` back), so a consumer needs the
+ * generated payload types the same way the SSE dashboard does. `workers` never joins this set —
+ * the queue is internal plumbing, not a promise to anyone outside this service.
+ */
+const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability', 'webhooks']);
 
 /** The sections one bundle is built from, in merge order. */
 const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>

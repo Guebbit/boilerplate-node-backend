@@ -47,6 +47,7 @@ import { router as ordersRouter } from '@modules/orders/routes';
 import { router as paymentsRouter } from '@modules/payments/routes';
 import { router as productsRouter } from '@modules/products/routes';
 import { router as usersRouter } from '@modules/users/routes';
+import { router as webhooksRouter } from '@modules/webhooks/routes';
 import { router as wishlistRouter } from '@modules/wishlist/routes';
 
 const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
@@ -72,6 +73,7 @@ const ROUTED_MODULES: Record<string, Router> = {
     payments: paymentsRouter,
     products: productsRouter,
     users: usersRouter,
+    webhooks: webhooksRouter,
     wishlist: wishlistRouter
 };
 

@@ -370,6 +370,24 @@ keys:
       scope: tenant
       description: Read the audit trail. There is no write key — nothing edits an audit row.
 
+    # -- webhooks --------------------------------------------------------------------------------
+    - key: webhooks.read
+      module: webhooks
+      subject: WebhookSubscription
+      action: read
+      scope: tenant
+      description: Read this shop's webhook subscriptions, delivery log and event catalogue.
+    - key: webhooks.manage
+      module: webhooks
+      subject: WebhookSubscription
+      action: manage
+      scope: tenant
+      description: >-
+          Create, update or delete a webhook subscription, and replay a delivery. One key rather
+          than the create/update/delete quartet: a subscription carries a secret ring, and the
+          blast radius of every write against it is the same — a party this shop did not intend
+          gets signed deliveries.
+
     # -- observability -------------------------------------------------------------------------
     # The only platform-scope module in the boilerplate, and it is what makes the invariant
     # testable here rather than only in a downstream project: health, metrics and the operational

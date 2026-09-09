@@ -19,6 +19,7 @@ import { seedLocalesCollection, exportSeededLocales } from './locales';
 import { seedOrdersCollection, exportSeededOrders } from './orders';
 import { seedProductsCollection, exportSeededProducts } from './products';
 import { seedUsersCollection, exportSeededUsers } from './users';
+import { seedWebhooksCollection, exportSeededWebhooks } from './webhooks';
 import { seedWishlistsCollection, exportSeededWishlists } from './wishlist';
 import type { SeedOutcome } from '@infrastructure/persistence/seed';
 
@@ -106,6 +107,14 @@ export const demoModules: Readonly<Record<string, DemoModule>> = {
         export: exportSeededUsers,
         /* `GET /users/:id` answers the serialized document as it stands. */
         shapes: { users: 'response' }
+    },
+    webhooks: {
+        seed: seedWebhooksCollection,
+        export: exportSeededWebhooks,
+        // Empty on purpose, always — see `demo/webhooks.ts`'s own docblock: seeds nothing by
+        // default, and even when a sink is configured locally, its url is meaningless to any
+        // other developer's machine and so never belongs in the published dataset.
+        shapes: {}
     },
     wishlist: {
         seed: seedWishlistsCollection,

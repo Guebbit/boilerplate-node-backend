@@ -1,0 +1,7 @@
+{
+    "webhooks": {
+        "subscription-cap-reached": "Questo negozio ha raggiunto il limite di sottoscrizioni webhook.",
+        "ring-cannot-be-empty": "Una sottoscrizione deve mantenere almeno un secret attivo.",
+        "subscription-not-found": "La sottoscrizione di questa consegna non esiste più."
+    }
+}

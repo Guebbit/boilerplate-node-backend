@@ -65,6 +65,10 @@ const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
     payments: { counterparts: ['payments'] },
     products: { counterparts: ['products'] },
     users: { counterparts: ['users'] },
+    webhooks: {
+        counterparts: [],
+        why: 'The admin screen (subscriptions, the delivery log, replay) is deferred — see DECISIONS.md\'s "Frontend admin screen for webhooks" entry — not silently skipped. The backend admin surface is complete and usable via any HTTP client today.'
+    },
     wishlist: { counterparts: ['wishlist'] }
 };
 

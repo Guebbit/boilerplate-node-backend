@@ -53,6 +53,7 @@ flowchart TD
     payments
     products
     users
+    webhooks
     wishlist
 
     account --> audit_logs
@@ -79,6 +80,8 @@ flowchart TD
     payments --> inventory
     payments --> orders
     payments --> users
+    webhooks --> orders
+    webhooks --> payments
     wishlist --> cart
     wishlist --> products
     wishlist --> users
@@ -88,7 +91,7 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class account,delivery,inventory,payments,users,wishlist supporting;
+    class account,delivery,inventory,payments,users,webhooks,wishlist supporting;
     class audit_logs,feedback,observability generic;
     class antibot,locales isolated;
 ```
@@ -97,14 +100,15 @@ flowchart TD
 | --------------- | ----------------------------------------------------------------------- | --------------------------------------------------- |
 | `account`       | audit-logs, cart, delivery, feedback, orders, payments, users, wishlist | cart                                                |
 | `cart`          | account, delivery, inventory, orders, products, users                   | account, wishlist                                   |
-| `orders`        | inventory, products, users                                              | account, cart, delivery, payments                   |
+| `orders`        | inventory, products, users                                              | account, cart, delivery, payments, webhooks         |
 | `users`         | —                                                                       | account, cart, delivery, orders, payments, wishlist |
+| `payments`      | inventory, orders, users                                                | account, webhooks                                   |
 | `delivery`      | orders, users                                                           | account, cart                                       |
 | `inventory`     | products                                                                | cart, orders, payments                              |
-| `payments`      | inventory, orders, users                                                | account                                             |
 | `products`      | —                                                                       | cart, inventory, orders, wishlist                   |
 | `wishlist`      | cart, products, users                                                   | account                                             |
 | `audit-logs`    | —                                                                       | account, observability                              |
+| `webhooks`      | orders, payments                                                        | —                                                   |
 | `feedback`      | —                                                                       | account                                             |
 | `observability` | audit-logs                                                              | —                                                   |
 | `antibot`       | —                                                                       | —                                                   |

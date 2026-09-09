@@ -68,6 +68,7 @@
         "reap:orders": "tsx ops/reap-orders.ts",
         "reap:payments": "tsx ops/reap-payments.ts",
         "sweep:order-effects": "tsx ops/sweep-order-effects.ts",
+        "sweep:webhook-retries": "tsx ops/sweep-webhook-retries.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",
         "compose:rebuild": "npm run compose -- down -v && npm run compose -- build --no-cache && npm run compose -- up -d",
