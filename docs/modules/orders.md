@@ -62,6 +62,13 @@ the catalogue's: `onHand` and `reserved` describe the warehouse right now, and a
 path to store either — the alternative is an invoice that quietly republishes live stock as if it
 were history.
 
+The snapshot's `title`/`description` are already RESOLVED, not the product's raw fallback-locale
+column: `items[].locale` (required on `OrderItem`) freezes which language they were resolved into at
+purchase time, so an order confirmation and its invoice read in the buyer's language rather than
+whatever the storefront happened to be showing. Reading the order back later must reproduce exactly
+that, never re-resolve against whoever is reading it now — see
+[Internationalisation](../tools/i18n.md#tier-3-user-authored-content).
+
 The status enum is the module's public vocabulary:
 
 | Status                                 | What it means                                | Who moves it                            |
