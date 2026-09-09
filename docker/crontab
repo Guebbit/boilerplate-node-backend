@@ -14,10 +14,11 @@
 # five jobs each opening their own Mongo connection do not all land on the pool at once.
 #
 # `sweep:webhook-retries` is the one job below NOT on that nightly schedule — it runs every
-# minute, because OUTBOUND_WEBHOOKS.md's delayed-retry decision (c) makes the sweep interval the
-# retry granularity: a webhook retry due in 5 seconds is only actually retried on the next minute
-# boundary. A minute-scale query against an indexed `{ status, nextAttemptAt }` is cheap regardless
-# of how the nightly jobs are staggered, so it needs no offset from them.
+# minute, because the sweep interval IS the retry granularity: a webhook retry due in 5 seconds is
+# only actually retried on the next minute boundary — see
+# docs/modules/webhooks.md#the-delivery-path. A minute-scale query against an indexed
+# `{ status, nextAttemptAt }` is cheap regardless of how the nightly jobs are staggered, so it
+# needs no offset from them.
 #
 # Output redirects to /proc/1/fd/1 and /proc/1/fd/2 — PID 1's own stdout/stderr — rather than
 # /dev/stdout: crond does not attach a cron job's stdout to the container's, so a plain redirect
