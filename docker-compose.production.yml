@@ -82,6 +82,46 @@ services:
             queue:
                 condition: service_healthy
 
+    # An external scheduler, not an in-process one — see the equivalent service in
+    # docker-compose.yml and docs/reference/ops.md#scheduled-jobs for the full reasoning. Same
+    # image as `app`; only the command differs, so this container runs `ops/reap-*`/`sweep:*`
+    # against the exact image that was type-checked and linted, never a copy built separately.
+    #
+    # `crond -f -d 8`: busybox's cron daemon, already in `node:*-alpine`. `-f` foreground, `-d 8`
+    # debug-level logging to stderr (nothing here runs syslog). This image runs as the unprivileged
+    # `node` user (`docker/Dockerfile.production`'s `USER node`) rather than root, so
+    # `docker/crontab` is bind-mounted to `/etc/crontabs/node`, not `/etc/crontabs/root` — a
+    # non-root crond reads only the crontab named for its own user. Mounting just this one file is
+    # enough; the image already carries `ops/`, `db/run-script.ts` and `package.json`.
+    #
+    # `replicas: 1` is what actually keeps two `reap:orders` passes from racing; the Mongo lease
+    # (`src/infrastructure/persistence/lease.ts`) is the backstop for a future job that does need it.
+    cron:
+        build:
+            context: .
+            dockerfile: docker/Dockerfile.production
+        restart: unless-stopped
+        deploy:
+            replicas: 1
+        env_file:
+            - .env
+        environment:
+            NODE_ENV: 'production'
+            NODE_DB_URI: 'mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}@database:27017/${MONGO_DB:-api}'
+            NODE_REDIS_URL: 'redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@cache:6379'
+            NODE_RABBITMQ_URL: 'amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@queue:5672'
+            NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}-cron'
+        volumes:
+            - ./docker/crontab:/etc/crontabs/node:ro
+        command: ['crond', '-f', '-d', '8']
+        depends_on:
+            database:
+                condition: service_healthy
+            cache:
+                condition: service_healthy
+            queue:
+                condition: service_healthy
+
     database:
         image: docker.io/library/mongo:8
         restart: unless-stopped

@@ -66,26 +66,67 @@ One config per service in the chain. Each is mounted into its container by the c
 | `docker/observability/grafana/dashboards/api-traces.json` | The provisioned dashboard itself: request rates, latencies and the trace links into Tempo.                                 | [Grafana](../tools/grafana.md)                   |
 | `docker/observability/umami-init.sh`                      | Initialises the Umami analytics database on first start.                                                                   | [Product Analytics](../tools/analytics.md)       |
 
+## Scheduled jobs
+
+The `cron` service in both compose files — busybox `crond` reading `docker/crontab` — is an
+external scheduler: the schedule is deployment configuration instead of code, and the shape
+survives a move off compose unchanged (a `CronJob` on Kubernetes, a systemd timer on a VM). It runs
+the same `ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run
+periodically", via `db/run-script.ts`.
+
+| Job                              | Schedule (UTC) | What it does                                                                                            |
+| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
+| `npm run reap:quarantine`        | 02:00 nightly  | Deletes quarantined upload files past their retention window.                                           |
+| `npm run reap:inactive-accounts` | 02:05 nightly  | Warns, then soft-, then hard-deletes an account inactive past the threshold. Disabled by default.       |
+| `npm run reap:orders`            | 02:10 nightly  | Anonymizes an order's remaining PII once its retention window has passed.                               |
+| `npm run reap:payments`          | 02:15 nightly  | Deletes abandoned (never-settled) payment attempts past their retention window.                         |
+| `npm run sweep:order-effects`    | 02:20 nightly  | Re-announces `ORDER_CANCELLED` for a refund the event bus's one delivery attempt did not carry through. |
+
+`docker/crontab` and this list are staggered five minutes apart so five jobs opening their own
+Mongo connection do not all land on the connection pool at once — each job's own header in `ops/`
+has the full reasoning. `tests/cross-cutting/scheduled-jobs.test.ts` asserts `docker/crontab` and
+`package.json`'s `reap:*`/`sweep:*` scripts agree in both directions — a script renamed in one and
+not the other is either a job that fails every night or cleanup that silently stops running.
+
+**Mutual exclusion.** `deploy: replicas: 1` on the `cron` service is what actually stops two passes
+racing over the same collection — nothing here is meant to scale. `withLease`
+(`src/infrastructure/persistence/lease.ts`) is the backstop if it ever is: an atomic Mongo upsert
+that only one caller can hold at a time, TTL-bounded so a crashed holder's lease still expires.
+None of the five jobs above call it yet — they are correct today under `replicas: 1` alone — but any
+future scheduled job that would NOT be safe to run twice concurrently should wrap its work in it.
+
+**Observability.** Every `withLease` call stamps its lease document's `lastSuccessAt` on success and
+`lastError` on a throw, and `GET /observability/health`'s `jobs` array reports the set — so a job
+that silently stopped running is visible on the probe an operator already looks at, without a
+Pushgateway or a second UI. See `docs/tools/observability-layer.md`.
+
 ## Data retention
 
-Three collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
-job — this repo has no scheduler, so a TTL index is the one form of cleanup that costs nothing to
-run.
+Four collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
+job — that is cleanup with no scheduler involved at all, the cheapest form there is, and it stays
+right for state with no retry story (a cart, an audit entry, a feedback ticket, an abandoned lease
+never need a second attempt at expiring). The five jobs above are the other half: retention and
+periodic work that DOES need to run as a step, with a real success/failure outcome — see Scheduled
+jobs above.
 
 | Collection         | Window                         | Default | Read next                                   |
 | ------------------ | ------------------------------ | ------- | ------------------------------------------- |
 | `auditlogs`        | `NODE_AUDIT_RETENTION_DAYS`    | 90      | [Winston & Audit Logs](../tools/winston.md) |
 | `feedbackrequests` | `NODE_FEEDBACK_RETENTION_DAYS` | 730     | [feedback](../modules/feedback.md)          |
 | `carts`            | `NODE_CART_RETENTION_DAYS`     | 365     | [cart](../modules/cart.md)                  |
+| `leases`           | `NODE_LEASE_RETENTION_DAYS`    | 30      | Scheduled jobs, above                       |
 
-All three share one caveat, worth stating once rather than three times: **Mongo will not modify an
+All four share one caveat, worth stating once rather than four times: **Mongo will not modify an
 existing TTL index's `expireAfterSeconds` in place.** Raising or lowering any of these variables and
 RESTARTING fails the boot — `autoIndex` asks for the new window and Mongo refuses the conflicting
 options. `npm run db:sync` is what applies it: it drops the index and rebuilds it, which is why
 `db:bootstrap` syncs before the server starts. `feedback`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
-sits inside the common limitation periods. `carts` ties to `updatedAt`, so any edit restarts the
-clock — only a genuinely abandoned cart is ever removed.
+sits inside the common limitation periods. `carts` and `leases` both tie to `updatedAt`, so any
+edit — a cart line changed, a lease re-acquired — restarts the clock; only a genuinely abandoned row
+is ever removed. For `leases` that window is unrelated to the mutual-exclusion lease a job actually
+holds (`withLease`'s own `ttlMs` argument, typically minutes): it is garbage collection for a job
+retired from the crontab entirely, not the lock a running job holds.
 
 `orders` and a SETTLED `payments` row must NOT be removed on a timer — both are invoices, kept for
 tax and commercial-law reasons. `orders` carries PII (shipping name/address, email) that survives

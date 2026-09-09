@@ -159,6 +159,49 @@ services:
             # Initial grace period to wait before starting health check
             start_period: 30s
 
+    # An external scheduler rather than an in-process one (`node-cron` et al.) — see
+    # docs/reference/ops.md#scheduled-jobs. The schedule stays deployment configuration instead of
+    # compiled into the app, and this shape is identical on a move to Kubernetes (a `CronJob`) or a
+    # VM (a systemd timer). Same image as `app`, since every entry point it runs (`ops/reap-*`,
+    # `sweep:*`) is already part of that image and already correct: `db/run-script.ts` opens a
+    # connection, closes it on both paths, and sets a non-zero exit code on failure.
+    #
+    # `crond` is busybox's cron daemon, already in `node:*-alpine` — no extra package. `-f` keeps it
+    # in the foreground (what a container needs); `-d 8` is debug-level logging to stderr instead
+    # of syslog, which nothing in this image runs. `docker/crontab` is bind-mounted to
+    # `/etc/crontabs/root`, crond's default per-user crontab path on Alpine.
+    #
+    # `replicas: 1` is the other half of the mutual-exclusion story. The Mongo lease
+    # (`src/infrastructure/persistence/lease.ts`) makes a second holder harmless even if this were
+    # ever scaled up, but the orchestrator not scaling it in the first place is what actually keeps
+    # two `reap:orders` passes from racing.
+    cron:
+        logging: *container-logging
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+        restart: unless-stopped
+        deploy:
+            replicas: 1
+        environment:
+            NODE_ENV: 'development'
+            NODE_REDIS_URL: 'redis://redis:6379'
+            NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
+            OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel-collector:4318'
+            NODE_SERVICE_NAME: 'cron'
+        volumes:
+            - .:/app:Z
+            - /app/node_modules
+            - ./docker/crontab:/etc/crontabs/root:ro,Z
+        command: ['crond', '-f', '-d', '8']
+        depends_on:
+            database:
+                condition: service_healthy
+            redis:
+                condition: service_started
+            rabbitmq:
+                condition: service_started
+
     # Another container
     database:
         logging: *container-logging
