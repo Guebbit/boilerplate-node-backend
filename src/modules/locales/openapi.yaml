@@ -1132,9 +1132,10 @@ components:
         # in V1) is untouched by this feature — a public read resolves to plain strings server-side,
         # so a client never sees this shape at all. Only the admin door in this module does.
         #
-        # See TRANSLATION_UPGRADE.md for the full design: why a side collection rather than an
-        # embedded map, why every locale — including the source — gets a row, and why the write
-        # path lives here (generic) rather than on `products` (entity-specific).
+        # See docs/modules/locales.md#the-translations-collection for the full design: why a side
+        # collection rather than an embedded map, why every locale — including the source — gets a
+        # row, and why the write path lives here (generic) rather than on `products`
+        # (entity-specific).
         TranslationOrigin:
             type: string
             enum: [machine, human]
