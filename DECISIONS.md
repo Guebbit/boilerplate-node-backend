@@ -188,3 +188,26 @@ reached via a "Translations" button on `ProductEdit.vue` (visible to `isAdmin ||
 It discovers its field set from the union of keys already present in the fetched rows rather than
 a per-entity client-side schema — the accepted trade-off of a screen that has to stay generic
 across entity types it doesn't know about yet.
+
+## `startLocaleOverrideRefresh` stays off `withLease`
+
+**Problem:** `SCHEDULING_AND_COORDINATION.md`'s Question 3 left open whether
+`startLocaleOverrideRefresh` (`src/infrastructure/i18n/overrides.ts`) — a `setInterval` every
+worker runs, polling Mongo for admin-edited locale overlays — should take the new `withLease`
+primitive, now that one exists for the `reap:*`/`sweep:*` cron jobs. The doc's own lean was
+"worth deciding on its own merits rather than reaching for the new hammer" rather than a verdict.
+
+**Options:** (a) wrap the refresh in `withLease`, so only one worker polls Mongo and refreshes;
+(b) leave it unchanged, with a comment explaining why.
+
+**Decision:** (b). A lease picks ONE runner and is correct for a job whose effect is durable and
+shared — an anonymisation pass writes to Mongo once, for every reader. This refresh writes to
+`i18next`'s in-memory resource bundle, which is PER PROCESS: every worker holds its own copy and
+has to apply the update itself, or it keeps serving stale copy until it restarts. Leasing it would
+not remove redundant work, it would starve N-1 workers of the update entirely — a correctness
+regression, not an optimisation. N Mongo reads a minute is also not a real cost at this scale, but
+that was not the deciding argument: even a genuinely expensive refresh would need a broadcast
+(a domain event over the existing bus, if the 60s staleness window ever stops being fine), not a
+lease, because the problem is "every reader must know", not "only one writer may act". This repo
+has no such broadcast primitive today, and building one was out of scope for a decision this
+document only asked to make one way or the other.
