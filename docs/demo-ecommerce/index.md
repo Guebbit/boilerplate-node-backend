@@ -104,7 +104,7 @@ pages because this is where you pick an account to log in as.
 | `warehouse`  | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                 |
 | `support`    | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                         |
 | `editor`     | tenant   | `products.manage`, `locales.read`                                                                                                                     |
-| `translator` | tenant   | `locales.manage`                                                                                                                                      |
+| `translator` | tenant   | `locales.manage`, `translations.read`, `translations.manage`                                                                                          |
 | `moderator`  | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                      |
 | `owner`      | tenant   | `all.manage`                                                                                                                                          |
 | `operator`   | platform | `platform.observability.manage`                                                                                                                       |

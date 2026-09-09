@@ -8,8 +8,8 @@
 
 /*
  * No loose re-exports beside the namespace: `localeService` is the only name anything imports from
- * here — seven controllers, `module.ts` and three suites — and a second list naming all twenty-four
- * functions said that twice, which is one list too many to keep in step with the folder.
+ * here — controllers, `module.ts` and tests alike — and a second list naming every function said
+ * that twice, which is one list too many to keep in step with the folder.
  */
 
 import {
@@ -33,6 +33,8 @@ import { listTenants } from '../tenants';
 import { createLanguage, updateLanguage, deleteLanguage } from './languages';
 import { searchEntries, createEntry, updateEntry, deleteEntry, importEntries } from './entries';
 import { readMessages, readApiOverrides } from './messages';
+import { setTranslatables } from './translatables';
+import { getEntityTranslations, upsertEntityTranslations } from './translations';
 
 /** The one name anything outside `services/` imports — every function the module exposes. */
 export const localeService = {
@@ -59,5 +61,8 @@ export const localeService = {
     createEntry,
     updateEntry,
     deleteEntry,
-    importEntries
+    importEntries,
+    setTranslatables,
+    getEntityTranslations,
+    upsertEntityTranslations
 };

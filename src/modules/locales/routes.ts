@@ -24,6 +24,8 @@ import {
     mergeLocaleEntries
 } from './controllers/write-locale-entries';
 import { deleteLocaleEntry } from './controllers/delete-locale-entry';
+import { getEntityTranslations } from './controllers/get-entity-translations';
+import { upsertEntityTranslations } from './controllers/upsert-entity-translations';
 
 /** Express router mounted at `/locales` — see the module header for the ordering and guard rules. */
 export const router = Router();
@@ -136,4 +138,26 @@ router.delete(
     requirePermission('locales.delete'),
     invalidateCache(['locales']),
     deleteLocaleEntry
+);
+
+/*
+ * The translator's door onto user-authored content — generic across whatever `translatables`
+ * declares, `product` in V1. Uncached, like `/:locale/entries` above: this is the screen someone
+ * is actively typing into. Its own cache tag (the registry-declared one, `products` today) is
+ * invalidated inside the service, not by this route's middleware — the tag varies with
+ * `entityType`, which `invalidateCache`'s fixed array cannot express.
+ */
+router.get(
+    '/translations/:entityType/:id',
+    getAuth,
+    isAuth,
+    requirePermission('translations.read'),
+    getEntityTranslations
+);
+router.patch(
+    '/translations/:entityType/:id',
+    getAuth,
+    isAuth,
+    requirePermission('translations.manage'),
+    upsertEntityTranslations
 );

@@ -34,8 +34,9 @@ import {
     startLocaleOverrideRefresh
 } from '@infrastructure/i18n';
 
-import { registerModules } from '@kernel/registry';
+import { registerModules, resolveTranslatables } from '@kernel/registry';
 import { enabledModules } from './modules';
+import { setTranslatables } from '@modules/locales/module';
 
 import { applyServerTimeouts, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
@@ -165,6 +166,16 @@ export const stopServer = () => {
  * rather than surfacing as a 500 on whichever request happens to cross the gap first.
  */
 registerModules(enabledModules);
+
+/*
+ * `locales` cannot collect every module's `translatables` entry itself — the same wall that keeps
+ * `@infrastructure/i18n`'s translation port free of any `src/modules/*` import — so the app tier
+ * builds the lookup and hands it in, the one direction data may cross that boundary. Alongside
+ * `registerModules` above, not inside `startServer()`: a translation write must be validatable the
+ * moment this file is imported, the same as every other module-registry fact, not only once the
+ * process actually starts listening.
+ */
+setTranslatables(resolveTranslatables(enabledModules));
 
 installSecurity(app);
 installRequestContext(app);

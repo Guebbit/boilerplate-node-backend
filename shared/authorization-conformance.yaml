@@ -418,11 +418,38 @@ cases:
       resource: { tenantId: shop_1 }
       expect: deny
 
-    - name: a translator may not update a price
-      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+    - name: a translator may not update a price, even holding the translations key
+      caller:
+          {
+              id: usr_8,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions: [locales.manage, translations.manage]
+          }
       action: update
       subject: Product
       resource: { tenantId: shop_1, active: true }
+      expect: deny
+
+    - name: a translator may read a product's translations
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [translations.read] }
+      action: read
+      subject: Translation
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: translations.manage is scoped, so it does not itself satisfy an unbounded manage check
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [translations.manage] }
+      action: manage
+      subject: Translation
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: an editor holding only products.manage may not read a translation
+      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage] }
+      action: read
+      subject: Translation
+      resource: { tenantId: shop_1 }
       expect: deny
 
     # =============================================================================================

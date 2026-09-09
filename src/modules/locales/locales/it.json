@@ -7,6 +7,13 @@
         "error-key-exists": "La chiave {{key}} è già tradotta in questa lingua.",
         "error-key-collision": "La chiave {{key}} non può coesistere con {{existing}}: una delle due dovrebbe essere insieme un testo e un gruppo di testi.",
         "error-key-invalid": "La chiave {{key}} non è utilizzabile come chiave di traduzione.",
-        "error-tenant-unknown": "Il tenant {{tenant}} non è tra quelli serviti da questa installazione — vedi GET /locales/tenants."
+        "error-tenant-unknown": "Il tenant {{tenant}} non è tra quelli serviti da questa installazione — vedi GET /locales/tenants.",
+        "error-language-is-fallback": "La lingua di fallback {{tag}} non può essere disattivata né eliminata: è dove vive la riga sorgente di ogni entità traducibile.",
+        "error-entity-type-unknown": "{{entityType}} non è un tipo di entità traducibile registrato.",
+        "error-translation-locale-unknown": "La lingua {{locale}} non esiste.",
+        "error-translation-locale-inactive": "La lingua {{locale}} non è attiva.",
+        "error-translation-field-unknown": "{{field}} non è un campo traducibile di {{entityType}}.",
+        "error-translation-fields-empty": "I campi di una traduzione non possono essere vuoti — ometti la lingua per lasciarla invariata, oppure invia null per eliminarla.",
+        "error-translation-fallback-required": "La lingua di fallback {{locale}} non può essere eliminata: è quella su cui ricadono tutte le altre."
     }
 }

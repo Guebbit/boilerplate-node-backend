@@ -4,7 +4,7 @@
  * the repository and stays the one place a controller may call into.
  */
 
-import { t } from '@infrastructure/i18n';
+import { removeTranslations, t } from '@infrastructure/i18n';
 import type { SearchProductsRequest, Product } from '@types';
 import {
     generateSuccess,
@@ -275,9 +275,14 @@ export const remove = (
     const id = product._id.toString();
 
     // HARD delete
+    // Translations go with it, in this same operation — through the port, never the
+    // `PRODUCT_DELETED` event above: that event fires on a SOFT delete too, with an identical
+    // payload, so a subscriber could not tell the two apart without an AsyncAPI change. Soft
+    // delete is a flip that doubles as a restore, and the rows must survive it.
     if (hardDelete)
         return emitDomainEvent(PRODUCT_DELETED, { productId: id })
             .then(() => productRepository.deleteOne(product))
+            .then(() => removeTranslations('product', id))
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
 

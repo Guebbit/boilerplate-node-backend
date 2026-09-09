@@ -442,6 +442,83 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    # The generic, entity-agnostic admin door onto user-authored content — the `translator`'s door,
+    # never the entity's own write path. `entityType` is a `translatables` registry key (`product`
+    # in V1); the entity's OWN contract is untouched by this feature and never sees this shape.
+    /locales/translations/{entityType}/{id}:
+        get:
+            tags: [System]
+            summary: Read every translation an entity has
+            description: |
+                Every locale this entity has a row for, in one response — the admin shape a
+                translation screen reads as a whole. A public read resolves to one language
+                server-side; this is the only door that shows every language at once.
+            operationId: getEntityTranslations
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
+                - $ref: '#/components/parameters/TranslationEntityIdPathParam'
+            responses:
+                '200':
+                    description: Every locale this entity has a row for
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EntityTranslationsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [System]
+            summary: Merge one or more of an entity's translations
+            description: |
+                MERGING semantics: a locale key absent from the body is left exactly as it is. Three
+                signals inside the map, and no way to mistake one for another:
+
+                | the body says      | the server does                                    |
+                | ------------------ | --------------------------------------------------- |
+                | key absent         | leaves that locale's row exactly as it is            |
+                | `"it": { … }`      | upserts that locale's row — created or fully replaced |
+                | `"it": null`       | deletes that locale's row                            |
+
+                An empty `fields` object is a 422, never a delete — deletion is `null`, spent
+                deliberately: a cleared form field sends `""`, never `null`, so a mis-click can
+                never delete translated work. `null` on the fallback locale is a 422: deleting it
+                would leave the entity with nothing to fall back to.
+
+                422 equally when a named locale does not exist or is not `active` in the `locales`
+                collection, and when `fields` names a key the `translatables` registry does not
+                declare for this `entityType` — the pointer names the locale, e.g.
+                `translations.it.title`, so an editor with several tabs open can tell which one
+                failed.
+            operationId: upsertEntityTranslations
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
+                - $ref: '#/components/parameters/TranslationEntityIdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpsertTranslationsRequest'
+            responses:
+                '200':
+                    description: Every locale this entity has a row for, after the write
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EntityTranslationsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
 components:
     parameters:
         # ---------- locales — the parameters only this module's paths reference. ----------
@@ -480,6 +557,22 @@ components:
             schema:
                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
             description: Identifier of one translation entry.
+
+        TranslatableEntityTypePathParam:
+            name: entityType
+            in: path
+            required: true
+            schema:
+                $ref: '#/components/schemas/TranslatableEntityType'
+            description: A `translatables` registry key — `product` in V1.
+
+        TranslationEntityIdPathParam:
+            name: id
+            in: path
+            required: true
+            schema:
+                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+            description: Identifier of the translated entity — a product id, in V1.
 
     schemas:
         # ---------- locales — the schemas only this module's paths reference. ----------
@@ -1111,20 +1204,6 @@ components:
                     type: string
                     format: date-time
 
-        TranslationEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/Translation'
-
         EntityTranslations:
             type: object
             additionalProperties: false
@@ -1167,13 +1246,35 @@ components:
             properties:
                 fields:
                     type: object
-                    minProperties: 1
                     additionalProperties:
                         type: string
                     description: >-
                         Every key MUST be one the `translatables` registry declares for this
-                        `entityType`; an unknown key is a 422, not a silently dropped one.
+                        `entityType`; an unknown key is a 422, not a silently dropped one. Empty is
+                        a 422 too — enforced at write time, not by this schema, since `minProperties`
+                        is not something the generated client validates.
                 origin:
                     allOf:
                         - $ref: '#/components/schemas/TranslationOrigin'
                     default: human
+
+        UpsertTranslationsRequest:
+            type: object
+            additionalProperties:
+                type: object
+                nullable: true
+                allOf:
+                    - $ref: '#/components/schemas/UpsertTranslationRequest'
+                description: >-
+                    Upserts this locale's row when an object, deletes it when `null`. A key this
+                    map does not name is left exactly as it is — see the operation description for
+                    the full three-way table.
+            description: >-
+                One or more locales for one entity, keyed by locale tag. A key absent from this map
+                leaves that locale untouched; see the operation description for what an object and
+                a `null` each mean.
+            example:
+                it:
+                    fields:
+                        title: Cuccia ortopedica in memory foam
+                        description: Un supporto extra per le articolazioni durante il riposo.

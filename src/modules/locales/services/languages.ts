@@ -11,7 +11,7 @@ import {
     type LocaleTenant,
     type UpdateLocaleRequest
 } from '@types';
-import { t } from '@infrastructure/i18n';
+import { getFallbackLocale, t } from '@infrastructure/i18n';
 import {
     generateReject,
     generateSuccess,
@@ -28,6 +28,16 @@ import { localeAuditActions } from '../audit';
 /** Not found, phrased the one way every route in this module phrases it. */
 export const languageNotFound = (): ResponseReject =>
     generateReject(404, [t('locales.error-language-not-found')]);
+
+/**
+ * The deployment's fallback locale, deactivated or deleted — refused before either happens.
+ * Every translatable entity's source row lives there; losing it empties the catalogue in every
+ * language at once, so the guard sits here rather than trusting an operator to know that.
+ */
+const rejectFallbackLocale = (tag: string): ResponseReject | undefined =>
+    tag === getFallbackLocale()
+        ? generateReject(409, [t('locales.error-language-is-fallback')])
+        : undefined;
 
 /** A tenant this deployment does not know — refused before anything is written under it. */
 export const rejectUnknownTenant = (tenant: string): ResponseReject | undefined =>
@@ -101,6 +111,11 @@ export const updateLanguage = async (
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
 
+    if (payload.active === false) {
+        const fallbackRefusal = rejectFallbackLocale(tag);
+        if (fallbackRefusal) return fallbackRefusal;
+    }
+
     if (payload.name !== undefined) language.name = payload.name.trim();
     if (payload.nativeName !== undefined) language.nativeName = payload.nativeName.trim();
     if (payload.direction !== undefined) language.direction = payload.direction;
@@ -134,13 +149,19 @@ export const updateLanguage = async (
 export const deleteLanguage = async (
     tag: string,
     context?: CallerContext
-): Promise<ResponseSuccess<{ removedEntries: number }> | ResponseReject> => {
+): Promise<
+    ResponseSuccess<{ removedEntries: number; removedTranslations: number }> | ResponseReject
+> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
 
     if (language.active) return generateReject(409, [t('locales.error-language-active')]);
 
-    const removedEntries = await localeRepository.deleteLocaleCascade(language);
+    const fallbackRefusal = rejectFallbackLocale(tag);
+    if (fallbackRefusal) return fallbackRefusal;
+
+    const { entries: removedEntries, translations: removedTranslations } =
+        await localeRepository.deleteLocaleCascade(language);
 
     if (context)
         emitAuditEvent(
@@ -149,9 +170,9 @@ export const deleteLanguage = async (
                 outcome: 'success',
                 target_type: 'locale',
                 target_id: tag,
-                metadata: { removedEntries }
+                metadata: { removedEntries, removedTranslations }
             })
         );
 
-    return generateSuccess({ removedEntries });
+    return generateSuccess({ removedEntries, removedTranslations });
 };

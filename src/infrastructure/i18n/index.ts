@@ -46,8 +46,9 @@ export { negotiateLocale } from './negotiate';
 
 export {
     localeCandidatesFor,
-    registerTranslationResolver,
+    registerTranslationPort,
+    removeTranslations,
     resolveTranslations,
     type TranslatedFields,
-    type TranslationResolver
+    type TranslationPort
 } from './translation';

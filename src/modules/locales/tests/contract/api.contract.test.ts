@@ -12,6 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infrastructure/i18n';
 import { readLocaleDictionary } from '@infrastructure/i18n';
+import { createProduct } from '@modules/products/tests/fixtures';
 import itTranslation from '../../../../locales/it.json';
 
 setupTestDb();
@@ -903,5 +904,77 @@ describe('GET /locales/:locale/messages?tenant=', () => {
 
         const stranger = await api().get('/locales/pt/messages?tenant=nobody');
         expect(stranger.status).toBe(404);
+    });
+});
+
+describe('GET & PATCH /locales/translations/:entityType/:id', () => {
+    it('answers an empty list matching the spec for an entity with no rows yet', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .get(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.translations).toEqual([]);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('upserts a locale and matches the spec', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const product = await createProduct();
+
+        const response = await api()
+            .patch(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ pt: { fields: { title: 'Cama' } } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.translations).toHaveLength(1);
+        expect(response.body.data.translations[0]).toMatchObject({
+            locale: 'pt',
+            fields: { title: 'Cama' },
+            origin: 'human'
+        });
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('422s an unregistered entityType, matching the spec', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get('/locales/translations/bogus/000000000000000000000000')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('422s a null on the fallback locale, matching the spec', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .patch(`/locales/translations/product/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ en: null });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('401s without a token, matching the spec', async () => {
+        const product = await createProduct();
+
+        const response = await api()
+            .patch(`/locales/translations/product/${String(product._id)}`)
+            .send({
+                en: { fields: { title: 'Bed' } }
+            });
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
     });
 });

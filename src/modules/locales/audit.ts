@@ -19,7 +19,13 @@ export const localeAuditActions = {
      * to keys the body did not name, which is a detail of the same event — and a compliance query
      * asking "who changed the Spanish copy" wants one prefix to filter on, not two.
      */
-    ADMIN_LOCALE_ENTRY_IMPORTED: 'admin.locale_entry.imported'
+    ADMIN_LOCALE_ENTRY_IMPORTED: 'admin.locale_entry.imported',
+    /*
+     * One action for the whole batch a PATCH carries, upserts and deletes together — a compliance
+     * query asking "who changed this product's translations" wants one row per request, not one
+     * per locale the request happened to touch.
+     */
+    ADMIN_TRANSLATION_UPDATED: 'admin.translation.updated'
 } as const;
 
 /** Merges this module's actions into the app-wide `AuditActionMap` union. */

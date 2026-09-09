@@ -299,6 +299,23 @@ keys:
       scope: tenant
       description: Any action on a locale.
 
+    # A translation is its own subject, deliberately apart from `Locale`: a translator writes
+    # WORDS for an entity a locale is already active for, never the locale's own row. It is also
+    # apart from `Product`/whatever entity is translated, which is the whole point — a
+    # mistranslation can never become a mischanged price.
+    - key: translations.read
+      module: locales
+      subject: Translation
+      action: read
+      scope: tenant
+      description: Read an entity's translated fields, in the admin shape (every locale at once).
+    - key: translations.manage
+      module: locales
+      subject: Translation
+      action: manage
+      scope: tenant
+      description: Write an entity's translated fields. Never grants a write on the entity itself.
+
     # -- users ---------------------------------------------------------------------------------
     - key: users.read
       module: users

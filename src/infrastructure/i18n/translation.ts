@@ -1,9 +1,15 @@
 /**
  * @module
  * The translation port: how a read path resolves user-authored content — a product's title, a
- * category's description — into a caller's language. Registered by `modules/locales` the same way
- * `./overrides` registers its provider, so this file stays free of any `src/modules/*` import and
- * a decorator over `createRepository` can depend on it without a cycle.
+ * category's description — into a caller's language, and how a HARD delete of that content takes
+ * its translation rows with it. Registered by `modules/locales` the same way `./overrides`
+ * registers its provider, so this file stays free of any `src/modules/*` import and a decorator
+ * over `createRepository` can depend on it without a cycle.
+ *
+ * `removeAll` is the only removal shape here: a `null` in a PATCH and a language's own delete
+ * cascade are both driven from inside `modules/locales` itself, against its own repository — this
+ * port exists only for the direction nothing else can reach, a product's hard delete asking its
+ * translations to go with it.
  *
  * See: docs/tools/i18n.md
  */
@@ -17,32 +23,47 @@ import { getFallbackLocale } from './catalog';
 export type TranslatedFields = Record<string, string>;
 
 /**
- * Resolves a batch of entities' translated fields in one locale-aware query.
- *
- * `localeCandidates` is the full fallback chain the caller already computed — see
- * {@link localeCandidatesFor} — never a single locale, so an implementation can satisfy a whole
- * page with one indexed query instead of one per candidate. The fields returned for each entity
- * are already merged in that candidate order, most specific field wins.
- *
- * @returns fields per entityId; an id with no row at all is simply absent from the map
+ * What `modules/locales` supplies once, at import time.
  */
-export type TranslationResolver = (
-    entityType: string,
-    entityIds: string[],
-    localeCandidates: string[]
-) => Promise<Map<string, TranslatedFields>>;
+export interface TranslationPort {
+    /**
+     * Resolves a batch of entities' translated fields in one locale-aware query.
+     *
+     * `localeCandidates` is the full fallback chain the caller already computed — see
+     * {@link localeCandidatesFor} — never a single locale, so an implementation can satisfy a
+     * whole page with one indexed query instead of one per candidate. The fields returned for
+     * each entity are already merged in that candidate order, most specific field wins.
+     *
+     * @returns fields per entityId; an id with no row at all is simply absent from the map
+     */
+    resolve: (
+        entityType: string,
+        entityIds: string[],
+        localeCandidates: string[]
+    ) => Promise<Map<string, TranslatedFields>>;
 
-/** The registered resolver, or `undefined` before `modules/locales` has supplied one. */
-let translationResolver: TranslationResolver | undefined;
+    /**
+     * Removes every locale's row for one entity — a product's HARD delete taking its translations
+     * with it, in the same operation. Never called for a soft delete: that flip is a restore
+     * candidate, and a restored product with no translated name is the bug this port exists to
+     * prevent.
+     *
+     * @returns how many rows were removed
+     */
+    removeAll: (entityType: string, entityId: string) => Promise<number>;
+}
+
+/** The registered port, or `undefined` before `modules/locales` has supplied one. */
+let translationPort: TranslationPort | undefined;
 
 /**
- * Declare where translated fields come from, replacing any previous resolver.
+ * Declare where translated fields come from and go to, replacing any previous port.
  *
  * Unregistered is a valid state: a unit test that never imports `modules/locales` gets no
- * resolution, which is correct — there is nothing registered to resolve against.
+ * resolution and no removal, which is correct — there is nothing registered to ask.
  */
-export const registerTranslationResolver = (resolver?: TranslationResolver): void => {
-    translationResolver = resolver;
+export const registerTranslationPort = (port?: TranslationPort): void => {
+    translationPort = port;
 };
 
 /**
@@ -54,9 +75,16 @@ export const resolveTranslations = (
     entityIds: string[],
     localeCandidates: string[]
 ): Promise<Map<string, TranslatedFields>> =>
-    !translationResolver || entityIds.length === 0
+    !translationPort || entityIds.length === 0
         ? Promise.resolve(new Map<string, TranslatedFields>())
-        : translationResolver(entityType, entityIds, localeCandidates);
+        : translationPort.resolve(entityType, entityIds, localeCandidates);
+
+/**
+ * The hard-delete path's entry point. A no-op — zero removed, no query — when nothing is
+ * registered, for the same reason {@link resolveTranslations} is.
+ */
+export const removeTranslations = (entityType: string, entityId: string): Promise<number> =>
+    translationPort ? translationPort.removeAll(entityType, entityId) : Promise.resolve(0);
 
 /**
  * The locale chain a resolver query walks, most specific first: the exact tag, its base language,

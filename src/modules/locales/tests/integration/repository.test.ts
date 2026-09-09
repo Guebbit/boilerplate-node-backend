@@ -9,11 +9,18 @@
 import { BACKEND, FRONTEND } from '../unit/tenants.fixture';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/fixtures';
-import { localeEntryRepository, localeRepository } from '@modules/locales/repository';
+import {
+    localeEntryRepository,
+    localeRepository,
+    translationRepository
+} from '@modules/locales/repository';
 import type { LocaleDocument } from '@modules/locales/model';
 import { localeService } from '@modules/locales/services';
 
 setupTestDb();
+
+/** The deployment's fallback locale in every environment this suite runs in — see `.env-example`. */
+const FALLBACK = 'en';
 
 /** A language and, optionally, some of its strings — the setup every case below starts from. */
 const givenLanguage = async (
@@ -216,7 +223,7 @@ describe('deleting a language', () => {
         const result = await localeService.deleteLanguage('es');
 
         expect(result.success).toBe(true);
-        expect(result.data).toEqual({ removedEntries: 2 });
+        expect(result.data).toEqual({ removedEntries: 2, removedTranslations: 0 });
         expect(await localeRepository.findByTag('es')).toBeNull();
         expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual([]);
     });
@@ -234,6 +241,141 @@ describe('deleting a language', () => {
         const result = await localeService.deleteLanguage('zz');
 
         expect(result.status).toBe(404);
+    });
+
+    it('cascades its translation rows too, and reports the count', async () => {
+        await givenLanguage('es', {}, { active: false });
+        await translationRepository.upsertEntityLocale(
+            'product',
+            'p1',
+            'es',
+            { title: 'Cama' },
+            'human',
+            undefined,
+            undefined
+        );
+        await translationRepository.upsertEntityLocale(
+            'product',
+            'p2',
+            'es',
+            { title: 'Silla' },
+            'human',
+            undefined,
+            undefined
+        );
+
+        const result = await localeService.deleteLanguage('es');
+
+        expect(result.data).toEqual({ removedEntries: 0, removedTranslations: 2 });
+        expect(await translationRepository.findEntityTranslations('product', 'p1')).toEqual([]);
+        expect(await translationRepository.findEntityTranslations('product', 'p2')).toEqual([]);
+    });
+
+    it('leaves another language’s translation rows standing', async () => {
+        await givenLanguage('es', {}, { active: false });
+        await givenLanguage('it');
+        await translationRepository.upsertEntityLocale(
+            'product',
+            'p1',
+            'es',
+            { title: 'Cama' },
+            'human',
+            undefined,
+            undefined
+        );
+        await translationRepository.upsertEntityLocale(
+            'product',
+            'p1',
+            'it',
+            { title: 'Cuccia' },
+            'human',
+            undefined,
+            undefined
+        );
+
+        await localeService.deleteLanguage('es');
+
+        const remaining = await translationRepository.findEntityTranslations('product', 'p1');
+        expect(remaining.map((row) => row.locale)).toEqual(['it']);
+    });
+
+    it('refuses to delete the fallback locale even when inactive', async () => {
+        await givenLanguage(FALLBACK, {}, { active: false });
+
+        const result = await localeService.deleteLanguage(FALLBACK);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(409);
+        expect(await localeRepository.findByTag(FALLBACK)).not.toBeNull();
+    });
+});
+
+describe('deactivating a language', () => {
+    it('refuses to deactivate the fallback locale', async () => {
+        await givenLanguage(FALLBACK);
+
+        const result = await localeService.updateLanguage(FALLBACK, { active: false });
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(409);
+        const stored = await localeRepository.findByTag(FALLBACK);
+        expect(stored?.active).toBe(true);
+    });
+
+    it('leaves the fallback locale updatable on every other field', async () => {
+        await givenLanguage(FALLBACK);
+
+        const result = await localeService.updateLanguage(FALLBACK, { name: 'English (US)' });
+
+        expect(result.success).toBe(true);
+        expect(result.data?.name).toBe('English (US)');
+    });
+});
+
+describe('the translations collection', () => {
+    /*
+     * A write path is a check-then-insert (`upsertEntityLocale` is an upsert, not a raw insert),
+     * so this is the database refusing what only a concurrent request could produce — the same
+     * property `localeSchema`'s tag index and `localeEntrySchema`'s compound index each guard.
+     */
+    it('refuses a second row for the same (entityType, entityId, locale) triple', async () => {
+        await translationRepository.create({
+            entityType: 'product',
+            entityId: 'p1',
+            locale: FALLBACK,
+            fields: { title: 'Bed' },
+            origin: 'human'
+        });
+
+        await expect(
+            translationRepository.create({
+                entityType: 'product',
+                entityId: 'p1',
+                locale: FALLBACK,
+                fields: { title: 'Bed, again' },
+                origin: 'human'
+            })
+        ).rejects.toThrow();
+    });
+
+    it('allows the same locale for a different entity', async () => {
+        await translationRepository.create({
+            entityType: 'product',
+            entityId: 'p1',
+            locale: FALLBACK,
+            fields: { title: 'Bed' },
+            origin: 'human'
+        });
+
+        await expect(
+            translationRepository.create({
+                entityType: 'product',
+                entityId: 'p2',
+                locale: FALLBACK,
+                fields: { title: 'Chair' },
+                origin: 'human'
+            })
+        ).resolves.toBeDefined();
     });
 });
 

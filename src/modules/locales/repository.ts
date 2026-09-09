@@ -7,15 +7,19 @@
  * between them only makes a client under-fetch once, never cache a stale dictionary as current.
  */
 
+import { createHash } from 'node:crypto';
+import mongoose from 'mongoose';
 import {
     localeModel,
     localeEntryModel,
+    translationModel,
     applyLocaleTransform,
-    applyLocaleEntryTransform
+    applyLocaleEntryTransform,
+    applyTranslationTransform
 } from './model';
-import type { LocaleDocument, LocaleEntryDocument } from './model';
+import type { LocaleDocument, LocaleEntryDocument, TranslationDocument } from './model';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
-import type { LocaleTenant } from '@types';
+import type { LocaleTenant, TranslationFields, TranslationOrigin } from '@types';
 import { frontendTenantIds } from './tenants';
 
 /** One key and its translation, as a write supplies them. */
@@ -226,20 +230,190 @@ const importEntries = async (
     };
 };
 
+/** What a language's own delete cascaded into, per collection. */
+export interface LocaleCascadeCounts {
+    /** Dictionary entries removed. */
+    entries: number;
+    /** Translation rows removed — every entity's row in this locale, across every `entityType`. */
+    translations: number;
+}
+
 /**
- * Remove a language and every string translated into it.
+ * Remove a language and every string translated into it — its dictionary entries AND its
+ * translation rows.
  *
- * The cascade this collection has instead of a foreign key: entries reference the language by
- * tag, so removing it alone would leave an orphan row set the next language of that tag would
- * silently inherit.
+ * The cascade this collection has instead of a foreign key: both reference the language by tag,
+ * so removing it alone would leave an orphan row set the next language of that tag would silently
+ * inherit.
  *
- * Entries go FIRST — interrupted the other way, the surviving language keeps stale rows;
- * interrupted this way, it is briefly empty, which is the state the caller asked for anyway.
+ * Both cascades go FIRST, the language row LAST — interrupted before it, the surviving language
+ * keeps stale rows; interrupted after either cascade but before the language row, it is briefly
+ * empty, which is the state the caller asked for anyway.
  */
-const deleteLocaleCascade = async (locale: LocaleDocument): Promise<number> => {
-    const { deletedCount } = await localeEntryModel.deleteMany({ locale: locale.tag }).exec();
+const deleteLocaleCascade = async (locale: LocaleDocument): Promise<LocaleCascadeCounts> => {
+    const [{ deletedCount: entries }, { deletedCount: translations }] = await Promise.all([
+        localeEntryModel.deleteMany({ locale: locale.tag }).exec(),
+        translationModel.deleteMany({ locale: locale.tag }).exec()
+    ]);
     await localeBase.deleteOne(locale);
+    return { entries, translations };
+};
+
+/** Base CRUD repository over the translations collection. No `searchable`: never listed by filter. */
+const translationBase = createRepository<TranslationDocument>(translationModel, {
+    transform: applyTranslationTransform
+});
+
+/**
+ * Every locale this entity has a row for, sorted by locale so a response is byte-stable.
+ */
+const findEntityTranslations = (
+    entityType: string,
+    entityId: string
+): Promise<TranslationDocument[]> =>
+    translationModel
+        .find({ entityType, entityId })
+        .sort({ locale: 1 })
+        .lean<TranslationDocument[]>()
+        .exec();
+
+/** One entity's row in one locale, or `null` when it has none yet. */
+const findEntityLocale = (
+    entityType: string,
+    entityId: string,
+    locale: string
+): Promise<TranslationDocument | null> =>
+    translationModel.findOne({ entityType, entityId, locale }).exec();
+
+/**
+ * A page's translated fields, one indexed `$in` query resolving every entity at once — the query
+ * `@infrastructure/i18n`'s translation port resolves reads through, and the primitive a future
+ * read-path decorator batches a whole page against.
+ *
+ * `localeCandidates` is `[exact, base, fallback]`, most specific first (see
+ * `localeCandidatesFor`); merging walks it in REVERSE so a more specific locale's fields overwrite
+ * a less specific one's, field by field — not row by row, since a locale may have translated only
+ * some of an entity's fields.
+ */
+const resolveEntityFields = async (
+    entityType: string,
+    entityIds: string[],
+    localeCandidates: string[]
+): Promise<Map<string, TranslationFields>> => {
+    const rows = await translationModel
+        .find({ entityType, entityId: { $in: entityIds }, locale: { $in: localeCandidates } })
+        .select({ entityId: 1, locale: 1, fields: 1, _id: 0 })
+        .lean<Pick<TranslationDocument, 'entityId' | 'locale' | 'fields'>[]>()
+        .exec();
+
+    const byEntity = new Map<string, Map<string, TranslationFields>>();
+    for (const row of rows) {
+        const byLocale = byEntity.get(row.entityId) ?? new Map<string, TranslationFields>();
+        byLocale.set(row.locale, row.fields);
+        byEntity.set(row.entityId, byLocale);
+    }
+
+    const leastSpecificFirst = localeCandidates.toReversed();
+
+    const resolved = new Map<string, TranslationFields>();
+    for (const [entityId, byLocale] of byEntity) {
+        const merged: TranslationFields = {};
+        for (const locale of leastSpecificFirst) {
+            const fields = byLocale.get(locale);
+            if (fields) Object.assign(merged, fields);
+        }
+        resolved.set(entityId, merged);
+    }
+
+    return resolved;
+};
+
+/**
+ * A stable digest of a fields map, for {@link TranslationDocument.sourceDigest}.
+ *
+ * Keys are sorted before hashing: `fields` is written and read as a plain object with no
+ * guaranteed key order, and two writes of the same content in a different order must produce the
+ * same digest — otherwise every fallback-locale save would mark every translation stale.
+ */
+export const deriveSourceDigest = (fields: TranslationFields): string =>
+    createHash('sha256')
+        .update(JSON.stringify(fields, Object.keys(fields).toSorted()))
+        .digest('hex');
+
+/**
+ * Write one entity's one-locale row — created if it had none, replaced if it did.
+ *
+ * `sourceDigest` is the caller's job to compute (see {@link deriveSourceDigest}): the repository
+ * has no opinion on what "the source" means, that is `services/translations.ts`'s reading of the
+ * fallback locale.
+ */
+const upsertEntityLocale = (
+    entityType: string,
+    entityId: string,
+    locale: string,
+    fields: TranslationFields,
+    origin: TranslationOrigin,
+    translatedBy: string | undefined,
+    sourceDigest: string | undefined
+): Promise<TranslationDocument> =>
+    translationModel
+        .findOneAndUpdate(
+            { entityType, entityId, locale },
+            {
+                $set: { fields, origin, translatedBy, sourceDigest },
+                $setOnInsert: { entityType, entityId, locale }
+            },
+            { upsert: true, returnDocument: 'after' }
+        )
+        .exec();
+
+/** Delete one entity's one-locale row — a `null` in a PATCH. A no-op if it never existed. */
+const removeEntityLocale = async (
+    entityType: string,
+    entityId: string,
+    locale: string
+): Promise<void> => {
+    await translationModel.deleteOne({ entityType, entityId, locale }).exec();
+};
+
+/**
+ * Delete every locale's row for one entity — a product's HARD delete taking its translations with
+ * it, in the same operation. Backs the `@infrastructure/i18n` translation port's `removeAll`.
+ *
+ * @returns how many rows were removed
+ */
+const removeEntityTranslations = async (entityType: string, entityId: string): Promise<number> => {
+    const { deletedCount } = await translationModel.deleteMany({ entityType, entityId }).exec();
     return deletedCount;
+};
+
+/**
+ * The Mongoose model registered for a `translatables` target's collection, found by name rather
+ * than imported — `locales` cannot import `src/modules/products` any more than
+ * `@infrastructure/i18n`'s translation port can. Undefined only if the registry names a collection
+ * no module has actually registered a model for, which `translatable-targets.test.ts` refuses.
+ */
+const modelForCollection = (collection: string) =>
+    mongoose
+        .modelNames()
+        .map((name) => mongoose.model(name))
+        .find((registeredModel) => registeredModel.collection.name === collection);
+
+/**
+ * Copy the fallback-locale row's fields onto the entity's own document — the derived index column
+ * a translated product's `title`/`description` become. Only the given keys are set, so a
+ * fallback-locale row that only names `title` cannot blank out a `description` written earlier by
+ * a different path (there is none today, but the write stays narrow on purpose).
+ */
+const updateDerivedColumn = (
+    collection: string,
+    entityId: string,
+    fields: TranslationFields
+): Promise<unknown> => {
+    const targetModel = modelForCollection(collection);
+    if (!targetModel) return Promise.resolve(undefined);
+
+    return targetModel.updateOne({ _id: entityId }, { $set: fields }).exec();
 };
 
 /*
@@ -255,7 +429,7 @@ export const localeRepository: Repository<LocaleDocument> & {
     publicScope: () => Record<string, unknown>;
     list: (scope?: Record<string, unknown>) => Promise<LocaleDocument[]>;
     bumpRevision: (tag: string) => Promise<number>;
-    deleteLocaleCascade: (locale: LocaleDocument) => Promise<number>;
+    deleteLocaleCascade: (locale: LocaleDocument) => Promise<LocaleCascadeCounts>;
 } = {
     ...localeBase,
     findByTag,
@@ -297,4 +471,47 @@ export const localeEntryRepository: Repository<LocaleEntryDocument> & {
     saveEntryValue,
     removeEntry,
     importEntries
+};
+
+/** User-authored content, one row per (entityType, entityId, locale). */
+export const translationRepository: Repository<TranslationDocument> & {
+    findEntityTranslations: (
+        entityType: string,
+        entityId: string
+    ) => Promise<TranslationDocument[]>;
+    findEntityLocale: (
+        entityType: string,
+        entityId: string,
+        locale: string
+    ) => Promise<TranslationDocument | null>;
+    resolveEntityFields: (
+        entityType: string,
+        entityIds: string[],
+        localeCandidates: string[]
+    ) => Promise<Map<string, TranslationFields>>;
+    upsertEntityLocale: (
+        entityType: string,
+        entityId: string,
+        locale: string,
+        fields: TranslationFields,
+        origin: TranslationOrigin,
+        translatedBy: string | undefined,
+        sourceDigest: string | undefined
+    ) => Promise<TranslationDocument>;
+    removeEntityLocale: (entityType: string, entityId: string, locale: string) => Promise<void>;
+    removeEntityTranslations: (entityType: string, entityId: string) => Promise<number>;
+    updateDerivedColumn: (
+        collection: string,
+        entityId: string,
+        fields: TranslationFields
+    ) => Promise<unknown>;
+} = {
+    ...translationBase,
+    findEntityTranslations,
+    findEntityLocale,
+    resolveEntityFields,
+    upsertEntityLocale,
+    removeEntityLocale,
+    removeEntityTranslations,
+    updateDerivedColumn
 };

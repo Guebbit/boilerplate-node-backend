@@ -18,7 +18,8 @@ describe('the locales audit vocabulary', () => {
             ADMIN_LOCALE_ENTRY_CREATED: 'admin.locale_entry.created',
             ADMIN_LOCALE_ENTRY_UPDATED: 'admin.locale_entry.updated',
             ADMIN_LOCALE_ENTRY_DELETED: 'admin.locale_entry.deleted',
-            ADMIN_LOCALE_ENTRY_IMPORTED: 'admin.locale_entry.imported'
+            ADMIN_LOCALE_ENTRY_IMPORTED: 'admin.locale_entry.imported',
+            ADMIN_TRANSLATION_UPDATED: 'admin.translation.updated'
         });
     });
 

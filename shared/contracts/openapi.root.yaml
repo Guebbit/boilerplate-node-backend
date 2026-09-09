@@ -922,6 +922,8 @@ paths:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries'
     /locales/{locale}/entries/{entryId}:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries~1{entryId}'
+    /locales/translations/{entityType}/{id}:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1translations~1{entityType}~1{id}'
 
     # ---------- observability ----------
     /observability/events:

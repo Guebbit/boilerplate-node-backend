@@ -32,8 +32,17 @@ const ADMIN = [
     'PUT /:locale/entries',
     'PATCH /:locale/entries',
     'PUT /:locale/entries/:entryId',
-    'DELETE /:locale/entries/:entryId'
+    'DELETE /:locale/entries/:entryId',
+    'GET /translations/:entityType/:id',
+    'PATCH /translations/:entityType/:id'
 ];
+
+/**
+ * The two translator-door routes: uncached like `GET /:locale/entries` (the editing screen), and
+ * clearing a registry-declared tag inside the service rather than `['locales']` via route
+ * middleware — the tag varies with `entityType`, which the middleware's fixed array cannot say.
+ */
+const TRANSLATIONS = ['GET /translations/:entityType/:id', 'PATCH /translations/:entityType/:id'];
 
 describe('locale routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
@@ -109,20 +118,24 @@ describe('locale routes — caching', () => {
             });
     });
 
-    it('leaves the editing screen uncached', () => {
-        // `GET /:locale/entries` feeds the screen the writes are made from; a cached copy there
-        // shows an editor the state before their own last save.
-        expect(chainOf('GET /:locale/entries').some((each) => each.startsWith('setCache'))).toBe(
-            false
-        );
+    it.each(['GET /:locale/entries', ...TRANSLATIONS])('%s is left uncached', (signature) => {
+        // `GET /:locale/entries` feeds the screen the writes are made from, and both translation
+        // routes are the same kind of screen — a cached copy would show a stale save.
+        expect(chainOf(signature).some((each) => each.startsWith('setCache'))).toBe(false);
     });
 
-    it.each(ADMIN.filter((signature) => signature !== 'GET /:locale/entries'))(
-        '%s invalidates the locales tag it just changed',
-        (signature) => {
-            // Every write changes what every visitor reads, and the tag reaches shared Redis, so
-            // one call covers every app instance.
-            expect(chainOf(signature)).toContain('invalidateCache([locales])');
-        }
-    );
+    it.each(
+        ADMIN.filter(
+            (signature) => signature !== 'GET /:locale/entries' && !TRANSLATIONS.includes(signature)
+        )
+    )('%s invalidates the locales tag it just changed', (signature) => {
+        // Every write changes what every visitor reads, and the tag reaches shared Redis, so
+        // one call covers every app instance.
+        expect(chainOf(signature)).toContain('invalidateCache([locales])');
+    });
+
+    it('does not invalidate the locales tag — its own cache tag is registry-declared, cleared inside the service', () => {
+        for (const signature of TRANSLATIONS)
+            expect(chainOf(signature)).not.toContain('invalidateCache([locales])');
+    });
 });

@@ -3,17 +3,28 @@
  * Languages: which ones this deployment speaks, and the dictionaries a client downloads. Two
  * tiers that never merge — deployed files loaded into i18next at boot, and runtime overrides this
  * module owns, one row per (language, tenant, key) — and neither is ever awaited on the request
- * path, so a database outage costs only a stale overlay. No `index.ts`: nothing imports this
- * module and nothing should; everything else reaches i18n through `@infrastructure/i18n`.
+ * path, so a database outage costs only a stale overlay. No `index.ts`: no sibling module reaches
+ * in, and everything else reaches i18n through `@infrastructure/i18n` — the one exception is the
+ * `app` tier, which alone may see which modules exist, handing this file the `translatables`
+ * lookup it cannot collect itself.
  *
  * See: docs/modules/locales.md
  */
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
+import { registerLocaleOverrideProvider, registerTranslationPort } from '@infrastructure/i18n';
 import { router } from './routes';
 import { localeService } from './services';
+import { translationRepository } from './repository';
+
+/**
+ * Hands the app tier the one function it needs from this module: `resolveTranslatables`'s result,
+ * for a caller that cannot reach `services/index.ts` directly — this file, alongside a possible
+ * `index.ts`, is the only path `depcruise`'s `module-internals-are-private` rule lets anything
+ * outside a module reach into.
+ */
+export const { setTranslatables } = localeService;
 
 /*
  * The backend tenant's share of this module's collection, handed to `@infrastructure/i18n` so an
@@ -24,6 +35,16 @@ import { localeService } from './services';
  * go looking for. Touches no database: `readApiOverrides` only runs on the refresh.
  */
 registerLocaleOverrideProvider(() => localeService.readApiOverrides());
+
+/*
+ * This module's implementation of the translation port, registered at import time the same way —
+ * `resolve` is what a read-path decorator batches a page against, `removeAll` is what a product's
+ * HARD delete calls to take its translations with it in the same operation.
+ */
+registerTranslationPort({
+    resolve: translationRepository.resolveEntityFields,
+    removeAll: translationRepository.removeEntityTranslations
+});
 
 /** This module's manifest entry: routes and its own locales. */
 export default {
@@ -39,7 +60,9 @@ export default {
         'locales.create',
         'locales.update',
         'locales.delete',
-        'locales.manage'
+        'locales.manage',
+        'translations.read',
+        'translations.manage'
     ],
     routes: router,
     /*

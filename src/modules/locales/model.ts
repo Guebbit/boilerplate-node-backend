@@ -9,8 +9,8 @@
 
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { LocaleDirection } from '@types';
-import type { Language, LocaleEntry } from '@types';
+import { LocaleDirection, TranslationOrigin } from '@types';
+import type { Language, LocaleEntry, Translation } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
@@ -36,11 +36,21 @@ export interface LocaleEntryDocument
     updatedAt?: Date;
 }
 
+/** Mongoose document type for one entity's translated fields, in one locale. */
+export interface TranslationDocument
+    extends Omit<Translation, 'id' | 'createdAt' | 'updatedAt'>, Document {
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
 /** Mongoose model type for the languages collection. */
 export type LocaleModel = Model<LocaleDocument>;
 
 /** Mongoose model type for the entries collection. */
 export type LocaleEntryModel = Model<LocaleEntryDocument>;
+
+/** Mongoose model type for the translations collection. */
+export type TranslationModel = Model<TranslationDocument>;
 
 /** The languages. */
 export const localeSchema = new Schema<LocaleDocument, LocaleModel>(
@@ -194,11 +204,77 @@ localeEntrySchema.index(
     { name: 'localeEntries_locale_tenant_key', unique: true }
 );
 
+/**
+ * One entity's words in one language — `product` in V1, generic across whatever else a module's
+ * `translatables` manifest entry declares. `entityId` is a plain string, not an ObjectId
+ * reference: this collection is generic across entity types with no shared id shape to assume.
+ */
+export const translationSchema = new Schema<TranslationDocument, TranslationModel>(
+    {
+        entityType: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        entityId: {
+            type: String,
+            required: true
+        },
+        locale: {
+            type: String,
+            required: true,
+            lowercase: true,
+            trim: true
+        },
+        /*
+         * `Mixed` rather than a typed sub-schema: which keys are valid depends on the
+         * `translatables` registry entry for `entityType`, which this collection has no way to
+         * see (see `openapi.yaml`'s note on why the shape stays generic on the wire too).
+         * Validated by the service before a write, not by the schema.
+         */
+        fields: {
+            type: Schema.Types.Mixed,
+            required: true,
+            default: () => ({})
+        },
+        // Absent on the fallback-locale row — see `deriveSourceDigest` in `./repository`.
+        sourceDigest: {
+            type: String
+        },
+        origin: {
+            type: String,
+            enum: Object.values(TranslationOrigin),
+            default: TranslationOrigin.human
+        },
+        translatedBy: {
+            type: String
+        }
+    },
+    {
+        timestamps: true
+    }
+);
+
+/*
+ * UNIQUE on (entityType, entityId, locale) — the row's whole identity. Every locale is a row,
+ * including the fallback one, with no separate "is this the source" flag. `entityId` sits in the
+ * middle, not `entityType`, because a lookup for one entity's
+ * every locale (`{ entityType, entityId }`) is the read this collection exists for, and a compound
+ * index serves any PREFIX of its keys.
+ */
+translationSchema.index(
+    { entityType: 1, entityId: 1, locale: 1 },
+    { name: 'translations_entity_locale', unique: true }
+);
+
 /** Normalizes a serialized language: `_id` → `id`, drops `__v`. */
 export const applyLocaleTransform = applySerialization(localeSchema);
 
 /** Normalizes a serialized entry, for the lean results `search()` returns. */
 export const applyLocaleEntryTransform = applySerialization(localeEntrySchema);
+
+/** Normalizes a serialized translation row. */
+export const applyTranslationTransform = applySerialization(translationSchema);
 
 /** Language model entrypoint. */
 export const localeModel = model<LocaleDocument, LocaleModel>('Locale', localeSchema);
@@ -213,4 +289,10 @@ export const localeModel = model<LocaleDocument, LocaleModel>('Locale', localeSc
 export const localeEntryModel = model<LocaleEntryDocument, LocaleEntryModel>(
     'LocaleEntry',
     localeEntrySchema
+);
+
+/** Translation model entrypoint. Mongoose collection name: `translations`. */
+export const translationModel = model<TranslationDocument, TranslationModel>(
+    'Translation',
+    translationSchema
 );
