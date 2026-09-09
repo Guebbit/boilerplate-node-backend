@@ -47,8 +47,67 @@ export const list = (
 };
 
 /**
+ * This subscription's position among its tenant's rows, oldest first. `_id` is total-ordered
+ * across the collection (Mongo's ObjectId embeds an insertion-time-ish counter), so counting every
+ * row at-or-before this one's `_id` gives a rank that is stable even for two creates that raced
+ * past the same pre-check below — whichever insert lands with the higher rank is the one over cap,
+ * regardless of which caller's request reached this line first.
+ */
+const insertionRank = (
+    subscriptionId: WebhookSubscriptionDocument['_id'],
+    tenant: string
+): Promise<number> =>
+    webhookSubscriptionRepository.count({ tenant, _id: { $lte: subscriptionId } });
+
+/**
+ * Undo a create that turned out to be over cap once ranked against whatever else just landed —
+ * the follow-up half of the race guard `create` below relies on.
+ */
+const rollbackOverCap = (subscription: WebhookSubscriptionDocument): Promise<ResponseReject> =>
+    webhookSubscriptionRepository
+        .deleteOne(subscription)
+        .then(() => generateReject(422, [t('webhooks.subscription-cap-reached')]));
+
+/**
+ * Finish a create once the row is written: reject and roll it back if it lands over cap once
+ * ranked against whatever else just landed, otherwise audit the creation and hand back the
+ * envelope.
+ *
+ * `async`/`await` over chaining despite the single await, against this repo's usual preference:
+ * TypeScript's contextual typing of a `.then` callback does not distribute over the union this
+ * returns, and silently narrows to just one branch instead — `await` checks each `return` against
+ * the declared type directly and does not have the problem.
+ */
+const finalizeCreate = async (
+    subscription: WebhookSubscriptionDocument,
+    plaintext: string,
+    tenant: string,
+    context: CallerContext
+): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> => {
+    const rank = await insertionRank(subscription._id, tenant);
+    if (rank > getWebhookSubscriptionCap()) return rollbackOverCap(subscription);
+
+    emitAuditEvent(
+        buildAuditEvent(context, {
+            action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_CREATED,
+            outcome: 'success',
+            target_type: 'webhook_subscription',
+            target_id: String(subscription._id)
+        })
+    );
+    return generateSuccess({ subscription, secret: plaintext }, 201);
+};
+
+/**
  * Create a subscription. Mints the ring's first secret and hands the plaintext back once — the
  * only response that ever carries it (see `openapi.yaml`'s `WebhookSubscriptionCreated`).
+ *
+ * The cap is enforced twice: a `count` before the insert rejects the common case (already over
+ * cap, nothing racing) without writing a row at all, and {@link insertionRank} after the insert
+ * closes the actual race — two callers both reading a `count` just under the cap can both pass
+ * this first check and both insert, but only `getWebhookSubscriptionCap()` of the resulting rows
+ * can ever rank within it, so exactly one guard's-worth of rows survives regardless of how many
+ * creates land in the same instant.
  *
  * @returns a 422 rejection once this tenant is at `getWebhookSubscriptionCap()` — the fan-out
  *   guard this module exists for: one event x N subscriptions is N deliveries.
@@ -72,17 +131,7 @@ export const create = (
                 eventTypes: body.eventTypes,
                 secrets: [entry]
             } as Partial<WebhookSubscriptionDocument>)
-            .then((subscription) => {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_CREATED,
-                        outcome: 'success',
-                        target_type: 'webhook_subscription',
-                        target_id: String(subscription._id)
-                    })
-                );
-                return generateSuccess({ subscription, secret: plaintext }, 201);
-            });
+            .then((subscription) => finalizeCreate(subscription, plaintext, tenant, context));
     });
 };
 
