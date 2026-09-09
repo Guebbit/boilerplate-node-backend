@@ -27,31 +27,13 @@ import {
     BACKUP_CODE_COUNT
 } from '../../two-factor';
 
+// The crypto and version-mismatch behaviour itself is `versioned-secret.ts`'s, tested once in
+// `tests/unit/infrastructure/security/versioned-secret.test.ts` — this just holds the wiring.
 describe('TOTP secret encryption', () => {
-    it('round-trips a secret through encrypt then decrypt', () => {
+    it('round-trips a secret through encrypt then decrypt, under the configured TOTP key', () => {
         const secret = generateSecret();
 
         expect(decryptTotpSecret(encryptTotpSecret(secret))).toBe(secret);
-    });
-
-    it('produces a different ciphertext each time, even for the same secret', () => {
-        // A fresh random IV per call — two enrollments minting the identical secret (unlikely,
-        // but not impossible) must not be distinguishable from their stored ciphertext alone.
-        const secret = generateSecret();
-
-        expect(encryptTotpSecret(secret)).not.toBe(encryptTotpSecret(secret));
-    });
-
-    it('carries the key version as a prefix', () => {
-        expect(encryptTotpSecret(generateSecret())).toMatch(/^v1:/);
-    });
-
-    it('rejects a tampered ciphertext', () => {
-        const tampered = encryptTotpSecret(generateSecret()).replace(/.$/, (c) =>
-            c === '0' ? '1' : '0'
-        );
-
-        expect(() => decryptTotpSecret(tampered)).toThrow();
     });
 });
 

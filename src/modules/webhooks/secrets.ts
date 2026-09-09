@@ -1,10 +1,10 @@
 /**
  * @module
- * Secret-ring encryption at rest, and the ring operations built on it — mint, rotate, drop. Same
- * shape as `account/two-factor/totp.ts`'s TOTP secret encryption: AES-256-GCM, a versioned key
- * from `getWebhookEncryptionKey` (`./config`, backed by `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`,
- * `requiredConfig` — see `./module`) — so a future key rotation can decrypt an old row against its
- * own key while signing new ones with the new one.
+ * Secret-ring encryption at rest, and the ring operations built on it — mint, rotate, drop.
+ * Encryption itself is `@infrastructure/security/versioned-secret`'s — AES-256-GCM under a
+ * versioned key from `getWebhookEncryptionKey` (`./config`, backed by
+ * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`, `requiredConfig` — see `./module`) — shared with
+ * `account/two-factor/totp.ts`'s TOTP secret encryption.
  *
  * A plaintext secret exists here only for the seconds it takes to mint it and hand it back in an
  * HTTP response (see `openapi.yaml`'s `secret`/`newSecret`), and again in memory for as long as one
@@ -12,7 +12,11 @@
  * carries it.
  */
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import {
+    encryptVersionedSecret,
+    decryptVersionedSecret
+} from '@infrastructure/security/versioned-secret';
 import { getWebhookEncryptionKey } from './config';
 import type { WebhookSecretRingEntry } from './model';
 
@@ -23,23 +27,9 @@ import type { WebhookSecretRingEntry } from './model';
  */
 const generatePlaintextSecret = (): string => `whsec_${randomBytes(32).toString('base64')}`;
 
-/** AES-256-GCM needs a 32-byte key; the configured value is an operator-chosen string of any length. */
-const deriveKey = (secret: string): Buffer => createHash('sha256').update(secret).digest();
-
-/**
- * Encrypt a ring secret for storage.
- *
- * Format: `<key-version>:<iv-hex>:<auth-tag-hex>:<ciphertext-hex>` — same versioned shape as
- * `encryptTotpSecret`, for the same reason: a future key rotation needs to tell which key an
- * already-stored row was encrypted under.
- */
-export const encryptRingSecret = (plaintext: string): string => {
-    const { version, key } = getWebhookEncryptionKey();
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', deriveKey(key), iv);
-    const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-    return `${version}:${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${ciphertext.toString('hex')}`;
-};
+/** Encrypt a ring secret for storage. See `encryptVersionedSecret` for the wire format. */
+export const encryptRingSecret = (plaintext: string): string =>
+    encryptVersionedSecret(plaintext, getWebhookEncryptionKey());
 
 /**
  * Decrypt a stored ring secret.
@@ -47,23 +37,8 @@ export const encryptRingSecret = (plaintext: string): string => {
  * @throws when the format is malformed, the key is wrong, or the auth tag does not match
  *   (tampering, or a key version this deployment no longer holds)
  */
-export const decryptRingSecret = (stored: string): string => {
-    const [version, ivHex, tagHex, ciphertextHex] = stored.split(':');
-    const configured = getWebhookEncryptionKey();
-    if (version !== configured.version)
-        throw new Error(`Unknown webhook secret key version: ${version}`);
-
-    const decipher = createDecipheriv(
-        'aes-256-gcm',
-        deriveKey(configured.key),
-        Buffer.from(ivHex, 'hex')
-    );
-    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-    return Buffer.concat([
-        decipher.update(Buffer.from(ciphertextHex, 'hex')),
-        decipher.final()
-    ]).toString('utf8');
-};
+export const decryptRingSecret = (stored: string): string =>
+    decryptVersionedSecret(stored, getWebhookEncryptionKey(), 'webhook secret');
 
 /** A new ring entry, and the plaintext it was minted with — the caller hands the plaintext back exactly once. */
 export const mintRingSecret = (): { entry: WebhookSecretRingEntry; plaintext: string } => {

@@ -5,8 +5,11 @@
  * `methods/totp.ts` is the adapter that reads and writes the user document.
  */
 
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import { generateURI, verify } from 'otplib';
+import {
+    encryptVersionedSecret,
+    decryptVersionedSecret
+} from '@infrastructure/security/versioned-secret';
 import { getTotpEncryptionKey } from '../session/config';
 
 /** RFC 6238 default: a code is valid for this many seconds. */
@@ -19,26 +22,14 @@ const TOTP_STEP_SECONDS = 30;
  */
 const TOTP_EPOCH_TOLERANCE_SECONDS = TOTP_STEP_SECONDS;
 
-/** AES-256-GCM needs a 32-byte key; `NODE_TOTP_ENCRYPTION_KEY` is an operator-chosen string of any length. */
-const deriveKey = (secret: string) => createHash('sha256').update(secret).digest();
-
 /**
- * Encrypt a TOTP secret for storage.
- *
- * Format: `<key-version>:<iv-hex>:<auth-tag-hex>:<ciphertext-hex>` — versioned so a future
- * `NODE_TOTP_ENCRYPTION_KEY` rotation can decrypt old rows against their own key while signing
- * new ones with the new key, rather than a migration that cannot tell which key a row used.
+ * Encrypt a TOTP secret for storage. See `encryptVersionedSecret` for the wire format.
  *
  * @param plaintext - the base32 TOTP secret from otplib's `generateSecret`
  * @returns the versioned ciphertext to store in the method entry's `secret`
  */
-export const encryptTotpSecret = (plaintext: string): string => {
-    const { version, key } = getTotpEncryptionKey();
-    const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', deriveKey(key), iv);
-    const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
-    return `${version}:${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${ciphertext.toString('hex')}`;
-};
+export const encryptTotpSecret = (plaintext: string): string =>
+    encryptVersionedSecret(plaintext, getTotpEncryptionKey());
 
 /**
  * Decrypt a stored TOTP secret.
@@ -48,22 +39,8 @@ export const encryptTotpSecret = (plaintext: string): string => {
  * @throws when the format is malformed, the key is wrong, or the auth tag does not match
  *   (tampering, or the wrong key version)
  */
-export const decryptTotpSecret = (stored: string): string => {
-    const [version, ivHex, tagHex, ciphertextHex] = stored.split(':');
-    const configured = getTotpEncryptionKey();
-    if (version !== configured.version) throw new Error(`Unknown TOTP key version: ${version}`);
-
-    const decipher = createDecipheriv(
-        'aes-256-gcm',
-        deriveKey(configured.key),
-        Buffer.from(ivHex, 'hex')
-    );
-    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-    return Buffer.concat([
-        decipher.update(Buffer.from(ciphertextHex, 'hex')),
-        decipher.final()
-    ]).toString('utf8');
-};
+export const decryptTotpSecret = (stored: string): string =>
+    decryptVersionedSecret(stored, getTotpEncryptionKey(), 'TOTP');
 
 /**
  * The `otpauth://` URI an authenticator app scans to enroll — the frontend renders it as a QR

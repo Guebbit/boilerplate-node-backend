@@ -1,6 +1,8 @@
 /**
  * Secret-ring encryption at rest and the ring operations built on it — see `../../secrets.ts`.
- * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` is set for every suite in `tests/support/setup.ts`.
+ * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` is set for every suite in `tests/support/setup.ts`. The
+ * crypto and version-mismatch behaviour itself is `versioned-secret.ts`'s, tested once in
+ * `tests/unit/infrastructure/security/versioned-secret.test.ts` — this just holds the wiring.
  */
 
 import {
@@ -13,39 +15,9 @@ import {
 import type { WebhookSecretRingEntry } from '@modules/webhooks/model';
 
 describe('encryptRingSecret / decryptRingSecret', () => {
-    it('round-trips a plaintext secret', () => {
+    it('round-trips a plaintext secret under the configured webhook key', () => {
         const ciphertext = encryptRingSecret('whsec_hello-world');
         expect(decryptRingSecret(ciphertext)).toBe('whsec_hello-world');
-    });
-
-    it('never stores the plaintext inside the ciphertext', () => {
-        const ciphertext = encryptRingSecret('whsec_a-very-guessable-secret');
-        expect(ciphertext).not.toContain('whsec_a-very-guessable-secret');
-    });
-
-    it('stamps the ciphertext with the key version, colon-delimited from iv/tag/data', () => {
-        const ciphertext = encryptRingSecret('whsec_x');
-        expect(ciphertext.split(':')).toHaveLength(4);
-        expect(ciphertext.startsWith('v1:')).toBe(true);
-    });
-
-    it('produces a different ciphertext each time (a fresh IV), same plaintext', () => {
-        const a = encryptRingSecret('whsec_same-plaintext');
-        const b = encryptRingSecret('whsec_same-plaintext');
-        expect(a).not.toBe(b);
-        expect(decryptRingSecret(a)).toBe(decryptRingSecret(b));
-    });
-
-    it('throws on an unknown key version rather than silently misreading the row', () => {
-        const ciphertext = encryptRingSecret('whsec_x').replace(/^v1:/, 'v99:');
-        expect(() => decryptRingSecret(ciphertext)).toThrow(/version/i);
-    });
-
-    it('throws when the ciphertext or auth tag has been tampered with', () => {
-        const ciphertext = encryptRingSecret('whsec_tamper-me');
-        const [version, iv, tag, data] = ciphertext.split(':');
-        const flippedData = data.slice(0, -2) + (data.at(-2) === '0' ? '1' : '0') + data.at(-1);
-        expect(() => decryptRingSecret(`${version}:${iv}:${tag}:${flippedData}`)).toThrow();
     });
 });
 
