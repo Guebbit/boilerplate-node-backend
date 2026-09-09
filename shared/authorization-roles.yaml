@@ -81,13 +81,15 @@ roles:
       scope: tenant
       title: The catalogue editor
       description: >-
-          What is for sale, in words, pictures and price. Sees a draft the storefront does not.
-          `products.manage` is the whole catalogue record, price included — what it may not touch
-          is a different subject entirely: stock (that is `inventory`), a delivery rule, or an
-          order.
+          What is for sale, in words, pictures and price, in every registered language at once —
+          `products.manage` is the whole catalogue record, price included, and
+          `translations.manage` is what lets the same write carry every locale's copy alongside
+          it. What neither touches is a different subject entirely: stock (that is `inventory`),
+          a delivery rule, or an order.
       permissions:
           - products.manage
           - locales.read
+          - translations.manage
 
     - name: translator
       scope: tenant

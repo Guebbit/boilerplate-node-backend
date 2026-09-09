@@ -1040,6 +1040,8 @@ paths:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1categories'
     /products/{id}:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}'
+    /products/{id}/admin:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1admin'
     /products/{id}/hard:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1hard'
     /products/search:

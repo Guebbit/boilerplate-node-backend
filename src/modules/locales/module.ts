@@ -41,16 +41,21 @@ registerLocaleOverrideProvider(() => localeService.readApiOverrides());
  * This module's implementation of the translation port, registered at import time the same way —
  * `resolve` is what a read-path decorator batches a page against, `removeAll` is what a product's
  * HARD delete calls to take its translations with it in the same operation, `search` is what a
- * free-text search unions with an entity's own (fallback-language) match, and `plan`/`write` are
- * what a caller with its own entity to write (`productService.write`) validates and applies the
- * translations half of its request through.
+ * free-text search unions with an entity's own (fallback-language) match, `plan`/`write` are what
+ * a caller with its own entity to write (`productService.write`) validates and applies the
+ * translations half of its request through, and `readAll` is what that same caller's admin read
+ * populates its language tabs from.
  */
 registerTranslationPort({
     resolve: translationRepository.resolveEntityFields,
     removeAll: translationRepository.removeEntityTranslations,
     search: translationRepository.findEntityIdsByFieldMatch,
     plan: planForPort,
-    write: writeForPort
+    write: writeForPort,
+    readAll: (entityType, entityId) =>
+        translationRepository
+            .findEntityTranslations(entityType, entityId)
+            .then((rows) => new Map(rows.map((row) => [row.locale, row.fields])))
 });
 
 /** This module's manifest entry: routes and its own locales. */

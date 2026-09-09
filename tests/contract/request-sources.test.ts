@@ -341,6 +341,7 @@ describe('request sources agree with openapi.yaml', () => {
         // picked — so a sixth row should fail here once and be added deliberately, alongside its
         // row in `docs/theory/request-input.md` and a look at what the spec declares for it.
         expect(Object.keys(SURFACE_SOURCES).toSorted()).toEqual([
+            'create',
             'delete',
             'list',
             'path',

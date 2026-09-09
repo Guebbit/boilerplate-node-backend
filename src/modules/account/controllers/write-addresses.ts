@@ -1,10 +1,10 @@
 /**
  * @module
  * Adding an entry to the address book, and editing one — the two shipping-address writes a
- * caller makes. One file for both, like `products/controllers/write-products.ts`: they run the
- * same three steps (parse body, call the service, branch on `result.success`), so a shape change
- * has one place to land. The read lives in `./get-addresses.ts`, the removal in
- * `./delete-address.ts` — neither parses a body, so neither shares this shape.
+ * caller makes. One file for both: they run the same three steps (parse body, call the service,
+ * branch on `result.success`), so a shape change has one place to land. The read lives in
+ * `./get-addresses.ts`, the removal in `./delete-address.ts` — neither parses a body, so neither
+ * shares this shape.
  */
 
 import type { Request, Response } from 'express';

@@ -56,26 +56,27 @@ const ADMIN = asOwner('507f1f77bcf86cd799439012');
 
 const titlesOf = (items: ProductDocument[]): string[] => items.map(({ title }) => title);
 
-describe('productService.validateData', () => {
+/** A valid fallback-locale entry — every positive-path test spreads this in. */
+const FALLBACK_TRANSLATIONS = { translations: { en: { title: 'A Valid Product' } } };
+
+describe('productService.validateCreateData', () => {
     it('returns an empty array for valid product data', () => {
-        const errors = productService.validateData({
-            title: 'A Valid Product', // >= 5 chars
+        const errors = productService.validateCreateData({
+            translations: { en: { title: 'A Valid Product', description: 'Some description' } }, // >= 5 chars
             price: 19.99,
             imageUrl: 'https://example.com/product.jpg',
-            active: true,
-            description: 'Some description'
+            active: true
         });
 
         expect(errors).toHaveLength(0);
     });
 
     it('returns errors when the title is too short', () => {
-        const errors = productService.validateData({
-            title: 'Abc', // < 5 chars
+        const errors = productService.validateCreateData({
+            translations: { en: { title: 'Abc' } }, // < 5 chars
             price: 9.99,
             imageUrl: 'https://example.com/img.jpg',
-            active: true,
-            description: ''
+            active: true
         });
 
         expect(errors.length).toBeGreaterThan(0);
@@ -83,12 +84,20 @@ describe('productService.validateData', () => {
 
     it('returns an error when the title is missing', () => {
         // price and imageUrl are valid so the only failure is the title
-        const errors = productService.validateData({
-            title: '',
+        const errors = productService.validateCreateData({
+            translations: { en: { title: '' } },
             price: 9.99,
             imageUrl: 'https://example.com/img.jpg',
-            active: true,
-            description: ''
+            active: true
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('returns an error when the fallback locale is absent from translations', () => {
+        const errors = productService.validateCreateData({
+            translations: { it: { title: 'Cuccia comoda' } }, // no `en` — the test fallback locale
+            price: 9.99
         });
 
         expect(errors.length).toBeGreaterThan(0);
@@ -96,29 +105,27 @@ describe('productService.validateData', () => {
 
     /**
      * `openapi.yaml` declares `CreateProductRequest.price` with `minimum: 0`, and
-     * `zodProductSchema` overrides the field for its i18n message. `.extend()` REPLACES a field,
-     * so the override has to restate every constraint it wants to keep — the previous one did
-     * not, and a negative price was accepted despite the contract forbidding it.
+     * `zodProductCreateSchema` overrides the field for its i18n message. `.extend()` REPLACES a
+     * field, so the override has to restate every constraint it wants to keep — the previous one
+     * did not, and a negative price was accepted despite the contract forbidding it.
      */
     it('rejects a negative price, as the contract minimum requires', () => {
-        const errors = productService.validateData({
-            title: 'A Valid Product',
+        const errors = productService.validateCreateData({
+            ...FALLBACK_TRANSLATIONS,
             price: -1,
             imageUrl: '/uploads/img.jpg',
-            active: true,
-            description: ''
+            active: true
         });
 
         expect(errors.length).toBeGreaterThan(0);
     });
 
     it('accepts a price of exactly 0 — the minimum is inclusive', () => {
-        const errors = productService.validateData({
-            title: 'A Free Product',
+        const errors = productService.validateCreateData({
+            translations: { en: { title: 'A Free Product' } },
             price: 0,
             imageUrl: '/uploads/img.jpg',
-            active: true,
-            description: ''
+            active: true
         });
 
         expect(errors).toHaveLength(0);
@@ -128,25 +135,32 @@ describe('productService.validateData', () => {
     // boolean'` or `coerceStringArray(42)` would turn each into a plausible value before
     // validation ran, and the endpoint would answer 201.
     it('rejects a wrong-typed active flag', () => {
-        const errors = productService.validateData({
-            title: 'A Valid Product',
+        const errors = productService.validateCreateData({
+            ...FALLBACK_TRANSLATIONS,
             price: 10,
             imageUrl: '/uploads/img.jpg',
-            active: 'not-a-boolean',
-            description: ''
+            active: 'not-a-boolean'
         });
 
         expect(errors.length).toBeGreaterThan(0);
     });
 
     it.each(['categories', 'tags'])('rejects a wrong-typed %s field', (field) => {
-        const errors = productService.validateData({
-            title: 'A Valid Product',
+        const errors = productService.validateCreateData({
+            ...FALLBACK_TRANSLATIONS,
             price: 10,
             imageUrl: '/uploads/img.jpg',
             active: true,
-            description: '',
             [field]: 42
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('rejects a translation field the registry does not declare', () => {
+        const errors = productService.validateCreateData({
+            translations: { en: { title: 'A Valid Product', price: 10 } },
+            price: 10
         });
 
         expect(errors.length).toBeGreaterThan(0);
@@ -155,12 +169,11 @@ describe('productService.validateData', () => {
     // The contract says `uri-reference`, not `uri`: an uploaded image is stored as a path
     // relative to the API host, so requiring an absolute URL here would reject every upload.
     it('accepts a server-relative upload path as the imageUrl', () => {
-        const errors = productService.validateData({
-            title: 'A Valid Product',
+        const errors = productService.validateCreateData({
+            ...FALLBACK_TRANSLATIONS,
             price: 10,
             imageUrl: '/uploads/1700000000-photo.jpg',
-            active: true,
-            description: ''
+            active: true
         });
 
         expect(errors).toHaveLength(0);
@@ -174,7 +187,10 @@ describe('productService.validateData', () => {
      * "users.field-email-invalid".
      */
     it('returns translated messages, never raw i18n keys', () => {
-        const errors = productService.validateData({ title: 'ab', price: -5 });
+        const errors = productService.validateCreateData({
+            translations: { en: { title: 'ab' } },
+            price: -5
+        });
 
         expect(errors.length).toBeGreaterThan(0);
         // `message` is the copy; `details.field` names the input it belongs to, which is what a
@@ -183,6 +199,53 @@ describe('productService.validateData', () => {
             expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
             expect(details).toEqual({ field: expect.any(String) });
         }
+    });
+
+    /**
+     * The per-locale pointer is the whole point of validating `translations` in Zod rather than
+     * off-schema: an editor with several language tabs open needs to know WHICH one failed.
+     */
+    it('names the locale in a translation title error, not a bare "title"', () => {
+        const errors = productService.validateCreateData({
+            translations: { en: { title: 'ab' } },
+            price: 10
+        });
+
+        expect(errors.some((error) => error.details?.field === 'translations.en.title')).toBe(true);
+    });
+});
+
+describe('productService.validateUpdateData', () => {
+    it('returns an empty array for an update with no translations at all', () => {
+        const errors = productService.validateUpdateData({ price: 25 });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    it('returns an empty array for a partial translations map missing the fallback locale', () => {
+        // Unlike create, an update may touch only a non-fallback locale — the fallback is simply
+        // left alone.
+        const errors = productService.validateUpdateData({
+            translations: { it: { title: 'Titolo aggiornato' } }
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    it('rejects null on the fallback locale', () => {
+        const errors = productService.validateUpdateData({
+            translations: { en: null }
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('rejects an empty translation object rather than treating it as a delete', () => {
+        const errors = productService.validateUpdateData({
+            translations: { it: {} }
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
     });
 });
 

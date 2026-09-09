@@ -103,7 +103,7 @@ pages because this is where you pick an account to log in as.
 | `manager`    | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read` |
 | `warehouse`  | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                 |
 | `support`    | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                         |
-| `editor`     | tenant   | `products.manage`, `locales.read`                                                                                                                     |
+| `editor`     | tenant   | `products.manage`, `locales.read`, `translations.manage`                                                                                              |
 | `translator` | tenant   | `locales.manage`, `translations.read`, `translations.manage`                                                                                          |
 | `moderator`  | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                      |
 | `owner`      | tenant   | `all.manage`                                                                                                                                          |
@@ -126,7 +126,7 @@ answer.
 | `manager`    | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | —             |
 | `warehouse`  | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —             |
 | `support`    | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —             |
-| `editor`     | **all**  | —       | —        | —         | r        | —        | r       | —       | —       | —          | —             |
+| `editor`     | **all**  | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —             |
 | `translator` | r        | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —             |
 | `moderator`  | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —             |
 | `owner`      | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | —             |

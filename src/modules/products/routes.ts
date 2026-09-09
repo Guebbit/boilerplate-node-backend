@@ -10,9 +10,11 @@ import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authoriz
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/adapters/storage';
 import { getProducts, searchProductsKeyParameters } from './controllers/get-products';
-import { writeProducts } from './controllers/write-products';
+import { createProduct } from './controllers/create-product';
+import { updateProduct } from './controllers/update-product';
 import { deleteProducts } from './controllers/delete-products';
 import { getProductItem } from './controllers/get-product-item';
+import { getProductAdmin } from './controllers/get-product-admin';
 import { getCatalogueFacets } from './controllers/get-catalogue-facets';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
@@ -32,26 +34,17 @@ router.post('/search', cacheProductsSearch, getProducts);
 // GET /products — public
 router.get('/', cacheProductsSearch, getProducts);
 
-// POST /products — admin only (create)
+// POST /products — admin only (create). Two keys: `products.create` for the record itself,
+// `translations.manage` since the same write always carries every language's copy alongside it.
 router.post(
     '/',
     uploadLimiter,
     isAuth,
     requirePermission('products.create'),
+    requirePermission('translations.manage'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
-    writeProducts
-);
-
-// PUT /products — admin only, id in body (update)
-router.put(
-    '/',
-    uploadLimiter,
-    isAuth,
-    requirePermission('products.update'),
-    invalidateCache(['products']),
-    upload.single('imageUpload'),
-    writeProducts
+    createProduct
 );
 
 // DELETE /products — admin only, id in body
@@ -74,15 +67,26 @@ router.get(
 // GET /products/:id — public
 router.get('/:id', setCache(3600, { tags: ['products'], keyParameters: [] }), getProductItem);
 
-// PUT /products/:id — admin only (update)
-router.put(
+// PATCH /products/:id — admin only (update, merging). Same two keys as the create door.
+router.patch(
     '/:id',
     uploadLimiter,
     isAuth,
     requirePermission('products.update'),
+    requirePermission('translations.manage'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
-    writeProducts
+    updateProduct
+);
+
+// GET /products/:id/admin — admin only, every language at once. Never cached: the screen someone
+// is actively editing, the same reasoning `GET /locales/:locale/entries` already applies.
+router.get(
+    '/:id/admin',
+    isAuth,
+    requirePermission('products.update'),
+    requirePermission('translations.read'),
+    getProductAdmin
 );
 
 // DELETE /products/:id — admin only (soft delete unless ?hardDelete=true)

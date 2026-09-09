@@ -10,8 +10,8 @@
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { z } from 'zod';
-import { t } from '@infrastructure/i18n';
-import { CreateProductBody } from '@api/schemas.zod';
+import { getFallbackLocale, t } from '@infrastructure/i18n';
+import { CreateProductBody, UpdateProductByIdBody } from '@api/schemas.zod';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { Product } from '@types';
 
@@ -64,24 +64,82 @@ export interface ProductDocument extends ProductRecord, Document {
 export type ProductModel = Model<ProductDocument, Record<string, never>, unknown>;
 
 /**
- * Zod schema for product data, built on the generated `CreateProductBody` — only fields needing
- * custom i18n messages or stricter rules are overridden; every other contract constraint applies.
- *
- * `.min(0)` restates the contract's `minimum: 0`: `.extend()` REPLACES a field outright, so an
- * override that forgets a constraint silently drops it. A prior bare `.refine()` override did
- * exactly that, letting a negative price through despite the contract forbidding it.
+ * One locale's words for a product, with the same title-length rule this schema has always
+ * enforced — applied per locale here so a Zod issue's path comes out `translations.<locale>.title`,
+ * naming which language failed, instead of a bare `title`.
  */
-export const zodProductSchema = CreateProductBody.extend({
+const zodProductTranslationEntry = z.strictObject({
     // Thunks, not eager calls: t() must run at parse time (post i18next.init()), see `users/model.ts`.
     title: z
         .string()
         .min(1, { error: () => t('products.field-title-required') })
         .min(5, { error: () => t('products.field-title-min') }),
+    description: z.string().optional()
+});
 
+/**
+ * `ProductTranslationsWrite` restated for Zod: a locale entry upserts, `null` deletes, absence
+ * leaves it untouched — see the `PATCH /products/{id}` operation description for the full
+ * three-way table.
+ */
+const zodProductTranslations = z.record(z.string(), zodProductTranslationEntry.nullable());
+
+/**
+ * The fallback locale (`NODE_FALLBACK_LOCALE`) MUST NOT be `null` — deleting it would leave the
+ * product with nothing to fall back to. Shared between create and update; `mustBePresent` is the
+ * one thing that differs: a fresh product has no prior row to leave alone, so create additionally
+ * refuses its ABSENCE, where update does not.
+ */
+const refineFallbackLocale = (
+    translations: Record<string, unknown> | undefined,
+    context: z.RefinementCtx,
+    mustBePresent: boolean
+): void => {
+    const fallback = getFallbackLocale();
+    const entry = translations?.[fallback];
+
+    if (entry === null)
+        context.addIssue({
+            code: 'custom',
+            message: t('products.field-translations-fallback-null', { locale: fallback }),
+            path: ['translations', fallback]
+        });
+    else if (mustBePresent && entry === undefined)
+        context.addIssue({
+            code: 'custom',
+            message: t('products.field-translations-fallback-required', { locale: fallback }),
+            path: ['translations', fallback]
+        });
+};
+
+/**
+ * Zod schema for a product CREATE, built on the generated `CreateProductBody` — only fields
+ * needing custom i18n messages, stricter rules, or a fallback-locale invariant are overridden;
+ * every other contract constraint applies.
+ *
+ * `.min(0)` restates the contract's `minimum: 0`: `.extend()` REPLACES a field outright, so an
+ * override that forgets a constraint silently drops it. A prior bare `.refine()` override did
+ * exactly that, letting a negative price through despite the contract forbidding it.
+ */
+export const zodProductCreateSchema = CreateProductBody.extend({
+    price: z
+        .number({ error: () => t('products.field-price-invalid') })
+        .min(0, { error: () => t('products.field-price-min') }),
+    translations: zodProductTranslations
+}).superRefine((data, context) => refineFallbackLocale(data.translations, context, true));
+
+/**
+ * Zod schema for a product PATCH, built on the generated `UpdateProductByIdBody` — every field is
+ * already optional there; this only adds the fallback-locale guard, which stays a refusal even
+ * when the field is optional overall.
+ */
+export const zodProductUpdateSchema = UpdateProductByIdBody.extend({
     price: z
         .number({ error: () => t('products.field-price-invalid') })
         .min(0, { error: () => t('products.field-price-min') })
-});
+        .optional(),
+    translations: zodProductTranslations.optional()
+}).superRefine((data, context) => refineFallbackLocale(data.translations, context, false));
 
 /**
  * Mongoose Schema for the Product model

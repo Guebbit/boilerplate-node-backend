@@ -64,26 +64,46 @@ const parseFormNumber = (value: unknown): unknown => {
     return Number.isFinite(parsed) ? parsed : value;
 };
 
+/**
+ * Parse a string-transported value as JSON.
+ *
+ * Same shape as `parseFormBoolean`/`parseFormNumber`: a multipart body carries no types, so a
+ * nested object arrives as a JSON-encoded string in one field. Anything not a string is returned
+ * untouched (an application/json body already has real types); invalid JSON is returned
+ * untouched too, so the validator downstream reports it rather than this helper throwing.
+ */
+export const parseFormJson = (value: unknown): unknown => {
+    if (typeof value !== 'string') return value;
+    // eslint-disable-next-line no-restricted-syntax -- JSON.parse throws on invalid input; caught locally so the raw string reaches the validator instead of crashing the request
+    try {
+        return JSON.parse(value) as unknown;
+    } catch {
+        return value;
+    }
+};
+
 /** The three places a value can arrive from. Named so a route can declare which ones it reads. */
 export type RequestInputSource = 'params' | 'body' | 'query';
 
 /**
  * Which route surface is reading — a CLOSED set, so precedence is a property of the surface rather
- * than an ordering chosen by whoever wrote the newest controller. A fifth combination has to be
+ * than an ordering chosen by whoever wrote the newest controller. A sixth combination has to be
  * added deliberately, where it can be reviewed against the spec.
  *
  * See: docs/theory/request-input.md
  */
-export type RequestSurface = 'search' | 'list' | 'write' | 'delete' | 'path';
+export type RequestSurface = 'search' | 'list' | 'write' | 'create' | 'delete' | 'path';
 
 /**
  * The sources each surface reads, HIGHEST precedence first — a CLOSED set, so precedence is a
  * property of the surface, not an ad hoc choice per controller.
  *
  * `search` reads body before query (unifies `POST .../search` and `GET ?text=`); `list` is
- * query-only (a GET has no body semantics per RFC 9110); `write` reads params before body;
- * `delete` reads params, query, then body, except `hardDelete` which is `anyTrue` and escapes
- * ranking; `path` is params-only, for a value that cannot arrive any other way.
+ * query-only (a GET has no body semantics per RFC 9110); `write` reads params before body, for a
+ * route that carries an id in its path; `create` is body-only, for a route that never does —
+ * declaring `write` there would claim a `params` source no such route offers; `delete` reads
+ * params, query, then body, except `hardDelete` which is `anyTrue` and escapes ranking; `path` is
+ * params-only, for a value that cannot arrive any other way.
  *
  * See: docs/theory/request-input.md
  */
@@ -91,6 +111,7 @@ const SURFACE_SOURCES: Record<RequestSurface, readonly RequestInputSource[]> = {
     search: ['body', 'query'],
     list: ['query'],
     write: ['params', 'body'],
+    create: ['body'],
     delete: ['params', 'query', 'body'],
     path: ['params']
 };
@@ -124,6 +145,12 @@ export interface RequestInputDeclaration<TId extends string> {
     numbers?: readonly string[];
     /** Fields declared `string[]` by the contract — decoded on the string transports. */
     stringArrays?: readonly string[];
+    /**
+     * Fields carrying a JSON-encoded nested value on the string transports — a multipart body has
+     * no way to send an object except as a string in one field. Decoded with {@link parseFormJson};
+     * a JSON body's own object is left untouched, same as every other decode kind here.
+     */
+    jsonFields?: readonly string[];
 }
 
 /**
@@ -151,7 +178,12 @@ export const readInput = <TId extends string = never>(
     const booleans = [...(declaration.booleans ?? []), ...anyTrue];
     const numbers = declaration.numbers ?? [];
     const stringArrays = declaration.stringArrays ?? [];
-    const decodes = booleans.length > 0 || numbers.length > 0 || stringArrays.length > 0;
+    const jsonFields = declaration.jsonFields ?? [];
+    const decodes =
+        booleans.length > 0 ||
+        numbers.length > 0 ||
+        stringArrays.length > 0 ||
+        jsonFields.length > 0;
 
     /**
      * Decoding happens per source rather than on the merged result, because whether a value needs
@@ -165,6 +197,8 @@ export const readInput = <TId extends string = never>(
         for (const key of numbers) if (key in decoded) decoded[key] = parseFormNumber(decoded[key]);
         for (const key of stringArrays)
             if (key in decoded) decoded[key] = coerceStringArray(decoded[key]);
+        for (const key of jsonFields)
+            if (key in decoded) decoded[key] = parseFormJson(decoded[key]);
         return decoded;
     };
 

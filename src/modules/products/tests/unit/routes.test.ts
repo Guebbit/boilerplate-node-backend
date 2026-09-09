@@ -35,11 +35,11 @@ describe('product routes — what is mounted', () => {
             'POST /search',
             'GET /',
             'POST /',
-            'PUT /',
             'DELETE /',
             'GET /categories',
             'GET /:id',
-            'PUT /:id',
+            'PATCH /:id',
+            'GET /:id/admin',
             'DELETE /:id',
             'DELETE /:id/hard'
         ]);
@@ -61,10 +61,17 @@ describe('product routes — what is mounted', () => {
 });
 
 describe('product routes — authorization', () => {
-    /** Everything that changes catalogue state. Reads are deliberately absent. */
-    const WRITES = ['POST /', 'PUT /', 'DELETE /', 'PUT /:id', 'DELETE /:id', 'DELETE /:id/hard'];
+    /** Everything that changes catalogue state, plus the admin-only all-languages read. */
+    const GUARDED = [
+        'POST /',
+        'DELETE /',
+        'PATCH /:id',
+        'GET /:id/admin',
+        'DELETE /:id',
+        'DELETE /:id/hard'
+    ];
 
-    it.each(WRITES)('%s requires an authenticated admin', (signature) => {
+    it.each(GUARDED)('%s requires an authenticated admin', (signature) => {
         const row = routeTable(router).find(
             ({ method, path }) => `${method} ${path}` === signature
         );
@@ -77,6 +84,21 @@ describe('product routes — authorization', () => {
             row!.chain.indexOf('requirePermissionGuard')
         );
     });
+
+    it.each(['POST /', 'PATCH /:id'])(
+        '%s stacks both products AND translations keys, since the same write carries every language',
+        (signature) => {
+            const row = routeTable(router).find(
+                ({ method, path }) => `${method} ${path}` === signature
+            );
+
+            // Two separate `requirePermission(...)` mounts, not one — either key missing refuses.
+            const guardCount = row!.chain.filter(
+                (entry) => entry === 'requirePermissionGuard'
+            ).length;
+            expect(guardCount).toBe(2);
+        }
+    );
 
     it.each(['POST /search', 'GET /', 'GET /categories', 'GET /:id'])(
         '%s stays public',
@@ -119,7 +141,7 @@ describe('product routes — caching', () => {
         }
     );
 
-    it.each(['POST /', 'PUT /', 'DELETE /', 'PUT /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
+    it.each(['POST /', 'DELETE /', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
         '%s invalidates the catalogue tag it just changed',
         (signature) => {
             // The tag has to be the one the readers above set. Asserting the literal rather than
@@ -130,7 +152,7 @@ describe('product routes — caching', () => {
 });
 
 describe('product routes — uploads and flags', () => {
-    it.each(['POST /', 'PUT /', 'PUT /:id'])(
+    it.each(['POST /', 'PATCH /:id'])(
         '%s accepts the imageUpload field and validates what arrives',
         (signature) => {
             const chain = chainOf(signature);

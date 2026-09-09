@@ -22,7 +22,7 @@
  *     `z.string()`, and tightening the validators to match instead would reject every upload the
  *     API itself produces. Correct the spec, not the validator.
  *   - **`.extend()` on a generated schema REPLACES a field**, dropping every constraint the
- *     override does not restate. `zodProductSchema` overrides `price` for its i18n message and
+ *     override does not restate. `zodProductCreateSchema` overrides `price` for its i18n message and
  *     therefore has to restate `.min(0)` to keep the contract's `minimum: 0`.
  *   - **Coercion running before validation** hides a wrong type from the check that would reject
  *     it. `!!request.body.active` and `coerceStringArray(...)` run only for `multipart/form-data`,
@@ -50,8 +50,21 @@ import {
     SignupBody,
     LoginBody
 } from '@api/schemas.zod';
+import { localeRepository } from '@modules/locales/repository';
+import { makeLocale } from '@modules/locales/fixtures';
+import { localeService } from '@modules/locales/services';
 
 setupTestDb();
+
+beforeAll(() => {
+    localeService.setTranslatables({
+        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+    });
+});
+
+afterAll(() => {
+    localeService.setTranslatables({});
+});
 
 // CreateOrderBody's userId/items[].productId are opaque strings to the schema — the contract
 // has no way to say "must reference a real document" — so the generated payload is patched with
@@ -126,10 +139,22 @@ describe('POST /users (contract-derived)', () => {
     );
 });
 
+// `translations` is a `Record<locale, {...} | null>` to the schema — it cannot say "the key must
+// be this deployment's actual fallback locale, and a real row must exist for it". Same relinking
+// problem `withRealOrderReferences` solves for `userId`/`productId`, patched the same way.
+const withRealTranslations = (payload: Record<string, unknown>) => ({
+    ...payload,
+    translations: { en: { title: 'Generated Product Title' } }
+});
+
 describe('POST /products (contract-derived)', () => {
+    beforeEach(async () => {
+        await localeRepository.create(makeLocale({ tag: 'en', name: 'en', nativeName: 'en' }));
+    });
+
     it('accepts a payload the contract declares legal', async () => {
         const { bearer } = await authenticateAs('admin');
-        const payload = validPayload(CreateProductBody);
+        const payload = withRealTranslations(validPayload(CreateProductBody));
 
         const response = await api().post('/products').set('Authorization', bearer).send(payload);
 

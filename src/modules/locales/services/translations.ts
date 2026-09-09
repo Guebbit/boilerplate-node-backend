@@ -62,24 +62,53 @@ const planSlot = async (
     if (value === null) {
         if (locale === fallbackLocale)
             return generateReject(422, [
-                t('locales.error-translation-fallback-required', { locale })
+                {
+                    code: 'VALIDATION_ERROR',
+                    message: t('locales.error-translation-fallback-required', { locale }),
+                    details: { field: locale }
+                }
             ]);
         return { locale, kind: 'delete' };
     }
 
     const language = await localeRepository.findByTag(locale);
     if (!language)
-        return generateReject(422, [t('locales.error-translation-locale-unknown', { locale })]);
+        return generateReject(422, [
+            {
+                code: 'VALIDATION_ERROR',
+                message: t('locales.error-translation-locale-unknown', { locale }),
+                details: { field: locale }
+            }
+        ]);
     if (!language.active)
-        return generateReject(422, [t('locales.error-translation-locale-inactive', { locale })]);
+        return generateReject(422, [
+            {
+                code: 'VALIDATION_ERROR',
+                message: t('locales.error-translation-locale-inactive', { locale }),
+                details: { field: locale }
+            }
+        ]);
 
     if (Object.keys(value.fields).length === 0)
-        return generateReject(422, [t('locales.error-translation-fields-empty')]);
+        return generateReject(422, [
+            {
+                code: 'VALIDATION_ERROR',
+                message: t('locales.error-translation-fields-empty'),
+                details: { field: locale }
+            }
+        ]);
 
     const unknownField = Object.keys(value.fields).find((field) => !fields.includes(field));
     if (unknownField !== undefined)
         return generateReject(422, [
-            t('locales.error-translation-field-unknown', { field: unknownField, entityType })
+            {
+                code: 'VALIDATION_ERROR',
+                message: t('locales.error-translation-field-unknown', {
+                    field: unknownField,
+                    entityType
+                }),
+                details: { field: `${locale}.${unknownField}` }
+            }
         ]);
 
     return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
@@ -119,10 +148,15 @@ export const planTranslationWrites = async (
 
 /**
  * Apply an ALREADY-VALIDATED plan — see {@link planTranslationWrites} — without touching the
- * entity's own derived index column, its cache tag, or the audit trail: a caller with its own
- * document to write (`productService.write`) owns all three itself, in the same operation that
- * calls this. `upsertEntityTranslations` below is the generic door's own caller, and still owns
- * that full sequence for itself.
+ * entity's cache tag or its audit trail: a caller with its own document to write
+ * (`productService.write`) owns both itself, in the same operation that calls this.
+ * `upsertEntityTranslations` below is the generic door's own caller, and still owns that pair for
+ * itself.
+ *
+ * The derived index column IS written here, not left to each caller: it is the one invariant that
+ * cannot vary by door — `title`/`description` on a translatable entity's own document must always
+ * reflect its fallback-locale row, in every caller, so there is exactly one place deciding when
+ * that write happens rather than one per caller that could drift.
  *
  * Never validates. A caller that skips {@link planTranslationWrites} first can corrupt data.
  */
@@ -156,6 +190,18 @@ export const writePlannedTranslations = async (
             slot.locale === fallbackLocale ? undefined : fallbackDigest
         );
     }
+
+    const fallbackWrite = planned.find(
+        (slot): slot is Extract<PlannedWrite, { kind: 'upsert' }> =>
+            slot.kind === 'upsert' && slot.locale === fallbackLocale
+    );
+    const target = translatableTarget(entityType);
+    if (fallbackWrite && target)
+        await translationRepository.updateDerivedColumn(
+            target.collection,
+            entityId,
+            fallbackWrite.fields
+        );
 };
 
 /**
@@ -243,20 +289,8 @@ export const upsertEntityTranslations = async (
     const { fallbackLocale, planned } = plan;
 
     const translatedBy = context?.caller.id ?? undefined;
+    // Writes the rows AND the derived index column — see `writePlannedTranslations`'s docblock.
     await writePlannedTranslations(entityType, entityId, fallbackLocale, planned, translatedBy);
-
-    // The generic door owns its derived index column, unlike a caller with its own document to
-    // write (`productService.write`, via the port) — see `writePlannedTranslations`'s docblock.
-    const fallbackWrite = planned.find(
-        (slot): slot is Extract<PlannedWrite, { kind: 'upsert' }> =>
-            slot.kind === 'upsert' && slot.locale === fallbackLocale
-    );
-    if (fallbackWrite)
-        await translationRepository.updateDerivedColumn(
-            target.collection,
-            entityId,
-            fallbackWrite.fields
-        );
 
     await invalidateCacheTagsLogged([target.cacheTag]);
 

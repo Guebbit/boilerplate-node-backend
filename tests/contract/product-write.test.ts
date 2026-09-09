@@ -1,0 +1,169 @@
+/**
+ * The multilingual product write surface, over real HTTP: `POST /products`, `PATCH /products/{id}`
+ * and `GET /products/{id}/admin`. Cross-module by nature, sitting at the top level rather than
+ * under `src/modules/products/tests/` for the same reason `translation-cascades.test.ts` does:
+ * driving these routes needs a real `locales` collection row, which `products` may only reach
+ * through the `@infrastructure/i18n` port.
+ */
+
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import YAML from 'yaml';
+import '@tests/contract';
+import { setupTestDb } from '@tests/setup-test-db';
+import { api, authenticateAsRole } from '@tests/http';
+import { createProduct } from '@modules/products/tests/fixtures';
+import { productRepository } from '@modules/products';
+import { localeRepository } from '@modules/locales/repository';
+import { makeLocale } from '@modules/locales/fixtures';
+import { localeService } from '@modules/locales/services';
+
+setupTestDb();
+
+beforeAll(() => {
+    localeService.setTranslatables({
+        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+    });
+});
+
+afterAll(() => {
+    localeService.setTranslatables({});
+});
+
+/** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
+const FALLBACK = 'en';
+
+beforeEach(async () => {
+    await localeRepository.create(
+        makeLocale({ tag: FALLBACK, name: FALLBACK, nativeName: FALLBACK })
+    );
+});
+
+describe('POST /products', () => {
+    it('matches the contract, creating a product in every language sent at once', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({
+                price: 24.9,
+                translations: { en: { title: 'Memory Foam Bed', description: 'Extra support' } }
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.title).toBe('Memory Foam Bed');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('rejects a body missing the fallback locale', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price: 10, translations: {} });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('PATCH /products/{id}', () => {
+    it('matches the contract, merging a price change and a translation edit', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10 });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ price: 15, translations: { en: { title: 'Bed, revised' } } });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.price).toBe(15);
+        expect(response.body.data.title).toBe('Bed, revised');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // The editor's door may set a price; the translator's door may not — the founding argument
+    // the multilingual write surface was built on, exercised over real HTTP.
+    it('lets the editor change a price', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', price: 10 });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ price: 999 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.price).toBe(999);
+    });
+
+    // A translator holds `translations.manage` but not `products.update` — the route stacks both
+    // keys, so one alone must refuse rather than silently degrade to "translations only".
+    it('refuses a translator, who holds translations.manage but not products.update', async () => {
+        const { bearer } = await authenticateAsRole('translator');
+        const product = await createProduct({ title: 'Bed', price: 10 });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ price: 999 });
+
+        expect(response.status).toBe(403);
+        expect(await productRepository.findById(String(product._id))).toMatchObject({ price: 10 });
+    });
+});
+
+describe('GET /products/{id}/admin', () => {
+    it('matches the contract, returning every language the product has', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const created = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({
+                price: 24.9,
+                translations: { en: { title: 'Memory Foam Bed' } }
+            });
+
+        const response = await api()
+            .get(`/products/${String(created.body.data.id)}/admin`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.translations.en.title).toBe('Memory Foam Bed');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('is refused to a caller with no permission at all', async () => {
+        const product = await createProduct();
+
+        const response = await api().get(`/products/${String(product._id)}/admin`);
+
+        expect(response.status).toBe(401);
+    });
+});
+
+describe('the removed write operations', () => {
+    it('no longer appear in the bundled contract', () => {
+        const bundlePath = path.join(__dirname, '../../openapi.yaml');
+        const bundle = YAML.parse(readFileSync(bundlePath, 'utf8')) as {
+            paths: Record<string, Record<string, { operationId?: string }>>;
+        };
+
+        const operationIds = Object.values(bundle.paths).flatMap((operations) =>
+            Object.values(operations)
+                .map((operation) => operation.operationId)
+                .filter((id): id is string => id !== undefined)
+        );
+
+        // `updateProduct` was `PUT /products`; the old `PUT /products/{id}` reused
+        // `updateProductById`, which the new `PATCH /products/{id}` reuses too — so its PRESENCE
+        // doesn't prove the old operation is gone. The method is what changed; asserted directly.
+        expect(operationIds).not.toContain('updateProduct');
+        expect(bundle.paths['/products']?.put).toBeUndefined();
+        expect(bundle.paths['/products/{id}']?.put).toBeUndefined();
+        expect(bundle.paths['/products/{id}']?.patch?.operationId).toBe('updateProductById');
+    });
+});

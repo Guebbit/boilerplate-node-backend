@@ -48,6 +48,7 @@ export {
     applyTranslations,
     localeCandidatesFor,
     planTranslations,
+    readAllTranslations,
     registerTranslationPort,
     removeTranslations,
     resolveTranslations,

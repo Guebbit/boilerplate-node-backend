@@ -48,18 +48,19 @@ array the newest controller happened to pass.
 
 Read "sources" left-to-right as precedence, highest first — with one declared exception,
 `hardDelete`, whose sources are OR'd instead (see the rules below). A controller does not spell this array:
-it names the **surface** it is (`search`, `list`, `write`, `delete`, `path`) and `SURFACE_SOURCES`
-in `@infrastructure/http/request` maps that to the row below. The set is closed, so precedence is a
-property of the surface rather than of whichever array the newest controller happened to pass — and
-a sixth combination has to be added there deliberately, where it can be reviewed against the spec.
-`tests/contract/request-sources.test.ts` pins the set for exactly that reason: adding one fails
-that test once, which is the prompt to update this page alongside it.
+it names the **surface** it is (`search`, `list`, `write`, `create`, `delete`, `path`) and
+`SURFACE_SOURCES` in `@infrastructure/http/request` maps that to the row below. The set is closed,
+so precedence is a property of the surface rather than of whichever array the newest controller
+happened to pass — and a seventh combination has to be added there deliberately, where it can be
+reviewed against the spec. `tests/contract/request-sources.test.ts` pins the set for exactly that
+reason: adding one fails that test once, which is the prompt to update this page alongside it.
 
 | Surface  | Sources (highest first) | Used by                                                        |
 | -------- | ----------------------- | -------------------------------------------------------------- |
 | `search` | body, query             | the four endpoints with a `POST …/search` sibling              |
 | `list`   | query                   | the four GET-only collection reads, which have no such sibling |
-| `write`  | params, body            | `writeProducts`/`writeUsers`/`writeOrders`, cart PUT           |
+| `write`  | params, body            | `updateProduct`/`writeUsers`/`writeOrders`, cart PUT           |
+| `create` | body                    | `createProduct` — a route that never carries an id in its path |
 | `delete` | params, query, body     | the three soft/hard delete controllers                         |
 | `path`   | params                  | `DELETE /cart/{productId}`, which declares no body             |
 

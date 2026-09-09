@@ -62,7 +62,11 @@ paths:
         post:
             tags: [Products]
             summary: Create product
-            description: Creates a new product with optional image upload
+            description: >-
+                Creates a new product with optional image upload. Words live in `translations`,
+                one entry per locale — the fallback locale (`NODE_FALLBACK_LOCALE`) MUST be
+                present and non-null, since a product with nothing to fall back to cannot exist.
+                See `PATCH /products/{id}` for the three-way table a locale entry follows.
             operationId: createProduct
             security:
                 - bearerAuth: []
@@ -84,35 +88,6 @@ paths:
                                 $ref: '#/components/schemas/ProductEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-        put:
-            tags: [Products]
-            summary: Edit product
-            description: Updates an existing product with optional image upload
-            operationId: updateProduct
-            x-alias-of: updateProductById
-            security:
-                - bearerAuth: []
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/UpdateProductRequest'
-                    multipart/form-data:
-                        schema:
-                            $ref: '#/components/schemas/UpdateProductRequestMultipart'
-            responses:
-                '200':
-                    description: Updated product
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ProductEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
@@ -177,11 +152,26 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-        # Same as PUT /products
-        put:
+        # Merges, unlike a replacing PUT — see `UpdateProductRequest.translations`.
+        patch:
             tags: [Products]
             summary: Edit product
-            description: Updates the product identified by `{id}` in the path with optional image upload. Functionally equivalent to `PUT /products` with the id in the body.
+            description: |
+                Updates the product identified by `{id}` in the path, merging. Every field but
+                `translations` replaces the stored value when sent; `translations` merges one
+                locale at a time — three signals, and no way to mistake one for another:
+
+                | the body says      | the server does                        |
+                | ------------------- | --------------------------------------- |
+                | `"it"` absent       | leaves the Italian row exactly as it is |
+                | `"it": { … }`       | upserts the Italian row, replacing its fields whole |
+                | `"it": null`        | deletes the Italian row                 |
+
+                An empty translation object is a 422, never a delete — deletion is `null`, spent
+                deliberately: a cleared form field sends `""`, never `null`, so a mis-click can
+                never delete translated work. `null` on the fallback locale is a 422: deleting it
+                would leave the product with nothing to fall back to. A validation failure names
+                the locale in its pointer, e.g. `translations.it.title`.
             operationId: updateProductById
             security:
                 - bearerAuth: []
@@ -192,10 +182,10 @@ paths:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/UpdateProductByIdRequest'
+                            $ref: '#/components/schemas/UpdateProductRequest'
                     multipart/form-data:
                         schema:
-                            $ref: '#/components/schemas/UpdateProductByIdRequestMultipart'
+                            $ref: '#/components/schemas/UpdateProductRequestMultipart'
             responses:
                 '200':
                     description: Updated product
@@ -227,6 +217,35 @@ paths:
                             $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/HardDeleteRequest'
             responses:
                 '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # The editor's own read: every language a product has, not the caller's resolved one.
+    /products/{id}/admin:
+        get:
+            tags: [Products]
+            summary: Product, every language at once
+            description: >-
+                Every language this product has a row for, plus its price/stock/image — the shape
+                the editor's form reads to populate its tabs. Unlike `GET /products/{id}`, this
+                does not resolve to one language and is never cached: it's the screen someone is
+                actively editing, the same reasoning `GET /locales/{locale}/entries` already
+                applies.
+            operationId: getProductAdmin
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Product, every language
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductAdminEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -294,6 +313,121 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Product'
+
+        # One locale's words for a product. `title` mirrors `zodProductSchema`'s length rules,
+        # enforced per locale — see the write operations' descriptions.
+        ProductTranslationFields:
+            type: object
+            additionalProperties: false
+            required: [title]
+            properties:
+                title:
+                    type: string
+                description:
+                    type: string
+
+        ProductTranslationsWrite:
+            type: object
+            additionalProperties:
+                type: object
+                nullable: true
+                allOf:
+                    - $ref: '#/components/schemas/ProductTranslationFields'
+            description: >-
+                One or more locales, keyed by BCP 47 tag. A key absent from this map leaves that
+                locale untouched; a key mapped to an object upserts it; a key mapped to null
+                deletes it — never omission or an empty object, which are both errors. The
+                fallback locale (`NODE_FALLBACK_LOCALE`) MUST be present and non-null on create,
+                and MUST NOT be null on update.
+            example:
+                en:
+                    title: Orthopedic Memory Foam Dog Bed
+                    description: Extra support for joints during rest.
+                it:
+                    title: Cuccia ortopedica in memory foam
+                    description: Un supporto extra per le articolazioni durante il riposo.
+
+        # Flat rather than `allOf: [Product, {...}]`: two `additionalProperties: false` schemas
+        # composed with `allOf` each validate the WHOLE instance on their own, so the `Product`
+        # branch alone would reject `translations` regardless of what the second branch allows.
+        # `Product`'s own fields are restated here for that reason — the same trade-off
+        # `CreateProductRequestMultipart` already makes against `CreateProductRequest`.
+        ProductAdmin:
+            type: object
+            additionalProperties: false
+            required: [id, title, price, translations]
+            description: >-
+                A product with every language it has a row for, not just the caller's resolved
+                one — what the editor's form needs to populate its tabs. `title`/`description`
+                stay the resolved (fallback-locale-derived) values; `translations` is the
+                per-locale source.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                onHand:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                reserved:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                available:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                description:
+                    type: string
+                active:
+                    type: boolean
+                requiresShipping:
+                    type: boolean
+                    default: true
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ThumbnailUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+                translations:
+                    type: object
+                    additionalProperties:
+                        $ref: '#/components/schemas/ProductTranslationFields'
+
+        ProductAdminEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ProductAdmin'
 
         ProductsResponseEnvelope:
             type: object
@@ -387,10 +521,10 @@ components:
         CreateProductRequest:
             type: object
             additionalProperties: false
-            required: [title, price]
+            required: [price, translations]
             properties:
-                title:
-                    type: string
+                translations:
+                    $ref: '#/components/schemas/ProductTranslationsWrite'
                 price:
                     type: number
                     format: double
@@ -410,8 +544,6 @@ components:
                     type: integer
                     minimum: 0
                     default: 100
-                description:
-                    type: string
                 # ---------- On `active`, and why it is declared here but not on the updates ----------
                 #
                 # `active` and `deletedAt` are INDEPENDENT. A record can be active or not regardless
@@ -451,10 +583,14 @@ components:
         CreateProductRequestMultipart:
             type: object
             additionalProperties: false
-            required: [title, price]
+            required: [price, translations]
             properties:
-                title:
+                # A multipart part carries no nested objects, only strings — so the translations
+                # map travels as a JSON-encoded string in this field, the same shape
+                # `ProductTranslationsWrite` describes, parsed before validation.
+                translations:
                     type: string
+                    description: JSON-encoded `ProductTranslationsWrite`.
                 price:
                     type: number
                     format: double
@@ -474,8 +610,6 @@ components:
                     type: integer
                     minimum: 0
                     default: 100
-                description:
-                    type: string
                 # Same default, same reasoning as `CreateProductRequest.active` above.
                 active:
                     type: boolean
@@ -497,17 +631,14 @@ components:
                     items:
                         type: string
 
+        # PATCH /products/{id} — every field optional, since a merge may touch just one of them.
+        # No `id`: it travels in the path.
         UpdateProductRequest:
             type: object
             additionalProperties: false
-            required: [id, title, price]
             properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                title:
-                    type: string
-                description:
-                    type: string
+                translations:
+                    $ref: '#/components/schemas/ProductTranslationsWrite'
                 price:
                     type: number
                     format: double
@@ -530,73 +661,12 @@ components:
         UpdateProductRequestMultipart:
             type: object
             additionalProperties: false
-            required: [id, title, price]
             properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                title:
+                # See `CreateProductRequestMultipart.translations` above — same JSON-string-in-a-
+                # field shape, same `ProductTranslationsWrite` contents.
+                translations:
                     type: string
-                description:
-                    type: string
-                price:
-                    type: number
-                    format: double
-                    minimum: 0
-                active:
-                    type: boolean
-                requiresShipping:
-                    type: boolean
-                imageUpload:
-                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
-                    type: string
-                    format: binary
-                    description: Optional product image
-                categories:
-                    type: array
-                    items:
-                        type: string
-                tags:
-                    type: array
-                    items:
-                        type: string
-
-        UpdateProductByIdRequest:
-            type: object
-            additionalProperties: false
-            required: [title, price]
-            properties:
-                title:
-                    type: string
-                description:
-                    type: string
-                price:
-                    type: number
-                    format: double
-                    minimum: 0
-                active:
-                    type: boolean
-                requiresShipping:
-                    type: boolean
-                imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
-                categories:
-                    type: array
-                    items:
-                        type: string
-                tags:
-                    type: array
-                    items:
-                        type: string
-
-        UpdateProductByIdRequestMultipart:
-            type: object
-            additionalProperties: false
-            required: [title, price]
-            properties:
-                title:
-                    type: string
-                description:
-                    type: string
+                    description: JSON-encoded `ProductTranslationsWrite`.
                 price:
                     type: number
                     format: double

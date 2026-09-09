@@ -226,7 +226,7 @@ export type UserModel = Model<UserDocument, Record<string, never>, UserMethods>;
 /**
  * Zod schema for user data validation, built on the orval-generated `CreateUserBody` so only
  * fields needing custom i18n messages are overridden. Sits beside the Mongoose schema on purpose,
- * like `zodProductSchema` beside `products/model.ts` — one for the wire, one for storage.
+ * like `zodProductCreateSchema` beside `products/model.ts` — one for the wire, one for storage.
  * Every message is a THUNK (`error: () => t(...)`), never called eagerly: this module evaluates
  * at import time, before `i18next.init()` runs in `app.ts`, so an eager call would return
  * `undefined` and Zod would silently fall back to its own English message.

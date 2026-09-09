@@ -7,12 +7,23 @@
 import {
     applyTranslations,
     getCurrentLocale,
+    getFallbackLocale,
     localeCandidatesFor,
+    planTranslations,
+    readAllTranslations,
     removeTranslations,
     searchTranslatedEntityIds,
-    t
+    t,
+    writeTranslations,
+    type TranslationWritePlan
 } from '@infrastructure/i18n';
-import type { SearchProductsRequest, Product } from '@types';
+import type {
+    SearchProductsRequest,
+    Product,
+    ProductAdmin,
+    ProductTranslationFields,
+    UpsertTranslationsRequest
+} from '@types';
 import {
     generateSuccess,
     generateReject,
@@ -31,7 +42,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { productsAnalyticsEvents } from './analytics';
 import { productsAuditActions } from './audit';
 import { PRODUCT_DELETED } from './events';
-import { zodProductSchema } from './model';
+import { zodProductCreateSchema, zodProductUpdateSchema, toProduct } from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
@@ -50,12 +61,23 @@ import { accessibleFilter } from '@kernel/access/query';
 const TRANSLATABLE_SEARCH_FIELDS = ['title', 'description'] as const;
 
 /**
- * Validates product data against the Zod schema; empty array means valid.
+ * Validates a product CREATE against the Zod schema; empty array means valid.
  * Takes `unknown` on purpose: this is the boundary that establishes the type, so callers passing
  * raw request bodies don't have to cast on the way in.
  */
-export const validateData = (productData: unknown): ResponseErrorItem[] => {
-    const parseResult = zodProductSchema.safeParse(productData);
+export const validateCreateData = (productData: unknown): ResponseErrorItem[] => {
+    const parseResult = zodProductCreateSchema.safeParse(productData);
+    if (!parseResult.success) return validationErrors(parseResult.error);
+    return [];
+};
+
+/**
+ * Validates a product PATCH against the Zod schema; empty array means valid. Every field is
+ * optional at this schema's own level — only the fallback-locale guard inside `translations` can
+ * still refuse an otherwise-valid-looking body.
+ */
+export const validateUpdateData = (productData: unknown): ResponseErrorItem[] => {
+    const parseResult = zodProductUpdateSchema.safeParse(productData);
     if (!parseResult.success) return validationErrors(parseResult.error);
     return [];
 };
@@ -338,6 +360,168 @@ export const updateById = (
     });
 
 /**
+ * `ProductTranslationsWrite` (this module's own flat write shape, `{ title, description? } | null`
+ * per locale) wrapped for the `@infrastructure/i18n` port, which speaks the generic door's
+ * `UpsertTranslationsRequest` — one locale's `{ fields, origin? }` rather than the flat shape this
+ * module's own contract uses. `origin` is left to the port's own default (`human`): an editor's
+ * write through `/products/{id}` is never a machine import.
+ */
+const toUpsertTranslationsRequest = (
+    translations: Record<string, ProductTranslationFields | null>
+): UpsertTranslationsRequest =>
+    Object.fromEntries(
+        Object.entries(translations).map(([locale, entry]) => [
+            locale,
+            entry === null
+                ? null
+                : {
+                      fields: {
+                          title: entry.title,
+                          ...(entry.description === undefined
+                              ? {}
+                              : { description: entry.description })
+                      }
+                  }
+        ])
+    );
+
+/** `true` for a rejection, narrowing a union of it and a validated plan — only the plan carries `fallbackLocale`. */
+const isTranslationPlan = (
+    value: TranslationWritePlan | ResponseReject
+): value is TranslationWritePlan => 'fallbackLocale' in value;
+
+/**
+ * A translations-plan rejection, reshaped for THIS module's write body — `translations` is a
+ * nested field here, unlike the generic translator's door (an unwrapped body), so a pointer of
+ * `it` becomes `translations.it` and `it.title` becomes `translations.it.title`.
+ */
+const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => ({
+    ...rejection,
+    errors: rejection.errors.map((error) =>
+        typeof error.details?.field === 'string'
+            ? {
+                  ...error,
+                  details: { ...error.details, field: `translations.${error.details.field}` }
+              }
+            : error
+    )
+});
+
+/**
+ * Create a product and its translation rows in one operation — the create door of the
+ * multilingual product write surface. Two validations run before anything is WRITTEN: the product
+ * fields' shape (`zodProductCreateSchema`, which also refuses a missing/`null` fallback locale)
+ * and the translations batch's locale/field-name legality (`planTranslations`, the
+ * `@infrastructure/i18n` port, validates without writing). Nothing in this codebase runs a
+ * cross-collection transaction, so the achievable guarantee stops there: nothing is written until
+ * both validations have already passed, not that the product write and the translations write
+ * that follow are atomic with each other.
+ *
+ * `imageExtras` (`thumbnailUrl`/`pendingImageKey`) is server-derived, never part of the contract
+ * body, so it never passes through `zodProductCreateSchema` — merged in only once validation has
+ * already succeeded, same as the controller used to do by hand.
+ */
+export const writeCreate = async (
+    data: Record<string, unknown>,
+    context: CallerContext,
+    imageExtras: { thumbnailUrl?: string; pendingImageKey?: string } = {}
+): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
+    const parsed = zodProductCreateSchema.safeParse(data);
+    if (!parsed.success) return generateReject(422, validationErrors(parsed.error));
+
+    const plan = await planTranslations(
+        'product',
+        toUpsertTranslationsRequest(parsed.data.translations)
+    );
+    if (!isTranslationPlan(plan)) return prefixTranslationErrors(plan);
+
+    // Guaranteed present and non-null by the schema's own refinement — a plan cannot validate
+    // without it.
+    const fallbackEntry = parsed.data.translations[getFallbackLocale()] as ProductTranslationFields;
+    const { translations: _translations, ...productFields } = parsed.data;
+
+    const product = await create(
+        {
+            ...productFields,
+            ...imageExtras,
+            title: fallbackEntry.title,
+            description: fallbackEntry.description ?? ''
+        },
+        context
+    );
+
+    await writeTranslations('product', product.id, plan, context.caller.id ?? undefined);
+
+    return generateSuccess(product, 201);
+};
+
+/**
+ * Update a product and merge its translation rows in one operation — the PATCH door of the
+ * multilingual product write surface. Delegates the product write itself to {@link updateById},
+ * which already owns the 404 check and the audit emit; this only adds the translations half
+ * around it, so there is exactly one path deciding what "the product was updated" means.
+ *
+ * `imageExtras` — see {@link writeCreate}.
+ */
+export const writeUpdate = async (
+    id: string,
+    data: Record<string, unknown>,
+    context: CallerContext,
+    imageExtras: { thumbnailUrl?: string; pendingImageKey?: string } = {}
+): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
+    const parsed = zodProductUpdateSchema.safeParse(data);
+    if (!parsed.success) return generateReject(422, validationErrors(parsed.error));
+
+    const { translations, ...productFields } = parsed.data;
+
+    const plan = translations
+        ? await planTranslations('product', toUpsertTranslationsRequest(translations))
+        : undefined;
+    if (plan && !isTranslationPlan(plan)) return prefixTranslationErrors(plan);
+
+    // An upsert at the fallback locale is the only slot that touches the derived index column;
+    // `null` there is already refused by `zodProductUpdateSchema`'s own refinement.
+    const fallbackEntry = translations?.[getFallbackLocale()];
+    const derivedFields = fallbackEntry
+        ? { title: fallbackEntry.title, description: fallbackEntry.description ?? '' }
+        : {};
+
+    const result = await updateById(
+        id,
+        { ...productFields, ...imageExtras, ...derivedFields },
+        context
+    );
+    if (!result.success) return result;
+
+    if (plan) await writeTranslations('product', id, plan, context.caller.id ?? undefined);
+
+    return result;
+};
+
+/**
+ * `GET /products/{id}/admin` — a product with every language it has a row for, for the editor's
+ * form to populate its tabs. Unscoped (the route is admin-only) and never resolved to one
+ * language, unlike {@link getById}.
+ */
+export const getAdmin = async (id: string): Promise<ProductAdmin | null> => {
+    const product = await productRepository.findById(id);
+    if (!product) return null;
+
+    const rows = await readAllTranslations('product', id);
+    const translations: Record<string, ProductTranslationFields> = {};
+    for (const [locale, fields] of rows)
+        translations[locale] = {
+            title: fields.title,
+            // `TranslationFields` types as `Record<string, string>`, but a row can genuinely omit
+            // the key — `in` is a runtime presence check `fields.description === undefined` isn't,
+            // since the index signature already promises every key is a `string`.
+            ...('description' in fields ? { description: fields.description } : {})
+        };
+
+    return { ...toProduct(product), translations };
+};
+
+/**
  * Remove a product document (soft or hard delete). Hard delete also removes the image file;
  * soft delete toggles `deletedAt`, acting as a restore when already soft-deleted.
  *
@@ -404,16 +588,20 @@ const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const productService = {
-    validateData,
+    validateCreateData,
+    validateUpdateData,
     callerScope,
     search,
     searchViewed,
     facets,
     getById,
     getByIdViewed,
+    getAdmin,
     create,
     update,
     updateById,
+    writeCreate,
+    writeUpdate,
     remove,
     removeById
 };

@@ -87,10 +87,11 @@ export interface TranslationPort {
     ) => Promise<TranslationWritePlan | ResponseReject>;
 
     /**
-     * Applies an ALREADY-VALIDATED plan — see {@link plan} — without touching the entity's own
-     * derived index column, its cache tag, or an audit trail: a caller with its own document to
-     * write owns all three itself, in the same operation that calls this. Never validates; a
-     * caller that skips {@link plan} first can corrupt data.
+     * Applies an ALREADY-VALIDATED plan — see {@link plan} — without touching the entity's cache
+     * tag or an audit trail: a caller with its own document to write owns both itself, in the same
+     * operation that calls this. The derived index column IS written (see the implementation's own
+     * docblock — it is one invariant that must not vary by caller). Never validates; a caller that
+     * skips {@link plan} first can corrupt data.
      */
     write: (
         entityType: string,
@@ -98,6 +99,14 @@ export interface TranslationPort {
         writePlan: TranslationWritePlan,
         translatedBy: string | undefined
     ) => Promise<void>;
+
+    /**
+     * Every locale one entity has a row for, unresolved — what an editor's admin form needs to
+     * populate its language tabs, as opposed to {@link resolve}'s single caller-locale answer.
+     *
+     * @returns fields per locale; a locale with no row is simply absent from the map
+     */
+    readAll: (entityType: string, entityId: string) => Promise<Map<string, TranslatedFields>>;
 }
 
 /**
@@ -196,6 +205,18 @@ export const writeTranslations = (
     translationPort
         ? translationPort.write(entityType, entityId, writePlan, translatedBy)
         : Promise.resolve();
+
+/**
+ * The admin read path's entry point — see {@link TranslationPort.readAll}. An empty map, no
+ * query, when nothing is registered, for the same reason {@link resolveTranslations} is.
+ */
+export const readAllTranslations = (
+    entityType: string,
+    entityId: string
+): Promise<Map<string, TranslatedFields>> =>
+    translationPort
+        ? translationPort.readAll(entityType, entityId)
+        : Promise.resolve(new Map<string, TranslatedFields>());
 
 /**
  * The locale chain a resolver query walks, most specific first: the exact tag, its base language,

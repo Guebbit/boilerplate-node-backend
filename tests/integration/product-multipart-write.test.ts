@@ -3,6 +3,9 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { localeRepository } from '@modules/locales/repository';
+import { makeLocale } from '@modules/locales/fixtures';
+import { localeService } from '@modules/locales/services';
 
 /**
  * Writing a product through the MULTIPART body, which is the only way to send one with an image.
@@ -49,11 +52,29 @@ const uploadedFiles = () =>
 
 setupTestDb();
 
+/** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
+const FALLBACK = 'en';
+
+beforeAll(() => {
+    localeService.setTranslatables({
+        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+    });
+});
+
+afterAll(() => {
+    localeService.setTranslatables({});
+});
+
 describe('writing a product through a multipart body', () => {
     let before: string[];
 
-    beforeEach(() => {
+    beforeEach(async () => {
         before = uploadedFiles();
+        // Every case below writes the fallback locale — see the same note in
+        // `locales/tests/integration/translations.test.ts`.
+        await localeRepository.create(
+            makeLocale({ tag: FALLBACK, name: FALLBACK, nativeName: FALLBACK })
+        );
     });
 
     /* A test that stores a file for real has to remove it, or the repository's upload directory
@@ -69,9 +90,16 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('title', 'Multipart product')
+            .field(
+                'translations',
+                JSON.stringify({
+                    en: {
+                        title: 'Multipart product',
+                        description: 'Created through a form body'
+                    }
+                })
+            )
             .field('price', '101.5')
-            .field('description', 'Created through a form body')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',
                 contentType: 'image/png'
@@ -90,12 +118,12 @@ describe('writing a product through a multipart body', () => {
         const created = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .send({ title: 'Starts as JSON', price: 10 });
+            .send({ price: 10, translations: { en: { title: 'Starts as JSON' } } });
 
         const response = await api()
-            .put(`/products/${created.body.data.id}`)
+            .patch(`/products/${created.body.data.id}`)
             .set('Authorization', bearer)
-            .field('title', 'Updated through a form')
+            .field('translations', JSON.stringify({ en: { title: 'Updated through a form' } }))
             .field('price', '42')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',
@@ -112,7 +140,7 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('title', 'Inactive on arrival')
+            .field('translations', JSON.stringify({ en: { title: 'Inactive on arrival' } }))
             .field('price', '5')
             // The string 'false' is truthy — the decoder is the only thing standing between this
             // and a product published against its author's wishes.
@@ -132,7 +160,7 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('title', 'Active by default')
+            .field('translations', JSON.stringify({ en: { title: 'Active by default' } }))
             .field('price', '7')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',
@@ -149,7 +177,7 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field('title', 'Nonsense price')
+            .field('translations', JSON.stringify({ en: { title: 'Nonsense price' } }))
             .field('price', 'not-a-number')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',

@@ -5,6 +5,8 @@
         "field-title-min": "Il titolo è troppo corto",
         "field-price-invalid": "Il prezzo è mancante o non valido",
         "field-price-min": "Il prezzo non può essere negativo",
+        "field-translations-fallback-required": "La traduzione in {{locale}} è obbligatoria: è la lingua di fallback di questo deployment.",
+        "field-translations-fallback-null": "La traduzione in {{locale}} non può essere eliminata: è la lingua di fallback di questo deployment.",
         "hard-deleted": "Il prodotto è stato eliminato definitivamente.",
         "soft-deleted": "Il prodotto è stato eliminato logicamente (solo per gli utenti)."
     }
