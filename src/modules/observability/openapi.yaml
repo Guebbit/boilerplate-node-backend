@@ -297,6 +297,24 @@ components:
                     type: array
                     items: { type: number }
 
+        ObservabilityHealthJob:
+            type: object
+            additionalProperties: false
+            required: [name]
+            description: >-
+                One lease-guarded job's last observed outcome, read off its `leases` document
+                (`src/infrastructure/persistence/lease.ts`). Absent `lastSuccessAt` means the job
+                has never completed since its lease document was created; absent `lastError` means
+                its most recent attempt did not fail.
+
+                Not part of `status`, same reasoning as `telemetry`: a job that has not run
+                recently costs staleness, not this instance's ability to serve a request — see
+                docs/reference/ops.md#scheduled-jobs.
+            properties:
+                name: { type: string }
+                lastSuccessAt: { type: string, format: date-time, nullable: true }
+                lastError: { type: string, nullable: true }
+
         ObservabilityHealth:
             type: object
             additionalProperties: false
@@ -330,6 +348,12 @@ components:
                 telemetry: { $ref: '#/components/schemas/ObservabilityHealthTelemetry' }
                 memory: { $ref: '#/components/schemas/ProcessMemory' }
                 system: { $ref: '#/components/schemas/ObservabilityHealthSystem' }
+                jobs:
+                    type: array
+                    description: >-
+                        Every lease-guarded job that has attempted to run at least once. See
+                        `ObservabilityHealthJob`.
+                    items: { $ref: '#/components/schemas/ObservabilityHealthJob' }
                 timestamp: { type: string, format: date-time }
 
         ObservabilityMetricsLatency:
