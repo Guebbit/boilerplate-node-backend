@@ -12,6 +12,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { connection } from '@infrastructure/runtime/database';
+import { leaseModel } from '@infrastructure/persistence/lease';
 
 setupTestDb();
 
@@ -100,6 +101,34 @@ describe('GET /observability/health', () => {
         const { analytics } = response.body.data.telemetry;
         expect(typeof analytics.provider).toBe('string');
         expect(typeof analytics.configured).toBe('boolean');
+    });
+
+    it("reports a seeded lease's real outcome in `jobs`, not just an empty array", async () => {
+        /*
+         * Every other case in this file hits an empty `leases` collection, which proves the shape
+         * is right but not that `jobHealth()` actually reads the collection — a hard-coded `[]`
+         * would pass every assertion above too. A real document, written the same way `lease.ts`
+         * itself would leave one behind, is what tells the two apart.
+         */
+        const lastSuccessAt = new Date('2026-01-01T00:00:00.000Z');
+        await leaseModel.create({
+            _id: 'observability-contract-test.seeded',
+            owner: 'seed-owner',
+            expiresAt: new Date(0),
+            lastSuccessAt,
+            lastError: 'temporary outage'
+        });
+
+        const { bearer } = await authenticateAs('admin');
+        const response = await api().get('/observability/health').set('Authorization', bearer);
+
+        expect(response).toSatisfyApiSpec();
+        const job = response.body.data.jobs.find(
+            (candidate: { name: string }) => candidate.name === 'observability-contract-test.seeded'
+        );
+        expect(job).toBeDefined();
+        expect(job.lastSuccessAt).toBe(lastSuccessAt.toISOString());
+        expect(job.lastError).toBe('temporary outage');
     });
 });
 

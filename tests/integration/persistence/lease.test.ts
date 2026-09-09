@@ -61,6 +61,36 @@ describe('withLease', () => {
         expect(secondResult).toBeUndefined();
     });
 
+    it('lets only one of two truly concurrent callers win the very first insert for a name', async () => {
+        // No pre-existing document, unlike the case above — both calls fire back to back with no
+        // `await` between them, so both `findOneAndUpdate` upserts are in flight before either can
+        // resolve. This is `acquireLease`'s OTHER duplicate-key race (its own doc comment calls it
+        // out separately from a held-lease race): the very first insert for `name`, contended.
+        const name = 'scheduled-jobs-test.first-insert-race';
+        const started: number[] = [];
+
+        const [firstResult, secondResult] = await Promise.all([
+            withLease(name, MINUTE_MS, () => {
+                started.push(1);
+                return Promise.resolve('first');
+            }),
+            withLease(name, MINUTE_MS, () => {
+                started.push(2);
+                return Promise.resolve('second');
+            })
+        ]);
+
+        expect(started).toHaveLength(1);
+        // Exactly one resolves to its body's own value; the other resolves `undefined` — the same
+        // "someone else has it" outcome a contended, already-held lease produces.
+        expect([firstResult, secondResult].filter((result) => result !== undefined)).toHaveLength(
+            1
+        );
+
+        const stored = await leaseModel.findById(name).lean().exec();
+        expect(stored).not.toBeNull();
+    });
+
     it('lets a different caller re-acquire a lease that has expired', async () => {
         // Acquired and released immediately: `withLease` stamps `expiresAt` with the epoch on
         // release (see lease.ts's `RELEASED`), so the very next acquisition already finds it
