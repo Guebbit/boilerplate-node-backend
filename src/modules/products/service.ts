@@ -4,7 +4,14 @@
  * the repository and stays the one place a controller may call into.
  */
 
-import { applyTranslations, removeTranslations, t } from '@infrastructure/i18n';
+import {
+    applyTranslations,
+    getCurrentLocale,
+    localeCandidatesFor,
+    removeTranslations,
+    searchTranslatedEntityIds,
+    t
+} from '@infrastructure/i18n';
 import type { SearchProductsRequest, Product } from '@types';
 import {
     generateSuccess,
@@ -28,8 +35,19 @@ import { zodProductSchema } from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { toSearchPattern } from '@infrastructure/persistence/search';
+import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { AuthContext } from '@types';
 import { accessibleFilter } from '@kernel/access/query';
+
+/**
+ * The columns a free-text search compares against — the same pair `repository.ts` declares as
+ * `searchable.text`, and the ONLY fields `translatables` registers `product` for in
+ * `src/modules/products/module.ts`. Kept here rather than read off the registry: this module
+ * already states its own searchable columns once, and a translated search asks the same question
+ * one tier down.
+ */
+const TRANSLATABLE_SEARCH_FIELDS = ['title', 'description'] as const;
 
 /**
  * Validates product data against the Zod schema; empty array means valid.
@@ -60,25 +78,67 @@ export const callerScope = (context?: AuthContext) => accessibleFilter(context, 
 /**
  * Search products (DTO-friendly) — matches POST /products/search in OpenAPI.
  *
+ * `text`/`title` follow the caller's locale: a free-text search unions a product's OWN
+ * (fallback-language) match with whatever the translations collection matches in the caller's
+ * locale chain, so searching in Italian finds a product whose Italian row is the only place the
+ * word appears — a product with no such row is still reachable through its own column.
+ *
  * @param filters - id, text, minPrice, maxPrice, page (1-based), pageSize
  * @param scope - which rows this caller may read ({@link callerScope})
  */
-export const search = (
+export const search = async (
     filters: SearchProductsRequest = {},
     scope?: Record<string, unknown>
 ): Promise<{
     items: ProductDocument[];
     meta: PaginatedMeta;
-}> =>
-    // How `text`/`category`/`tag`/`minPrice`/`maxPrice` become a query is declared on the
-    // repository; the scope it is merged with is the caller's, and no filter may widen it.
-    productRepository.search(filters, scope).then((result) =>
-        // `.search()` already normalized every item (`_id` → `id`, dates to ISO strings), so this
-        // overlays the caller's locale on top of an already wire-shaped page — one batched query,
-        // never one per item. A no-op when nothing is registered or no row matches, which is why
-        // this can sit in the base function rather than only in the viewed wrapper below.
-        applyTranslations('product', result.items).then((items) => ({ ...result, items }))
+}> => {
+    const pattern = toSearchPattern(filters.text ?? filters.title);
+
+    // No free-text term: `category`/`tag`/`minPrice`/`maxPrice`/`active` still apply as declared
+    // on the repository, unioning nothing.
+    const result = pattern
+        ? await searchWithTranslatedText(filters, scope, pattern)
+        : await productRepository.search(filters, scope);
+
+    // `.search()` already normalized every item (`_id` → `id`, dates to ISO strings), so this
+    // overlays the caller's locale on top of an already wire-shaped page — one batched query,
+    // never one per item. A no-op when nothing is registered or no row matches, which is why
+    // this can sit in the base function rather than only in the viewed wrapper below.
+    const items = await applyTranslations('product', result.items);
+    return { ...result, items };
+};
+
+/**
+ * The union half of {@link search}: an entity's own column OR a translated row, both scoped by
+ * whatever the caller's filters and visibility already require.
+ *
+ * `text`/`title` are stripped before `buildWhere` runs a second time — `where.$or` below already
+ * carries the product's own match, and leaving them in would AND a second, redundant one in.
+ */
+const searchWithTranslatedText = async (
+    filters: SearchProductsRequest,
+    scope: Record<string, unknown> | undefined,
+    pattern: string
+): Promise<{ items: ProductDocument[]; meta: PaginatedMeta }> => {
+    const { text, title, ...rest } = filters;
+    const ownMatch = productRepository.buildWhere({ text, title });
+
+    const candidates = localeCandidatesFor(getCurrentLocale());
+    const translatedIds = await searchTranslatedEntityIds(
+        'product',
+        TRANSLATABLE_SEARCH_FIELDS,
+        pattern,
+        candidates
     );
+
+    const union =
+        translatedIds.length === 0
+            ? ownMatch
+            : { $or: [ownMatch, { _id: { $in: translatedIds.map((id) => toObjectId(id)) } }] };
+
+    return productRepository.search(rest, { ...scope, ...union });
+};
 
 /**
  * `GET /products` / `POST /products/search` — search, and report that a search happened.

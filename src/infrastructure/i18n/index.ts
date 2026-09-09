@@ -50,6 +50,7 @@ export {
     registerTranslationPort,
     removeTranslations,
     resolveTranslations,
+    searchTranslatedEntityIds,
     type TranslatedFields,
     type Translatable,
     type TranslationPort

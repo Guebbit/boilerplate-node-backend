@@ -52,6 +52,23 @@ export interface TranslationPort {
      * @returns how many rows were removed
      */
     removeAll: (entityType: string, entityId: string) => Promise<number>;
+
+    /**
+     * Every entity whose translated fields match a search pattern, in the caller's locale chain —
+     * what a free-text search unions with an entity's own (fallback-language) match, so searching
+     * in Italian finds a product whose Italian row is the only place the word appears.
+     *
+     * `pattern` arrives already escaped — see {@link applyTranslations}'s caller-side sibling,
+     * `search()` — so an implementation never touches raw caller input.
+     *
+     * @returns entity ids, deduplicated
+     */
+    search: (
+        entityType: string,
+        fields: readonly string[],
+        pattern: string,
+        localeCandidates: string[]
+    ) => Promise<string[]>;
 }
 
 /** The registered port, or `undefined` before `modules/locales` has supplied one. */
@@ -86,6 +103,20 @@ export const resolveTranslations = (
  */
 export const removeTranslations = (entityType: string, entityId: string): Promise<number> =>
     translationPort ? translationPort.removeAll(entityType, entityId) : Promise.resolve(0);
+
+/**
+ * The search path's entry point. An empty list — never a query — when nothing is registered, for
+ * the same reason {@link resolveTranslations} is.
+ */
+export const searchTranslatedEntityIds = (
+    entityType: string,
+    fields: readonly string[],
+    pattern: string,
+    localeCandidates: string[]
+): Promise<string[]> =>
+    translationPort
+        ? translationPort.search(entityType, fields, pattern, localeCandidates)
+        : Promise.resolve([]);
 
 /**
  * The locale chain a resolver query walks, most specific first: the exact tag, its base language,

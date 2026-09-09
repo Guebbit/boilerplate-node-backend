@@ -329,6 +329,38 @@ const resolveEntityFields = async (
 };
 
 /**
+ * Every entity whose translated `fields` match a search pattern, in the caller's locale chain —
+ * the query free-text search unions with a product's own (fallback-language) match, so searching
+ * in Italian finds a product whose Italian row is the only place the word appears.
+ *
+ * `pattern` arrives already built — `toSearchPattern` from `@infrastructure/persistence/search`,
+ * the same escaping every other free-text filter in the app uses — so this file never touches raw
+ * caller input.
+ *
+ * @returns entity ids, deduplicated; an id can match through more than one locale in the chain
+ */
+const findEntityIdsByFieldMatch = async (
+    entityType: string,
+    fields: readonly string[],
+    pattern: string,
+    localeCandidates: string[]
+): Promise<string[]> => {
+    const rows = await translationModel
+        .find({
+            entityType,
+            locale: { $in: localeCandidates },
+            $or: fields.map((field) => ({
+                [`fields.${field}`]: { $regex: pattern, $options: 'i' }
+            }))
+        })
+        .select({ entityId: 1, _id: 0 })
+        .lean<{ entityId: string }[]>()
+        .exec();
+
+    return [...new Set(rows.map((row) => row.entityId))];
+};
+
+/**
  * A stable digest of a fields map, for {@link TranslationDocument.sourceDigest}.
  *
  * Keys are sorted before hashing: `fields` is written and read as a plain object with no
@@ -489,6 +521,12 @@ export const translationRepository: Repository<TranslationDocument> & {
         entityIds: string[],
         localeCandidates: string[]
     ) => Promise<Map<string, TranslationFields>>;
+    findEntityIdsByFieldMatch: (
+        entityType: string,
+        fields: readonly string[],
+        pattern: string,
+        localeCandidates: string[]
+    ) => Promise<string[]>;
     upsertEntityLocale: (
         entityType: string,
         entityId: string,
@@ -510,6 +548,7 @@ export const translationRepository: Repository<TranslationDocument> & {
     findEntityTranslations,
     findEntityLocale,
     resolveEntityFields,
+    findEntityIdsByFieldMatch,
     upsertEntityLocale,
     removeEntityLocale,
     removeEntityTranslations,

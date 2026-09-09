@@ -39,11 +39,13 @@ registerLocaleOverrideProvider(() => localeService.readApiOverrides());
 /*
  * This module's implementation of the translation port, registered at import time the same way —
  * `resolve` is what a read-path decorator batches a page against, `removeAll` is what a product's
- * HARD delete calls to take its translations with it in the same operation.
+ * HARD delete calls to take its translations with it in the same operation, and `search` is what
+ * a free-text search unions with an entity's own (fallback-language) match.
  */
 registerTranslationPort({
     resolve: translationRepository.resolveEntityFields,
-    removeAll: translationRepository.removeEntityTranslations
+    removeAll: translationRepository.removeEntityTranslations,
+    search: translationRepository.findEntityIdsByFieldMatch
 });
 
 /** This module's manifest entry: routes and its own locales. */

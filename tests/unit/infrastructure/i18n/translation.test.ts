@@ -1,24 +1,29 @@
 /**
- * The translation port: the register/resolve/remove trio, and the locale-candidate chain a
- * resolver query walks.
+ * The translation port: register/resolve/remove/search, the locale-candidate chain a resolver
+ * query walks, and `applyTranslations` — the overlay a read path runs on an already wire-shaped
+ * page.
  *
  * Mirrors `overrides.test.ts` in spirit — unregistered has to be a safe, ordinary state, since a
  * unit test that never imports `modules/locales` must not throw resolving a product's title.
  */
 import {
+    applyTranslations,
     localeCandidatesFor,
     registerTranslationPort,
     removeTranslations,
     resolveTranslations,
+    runWithLocale,
+    searchTranslatedEntityIds,
     type TranslationPort
 } from '@infrastructure/i18n';
 
 const ORIGINAL_FALLBACK = process.env.NODE_FALLBACK_LOCALE;
 
-/** A port double whose two methods are jest mocks by default, overridable per test. */
+/** A port double whose methods are jest mocks by default, overridable per test. */
 const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => ({
     resolve: jest.fn().mockResolvedValue(new Map()),
     removeAll: jest.fn().mockResolvedValue(0),
+    search: jest.fn().mockResolvedValue([]),
     ...overrides
 });
 
@@ -80,6 +85,32 @@ describe('removeTranslations', () => {
     });
 });
 
+describe('searchTranslatedEntityIds', () => {
+    it('resolves to an empty list when no port is registered', async () => {
+        await expect(
+            searchTranslatedEntityIds('product', ['title'], 'bed', ['en'])
+        ).resolves.toEqual([]);
+    });
+
+    it('delegates to the registered port with exactly what it was given', async () => {
+        const port = fakePort({ search: jest.fn().mockResolvedValue(['p1', 'p2']) });
+        registerTranslationPort(port);
+
+        const result = await searchTranslatedEntityIds(
+            'product',
+            ['title', 'description'],
+            'cuccia',
+            ['it', 'en']
+        );
+
+        expect(port.search).toHaveBeenCalledWith('product', ['title', 'description'], 'cuccia', [
+            'it',
+            'en'
+        ]);
+        expect(result).toEqual(['p1', 'p2']);
+    });
+});
+
 describe('localeCandidatesFor', () => {
     beforeEach(() => {
         process.env.NODE_FALLBACK_LOCALE = 'en';
@@ -101,5 +132,53 @@ describe('localeCandidatesFor', () => {
         process.env.NODE_FALLBACK_LOCALE = 'pt-BR';
 
         expect(localeCandidatesFor('pt-BR')).toEqual(['pt-BR', 'pt']);
+    });
+});
+
+describe('applyTranslations', () => {
+    it('returns the items unchanged when the batch is empty', async () => {
+        await expect(applyTranslations('product', [])).resolves.toEqual([]);
+    });
+
+    it('returns the items unchanged when nothing is registered', async () => {
+        const items = [{ id: 'p1', title: 'Bed' }];
+
+        await expect(applyTranslations('product', items)).resolves.toEqual(items);
+    });
+
+    it('overlays a resolved field onto its matching item, by id', async () => {
+        registerTranslationPort(
+            fakePort({ resolve: () => Promise.resolve(new Map([['p1', { title: 'Cuccia' }]])) })
+        );
+        const items = [
+            { id: 'p1', title: 'Bed' },
+            { id: 'p2', title: 'Bowl' }
+        ];
+
+        const result = await runWithLocale('it', () => applyTranslations('product', items));
+
+        expect(result).toEqual([
+            { id: 'p1', title: 'Cuccia' },
+            { id: 'p2', title: 'Bowl' }
+        ]);
+    });
+
+    it('leaves an item with no matching row unchanged, by reference', async () => {
+        registerTranslationPort(fakePort({ resolve: () => Promise.resolve(new Map()) }));
+        const item = { id: 'p1', title: 'Bed' };
+
+        const [result] = await applyTranslations('product', [item]);
+
+        expect(result).toBe(item);
+    });
+
+    it('resolves against the ambient locale, base and fallback', async () => {
+        process.env.NODE_FALLBACK_LOCALE = 'en';
+        const resolve = jest.fn().mockResolvedValue(new Map());
+        registerTranslationPort(fakePort({ resolve }));
+
+        await runWithLocale('it-CH', () => applyTranslations('product', [{ id: 'p1' }]));
+
+        expect(resolve).toHaveBeenCalledWith('product', ['p1'], ['it-CH', 'it', 'en']);
     });
 });

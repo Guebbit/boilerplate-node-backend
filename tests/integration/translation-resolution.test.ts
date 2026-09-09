@@ -105,3 +105,78 @@ describe('GET /products resolves a whole page in one batched query', () => {
         expect(byId.get(String(untranslated._id))).toBe('Dog Bowl');
     });
 });
+
+describe('free-text search follows the caller’s locale', () => {
+    it('finds a product by its Italian translation, searching a word absent from its own column', async () => {
+        await givenLocale('it');
+        const product = await createProduct({ title: 'Dog Bed', description: 'A soft bed' });
+        await givenTranslation(String(product._id), 'it', 'Cuccia');
+
+        const response = await api()
+            .get('/products')
+            .query({ text: 'cuccia' })
+            .set('Accept-Language', 'it');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.items[0].id).toBe(String(product._id));
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('still reaches a product through its own column when it has no translation row', async () => {
+        const product = await createProduct({ title: 'Dog Bed' });
+
+        const response = await api()
+            .get('/products')
+            .query({ text: 'Dog Bed' })
+            .set('Accept-Language', 'it');
+
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.items[0].id).toBe(String(product._id));
+    });
+
+    it('unions rather than intersects: an own-column match and a translated match both return', async () => {
+        await givenLocale('it');
+        const bySourceColumn = await createProduct({ title: 'Cuccia' }); // authored in Italian text by coincidence
+        const byTranslation = await createProduct({ title: 'Dog Bed' });
+        await givenTranslation(String(byTranslation._id), 'it', 'Cuccia');
+
+        const response = await api()
+            .get('/products')
+            .query({ text: 'Cuccia' })
+            .set('Accept-Language', 'it');
+
+        const ids = (response.body.data.items as { id: string }[]).map(({ id }) => id).toSorted();
+        expect(ids).toEqual([String(bySourceColumn._id), String(byTranslation._id)].toSorted());
+    });
+
+    it('does not match a product outside the search term at all', async () => {
+        await givenLocale('it');
+        const match = await createProduct({ title: 'Dog Bed' });
+        const other = await createProduct({ title: 'Cat Tower' });
+        await givenTranslation(String(match._id), 'it', 'Cuccia');
+        await givenTranslation(String(other._id), 'it', 'Torre per gatti');
+
+        const response = await api()
+            .get('/products')
+            .query({ text: 'cuccia' })
+            .set('Accept-Language', 'it');
+
+        const ids = (response.body.data.items as { id: string }[]).map(({ id }) => id);
+        expect(ids).toEqual([String(match._id)]);
+    });
+
+    it('the title= filter unions the same way text does', async () => {
+        await givenLocale('it');
+        const product = await createProduct({ title: 'Dog Bed' });
+        await givenTranslation(String(product._id), 'it', 'Cuccia');
+
+        const response = await api()
+            .get('/products')
+            .query({ title: 'cuccia' })
+            .set('Accept-Language', 'it');
+
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.items[0].id).toBe(String(product._id));
+    });
+});
