@@ -5,41 +5,31 @@
  * `@infrastructure/i18n` on purpose.
  */
 
-import { Types } from 'mongoose';
+import type { Types } from 'mongoose';
 import { localeCandidatesFor, resolveTranslations, runWithLocale } from '@infrastructure/i18n';
-
-/**
- * Mongoose's hydrated documents carry `toObject()`; a lean read like
- * `productRepository.findByIdRaw`'s result is already plain data with no such method. Narrows the
- * compiler's view of `T` — which types both shapes as the same hydrated document, a lie
- * `findByIdRaw`'s own docblock explains — to whichever the runtime actually handed us, so a
- * snapshot never accidentally embeds Mongoose document machinery (nested subdocuments, virtuals)
- * instead of plain data.
- */
-const toPlainRecord = <T extends { _id: Types.ObjectId }>(product: T): T => {
-    // Narrows past a type the compiler treats as always-hydrated but sometimes isn't — see above.
-    const maybeDocument = product as T & { toObject?: () => T };
-    return typeof maybeDocument.toObject === 'function' ? maybeDocument.toObject() : product;
-};
 
 /**
  * Resolves each product's translatable fields (`title`/`description`) into `locale`, ready to
  * freeze into an order line snapshot.
+ *
+ * Takes plain objects, not hydrated documents: `{ ...plain, ...fields }` below only overlays the
+ * translated fields correctly on real own properties, which a Mongoose document does not expose
+ * the way a plain object does. `productRepository.findByIdRaw`'s `Lean<ProductDocument>` already
+ * satisfies this; a caller holding a hydrated document (e.g. from `populate()`) must call
+ * `.toObject()` — never `.toJSON()`, which turns `_id` into a string `id` and would make Mongoose
+ * mint a FRESH `_id` when the result is assigned into `orderLineProductSchema`'s embedded path,
+ * silently breaking `orderRepository.search`'s `productId` filter (`items.product._id`, see
+ * `../repository.ts`) — before calling this.
  *
  * Binds `locale` explicitly with `runWithLocale` rather than reading the ambient one: order
  * creation resolves the BUYER's stored or requested locale, which can differ from whatever the
  * current request negotiated — out-of-band work must bind, not read ambient context. See
  * `docs/tools/i18n.md`.
  *
- * `.toObject()`, never `.toJSON()`: a `toJSON()`'d document turns `_id` into a string `id`, and
- * assigning that into `orderLineProductSchema`'s embedded path would make Mongoose mint a FRESH
- * `_id` instead of preserving the product's own — silently breaking `orderRepository.search`'s
- * `productId` filter, which matches on `items.product._id` (see `../repository.ts`).
- *
  * @param locale - the language to resolve into, already known by the caller
- * @param products - the catalogue rows about to be embedded as order lines
+ * @param products - the catalogue rows about to be embedded as order lines, already plain
  * @returns the same products, each with `title`/`description` overlaid in `locale` where a
- *   translation row exists; unchanged (but still plain) otherwise
+ *   translation row exists; unchanged otherwise
  */
 export const resolveSnapshotProducts = <T extends { _id: Types.ObjectId }>(
     locale: string,
@@ -52,9 +42,8 @@ export const resolveSnapshotProducts = <T extends { _id: Types.ObjectId }>(
             localeCandidatesFor(locale)
         ).then((resolved) =>
             products.map((product) => {
-                const plain = toPlainRecord(product);
                 const fields = resolved.get(String(product._id));
-                return fields ? { ...plain, ...fields } : plain;
+                return fields ? { ...product, ...fields } : product;
             })
         )
     );

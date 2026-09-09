@@ -6,6 +6,7 @@
 
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import type { Lean } from '@infrastructure/persistence/create-repository';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 
@@ -31,7 +32,7 @@ export const detachUserId = (userId: string): Promise<void> =>
  *
  * @param userId - the caller's own id
  */
-export const findOwnPayments = (userId: string): Promise<PaymentDocument[]> =>
+export const findOwnPayments = (userId: string): Promise<Lean<PaymentDocument>[]> =>
     // `limit` well past `findAll`'s own 1000-row default — an export answers "all of it", not a
     // page of it.
     paymentRepository.findAll(paymentRepository.ownerScope(userId), { limit: 100_000 });

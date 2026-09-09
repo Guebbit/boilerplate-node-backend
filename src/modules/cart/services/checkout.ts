@@ -17,6 +17,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
+import type { Lean } from '@infrastructure/persistence/create-repository';
 import {
     orderRepository,
     orderService,
@@ -26,6 +27,7 @@ import {
     sumLineItems,
     type OrderDocument
 } from '@modules/orders';
+import type { ProductDocument } from '@modules/products';
 import { userRepository } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
 import { addressForCheckout, type AddressItem } from '@modules/account';
@@ -171,9 +173,14 @@ const runCheckout = async (
 
     // Resolved into the buyer's language only now every check has passed — translation must
     // never gate a purchase, so it runs strictly after the stock/shipping verdicts above.
+    // `.toObject()`: `resolveSnapshotProducts` wants a plain object, and `product` here is a
+    // hydrated document from `readCartLines`'s `populate()` — see that function's own docblock.
+    // Cast, not inferred: `ProductDocument`'s untyped `DocType` generic makes Mongoose's own
+    // `toObject()` overload resolve to `any`; `Lean<ProductDocument>` is the plain shape it
+    // actually returns at runtime.
     const resolvedProducts = await resolveSnapshotProducts(
         buyerLocale,
-        joined.map(({ product }) => product)
+        joined.map(({ product }) => product.toObject() as Lean<ProductDocument>)
     );
     const orderItems = joined.map(({ quantity }, index) => ({
         // Same array, same order as `resolvedProducts` — `resolveSnapshotProducts` maps 1:1.

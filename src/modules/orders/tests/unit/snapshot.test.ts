@@ -2,7 +2,9 @@
  * `resolveSnapshotProducts` — the buyer-language resolution an order line snapshot freezes before
  * it's embedded (`../../services/snapshot.ts`). A unit test: a fake `TranslationPort` stands in
  * for `@modules/locales`, so this proves the fallback-chain wiring, the explicit-locale binding,
- * and the `_id`-preservation contract without a database.
+ * and the `_id`-preservation contract without a database. Every product passed in here is already
+ * plain — the function's own contract now, not something it detects — so there is nothing to test
+ * about a hydrated document reaching it.
  */
 
 import { Types } from 'mongoose';
@@ -84,32 +86,5 @@ describe('resolveSnapshotProducts', () => {
 
         expect(result._id).toBe(id);
         expect(result._id).toBeInstanceOf(Types.ObjectId);
-    });
-
-    it('calls `.toObject()` on a hydrated document rather than spreading its Mongoose machinery raw', async () => {
-        const id = new Types.ObjectId();
-        registerTranslationPort(fakePort());
-        const toObject = jest.fn().mockReturnValue({ _id: id, title: 'Dog Bed', price: 10 });
-
-        const [result] = await resolveSnapshotProducts('it', [
-            { _id: id, title: 'ignored-if-toObject-is-called', price: 0, toObject }
-        ]);
-
-        expect(toObject).toHaveBeenCalled();
-        expect(result.title).toBe('Dog Bed');
-    });
-
-    it('leaves an already-plain record (a lean read, with no `.toObject`) alone', async () => {
-        // `productRepository.findByIdRaw` returns exactly this shape: lean, plain, no document
-        // methods — the case `.toObject()` would throw on if called unconditionally.
-        const id = new Types.ObjectId();
-        registerTranslationPort(fakePort());
-
-        const [result] = await resolveSnapshotProducts('it', [
-            { _id: id, title: 'Dog Bed', price: 10 }
-        ]);
-
-        expect(result.title).toBe('Dog Bed');
-        expect(result._id).toBe(id);
     });
 });

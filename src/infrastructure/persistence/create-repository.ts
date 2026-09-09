@@ -12,6 +12,15 @@
 
 import { Types } from 'mongoose';
 import type { Model, Document, QueryFilter, SaveOptions } from 'mongoose';
+
+/**
+ * What `.lean()` actually hands back: `TDocument`'s own fields, none of `Document`'s instance
+ * machinery (`save`, `toObject`, `isNew`, …) and no `id` virtual — `.lean()` skips virtuals, so a
+ * lean read never has one. `_id` is restored explicitly: `Document` declares it too, so the
+ * `Omit` would otherwise drop it along with everything else `Document` owns.
+ */
+export type Lean<TDocument extends Document> = Omit<TDocument, keyof Document | 'id'> &
+    Pick<TDocument, '_id'>;
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -182,9 +191,12 @@ export interface Repository<TDocument extends Document> {
      * this deliberately skips `normalize`. So does `findAll`; `search` is the only read that
      * returns serialized output.
      */
-    findByIdRaw: (id: string) => Promise<TDocument | null>;
+    findByIdRaw: (id: string) => Promise<Lean<TDocument> | null>;
     /** Fetch a filtered, sorted, paginated list as lean objects — **not** normalized. */
-    findAll: (where?: QueryFilter<TDocument>, options?: FindAllOptions) => Promise<TDocument[]>;
+    findAll: (
+        where?: QueryFilter<TDocument>,
+        options?: FindAllOptions
+    ) => Promise<Lean<TDocument>[]>;
     /** Count the documents matching a filter. */
     count: (where?: QueryFilter<TDocument>) => Promise<number>;
     /**
@@ -251,25 +263,22 @@ export function createRepository<TDocument extends Document>(
         mongooseModel.findOne(where).exec();
 
     /** Lean and untransformed, so the `_id` survives — for embedded snapshots. */
-    const findByIdRaw = (id: string): Promise<TDocument | null> =>
-        mongooseModel.findById(id).lean<TDocument | null>().exec();
+    const findByIdRaw = (id: string): Promise<Lean<TDocument> | null> =>
+        mongooseModel.findById(id).lean<Lean<TDocument> | null>().exec();
 
     /**
-     * Filtered, sorted, paginated list.
-     *
-     * `.lean<TDocument[]>()` is the `.lean()` lie made explicit: these are plain objects typed
-     * as hydrated documents, and they are NOT normalized — `search()` is the path that also
-     * normalizes.
+     * Filtered, sorted, paginated list. Plain objects, and NOT normalized — `search()` is the
+     * path that also normalizes.
      */
     const findAll = (
         where: QueryFilter<TDocument> = {},
         // `sort` defaults to `DEFAULT_SORT` because this applies `skip`, and a non-unique sort
         // makes which documents a page contains undefined.
         { sort = DEFAULT_SORT, skip = 0, limit = FIND_ALL_LIMIT }: FindAllOptions = {}
-    ): Promise<TDocument[]> =>
+    ): Promise<Lean<TDocument>[]> =>
         mongooseModel
             .find({ ...where })
-            .lean<TDocument[]>()
+            .lean<Lean<TDocument>[]>()
             // eslint-disable-next-line unicorn/no-array-sort -- Mongoose's Query#sort, not Array#sort
             .sort(sort)
             .skip(skip)
