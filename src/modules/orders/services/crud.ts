@@ -20,6 +20,7 @@ import {
 } from '@infrastructure/http/response';
 import { productRepository } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
+import { userRepository } from '@modules/users';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -154,9 +155,12 @@ export const create = async (
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     // The whole language chain — both the snapshot each line freezes and, further down, the
-    // confirmation email — decided once so the two cannot disagree. `context.locale` is the caller's
-    // own: an admin-created order has no recipient record, only a supplied address.
-    const buyerLocale = context.locale ?? getDefaultLocale();
+    // confirmation email — decided once so the two cannot disagree. The BUYER's stored language,
+    // never the caller's: this endpoint lets an admin place an order for someone else, and
+    // `context.locale` there is the admin's own UI language, not the recipient's. Same rule and
+    // same lookup as `@modules/cart`'s checkout, so the two creation paths cannot diverge.
+    const buyer = await userRepository.findById(userId);
+    const buyerLocale = buyer?.locale ?? getDefaultLocale();
 
     // One rule call, two outcomes. `Promise.all([])` settles without a query, so an empty basket
     // still costs no round trip. The rule is in `domain/rules.ts`; mapping it to a status code

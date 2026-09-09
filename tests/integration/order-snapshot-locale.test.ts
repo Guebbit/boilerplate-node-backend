@@ -43,10 +43,13 @@ const givenTranslation = (
 
 const asSuccess = (result: unknown) => result as ResponseSuccess<OrderDocument>;
 
-describe('orderService.create freezes the snapshot in the caller-supplied buyer locale', () => {
-    it('embeds the Italian title/description and records the frozen locale', async () => {
+describe("orderService.create freezes the snapshot in the buyer's stored locale", () => {
+    it("embeds the Italian title/description from `user.locale`, over the caller's own", async () => {
+        // The admin path: an English-speaking operator placing an order for an Italian customer.
+        // The caller's locale is deliberately the WRONG answer here — if it ever wins again, the
+        // customer is mailed a receipt in a language they never chose, frozen beyond repair.
         await givenLocale('it');
-        const user = await createUser();
+        const user = await createUser({ locale: 'it' });
         const product = await createProduct({ title: 'Dog Bed', description: 'A soft bed' });
         await givenTranslation(String(product._id), 'it', {
             title: 'Cuccia',
@@ -57,7 +60,7 @@ describe('orderService.create freezes the snapshot in the caller-supplied buyer 
             String(user._id),
             user.email,
             [{ productId: String(product._id), quantity: 1 }],
-            { ...testCallerContext, locale: 'it' }
+            { ...testCallerContext, locale: 'en' }
         );
 
         const order = asSuccess(result).data!;
@@ -69,15 +72,15 @@ describe('orderService.create freezes the snapshot in the caller-supplied buyer 
         expect(String(order.items[0].product._id)).toBe(String(product._id));
     });
 
-    it('falls back to the source text, still framed as the caller-supplied locale', async () => {
-        const user = await createUser();
+    it("falls back to the source text, still framed as the buyer's locale", async () => {
+        const user = await createUser({ locale: 'it' });
         const product = await createProduct({ title: 'Dog Bed' });
 
         const result = await orderService.create(
             String(user._id),
             user.email,
             [{ productId: String(product._id), quantity: 1 }],
-            { ...testCallerContext, locale: 'it' }
+            { ...testCallerContext, locale: 'en' }
         );
 
         const order = asSuccess(result).data!;
