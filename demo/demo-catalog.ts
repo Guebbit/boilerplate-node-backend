@@ -7,10 +7,10 @@
  * randomness than a test file does. `./products` attaches an id and an image to each row; this
  * file only knows words.
  *
- * Animal × product-type × tier — a pet-supply retailer's catalogue, in plain professional
- * copy. `FILLER_IMAGE_ROLE_KEYS` is a fixed pool independent of that grid's size: growing it
- * (more animals, more types, more tiers) never requires downloading a new photo, it only means
- * more rows share the ones `npm run seed:images` already fetched.
+ * Animal × product-type × tier — a pet-supply retailer's catalogue, in plain professional copy,
+ * English and Italian. `FILLER_IMAGE_ROLE_KEYS` is a fixed pool independent of that grid's size:
+ * growing it (more animals, more types, more tiers) never requires downloading a new photo, it
+ * only means more rows share the ones `npm run seed:images` already fetched.
  */
 
 /** The image roles `npm run seed:images` populated under this key — see
@@ -25,16 +25,19 @@ export const FILLER_IMAGE_ROLE_KEYS: string[] = Array.from(
 interface AnimalLine {
     name: string;
     slug: string;
+    /** The Italian catalogue's counterpart — plural, since every template needs "per i
+     * proprietari di {animali}", never the singular. */
+    it: { namePlural: string };
 }
 
 /** The six species the grid is built over — one axis of the generated catalogue. */
 const ANIMALS: AnimalLine[] = [
-    { name: 'Dog', slug: 'dogs' },
-    { name: 'Cat', slug: 'cats' },
-    { name: 'Rabbit', slug: 'rabbits' },
-    { name: 'Bird', slug: 'birds' },
-    { name: 'Reptile', slug: 'reptiles' },
-    { name: 'Small Animal', slug: 'small-animals' }
+    { name: 'Dog', slug: 'dogs', it: { namePlural: 'Cani' } },
+    { name: 'Cat', slug: 'cats', it: { namePlural: 'Gatti' } },
+    { name: 'Rabbit', slug: 'rabbits', it: { namePlural: 'Conigli' } },
+    { name: 'Bird', slug: 'birds', it: { namePlural: 'Uccelli' } },
+    { name: 'Reptile', slug: 'reptiles', it: { namePlural: 'Rettili' } },
+    { name: 'Small Animal', slug: 'small-animals', it: { namePlural: 'Piccoli Animali' } }
 ];
 
 /** One product line, generic enough to apply sensibly across every {@link ANIMALS} entry. */
@@ -45,6 +48,9 @@ interface ProductType {
     blurb: string;
     /** Pre-tier price, in whole currency units. */
     basePrice: number;
+    /** The Italian catalogue's counterpart — `name` is gender-neutral in how {@link TIERS}
+     * combines it in a title, `blurb` completes "...proprietari di {animali}: {blurb}.". */
+    it: { name: string; blurb: string };
 }
 
 /** The product lines every species gets — the second axis of the grid. */
@@ -53,43 +59,71 @@ const PRODUCT_TYPES: ProductType[] = [
         name: 'Bed',
         slug: 'bed',
         blurb: 'a supportive resting surface designed for daily use',
-        basePrice: 60
+        basePrice: 60,
+        it: {
+            name: 'Cuccia',
+            blurb: 'una superficie di riposo di supporto pensata per un uso quotidiano'
+        }
     },
     {
         name: 'Carrier',
         slug: 'carrier',
         blurb: 'a secure enclosure for transport and travel',
-        basePrice: 70
+        basePrice: 70,
+        it: {
+            name: 'Trasportino',
+            blurb: 'un alloggiamento sicuro per il trasporto e i viaggi'
+        }
     },
     {
         name: 'Feeding Bowl',
         slug: 'feeding-bowl',
         blurb: 'a stable, easy-to-clean feeding solution',
-        basePrice: 15
+        basePrice: 15,
+        it: {
+            name: 'Ciotola per Alimenti',
+            blurb: "una soluzione per l'alimentazione stabile e facile da pulire"
+        }
     },
     {
         name: 'Water Dispenser',
         slug: 'water-dispenser',
         blurb: 'a leak-resistant system for a constant water supply',
-        basePrice: 20
+        basePrice: 20,
+        it: {
+            name: "Erogatore d'Acqua",
+            blurb: "un sistema resistente alle perdite per un rifornimento d'acqua costante"
+        }
     },
     {
         name: 'Grooming Kit',
         slug: 'grooming-kit',
         blurb: 'a set of tools for routine coat and nail care',
-        basePrice: 25
+        basePrice: 25,
+        it: {
+            name: 'Kit per la Toelettatura',
+            blurb: 'un set di strumenti per la cura quotidiana del pelo e delle unghie'
+        }
     },
     {
         name: 'Enrichment Toy',
         slug: 'enrichment-toy',
         blurb: 'an interactive item that supports natural behaviour',
-        basePrice: 12
+        basePrice: 12,
+        it: {
+            name: 'Giocattolo Interattivo',
+            blurb: 'un accessorio interattivo che favorisce i comportamenti naturali'
+        }
     },
     {
         name: 'Health Supplement',
         slug: 'health-supplement',
         blurb: 'a formulation intended to support everyday wellbeing',
-        basePrice: 18
+        basePrice: 18,
+        it: {
+            name: 'Integratore per la Salute',
+            blurb: 'una formulazione pensata per il benessere quotidiano'
+        }
     }
 ];
 
@@ -100,6 +134,9 @@ interface Tier {
     priceMultiplier: number;
     /** Completes "{qualifier} {animal} owners: ...". */
     qualifier: string;
+    /** The Italian catalogue's counterpart. `qualifier` ends in "per i proprietari di", so the
+     * template only has to append the animal and the colon — see {@link FILLER_PRODUCTS}. */
+    it: { name: string; qualifier: string };
 }
 
 /** The quality tiers each species/type pair is offered at — the third axis, and the price dial. */
@@ -108,21 +145,42 @@ const TIERS: Tier[] = [
         name: 'Standard',
         slug: 'standard',
         priceMultiplier: 1,
-        qualifier: 'A dependable, no-frills option for'
+        qualifier: 'A dependable, no-frills option for',
+        it: {
+            name: 'Standard',
+            qualifier: "Un'opzione affidabile e senza fronzoli per i proprietari di"
+        }
     },
     {
         name: 'Premium',
         slug: 'premium',
         priceMultiplier: 1.6,
-        qualifier: 'A higher-grade option, built for'
+        qualifier: 'A higher-grade option, built for',
+        it: {
+            name: 'Premium',
+            qualifier: "Un'opzione di qualità superiore, pensata per i proprietari di"
+        }
     },
     {
         name: 'Heavy-Duty',
         slug: 'heavy-duty',
         priceMultiplier: 1.3,
-        qualifier: 'Reinforced construction intended for demanding, everyday use by'
+        qualifier: 'Reinforced construction intended for demanding, everyday use by',
+        it: {
+            // Invariant across the type nouns' genders (bed/carrier/bowl/... are a mix of
+            // masculine and feminine), unlike an inflected adjective would be.
+            name: 'Extra Resistente',
+            qualifier:
+                'Una struttura rinforzata, pensata per un uso quotidiano e intenso, per i proprietari di'
+        }
     }
 ];
+
+/** One locale's title/description for a filler row. */
+interface FillerCopy {
+    title: string;
+    description: string;
+}
 
 /** One filler row's fields, before `./products` attaches an id and an image. */
 export interface FillerProduct {
@@ -134,6 +192,10 @@ export interface FillerProduct {
     onHand: number;
     categories: string[];
     tags: string[];
+    /** Both locales' copy for the write surface's translation batch (see `./products`). `en` is
+     * built from the same template call as the flat `title`/`description` above, so the two can
+     * never drift apart. */
+    translations: { en: FillerCopy; it: FillerCopy };
 }
 
 /**
@@ -144,15 +206,27 @@ export interface FillerProduct {
  */
 export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalIndex) =>
     PRODUCT_TYPES.flatMap((type, typeIndex) =>
-        TIERS.map((tier, tierIndex) => ({
-            key: `${animal.slug}-${type.slug}-${tier.slug}`,
-            title: `${tier.name} ${animal.name} ${type.name}`,
-            description: `${tier.qualifier} ${animal.name.toLowerCase()} owners: ${type.blurb}.`,
-            price: Math.round(type.basePrice * tier.priceMultiplier) + animalIndex * 2,
-            onHand: Math.max(5, 60 - tierIndex * 15 - typeIndex * 3 + animalIndex * 2),
-            categories: [animal.slug],
-            tags: [type.slug, tier.slug]
-        }))
+        TIERS.map((tier, tierIndex) => {
+            const en: FillerCopy = {
+                title: `${tier.name} ${animal.name} ${type.name}`,
+                description: `${tier.qualifier} ${animal.name.toLowerCase()} owners: ${type.blurb}.`
+            };
+            const it: FillerCopy = {
+                title: `${type.it.name} ${tier.it.name} per ${animal.it.namePlural}`,
+                description: `${tier.it.qualifier} ${animal.it.namePlural.toLowerCase()}: ${type.it.blurb}.`
+            };
+
+            return {
+                key: `${animal.slug}-${type.slug}-${tier.slug}`,
+                title: en.title,
+                description: en.description,
+                price: Math.round(type.basePrice * tier.priceMultiplier) + animalIndex * 2,
+                onHand: Math.max(5, 60 - tierIndex * 15 - typeIndex * 3 + animalIndex * 2),
+                categories: [animal.slug],
+                tags: [type.slug, tier.slug],
+                translations: { en, it }
+            };
+        })
     )
 );
 

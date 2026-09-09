@@ -18,8 +18,17 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { assembleDemoDataset, DEMO_DATA_PATH } from './assemble';
-import { demoModules } from '@demo/index';
+import { seedAllDemoModules } from '@demo/index';
 import { seedAccessModel } from '@kernel/access/seed';
+import { resolveTranslatables } from '@kernel/registry';
+import { setTranslatables } from '@modules/locales/module';
+import { enabledModules } from '../../src/modules';
+
+/* `src/app.ts`'s own two lines, repeated here — see `db/demo/index.ts`'s identical call for why:
+ * importing THE registry registers every module's `@infrastructure/i18n` ports (the translation
+ * port `products.seed()` needs), and `translatables` still needs building from `enabledModules`
+ * and handing in, since `locales` cannot collect its own manifest across the module wall. */
+setTranslatables(resolveTranslatables(enabledModules));
 
 const checkOnly = process.argv.includes('--check');
 
@@ -41,8 +50,9 @@ const run = async (): Promise<number> => {
         await mongoose.connect(process.env.NODE_DB_URI);
         // Same order as the two runtime runners: the shop and its roles before any module's
         // fixtures, because nothing can resolve a caller until there is a shop to be a member of.
+        // `seedAllDemoModules` then runs `locales` before the rest — see its own docblock for why.
         await seedAccessModel();
-        await Promise.all(Object.values(demoModules).map((demoModule) => demoModule.seed()));
+        await seedAllDemoModules();
 
         const assembled = await assembleDemoDataset();
         const committed = existsSync(DEMO_DATA_PATH) ? readFileSync(DEMO_DATA_PATH, 'utf8') : '';

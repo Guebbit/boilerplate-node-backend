@@ -27,8 +27,21 @@ import { start, connection } from '@infrastructure/runtime/database';
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
-import { demoModules } from '@demo/index';
+import { seedAllDemoModules } from '@demo/index';
 import { seedAccessModel } from '@kernel/access/seed';
+import { resolveTranslatables } from '@kernel/registry';
+import { setTranslatables } from '@modules/locales/module';
+import { enabledModules } from '../../src/modules';
+
+/*
+ * `src/app.ts` does both of these the moment it is imported: importing THE registry pulls in
+ * every module's `module.ts`, registering its `@infrastructure/i18n` ports — `locales/module.ts`'s
+ * translation port, which `products.seed()` now needs. That alone registers the port, not the
+ * `translatables` MANIFEST a write validates against; `locales` cannot collect that itself (the
+ * same wall the port is built around), so it is built from `enabledModules` and handed in here too
+ * — this runner starts no server, so it repeats `app.ts`'s two lines rather than importing it whole.
+ */
+setTranslatables(resolveTranslatables(enabledModules));
 
 const reset = process.argv.includes('--reset');
 
@@ -51,20 +64,19 @@ async function seed() {
      * domain: it only walks whatever that table lists. `tests/cross-cutting/seed-conformance.test.ts`
      * refuses an entry left behind after the module it names is deleted.
      *
-     * Concurrent on purpose, and safe to be: no fixture is derived from another fixture's WRITE.
-     * An order embeds a product snapshot built from the catalogue's own fixtures, not read back
-     * from Mongo, and a cart references a user id rather than requiring the user row to exist
-     * first.
+     * Mostly concurrent, and safe to be: no fixture is derived from another fixture's WRITE. An
+     * order embeds a product snapshot built from the catalogue's own fixtures, not read back from
+     * Mongo, and a cart references a user id rather than requiring the user row to exist first.
+     * The one exception — `products` needing `locales`' rows to already exist — is why
+     * `seedAllDemoModules` runs `locales` first rather than joining the batch; see its own
+     * docblock.
      */
     // The shop, the preset roles and the demo memberships first: a module's fixtures may be
     // written in any order, but nothing can resolve a caller until there is a shop to be a member
     // of. Not part of the concurrent batch below for that reason.
     await seedAccessModel();
 
-    const perModule = await Promise.all(
-        Object.values(demoModules).map((demoModule) => demoModule.seed())
-    );
-    const results = perModule.flat();
+    const results = await seedAllDemoModules();
 
     const created = results.filter((result) => result === 'created').length;
 

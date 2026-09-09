@@ -83,9 +83,11 @@ export const demoModules: Readonly<Record<string, DemoModule>> = {
     locales: {
         seed: seedLocalesCollection,
         export: exportSeededLocales,
-        /* Neither row is served raw. `GET /locales` answers a composed capabilities envelope and
-         * `GET /locales/:locale/messages` answers a nested tree built from the flat entries. */
-        shapes: { locales: 'stored', localeEntries: 'stored' }
+        /* None of the three rows is served raw. `GET /locales` answers a composed capabilities
+         * envelope, `GET /locales/:locale/messages` answers a nested tree built from the flat
+         * entries, and a translation row is only ever read resolved into a product's own `title`/
+         * `description`, or as one entry of the admin `GET /translations/{entityType}/{id}` list. */
+        shapes: { locales: 'stored', localeEntries: 'stored', translations: 'stored' }
     },
     orders: {
         seed: seedOrdersCollection,
@@ -112,3 +114,25 @@ export const demoModules: Readonly<Record<string, DemoModule>> = {
         shapes: { wishlists: 'stored' }
     }
 };
+
+/**
+ * Seed every module — `db/demo/index.ts` and `scripts/demo/export-dataset.ts` both call this
+ * instead of their own `Promise.all(Object.values(demoModules).map(...))`, so the ordering fix
+ * lives in exactly one place.
+ *
+ * `locales` MUST finish first, not join the concurrent batch: `products.seed()` writes its rows'
+ * `translations` through `planTranslations`/`writeTranslations`, and `planSlot`
+ * (`@modules/locales/services/translations.ts`) requires every locale in that write — including
+ * the fallback locale itself — to already exist as an ACTIVE row. A `Promise.all` over every
+ * module would race `products` against `locales` writing that row, and lose it as often as not.
+ * No other module reads another module's write, which is what keeps the rest of the table
+ * concurrent.
+ */
+export const seedAllDemoModules = (): Promise<SeedOutcome[]> =>
+    demoModules.locales.seed().then((localeOutcomes) =>
+        Promise.all(
+            Object.entries(demoModules)
+                .filter(([name]) => name !== 'locales')
+                .map(([, demoModule]) => demoModule.seed())
+        ).then((restOutcomes) => [localeOutcomes, ...restOutcomes].flat())
+    );

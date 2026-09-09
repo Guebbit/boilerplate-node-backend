@@ -36,12 +36,13 @@ import {
     CreateUserBody,
     GetAddressesResponse,
     GetCartResponse,
+    GetEntityTranslationsResponse,
     GetOrderByIdResponse,
     GetProductByIdResponse,
     GetUserByIdResponse,
     GetWishlistResponse
 } from '@api/schemas.zod';
-import { listSupportedLocales } from '@infrastructure/i18n';
+import { getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
 import { demoModules } from '@demo/index';
 import dataset from '../../db/demo/demo-data.json';
 import { enabledModules } from '../../src/modules';
@@ -111,6 +112,11 @@ const localeEntrySchema = CreateLocaleEntryResponse.shape.data
 
 const idSchema = GetUserByIdResponse.shape.data.shape.id;
 
+/** One entity's one-locale translation row, as the admin GET's `translations` array element. */
+const translationSchema = GetEntityTranslationsResponse.shape.data.shape.translations.element
+    .required({ createdAt: true, updatedAt: true })
+    .strict();
+
 describe('the exported dataset conforms to the generated contract', () => {
     describe('products', () => {
         it('parse against the generated product schema', () => {
@@ -127,6 +133,36 @@ describe('the exported dataset conforms to the generated contract', () => {
                 1
             );
             expect(collections.products.filter((product) => !product.active)).toHaveLength(1);
+        });
+    });
+
+    describe('translations', () => {
+        it('parse against the generated translation schema', () => {
+            expect(collections.translations.length).toBeGreaterThan(0);
+            for (const translation of collections.translations) {
+                expect(() => translationSchema.parse(translation)).not.toThrow();
+            }
+        });
+
+        it('give every seeded product a fallback-locale row', () => {
+            /* Every locale is a row, no special case for the source one — a product with no
+             * fallback-locale row is one `planTranslations` should have refused to create in the
+             * first place, so a seeded catalogue missing one means the seeder skipped the write
+             * surface's own primitives rather than going through them. */
+            const fallbackLocale = getFallbackLocale();
+            const fallbackRowIds = new Set(
+                collections.translations
+                    .filter(
+                        (translation) =>
+                            translation.entityType === 'product' &&
+                            translation.locale === fallbackLocale
+                    )
+                    .map((translation) => translation.entityId)
+            );
+
+            for (const product of collections.products) {
+                expect(fallbackRowIds).toContain(product.id);
+            }
         });
     });
 

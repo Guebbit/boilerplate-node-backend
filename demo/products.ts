@@ -11,6 +11,10 @@
  * edge cases. Every image comes from `./products-images.generated.json` (`npm run seed:images`) —
  * none is hand-placed. The filler rows share a fixed pool of 20 images by cycling through it
  * (`FILLER_IMAGE_ROLE_KEYS`), so a larger grid never means a new download.
+ *
+ * Every row's `title`/`description` are written twice: once here, flat, as the product document's
+ * own derived index column (what `text`/`title=` search and the stock board's sort read), and once
+ * as a `translations` row per locale — see {@link seedProductsCollection}.
  */
 
 import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './demo-catalog';
@@ -26,6 +30,35 @@ import { makeProduct } from '@modules/products/fixtures';
 import { productModel } from '@modules/products/model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { productRepository } from '@modules/products/repository';
+import {
+    getFallbackLocale,
+    planTranslations,
+    writeTranslations,
+    type TranslationWritePlan
+} from '@infrastructure/i18n';
+import { translationModel } from '@modules/locales/model';
+import { createHash } from 'node:crypto';
+import type { ProductTranslationFields, UpsertTranslationsRequest } from '@types';
+
+/**
+ * Every seeded translation row's `createdAt`/`updatedAt` — fixed, like every other demo
+ * fixture's dates, rather than "whenever the seeder ran". `writeTranslations` goes through
+ * `findOneAndUpdate`, which (schema `timestamps: true`) stamps the real clock; nothing in that
+ * port takes a caller-supplied date, so {@link writeSeedTranslations} overwrites it after the
+ * fact — the same reason `db/demo/demo-data.json` must be byte-stable across re-exports.
+ */
+const SEED_TRANSLATION_TIMESTAMP = new Date('2024-01-01T00:00:00.000Z');
+
+/**
+ * A stable, valid `_id` for one product's one-locale translation row — every OTHER demo fixture
+ * pins its own `_id` ({@link fillerProductId}, `SEED_PRODUCT_IDS`, `demo/locales.ts`'s hex bands),
+ * but `upsertEntityLocale` (the write surface's own primitive) has no caller-supplied-id
+ * parameter at all: it mints one at insert. An MD5 of `(entityId, locale)`, truncated to a valid
+ * 24-hex ObjectId, is deterministic across every reseed without a hand-maintained id table for
+ * 264 rows.
+ */
+const translationSeedId = (entityId: string, locale: string): string =>
+    createHash('md5').update(`product:${entityId}:${locale}`).digest('hex').slice(0, 24);
 
 /**
  * The catalogue ids, named by what each row is for.
@@ -44,6 +77,90 @@ export const SEED_PRODUCT_IDS = {
 } as const;
 
 /**
+ * Each named product's copy, both locales — the single source `namedProducts`' `title`/
+ * `description` and the translation batch below both read from, so the English string is written
+ * once and never duplicated by hand. `barebones` has no `description` in either locale, matching
+ * its deliberately minimal English fixture.
+ */
+const NAMED_PRODUCT_COPY: Record<
+    keyof typeof SEED_PRODUCT_IDS,
+    { en: ProductTranslationFields; it: ProductTranslationFields }
+> = {
+    dogFoodStandard: {
+        en: {
+            title: 'Premium Grain-Free Dog Food, 15kg',
+            description:
+                'A complete, balanced diet formulated for adult dogs, made with real chicken and rice.'
+        },
+        it: {
+            title: 'Crocchette Premium Senza Cereali per Cani, 15kg',
+            description:
+                'Una dieta completa ed equilibrata formulata per cani adulti, con pollo e riso veri.'
+        }
+    },
+    heaterSoftDeleted: {
+        en: {
+            title: '150W Ceramic Heat Emitter',
+            description:
+                'A ceramic heat emitter for reptile terrariums, providing consistent background heat ' +
+                'without light. Discontinued — no longer offered for sale.'
+        },
+        it: {
+            title: 'Lampada Ceramica Riscaldante 150W',
+            description:
+                'Una lampada ceramica riscaldante per terrari di rettili, che fornisce calore di fondo ' +
+                'costante senza luce. Prodotto ritirato — non più in vendita.'
+        }
+    },
+    scratchPostOutOfStock: {
+        en: {
+            title: 'Heavy-Duty Cat Scratching Post',
+            description:
+                'A tall, sisal-wrapped scratching post built to withstand daily use. Currently ' +
+                'unavailable — back in stock soon.'
+        },
+        it: {
+            title: 'Tiragraffi Extra Resistente per Gatti',
+            description:
+                'Un tiragraffi alto, rivestito in sisal, costruito per resistere a un uso quotidiano. ' +
+                'Momentaneamente non disponibile — di nuovo in stock a breve.'
+        }
+    },
+    dogBedPremium: {
+        en: {
+            title: 'Orthopedic Memory Foam Dog Bed',
+            description:
+                'A supportive memory foam bed designed to ease pressure on joints, suitable for ' +
+                'senior and large-breed dogs.'
+        },
+        it: {
+            title: 'Cuccia Ortopedica in Memory Foam',
+            description:
+                'Una cuccia in memory foam di supporto, pensata per alleviare la pressione sulle ' +
+                'articolazioni, adatta a cani anziani e di taglia grande.'
+        }
+    },
+    bundleInactive: {
+        en: {
+            title: 'Rabbit Starter Bundle — Hutch, Feeder & Water Bottle',
+            description:
+                'A complete rabbit housing bundle including hutch, feeder and water bottle. ' +
+                'Temporarily disabled while packaging is updated.'
+        },
+        it: {
+            title: 'Kit di Partenza per Conigli — Gabbia, Mangiatoia e Biberon',
+            description:
+                'Un kit completo per la sistemazione del coniglio, con gabbia, mangiatoia e biberon. ' +
+                "Temporaneamente disattivato durante l'aggiornamento della confezione."
+        }
+    },
+    barebones: {
+        en: { title: 'Universal Small Animal Water Bottle' },
+        it: { title: 'Biberon Universale per Piccoli Animali' }
+    }
+};
+
+/**
  * Six named products, chosen to cover the branches the storefront and repositories actually
  * exercise rather than to look like a shop on their own — `./demo-catalog`'s filler rows are what
  * make the catalogue look like a shop. `categories` is non-empty on every RICH record, since a
@@ -53,9 +170,8 @@ export const SEED_PRODUCT_IDS = {
 const namedProducts = [
     makeProduct({
         id: SEED_PRODUCT_IDS.dogFoodStandard,
-        title: 'Premium Grain-Free Dog Food, 15kg',
-        description:
-            'A complete, balanced diet formulated for adult dogs, made with real chicken and rice.',
+        title: NAMED_PRODUCT_COPY.dogFoodStandard.en.title,
+        description: NAMED_PRODUCT_COPY.dogFoodStandard.en.description,
         price: 68,
         onHand: 30,
         categories: ['dogs', 'food'],
@@ -69,10 +185,8 @@ const namedProducts = [
      */
     makeProduct({
         id: SEED_PRODUCT_IDS.heaterSoftDeleted,
-        title: '150W Ceramic Heat Emitter',
-        description:
-            'A ceramic heat emitter for reptile terrariums, providing consistent background heat ' +
-            'without light. Discontinued — no longer offered for sale.',
+        title: NAMED_PRODUCT_COPY.heaterSoftDeleted.en.title,
+        description: NAMED_PRODUCT_COPY.heaterSoftDeleted.en.description,
         price: 55,
         onHand: 12,
         categories: ['reptiles'],
@@ -87,10 +201,8 @@ const namedProducts = [
      */
     makeProduct({
         id: SEED_PRODUCT_IDS.scratchPostOutOfStock,
-        title: 'Heavy-Duty Cat Scratching Post',
-        description:
-            'A tall, sisal-wrapped scratching post built to withstand daily use. Currently ' +
-            'unavailable — back in stock soon.',
+        title: NAMED_PRODUCT_COPY.scratchPostOutOfStock.en.title,
+        description: NAMED_PRODUCT_COPY.scratchPostOutOfStock.en.description,
         price: 45,
         onHand: 0,
         categories: ['cats'],
@@ -99,10 +211,8 @@ const namedProducts = [
     }),
     makeProduct({
         id: SEED_PRODUCT_IDS.dogBedPremium,
-        title: 'Orthopedic Memory Foam Dog Bed',
-        description:
-            'A supportive memory foam bed designed to ease pressure on joints, suitable for ' +
-            'senior and large-breed dogs.',
+        title: NAMED_PRODUCT_COPY.dogBedPremium.en.title,
+        description: NAMED_PRODUCT_COPY.dogBedPremium.en.description,
         price: 84,
         onHand: 45,
         categories: ['dogs'],
@@ -113,10 +223,8 @@ const namedProducts = [
      * deleted, so from outside these two behave identically while remaining distinct states. */
     makeProduct({
         id: SEED_PRODUCT_IDS.bundleInactive,
-        title: 'Rabbit Starter Bundle — Hutch, Feeder & Water Bottle',
-        description:
-            'A complete rabbit housing bundle including hutch, feeder and water bottle. ' +
-            'Temporarily disabled while packaging is updated.',
+        title: NAMED_PRODUCT_COPY.bundleInactive.en.title,
+        description: NAMED_PRODUCT_COPY.bundleInactive.en.description,
         price: 96,
         onHand: 18,
         categories: ['rabbits', 'bundles'],
@@ -132,7 +240,7 @@ const namedProducts = [
      */
     makeProduct({
         id: SEED_PRODUCT_IDS.barebones,
-        title: 'Universal Small Animal Water Bottle',
+        title: NAMED_PRODUCT_COPY.barebones.en.title,
         price: 9
     })
 ];
@@ -140,20 +248,41 @@ const namedProducts = [
 /**
  * The combinatorial filler rows from `./demo-catalog`, each given an id and an image cycled from
  * the fixed 20-image pool — the grid is far larger than that pool, so rows share photos rather
- * than each needing its own.
+ * than each needing its own. `translations` is excluded from the spread: it isn't a product-schema
+ * path, and {@link PRODUCT_COPY_BY_ID} below keeps it addressable by id for the translation batch.
  */
-const fillerProductRows = FILLER_PRODUCTS.map((product, index) => {
-    const imageRole = FILLER_IMAGE_ROLE_KEYS[index % FILLER_IMAGE_ROLE_KEYS.length];
-
-    return makeProduct({
-        id: fillerProductId(index),
-        ...product,
-        ...productImages[imageRole as keyof typeof productImages]
-    });
-});
+const fillerProductRows = FILLER_PRODUCTS.map(
+    ({ translations: _translations, ...product }, index) =>
+        makeProduct({
+            id: fillerProductId(index),
+            ...product,
+            ...productImages[
+                FILLER_IMAGE_ROLE_KEYS[
+                    index % FILLER_IMAGE_ROLE_KEYS.length
+                ] as keyof typeof productImages
+            ]
+        })
+);
 
 /** Every demo product: the hand-written catalogue first, then the generated filler rows. */
 export const productFixtures = [...namedProducts, ...fillerProductRows];
+
+/**
+ * Every product's bilingual copy, keyed by its seeded id — the named six from
+ * {@link NAMED_PRODUCT_COPY}, the filler rows from `./demo-catalog`'s own `translations` field.
+ * {@link seedProductsCollection} is the only reader.
+ */
+const PRODUCT_COPY_BY_ID: ReadonlyMap<
+    string,
+    { en: ProductTranslationFields; it: ProductTranslationFields }
+> = new Map([
+    ...Object.entries(SEED_PRODUCT_IDS).map(
+        ([name, id]) => [id, NAMED_PRODUCT_COPY[name as keyof typeof SEED_PRODUCT_IDS]] as const
+    ),
+    ...FILLER_PRODUCTS.map(
+        (product, index) => [fillerProductId(index), product.translations] as const
+    )
+]);
 
 /**
  * One demo product by id, or a thrown error naming what's missing.
@@ -170,9 +299,159 @@ export const seedProductById = (productId: string): (typeof productFixtures)[num
     return product;
 };
 
-/** Seed this collection. Declared in `./index`; called by `db/demo/index.ts`. */
+/**
+ * One product's copy, reshaped for `@infrastructure/i18n`'s `plan`/`write` primitives — the
+ * fallback locale keyed by {@link getFallbackLocale} rather than a hardcoded `'en'`, and `it`
+ * fixed, since that is the whole set this dataset seeds today (`./locales` names the rest).
+ * `description` is included only when the locale's copy has one, matching `UpsertTranslationRequestFields`'s
+ * `Record<string, string>` — an explicit `undefined` value would fail that shape.
+ */
+const toUpsertTranslationsRequest = (copy: {
+    en: ProductTranslationFields;
+    it: ProductTranslationFields;
+}): UpsertTranslationsRequest => {
+    const fieldsOf = (entry: ProductTranslationFields): Record<string, string> =>
+        entry.description === undefined
+            ? { title: entry.title }
+            : { title: entry.title, description: entry.description };
+
+    return {
+        [getFallbackLocale()]: { fields: fieldsOf(copy.en) },
+        it: { fields: fieldsOf(copy.it) }
+    };
+};
+
+/** `true` for a validated plan, narrowing a union with a rejection — mirrors the private helper of
+ * the same name in `@modules/products/service.ts`'s `writeCreate`, the primitive this seeder is
+ * standing in for (see {@link seedProductsCollection}'s own docblock for why). */
+const isTranslationPlan = (value: unknown): value is TranslationWritePlan =>
+    typeof value === 'object' && value !== null && 'fallbackLocale' in value;
+
+/**
+ * Replaces each just-written translation row with an identical one under a deterministic
+ * {@link translationSeedId} and {@link SEED_TRANSLATION_TIMESTAMP} — `upsertEntityLocale` (the
+ * write surface's own primitive) has no caller-supplied-id parameter, so a fresh insert's `_id`
+ * and `createdAt` are the real clock, which `db/demo/demo-data.json`'s byte-stability across
+ * reseeds cannot tolerate. `_id` is immutable in MongoDB, so this deletes and reinserts rather
+ * than updating in place; every other field is carried over unchanged from what
+ * `writeTranslations` actually computed (fields, origin, digest), so only the ROW's identity and
+ * timing become deterministic, never its content.
+ */
+const pinSeedTranslationRows = (entityId: string, locales: readonly string[]): Promise<void> =>
+    Promise.all(
+        locales.map((locale) =>
+            translationModel
+                .findOne({ entityType: 'product', entityId, locale })
+                .lean()
+                .exec()
+                .then((row) => {
+                    if (!row) return undefined;
+                    const {
+                        _id: oldId,
+                        createdAt: _createdAt,
+                        updatedAt: _updatedAt,
+                        __v,
+                        ...rest
+                    } = row;
+                    return translationModel
+                        .deleteOne({ _id: oldId })
+                        .exec()
+                        .then(() =>
+                            new translationModel({
+                                ...rest,
+                                _id: translationSeedId(entityId, locale),
+                                createdAt: SEED_TRANSLATION_TIMESTAMP,
+                                updatedAt: SEED_TRANSLATION_TIMESTAMP
+                            }).save({ timestamps: false })
+                        );
+                })
+        )
+    ).then(() => undefined);
+
+/**
+ * Write one freshly-created product's fallback and Italian rows, through the write surface's own
+ * validate/apply primitives (`planTranslations`/`writeTranslations`) rather than a raw repository
+ * insert — the derived index column on the product document is already correct (it was written by
+ * `upsertById` above, from the same `title`/`description` this batch also carries), this call adds
+ * the `translations` rows a real editor's write would have produced alongside it.
+ *
+ * Two follow-up fixups undo timestamp side effects `writeTranslations` has no reason to avoid in
+ * production but that break `db/demo/demo-data.json`'s byte-stability: {@link pinSeedTranslationRows}
+ * for the rows themselves, and re-pinning the PRODUCT's own `updatedAt` — `writePlannedTranslations`
+ * re-touches it (the derived-column write) with an ordinary, timestamps-enabled `updateOne`,
+ * silently bumping it past the fixed value `upsertById` had just set.
+ *
+ * @param productUpdatedAt - the fixture's own `updatedAt` ({@link identityOf}'s default is its
+ *   `createdAt`), restored after the derived-column write bumps it
+ * @throws {Error} if the batch fails to validate — a bug in the fixture data, never a caller input
+ */
+const writeSeedTranslations = (productId: string, productUpdatedAt: Date): Promise<void> => {
+    const copy = PRODUCT_COPY_BY_ID.get(productId);
+    if (!copy) throw new Error(`seed fixtures: no translation copy for product ${productId}`);
+
+    return planTranslations('product', toUpsertTranslationsRequest(copy)).then((plan) => {
+        if (!isTranslationPlan(plan))
+            throw new Error(
+                `seed fixtures: product ${productId} translations failed to plan: ${JSON.stringify(plan)}`
+            );
+
+        const upsertedLocales = plan.planned
+            .filter((slot) => slot.kind === 'upsert')
+            .map((slot) => slot.locale);
+
+        // `translatedBy: undefined` — this is a system seed, not a human translator's write.
+        return writeTranslations('product', productId, plan, undefined)
+            .then(() => pinSeedTranslationRows(productId, upsertedLocales))
+            .then(() =>
+                productModel
+                    .updateOne(
+                        { _id: productId },
+                        { $set: { updatedAt: productUpdatedAt } },
+                        { timestamps: false }
+                    )
+                    .exec()
+            )
+            .then(() => undefined);
+    });
+};
+
+/**
+ * Seed this collection. Declared in `./index`; called by `db/demo/index.ts`.
+ *
+ * Each fixture writes twice: {@link upsertById} for the product document (its `title`/
+ * `description` are the derived index column, in the fallback locale), then
+ * {@link writeSeedTranslations} for its `translations` rows — only when the product was actually
+ * `'created'`, so a re-run against an already-seeded database does not redo the translation write
+ * for a row `upsertById` itself skipped.
+ *
+ * Goes through `planTranslations`/`writeTranslations` rather than `productService.writeCreate`:
+ * that service validates its body against `zodProductCreateSchema` (generated from `POST
+ * /products`), which has no `id` field and always mints a fresh one — this dataset needs the
+ * fixture's PINNED id, both for idempotent re-seeding and because `./orders`/`./cart`/`./wishlist`
+ * address specific rows by their known id. `planTranslations`/`writeTranslations` are the same two
+ * primitives that service composes; calling them directly is the closest a seeder with its own id
+ * can get to "the new write surface".
+ *
+ * Depends on `./locales` having already seeded the fallback and `it` locale rows — `db/demo/index.ts`
+ * and `scripts/demo/export-dataset.ts` both seed `locales` before every other module for exactly
+ * this reason.
+ */
 export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(productFixtures.map((product) => upsertById(productRepository, product)));
+    Promise.all(productFixtures.map((product) => upsertById(productRepository, product))).then(
+        (outcomes) =>
+            Promise.all(
+                productFixtures.map((product, index) =>
+                    outcomes[index] === 'created'
+                        ? // `identityOf` (via `makeProduct`) always sets `updatedAt`, defaulting
+                          // it to `createdAt` — the `??` only guards the type, not a real gap.
+                          writeSeedTranslations(
+                              product._id.toString(),
+                              product.updatedAt ?? product.createdAt ?? new Date()
+                          )
+                        : Promise.resolve()
+                )
+            ).then(() => outcomes)
+    );
 
 /**
  * Read the seeded catalogue back as the API serves it — `./index` declares this, and

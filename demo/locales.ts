@@ -1,6 +1,6 @@
 /**
  * @module
- * The dynamic locale tier's slice of the demo dataset — four languages chosen to exercise
+ * The dynamic locale tier's slice of the demo dataset — five languages chosen to exercise
  * every state a language and its entries can be in (see the fixtures below for which).
  * `revision` is stated explicitly since these rows bypass the repository call that
  * normally bumps it.
@@ -8,12 +8,17 @@
 
 import { backendTenant, frontendTenant } from '@modules/locales/tenants';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/fixtures';
-import { localeModel, localeEntryModel } from '@modules/locales/model';
+import { localeModel, localeEntryModel, translationModel } from '@modules/locales/model';
 import { localeRepository, localeEntryRepository } from '@modules/locales/repository';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
+import { getFallbackLocale } from '@infrastructure/i18n';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
 const SEED_LOCALE_TAGS = {
+    /** The deployment's fallback locale — the product catalogue's source language. Every
+     * product's fallback-locale `translations` row needs this to exist and be active, or
+     * `planTranslations` has nothing to validate that row's own locale against (`./products`). */
+    source: getFallbackLocale(),
     /** A language that exists ONLY as rows — no deployed file — downloadable from the API. */
     downloadable: 'es',
     /** A language deployed as files AND registered here, so its API copy can be overridden. */
@@ -26,6 +31,17 @@ const SEED_LOCALE_TAGS = {
 
 /** The seeded languages themselves — see `SEED_LOCALE_TAGS` for what each one demonstrates. */
 const localeFixtures = [
+    /*
+     * No `revision` and no entries: `seed-conformance.test.ts` requires every entry-less language
+     * to sit at the default revision, and this one's dictionary is the deployed `en.json` file,
+     * not a set of dynamic rows.
+     */
+    makeLocale({
+        id: '65e01f3c9a7d4b2e1c0f0005',
+        tag: SEED_LOCALE_TAGS.source,
+        name: 'English',
+        nativeName: 'English'
+    }),
     makeLocale({
         id: '65e01f3c9a7d4b2e1c0f0001',
         tag: SEED_LOCALE_TAGS.downloadable,
@@ -200,12 +216,19 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
 };
 
 /**
- * Read both collections back as stored — `./index` declares this, `npm run seed:export` calls
- * it. These are stored rows, not endpoint responses: the frontend's mocks do the same tier-merge
- * assembly the API does, rather than replaying a published answer.
+ * Read all three collections back as stored — `./index` declares this, `npm run seed:export`
+ * calls it. These are stored rows, not endpoint responses: the frontend's mocks do the same
+ * tier-merge assembly the API does, rather than replaying a published answer. `translations`
+ * itself is seeded by `./products`, not here — this only publishes what that write produced,
+ * the same way every other module's `export` reads back a write it did not necessarily make.
  * Sorted so the exported file is byte-stable regardless of Mongo's natural order.
  */
 export const exportSeededLocales = async (): Promise<Record<string, unknown[]>> => ({
     locales: await exportCollection(localeModel, { tag: 1 }),
-    localeEntries: await exportCollection(localeEntryModel, { locale: 1, tenant: 1, key: 1 })
+    localeEntries: await exportCollection(localeEntryModel, { locale: 1, tenant: 1, key: 1 }),
+    translations: await exportCollection(translationModel, {
+        entityType: 1,
+        entityId: 1,
+        locale: 1
+    })
 });
