@@ -96,9 +96,12 @@ None of the five jobs above call it yet — they are correct today under `replic
 future scheduled job that would NOT be safe to run twice concurrently should wrap its work in it.
 
 **Observability.** Every `withLease` call stamps its lease document's `lastSuccessAt` on success and
-`lastError` on a throw, and `GET /observability/health`'s `jobs` array reports the set — so a job
-that silently stopped running is visible on the probe an operator already looks at, without a
-Pushgateway or a second UI. See `docs/tools/observability-layer.md`.
+`lastError` on a throw, and `GET /observability/health`'s `jobs` array is built to report that set —
+so a job wrapped in `withLease` that silently stopped running would be visible on the probe an
+operator already looks at, without a Pushgateway or a second UI. The signal exists; nothing
+populates it yet. None of the five jobs above call `withLease` (see **Mutual exclusion** above), so
+`jobs` is an empty array in production today — do not read that emptiness as "every job is healthy".
+See `docs/tools/observability-layer.md`.
 
 ## Data retention
 
