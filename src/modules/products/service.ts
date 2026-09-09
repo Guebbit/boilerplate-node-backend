@@ -4,7 +4,7 @@
  * the repository and stays the one place a controller may call into.
  */
 
-import { removeTranslations, t } from '@infrastructure/i18n';
+import { applyTranslations, removeTranslations, t } from '@infrastructure/i18n';
 import type { SearchProductsRequest, Product } from '@types';
 import {
     generateSuccess,
@@ -72,7 +72,13 @@ export const search = (
 }> =>
     // How `text`/`category`/`tag`/`minPrice`/`maxPrice` become a query is declared on the
     // repository; the scope it is merged with is the caller's, and no filter may widen it.
-    productRepository.search(filters, scope);
+    productRepository.search(filters, scope).then((result) =>
+        // `.search()` already normalized every item (`_id` → `id`, dates to ISO strings), so this
+        // overlays the caller's locale on top of an already wire-shaped page — one batched query,
+        // never one per item. A no-op when nothing is registered or no row matches, which is why
+        // this can sit in the base function rather than only in the viewed wrapper below.
+        applyTranslations('product', result.items).then((items) => ({ ...result, items }))
+    );
 
 /**
  * `GET /products` / `POST /products/search` — search, and report that a search happened.
@@ -101,15 +107,29 @@ export const searchViewed = (
     });
 
 /**
- * Get a single product by ID.
+ * Get a single product by ID, already resolved to the caller's locale.
  * Returns undefined if the id is falsy; null if no matching document is found.
+ *
+ * The wire shape, not a hydrated document: `.toJSON()` runs here — before translation resolution,
+ * never after, since resolution is a plain-object overlay that would otherwise lose whatever the
+ * document's own transform computes (`available`, `_id` → `id`, dates to ISO strings).
  *
  * @param scope - which rows this caller may read ({@link callerScope})
  */
-export const getById = (id: string | undefined, scope?: Record<string, unknown>) => {
+export const getById = async (
+    id: string | undefined,
+    scope?: Record<string, unknown>
+): Promise<Product | null | undefined> => {
     // Return early without triggering a DB call when no id is provided
-    if (!id) return Promise.resolve();
-    return productRepository.findByIdScoped(id, scope);
+    if (!id) return undefined;
+
+    const product = await productRepository.findByIdScoped(id, scope);
+    if (!product) return product;
+
+    // A single `as` narrows a cast the compiler cannot see through: `toJSON()`'s return type is
+    // the schema's own `Document['toJSON']` overload, not this module's wire type.
+    const [resolved] = await applyTranslations('product', [product.toJSON() as Product]);
+    return resolved;
 };
 
 /**

@@ -15,6 +15,7 @@
  */
 
 import { getFallbackLocale } from './catalog';
+import { getCurrentLocale } from './context';
 
 /**
  * One entity's translated field values, keyed by field name — `{ title, description }` for a
@@ -95,4 +96,45 @@ export const removeTranslations = (entityType: string, entityId: string): Promis
 export const localeCandidatesFor = (locale: string): string[] => {
     const base = locale.split('-')[0];
     return [...new Set([locale, base, getFallbackLocale()])].filter((tag) => tag.length > 0);
+};
+
+/** The one thing {@link applyTranslations} needs from an already wire-shaped item. */
+export interface Translatable {
+    id: string;
+}
+
+/**
+ * Overlays each item's resolved translated fields onto its ALREADY wire-shaped copy — one batched
+ * query for the whole page, via {@link resolveTranslations} and {@link localeCandidatesFor} bound
+ * to the ambient locale `runWithLocaleContext` carries. No signature threading: the read path
+ * that calls this needs no locale parameter of its own.
+ *
+ * Deliberately NOT for a hydrated Mongoose document: spreading one loses whatever its own
+ * `toJSON` transform computes (a virtual like `available`, `_id` → `id`, dates to ISO strings),
+ * so a caller with a document calls `.toJSON()` (or reads through `search()`'s already-normalized
+ * output) before this ever sees it. Resolution is async and batched, the serializer is
+ * synchronous and per-document — the two stay separate, and this one runs strictly after the
+ * other.
+ *
+ * @returns a new array; an item with no translation row is returned unchanged, by reference
+ */
+export const applyTranslations = async <T extends Translatable>(
+    entityType: string,
+    items: readonly T[]
+): Promise<T[]> => {
+    if (items.length === 0) return [...items];
+
+    const candidates = localeCandidatesFor(getCurrentLocale());
+    const resolved = await resolveTranslations(
+        entityType,
+        items.map((item) => item.id),
+        candidates
+    );
+
+    if (resolved.size === 0) return [...items];
+
+    return items.map((item) => {
+        const fields = resolved.get(item.id);
+        return fields ? { ...item, ...fields } : item;
+    });
 };

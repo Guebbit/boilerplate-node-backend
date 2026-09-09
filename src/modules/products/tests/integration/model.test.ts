@@ -30,10 +30,14 @@ describe('product serialization', () => {
             productService.callerScope(asOwner())
         );
 
-        expect(found!.toJSON()).toMatchObject({
+        // Already the wire shape, not a hydrated document — `getById` runs `.toJSON()` itself
+        // before resolving a translation over it, so there is no second transform to call here.
+        expect(found).toMatchObject({
             id: product._id.toString(),
             title: 'Lookup Product'
         });
+        expect(JSON.stringify(found)).not.toContain('_id');
+        expect(JSON.stringify(found)).not.toContain('__v');
     });
 
     it('normalizes a lean list via productService.search', async () => {

@@ -45,10 +45,12 @@ export {
 export { negotiateLocale } from './negotiate';
 
 export {
+    applyTranslations,
     localeCandidatesFor,
     registerTranslationPort,
     removeTranslations,
     resolveTranslations,
     type TranslatedFields,
+    type Translatable,
     type TranslationPort
 } from './translation';

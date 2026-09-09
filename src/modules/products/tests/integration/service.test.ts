@@ -310,8 +310,9 @@ describe('productService.getById', () => {
 
         expect(found).not.toBeNull();
         expect(found!.title).toBe('Test Product');
-        // A real Mongoose document — schema's toJSON transform normalizes it on the way out
-        expect(typeof asStub<{ save: unknown }>(found).save).toBe('function');
+        // Already the wire shape: `getById` runs the document's own `toJSON` transform itself,
+        // before resolving a translation over the result, so what comes back is a plain object.
+        expect(typeof asStub<{ save: unknown }>(found).save).toBe('undefined');
     });
 
     it('hides an unpublished product from a guest', async () => {
