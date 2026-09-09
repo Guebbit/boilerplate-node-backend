@@ -266,7 +266,7 @@ describe('sustained failure', () => {
 });
 
 describe('replay', () => {
-    it('re-sends against the CURRENT url, attempt increments, and the log reflects the replay', async () => {
+    it('re-sends against the CURRENT url, and the log reflects the replay', async () => {
         const deadServer = await startHttpsTestServer((response) => response.writeHead(500).end());
         const subscription = await createSubscription(`${deadServer.url}/hook`);
         const job = await createPendingDelivery(subscription);
@@ -290,11 +290,45 @@ describe('replay', () => {
         if (!result.success || !result.data) throw new Error('unreachable — asserted above');
 
         expect(result.data.status).toBe('succeeded');
-        expect(result.data.attempt).toBe(attemptBeforeReplay + 1);
+        // A successful attempt never advances `attempt` — replayed or not, see `recordSuccess`.
+        expect(result.data.attempt).toBe(attemptBeforeReplay);
         expect(liveServer.requests()).toHaveLength(1);
 
         const stored = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(stored?.status).toBe('succeeded');
         expect(stored?.responseCode).toBe(200);
+    });
+
+    it('a replayed attempt that fails advances `attempt` by exactly one, matching a non-replayed failure at the same starting attempt', async () => {
+        const server = await startHttpsTestServer((response) => response.writeHead(500).end());
+        const subscription = await createSubscription(`${server.url}/hook`);
+
+        // Two identical chains, each driven through one real failure so both sit `pending` at the
+        // same starting attempt (2) — one continues through the normal queue path, the other is
+        // replayed instead, so their outcomes can be compared directly.
+        const queuedJob = await createPendingDelivery(subscription, 'order.paid.queued');
+        await processDeliveryJob(queuedJob);
+        const replayedJob = await createPendingDelivery(subscription, 'order.paid.replayed');
+        await processDeliveryJob(replayedJob);
+
+        const beforeReplay = await webhookDeliveryRepository.findById(replayedJob.deliveryId);
+        if (!beforeReplay) throw new Error('unreachable — asserted above');
+        expect(beforeReplay.attempt).toBe(2);
+
+        // The non-replayed sibling: one more real queued failure at the same starting attempt.
+        await processDeliveryJob({ ...queuedJob, attempt: beforeReplay.attempt });
+        const queuedAfter = await webhookDeliveryRepository.findById(queuedJob.deliveryId);
+
+        const result = await replayDelivery(replayedJob.deliveryId, context);
+        await server.close();
+
+        expect(result.success).toBe(true);
+        if (!result.success || !result.data) throw new Error('unreachable — asserted above');
+
+        // Exactly one increment for the one real HTTP attempt the replay made, and the same
+        // backoff tier a non-replayed failure at the same starting attempt would have used.
+        expect(result.data.attempt).toBe(beforeReplay.attempt + 1);
+        expect(result.data.attempt).toBe(queuedAfter?.attempt);
+        expect(result.data.status).toBe(queuedAfter?.status);
     });
 });

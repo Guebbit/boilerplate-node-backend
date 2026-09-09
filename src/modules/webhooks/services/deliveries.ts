@@ -58,8 +58,11 @@ export const list = (
 /**
  * Re-send one delivery: signs and POSTs again, synchronously, against the subscription's CURRENT
  * url and secret ring — never the ones this row was originally attempted with. Updates the same
- * row in place; `attempt` increments on every replay (see `openapi.yaml`'s own description),
- * whatever state the row was in when this was called.
+ * row in place, sharing {@link attemptDelivery}'s own bookkeeping with the queued path rather than
+ * bumping `attempt` here first: a replay is counted exactly like a real attempt at whatever ordinal
+ * the row already holds — one step forward on a failure with backoff tiers left, unchanged on
+ * success or exhaustion. A caller-side bump on top of that would double-count the one real HTTP
+ * attempt this makes.
  *
  * @returns a 404 outside this tenant's log, or when the subscription itself no longer exists
  */
@@ -77,7 +80,6 @@ export const replay = (
                 if (!subscription)
                     return generateReject(404, [t('webhooks.subscription-not-found')]);
 
-                delivery.attempt += 1;
                 return attemptDelivery(delivery, subscription).then((updated) => {
                     emitAuditEvent(
                         buildAuditEvent(context, {
