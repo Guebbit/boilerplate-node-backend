@@ -82,6 +82,22 @@ services:
             queue:
                 condition: service_healthy
 
+        # Liveness only — `/` depends on no module, so it survives deleting any of them. `node -e`,
+        # not `curl -f`: the runtime image is node:*-alpine and ships no curl. `start_period` is
+        # generous because the container runs db:bootstrap before it starts listening.
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+
     # An external scheduler, not an in-process one — see the equivalent service in
     # docker-compose.yml and docs/reference/ops.md#scheduled-jobs for the full reasoning. Same
     # image as `app`; only the command differs, so this container runs `ops/reap-*`/`sweep:*`
