@@ -8,6 +8,10 @@
  * Deterministic, not exploratory: every case here has one correct answer (refuse, or don't), so
  * this is a fixed table rather than a `fast-check` arbitrary — the hostile inputs worth having are
  * the well-known bypass techniques, not random byte soup.
+ *
+ * 6to4 and Teredo literals are in the table too: both embed an IPv4 address that
+ * `embeddedIPv4()` never unwraps, so a 6to4 literal encoding the cloud metadata endpoint reads as
+ * an ordinary global address to every other check — see `ssrf-guard.ts`'s module docblock.
  */
 
 import { EventEmitter } from 'node:events';
@@ -69,7 +73,15 @@ describe('resolveSafeWebhookTarget — literal IP hostiles, refused with unsafe-
         ['IPv4-mapped IPv6 private', 'https://[::ffff:10.0.0.1]/hook'],
         ['decimal-encoded IPv4 (127.0.0.1)', 'https://2130706433/hook'],
         ['octal-encoded IPv4 (127.0.0.1)', 'https://0177.0.0.1/hook'],
-        ['hex-encoded IPv4 (127.0.0.1)', 'https://0x7f000001/hook']
+        ['hex-encoded IPv4 (127.0.0.1)', 'https://0x7f000001/hook'],
+        ['NAT64 loopback (RFC 6052)', 'https://[64:ff9b::7f00:1]/hook'],
+        ['6to4 loopback (RFC 3056)', 'https://[2002:7f00:0001::]/hook'],
+        ['6to4 private (RFC 3056, 10/8)', 'https://[2002:0a00:0001::]/hook'],
+        ['6to4-encoded cloud metadata endpoint', 'https://[2002:a9fe:a9fe::]/hook'],
+        [
+            'Teredo-encoded loopback (RFC 4380)',
+            'https://[2001:0000:4136:e378:8000:63bf:3fff:fdd2]/hook'
+        ]
     ])('%s: %s', async (_label, url) => {
         await expect(resolveSafeWebhookTarget(url)).rejects.toBeInstanceOf(SsrfRefusedError);
         await expect(resolveSafeWebhookTarget(url)).rejects.toMatchObject({

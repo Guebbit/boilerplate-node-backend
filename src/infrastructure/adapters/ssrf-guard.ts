@@ -16,8 +16,15 @@
  *
  * Ranges refused, and why: RFC 1918 private space, RFC 1122 loopback, RFC 3927 / RFC 4291
  * link-local (this is what blocks the cloud metadata endpoint `169.254.169.254`), RFC 4193 IPv6
- * unique-local, RFC 6598 carrier-grade NAT, RFC 919 broadcast, and both families' unspecified
- * (`0.0.0.0`, `::`) and multicast ranges.
+ * unique-local, RFC 6598 carrier-grade NAT, RFC 919 broadcast, both families' unspecified
+ * (`0.0.0.0`, `::`) and multicast ranges, and the two IPv6 transition mechanisms that embed an
+ * address `embeddedIPv4()` does NOT unwrap: 6to4 (RFC 3056, `2002::/16`) and Teredo (RFC 4380,
+ * `2001::/32`). Both carry an IPv4 address in their bits — 6to4 plainly, Teredo XOR-obfuscated —
+ * that this guard would otherwise never see: a 6to4 literal encoding `169.254.169.254` reads as an
+ * ordinary global address to every other check here. Refused outright rather than decoded: a
+ * legitimate webhook endpoint has no reason to be specified as a transition-mechanism literal, and
+ * native 6to4/Teredo relaying is still enabled on some hosts and networks despite the public relay
+ * infrastructure having mostly been decommissioned.
  *
  * What this module does NOT do:
  *  - No redirect handling. A 3xx must not be followed without re-running this same check on the
@@ -121,7 +128,20 @@ const isAddressUnsafe = (address: string): boolean => {
     // "fail closed" rule from the module docblock intact even for a malformed DNS answer.
     if (family === 0) return true;
 
-    const ip = family === 4 ? new Address4(address) : new Address6(address);
+    if (family === 4) {
+        const ip = new Address4(address);
+        return (
+            ip.isPrivate() ||
+            ip.isLoopback() ||
+            ip.isLinkLocal() ||
+            ip.isUnspecified() ||
+            ip.isMulticast() ||
+            ip.isCGNAT() ||
+            ip.isBroadcast()
+        );
+    }
+
+    const ip = new Address6(address);
     return (
         ip.isPrivate() ||
         ip.isLoopback() ||
@@ -129,7 +149,12 @@ const isAddressUnsafe = (address: string): boolean => {
         ip.isUnspecified() ||
         ip.isMulticast() ||
         ip.isCGNAT() ||
-        ip.isBroadcast()
+        ip.isBroadcast() ||
+        // Neither is unwrapped by `embeddedIPv4()` — see the module docblock — so a 6to4 or
+        // Teredo literal carrying a private/loopback/link-local IPv4 would otherwise read as an
+        // ordinary global address to every check above.
+        ip.is6to4() ||
+        ip.isTeredo()
     );
 };
 
